@@ -70,10 +70,10 @@ PA-01's `planWaves` to a registered-extension-bound wave. Depends on R2-1.
   scheduler logic → no live smoke; offline throughout.
 
 ## Operational
-- keryx = `bun ./src/cli.ts`. Root = `/Users/Goodea/goodea/keryx` (branch feature/keryx-release2-bound-wave).
+- keryx = `bun ./src/cli.ts`. Root = `~/goodea/keryx` (branch feature/keryx-release2-bound-wave).
   Never commit to main; PR at the end (no co-authorship). NOTE: R2-3 edits the runbook Release 2 Стейт →
   will conflict with R2-2 (#27) at merge; resolve then (keep both ✅).
 - State only via `keryx flow` (flow 025); workers via subagent-dispatch/result (STATUS: first line).
-- WORKTREE-GUARD: every writing worker `cd /Users/Goodea/goodea/keryx && pwd` first, write ONLY under it.
+- WORKTREE-GUARD: every writing worker `cd ~/goodea/keryx && pwd` first, write ONLY under it.
   Guard array indexing; injected id/clock; no real fs/network/async; `.toThrow()` for immutability.
 - Order: T5 (RED) → T6 (impl) → T7 (review).

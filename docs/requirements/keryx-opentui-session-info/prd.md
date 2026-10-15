@@ -3,15 +3,15 @@ Version: 0.2.0
 
 ## Problem
 
-Grok Build's `/session-info` (`/status`, `/info`) opens a modal on a
+Another agent CLI's `/session-info` (`/status`, `/info`) opens a modal on a
 **Session info** tab and shows title, version, auth, session id, cwd,
 model, backend, sandbox, and context-window use. Values are copyable
 (`c` = id, `y` = whole block).
 
 Keryx already has the data (`SessionSummary`, footer provider/model,
 per-turn `onUsage`, `estimateContextTokens`). The shipped inspector
-matches Grok's **operator outcome** (identity + usage without leaving
-the shell), not Grok's catalog: one slash token, keryx-owned rows only.
+delivers the **operator outcome** (identity + usage without leaving
+the shell), not that tool's catalog: one slash token, keryx-owned rows only.
 
 ## Goal
 
@@ -34,7 +34,7 @@ Readline / `--no-tui` prints the same facts as text.
 | SI-1 | Register **`/status` only** in `AGENT_SLASH_COMMANDS` for **both** `agent` and `chat`. `/session-info` and `/info` are not aliases and must not appear in the `/` menu. |
 | SI-2 | In TUI, the command opens the shared modal host with title `/status` and `initialTab` `status`. It must **not** invent a third overlay stack. |
 | SI-3 | Status tab fields (only if the value exists): title, keryx version (`package.json`), session id, project path / cwd, provider, model, parent session id (if fork), created/updated, message count, archive message count, compact count. |
-| SI-4 | Context tab: prefer last provider `usage`. Else `estimateContextTokens(history)`. Label estimates. Never invent a Grok-style 128k window. |
+| SI-4 | Context tab: prefer last provider `usage`. Else `estimateContextTokens(history)`. Label estimates. Never invent a fixed 128k window. |
 | SI-5 | Missing/unknown values render as an explicit `—` / `unknown`, not guessed auth or sandbox rows. |
 | SI-6 | `c` copies the full session id via the same clipboard path as `/copy` / block-nav `y`. Toast on success. Whole-block `y` is **not** required on this surface. |
 | SI-7 | The command is a slash builtin: it never calls `provider.stream`. Mid-turn it still opens (read-only). |
@@ -54,7 +54,7 @@ Readline / `--no-tui` prints the same facts as text.
 
 ## Risks
 
-- Copying Grok's OAuth/sandbox rows would lie. Only paint keryx-owned
+- Copying another tool's OAuth/sandbox rows would lie. Only paint keryx-owned
   facts.
 - `estimateContextTokens` is ≈4 chars/token and will disagree with
   billed tokens; label it `estimate` when that path is used.
@@ -64,7 +64,7 @@ Readline / `--no-tui` prints the same facts as text.
 
 ## Recommendation
 
-Keep `/status` as the only token. Do not port Grok mouse selection or
+Keep `/status` as the only token. Do not add mouse selection or
 billing UI. Leave `/model` on `selectProviderModelInTui` until a later
 host migration. Browse all project flows through `/flows`, not this
 inspector.

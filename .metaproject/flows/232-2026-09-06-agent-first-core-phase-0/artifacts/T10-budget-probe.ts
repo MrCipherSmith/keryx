@@ -9,7 +9,7 @@
  * Deterministic in-memory provider + in-memory tools only. No network, no
  * model API call, no filesystem writes, no working-tree edits.
  */
-const { runAgentTurn } = await import("/Users/Goodea/goodea/keryx/src/commands/agent");
+const { runAgentTurn } = await import("~/goodea/keryx/src/commands/agent");
 
 type Event = Record<string, unknown>;
 type Round = readonly Event[];

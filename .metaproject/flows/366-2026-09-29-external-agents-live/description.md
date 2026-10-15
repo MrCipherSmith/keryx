@@ -1,11 +1,11 @@
 # P0 W1 external agents live
 
 Status: draft
-Source: operator answer "A" (helyx 172181), competitive review P0 item 1
+Source: operator answer "A" (operator chat channel 172181), competitive review P0 item 1
 
 ## Problem
 
-keryx can drive Claude Code, Codex and Antigravity as child processes (`keryx agents external run`), but every codec was written against documentation and recorded fixtures, never against a real vendor process. The docs say so (`docs/verification/keryx-shell-tui-test-catalog.md` DELEG-05, `harness.md`). This is the one feature no competitor has, and it is unproven.
+keryx can drive Claude Code, Codex and Antigravity as child processes (`keryx agents external run`), but every codec was written against documentation and recorded fixtures, never against a real vendor process. The docs say so (`docs/verification/keryx-shell-tui-test-catalog.md` DELEG-05, `harness.md`). This is the one feature no other agent tool has, and it is unproven.
 
 ## Expected Outcome
 

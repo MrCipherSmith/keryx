@@ -122,21 +122,24 @@ export function isValidIp(value: string): boolean {
 // the word boundary is therefore the Unicode one, not `\b`.
 // The ASCII flavour is the original rule. It still runs on text with non-ASCII characters, so an address that
 // the Unicode flavour reads as longer (`user@example.com` followed by `é`) is reported as it always was.
-type EmailFlavour = { from: RegExp; localChar: RegExp; wordChar: RegExp };
+type EmailFlavour = { from: RegExp; localChar: RegExp; boundary: RegExp };
 
 const UNICODE_EMAIL: EmailFlavour = {
   from: /(?:(?<=[\p{L}\p{N}\p{M}_])(?![\p{L}\p{N}\p{M}_])|(?<![\p{L}\p{N}\p{M}_])(?=[\p{L}\p{N}\p{M}_]))[\p{L}\p{N}\p{M}._%+-]+@[\p{L}\p{N}\p{M}.-]+\.[\p{L}\p{M}]{2,}(?![\p{L}\p{N}\p{M}_])/uy,
   localChar: /[\p{L}\p{N}\p{M}._%+-]/u,
-  wordChar: /[\p{L}\p{N}\p{M}_]/u,
+  boundary: /(?:(?<=[\p{L}\p{N}\p{M}_])(?![\p{L}\p{N}\p{M}_])|(?<![\p{L}\p{N}\p{M}_])(?=[\p{L}\p{N}\p{M}_]))/uy,
 };
 const ASCII_EMAIL: EmailFlavour = {
   from: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/y,
   localChar: /[A-Za-z0-9._%+-]/,
-  wordChar: /\w/,
+  boundary: /\b/y,
 };
 
 function isWordBoundary(flavour: EmailFlavour, content: string, index: number): boolean {
-  return flavour.wordChar.test(wordCharBefore(content, index)) !== flavour.wordChar.test(wordCharAt(content, index));
+  // Use the matcher's boundary semantics, including astral lookbehind behaviour.
+  // A scalar check can choose a start the regex rejects and skip the entire address.
+  flavour.boundary.lastIndex = index;
+  return flavour.boundary.test(content);
 }
 
 // The code point that ends at `index`, or "" at the start. `\p{L}` and friends match whole code points.

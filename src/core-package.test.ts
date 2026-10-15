@@ -53,7 +53,7 @@
 //
 // `src/lib/import-zones.ts` is the shared data constant for "what is this
 // top-level directory". Restating it here would create the second copy that
-// file was written to prevent. The five `src/session/` state modules are the
+// file was written to prevent. The six `src/session/` state modules are the
 // one documented exception, and they are listed BY NAME below with the reason.
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
@@ -115,20 +115,20 @@ const IMPACT_EVIDENCE_ENTRY = "src/impact-evidence/provider.ts";
 const ALL_FACADES = [...FACADES, IMPACT_EVIDENCE_FACADE] as const;
 
 /**
- * Five `src/session/` modules that are in the core graph ON PURPOSE.
+ * Six `src/session/` modules that are in the core graph ON PURPOSE.
  *
  * `src/lib/import-zones.ts` classifies the whole `src/session/` directory as
  * "client", and at directory granularity that is right: session streaming and
- * compaction are client concerns. These five are not that. They are
+ * compaction are client concerns. These six are not that. They are
  * deterministic session-state storage — JSON and file locks over the session
  * directory — with no provider registry, no model selection, no credential read
  * and no LLM call, and three of them are re-exported by `src/sac/service.ts` so
  * another surface reaches SAC through one door instead of into `src/session/`
- * internals (`src/mcp/boundary.test.ts`'s M-3 rule); the other two arrive
- * underneath them. `src/sac/core-graph.test.ts` allowlists the same five for
+ * internals (`src/mcp/boundary.test.ts`'s M-3 rule); the other three arrive
+ * underneath them. Preservation adds only local hashed/fsynced storage, not a provider. `src/sac/core-graph.test.ts` allowlists the same six for
  * the same reason.
  *
- * They are named individually rather than by prefix, so a SIXTH session module
+ * They are named individually rather than by prefix, so a SEVENTH session module
  * appearing in the core entry's graph fails this file. Reclassifying them in
  * the zone table proper, or relocating them below both consumers, needs a lane
  * that owns `src/lib/import-zones.ts` and `src/session/` — neither is this one,
@@ -137,6 +137,7 @@ const ALL_FACADES = [...FACADES, IMPACT_EVIDENCE_FACADE] as const;
 const SESSION_STATE_ALLOWLIST = [
   "src/session/external-slate.ts",
   "src/session/paths.ts",
+  "src/session/preservation.ts",
   "src/session/slate-course.ts",
   "src/session/slate.ts",
   "src/session/store.ts",
@@ -259,7 +260,7 @@ async function shippedGraph(tokens: readonly string[], outDir: string): Promise<
 /**
  * Every module in `graph` a core-only artifact must not contain: anything the
  * shared zone table calls client or adapter, plus the CLI entry itself (which
- * sits at `src/` root and so has no zone), minus the five session-state modules
+ * sits at `src/` root and so has no zone), minus the six session-state modules
  * documented above.
  */
 function forbiddenIn(graph: readonly string[]): string[] {
@@ -376,10 +377,12 @@ test("review round 1, REG-1: core.security and core.impactEvidence member names 
     "analyze",
     "appendIncident",
     "applyAuditProposal",
+    "applyRedaction",
     "auditGate",
     "createSecurityService",
     "defaultBaselinePath",
     "detectEntropy",
+    "detectPii",
     "detectSecrets",
     "isDeniedForMcpChild",
     "isEntropyBackendEnabled",
@@ -438,7 +441,7 @@ test("the core entry ships no provider registry, model selection, credential rea
   expect(forbiddenIn(coreGraph)).toEqual([]);
 });
 
-test("no session module beyond the five allowlisted state stores reaches the core entry", () => {
+test("no session module beyond the six allowlisted state stores reaches the core entry", () => {
   const session = coreGraph.filter((module) => module.startsWith("src/session/"));
   expect(session.filter((module) => !SESSION_STATE_ALLOWLIST.includes(module))).toEqual([]);
   // And the allowlist names files that exist, so a rename cannot quietly widen it.

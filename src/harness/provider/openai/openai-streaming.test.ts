@@ -138,6 +138,49 @@ describe("AC2 — first-byte timeout fails closed", () => {
   });
 });
 
+// --- (c2) response-headers timeout -------------------------------------------
+
+/** A `fetch` that never answers on its own — only the request signal settles it. */
+function headerlessFetch(): typeof fetch {
+  return ((_input: RequestInfo | URL, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      const onAbort = (): void => reject(new DOMException("aborted", "AbortError"));
+      if (signal?.aborted === true) {
+        onAbort();
+        return;
+      }
+      signal?.addEventListener("abort", onAbort);
+    })) as unknown as typeof fetch;
+}
+
+describe("a server that never sends response headers", () => {
+  test("fails closed with one retryable unavailable error after the first-byte deadline", async () => {
+    const deps: OpenAiProviderDeps = { fetch: headerlessFetch(), grant: validGrant(), firstByteTimeoutMs: 20 };
+    const provider = new OpenAiProvider(deps);
+    const events = await collectEvents(provider.stream(buildRequest("req-h1"), { attemptId: "att-h1" }));
+
+    expect(events).toHaveLength(1);
+    const trailing = lastEvent(events);
+    expect(trailing.kind).toBe("provider_error");
+    expect(trailing.error?.kind).toBe("unavailable");
+    expect(trailing.error?.retryable).toBe(true);
+    expect(trailing.error?.message).toContain("response headers");
+  });
+
+  test("an external abort still ends it as cancelled, not as a timeout", async () => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 5);
+    const deps: OpenAiProviderDeps = { fetch: headerlessFetch(), grant: validGrant(), firstByteTimeoutMs: 5_000 };
+    const provider = new OpenAiProvider(deps);
+    const options: StreamOptions = { attemptId: "att-h2", signal: controller.signal };
+    const events = await collectEvents(provider.stream(buildRequest("req-h2"), options));
+
+    expect(events).toHaveLength(1);
+    expect(lastEvent(events).error?.kind).toBe("cancelled");
+  });
+});
+
 // --- (d) idle timeout ---------------------------------------------------------
 
 describe("AC2 — idle timeout fails closed", () => {

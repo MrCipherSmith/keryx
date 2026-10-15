@@ -1,0 +1,142 @@
+{
+ "mutants": [
+  {
+   "id": "cr1-collapse-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "  if (collapseQuoting(command).toLowerCase().includes(COVERAGE_WAIVER_FLAG)) return true;\n",
+   "replacement": ""
+  },
+  {
+   "id": "cr4-opaque-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "if (words.slice(review + 1).some(wordIsOpaque)) return true;",
+   "replacement": "if (false) return true;"
+  },
+  {
+   "id": "cr7-recursion-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "if (depth < 4 && words.some((w) => /\\s/.test(w) && parsedCoverageWaiver(w, depth + 1))) return true;",
+   "replacement": ""
+  },
+  {
+   "id": "cr10-oct-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "if (oct !== undefined) return String.fromCharCode(Number.parseInt(oct, 8) & 0xff);",
+   "replacement": ""
+  },
+  {
+   "id": "cr13-estimate-check-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "if (after.includes(\"estimate\") && after.some(",
+   "replacement": "if (true && after.some("
+  },
+  {
+   "id": "cr16-chunk-recursion-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "if (depth < 4 && seg.words.some((w) => /\\s/.test(w) && scan(w, depth + 1))) return true;",
+   "replacement": ""
+  },
+  {
+   "id": "cr19-ansi-newline",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "n: \"\\n\", ",
+   "replacement": ""
+  },
+  {
+   "id": "cr22-review-complete-off",
+   "file": "src/lib/command-risk.ts",
+   "anchor": "if (review >= 0 && words.slice(review + 1).some((w) => w.toLowerCase() === \"complete\")) {",
+   "replacement": "if (false) {"
+  },
+  {
+   "id": "mg1-restore-off",
+   "file": "src/review/managed.ts",
+   "anchor": "if (researchBefore !== undefined) await writeFileAtomic(researchPath, researchBefore).catch(() => undefined);",
+   "replacement": ""
+  },
+  {
+   "id": "un1-waiver-off",
+   "file": "src/trigger/unattended.ts",
+   "anchor": "if (touchesCoverageWaiver(text) || touchesChunkEstimateAnswer(text)) {",
+   "replacement": "if (touchesChunkEstimateAnswer(text)) {"
+  },
+  {
+   "id": "tr2-coverage",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "    \"coverage\",\n",
+   "replacement": ""
+  },
+  {
+   "id": "ar2-answer",
+   "file": "src/commands/automatic-review.ts",
+   "anchor": " && !flags.has(\"--answer\") && !flags.has(\"--quote\")",
+   "replacement": " && !flags.has(\"--quote\")"
+  },
+  {
+   "id": "ar5-chunks-pkg",
+   "file": "src/commands/automatic-review.ts",
+   "anchor": "case \"chunks\":\n        return inPackage(one(\"--package\")) &&",
+   "replacement": "case \"chunks\":\n        return"
+  },
+  {
+   "id": "ly2-current-commit",
+   "file": "src/review/layers.ts",
+   "anchor": "return existing.graphCommit === existing.prHead && (await graphIntact(packageDir, existing));",
+   "replacement": "return await graphIntact(packageDir, existing);"
+  },
+  {
+   "id": "ly5-intact-nodes",
+   "file": "src/review/layers.ts",
+   "anchor": "return (await stat(path.join(dataDir, \"storage\", \"nodes.jsonl\"))).size > 0;",
+   "replacement": "return true;"
+  },
+  {
+   "id": "ly8-force",
+   "file": "src/review/layers.ts",
+   "anchor": "if (input.force !== true && sameHead &&",
+   "replacement": "if (sameHead &&"
+  },
+  {
+   "id": "ly11-sweep-age",
+   "file": "src/review/layers.ts",
+   "anchor": "if (age < WORKTREE_SWEEP_AGE_MS) continue;",
+   "replacement": ""
+  },
+  {
+   "id": "ly14-recover-old",
+   "file": "src/review/layers.ts",
+   "anchor": "if (missing && entry.startsWith(`${name}.old.`)) {",
+   "replacement": "if (false) {"
+  },
+  {
+   "id": "ly17-sweep-call",
+   "file": "src/review/layers.ts",
+   "anchor": "      await sweepStaleWorktrees(deps, input.projectRoot);\n",
+   "replacement": ""
+  },
+  {
+   "id": "pl3-batch-bound",
+   "file": "src/review/layers-payload.ts",
+   "anchor": "taken < Math.max(1, list.length - runnerUp) &&",
+   "replacement": "taken < 1 &&"
+  },
+  {
+   "id": "us2-isfile",
+   "file": "src/review/layers-usage.ts",
+   "anchor": "if (!info.isFile() || info.size",
+   "replacement": "if (info.size"
+  },
+  {
+   "id": "ch1-lock-wait",
+   "file": "src/review/chunks.ts",
+   "anchor": "{ timeoutMs: CHUNK_LOCK_WAIT_MS }",
+   "replacement": "{ timeoutMs: 1 }"
+  },
+  {
+   "id": "ch4-record-lock",
+   "file": "src/review/chunks.ts",
+   "anchor": "return withChunkStateLock(packageDir, () => recordChunkLocked(packageDir, chunkId, result));",
+   "replacement": "return recordChunkLocked(packageDir, chunkId, result);"
+  }
+ ]
+}

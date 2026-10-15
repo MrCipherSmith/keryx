@@ -2,7 +2,7 @@
 
 Status: draft
 
-Source: operator request (helyx, 2026-09-30): "how do I phrase a question so keryx shell starts a subagent on Claude? Make it as simple as possible."
+Source: operator request (operator chat channel, 2026-09-30): "how do I phrase a question so keryx shell starts a subagent on Claude? Make it as simple as possible."
 
 ## Problem
 

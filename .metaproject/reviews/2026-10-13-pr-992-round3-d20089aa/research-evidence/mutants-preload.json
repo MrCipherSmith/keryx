@@ -1,0 +1,16 @@
+{
+  "mutants": [
+    {
+      "id": "M20-second-preload-dropped",
+      "file": "bunfig.toml",
+      "anchor": "preload = [\"./src/lib/test-preload.ts\", \"./src/lib/test-preload-hooks.ts\"]",
+      "replacement": "preload = [\"./src/lib/test-preload.ts\"]"
+    },
+    {
+      "id": "M21-preload-reset-dropped",
+      "file": "src/lib/test-preload-hooks.ts",
+      "anchor": "beforeEach(() => resetOperatorDenials());",
+      "replacement": "beforeEach(() => {});"
+    }
+  ]
+}

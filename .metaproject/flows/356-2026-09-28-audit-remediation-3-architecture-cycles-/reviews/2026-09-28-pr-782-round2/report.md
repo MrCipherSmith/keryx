@@ -14,7 +14,7 @@
   so `keryx review complete` and `keryx flow status 356` read a verifier `refuted` verdict against
   the finding that was actually raised, not a bare `acted-on` with no verification record.
 - Executed against a read-only detached worktree at the PR head:
-  `git worktree add --detach /home/altsay/keryx-v356 7457ed83a6a4980594577810f53df98e2b232638`.
+  `git worktree add --detach ~/keryx-v356 7457ed83a6a4980594577810f53df98e2b232638`.
 - `verification_mode: filter`
 - No domain reviewers dispatched this round (budget-conscious, narrow round) — `review-verifier`
   only, re-checking each round-1 finding by re-running the reviewer's own recorded repro against the

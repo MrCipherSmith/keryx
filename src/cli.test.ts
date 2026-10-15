@@ -295,6 +295,8 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
       "  `flow init --origin human-request|agent-finding|agent-proposal --quote \"<verbatim>\" --source \"<ref>\"` records where the flow came from. Evidence, not assertion: `human-request` is recorded only with a verbatim `--quote` of the human's first message with the idea AND a `--source` (channel, message id or time); `agent-finding` and `agent-proposal` need a `--source`. Without the evidence, or with an invalid kind, the origin stays `unknown`, the command still succeeds and says why. The Outcome criteria template then holds the request (or the source), the agent's formalization and how to observe it. `flow origin set` changes it later, with a reason. The origin labels a sample and gates nothing.\n",
       // Flow 364: the read-only completion check.
       "  keryx flow check-complete <id> [--merged <commit>] [--confirm-token <token>] [--json]   (every completion gate plus the PR's merge state; writes nothing)\n",
+      // Flow 422: the freeze prompt for criteria with no verification kind can be skipped.
+      "  keryx flow freeze <id> --yes   (or KERYX_NONINTERACTIVE=1: skip the no-verification-kind prompt; the warning is journaled)\n",
     ],
   };
 

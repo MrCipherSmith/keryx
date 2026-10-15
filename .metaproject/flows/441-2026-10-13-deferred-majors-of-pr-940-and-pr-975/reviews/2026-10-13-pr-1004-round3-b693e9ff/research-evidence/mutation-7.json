@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t4",
+  "command": "bun test src/review/replay.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 3356
+  },
+  "mutants": [
+    {
+      "id": "S07-maxbuffer-tiny",
+      "file": "src/review/replay.ts",
+      "anchor": "maxBuffer: 64 * 1024 * 1024",
+      "replacement": "maxBuffer: 1000",
+      "line": 134,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3327
+    }
+  ],
+  "totals": {
+    "killed": 1,
+    "survived": 0,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

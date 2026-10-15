@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f431i",
+  "command": "bun test src/review src/commands/review-layers.test.ts src/commands/review-ledger.test.ts src/commands/review-slice-paths.test.ts src/gdskills/reviewer-layer-block.test.ts src/tui/review-panel.test.ts src/tui/reviews-inspector.test.ts src/lib/command-risk",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 13236
+  },
+  "mutants": [
+    {
+      "id": "f03",
+      "file": "src/review/layers.ts",
+      "anchor": "if (hadPrevious) await rename(previous, finalDir).catch(() => {});",
+      "replacement": "void 0;",
+      "line": 254,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13173
+    },
+    {
+      "id": "f06",
+      "file": "src/review/layers.ts",
+      "anchor": "return typeof head === \"string\" && /^[0-9a-f]{7,64}$/i.test(head) ? head : null;",
+      "replacement": "return typeof head === \"string\" ? head : null;",
+      "line": 199,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13139
+    },
+    {
+      "id": "f07",
+      "file": "src/review/layers.ts",
+      "anchor": "if (input.prHead !== undefined) assertGitRevision(input.prHead);",
+      "replacement": "void 0;",
+      "line": 402,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13202
+    },
+    {
+      "id": "f08",
+      "file": "src/review/layers.ts",
+      "anchor": "return parsed !== null && parsed.version === LAYERS_VERSION ? parsed : null;",
+      "replacement": "return parsed;",
+      "line": 207,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13151
+    },
+    {
+      "id": "f11",
+      "file": "src/review/chunks.ts",
+      "anchor": "const finished = status === \"DONE\" || status === \"DONE_WITH_CONCERNS\";",
+      "replacement": "const finished = status === \"DONE\";",
+      "line": 286,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13162
+    },
+    {
+      "id": "f12",
+      "file": "src/review/chunks.ts",
+      "anchor": "const alreadySplit = state.derived.some((d) => d.retryOf?.includes(chunkId));",
+      "replacement": "const alreadySplit = false;",
+      "line": 310,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 13155
+    },
+    {
+      "id": "f14",
+      "file": "src/review/chunks-estimate.ts",
+      "anchor": "const answered = record?.estimate.planKey === estimate.planKey ? record.answer : undefined;",
+      "replacement": "const answered = record?.answer;",
+      "line": 161,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 13111
+    },
+    {
+      "id": "f24",
+      "file": "src/review/layers-usage.ts",
+      "anchor": "if (!(await stat(real)).isFile()) return undefined;",
+      "replacement": "void 0;",
+      "line": 72,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 18186
+    }
+  ],
+  "totals": {
+    "killed": 7,
+    "survived": 1,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

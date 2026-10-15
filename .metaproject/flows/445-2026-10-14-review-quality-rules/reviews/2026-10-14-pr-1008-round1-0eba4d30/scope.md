@@ -1,0 +1,114 @@
+# Review Scope
+
+target: report
+ref: 060701ca
+mode: ingest
+flow: 445 (explicit-flow-id)
+created_at: 2026-10-14T06:30:12.050Z
+context_mode: light
+
+## Stage counts
+
+Stated as counts, never as a precision figure: no precision baseline
+exists to improve on (see the flow's baseline.md — 53/53 = 100% by
+construction, refused as a baseline).
+
+### Dropped by the pre-filter
+
+files_seen: 34
+files_retained: 34
+files_dropped: 0
+blocks_seen: 234
+blocks_retained: 234
+blocks_dropped: 0
+changed_lines_retained: 1370
+changed_lines_dropped: 0
+
+_the pre-filter ran and dropped nothing_
+
+### Refuted by the verifier
+
+verification_mode: annotate
+claims_received: 0
+claims_applied: 0
+claims_rejected: 0
+verdicts_capped_to_unverifiable: 0
+confirmed: 0
+refuted: 0
+unverifiable: 0
+unverified: 13
+
+### Retained
+
+findings_in: 13
+findings_removed_by_verifier: 0
+findings_retained: 13
+
+### Verification claims discarded
+
+_none_
+
+
+## Caps
+
+Each cap says what it removed, deferred or stopped, with a count. An
+absent cap prints `not recorded`, never `0`: a cap that never ran and a
+cap that dropped nothing are different facts.
+
+### Findings cap
+
+limit_per_reviewer: 10
+findings_seen: 12
+findings_retained: 12
+findings_truncated: 0
+blockers_exempt: 0
+reviewers_truncated: 0
+
+_the findings cap ran and truncated nothing_
+
+### Spend ceiling
+
+not recorded — no spend ceiling was evaluated for this package.
+
+### Concurrency cap
+
+not recorded — no dispatch plan was supplied for this package.
+
+## Scope B rejections
+
+severity_floor: major
+accepted: 0
+rejected: 1
+exempted: 0
+
+| finding | reviewer | rule | why |
+|---|---|---|---|
+| R1-00 | review-regression | outside-set | src/flow/review-gate.e2e.test.ts is neither in the blast-radius set nor in the changed set. Scope B is bounded to the computed set; a finding outside it was not in scope for this round. |
+
+Rejected findings are recorded, not deleted: raise them under scope A or as a separate review.
+scope_b_findings: 1
+scope_b_exempted: 0
+blast_radius_record: supplied by the caller (--blast-radius)
+
+## filter_stats
+
+The machine-readable copy is `filter_stats` in `manifest.json`; this block is
+rendered from the same record, never re-parsed out of the prose above.
+`null` means the stage did not run. It never means `0`.
+
+total: 13
+dropped_prefilter: 0
+dropped_low_confidence: null — this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing.
+dropped_refuted: 0
+dropped_scope_b: 1
+dropped_findings_cap: 0
+dismissed_by_round: null — the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction.
+retained: 12
+
+### by_reason
+
+scope_b:outside-set: 1
+
+`dropped_prefilter` counts diff material — whole files and change blocks removed
+before any reviewer read them. Every other count is findings, and only those are
+summed against `retained`.

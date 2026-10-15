@@ -45,7 +45,7 @@ A thin layer that reads an optional `.metaproject/memory.config.json` file and d
 
 ### Ingest pipeline (`ingest.ts`)
 
-Bridges external tool outputs (health reports, code reviews, job results) into memory entries. It reads the source file, extracts candidate texts (JSON or Markdown), maps each to a memory type by source (`health` → `known-mistake`, `review`/`job`/`skill-verifier` → `lesson`), checks for duplicates and conflicts against existing entries, applies the security write seam (`guardOutput`) before any disk write, and performs Mem0-style reconciliation (appending a provenance note to an existing entry rather than creating a duplicate).
+Bridges external tool outputs (health reports, code reviews, job results) into memory entries. It reads the source file, extracts candidate texts (JSON or Markdown), maps each to a memory type by source (`health` → `known-mistake`, `review`/`job`/`skill-verifier` → `lesson`), checks for duplicates and conflicts against existing entries, applies the security write seam (`guardOutput`) before any disk write, and performs reconciliation (appending a provenance note to an existing entry rather than creating a duplicate).
 
 ## Key concepts
 
@@ -230,7 +230,7 @@ Bridges external tool outputs into memory entries.
 3. Map to memory type by source
 4. Check for duplicates and conflicts
 5. Apply security write seam (`guardOutput`)
-6. Perform Mem0-style reconciliation (append provenance note to existing entry rather than creating duplicate)
+6. Perform reconciliation (append provenance note to existing entry rather than creating duplicate)
 
 ## Key Concepts
 

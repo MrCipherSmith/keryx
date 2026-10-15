@@ -50,7 +50,7 @@
     ".metaproject/jobs/audit-2026-09-06/improvement-plan.md"
   ],
   "constraints": [
-    "Exact root /Users/Goodea/goodea/keryx; read index first",
+    "Exact root ~/goodea/keryx; read index first",
     "Read-only package; write only own .metaproject/jobs/audit-2026-09-06/docpack-review.md/result.json",
     "Russian user-facing report, Version below H1; security-check artifact; no execution metrics",
     "Do not require reapproval for already authorized decisions; no runtime source implementation, no commits or installs",

@@ -73,7 +73,7 @@ export async function ingestMemory(
       continue;
     }
 
-    // Near-duplicate of an existing entry -> reconcile (Mem0-style UPDATE).
+    // Near-duplicate of an existing entry -> reconcile (UPDATE).
     const dupes = findDuplicates(candidate, existing, config);
     if (dupes.length > 0) {
       const match = existing.find((e) => e.relativePath === dupes[0]?.path);
@@ -130,7 +130,7 @@ export async function ingestMemory(
   return result;
 }
 
-// Mem0-style UPDATE: append a provenance reconciliation note to an existing
+// UPDATE: append a provenance reconciliation note to an existing
 // entry and bump its Updated date. Idempotent per (source, link, date).
 async function reconcileEntry(
   cwd: string,

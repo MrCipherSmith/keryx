@@ -1,0 +1,152 @@
+[
+{
+"id": "M01-no-git-guard-removed",
+"file": "src/review/replay.ts",
+"anchor": "if (!existsSync(path.join(root, \".git\"))) return undefined;",
+"replacement": ""
+},
+{
+"id": "M02-never-git-mode",
+"file": "src/review/replay.ts",
+"anchor": "if (!existsSync(path.join(root, \".git\"))) return undefined;",
+"replacement": "return undefined;"
+},
+{
+"id": "M03-ls-files-throw-off",
+"file": "src/review/replay.ts",
+"anchor": "if (listed.status !== 0) {",
+"replacement": "if (false) {"
+},
+{
+"id": "M04-backslash-escape-off",
+"file": "src/review/replay.ts",
+"anchor": "value.replaceAll(\"\\\\\", \"\\\\\\\\\").",
+"replacement": "value."
+},
+{
+"id": "M05-pipe-escape-off",
+"file": "src/review/replay.ts",
+"anchor": ".replaceAll(\"|\", \"\\\\|\")",
+"replacement": ""
+},
+{
+"id": "M06-linebreak-collapse-off",
+"file": "src/review/replay.ts",
+"anchor": ".replace(/\\r\\n|[\\r\\n]/g, \" \")",
+"replacement": ""
+},
+{
+"id": "M07-cr-not-collapsed",
+"file": "src/review/replay.ts",
+"anchor": "/\\r\\n|[\\r\\n]/g",
+"replacement": "/\\n/g"
+},
+{
+"id": "M08-table-file-unescaped",
+"file": "src/review/replay.ts",
+"anchor": "| ${cell(row.file)} | ${row.hash}",
+"replacement": "| ${row.file} | ${row.hash}"
+},
+{
+"id": "M09-table-old-unescaped",
+"file": "src/review/replay.ts",
+"anchor": "| ${cell(row.old)} | ${cell(row.next)}",
+"replacement": "| ${row.old} | ${cell(row.next)}"
+},
+{
+"id": "M10-table-next-unescaped",
+"file": "src/review/replay.ts",
+"anchor": "| ${cell(row.next)} | ${row.cause}",
+"replacement": "| ${row.next} | ${row.cause}"
+},
+{
+"id": "M11-table-decision-unescaped",
+"file": "src/review/replay.ts",
+"anchor": "${cell(decisionFor(row, decisions))}",
+"replacement": "${decisionFor(row, decisions)}"
+},
+{
+"id": "M12-bullet-file-unescaped",
+"file": "src/review/replay.ts",
+"anchor": "- ${cell(row.file)} (",
+"replacement": "- ${row.file} ("
+},
+{
+"id": "M13-bullet-old-unescaped",
+"file": "src/review/replay.ts",
+"anchor": ": ${cell(row.old)}`",
+"replacement": ": ${row.old}`"
+},
+{
+"id": "M14-isfile-removed",
+"file": "src/review/replay.ts",
+"anchor": " && lstatSync(absolute).isFile()",
+"replacement": ""
+},
+{
+"id": "M15-isfile-weakened",
+"file": "src/review/replay.ts",
+"anchor": "lstatSync(absolute).isFile()",
+"replacement": "!lstatSync(absolute).isSymbolicLink()"
+},
+{
+"id": "M16-realpath-equality-off",
+"file": "src/review/replay.ts",
+"anchor": "realpathSync(absolute) === absolute &&",
+"replacement": "realpathSync(absolute).length > 0 &&"
+},
+{
+"id": "M17-walk-prune-off",
+"file": "src/review/replay.ts",
+"anchor": "if (!SKIPPED_DIRS.has(entry.name)) stack.push(child);",
+"replacement": "stack.push(child);"
+},
+{
+"id": "M18-walk-prune-node-modules-only",
+"file": "src/review/replay.ts",
+"anchor": "if (!SKIPPED_DIRS.has(entry.name)) stack.push(child);",
+"replacement": "if (entry.name !== \"node_modules\") stack.push(child);"
+},
+{
+"id": "S15-realroot-unresolved",
+"file": "src/review/replay.ts",
+"anchor": "const realRoot = realpathSync(root);",
+"replacement": "const realRoot = root;"
+},
+{
+"id": "S07-maxbuffer-tiny",
+"file": "src/review/replay.ts",
+"anchor": "maxBuffer: 64 * 1024 * 1024",
+"replacement": "maxBuffer: 1000"
+},
+{
+"id": "M19-error-text-changed",
+"file": "src/review/replay.ts",
+"anchor": "no raw reviewer replies to replay found under",
+"replacement": "no replies"
+},
+{
+"id": "M20-env-scrub-off",
+"file": "src/review/replay.ts",
+"anchor": "env: withoutGitDiscoveryOverrides(process.env)",
+"replacement": "env: process.env"
+},
+{
+"id": "M21-scrub-drops-git-dir",
+"file": "src/lib/git-env.ts",
+"anchor": "  \"GIT_DIR\",\n",
+"replacement": ""
+},
+{
+"id": "M22-scrub-drops-index-file",
+"file": "src/lib/git-env.ts",
+"anchor": "  \"GIT_INDEX_FILE\",\n",
+"replacement": ""
+},
+{
+"id": "M23-scrub-drops-work-tree",
+"file": "src/lib/git-env.ts",
+"anchor": "  \"GIT_WORK_TREE\",\n",
+"replacement": ""
+}
+]

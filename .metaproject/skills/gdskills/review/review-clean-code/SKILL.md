@@ -67,17 +67,15 @@ Clean Code Review Progress:
 
 See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
 
-Run the script to determine `BASE_SHA`, then collect the diff:
-
-```bash
-git diff --name-status "${BASE_SHA}"
-git diff "${BASE_SHA}"
-git ls-files --others --exclude-standard
-```
-
 Review scope: **only code introduced or modified in this branch since merge-base**.
 Pre-existing problems in unchanged lines are out of scope unless a change directly
 worsens them.
+
+**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text: a read-only child has no shell, so run no git command and never rebuild the diff. Only with none supplied, collect it:
+```bash
+git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
+# explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
+```
 
 ---
 

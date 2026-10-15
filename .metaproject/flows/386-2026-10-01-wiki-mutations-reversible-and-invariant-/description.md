@@ -1,11 +1,11 @@
 # Wiki mutations are reversible and preserve page invariants: snapshot before enrich/collect/sync, and enrich/collect stop dropping changelog, attestations and Version
 
 Status: formalized
-Source: user description (2026-10-01 incident in a downstream project, vantage-frontend)
+Source: user description (2026-10-01 incident in a downstream project, acme-frontend)
 
 ## Problem
 
-In a downstream project (vantage-frontend) `.metaproject/` is entirely gitignored, so
+In a downstream project (acme-frontend) `.metaproject/` is entirely gitignored, so
 `.metaproject/wiki/` has no version history at all. On 2026-10-01 a single
 `keryx wiki enrich --all --force` run:
 
@@ -56,7 +56,7 @@ The wiki stays correct and current without a manual repair round after each
 
 ## Outcome criteria
 
-- After the next `keryx wiki enrich --all --force` in vantage-frontend (on a release
+- After the next `keryx wiki enrich --all --force` in acme-frontend (on a release
   carrying this flow), `keryx wiki validate` reports 0 changelog/Version/attestation
   findings and no page needs hand repair; if anything regressed, `keryx wiki restore --run
   <id>` returns the store to `diff -rq`-identical pre-run state.

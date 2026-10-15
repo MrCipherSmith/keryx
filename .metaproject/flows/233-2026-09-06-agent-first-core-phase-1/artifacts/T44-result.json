@@ -23,19 +23,19 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T44-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T44-spec.md",
       "kind": "plan",
       "exists": true,
       "summary": "The defect restated, the change with its one deviation from T41's proposal recorded before coding, every caller enumerated with method, the assertions to widen, the regressions planned per outcome, and the exfil.test.ts conflict disclosed in advance."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T44-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T44-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Caller enumeration, the change and its type-narrowing deviation, the exact assertions widened, the four regressions added with the architectural finding regression 4 surfaced, the disclosed exfil.test.ts conflict with its one-line fix, exact before/RED/GREEN counts with raw log paths, files changed, and the routing audit."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T44-result.json",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T44-result.json",
       "kind": "final-report",
       "exists": true,
       "summary": "This file."

@@ -1,6 +1,6 @@
 // What the topic gets back when it asks for the session's history (flow 399).
 //
-// A topic is deleted when the shell exits, and a resumed session gets a new, empty one. The
+// A topic is archived when the shell exits, and a resumed session gets a new, empty one. The
 // operator wants the last few messages of the conversation there again: what they wrote and
 // what the agent answered. Pure functions only; the bridge does the sending.
 //

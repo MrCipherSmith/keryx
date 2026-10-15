@@ -1,0 +1,65 @@
+[
+  {
+    "finding": "F-001",
+    "verdict": "confirmed",
+    "method": "execution",
+    "evidence": "quote exists at tui-shell.ts:8592; busy-dispatch.test.ts:268 pins the call without the return; mutant N01 survived",
+    "verifier": "review-verifier"
+  },
+  {
+    "finding": "F-002",
+    "verdict": "confirmed",
+    "method": "execution",
+    "evidence": "notices at tui-shell.ts:8626 and :9438 exist and are not pinned; mutants N02, N03, N10 survived",
+    "verifier": "review-verifier"
+  },
+  {
+    "finding": "F-003",
+    "verdict": "confirmed",
+    "method": "execution",
+    "evidence": "main-queue.test.ts:164 is a presence loop; tui-bus.test.ts:716 bare toContain; mutants P01, P02, P03 survived",
+    "verifier": "review-verifier"
+  },
+  {
+    "finding": "F-004",
+    "verdict": "confirmed",
+    "method": "execution",
+    "evidence": "turn-loop.ts:80-81 paint forwarding unpinned; mutant N16b survived",
+    "verifier": "review-verifier"
+  },
+  {
+    "finding": "F-005",
+    "verdict": "confirmed",
+    "method": "site-check",
+    "evidence": "turn-loop.ts:8-10 misattributes; guards are in main-queue.test.ts:164, busy branch in busy-dispatch.test.ts:268-271",
+    "verifier": "review-verifier"
+  },
+  {
+    "finding": "F-006",
+    "verdict": "confirmed",
+    "method": "site-check",
+    "evidence": "tui-hold.test.ts:128 slice has no end>start check; stale comment at :122-123 and title at :115",
+    "verifier": "review-verifier"
+  },
+  {
+    "finding": "F-007",
+    "verdict": "confirmed",
+    "method": "site-check",
+    "evidence": "queue: () => queue, asserted at tui-hold.test.ts:155, busy-dispatch.test.ts:278, tui-shell.test.ts:4016",
+    "verifier": "review-verifier"
+  },
+  {
+    "finding": "F-008",
+    "verdict": "confirmed",
+    "method": "site-check",
+    "evidence": "turn-loop.ts:47-52 boolean enqueueWhileBusy with adjacent string parameters",
+    "verifier": "review-verifier"
+  },
+  {
+    "finding": "F-009",
+    "verdict": "confirmed",
+    "method": "site-check",
+    "evidence": "turn-loop.test.ts:215 and :326 overlap; main-queue.ts:239 and :246 stale; turn-loop.ts:60 unnamed drain type",
+    "verifier": "review-verifier"
+  }
+]

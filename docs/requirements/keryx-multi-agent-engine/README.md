@@ -74,7 +74,7 @@ live in-process stream.
 
 **Phase D — implemented (added 2026-08-18, shipped flow 171).** Two gaps found by
 direct code investigation while comparing Keryx against three reference
-open-source coding agents (xAI Grok Build, sst/opencode, OpenAI Codex CLI — see
+open-source coding agents (OpenAI Codex CLI and two other harnesses — see
 `brainstorm.md` for the comparison) have now been closed:
 
 1. **Interactive `spawn_subagent` calls in one turn now run concurrently.** The

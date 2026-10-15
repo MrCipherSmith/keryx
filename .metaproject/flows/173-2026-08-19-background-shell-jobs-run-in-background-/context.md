@@ -52,9 +52,9 @@ conversation's transcript, not re-pasted here)
   unshipped proposal — issue #32188/#29865). Sandboxed `pgrep` fails, so
   Codex often cannot see/kill its own background children (#8656) — a
   process-VISIBILITY bug, same root cause class as the next one.
-- **opencode**: no built-in backgrounding; real open hangs from a background
+- **Another agent tool**: no built-in backgrounding; real open hangs from a background
   child inheriting stdout/stderr FDs so the parent tool call never returns
-  (#20902, #22012, #29294) — a process-OWNERSHIP bug (losing track of the
+  — a process-OWNERSHIP bug (losing track of the
   process group, not just the direct PID). This is exactly why this flow
   requires kill-by-process-group as a hard requirement, not a nice-to-have.
 - **Gemini CLI**: `is_background:true`/trailing `&` → returns immediately
@@ -62,9 +62,8 @@ conversation's transcript, not re-pasted here)
   must self-manage the PID via a later `kill <pid>` call. Weakest API shape
   surveyed — ruled out during the discussion in favor of Claude-Code-style
   companion tools.
-- **aider**: no backgrounding; foreground/synchronous only.
-- **Cline** (VS Code extension): removed foreground terminal mode entirely
-  in v3.80 — every command runs as background exec via a plain
+- **Another VS Code extension agent**: removed foreground terminal mode entirely
+  — every command runs as background exec via a plain
   `child_process`, specifically to kill a class of zombie-process bugs the
   old shell-integration mode had. Reacts to new output as an event, not
   poll-on-demand.

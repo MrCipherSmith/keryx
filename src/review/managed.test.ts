@@ -1,15 +1,17 @@
-import { afterEach, test, expect } from "bun:test";
-import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { READY_DISPATCH } from "./dispatch.test-helpers";
+import { afterEach, describe, test, expect } from "bun:test";
+import { appendFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
+import { touchesCoverageWaiver, touchesHumanConfirmation } from "../lib/command-risk";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import { createFlowService } from "../flow/service";
 import type { FlowServiceDeps, TrackerAdapter } from "../flow/types";
 import {
   completeManagedReview,
-  createManagedReviewPackage,
+  createManagedReviewPackage as createPendingManagedReviewPackage,
   findingDispositionState,
   findRelatedFlow,
   validateManagedReviewManifest,
@@ -240,6 +242,29 @@ test("ingest writes classified findings and skill learning decision", async () =
   expect(decisions).toContain("F-001: create follow-up task or learning proposal (valid_followup, standalone_review).");
   const learning = await readFile(path.join(ROOT, result.path, "learning.md"), "utf8");
   expect(learning).toContain("## Skill Learning");
+});
+
+test("start with a report path that does not exist yet opens the round; ingest still refuses it", async () => {
+  await fresh();
+  const started = await createManagedReviewPackage({
+    cwd: ROOT,
+    mode: "review-flow",
+    reviewId: "2026-10-10-start-no-report",
+    target: { kind: "report", ref: "later/review.md" },
+    reportPath: "later/review.md",
+    now: new Date("2026-10-10T00:00:00Z"),
+  });
+  expect(started.path).toContain("2026-10-10-start-no-report");
+  await expect(
+    createManagedReviewPackage({
+      cwd: ROOT,
+      mode: "ingest",
+      reviewId: "2026-10-10-ingest-no-report",
+      target: { kind: "report", ref: "later/review.md" },
+      reportPath: "later/review.md",
+      now: new Date("2026-10-10T00:00:00Z"),
+    }),
+  ).rejects.toThrow();
 });
 
 test("ingest refuses a blocker or major that does not enumerate its class", async () => {
@@ -549,6 +574,7 @@ test("complete requires every managed review artifact", async () => {
     target: { kind: "path", ref: "src/review" },
     now: new Date("2026-07-09T11:00:00Z"),
   });
+  await appendFile(path.join(ROOT, result.path, "report.md"), "\nEvidence level: static only — did not run: tests\n", "utf8");
 
   const completed = await completeManagedReview(ROOT, result.path);
   expect(completed.manifest.status).toBe("closed");
@@ -617,7 +643,7 @@ async function ingestFindings(
     mode: "ingest",
     reviewId,
     target: { kind: "report", ref: "review.md" },
-    reportText: "# Round\n\nno machine-readable block here\n",
+    reportText: "# Round\n\nno machine-readable block here\nEvidence level: static only — did not run: tests\n",
     findings: [FULL_FINDING],
     now: new Date("2026-08-29T11:00:00Z"),
     ...over,
@@ -1267,7 +1293,7 @@ test("AC6/AC10: a spend over the ceiling is recorded as a stop, and the package 
 test("AC7/AC10: a dispatch plan records its waves, its queue and whether it holds across nesting", async () => {
   await fresh();
   const { path: pkg } = await ingestFindings("2026-08-30-cap-concurrency", {
-    concurrency: { reviewers: ["a", "b", "c", "d", "e", "f"] },
+    concurrency: { cap: 4, reviewers: ["a", "b", "c", "d", "e", "f"] },
   });
   const scope = await readFile(path.join(ROOT, pkg, "scope.md"), "utf8");
 
@@ -1512,7 +1538,7 @@ async function ingestUnnamed(
     cwd: ROOT,
     mode: "ingest",
     target: { kind: "report", ref: "review.md" },
-    reportText: "# Round\n\nno machine-readable block here\n",
+    reportText: "# Round\n\nno machine-readable block here\nEvidence level: static only — did not run: tests\n",
     findings: [FULL_FINDING],
     now: new Date("2026-08-29T11:00:00Z"),
     ...over,
@@ -1662,3 +1688,155 @@ test("AC3: rule 3 still holds a major to naming the change, and says so out loud
   expect(scope).toContain("no-link-to-change");
   expect(scope).toContain("scope_b_findings: 1");
 });
+
+async function packageWithUncoveredFiles(reviewId: string): Promise<string> {
+  const { path: pkg } = await ingestFindings(reviewId);
+  const dir = path.join(ROOT, pkg);
+  const dropped = Array.from({ length: 8 }, (_, index) => ({ file: `src/far-${index}.ts`, hop: 1, fanIn: 1, via: "src/a.ts", source: "graph", reason: "cap", detail: "over the cap" }));
+  await writeFile(path.join(dir, "scope-files.json"), JSON.stringify({ files: ["src/a.ts"] }), "utf8");
+  await writeFile(path.join(dir, "blast-radius.json"), JSON.stringify({ schemaVersion: 1, changedFiles: ["src/a.ts"], files: [], dropped }), "utf8");
+  await mkdir(path.join(dir, "slices"), { recursive: true });
+  return pkg;
+}
+
+test("R1-12: review complete refuses uncovered files without the flag, naming the count and the first files", async () => {
+  await fresh();
+  const pkg = await packageWithUncoveredFiles("2026-10-13-gate-no-flag");
+  const error = await completeManagedReview(ROOT, pkg).then(() => undefined, (caught: Error) => caught);
+  expect(error?.message).toContain("8 in-scope file(s) are uncovered");
+  expect(error?.message).toContain("src/far-0.ts");
+  expect(error?.message).toContain("--waive-coverage");
+  expect(JSON.parse(await readFile(path.join(ROOT, pkg, "research.json"), "utf8")).dispatch.coverageWaiver).toBeUndefined();
+});
+
+test("R1-12: an empty, blank or flag-name quote is refused and writes nothing", async () => {
+  await fresh();
+  const pkg = await packageWithUncoveredFiles("2026-10-13-gate-bad-quote");
+  const before = await readFile(path.join(ROOT, pkg, "research.json"), "utf8");
+  for (const quote of ["", "   ", "ok", "--waive-coverage", "waive coverage"]) {
+    await expect(completeManagedReview(ROOT, pkg, { waiveCoverage: quote })).rejects.toThrow("operator's own words");
+  }
+  expect(await readFile(path.join(ROOT, pkg, "research.json"), "utf8")).toBe(before);
+});
+
+test("R1-12: the operator's own words complete the review and are recorded with the time and the waived files", async () => {
+  await fresh();
+  const pkg = await packageWithUncoveredFiles("2026-10-13-gate-waived");
+  const now = new Date("2026-10-13T12:00:00Z");
+  await completeManagedReview(ROOT, pkg, { waiveCoverage: "skip the far files, they are generated", now });
+  const waiver = JSON.parse(await readFile(path.join(ROOT, pkg, "research.json"), "utf8")).dispatch.coverageWaiver;
+  expect(waiver).toMatchObject({ operatorQuote: "skip the far files, they are generated", time: now.toISOString() });
+  expect(waiver.files).toHaveLength(8);
+});
+
+test("R1-12: through the CLI the waiver flag is not read as a disposition and an empty value is refused", async () => {
+  await fresh();
+  const pkg = await packageWithUncoveredFiles("2026-10-13-gate-cli");
+  process.chdir(ROOT);
+  const log = console.log;
+  const logError = console.error;
+  const errors: string[] = [];
+  console.log = () => undefined;
+  console.error = (...parts: unknown[]) => void errors.push(parts.join(" "));
+  try {
+    process.exitCode = 0;
+    await reviewCommand(["complete", pkg, "--waive-coverage", ""], { isTerminal: () => true });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("operator's own words");
+    process.exitCode = 0;
+    await reviewCommand(["complete", pkg, "--finding", "F-001", "--disposition", "acted-on", "--evidence", "closed by 380bf3b0", "--waive-coverage", "skip the far files, generated"], { isTerminal: () => true });
+    expect(process.exitCode ?? 0).toBe(0);
+  } finally {
+    console.log = log;
+    console.error = logError;
+  }
+  const findings = JSON.parse(await readFile(path.join(ROOT, pkg, "findings.json"), "utf8")) as StructuredReviewFinding[];
+  expect(findings[0]?.disposition?.state).toBe("acted-on");
+  expect(JSON.parse(await readFile(path.join(ROOT, pkg, "research.json"), "utf8")).dispatch.coverageWaiver.operatorQuote).toBe("skip the far files, generated");
+});
+
+test("R1-10: a close that fails after the waiver was written takes the waiver back", async () => {
+  await fresh();
+  const pkg = await packageWithUncoveredFiles("2026-10-13-gate-rollback");
+  const researchPath = path.join(ROOT, pkg, "research.json");
+  const research = JSON.parse(await readFile(researchPath, "utf8"));
+  research.scopeReviewed = false;
+  await writeFile(researchPath, JSON.stringify(research), "utf8");
+  const before = await readFile(researchPath, "utf8");
+
+  await expect(completeManagedReview(ROOT, pkg, { waiveCoverage: "skip the far files, they are generated" })).rejects.toThrow("Cannot complete managed review");
+
+  expect(await readFile(researchPath, "utf8")).toBe(before);
+  await expect(completeManagedReview(ROOT, pkg)).rejects.toThrow("uncovered");
+});
+
+test("R2-05: without a terminal the waiver is refused and nothing is written", async () => {
+  await fresh();
+  const pkg = await packageWithUncoveredFiles("2026-10-13-gate-no-tty");
+  const researchPath = path.join(ROOT, pkg, "research.json");
+  const before = await readFile(researchPath, "utf8");
+  process.chdir(ROOT);
+  const logError = console.error;
+  const errors: string[] = [];
+  console.error = (...parts: unknown[]) => void errors.push(parts.join(" "));
+  try {
+    process.exitCode = 0;
+    await reviewCommand(["complete", pkg, "--waive-coverage", "skip the far files, generated"], { isTerminal: () => false });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("needs a terminal");
+  } finally {
+    console.error = logError;
+    process.exitCode = 0;
+  }
+  expect(await readFile(researchPath, "utf8")).toBe(before);
+});
+
+describe("R2-01: every throw site between the waiver write and the manifest write takes the waiver back", () => {
+  const quote = "skip the far files, they are generated";
+
+  async function expectRolledBack(pkg: string, options: Parameters<typeof completeManagedReview>[2], message: string): Promise<void> {
+    const researchPath = path.join(ROOT, pkg, "research.json");
+    const manifestPath = path.join(ROOT, pkg, "manifest.json");
+    const researchBefore = await readFile(researchPath, "utf8");
+    const manifestBefore = await readFile(manifestPath, "utf8");
+    await expect(completeManagedReview(ROOT, pkg, options)).rejects.toThrow(message);
+    expect(await readFile(researchPath, "utf8")).toBe(researchBefore);
+    expect(await readFile(manifestPath, "utf8")).toBe(manifestBefore);
+    await expect(completeManagedReview(ROOT, pkg)).rejects.toThrow("uncovered");
+  }
+
+  test("an unknown finding id in --finding", async () => {
+    await fresh();
+    const pkg = await packageWithUncoveredFiles("2026-10-13-rollback-unknown-finding");
+    await expectRolledBack(
+      pkg,
+      { waiveCoverage: quote, dispositions: [{ finding: "F-999", state: "dismissed-incorrect", evidence: "x" }] },
+      "F-999",
+    );
+  });
+
+  test("an invalid manifest", async () => {
+    await fresh();
+    const pkg = await packageWithUncoveredFiles("2026-10-13-rollback-bad-manifest");
+    const manifestPath = path.join(ROOT, pkg, "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.target = { ...manifest.target, kind: "not-a-kind" };
+    await writeFile(manifestPath, JSON.stringify(manifest), "utf8");
+    await expectRolledBack(pkg, { waiveCoverage: quote }, "Invalid managed review manifest");
+  });
+});
+
+test("R1-10: `--waive-coverage` is a human-confirmation command the approval floor asks about", () => {
+  expect(touchesCoverageWaiver('keryx review complete --package p --waive-coverage "skip them all"')).toBe(true);
+  expect(touchesHumanConfirmation("bun run src/cli.ts review complete p --waive-coverage 'x y z'")).toBe(true);
+  expect(touchesCoverageWaiver("keryx review complete --package p")).toBe(false);
+});
+
+// These synthetic fixtures exercise disposition/ingest, not outstanding research.
+// The pending default is exercised without this helper in research.test.ts.
+function createManagedReviewPackage(input: ManagedReviewIngestInput) {
+  return createPendingManagedReviewPackage({
+    research: { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: READY_DISPATCH },
+    ...input,
+  });
+}

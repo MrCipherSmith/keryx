@@ -466,6 +466,7 @@
         "src/gdskills/bundled/skills/review/review-clean-code/**",
         "src/gdskills/bundled/skills/review/review-highload/**",
         "src/gdskills/bundled/skills/review/review-regression/**",
+        "src/gdskills/bundled/skills/review/review-pr-contract/**",
         "src/gdskills/bundled/skills/review/review-core-boundaries/**",
         "src/gdskills/bundled/skills/review/review-flow-graph/**",
         "src/gdskills/bundled/skills/review/review-layout/**",

@@ -191,7 +191,7 @@
     "problem": "When the branch names no flow, resolveFlowContext attributes the question to the only flow whose status is in-progress, even if the operator is not working on it. That flow then receives a line in its tracked journal.md.",
     "impact": "The operator works on main or on an unrelated branch while one stale flow is left in-progress (a long-lived flow is normal here). Every ask_user question is recorded with that flow and stage, and each answer appends a line to that flow's journal.md, leaving the main checkout with a modified tracked file and putting questions about other work into that flow's by-stage numbers.",
     "suggested_fix": "Use the in-progress fallback only when the branch matched nothing AND the flow's own branch or worktree is the current one; otherwise record no flow. Alternatively mark the guess in the record (flow_source) so the report can exclude it.",
-    "evidence": "src/decisions/context.ts resolveFlowContext: when KERYX_FLOW is unset and fromBranch yields nothing, `dir ??= await onlyInProgress(cwd, dirs)` picks any single in-progress flow of the 30 newest. On /home/altsay/keryx (main) it returned no flow only because several flows are in progress at once, which is luck rather than a rule.",
+    "evidence": "src/decisions/context.ts resolveFlowContext: when KERYX_FLOW is unset and fromBranch yields nothing, `dir ??= await onlyInProgress(cwd, dirs)` picks any single in-progress flow of the 30 newest. On ~/keryx (main) it returned no flow only because several flows are in progress at once, which is luck rather than a rule.",
     "confidence": "medium",
     "file": "src/decisions/context.ts",
     "line": 93,

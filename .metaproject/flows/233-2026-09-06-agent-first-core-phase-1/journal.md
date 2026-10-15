@@ -581,7 +581,7 @@ T52 заменил регулярные выражения настоящим с
 
 Отдельно проверена тревога из памяти о том, что воркер мог уйти в `.claude/worktrees/` и не видеть незакоммиченную работу. Проверка: `git worktree list` показывает два старых worktree; в `wizardly-chatelet-a166c6` `git status` **чист** — исходники там не менялись, есть только сгенерированные `.metaproject/data/gdctx` артефакты за 16:0x. То есть исходная работа не терялась: защита «cd в корень и pwd первым делом», встроенная в каждый dispatch этой сессии, сработала. Подтверждено и предметно: `gateExitCode` из T50 присутствует в основном чекауте (`src/health/service.ts:175`), оба новых тестовых файла на месте, а комментарии T55 уже ссылаются на T50 — значит текущий лан пишет туда, куда нужно.
 
-Root при этом сам на минуту оказался с рабочим каталогом внутри worktree из-за `cd` в команде проверки и немедленно вернулся в `/Users/Goodea/goodea/keryx`. Урок для следующего агента: инспектировать worktree только через абсолютные пути, без `cd`, иначе среда переключает корень сессии.
+Root при этом сам на минуту оказался с рабочим каталогом внутри worktree из-за `cd` в команде проверки и немедленно вернулся в `~/goodea/keryx`. Урок для следующего агента: инспектировать worktree только через абсолютные пути, без `cd`, иначе среда переключает корень сессии.
 - 2026-09-06T16:08:14.299Z - task-done: T55: Close the exit-code residue: stored mode source, the enforced arm and the missing gate key
 - 2026-09-06T16:08:14.414Z - task-attempt: T43: started (attempt 1) — Shape-aware sibling reader per the T39 ruling; migrate only readers whose payload feeds a gate, an exit code or a security decision
 

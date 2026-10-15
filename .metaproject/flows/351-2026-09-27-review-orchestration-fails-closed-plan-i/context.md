@@ -73,4 +73,4 @@ Sites located and read in the analysis session (line numbers at `d1001a52`; shif
 
 Tests that pin current behaviour: `src/commands/agent.test.ts` (`buildToollessReprompt`), `src/commands/agent-tool-call-budget.test.ts`, `src/session/execution-plan.test.ts`, `src/harness/tool/builtin/spawn-subagent-tool.test.ts`, `src/commands/goal-command.test.ts`, `src/review/reviewers.test.ts`.
 
-Evidence: the independent report is at `/private/tmp/claude-502/-Users-Goodea-work-vantage-frontend/6ade2bd6-53b0-4026-acc1-46edff376d8c/scratchpad/keryx-review-orchestration-report.md` (outside the repo; summarized in description.md).
+Evidence: the independent report is at `<consumer-project scratchpad>/keryx-review-orchestration-report.md` (outside the repo; summarized in description.md).

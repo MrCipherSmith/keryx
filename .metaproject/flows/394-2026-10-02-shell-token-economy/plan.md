@@ -5,7 +5,7 @@ Status: ready for freeze
 ## Approach
 
 Fix the seven defects in `description.md` with deterministic, no-LLM mechanisms first, copying the
-pattern that the competitor study (`context.md`) found strongest for each, and prove the effect with
+pattern that the harness comparison study (`context.md`) found strongest for each, and prove the effect with
 a measurement rather than by inspection. Order is by token saved per unit of risk: the cache key and
 the codex window are near one-liners with large effect; pruning and anchor dedup are the bulk of the
 saving; the comparative benchmark comes last because it measures everything before it.
@@ -44,7 +44,7 @@ LLM summary follows as its own flow once this one's measurement shows what is le
    placeholder carrying the spill path, only when that saves ≥ 20K tokens. Pruning edits only what is
    sent; `archive.jsonl` keeps the original. Prune → remeasure → compact only if still over threshold.
 9. **Session replay fixture (AC9).** A synthetic, redacted fixture with the shape of the 2026-10-01
-   vantage-frontend session (message mix, tool-output sizes, anchor churn, task notifications) and a
+   acme-frontend session (message mix, tool-output sizes, anchor churn, task notifications) and a
    deterministic replay that reports per-request estimated input before and after.
 10. **Comparative benchmark (AC10, AC11).** Extend the mutating-ablation runners to record uncached
     input, cached input and output tokens per task for keryx shell, codex CLI and opencode; run the
@@ -64,5 +64,5 @@ LLM summary follows as its own flow once this one's measurement shows what is le
   step 1; codex CLI sends it, which is strong but not proof for this adapter's request shape.
 - **Benchmark fairness.** Harnesses cannot all run the identical model (known from the M2 ladder).
   The report states the model per leg; a mismatched leg is reported, not dropped.
-- **Real session data.** The 2026-10-01 session contains Vantage project content; the AC9 fixture is
+- **Real session data.** The 2026-10-01 session contains Acme project content; the AC9 fixture is
   synthetic with the same shape, never a copy of the transcript.

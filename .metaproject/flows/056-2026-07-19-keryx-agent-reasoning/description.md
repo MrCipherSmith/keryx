@@ -3,8 +3,8 @@
 ## Problem
 Reasoning-capable models (via OpenRouter: deepseek-r1, o1, qwen-thinking, etc.)
 stream their chain-of-thought in a separate `delta.reasoning` field, which keryx
-currently drops (the normalized layer has no reasoning event). OpenCode/claude
-show a distinct, de-emphasized "thinking" section above the answer. Add it.
+currently drops (the normalized layer has no reasoning event). Claude
+shows a distinct, de-emphasized "thinking" section above the answer. Add it.
 
 ## Approach
 - Add `reasoning_delta` to NormalizedEventKind (no exhaustive switch consumes the

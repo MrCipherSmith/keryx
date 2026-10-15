@@ -1,7 +1,7 @@
 // Pure main-queue helpers for the TUI busy-input router (flow 167),
 // GENERALISED to a queue per addressee (flow 176, T16).
 //
-// The interactive shell keeps `mainQueue` state + rendering inside
+// The interactive shell keeps the queue in `createTurnLoop` (src/tui/turn-loop.ts) and renders it inside
 // `launchTuiAgentShell` (src/tui/tui-shell.ts); this module holds the PURE,
 // unit-testable part — marker formatting and the remove/edit/reinsert
 // moves — so the queue behaviour is pinned by tests without mounting a whole
@@ -187,4 +187,166 @@ export function drainIdleMainQueue<T extends QueuedMainQuestion>(
   if (next === undefined) return false;
   options.dispatch(next);
   return true;
+}
+
+/**
+ * How a drain ended. `started`: queue work is in flight (a turn, an operation, a hand-off or a
+ * detached slash command), so its own end drains the rest. `empty`: nothing is left to run.
+ * `exhausted`: lines remain but this drain stopped because a line put itself back, so only a
+ * later settle or release moves them.
+ */
+export type DrainOutcome = "started" | "empty" | "exhausted";
+
+/**
+ * Take the next queued line and run it, and keep going while the line started no queue work
+ * (flow 441, R1). A slash command that finishes inline (`/compact`) starts no turn, so no settle
+ * would ever drain what is queued behind it.
+ *
+ * The loop is bounded by the number of takeable lines at entry, and it stops at the first line
+ * that leaves the count unchanged (a line put back in the queue under a held lease).
+ */
+export function drainNext<T extends QueuedMainQuestion>(options: {
+  /** The forced items first, else the head of the queue. */
+  take: () => T | undefined;
+  /** How many lines `take` can return now: forced items plus queued ones. */
+  pending: () => number;
+  paint: () => void;
+  run: (item: T) => void;
+  /** Queue work is in flight after `run` returned. */
+  isBusy: () => boolean;
+}): DrainOutcome {
+  for (let budget = options.pending(); budget > 0; budget--) {
+    const before = options.pending();
+    const next = options.take();
+    options.paint();
+    if (next === undefined) return "empty";
+    options.run(next);
+    if (options.isBusy()) return "started";
+    if (options.pending() >= before) return "exhausted";
+  }
+  // every pass lowered the count by at least one (else it returned above), so the count is now zero
+  return "empty";
+}
+
+/** The part of `ForegroundForceHandoff` the drain reads. */
+export interface ForcedItems<T> {
+  takeNext(): T | undefined;
+  readonly pendingCount: number;
+  readonly isAwaitingSettlement: boolean;
+}
+
+/**
+ * The whole queue drain in one place (flow 441, R1): `createTurnLoop` builds it for the shell, and
+ * `main-queue-drain.test.ts` and `turn-loop.test.ts` build and drive it directly. The sites differ in what surrounds the drain: a finished foreground operation
+ * and a settled turn wait for a pending force hand-off; a released lease and the end of a detached
+ * slash command stay out while queue work is in flight, because that work's own end drains. Every
+ * site that ends with nothing queued and nothing started calls `onSettle`, so the bus wake is
+ * never starved by the site that happened to be last.
+ *
+ * `queue` is a getter: the turn loop replaces its queue array on `/queue remove`, `/queue edit` and
+ * Force, so a reference taken once would drain a queue nobody shows any more.
+ */
+export function createMainQueueDrain<T extends QueuedMainQuestion>(deps: {
+  forced: ForcedItems<T>;
+  queue: () => T[];
+  paint: () => void;
+  run: (item: T) => void;
+  /** A turn, a foreground operation or a pending hand-off is in flight. Detached slash work is counted by `detach`. */
+  turnWorkInFlight: () => boolean;
+  /** The drain left nothing queued and started nothing, so the bus may wake. */
+  onSettle: () => void;
+  /** Detached slash work rejected: say why. The queue is released afterwards either way. */
+  onDetachedFailure: (error: unknown) => void;
+}): {
+  onForegroundOperationComplete(): void;
+  onTurnSettle(): void;
+  onLeaseRelease(): void;
+  /** Hold the queue until `work` settles (either way), then drain what waited behind it. */
+  detach(work: Promise<unknown>): void;
+  /** Everything the drain waits on: `deps.turnWorkInFlight` plus detached slash work. */
+  workInFlight(): boolean;
+} {
+  let detached = 0;
+  const workInFlight = (): boolean => deps.turnWorkInFlight() || detached > 0;
+  const drain = (): DrainOutcome => {
+    const outcome = drainNext({
+      take: () => deps.forced.takeNext() ?? deps.queue().shift(),
+      pending: () => deps.forced.pendingCount + deps.queue().length,
+      paint: deps.paint,
+      run: deps.run,
+      isBusy: workInFlight,
+    });
+    if (outcome === "empty") deps.onSettle();
+    return outcome;
+  };
+  const drainWhenIdle = (): void => {
+    if (workInFlight()) return;
+    drain();
+  };
+  return {
+    onForegroundOperationComplete() {
+      if (deps.forced.isAwaitingSettlement) return;
+      drain();
+    },
+    onTurnSettle() {
+      if (deps.forced.isAwaitingSettlement) return;
+      drain();
+    },
+    onLeaseRelease: drainWhenIdle,
+    detach(work) {
+      detached += 1;
+      const end = (): void => {
+        detached -= 1;
+        drainWhenIdle();
+      };
+      work.then(end, (error: unknown) => {
+        try {
+          deps.onDetachedFailure(error);
+        } catch {
+          // a failing report must not strand the queue
+        }
+        end();
+      });
+    },
+    workInFlight,
+  };
+}
+
+/** What a queued message waits for (flow 426, AC6). */
+export type QueueWait = { kind: "turn" } | { kind: "approval"; call: string };
+
+export const QUEUE_FORCE_HELP =
+  "[Force] interrupts the current turn and runs this message now · [Edit] moves it back to the composer · [Delete] removes it";
+
+const PENDING_CALL_CHARS = 60;
+
+/** One short line naming the call an approval is pending for: the shell command, else the tool name. */
+export function describePendingCall(tool: string, inputJson: string): string {
+  let shown = tool;
+  try {
+    const parsed: unknown = JSON.parse(inputJson);
+    if (parsed !== null && typeof parsed === "object") {
+      const command = (parsed as { command?: unknown }).command;
+      if (typeof command === "string" && command.trim().length > 0) shown = command;
+    }
+  } catch {
+    // not JSON: the tool name stands for the call
+  }
+  const oneLine = shown.replace(/\s+/g, " ").trim();
+  return oneLine.length > PENDING_CALL_CHARS ? `${oneLine.slice(0, PENDING_CALL_CHARS - 1)}…` : oneLine;
+}
+
+export function queueWaitReason(wait: QueueWait): string {
+  return wait.kind === "turn" ? "waits for the current turn" : `waits for approval of: ${wait.call}`;
+}
+
+/** The queue row: marker, text, state, and the reason it waits. */
+export function formatQueueRow(index: number, text: string, wait: QueueWait): string {
+  return `${formatMainQueueMarker(index)} ${text} — queued · ${queueWaitReason(wait)}`;
+}
+
+/** What `/queue` prints: the same rows the panel shows, then the one-line [Force] explanation. */
+export function formatQueueListing(texts: readonly string[], wait: QueueWait): string[] {
+  if (texts.length === 0) return ["main queue is empty."];
+  return [...texts.map((text, index) => formatQueueRow(index, text, wait)), QUEUE_FORCE_HELP];
 }

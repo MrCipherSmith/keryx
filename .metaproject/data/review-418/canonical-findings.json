@@ -1,0 +1,209 @@
+[
+  {
+    "id": "F-001",
+    "severity": "major",
+    "file": "src/tui/tui-shell.ts",
+    "line": null,
+    "problem": "Busy slash lines are queued on mainQueue and run when the turn ends, but every drain site shifts ONE item and relies on a later turn-settle to shift the next. A queued slash command that starts no turn (/compact, /model, /goal, /connect) ends without a settle, so every line queued behind it stays in mainQueue.",
+    "impact": "While a turn runs, '/compact' then 'continue with the review' leaves the second line stuck; the operator's next typed line runs ahead of it (order inversion). In an unattended trust-mode run a queued slash line silently stops the queue.",
+    "suggested_fix": "Deferred, not fixed in this closing round. Follow-up: after runQueued runs an item that starts no foreground operation, drain the next item (shared drainNext helper used by the three sites), stopping once an item starts a turn. Add a headless test that queues ['/compact', 'question'] and asserts the question is dispatched.",
+    "evidence": "src/tui/tui-shell.ts drain sites at lines 9565, 9874, 9970 (each `forceHandoff.takeNext() ?? mainQueue.shift()` once); raw replies: review-logic-10-11 F-001",
+    "confidence": "high",
+    "reviewer": "review-logic",
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts:9565 (drain after a foreground turn settles)",
+        "src/tui/tui-shell.ts:9874 (drain after a lease-held turn)",
+        "src/tui/tui-shell.ts:9970 (drain after a queued line ends)",
+        "src/tui/tui-shell.ts:8594 takeForced hands the forced-queue head to the same consumer (forceHandoff, not mainQueue)"
+      ],
+      "enumeration_method": "keryx ctx rg --all 'mainQueue\\.shift\\(\\)|takeNext\\(\\)' src/tui: 13 matches in 7 files; in non-test code only src/tui/tui-shell.ts (8594, 9565, 9874, 9970) and the definition in foreground-operation.ts; the others are tests. Each of the three shift sites takes exactly one item."
+    }
+  },
+  {
+    "id": "F-002",
+    "severity": "minor",
+    "file": "src/tui/busy-dispatch.ts",
+    "line": null,
+    "problem": "BUSY_REFUSED_COMMANDS lists /new, /clear and /resume as session-swapping commands refused while busy, but the alias /sessions takes the same resumeSessionInteractive path and is queued instead.",
+    "impact": "Queue ['/sessions', 'q2'] while busy: when the turn ends the picker opens and, if the operator resumes another session, q2 (typed against the old history) is answered in the resumed session.",
+    "suggested_fix": "Deferred. Follow-up: add /sessions to the refused set, or derive the refused set from the handlers that swap the session so an alias cannot drift; add a test for the alias.",
+    "evidence": "src/tui/busy-dispatch.ts:197 (BUSY_REFUSED_COMMANDS = /new, /clear, /resume); /sessions is dispatched to the same resumeSessionInteractive branch; raw replies: review-architecture-10-11 F-001, review-logic-10-11 F-002",
+    "confidence": "medium",
+    "reviewer": "review-logic"
+  },
+  {
+    "id": "F-003",
+    "severity": "minor",
+    "file": "src/tui/tui-shell.ts",
+    "line": null,
+    "problem": "The enqueue sequence (mint `mq${mainQueueSeq++}`, push a QueuedMainQuestion, paintMainQueue) is now present three times in tui-shell.ts; main-queue.ts owns the queue shape but has no enqueue function. The PR added the third copy.",
+    "impact": "A change to the queue entry shape or id scheme must be repeated at each site; a missed one makes one queue path behave differently.",
+    "suggested_fix": "Deferred. Follow-up: add an enqueue helper to main-queue.ts and call it from the three sites; keep the tests that pin the push text pointing at the helper.",
+    "evidence": "src/tui/tui-shell.ts, three copies of the mint-id/push/paintMainQueue sequence (busy deferred case, lease-held busy branch, lease-held idle branch); raw replies: review-architecture-10-11 F-002, review-clean-code-10-11 F-001",
+    "confidence": "high",
+    "reviewer": "review-clean-code"
+  },
+  {
+    "id": "F-004",
+    "severity": "minor",
+    "file": "src/commands/review-slice.ts",
+    "line": null,
+    "problem": "runSlice clears only slice-NN.diff files, so retry-state.json and the r1-<reviewer>-NN.diff retry slices survive a re-slice into the same directory, and retry state is keyed by reviewer name alone. runRetryPlan also reads and rewrites manifest and state without a lock.",
+    "impact": "After a re-slice or in a later round, a reviewer with attempt 1 on record is planned not-run on its first failure (a false 'Not run' line); two retry-plan processes on a parallel-tool host can overwrite each other's additions. The failure direction is safe (reported as not run, never as clean).",
+    "suggested_fix": "Deferred. Follow-up: have runSlice remove retry-state.json and r1-* slices (or key the state by manifest hash), and serialise the read-modify-write of manifest and state (lock or compare-and-swap); add a two-round test.",
+    "evidence": "src/commands/review-slice.ts:131 (cleanup matches only slice-NN.diff) and :248 (state path beside the manifest); src/review/retry-plan.ts priorAttempts; raw replies: review-architecture-06-07-08-09 F-002, review-highload-06-07-08-09 F-002, review-logic-06-07-08-09 F-001, review-highload-06-07-08-09 F-001",
+    "confidence": "medium",
+    "reviewer": "review-logic"
+  },
+  {
+    "id": "F-005",
+    "severity": "minor",
+    "file": "src/commands/review-slice.ts",
+    "line": null,
+    "problem": "runRetryPlan builds the extended manifest itself (spread of the old manifest plus retry slices); the totals (slices, bytes, files) are owned by buildSlices and are not recomputed on this path.",
+    "impact": "After a retry, manifest.slices lists more entries than totals.slices reports and totals.bytes and totals.files omit the retry slices, so any reader of totals sees counts that disagree with the list.",
+    "suggested_fix": "Deferred. Follow-up: move manifest extension into src/review (retry-plan or slice) and recompute totals there.",
+    "evidence": "src/commands/review-slice.ts runRetryPlan; manifest totals live in src/review/slice.ts:47; raw replies: review-architecture-06-07-08-09 F-001",
+    "confidence": "high",
+    "reviewer": "review-architecture"
+  },
+  {
+    "id": "F-006",
+    "severity": "minor",
+    "file": "src/review/retry-plan.ts",
+    "line": null,
+    "problem": "notRunLine always says the reviewer failed after a smaller-slice retry, but it serves all three not-run exits; two of them (no assigned slice in the manifest, assigned slice below the minimum after halving) dispatch no retry.",
+    "impact": "The report line the orchestrator pastes tells a reader a retry happened when none did, which misstates the effort spent on the gap.",
+    "suggested_fix": "Deferred. Follow-up: make the line depend on the exit (retried or not) and add a test per exit.",
+    "evidence": "src/review/retry-plan.ts:87 (notRunLine text 'after a smaller-slice retry'); raw replies: review-clean-code-06-07-08-09 F-003",
+    "confidence": "high",
+    "reviewer": "review-clean-code"
+  },
+  {
+    "id": "F-007",
+    "severity": "major",
+    "file": "src/lib/trust-routine-command.ts",
+    "line": null,
+    "problem": "The trust routine allow-list accepts `bun test` with any further arguments (and the same inside `keryx ctx run --`, and after `cd <dir> &&`). `bun test` runs repository code: test files, bunfig.toml preload and `--preload <file>`.",
+    "impact": "With untrusted content in the turn, a prompt-injected model, or a checked-out PR whose bunfig.toml sets a preload, runs project code without approval, which is the capability the untrusted-content latch withholds.",
+    "suggested_fix": "Deferred. Follow-up: drop `bun test` from the routine list for the post-untrusted case or allow it only with no arguments and an unchanged bunfig; add a test with `--preload` and a foreign `cd`.",
+    "evidence": "src/lib/trust-routine-command.ts:129-130 (case \"bun\": return words[1] === \"test\"); raw replies: review-security-code-01-02-03-04-05 F-001, review-security-code-06-07-08-09 F-002",
+    "confidence": "medium",
+    "reviewer": "review-security-code",
+    "class_scope": {
+      "sites": [
+        "src/lib/trust-routine-command.ts:129-130 (case \"bun\": return words[1] === \"test\"), the only place a bun command is accepted",
+        "src/lib/trust-routine-command.ts:114-116 (the same segment check is applied to the words after `keryx ctx run --`)",
+        "src/lib/trust-routine-command.ts:125-126 (cd <dir> && bun test chains through the same switch)"
+      ],
+      "enumeration_method": "keryx ctx rg --all '\"bun\"|bun test' over src/lib/trust-routine-command.ts, command-risk.ts and shell-syntax.ts: 4 matches in 2 files, the accepting case being the one listed; the other two entries are the callers that reach it."
+    }
+  },
+  {
+    "id": "F-008",
+    "severity": "major",
+    "file": "src/commands/review-slice.ts",
+    "line": null,
+    "problem": "`review slice`, `dispatch-check` and `retry-plan` are in the no-prompt routine list but write to paths taken verbatim from flags: slice --out (creates the directory, deletes slice-NN.diff, writes manifest.json), retry-plan --state and --manifest (overwrite the named file).",
+    "impact": "After untrusted content, an injected model can overwrite or delete files outside the project through a command classed as routine, with no prompt.",
+    "suggested_fix": "Deferred. Follow-up: confine --out, --state and --manifest to the project root or .metaproject, or leave these verbs out of the routine list when a path flag is given; add tests for an outside path.",
+    "evidence": "src/commands/review-slice.ts:248 (--state resolved verbatim); slice, dispatch-check, retry-plan are rows of TRUST_ROUTINE_KEYRYX (src/lib/trust-routine-command.ts:60-78); raw replies: review-security-code-06-07-08-09 F-003",
+    "confidence": "medium",
+    "reviewer": "review-security-code",
+    "class_scope": {
+      "sites": [
+        "src/commands/review-slice.ts:105-107 (writeSlices creates the directory and writes every slice-NN.diff)",
+        "src/commands/review-slice.ts:122-137 (--out resolved verbatim; mkdir, rm of slice-NN.diff entries, manifest write)",
+        "src/commands/review-slice.ts:277 (retry-plan rewrites the file named by --manifest)",
+        "src/commands/review-slice.ts:248,279 (retry-plan writes the file named by --state)",
+        "src/commands/review-slice.ts dispatch-check: reads --manifest/--payload only, no write (included because it shares the routine row)"
+      ],
+      "enumeration_method": "keryx ctx rg --all 'writeFile|mkdir|rm\\(|unlink|--out|--state|--manifest' over src/commands/review-slice.ts, which implements the three verbs: writes at 105,107,129,132,137,277,279, each fed by --out, --manifest or --state; cross-checked against the rows slice, dispatch-check, retry-plan in TRUST_ROUTINE_KEYRYX (trust-routine-command.ts:64-66)."
+    }
+  },
+  {
+    "id": "F-009",
+    "severity": "minor",
+    "file": "src/lib/trust-routine-command.ts",
+    "line": null,
+    "problem": "Any segment with an unquoted metacharacter is rejected, and `>`/`<` are metacharacters. The commands the PR itself prescribes (`keryx ctx run --raw -- keryx review scope --json > scope.json`, saving slices and payloads by redirection in the SKILL) are therefore never routine.",
+    "impact": "In trust mode after untrusted content the documented shell-host commands still prompt, which defeats the purpose of the routine list for a long review run.",
+    "suggested_fix": "Deferred. Follow-up: either allow a single redirection to a path under the project, or change the SKILL and help text to name an output flag instead of a shell redirection.",
+    "evidence": "src/lib/trust-routine-command.ts:149 (`!hasUnquotedMetacharacter(seg.raw)`; > and < are metacharacters); raw replies: review-logic-06-07-08-09 F-003",
+    "confidence": "medium",
+    "reviewer": "review-logic"
+  },
+  {
+    "id": "F-010",
+    "severity": "minor",
+    "file": "src/session/ask-answer-notes.ts",
+    "line": null,
+    "problem": "A stored ask_user answer is keyed by the normalized question text only: the options are not part of the key, punctuation and path separators are collapsed (\"Delete ./build?\" and \"Delete /build?\" collide), and an answer longer than about 1700 characters is stored cut by the note limit and replayed as complete. The read side swallows failures silently.",
+    "impact": "The same question with a different option set, or a lookalike question, gets a stale or truncated operator answer replayed without asking.",
+    "suggested_fix": "Deferred. Follow-up: include the option ids in the key, keep punctuation that carries meaning (or compare the stored question text), refuse to replay a truncated answer, and log a read failure.",
+    "evidence": "src/session/ask-answer-notes.ts:24 (key = sha256 of the normalized question, first 12 hex); src/commands/agent.ts storedAskUserAnswer; raw replies: review-logic-06-07-08-09 F-005, review-security-code-10-11 F-001, review-logic-10-11 F-003, review-clean-code-06-07-08-09 F-008",
+    "confidence": "medium",
+    "reviewer": "review-logic"
+  },
+  {
+    "id": "F-011",
+    "severity": "minor",
+    "file": "src/commands/agent.ts",
+    "line": null,
+    "problem": "Docs and comments describe values or behaviour this PR changed: cli-reference says 25 requests at the cap (now 201); the JSDoc of DEFAULT_MAX_SUBAGENT_CONCURRENCY argues for a low single-digit ceiling while the value is 10; resolveAgentMaxRounds JSDoc omits the mode parameter and the trust fallback; shell.ts keeps the comment of a deleted maxRounds line; comments still equate onDestroy with one Ctrl+C; tool descriptions repeat the literals 40 and 200; permission-modes.md says follow-through continues 'in a row' while the counter is a per-turn total.",
+    "impact": "A reader tuning concurrency or round budgets, or sizing a subagent from the docs, is told the opposite of what the code does.",
+    "suggested_fix": "Deferred. Follow-up: one docs and comments pass: fix the figure, the two JSDoc blocks, the orphan comment and the Ctrl+C comments, interpolate the constants into the tool descriptions, and reword 'in a row'.",
+    "evidence": "docs/docs/cli-reference.md:1080 ('25 at the cap'); src/commands/agent.ts:1025-1042 (concurrency and resolveAgentMaxRounds JSDoc); src/commands/shell.ts:4032 (orphan comment); src/tui/tui-shell.test.ts:3072 (exitOnCtrlC comment); raw replies: review-clean-code-01-02-03-04-05 F-001, review-clean-code-01-02-03-04-05 F-002, review-clean-code-01-02-03-04-05 F-004, review-clean-code-06-07-08-09 F-001, review-clean-code-06-07-08-09 F-002, review-clean-code-06-07-08-09 F-007, review-clean-code-10-11 F-002, review-style-06-07-08-09 F-001, review-style-06-07-08-09 F-002, review-style-06-07-08-09 F-008, review-style-06-07-08-09 F-010, review-logic-01-02-03-04-05 F-001",
+    "confidence": "high",
+    "reviewer": "review-clean-code"
+  },
+  {
+    "id": "F-012",
+    "severity": "minor",
+    "file": ".metaproject/flows/418-2026-10-09-shell-review-orchestration/plan.md",
+    "line": null,
+    "problem": "The flow's plan.md was merged as the untouched scaffold (Status: draft, numbered placeholders) and tasks.md lists only the four scaffold tasks, while flow.json and the journal carry T5-T8 and the closed implementation.",
+    "impact": "A reader opening the flow folder to learn the approach finds placeholders and a draft status that contradicts the journal.",
+    "suggested_fix": "Deferred. Follow-up: fill plan.md with the approach as built and bring tasks.md in line with flow.json.",
+    "evidence": ".metaproject/flows/418-2026-10-09-shell-review-orchestration/plan.md:3 (Status: draft); tasks.md lists T1-T4 only; raw replies: review-style-01-02-03-04-05 F-003, review-style-01-02-03-04-05 F-004",
+    "confidence": "high",
+    "reviewer": "review-style"
+  },
+  {
+    "id": "F-013",
+    "severity": "minor",
+    "file": "src/commands/agent-trust-orchestration.test.ts",
+    "line": null,
+    "problem": "Several new tests cannot fail for the claim they make: the 'ask mode control' uses `keryx review verify --run`, which is not in the routine list, so it prompts with or without the mode gate; the busy-dispatch tests assert substrings of tui-shell.ts source instead of driving the code; the /mode, /remote-control test never reaches deferredBusyAction; the okReply guard is dead; temp directories are never removed; two fixtures and two `gitFile` helpers duplicate setup.",
+    "impact": "False assurance on the behaviours AC5 and the trust-mode gate depend on (including the queue drain in F-001, which these tests miss); leftover temp files on every run.",
+    "suggested_fix": "Deferred. Follow-up: use a real routine verb in the control, drive the queue drain with fakes, add a two-run slice test, remove the dead guard, clean up the temp dirs and share the fixtures.",
+    "evidence": "src/commands/agent-trust-orchestration.test.ts:85 (dead okReply guard), the ask-mode control test, planFixture/askFixture temp dirs; src/tui/busy-dispatch.test.ts source-text assertions; raw replies: review-testing-practices-04-05-07-10 F-001, review-testing-practices-04-05-07-10 F-002, review-testing-practices-04-05-07-10 F-003, review-testing-practices-04-05-07-10 F-004, review-clean-code-01-02-03-04-05 F-003, review-style-01-02-03-04-05 F-001, review-style-01-02-03-04-05 F-002, review-logic-10-11 F-004, review-architecture-10-11 F-003, review-style-10-11 F-002",
+    "confidence": "high",
+    "reviewer": "review-testing-practices"
+  },
+  {
+    "id": "F-014",
+    "severity": "info",
+    "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "line": null,
+    "problem": "The parent's round budget depends on permission mode, but the subagent ceilings are changed for every mode and provider: default rounds 10 to 40, cap 24 to 200, concurrency 3 to 10. After untrusted content the spawn batch is still gated, so review waves of 10 are not reachable without a prompt.",
+    "impact": "Ask and auto mode quietly gain a 5x child budget and 10 simultaneous streams; a looping child sends its whole history for up to 200 rounds. Whether this is intended is a policy question, not a proven defect.",
+    "suggested_fix": "Deferred. Follow-up: decide whether the larger budgets are trust-only; if so make the constants mode-aware, and record the choice.",
+    "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts (DEFAULT 40, MAX 200); src/commands/agent.ts:1033 (concurrency 10); raw replies: review-architecture-06-07-08-09 F-003, review-performance-06-07-08-09 F-001, review-performance-06-07-08-09 F-002, review-highload-06-07-08-09 F-003, review-logic-06-07-08-09 F-004",
+    "confidence": "medium",
+    "reviewer": "review-architecture"
+  },
+  {
+    "id": "F-015",
+    "severity": "info",
+    "file": "src/tui/tui-shell.ts",
+    "line": null,
+    "problem": "Readability points: long functions (buildSlices, runRetryPlan), four-positional-argument helpers, askUserQuestion named like an action, a duplicated four-clause guard in storedAskUserAnswer and rememberAskUserAnswer, a three-deep ternary, unnamed literals (3, 12, 200), an immediately-invoked fallback in onCtrlC, a second private schema resolver in dispatch-check, naming of followThroughOn and ctrlCPress, a repeated import and one missing JSDoc.",
+    "impact": "Maintenance cost only; no behaviour is wrong.",
+    "suggested_fix": "Deferred. Follow-up: fold into the next change that touches these files; none needs its own change.",
+    "evidence": "src/review/slice.ts (buildSlices length, nested ternary), src/commands/agent.ts (askUserQuestion, duplicated guard), src/tui/tui-shell.ts:3947 onCtrlC expression, src/session/ask-answer-notes.ts (literal 12); raw replies: review-clean-code-06-07-08-09 F-004, review-clean-code-06-07-08-09 F-005, review-clean-code-06-07-08-09 F-006, review-clean-code-10-11 F-003, review-style-06-07-08-09 F-003, review-style-06-07-08-09 F-004, review-style-06-07-08-09 F-005, review-style-06-07-08-09 F-006, review-style-06-07-08-09 F-007, review-style-06-07-08-09 F-009, review-style-10-11 F-001, review-style-10-11 F-003, review-style-10-11 F-004, review-style-10-11 F-005, review-style-10-11 F-006, review-style-10-11 F-007, review-style-01-02-03-04-05 F-005, review-architecture-06-07-08-09 F-004",
+    "confidence": "medium",
+    "reviewer": "review-style"
+  }
+]

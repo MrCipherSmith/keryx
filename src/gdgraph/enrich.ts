@@ -17,6 +17,7 @@ import {
   type CapabilitySpec,
 } from "../capability/seam";
 import { loadGdgraphConfig } from "./config";
+import { gdgraphStorageDir } from "./data-dir";
 import {
   createTreesitterSpec,
   resolveTreesitterCapability,
@@ -45,6 +46,7 @@ export async function enrichBuildWithSymbols(
   // `resolveTreesitterCapability`; tests pass an explicit `CapabilityResolver`
   // (e.g. a mock adapter, or the raw seam) to bypass it.
   resolve?: CapabilityResolver,
+  dataDir?: string,
 ): Promise<EnrichResult> {
   const config = await loadGdgraphConfig(cwd);
   const treesitterConfig = {
@@ -76,12 +78,12 @@ export async function enrichBuildWithSymbols(
     () => ({ symbols: [], calls: [] }),
   );
 
-  await writeSymbolLayer(cwd, layer);
+  await writeSymbolLayer(cwd, layer, dataDir);
   return { enriched: true, symbols: layer.symbols.length, calls: layer.calls.length };
 }
 
-async function writeSymbolLayer(cwd: string, layer: SymbolLayer): Promise<void> {
-  const storageDir = path.join(cwd, ".metaproject", "data", "gdgraph", "storage");
+async function writeSymbolLayer(cwd: string, layer: SymbolLayer, dataDir?: string): Promise<void> {
+  const storageDir = gdgraphStorageDir(cwd, dataDir);
   await mkdir(storageDir, { recursive: true });
   await writeFile(
     path.join(storageDir, "symbols.jsonl"),

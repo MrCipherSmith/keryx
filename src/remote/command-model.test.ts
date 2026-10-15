@@ -124,16 +124,7 @@ describe("/model buttons (AC3)", () => {
     expect(h.client().replies[0]).toContain("no models");
   });
 
-  it("is not run when the shell is busy", async () => {
-    const h = commandHarness({ busy: true, listModels: async () => ({ provider: "acme", models: models(2) }), switchModel: async () => ({ output: "", ok: true }) });
-    await h.bridge.enable();
-    await h.say("/model");
-    await h.bridge.idle();
-    expect(h.client().choices).toEqual([]);
-    expect(h.client().replies[0]).toContain("/model was not run");
-  });
-
-  it("does not switch if the shell became busy while the picker was open", async () => {
+  it("does not switch while the shell is busy; it says so, and switches once the shell is idle (flow 419)", async () => {
     const switched: Array<[string, string | undefined]> = [];
     const h = withModels(3, { switched });
     await h.bridge.enable();
@@ -141,8 +132,11 @@ describe("/model buttons (AC3)", () => {
     await waitFor(() => h.client().choices.length === 1, "the picker");
     h.state.busy = true;
     h.client().choices[0]?.answer(1);
-    await h.bridge.idle();
+    await waitFor(() => h.client().replies.length === 1, "the queued notice");
     expect(switched).toEqual([]);
-    expect(h.client().replies[0]).toContain("/model was not run");
+    expect(h.client().replies[0]).toContain("is queued: main is busy");
+    h.state.busy = false;
+    await h.bridge.idle();
+    expect(switched).toEqual([["m1", undefined]]);
   });
 });

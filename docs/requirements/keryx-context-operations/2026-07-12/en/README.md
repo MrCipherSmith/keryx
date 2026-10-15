@@ -24,6 +24,5 @@ deterministic local-first core.
 ## Non-goals
 
 No required cloud database, no new agent runtime, no automatic promotion of
-untrusted content, and no replacement for Mem0, Letta, Graphiti, Cognee or
-OpenViking.
+untrusted content, and no replacement for external memory or graph engines.
 

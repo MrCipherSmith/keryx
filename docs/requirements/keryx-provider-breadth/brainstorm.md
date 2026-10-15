@@ -10,7 +10,7 @@ not the original research pass) sharpened the gap's actual shape.
 
 ## Reference designs studied (from the prior gap-closing research)
 
-### opencode (`packages/llm`)
+### Harness A (a hand-rolled multi-protocol layer)
 
 A hand-rolled multi-protocol layer separating wire format from provider
 identity: each real wire protocol (openai-responses, openai-chat,
@@ -22,13 +22,13 @@ with only the endpoint swapped, each vendor a one-line profile entry.
 
 Relevance: the direct template this package follows. keryx's own
 `ProviderPort` (`NormalizedEvent`/`ProviderPort`) is already the same kind of
-provider-neutral, SDK-free contract opencode's `Route` abstraction is —
+provider-neutral, SDK-free contract that harness's `Route` abstraction is —
 confirmed by reading `types.ts` directly, not assumed from the research
 summary. The gap is exactly "one native module per real wire format we
 actually need, keep the generic adapter for the compat long tail" — which
 this package's D-03 reapplies.
 
-### cline (`sdk/packages/llms`)
+### Harness B (a generated provider catalog)
 
 150+ provider entries live in a generated data catalog pulled from
 models.dev; a factory registry maps each provider's declared "family" to a
@@ -43,12 +43,11 @@ tail, populated from a source like models.dev instead of hand-maintained —
 is out of scope for this package (see README non-goals) but worth a future,
 separate note.
 
-### deepseek-harness (`packages/llm/llm-pi-ai`)
+### Harness C (an outsourced protocol matrix)
 
-Outsources the entire multi-protocol matrix to a third-party package,
-`@earendil-works/pi-ai`.
+Outsources the entire multi-protocol matrix to a third-party package.
 
-Relevance: rejected for the same SDK-free reason as cline, more directly —
+Relevance: rejected for the same SDK-free reason as harness B, more directly —
 this is a single external dependency becoming the source of truth for every
 non-Anthropic wire protocol, an explicit conflict with keryx's stated design,
 not a partial one.

@@ -125,6 +125,7 @@ export type FakeMethod =
   | "sendChatAction"
   | "createForumTopic"
   | "deleteForumTopic"
+  | "closeForumTopic"
   | "editForumTopic"
   | "answerCallbackQuery"
   | "getMe"
@@ -157,6 +158,8 @@ export class FakeBotApi implements BotApi {
   myCommands: BotCommandMenuEntry[] = [];
   readonly myCommandsCalls: BotCommandMenuEntry[][] = [];
   readonly deletedTopics: { chatId: number; messageThreadId: number }[] = [];
+  /** Topics the bot closed (archived); they stay in `liveTopics` with their messages. */
+  readonly closedTopics: { chatId: number; messageThreadId: number }[] = [];
   readonly renamedTopics: { messageThreadId: number; name: string }[] = [];
   /** Every call, in order, by client label. */
   readonly calls: { method: FakeMethod; label: string }[] = [];
@@ -209,6 +212,7 @@ export class FakeBotApi implements BotApi {
       sendChatAction: (params) => this.chatActionFor(label, params),
       createForumTopic: (params) => this.createTopicFor(label, params),
       deleteForumTopic: (params) => this.deleteTopicFor(label, params),
+      closeForumTopic: (params) => this.closeTopicFor(label, params),
       editForumTopic: (params) => this.editTopicFor(label, params),
       answerCallbackQuery: (params) => this.answerFor(label, params),
       getMe: () => this.getMeFor(label),
@@ -439,6 +443,10 @@ export class FakeBotApi implements BotApi {
 
   deleteForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void> {
     return this.defaultClient.deleteForumTopic(params);
+  }
+
+  closeForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void> {
+    return this.defaultClient.closeForumTopic(params);
   }
 
   editForumTopic(params: { chatId: number; messageThreadId: number; name: string }): Promise<void> {
@@ -805,6 +813,14 @@ export class FakeBotApi implements BotApi {
       throw rejected("deleteForumTopic", 400, "Bad Request: message thread not found");
     }
     this.deletedTopics.push({ chatId: params.chatId, messageThreadId: params.messageThreadId });
+  }
+
+  private async closeTopicFor(label: string, params: { chatId: number; messageThreadId: number }): Promise<void> {
+    this.begin("closeForumTopic", label);
+    if (!this.liveTopics.has(params.messageThreadId)) {
+      throw rejected("closeForumTopic", 400, "Bad Request: message thread not found");
+    }
+    this.closedTopics.push({ chatId: params.chatId, messageThreadId: params.messageThreadId });
   }
 
   private async editTopicFor(label: string, params: { chatId: number; messageThreadId: number; name: string }): Promise<void> {

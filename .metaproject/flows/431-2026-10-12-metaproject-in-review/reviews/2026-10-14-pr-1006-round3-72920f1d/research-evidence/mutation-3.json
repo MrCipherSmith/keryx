@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f431i",
+  "command": "bun test src/review src/commands/review-layers.test.ts src/commands/review-ledger.test.ts src/commands/review-slice-paths.test.ts src/gdskills/reviewer-layer-block.test.ts src/tui/review-panel.test.ts src/tui/reviews-inspector.test.ts src/lib/command-risk src/lib/trust-routine-command.test.ts src/commands/review-chunks.test.ts src/flow/review-gate-coverage.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 19829
+  },
+  "mutants": [
+    {
+      "id": "r3-03-args-text",
+      "file": "src/review/layers-usage.ts",
+      "anchor": "layersOfCommand(call, found);\n  return LAYER_NAMES",
+      "replacement": "layersOfCommand(call, found);\n  if (/keryx\\s+wiki/.test(call)) found.add(\"wiki\");\n  return LAYER_NAMES",
+      "line": 62,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 27001
+    },
+    {
+      "id": "r3-03-first-segment",
+      "file": "src/review/layers-usage.ts",
+      "anchor": "for (const segment of splitSegments(command)) {",
+      "replacement": "for (const segment of splitSegments(command).slice(0, 1)) {",
+      "line": 37,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 27540
+    },
+    {
+      "id": "r3-03-mcp-args",
+      "file": "src/review/layers-usage.ts",
+      "anchor": "for (const key of [\"name\", \"tool\"])",
+      "replacement": "for (const key of [\"name\", \"tool\", \"arguments\"])",
+      "line": 91,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 25166
+    },
+    {
+      "id": "r3-05-completeness",
+      "file": "src/flow/review-gate.ts",
+      "anchor": " && (await packageRecordsCoverage(packageDir));",
+      "replacement": ";",
+      "line": 448,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 19421
+    },
+    {
+      "id": "r3-ly-fsmonitor",
+      "file": "src/review/layers.ts",
+      "anchor": "\"-c\", \"core.fsmonitor=false\", ",
+      "replacement": "",
+      "line": 369,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 19835
+    },
+    {
+      "id": "r3-ly-peel",
+      "file": "src/review/layers.ts",
+      "anchor": "`${rev}^{commit}`",
+      "replacement": "rev",
+      "line": 226,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 19404
+    },
+    {
+      "id": "r3-ly-lock-stale-opt-off",
+      "file": "src/review/layers.ts",
+      "anchor": "{ timeoutMs: LOCK_WAIT_MS, staleMs: LOCK_STALE_MS }",
+      "replacement": "{ timeoutMs: LOCK_WAIT_MS }",
+      "line": 572,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 19816
+    },
+    {
+      "id": "r3-rl-maxbytes-floor",
+      "file": "src/commands/review-layers.ts",
+      "anchor": "maxBytes < 256",
+      "replacement": "maxBytes < 255",
+      "line": 133,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 19641
+    }
+  ],
+  "totals": {
+    "killed": 7,
+    "survived": 1,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

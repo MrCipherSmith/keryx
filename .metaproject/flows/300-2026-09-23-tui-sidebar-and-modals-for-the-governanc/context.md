@@ -124,7 +124,7 @@ Phase 1 research, 2026-09-23. Written by a research subagent. Line numbers are f
 
 ### 8. The seam with flow 295 (scheduler)
 
-- Flow 295's frozen criteria (`/home/altsay/keryx-sched/.metaproject/flows/295-*/acceptance-criteria.md`) say:
+- Flow 295's frozen criteria (`~/keryx-sched/.metaproject/flows/295-*/acceptance-criteria.md`) say:
   - AC10: a **Schedules** section in `sidebarTop` "like the Plan and Jobs sections", hidden when empty, clickable rows.
   - AC11: a 4-tab modal whose actions "call the same function as the CLI".
   - AC12: `/schedule` and `/schedules` slash commands.

@@ -1,0 +1,427 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t4",
+  "command": "bun test src/review/replay.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 424
+  },
+  "mutants": [
+    {
+      "id": "M01-decision-fence-undecided",
+      "file": "src/review/replay.ts",
+      "anchor": "\"fence-inner-backticks\": \"accepted (operator, poll 161, 2026-10-13)\"",
+      "replacement": "\"fence-inner-backticks\": \"undecided\"",
+      "line": 19,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 411
+    },
+    {
+      "id": "M02-decision-status-only-undecided",
+      "file": "src/review/replay.ts",
+      "anchor": "\"status-only-fragment\": \"accepted (operator, poll 162, 2026-10-13)\"",
+      "replacement": "\"status-only-fragment\": \"undecided\"",
+      "line": 20,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 395
+    },
+    {
+      "id": "M03-decision-unclassified-accepted",
+      "file": "src/review/replay.ts",
+      "anchor": "  unclassified: \"undecided\",",
+      "replacement": "  unclassified: \"accepted\",",
+      "line": 21,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 310
+    },
+    {
+      "id": "M04-decision-none-accepted",
+      "file": "src/review/replay.ts",
+      "anchor": "  none: \"undecided\",",
+      "replacement": "  none: \"accepted\",",
+      "line": 22,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 405
+    },
+    {
+      "id": "M05-labelled-greedy",
+      "file": "src/review/replay.ts",
+      "anchor": "([\\s\\S]*?)```/gi;",
+      "replacement": "([\\s\\S]*)```/gi;",
+      "line": 25,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 412
+    },
+    {
+      "id": "M06-outcome-no-empty",
+      "file": "src/review/replay.ts",
+      "anchor": "  if (empty) return \"empty\";\n",
+      "replacement": "\n",
+      "line": 28,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 394
+    },
+    {
+      "id": "M07-outcome-none-as-empty",
+      "file": "src/review/replay.ts",
+      "anchor": "if (result === undefined) return \"none\";",
+      "replacement": "if (result === undefined) return \"empty\";",
+      "line": 29,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 402
+    },
+    {
+      "id": "M08-outcome-findings-dash",
+      "file": "src/review/replay.ts",
+      "anchor": "? String(result.findings.length) : \"-\";",
+      "replacement": "? \"-\" : \"-\";",
+      "line": 30,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 392
+    },
+    {
+      "id": "M09-outcome-reviewer-empty",
+      "file": "src/review/replay.ts",
+      "anchor": "${result.reviewer ?? \"-\"}",
+      "replacement": "${result.reviewer ?? \"\"}",
+      "line": 31,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 386
+    },
+    {
+      "id": "M10-outcome-reviewer-result-true",
+      "file": "src/review/replay.ts",
+      "anchor": "reviewer-result=${isReviewerResult(result)}`",
+      "replacement": "reviewer-result=${true}`",
+      "line": 31,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 374
+    },
+    {
+      "id": "M11-broken-no-labelled-true",
+      "file": "src/review/replay.ts",
+      "anchor": "if (labelled.length === 0) return false;",
+      "replacement": "if (labelled.length === 0) return true;",
+      "line": 36,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 391
+    },
+    {
+      "id": "M12-broken-first-fence",
+      "file": "src/review/replay.ts",
+      "anchor": "JSON.parse(labelled[labelled.length - 1]![1]!);\n    return false;",
+      "replacement": "JSON.parse(labelled[0]![1]!);\n    return false;",
+      "line": 38,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 382
+    },
+    {
+      "id": "M13-broken-parse-ok-true",
+      "file": "src/review/replay.ts",
+      "anchor": "JSON.parse(labelled[labelled.length - 1]![1]!);\n    return false;",
+      "replacement": "JSON.parse(labelled[labelled.length - 1]![1]!);\n    return true;",
+      "line": 38,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 414
+    },
+    {
+      "id": "M14-broken-catch-false",
+      "file": "src/review/replay.ts",
+      "anchor": "  } catch {\n    return true;\n  }",
+      "replacement": "  } catch {\n    return false;\n  }",
+      "line": 40,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 415
+    },
+    {
+      "id": "M15-classify-old-undefined-only",
+      "file": "src/review/replay.ts",
+      "anchor": "if (old === undefined && next !== undefined) return",
+      "replacement": "if (old === undefined) return",
+      "line": 46,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 384
+    },
+    {
+      "id": "M16-classify-fence-swap",
+      "file": "src/review/replay.ts",
+      "anchor": "labelledCaptureBroken(raw) ? \"fence-inner-backticks\" : \"unclassified\"",
+      "replacement": "labelledCaptureBroken(raw) ? \"unclassified\" : \"fence-inner-backticks\"",
+      "line": 46,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 401
+    },
+    {
+      "id": "M17-classify-fragment-any-old",
+      "file": "src/review/replay.ts",
+      "anchor": "if (old !== undefined && !isReviewerResult(old) && next === undefined)",
+      "replacement": "if (old !== undefined && next === undefined)",
+      "line": 47,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 395
+    },
+    {
+      "id": "M18-classify-fragment-any-next",
+      "file": "src/review/replay.ts",
+      "anchor": "if (old !== undefined && !isReviewerResult(old) && next === undefined)",
+      "replacement": "if (old !== undefined && !isReviewerResult(old))",
+      "line": 47,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 394
+    },
+    {
+      "id": "M19-classify-default-none",
+      "file": "src/review/replay.ts",
+      "anchor": "return \"status-only-fragment\";\n  return \"unclassified\";",
+      "replacement": "return \"status-only-fragment\";\n  return \"none\";",
+      "line": 47,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 413
+    },
+    {
+      "id": "M20-replayRaw-same-true",
+      "file": "src/review/replay.ts",
+      "anchor": "const same = before === after;",
+      "replacement": "const same = true;",
+      "line": 57,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 396
+    },
+    {
+      "id": "M21-hash-8",
+      "file": "src/review/replay.ts",
+      "anchor": ".digest(\"hex\").slice(0, 12),",
+      "replacement": ".digest(\"hex\").slice(0, 8),",
+      "line": 60,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 396
+    },
+    {
+      "id": "M22-cause-always-classify",
+      "file": "src/review/replay.ts",
+      "anchor": "cause: same ? \"none\" : classify(raw, old, next),",
+      "replacement": "cause: classify(raw, old, next),",
+      "line": 64,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 393
+    },
+    {
+      "id": "M23-rawdir-name",
+      "file": "src/review/replay.ts",
+      "anchor": "if (entry === \"raw\") dirs.push(full);",
+      "replacement": "if (entry === \"rawx\") dirs.push(full);",
+      "line": 80,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 375
+    },
+    {
+      "id": "M24-walk-keeps-node-modules",
+      "file": "src/review/replay.ts",
+      "anchor": "entry !== \"node_modules\" && ",
+      "replacement": "",
+      "line": 81,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 397
+    },
+    {
+      "id": "M25-walk-keeps-research-evidence",
+      "file": "src/review/replay.ts",
+      "anchor": " && entry !== \"research-evidence\"",
+      "replacement": "",
+      "line": 81,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 408
+    },
+    {
+      "id": "M26-walk-keeps-drivers",
+      "file": "src/review/replay.ts",
+      "anchor": " && entry !== \"drivers\"",
+      "replacement": "",
+      "line": 81,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 423
+    },
+    {
+      "id": "M27-parents-drop-data-review",
+      "file": "src/review/replay.ts",
+      "anchor": "[\".metaproject/flows\", \".metaproject/data/review\"]",
+      "replacement": "[\".metaproject/flows\"]",
+      "line": 70,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 400
+    },
+    {
+      "id": "M28-parents-drop-flows",
+      "file": "src/review/replay.ts",
+      "anchor": "[\".metaproject/flows\", \".metaproject/data/review\"]",
+      "replacement": "[\".metaproject/data/review\"]",
+      "line": 70,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 264
+    },
+    {
+      "id": "M29-no-existsSync-guard",
+      "file": "src/review/replay.ts",
+      "anchor": "    if (!existsSync(base)) continue;\n",
+      "replacement": "\n",
+      "line": 73,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 403
+    },
+    {
+      "id": "M30-dirs-unsorted",
+      "file": "src/review/replay.ts",
+      "anchor": "return dirs.sort();",
+      "replacement": "return dirs;",
+      "line": 85,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 401
+    },
+    {
+      "id": "M31-txt-filter-off",
+      "file": "src/review/replay.ts",
+      "anchor": ".filter((entry) => entry.endsWith(\".txt\"))",
+      "replacement": ".filter((entry) => true)",
+      "line": 91,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 348
+    },
+    {
+      "id": "M32-names-unsorted",
+      "file": "src/review/replay.ts",
+      "anchor": ".filter((entry) => entry.endsWith(\".txt\")).sort()",
+      "replacement": ".filter((entry) => entry.endsWith(\".txt\"))",
+      "line": 91,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 406
+    },
+    {
+      "id": "M33-relative-sep",
+      "file": "src/review/replay.ts",
+      "anchor": ".split(path.sep).join(\"/\")",
+      "replacement": "",
+      "line": 92,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 408
+    },
+    {
+      "id": "M34-render-all-rows-differ",
+      "file": "src/review/replay.ts",
+      "anchor": "const differing = rows.filter((row) => !row.same);",
+      "replacement": "const differing = rows;",
+      "line": 100,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 408
+    },
+    {
+      "id": "M35-render-same-count",
+      "file": "src/review/replay.ts",
+      "anchor": "Same: ${rows.length - differing.length}.",
+      "replacement": "Same: ${rows.length}.",
+      "line": 110,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 404
+    },
+    {
+      "id": "M36-render-same-list-inverted",
+      "file": "src/review/replay.ts",
+      "anchor": "...rows.filter((row) => row.same).map((row) => `- ",
+      "replacement": "...rows.filter((row) => !row.same).map((row) => `- ",
+      "line": 124,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 409
+    },
+    {
+      "id": "M37-cli-root-parent",
+      "file": "src/review/replay.ts",
+      "anchor": "const root = process.cwd();",
+      "replacement": "const root = path.resolve(process.cwd(), \"..\");",
+      "line": 131,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 399
+    },
+    {
+      "id": "M38-cli-write-no-target-guard",
+      "file": "src/review/replay.ts",
+      "anchor": "if (!target) throw new Error(\"--write needs a target path\");",
+      "replacement": "",
+      "line": 137,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 407
+    },
+    {
+      "id": "M39-cli-write-ignores-root",
+      "file": "src/review/replay.ts",
+      "anchor": "await Bun.write(path.resolve(root, target), report);",
+      "replacement": "await Bun.write(target, report);",
+      "line": 138,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 396
+    },
+    {
+      "id": "M40-legacy-nested-last-status",
+      "file": "src/review/legacy-result-parser.ts",
+      "anchor": "start = end;\n",
+      "replacement": "\n",
+      "line": 35,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 404
+    },
+    {
+      "id": "M41-legacy-fence-greedy",
+      "file": "src/review/legacy-result-parser.ts",
+      "anchor": "([\\s\\S]*?)```/gi",
+      "replacement": "([\\s\\S]*)```/gi",
+      "line": 9,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 390
+    }
+  ],
+  "totals": {
+    "killed": 34,
+    "survived": 7,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

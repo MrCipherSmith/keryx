@@ -1,6 +1,6 @@
 # Final verification
 
-Date:2026-09-26 (local); worktree `/Users/Goodea/goodea/keryx-openai-subscription`, branch `codex/openai-subscription`.
+Date:2026-09-26 (local); worktree `~/goodea/keryx-openai-subscription`, branch `codex/openai-subscription`.
 
 **Code/test gate: PASS_WITH_WARNINGS.** Functional checks pass. The generic security scan of test-output text still reports advisory findings; this is not a clean security-output gate. Live ChatGPT Pro authorization remains untested.
 

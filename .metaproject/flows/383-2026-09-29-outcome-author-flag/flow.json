@@ -58,7 +58,7 @@
     "url": "https://github.com/MrCipherSmith/keryx/pull/796"
   },
   "owner": {
-    "value": "altsay",
+    "value": "operator",
     "basis": "stated",
     "source": "`--owner` flag on `flow init`"
   },
@@ -374,7 +374,7 @@
       "at": "2026-09-29T10:41:43.443Z",
       "kind": "complete",
       "identity": {
-        "value": "altsay",
+        "value": "operator",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },
@@ -410,7 +410,7 @@
         {
           "name": "owner",
           "status": "pass",
-          "detail": "owner: altsay"
+          "detail": "owner: operator"
         },
         {
           "name": "review",

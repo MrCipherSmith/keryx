@@ -8,7 +8,7 @@ Source: `docs/requirements/keryx-plan-mode-toggle/README.md` (planning conversat
 keryx's interactive agent session (`keryx shell`, TUI) has `/mode ask|trust|auto`
 (`src/commands/permission-mode.ts`), which controls how much confirmation a
 mutating tool call needs, but nothing controls whether mutating tools are
-reachable AT ALL. A competitive review of other terminal coding agents found a comparable
+reachable AT ALL. A review of other terminal coding agents found a comparable
 read-only posture with no keryx equivalent: there is no way to put a session
 into a hard "nothing mutates, whatever the mode" state.
 

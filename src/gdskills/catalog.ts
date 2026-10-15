@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ORCHESTRATORS_INLINE_NOTE } from "../lib/orchestrators-inline";
 import { parseSkillFrontmatter } from "./skill-frontmatter";
 
 export type GdskillsProfile = "minimal" | "recommended" | "full" | "custom";
@@ -246,6 +247,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Ask only whether the change breaks an existing behaviour here; style and architecture in untouched code are rejected in code, not discouraged.",
     "Anchor class_scope on the callers that break, never on the changed line.",
     "Say when the radius could not answer — a non-code change has an empty one.",
+  ]),
+  skill("review-pr-contract", "review", ["recommended", "full"], "Compare what the PR body claims (checklist boxes, stated changes) with the diff, and look for documentation outside the diff that the change made stale.", [
+    "Work every checklist box in pr-context.md as a row: quoted box, state, quoted diff line, expectation.",
+    "File a finding only where a quoted box or claim disagrees with a quoted diff or document line.",
+    "On a shell host stay read-only and answer NEEDS_CONTEXT with named paths instead of guessing a document.",
   ]),
   skill("review-core-boundaries", "review", ["recommended", "full"], "Review shared/core module coupling, public API stability, and dependency minimization.", [
     "Identify core/shared surfaces changed by the task.",
@@ -822,6 +828,7 @@ Resolution order:
 - User asks which project skill applies to a file/task: run \`keryx skills route <query-or-target>\` before reading broad files.
 - User asks whether a project skill is still valid: run \`keryx skills verify <skill-or-target>\`.
 - User asks to create/update a Metaproject requirements package, PRD/spec package, or \`docs/requirements/<name>\` documentation: load \`gdskills/planning/docpack-orchestrator/SKILL.md\`; use \`autodoc-orchestrator\` instead only for reverse-engineering documentation from the current codebase.
+- Orchestrators: ${ORCHESTRATORS_INLINE_NOTE}
 
 | Skill | Category | Purpose | Entry |
 |---|---|---|---|

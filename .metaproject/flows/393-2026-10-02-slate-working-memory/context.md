@@ -71,12 +71,12 @@ Use `keryx gdgraph affected <file>` for blast radius.
 - Consequence for this flow: working notes the model relies on must be a NEW shelf (task-local, model-facing, never promoted), not Seeds; Seeds and their review path stay unchanged.
 - Course already flows to the model as the execution-plan snapshot appended to the system instruction each round (`renderExecutionPlanSnapshot`, `plan.json`).
 
-### Competitor patterns relevant here (flow 394 study, `~/sandbox/forks`)
+### Patterns from other agent tools relevant here (flow 394 study, `~/sandbox/forks`)
 
 - codex: `WorldState.render_diff` — environment context sent as diffs; compaction re-injects initial context.
 - opencode/pi: anchored incremental summary with a verbatim tail and read/modified file lists.
-- deepseek-harness: append-only log with `surfaceOp: replace` nodes; hash-dedup of injected context.
-- Anthropic memory tool / grok-build state reminder: one rebuilt, replaced block rather than accumulation.
+- Another harness: append-only log with `surfaceOp: replace` nodes; hash-dedup of injected context.
+- Anthropic memory tool / another harness's state reminder: one rebuilt, replaced block rather than accumulation.
 
 ### Other gaps found in flow 394 that belong here
 

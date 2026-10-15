@@ -35,9 +35,9 @@ Usage:
                      [--json | --scoped-diff] [--append <file>]
   keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                            [--json | --brief] [--out <file>]
+                            [--package <review-dir>] [--json | --brief] [--out <file>]
   keryx review budget [--spent <usd>] [--ceiling <usd>]
-                      [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+                      [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
   keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
                                 [--self <login>] [--round <n>]
                                 [--out <findings.json>] [--json] [--fixtures <dir>]
@@ -81,6 +81,136 @@ The cost of the choice, stated: running `review ingest` twice with no
 what the record says happened, and it is the safe direction — reusing the
 directory would delete exactly the signal a genuinely stuck round produces.
 
+## Who runs the round
+
+The agent that loads the `review-orchestrator` skill is the orchestrator: it runs
+the round inline, in the main session, and does not hand the round to one subagent.
+Before step 0 it checks three things:
+
+1. **It can spawn.** A subagent-spawn tool (`Agent`, `spawn_subagent` or the host's
+   equivalent) is present and the nesting depth is not spent (Claude Code nests at
+   most 3 deep). If not, the whole output is
+   `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`,
+   and nothing else runs. It never reviews alone.
+2. **A round is needed.** A diff where every file is prose or machine-written data
+   gets `round not needed: <reason>` and launches no reviewer. Prose is exactly:
+   README or CHANGELOG at any depth; CONTRIBUTING, LICENSE, SECURITY or CODE_OF_CONDUCT
+   at the top level; and, under `docs/`, `.metaproject/wiki`, `.metaproject/reviews` or a
+   flow's `journal.md`, a file with extension `.md`, `.rst` or `.adoc` whose
+   name holds a lowercase letter. An all-uppercase name (`AGENT.md`, `WARP.md`,
+   `CONTEXT.md`) is steering by convention. Machine-written data is a file under
+   `coverage/` or `__generated__/` with extension `.lcov`, `.info` or `.map`; json, txt,
+   html and md there are code. Everything else counts as code: lockfiles, committed
+   `dist/` output, CI, auth, migrations, config JSON, a flow's `description.md`,
+   `acceptance-criteria.md` and `tasks/` (they are gate inputs), and steering files
+   wherever they sit, `docs/` included: a directory named, singular or plural, agent,
+   skill, command, rule, prompt, instruction, persona, steering or hook; any path
+   segment starting with a dot (`.claude`, `.cursorrules`, `.mcp.json`); a name starting
+   with `SKILL`, `AGENT`, `CLAUDE`, `GEMINI`, `QWEN`, `CODEX`, `WARP`, `CRUSH`, `JULES`,
+   `KNOWLEDGE`, `GUIDELINES`, `CONVENTIONS` or `copilot-instructions`, ending in `.local`,
+   `.override`, `.instructions`, `.prompt`, `.agent` or `.chatmode`, or containing `prompt`, `instruction` or
+   `system`. A path with `..`, a backslash, a leading `./` or `//` also counts as
+   code. `--all`, an explicit reviewer list or a gating round forces a round. The files
+   are listed with `git diff --name-status --no-renames <base>...HEAD`, so a rename
+   shows both paths.
+
+   The rule is written twice: the skill text above is what the host executes, and
+   `classifyRoundNeed` in `src/review/round-need.ts` is its tested reference. Nothing
+   in the CLI calls that function yet; a test keeps the skill text and the function's
+   token lists in step.
+3. **A round is left.** The ceiling is `REVIEW_ROUND_CAP` rounds on one
+   `merge-base..HEAD` (5 today); after the last one it stops and reports to you.
+
+The default profile is read-only: one round, no edits. `--fix` is a separate
+profile: the orchestrator still changes no code itself, it hands the findings to
+`flow-orchestrator` or `task-implementer`, takes the new head and runs the next
+round, and each re-review counts toward the ceiling.
+
+Reviewers are dispatched in waves split by diff domain: `core` (logic, security,
+architecture) first, then `domain` (frontend, backend, conventions), then `support`
+(style, tests); the verifier runs last and only
+removes findings. For `--all` and a full review a wave holds at most 10 reviewers
+(`keryx review budget --full` prints the plan). A reviewer that answers
+`STATUS: RATE_LIMITED` is requeued with the wave halved and `retry-after`
+honoured, at most 300 seconds; after two halvings the round stops with
+`STATUS: BLOCKED rate_limited`, naming the reviewers still queued.
+
+What the skill does not do: it does not run as a subagent of another orchestrator
+by default, it does not fix code, and it does not shrink the reviewer set to fit a
+budget.
+
+## How deep a round goes
+
+A pull-request round runs **every available reviewer** by default (`mode: all`):
+the bundled `review-*` roles and the project's own reviewers, minus the ones the
+stack rules out and the ones whose path triggers no changed file matches.
+`review-regression` joins the set only when a blast radius was computed for the
+package, and `review-pr-contract` (the reviewer that reads the diff against the
+pull request's own stated contract: title, description, linked issue, CI) only when
+`pr-context.md` is in the package. `keryx review required --pr-context <file>`
+prints the set, and prints each excluded reviewer
+with its reason. A narrower set (`mode: diff`, the roles derived from the changed
+files) is the operator's call and the dispatch records their own words as
+`operatorQuote`; `review complete` refuses a smaller dispatch without them.
+
+Reading the code is not the same as running it. After the reviewers answer, the
+mutants they proposed are run against the tests:
+
+```bash
+keryx review mutate --test "bun test" --package <review-dir>
+keryx review severity-audit --package <review-dir>
+```
+
+Reviewers propose a mutant for every changed branch, not a sample. On a shell host
+the reviewers cannot write files, so the main session writes their candidates to
+`research-evidence/mutants.json` as they are. A mutant says what kind of change it
+is: `behavior` (the default) or `presentation` (copy, class names, display order).
+
+`mutate` applies each proposed mutant in a scratch copy of the worktree (the
+worktree is never written) and records whether the tests failed. The table in
+`research-evidence/mutation-<n>.md` gives every mutant a row with its result, the
+test command it was judged by and that command's exit code. A mutant that
+**survived** means no test pins that behaviour. A survivor shows a
+missing assertion, not wrong behaviour, so `severity-audit` raises a finding that
+cites a surviving mutant (`mutant:<id>` in its `evidence`) from minor to major only
+when no mutant in the same file was killed: nothing in the suite exercises that code.
+When the file has a killed mutant, the suite covers it, the survivor is a gap in covered
+code, and the severity is held with `severity_audit.held` (`kind: "covered"`, and the
+kill count in `reason`). A survivor of kind `presentation` is held the same way,
+because a test that does not pin copy is not a missing test. The audit never deletes a finding.
+For an attended run `review complete`
+refuses a package with proposed mutants nobody ran, unless the dispatch carries a
+`mutationWaiver` with the operator's own words.
+
+A long list can be run in part: `keryx review mutate --cap 20 …` runs the first 20
+and prints `Not run: N candidates (cap 20)`. The rest stay pending, still block
+`review complete` and are named in the report, so a cap changes the order of work,
+not what the round claims.
+
+A reviewer that answers `NEEDS_CONTEXT` is asked once more with what it named. If it
+asks again it is recorded as **Not run** (`layout: no engine` for `review-layout`,
+which needs a browser; `no engine` for any other role), never as a clean pass. On a
+shell host the main session takes the browser measurements first and hands them to
+`review-layout` as `context_files`.
+
+A reviewer's `Parent follow-up:` lines and `follow_ups` are work handed back to you.
+`review ledger build` turns each into an obligation `<reviewer>:fu<n>` that stays a
+gap until a disposition closes it (`narrowed` needs a `remains` note).
+
+Before dispatch, `keryx review context-collect` writes the pull request's
+comments in full, its intent, its CI status and the backend pins it names into
+the package, and `dispatch-check --pr-context` refuses a payload without them.
+To see what a round missed against a report someone else wrote, run
+`keryx review compare-reference --reference <report.md> --package <review-dir>`:
+each item of that report comes back as role-not-run, role-ran-and-found-nothing,
+seen-and-lost, or kept.
+
+The shell shows the same record. `/reviews` opens a **Review depth** tab next to
+the managed-review metrics: per pull request the mode, how many of the required
+reviewers were dispatched, which were missing, which were excluded and why, and the
+mutation totals with the number still pending. In the readline shell `/reviews`
+prints the same block under the metrics.
+
 ## Narrow the scope before anyone reads it
 
 ```bash
@@ -89,7 +219,12 @@ keryx review scope --ref "$(git merge-base HEAD main)" --json > scope.json
 
 Deterministic, no model call: lockfiles, generated and vendored paths, binaries,
 whitespace-only and comment-only hunks are dropped, and what remains is bounded
-to the changed hunks plus 20 lines of context. **Every drop is recorded with its
+to the changed hunks plus 20 lines of context. If the repository has a rule that
+limits comments (in `CLAUDE.md`, `AGENTS.md` or `.metaproject/rules/**`), a
+comment-only block that adds comments is **kept**, not dropped, because for that
+repository a comment is something that can be wrong; the scope lists it under
+"Kept past a drop rule" with the reason `kept:comment-rule`. Set `retainCommentBlocks`
+to `false` to switch that off, or to a pattern to keep only matching comments. **Every drop is recorded with its
 reason** — a scope that shrank silently reads afterwards as "we reviewed
 everything".
 
@@ -136,6 +271,12 @@ Recompute when the changed-file set moves, and always on the final round:
 ```bash
 keryx review blast-radius --ref "$BASE" --previous blast-radius.json --final
 ```
+
+### The layers every reviewer reads, and the files the cap dropped
+
+Before a round dispatches, the review refreshes the graph, the wiki and the memory for the PR head and writes `layers.json` into the package. **No model is called**, and `wiki enrich` — the only model step in the wiki — is never run automatically. The graph is built at the PR head in a fresh worktree, so its recorded commit equals the head; the wiki and the memory come from your working copy, and `layers.json` says how far that copy is from the head. Each reviewer payload carries a bounded `layers` block, and the package records per reviewer how many graph, wiki, memory and ctx calls it made (`unknown`, never zero, when it left no tool-call log).
+
+The blast radius is capped at 40 files a pass. The files beyond the cap are not skipped silently: `keryx review chunks plan` splits them into chunks, `chunks estimate` states the cost before you spend it (the ceiling is 25 passes of 40 files, set by `reviewChunks.maxPasses` in `routing.config.json`), and the chunks run one at a time through `review-regression` on the middle tier. `keryx review coverage` counts what is covered, covered by a named omission, and uncovered. `keryx review complete` refuses while a file is uncovered and names the command that runs the missing chunks; the only way past is `--waive-coverage "<operator quote>"`, recorded with the time and the files not reviewed. See [`review layers`, `review chunks` and `review coverage`](../cli-reference.md#review-layers-review-chunks-and-review-coverage).
 
 ## Answer the humans — once, at the end
 
@@ -319,15 +460,16 @@ keryx review budget --spent 2.10 --reviewers review-logic,review-style,review-se
 
 Three caps, all with defaults in code so a caller that says nothing still gets a
 bound: **10 findings per reviewer** (blockers exempt), a **3.00 USD** spend
-ceiling, and **4** reviewers in flight at once. This command exits non-zero when
+ceiling, and a wave of at most **10** reviewers (`--parallel <n>` replaces the 10
+without `--full`; with `--full` it can only lower it). This command exits non-zero when
 the spend ceiling is reached, which is the point at which stopping is still
 possible — an ingest can only record that a round already went over.
 
-`--outstanding` is what an enclosing orchestrator already has in flight. It
-matters because `review-orchestrator` runs nested under `flow-orchestrator` and
-`job-orchestrator`, and keryx cannot see subagents in another process: without a
-declared count the cap bounds this dispatch alone, and the record says so rather
-than implying it covered more.
+`--outstanding` is the number of subagents the main session still has running. It
+matters because `review-orchestrator` runs inline in that session next to whatever
+else it has dispatched, and keryx cannot see those subagents: without a declared
+count the cap bounds this dispatch alone, and the record says so rather than
+implying it covered more.
 
 **Every cap records what it dropped** — the truncated finding ids, the queued
 reviewers, the stop — in the package's `scope.md` under `## Caps`. A cap that
@@ -405,6 +547,247 @@ Three outcomes, all recorded in `locator`, none of them a guess:
 
 A quote that matches twice is `unlocatable`, never the first hit. A wrong anchor
 is acted on; an admitted one is investigated.
+
+## Verify the findings before you report them
+
+Wave C of a review used to be `review-strict`, which re-read the findings and
+adjusted their severity with no new evidence. It is gone, because that operation
+is measured to make accuracy worse: GPT-4 on GSM8K falls 95.5 → 91.5 → 89.0 across
+self-correction rounds, GPT-3.5 on CommonSenseQA falls 75.8 → 38.1 (Huang et al.,
+ICLR 2024, arXiv:2310.01798).
+
+`review-verifier` replaced it and **can only delete**. It checks a finding by
+running something that fails if the finding is real, and merges through:
+
+```bash
+keryx review ingest --report round7.md --ref round7 \
+  --verifications verifier-result.json \
+  --scope scope.json
+```
+
+The merge cannot raise a severity, add a finding, or rewrite one; a finding is
+never verified by the reviewer that raised it; and a verdict reached by reasoning
+alone is capped at `unverifiable`. The default mode is `annotate` — verdicts are
+recorded and **nothing is removed** — so the drop rate is a measured number before
+it costs a real finding. Every package's `scope.md` carries the stage counts:
+dropped by the pre-filter, refuted by the verifier, retained.
+
+## Ingest a report someone already wrote
+
+```bash
+keryx review ingest --target report --ref round6-review.md --report path/to/report.md
+```
+
+**The parser has a shape, and it will refuse rather than guess.** Two things
+that cost real time when they are learned the hard way:
+
+- A finding must be a `## F-nnn — title` heading with `severity: <level>` in its
+  block. A heading like `## F-040 (blocker) — …` is read as **prose**, and the
+  ingest reports success having recorded **zero findings** — a ten-finding
+  review stored as an empty package.
+- A `blocker` or `major` finding **without a `class_scope`** is refused. The
+  scope must name the sites and the enumeration method: *how* you established
+  that this is the whole class, not just the instance you happened to see.
+
+The second is the more useful constraint. It is the difference between "I found
+a bug here" and "I know where else this shape occurs, and here is how I looked."
+
+## Check where one stands
+
+```console
+$ keryx review status .metaproject/reviews/2026-08-03-ingest-round6-review-md/
+# managed review: 2026-08-03-ingest-round6-review-md
+
+mode: ingest
+status: draft
+target: report round6-review.md
+flow: none
+coverage: 1
+filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 dismissed_by_round=not-measured retained=3
+  low_confidence: not measured — this pipeline has no confidence threshold …
+  scope_b: not measured — no blast-radius record reached this ingest …
+```
+
+`filter_stats` is what the round dropped, read back out of `manifest.json` — the
+same numbers `scope.md` shows a person, in a form something else can check.
+`not-measured` is not `0`: it means that stage did not run, and the reason is
+printed underneath. `status` exits **1** when the numbers do not add up (`total`
+minus the measured finding-stage drops must equal `retained`) or when a count is
+absent with no reason recorded, so a stage that starts dropping findings without
+counting them is caught on the next status call rather than a release later.
+
+`dropped_prefilter` counts diff material — whole files and change blocks removed
+before anyone read them — so it is deliberately not summed with the rest.
+
+What a round leaves behind that no finding count shows is printed under the same
+header: `Not run: N candidates`, `held: F-003 stays minor (mutant m2)`, and
+`follow-up open: <reviewer>:fu1 …`. `keryx review report-parity <review>` prints the
+same as Markdown to paste into `report.md`; `/review parity` in the shell and the
+sidebar show it too. `review complete` warns, and does not refuse, when the report
+names none of a kind of leftover. A package built before this existed shows no such
+lines, and a package whose ledger predates `review-pr-contract` is not refused for
+lacking it; `review complete` warns `review-pr-contract not run (package predates
+the role)`.
+
+## Complete it — and say what became of each finding
+
+```bash
+keryx review complete <review-id-or-path> \
+  --finding F-001 --disposition acted-on --evidence "closed by 380bf3b0" \
+  --finding F-002 --disposition dismissed-incorrect \
+    --evidence "ran the writer under umask 002; the mode is 0700"
+```
+
+Completion validates the package structurally — coverage, findings and
+decisions have to be present and consistent, so "reviewed" is a state something
+had to earn.
+
+The disposition triples are the half that was missing, and the cost of missing
+it is measurable: computed over every review package in this repository,
+precision came out at **53 / (53 + 0) = 100%** — not because the reviewers were
+right, but because nothing on disk could record a finding as *wrong*. Only
+`acted-on` and `dismissed-incorrect` say anything about accuracy; the other
+dismissals (`dismissed-wont-fix`, `dismissed-out-of-scope`,
+`dismissed-deprioritised`) say the finding was correct and not worth doing now.
+Everything except `unknown` must cite where the outcome is written down, and a
+recorded state and its citation cannot be overwritten by a later close.
+
+The same applies to what a round raised and then threw away — pass it at ingest
+rather than describing it in prose nobody can count:
+
+```bash
+keryx review ingest --report round7.md --ref round7 --refuted refuted.json
+```
+
+Closing with no dispositions is allowed. It leaves every finding reading
+`unknown`, which means "nobody wrote down what happened".
+
+### Completed means ready — the checklist
+
+A package cannot be marked `completed` while a file nobody read, a reviewer
+that never reported, or a verifier that skipped findings is still in it. Nine
+items are checked, offline except the last, and `keryx review complete` refuses
+while any of them fails:
+
+```bash
+keryx review readiness <review-id-or-path>   # NOT READY lists each failing item and its repair
+```
+
+| # | Item | Repair |
+|---|------|--------|
+| 1 | every changed file is covered by a wave or a recorded waiver | run the missing wave |
+| 2 | no file the blast radius cut is left unreviewed | `keryx review chunks plan`, `estimate`, `next`/`record`, `merge` |
+| 3 | every planned reviewer was dispatched and ingested | dispatch it, save the reply, `ledger build` |
+| 4 | the verifier checked every finding it should | run the verifier, or let the report state the count it did not |
+| 5 | the ledger is READY | close each obligation with a disposition |
+| 6 | coverage.md does not list a reviewer as `run` that did not finish | re-run `keryx review ingest` |
+| 7 | the report's head is the PR head | `--head <sha>` |
+| 8 | pending mutation candidates and parity warnings are named | add them to the report |
+| 9 | the changed-file count equals the PR's own file list | recount from the PR's files |
+
+When the blast radius is cut, `keryx review blast-radius --package <ref>` writes
+the chunk plan next to it, so the waves are one command away. An unattended run
+(`keryx review run --autonomous`) runs every wave without asking, up to the
+25-pass ceiling; an interactive run asks you once before the waves start.
+
+Only you can waive an item, in a terminal, with your own words recorded beside
+the time:
+
+```bash
+keryx review complete <ref> --waive blast-radius "the cut files are generated code"
+```
+
+Publishing is held by the same checklist. `keryx review publish` refuses a
+package that is not READY; `keryx review publish --partial` posts it with a
+"Partial review" header and never approves. The same verdict shows in
+`keryx review status`, in the TUI Review depth tab and sidebar, and as
+`/review readiness`.
+
+**Named limit.** The refusal lives in keryx and in the keryx shell guard. A
+publisher outside them (CI, another agent, a script file calling `gh`
+directly) is not stopped by it.
+
+### Five gates that keep a report honest
+
+- **The PR moved.** `keryx review complete` on a PR-bound package asks the tracker for the PR. When it is merged or its head is no longer the reviewed SHA, completion is refused until the first line of `report.md` names the reviewed SHA and says so ("Reviewed `1a2b3c4` — the PR has since merged."). A package is PR-bound when it targets a pull request or when its `--ref` is a pull request URL, even if it was ingested with `--target report`; a package with no PR binding is not asked; a tracker that cannot be reached is a warning, not a refusal.
+- **Evidence level.** A report carries one line, `Evidence level: static only — did not run: <what>` or `Evidence level: ran — <what ran>`, and `complete` refuses a report without it. A package ingested before the field existed completes with a warning.
+- **Citations.** When a dismissal's rebuttal cites a rule or document, `review ingest` looks the path up in the tree (at the reviewed commit and as it stands) and, if it is not there, adds a `citation not found: <path>` line to the finding's evidence. The finding is never deleted.
+- **Narrowed.** A research obligation may close as `narrowed` with a `remains` text ("what is still open"). It counts as closed only with that text, and the report keeps it under "Refuted and narrowed" with its evidence.
+- **Locators at the SHA.** `review ingest` reads each finding's quote at its `path` at the reviewed SHA, not from the working tree, and refuses the ingest, naming the finding, when it does not resolve there. The report links the blob at that SHA.
+
+### The one dismissal that teaches something
+
+`dismissed-incorrect` — and only that state — writes a note into
+`.metaproject/memory/review-notes/`, naming the finding, the reviewer, why it was
+dismissed, and the round and commit it came from:
+
+```console
+$ keryx review complete <path> --finding F-002 --disposition dismissed-incorrect \
+    --evidence "human: alice ran the writer under umask 002; the mode is 0700"
+review-note: 2026-08-03-round6#F-002 -> .metaproject/memory/review-notes/2026-08-03-round6__F-002.md (attested by human)
+```
+
+The other three dismissals write nothing, deliberately. They say the finding was
+*correct* and not worth doing now; feeding them into a learning signal teaches
+the reviewer to stop raising true findings, and in the resulting `SKILL.md` that
+is indistinguishable from having learned something real.
+
+A note needs somebody behind it. The evidence must name a human decision
+(`human: <who>`, `decided-by: <who>`) or the finding must carry an independent
+verifier's `refuted` verdict with a method and evidence — which is what an
+applied `--verification-mode filter` verdict already produces at ingest. Without
+either, the dismissal is still recorded in `findings.json` and no note is
+written:
+
+```console
+review-note NOT written for 2026-08-03-round6#F-009: no recorded human decision and no independent verifier `refuted` verdict …
+```
+
+That refusal is the point. An orchestrator that could file its own finding as its
+own error, teach a skill from it and move on would be grading its own work with
+nobody in the room.
+
+## Feed what you learned back
+
+```bash
+keryx memory ingest --from-review <path>
+keryx skills learn --from-review <path> --skill <module>/<skill>
+```
+
+This is the point of the whole exercise. A finding that changes nothing is a
+finding you will make again — and this repository has the receipts: six review
+rounds on one branch, twelve blockers, and every one of them the same mistake
+in a different place until it was written down as a
+[lesson](https://github.com/MrCipherSmith/keryx/blob/main/.metaproject/memory/lessons/branching-on-a-value-whose-domain-you-never-wrote-down.md).
+
+### And the comments other people left
+
+The commands above learn from *your own* review reports. The comments humans left
+on the pull request are a second source, and the project decides whose count:
+
+```bash
+keryx review learn --pr <n>
+keryx skills learn apply .metaproject/data/gdskills/proposals/<id>.json
+```
+
+`learn` reads the record `comments collect` already wrote — no second fetch — and
+keeps only the authors named in `.metaproject/review-learning.config.json`. A
+project without that file does not learn, and that is fine. Keryx ships no
+reviewer and no checklist: which reviewers teach a project, and what they teach,
+stays in that project.
+
+Seeding a local skill from conventions you already keep elsewhere is documented
+in [CLI reference › review learn](../cli-reference.md) — the content comes from
+your own copy, because keryx holds none.
+
+## Running it from the keryx shell
+
+A review run in the shell is finished when `keryx review complete` has closed the package, not when the
+model stops writing. Once the session has loaded `review-orchestrator` or run a `keryx review` command,
+the shell does not accept a text-only finish while no package is closed: it names what is still missing
+(no package opened yet, missing artifacts, research or dispatch errors) and the next step, prints a
+`[review-gate]` line in the pane, and continues the turn. It gives up after 20 continues, or after three
+in a row that added no new artifact, and then reports the state instead of looping.
 
 ## Verify the findings before you report them
 
@@ -574,6 +957,14 @@ stays in that project.
 Seeding a local skill from conventions you already keep elsewhere is documented
 in [CLI reference › review learn](../cli-reference.md) — the content comes from
 your own copy, because keryx holds none.
+
+## Running it from the keryx shell
+
+A review run in the shell is finished when `keryx review complete` accepts the package, not when the
+model stops writing. While a review package is open and `review complete` would still refuse, the
+shell does not accept a text-only finish: it names what is still missing, prints a `[review-gate]`
+line in the pane, and continues the turn. It gives up after 20 continues, or after two in a row that
+added no new artifact, and then reports the state instead of looping.
 
 ## Verify
 

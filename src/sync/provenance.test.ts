@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmod, mkdir } from "node:fs/promises";
-import { gitCmd, gitCmdResult, resolveGitHead } from "./provenance";
+import { gitCmd, gitCmdResult, provenancePath, readProvenance, resolveGitHead } from "./provenance";
 
 let root: string;
 
@@ -217,5 +217,32 @@ describe("resolveGitHead (F236-02): a broken repository is never reported as an 
 
     const result = await resolveGitHead(nested);
     expect(result.kind).toBe("failed");
+  });
+});
+
+// R3-02: the commit read back from a stamp is a hex revision or the stamp is absent; both anchors matter, because a
+// value with a leading dash or a stray character would otherwise reach a git argv.
+describe("readProvenance: the stamped commit must be anchored hex", () => {
+  async function stampWith(commit: string): Promise<void> {
+    const file = provenancePath(root, "gdgraph");
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, JSON.stringify({ commit, branch: "main", builtAt: "2026-10-13T00:00:00.000Z" }), "utf8");
+  }
+
+  test("a plain hex commit is read back", async () => {
+    await stampWith("abc1234");
+    expect((await readProvenance(root, "gdgraph"))?.commit).toBe("abc1234");
+  });
+
+  test.each([
+    ["a leading dash", "-abc1234"],
+    ["a leading option", "--output=x"],
+    ["a trailing non-hex character", "abc1234g"],
+    ["a trailing newline", "abc1234\n"],
+    ["an embedded space", "abc 1234"],
+    ["a too-short value", "abc"],
+  ])("%s is read as absent", async (_name, commit) => {
+    await stampWith(commit);
+    expect(await readProvenance(root, "gdgraph")).toBeNull();
   });
 });

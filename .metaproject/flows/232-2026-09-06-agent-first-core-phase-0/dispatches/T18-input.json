@@ -103,15 +103,15 @@
       "Behavior is preserved or any necessary defect correction has focused runtime regression and explanation.",
       "No conflicting source/config/dependency/flow/git mutations; exact check evidence and unresolved concerns reported."
     ],
-    "context": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-spec.md",
+    "context": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-spec.md",
     "existing_tests": [],
     "existing_stories": [],
     "module_patterns": "ESLint recommended TypeScript correctness; preserve runtime semantics and evaluate intentional test/security constructs."
   },
   "workspace": {
-    "codebase_path": "/Users/Goodea/goodea/keryx",
+    "codebase_path": "~/goodea/keryx",
     "branch": "codex/agent-first-core",
-    "context_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md"
+    "context_path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md"
   },
   "automation": {
     "skip_confirmation": true,

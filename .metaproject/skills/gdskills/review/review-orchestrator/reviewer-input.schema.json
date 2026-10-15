@@ -22,7 +22,7 @@
         "string",
         "null"
       ],
-      "description": "Absolute path of the reviewer's registered `<path>/SKILL.md`, set for every reviewer from the `project` half of `keryx review reviewers --json` and omitted for a bundled one. The file is the reviewer's definition: it overrides the built-in definition of a same-named agent type, whichever runtime branch dispatches it. A path that does not exist makes the reviewer BLOCKED, never substituted. Optional, and like the rest of this schema it is read by the dispatching agent — no keryx command validates a dispatch against it."
+      "description": "Absolute path of the reviewer's registered `<path>/SKILL.md`, set for every reviewer from the `project` half of `keryx review reviewers --json` and omitted for a bundled one. The file is the reviewer's definition: it overrides the built-in definition of a same-named agent type, whichever runtime branch dispatches it. A path that does not exist makes the reviewer BLOCKED, never substituted. Optional. `keryx review dispatch-check --payload <file>` validates a payload against this schema and refuses a `diff` scope that names no slice or whose assigned bytes exceed the ceiling."
     },
     "scope_mode": {
       "type": "string",
@@ -30,6 +30,14 @@
         "diff",
         "path"
       ]
+    },
+    "slices": {
+      "type": "array",
+      "description": "Slice ids (or manifest-relative paths) from `keryx review slice` that this reviewer is assigned. A `diff` scope names its slices here or carries a `diff` that fits the slice ceiling; `keryx review dispatch-check` refuses a payload that does neither.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "context_doc": {
       "type": [
@@ -80,6 +88,10 @@
         "inherit": {
           "type": "boolean",
           "description": "Run this dispatch on the caller's own model. Present in place of `provider`/`model`, never alongside them, when `keryx review tier` could not resolve a concrete model."
+        },
+        "routed": {
+          "type": "boolean",
+          "description": "True when the provider/model were set by the routing table's `review` category (`keryx review tier` emits it on a routed pick) rather than tier-ranked discovery. Additive to `tier_resolution`, which still records how the tier resolved a model; the two questions are independent."
         },
         "tier_resolution": {
           "type": "string",
@@ -152,6 +164,13 @@
         "null"
       ]
     },
+    "pr_context": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Path of the `pr-context.md` that `keryx review context-collect` wrote into the review package: every review comment in full, the round-1 intent, the CI status and the backend pins the pull request names. Required of a pull-request review by `keryx review dispatch-check --pr-context <package>`; a reviewer reads it before the diff."
+    },
     "round": {
       "type": "integer",
       "minimum": 1,
@@ -207,6 +226,59 @@
         },
         "additionalProperties": true
       }
+    },
+    "layers": {
+      "type": "object",
+      "description": "The bounded layers block for this reviewer's files, built from the package's own graph, the working-copy wiki and the memory (`keryx review layers block --package <dir> --files <a,b>`). Optional. `truncated` names what was cut and the command that fetches the rest.",
+      "required": ["version", "files", "affected", "truncated"],
+      "properties": {
+        "version": { "const": 1 },
+        "files": { "type": "array", "items": { "type": "string" } },
+        "prHead": { "type": ["string", "null"] },
+        "graphCommit": { "type": ["string", "null"] },
+        "maxBytes": { "type": "integer", "minimum": 1 },
+        "affected": {
+          "type": "object",
+          "required": ["depth", "files"],
+          "properties": {
+            "depth": { "enum": [1, 2] },
+            "files": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        },
+        "symbols": { "type": "array", "items": { "type": "object" } },
+        "relatedTests": { "type": "array", "items": { "type": "string" } },
+        "wiki": { "type": "array", "items": { "type": "object" } },
+        "memory": { "type": "array", "items": { "type": "object" } },
+        "truncated": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["section", "shown", "total", "command"],
+            "properties": {
+              "section": { "enum": ["files", "affected", "symbols", "relatedTests", "wiki", "memory"] },
+              "shown": { "type": "integer", "minimum": 0 },
+              "total": { "type": "integer", "minimum": 0 },
+              "command": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "unavailable": {
+          "type": "array",
+          "description": "Sections that could not be read, with the reason. An empty section that is not listed here was read and held nothing.",
+          "items": {
+            "type": "object",
+            "required": ["section", "reason"],
+            "properties": {
+              "section": { "enum": ["affected", "wiki", "memory"] },
+              "reason": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "metaproject": {
       "type": "object",

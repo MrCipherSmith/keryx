@@ -1,6 +1,6 @@
 # T33 spec — one repair across the security gate path (config load → flow completion)
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`).
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`).
 Written before any production edit. Baseline evidence for every defect is the two
 reviewer probes, executed first (raw logs in the Verification section of
 `T33-implementation.md`).

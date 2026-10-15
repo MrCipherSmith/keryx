@@ -9,7 +9,7 @@ interview answers.
 - [accepted/lesson] A fix round needs its own review: three consecutive rounds each introduced a blocker - `.metaproject/memory/lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md`
 - [accepted/constraint] The keryx on PATH is a stale build; the review pipeline does not exercise the code under review - `.metaproject/memory/constraints/stale-installed-keryx-binary.md`
 - [accepted/lesson] Theme switch repaints already-rendered chrome via old-slot value matching - `.metaproject/memory/lessons/theme-switch-repaint.md`
-- [accepted/task-note] SAC: Anchors: root: /Users/tsaitler.aleksandr/goodea/keryx tre… - `.metaproject/memory/task-notes/sac-proposal-b051e66aebd74f37.md`
+- [accepted/task-note] SAC: Anchors: root: ~/goodea/keryx tre… - `.metaproject/memory/task-notes/sac-proposal-b051e66aebd74f37.md`
 - [accepted/lesson] A shell allowlist matched against the raw command string is not a security boundary - `.metaproject/memory/lessons/allowlist-not-a-boundary.md`
 
 ## Code Graph

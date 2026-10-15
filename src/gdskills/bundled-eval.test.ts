@@ -114,8 +114,9 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // review jev-docs`/`jev-comments` command rather than an LLM sub-agent.
     // Plus `review-jev-contract` (flow 335): one more, dispatched as a
     // `keryx review jev-contract` command rather than an LLM sub-agent.
+    // Plus `review-pr-contract` (flow 446): one more, an LLM reviewer.
     const files = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
-    expect(files.length).toBe(78);
+    expect(files.length).toBe(79);
 
     const evaluation = realTree();
     expect(evaluation.skills).toBe(files.length);
@@ -1872,10 +1873,10 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     // rather than restated: `review/review-clean-code` is the entry a review
     // actually raised (545 -> 1200) while every test stayed green, so that
     // exact edit is the one this proves is now caught.
-    expect(SKILL_LENGTH_CEILINGS.get("review/review-clean-code")).toBe(545);
+    expect(SKILL_LENGTH_CEILINGS.get("review/review-clean-code")).toBe(543);
     const raised = ceilingMismatches(new Map(SKILL_LENGTH_CEILINGS).set("review/review-clean-code", 1200));
     expect(raised).toHaveLength(1);
-    expect(raised[0]).toContain("review/review-clean-code: ships 545 lines, ceiling records 1200");
+    expect(raised[0]).toContain("review/review-clean-code: ships 543 lines, ceiling records 1200");
     expect(raised[0]).toContain("the ratchet forbids");
 
     // …and a skill that grows past a ceiling nobody touched is the other

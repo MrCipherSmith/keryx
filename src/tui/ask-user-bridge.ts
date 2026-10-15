@@ -4,8 +4,12 @@
 // real interactive host here, and the tool invokes through this bridge.
 
 import { randomUUID } from "node:crypto";
-import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
+import { ASK_USER_NO_HOST, type AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import { CANCEL_ANSWER, journalAsk, resolveFlowContext, type JournalAskDeps } from "../decisions/service";
+import { reviewAutoActive, reviewAutoMayAnswer } from "../review/review-system";
+import { askFloor } from "../review/arbiter-floor";
+import { ENV_AUTONOMOUS_ANSWERS_FILE, answerAutonomously } from "../review/autonomous-answers";
+import { consultArbiter, installQuestionArbiter } from "../commands/review-arbiter-install";
 
 let host: AskUserFn | undefined;
 
@@ -17,7 +21,7 @@ export async function invokeAskUserHost(
   request: Parameters<AskUserFn>[0],
 ): ReturnType<AskUserFn> {
   if (host === undefined) {
-    return "__cancel__";
+    return ASK_USER_NO_HOST;
   }
   return host(request);
 }
@@ -55,7 +59,41 @@ export function setAskUserNotice(fn: ((text: string) => void) | undefined): void
  */
 export function journaledAskUser(cwd: string): AskUserFn {
   const journaled = journalAsk(invokeAskUserHost, journalDeps(cwd));
-  return (request) => (host === undefined ? invokeAskUserHost(request) : journaled(request));
+  return async (request) => {
+    const autonomousFile = process.env[ENV_AUTONOMOUS_ANSWERS_FILE];
+    if (autonomousFile !== undefined && autonomousFile.length > 0) {
+      installQuestionArbiter(cwd);
+      return answerAutonomously(request, { file: autonomousFile });
+    }
+    if (process.env.KERYX_REVIEW_AUTO_ANSWER === "1" || reviewAutoActive()) {
+      // Flow 425: a question that carries a policy tag is the arbiter's, not the word heuristic's. Its allow takes
+      // the recommended option; deny, escalate and failure leave the question to the operator.
+      const outcome = await consultArbiter(cwd, request);
+      if (outcome.kind === "answer") return outcome.answer;
+      if (outcome.kind === "human") {
+        notice?.(outcome.notice);
+        return host === undefined ? invokeAskUserHost(request) : journaled(request);
+      }
+    }
+    const auto = reviewAutoAnswer(request);
+    if (auto !== undefined) return auto;
+    if ((process.env.KERYX_REVIEW_AUTO_ANSWER === "1" || reviewAutoActive()) && request.irreversible !== true && !reviewAutoMayAnswer(request)) {
+      notice?.("review-auto: this permission question is yours to answer, because you refused an action earlier in this session");
+    }
+    return host === undefined ? invokeAskUserHost(request) : journaled(request);
+  };
+}
+
+/**
+ * `KERYX_REVIEW_AUTO_ANSWER=1`: a shell started for a live review run with nobody at the keyboard answers its
+ * own `ask_user` menus with the recommended option (the first when none is marked), so a menu cannot park the
+ * run, including the plan-confirmation menus that come before `keryx review start` opens a package. An
+ * irreversible question is never auto-answered.
+ */
+function reviewAutoAnswer(request: Parameters<AskUserFn>[0]): string | undefined {
+  if (askFloor(request) !== undefined) return undefined;
+  if ((process.env.KERYX_REVIEW_AUTO_ANSWER !== "1" && !reviewAutoActive()) || !reviewAutoMayAnswer(request)) return undefined;
+  return (request.options.find((o) => o.recommended === true) ?? request.options[0])?.id;
 }
 
 function journalDeps(cwd: string, extra: Partial<JournalAskDeps> = {}): JournalAskDeps {

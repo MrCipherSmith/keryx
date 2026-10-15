@@ -1,0 +1,82 @@
+[
+  {
+    "id": "R2-01",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The round-1 fix for R1-11 added a way out to the unlocatable-quote refusal: \"or ingest without --head\". In a git checkout that escape does not work. resolveTargetHead falls back to the checkout's own git HEAD when no head is declared, so refuseUnresolvedLocators still has a non-null head and refuses the same finding again. The new test pins the sentence (`expect(message).toContain(\"ingest without --head\")`) but not that it works.",
+    "impact": "Trigger: an operator ingests a report whose quote repeats in the file or whose file the PR deleted, reads the refusal, and drops --head as told. Outcome (probed with createManagedReviewPackage in a fresh git repo, no head declared, quote absent): the ingest is refused again with the same message. The only working exits are dismissing the finding with evidence or re-quoting, so the message sends the operator in a circle once. The escape is true only in a directory that is not a git checkout.",
+    "suggested_fix": "Drop the clause and keep \"dismiss the finding with evidence, or re-quote one distinct line\". Change the assertion to the two remaining exits.",
+    "evidence": "Probe at head: ingest in a git repo with no declared head and a quote that is not in the file gives \"REFUSED Cannot ingest review; 1 finding(s) cite a quote that does not resolve at the rev...\". Source: managed.ts:131-140 (resolveTargetHead falls back to resolveGitHead), managed.ts:1224-1240; test ingest-locator-sha.test.ts \"the refusal names the possible causes and the way out\".",
+    "confidence": "high",
+    "file": "src/review/managed.ts",
+    "line": null,
+    "quote": "Causes: the quote is not in the file at that commit",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/managed.ts:1240",
+        "src/review/ingest-locator-sha.test.ts:84"
+      ],
+      "enumeration_method": "Searched the tree for the phrase \"without --head\": the message and its test are the only two sites; the docs and the skill do not repeat it."
+    },
+    "global_id": "2026-10-14-pr-1008-round2-39861592#R2-01"
+  },
+  {
+    "id": "R2-02",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "fixes-round1.md says the R1-09 tests kill r1-cite-url-kept, r1-lex-dotdot-ok and r1-lex-absolute-ok. Two of the three are killed. The URL one is not: the added test cites `https://example.com/rules/a.md`, which the CITED lookbehind already rejects (each candidate is preceded by `/`), so the test passes with the URL stripping deleted. The URL strip matters only where a path follows `=` or `#` (`https://x.io/view?doc=docs/a.md`). Separately, the lexical guard inside citationExists is tested only as the pure function lexicalRelativePath, which R1-09 explicitly asked to be tested through citationExists.",
+    "impact": "Trigger: an edit that drops the URL strip, or the `relative === null` guard in citationExists. Outcome (re-run of both mutants at head against the 9 focused files plus the new ones): both survive. Without the strip, a rebuttal quoting a link with a query path gets a false `citation not found`; without the guard, a rebuttal citing `../x.md` that exists outside the tree is accepted as present. The cost is advisory noise or a missed flag, not a wrong refusal, hence minor.",
+    "suggested_fix": "Use `https://example.com/view?doc=docs/a.md` as the URL-only input and expect []. Add one citationExists case through createManagedReviewPackage: a rebuttal citing `../outside.md` with that file created beside the temp tree gets `citation not found`.",
+    "evidence": "Survivors in mutation-1.json of this round: r2-cite-url-kept and r2-lex-guard-off (judged in research-evidence/survivors.md). Killed for contrast: r2-lex-dotdot-ok, r2-lex-absolute-ok (the pure-function test). Source: rebuttal-citation.ts:9 and managed.ts:1246-1249.",
+    "confidence": "high",
+    "file": "src/review/rebuttal-citation.ts",
+    "line": null,
+    "quote": "text.replace(URL, \" \")",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/rebuttal-citation.ts:12",
+        "src/review/managed.ts:1246",
+        "src/review/rebuttal-citation.test.ts:36-52"
+      ],
+      "enumeration_method": "All 8 round-1 survivors were re-run unchanged: 7 are now killed (offline throw, lookup off, warnings silent, external asked, dismissed asked, dotdot, absolute); this one and the guard-through-citationExists mutant remain."
+    },
+    "global_id": "2026-10-14-pr-1008-round2-39861592#R2-02"
+  },
+  {
+    "id": "R2-03",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "Small behaviours added by the round-1 fixes that no assertion pins: the not-a-commit-SHA warning is dropped on the path where the PR moved or merged and the first line says so (the unmoved path is tested); the evidence-level fence tracker closes a fence on any fence character and ignores fence length, so a longer outer fence quoting a shorter one mis-pairs; the placeholder list's `na`, `nil` and dash forms are untested; ROOT_DOCUMENT accepts a lowercase bare `notes.md` only if written in capitals.",
+    "impact": "None demonstrated. Each is an edge with a lost advisory warning at worst; the one visible effect is that a bare lowercase document name (`notes.md`) is never checked, a trade-off the fix chose on purpose.",
+    "suggested_fix": "Optional: one test for the merged-with-bad-head path; leave the rest.",
+    "evidence": "Survivors in mutation-1.json of this round: r2-gate-unusable-dropped-sayso, r2-ev-fence-char-off, r2-ev-placeholder-narrow, r2-cite-root-lowercase, r2-cli-detect-off (judged in research-evidence/survivors.md; the last is equivalent in effect, the adapter's own failure path gives the same warning).",
+    "confidence": "medium",
+    "file": "src/review/complete-head-gate.ts",
+    "line": 49,
+    "quote": "if (names && SAYS_SO.test(first)) return { warnings: unusable };",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/complete-head-gate.ts:50",
+        "src/review/evidence-level.ts:19-30",
+        "src/review/rebuttal-citation.ts:7"
+      ],
+      "enumeration_method": "Every survivor of the 26-mutant round-2 pass that is not part of R2-01 or R2-02."
+    },
+    "global_id": "2026-10-14-pr-1008-round2-39861592#R2-03"
+  }
+]

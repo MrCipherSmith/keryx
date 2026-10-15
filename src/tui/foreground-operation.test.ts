@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { AgentIO } from "../commands/agent";
+import type { AgentIO, ApproverProvenance } from "../commands/agent";
 import {
   createForegroundAgentIoFacade,
   type TurnScopedIo,
@@ -8,6 +8,8 @@ import {
   finalizeWikiForegroundOperation,
   forceForegroundQueueItem,
   runAfterForegroundSettlement,
+  settleForegroundOperation,
+  withTurnScopedIo,
 } from "./foreground-operation";
 
 // Two Force presses arriving while one operation is still settling.
@@ -221,6 +223,50 @@ test("flow 268 T17: an accepted foreground facade forwards onReasoningDelta and 
   ]);
 });
 
+test("withTurnScopedIo lays a turn's hooks over the shell io, leaves the shell io alone and reads the rest live", () => {
+  const received: string[] = [];
+  const io: AgentIO = { write: (text) => received.push(`write:${text}`), permissionMode: () => "auto" };
+  const scoped = withTurnScopedIo(io, { permissionMode: () => "ask", mcpGrantsApply: () => false });
+
+  expect(scoped.permissionMode?.()).toBe("ask");
+  expect(scoped.mcpGrantsApply?.()).toBe(false);
+  expect(io.permissionMode?.()).toBe("auto");
+  expect(io.mcpGrantsApply).toBeUndefined();
+
+  scoped.write("a");
+  io.onSystem = (text) => received.push(`system:${text}`);
+  scoped.onSystem?.("late");
+  expect(received).toEqual(["write:a", "system:late"]);
+});
+
+test("a self-answered question reaches the shell while the turn is current and never after it settled", () => {
+  const owner = createForegroundOperationOwner();
+  const operation = owner.begin();
+  const received: string[] = [];
+  const io: AgentIO = { write: () => {}, onQuestionSelfAnswered: (question, label) => received.push(`${question}->${label}`) };
+  const facade = createForegroundAgentIoFacade(owner, operation, io);
+
+  facade.onQuestionSelfAnswered?.("Which scope?", "Full");
+  owner.settle(operation);
+  owner.begin();
+  facade.onQuestionSelfAnswered?.("Which scope?", "Small");
+
+  expect(received).toEqual(["Which scope?->Full"]);
+});
+
+test("the facade's approver says whether its turn is still current, so a displaced turn's no is not a person's refusal", () => {
+  const owner = createForegroundOperationOwner();
+  const operation = owner.begin();
+  const facade = createForegroundAgentIoFacade(owner, operation, { write: () => {}, requestApproval: async () => false });
+  const { current } = facade.requestApproval as unknown as ApproverProvenance;
+
+  expect(typeof current).toBe("function");
+  expect(current?.()).toBe(true);
+  owner.settle(operation);
+  owner.begin();
+  expect(current?.()).toBe(false);
+});
+
 test("flow 219: an approval resolved after disposal remains denied", async () => {
   const owner = createForegroundOperationOwner();
   const operation = owner.begin();
@@ -304,4 +350,54 @@ test("flow 396: the hooks of a Telegram turn reach that turn's facade only, neve
   owner.settle(operation);
   expect(telegramTurn.permissionMode?.()).toBe("ask");
   expect(await telegramTurn.requestApproval?.("shell_exec", "{}", undefined)).toBe(false);
+});
+
+
+test("ordinary cancellation still accepts stopped callbacks and finalization", () => {
+  const owner = createForegroundOperationOwner();
+  const token = owner.begin();
+  const painted: string[] = [];
+  const facade = createForegroundAgentIoFacade(owner, token, { write: () => {}, onSystem: s => painted.push(s) });
+  owner.cancel("user interruption");
+  facade.onSystem?.("[stopped]");
+  expect(painted).toEqual(["[stopped]"]);
+  expect(settleForegroundOperation(owner, token)).toBe(true);
+});
+
+test("a settlement handoff cannot dispatch into a replacement session", async () => {
+  const owner = createForegroundOperationOwner();
+  const token = owner.begin();
+  let dispatched = 0;
+  const pending = runAfterForegroundSettlement(owner, () => { dispatched += 1; });
+  owner.invalidateSession();
+  owner.settle(token);
+  await pending;
+  expect(dispatched).toBe(0);
+});
+
+
+test("session switch clears old Force selections and permits a fresh settlement handoff", async () => {
+  const owner = createForegroundOperationOwner();
+  const token = owner.begin();
+  const handoff = createForegroundForceHandoff<string>();
+  const dispatched: string[] = [];
+  const old = forceForegroundQueueItem(owner, handoff, "old", { run: item => dispatched.push(item) });
+  owner.invalidateSession();
+  handoff.clear();
+  const fresh = forceForegroundQueueItem(owner, handoff, "fresh", { run: item => dispatched.push(item) });
+  owner.settle(token);
+  await Promise.all([old, fresh]);
+  expect(dispatched).toEqual(["fresh"]);
+  expect(handoff.hasPending).toBe(false);
+  expect(handoff.isAwaitingSettlement).toBe(false);
+});
+
+test("flow 441: pendingCount is the number of deferred forced items, and falls as they are taken", () => {
+  const handoff = createForegroundForceHandoff<string>();
+  expect(handoff.pendingCount).toBe(0);
+  handoff.enqueue("q1");
+  handoff.enqueue("q2");
+  expect(handoff.pendingCount).toBe(2);
+  expect(handoff.takeNext()).toBe("q1");
+  expect(handoff.pendingCount).toBe(1);
 });

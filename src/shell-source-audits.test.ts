@@ -1,7 +1,8 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test } from "bun:test";
+import { beforeAll, expect, test } from "bun:test";
 
 // Flow 276 (shell god-file split, P1). `src/tui/tui-shell.ts` and
 // `src/commands/shell.ts` are pinned in place by tests that read them as TEXT
@@ -42,10 +43,10 @@ const READ_PRIMITIVE = /readFileSync|Bun\.file|readFile\(|fs\.promises\.readFile
 const LITERAL = /["'`]([^"'`\n]+)["'`]/g;
 
 function testFiles(dir: string, out: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) testFiles(full, out);
-    else if (entry.endsWith(".test.ts")) out.push(full);
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) testFiles(full, out);
+    else if (entry.isFile() && entry.name.endsWith(".test.ts")) out.push(full);
   }
   return out;
 }
@@ -92,23 +93,30 @@ export interface SourceTextAudit {
 }
 
 /** Re-derives the inventory's subject: which tests read either god-file's source text. */
-export function scanSourceTextAudits(): SourceTextAudit[] {
+export async function scanSourceTextAudits(): Promise<SourceTextAudit[]> {
   const found: SourceTextAudit[] = [];
-  for (const file of testFiles(HERE).sort()) {
-    if (path.resolve(file) === path.resolve(fileURLToPath(import.meta.url))) continue;
-    const text = readFileSync(file, "utf8");
-    if (!READ_PRIMITIVE.test(text)) continue;
-    const dir = path.dirname(file);
-    const targets = new Set<string>();
-    let sites = 0;
-    for (const line of text.split("\n")) {
-      const named = pathsNamedOn(line, dir).filter((p) => TARGET_PATHS.includes(p));
-      if (named.length === 0) continue;
-      sites += 1;
-      for (const hit of named) targets.add(path.relative(HERE, hit));
-    }
-    if (targets.size > 0) {
-      found.push({ file: path.relative(HERE, file), targets: [...targets].sort(), sites });
+  const files = testFiles(HERE).sort().filter((file) =>
+    path.resolve(file) !== path.resolve(fileURLToPath(import.meta.url)));
+  // Bound open files while avoiding 1500 serial filesystem round trips.
+  for (let offset = 0; offset < files.length; offset += 32) {
+    const batch = await Promise.all(files.slice(offset, offset + 32).map(async (file) => ({
+      file,
+      text: await readFile(file, "utf8"),
+    })));
+    for (const { file, text } of batch) {
+      if (!READ_PRIMITIVE.test(text)) continue;
+      const dir = path.dirname(file);
+      const targets = new Set<string>();
+      let sites = 0;
+      for (const line of text.split("\n")) {
+        const named = pathsNamedOn(line, dir).filter((p) => TARGET_PATHS.includes(p));
+        if (named.length === 0) continue;
+        sites += 1;
+        for (const hit of named) targets.add(path.relative(HERE, hit));
+      }
+      if (targets.size > 0) {
+        found.push({ file: path.relative(HERE, file), targets: [...targets].sort(), sites });
+      }
     }
   }
   return found;
@@ -141,22 +149,28 @@ function manifest(): SourceTextAudit[] {
     });
 }
 
+// All assertions describe one source-tree snapshot. Keep the default timeout.
+let audits: SourceTextAudit[];
+beforeAll(async () => {
+  audits = await scanSourceTextAudits();
+});
+
 test("the inventory lists exactly the tests that read either shell god-file as source text", () => {
-  expect(scanSourceTextAudits().map((a) => a.file)).toEqual(manifest().map((a) => a.file));
+  expect(audits.map((a) => a.file)).toEqual(manifest().map((a) => a.file));
 });
 
 test("and records, per file, which god-file it reads and how many sites read it", () => {
   // The counts are the P2 worklist. They only ever go down; a row that grows
   // is a new audit, which needs its behaviour written into the table above the
   // manifest before it can land.
-  expect(scanSourceTextAudits()).toEqual(manifest());
+  expect(audits).toEqual(manifest());
 });
 
 test("BOUNDARY — the scan is looking at the real files, and a comment is not an audit", () => {
   // Without this, a scan that silently resolved nothing would report an empty
   // set, the manifest would be emptied to match, and both tests above would
   // pass while the audits they exist for went unrecorded.
-  const found = scanSourceTextAudits();
+  const found = audits;
   expect(found.length).toBeGreaterThan(0);
   expect(found.map((a) => a.file)).toContain("tui/tui-shell.test.ts");
   expect(found.map((a) => a.file)).toContain("commands/shell.test.ts");

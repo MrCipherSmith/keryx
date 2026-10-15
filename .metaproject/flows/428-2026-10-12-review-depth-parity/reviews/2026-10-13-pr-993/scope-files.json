@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "files": [
+    "docs/docs/guides/review-with-a-record.md",
+    "package.json",
+    "src/gdskills/reviewer-triggers.test.ts",
+    "src/review/dispatch.test.ts",
+    "src/review/ledger.test.ts",
+    "src/review/mutate.test.ts",
+    "src/review/mutate.ts"
+  ]
+}

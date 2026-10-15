@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f428",
+  "command": "bun test src/review/mutate.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 3376
+  },
+  "mutants": [
+    {
+      "id": "M4",
+      "file": "src/review/mutate.ts",
+      "anchor": "${m.exitCode ?? \"-\"}",
+      "replacement": "${m.exitCode ?? 0}",
+      "note": "an invalid row shows exit 0 instead of -",
+      "line": 166,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3353
+    },
+    {
+      "id": "M5",
+      "file": "src/review/mutate.ts",
+      "anchor": "| Result | Test command | Exit |",
+      "replacement": "| Result |",
+      "note": "table header loses the two new columns",
+      "line": 176,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3284
+    },
+    {
+      "id": "M6",
+      "file": "src/review/mutate.ts",
+      "anchor": "${cell(m.command ?? record.command)}",
+      "replacement": "${m.command ?? record.command}",
+      "note": "the command cell is no longer pipe-escaped (anchor follows the F-004 edit)",
+      "line": 166,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3290
+    },
+    {
+      "id": "M7",
+      "file": "src/review/mutate.ts",
+      "anchor": "cell(m.command ?? record.command)",
+      "replacement": "cell(m.command as string)",
+      "note": "no fallback for a record without a command",
+      "line": 166,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3346
+    }
+  ],
+  "totals": {
+    "killed": 4,
+    "survived": 0,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

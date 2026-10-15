@@ -2,7 +2,7 @@ STATUS: DONE_WITH_CONCERNS
 
 # T79 — implementation: closing T76 F-001..F-004, and the class
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`, confirmed
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`, confirmed
 via `pwd`/`git rev-parse --abbrev-ref HEAD` before the first read). No
 `.claude/worktrees/**` entered. No `git stash` at any point (all uncommitted
 work in this checkout was left untouched; temporary RED/GREEN reverts used

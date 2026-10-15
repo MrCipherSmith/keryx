@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "files": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    ".metaproject/data/review/scope.json",
+    ".metaproject/data/wiki/freshness-queue.jsonl",
+    ".metaproject/skills/gdskills/planning/interviewer/SKILL.md",
+    "bunfig.toml",
+    "docs/docs/guides/permission-modes.md",
+    "src/commands/agent-question-axis.test.ts",
+    "src/commands/agent.ts",
+    "src/commands/permission-mode.test.ts",
+    "src/commands/permission-mode.ts",
+    "src/commands/shell.ts",
+    "src/decisions/interviewer-path.test.ts",
+    "src/gdskills/bundled/skills/planning/interviewer/SKILL.md",
+    "src/harness/tool/builtin/ask-user-tool.test.ts",
+    "src/harness/tool/builtin/ask-user-tool.ts",
+    "src/lib/test-preload-hooks.ts",
+    "src/tui/ask-user-bridge.test.ts",
+    "src/tui/ask-user-bridge.ts",
+    "src/tui/foreground-operation.test.ts",
+    "src/tui/foreground-operation.ts",
+    "src/tui/tui-shell.ts"
+  ]
+}

@@ -26,7 +26,7 @@
 - 2026-09-11T21:03:34.437Z - task-attempt: T5: started (attempt 1) — 257-T5 wave W1
 - 2026-09-11T21:03:34.547Z - task-attempt: T17: started (attempt 1) — 257-T17 wave W1
 - 2026-09-11T21:08:53.386Z - task-done: T17: W3: rejected-change ledger and the rule that requires it (AC11)
-- 2026-09-11T21:08:53Z - NOTE for flow 258: THIRD_PARTY_NOTICES.md does not exist yet; the program plan says MIT attribution for techniques adapted from addyosmani/agent-skills goes there — create it with the first adapted skill. T17 noted the MIT source inline in the ledger header.
+- 2026-09-11T21:08:53Z - NOTE for flow 258: THIRD_PARTY_NOTICES.md does not exist yet; the program plan says MIT attribution for techniques adapted from an external MIT-licensed skills library goes there — create it with the first adapted skill. T17 noted the MIT source inline in the ledger header.
 - 2026-09-11T21:23:57.666Z - task-done: T5: W1: delete SKILL.<runtime>.md copies identical to SKILL.md; export/install/tests treat the SKILL.md fallback as normal (AC8)
 - 2026-09-11T21:23:57.781Z - task-attempt: T6: started (attempt 1) — 257-T6 after T5
 - 2026-09-11T21:25:03Z - T5 committed (88 identical runtime copies removed per tree; install prunes stale builds; export manifest drops usedFallbackBuild — PR must call this out). NOTE for T16: src/commands/skills.ts ~l.1475 help text still says 'the 65 SKILL.md files' (67 now); docs/docs/cli-reference.md:812,832, modules.md:368, complete-setup-and-agent-workflows.md:552 list --runtime codex|claude|plugin without cursor/zed/opencode.

@@ -74,8 +74,8 @@ const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
  * ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197)); correctness falling
  * **0.820 -> 0.673** across two forced revisions while cumulative ever-correct
  * is **0.847** ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)), i.e. the
- * agent finds the fix and then destroys it. Aider's `max_reflections = 3` and
- * OpenHands' critic bound the same shape.
+ * agent finds the fix and then destroys it. A bound of three repair rounds is
+ * the common response to that shape.
  *
  * `/goal --auto` is a **continuation** loop. Each round advances a course toward
  * a goal and the loop ends on a positive `isCourseDone` signal, not on "the
@@ -298,7 +298,7 @@ function getFlowService(): FlowService {
  * retry. Not user-visible breakage — just accumulating garbage in
  * `.metaproject/flows/` — but a real gap, not a hypothetical one.
  */
-async function autoProvisionFlow(cwd: string, goalText: string): Promise<string> {
+export async function autoProvisionFlow(cwd: string, goalText: string): Promise<string> {
   const service = getFlowService();
   const result = await service.init({ cwd, title: goalText });
   const acFile = path.join(cwd, result.dir, "acceptance-criteria.md");
@@ -320,9 +320,8 @@ async function autoProvisionFlow(cwd: string, goalText: string): Promise<string>
       "",
       "## Criteria",
       "",
-      `- AC1: The stated goal — "${goalText}" — is achieved, judged by the`,
-      "  verifier subagent this session's continuation loop runs before",
-      "  stopping (flow 186 T10).",
+      // One line: goal text must not carry its own `[verify:` (neutralised to `(verify:`), so AC1 keeps exactly one marker; the marker is read from the criterion's own `- ACn:` line (flow 422).
+      `- AC1: The stated goal — "${goalText.replace(/\s+/g, " ").replace(/\[verify:/gi, "(verify:").trim()}" — is achieved, judged by the verifier subagent this session's continuation loop runs before stopping (flow 186 T10). [verify: judged]`,
       "",
     ].join("\n"),
   );

@@ -8,7 +8,7 @@
     "title": "Prepare Keryx agent-first core requirements package",
     "description": "Resume docpack-orchestrator phases 0–4 for approved decisions 01–32 plus enrichment M01–M11 and W01–W06; request independent phase5 review from parent. Documentation only.",
     "intent": "documentation",
-    "scope": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core"
+    "scope": "~/goodea/keryx/docs/requirements/keryx-agent-first-core"
   },
   "acceptance_criteria": [
     "README, PRD, specification and justified contracts/policies/lifecycle/implementation plan with Version after H1",
@@ -59,7 +59,7 @@
     ".metaproject/jobs/audit-2026-09-06/origin-main-analysis.md"
   ],
   "constraints": [
-    "Exact project root /Users/Goodea/goodea/keryx; read .metaproject/index.md before other repo actions",
+    "Exact project root ~/goodea/keryx; read .metaproject/index.md before other repo actions",
     "User authorizes docs/specs, not implementation, commits, dependency updates or runtime calls to models",
     "User opted OUT of execution statistics",
     "Russian prose; Version under each H1; schemas English keys",

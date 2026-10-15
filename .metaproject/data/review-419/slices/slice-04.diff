@@ -1,0 +1,674 @@
+--- src/remote/bot-api-http.ts
+@@ 227,238 @@
+         message_thread_id: params.messageThreadId,
+       });
+     },
++    async closeForumTopic(params) {
++      await call<boolean>("closeForumTopic", {
++        chat_id: params.chatId,
++        message_thread_id: params.messageThreadId,
++      });
++    },
+     async editForumTopic(params) {
+       await call<boolean>("editForumTopic", {
+         chat_id: params.chatId,
+
+--- src/remote/client.ts
+@@ 69,79 @@
+   | { kind: "own"; text: string; refusal?: undefined }
+   | { kind: "none"; refusal?: string };
+ 
++/** Read at the call: an earlier check on the same signal must not narrow it to "not aborted". */
++function isAborted(signal: AbortSignal | undefined): boolean {
++  return signal?.aborted === true;
++}
++
+ function closeByFor(signal: AbortSignal | undefined): "shell" | "cancelled" {
+   return signal?.reason === "cancelled" ? "cancelled" : "shell";
+ }
+
+--- src/remote/client.ts
+@@ 469,478 @@
+     if (!this.connected) {
+       return { decision: "deny" };
+     }
++    if (isAborted(options.signal)) {
++      await this.closePrompt(approvalId, closeByFor(options.signal));
++      return { decision: "deny", approvalId };
++    }
+     return new Promise<ApprovalAnswer>((resolve) => {
+       const signal = options.signal;
+       const onAbort = (): void => {
+
+--- src/remote/client.ts
+@@ 481,488 @@
+         if (waiter !== undefined) clearTimeout(waiter.timer);
+         this.waiters.delete(approvalId);
+         resolve({ decision: "deny", approvalId });
++        // Flow 419: the buttons may still be in the topic; serve takes them down and says where it was answered.
++        void this.closePrompt(approvalId, closeByFor(signal));
+       };
+       const timer = setTimeout(() => {
+         signal?.removeEventListener("abort", onAbort);
+
+--- src/remote/command-gateway.ts
+@@ 64,70 @@
+   { name: "delegate", kind: "confirm", description: "Hand a paid task to an external agent: /delegate <agent> <task>; asks first" },
+   { name: "external", kind: "confirm", description: "Show or switch sending work to external providers; on and off ask first" },
+   { name: "external-agents", kind: "confirm", description: "Show or switch the external agent runtime; on and off ask first" },
++  { name: "route", kind: "confirm", description: "Show or switch model routing: /route [on|off]; on and off ask first" },
+ ];
+ 
+ /** Commands that are never run from the topic, each with the reason the topic is told. */
+
+--- src/remote/command-gateway.ts
+@@ 75,87 @@
+   provider: "it asks for provider keys and addresses, which are never typed into a chat",
+   "search-provider": "it asks for provider keys, which are never typed into a chat",
+   "search-connect": "it changes where searches are sent",
+-  "remote-control": "turning remote control off would delete this topic, and its panel is local",
++  "remote-control": "turning remote control off would archive this topic, and its panel is local",
+   integrate: "it edits other tools' configuration on this machine",
+   copy: "it uses this machine's clipboard",
+   game: "it needs the shell's screen",
+   setup: "it asks for keys and changes the configuration",
+   mcp: "it can trust tools and change server connections; use the shell",
+   guard: "it changes a safety guard; use the shell",
+-  route: "it changes where work is routed; use the shell",
+   editguard: "it changes a safety guard; use the shell",
+   settings: "it edits settings, some of them secret; use the shell",
+   bus: "it talks to other agents on this machine",
+
+--- src/remote/command-gateway.ts
+@@ 112,124 @@
+ };
+ 
+ /** The commands a shell refuses while a turn runs, when the host gives no better answer. */
+-export const BUSY_DEFERRED_COMMANDS: readonly string[] = ["new", "clear", "resume", "sessions", "compact", "model", "connect"];
++export const BUSY_DEFERRED_COMMANDS: readonly string[] = ["new", "clear", "resume", "sessions", "compact", "model", "connect", "route", "external", "external-agents"];
++
++/**
++ * Commands that are not refused while a turn runs but held: the topic is told they are queued, and each runs
++ * when main is idle (flow 419, AC4). Shell spelling. `/mode` is not here: the shell takes it at any moment.
++ */
++export const QUEUED_WHEN_BUSY_COMMANDS: readonly string[] = ["model", "route", "external", "external-agents"];
+ 
+ /** The reason the shell gives for a command it will not run during a turn. */
+ export const BUSY_REASON = "main is busy: command deferred";
+
+--- src/remote/command-gateway.ts
+@@ 197,203 @@
+ 
+   if (canonical === "remote-control") {
+     const sub = args.split(/\s+/)[0]?.toLowerCase() ?? "";
+-    return refuse(canonical, sub === "off" ? "it would delete this topic; turn it off in the shell" : (refusedReason ?? "its panel is local"), true);
++    return refuse(canonical, sub === "off" ? "it would archive this topic; turn it off in the shell" : (refusedReason ?? "its panel is local"), true);
+   }
+   if (spec === undefined) {
+     if (refusedReason !== undefined) {
+
+--- src/remote/command-gateway.ts
+@@ 248,263 @@
+         };
+       }
+       return first === "" ? { kind: "run", command: name, line: "/external" } : refuse(name, "use /external, /external on or /external off", true);
++    case "route":
++      if (first === "on" || first === "off") {
++        return {
++          kind: "confirm",
++          command: name,
++          line: `/route ${first}`,
++          summary: `Switch model routing ${first}? This changes which model answers each turn.`,
++        };
++      }
++      return first === "" ? { kind: "run", command: name, line: "/route" } : refuse(name, "use /route, /route on or /route off", true);
+     case "external-agents":
+       if (first === "on" || first === "off") {
+         return {
+
+--- src/remote/command-gateway.ts
+@@ 319,329 @@
+   return BUSY_DEFERRED_COMMANDS.includes(name);
+ }
+ 
++/** Whether a command from the topic waits for an idle main instead of being refused while a turn runs. */
++export function isQueuedWhenBusy(name: string): boolean {
++  return QUEUED_WHEN_BUSY_COMMANDS.includes(name);
++}
++
+ /** Every menu name is valid for Telegram; the test holds this. */
+ export function menuNamesAreValid(): boolean {
+   return REMOTE_COMMANDS.every((spec) => MENU_NAME.test(menuName(spec.name)));
+
+--- src/remote/command-router.ts
+@@ 15,21 @@
+   classifyRemoteCommand,
+   type GatewayDecision,
+   isBusyDeferred,
++  isQueuedWhenBusy,
+   refusalText,
+   remoteHelpText,
+ } from "./command-gateway";
+
+--- src/remote/command-router.ts
+@@ 90,108 @@
+   commandLimitMs: number;
+   /** How long a picker or a Yes/No waits for a press. */
+   choiceTimeoutMs: number;
++  /** How often a command held for an idle main looks again (flow 419, AC4). */
++  idlePollMs?: number;
++  /** After this long a held command is dropped, and the topic is told. */
++  queuedCommandLimitMs?: number;
+ }
+ 
+-export const DEFAULT_ROUTER_LIMITS: RouterLimits = { runningNoticeMs: 4_000, commandLimitMs: 120_000, choiceTimeoutMs: 120_000 };
++export const DEFAULT_ROUTER_LIMITS: RouterLimits = {
++  runningNoticeMs: 4_000,
++  commandLimitMs: 120_000,
++  choiceTimeoutMs: 120_000,
++  idlePollMs: 250,
++  queuedCommandLimitMs: 30 * 60_000,
++};
+ 
+ /** The most items on one picker page; with the navigation row this stays within the eight rows a keyboard may have. */
+ export const PICKER_PAGE_SIZE = 7;
+
+--- src/remote/command-router.ts
+@@ 117,124 @@
+   host: RemoteCommandHost;
+   /** Send text to the topic. False when it could not be sent. */
+   reply(text: string): Promise<boolean>;
++  /** False once remote control is off: a command held for an idle main is dropped. Absent: always live. */
++  live?(): boolean;
+   /**
+    * `/history [N]` (flow 399): post the session's last messages to the topic. Resolves with the one
+    * line to answer with when nothing was posted (usage, empty history), undefined when the messages went out.
+
+--- src/remote/command-router.ts
+@@ 274,323 @@
+ 
+   /** Put a run on the line. Used by the gateway's `run` and by an answered Yes/No. */
+   enqueue(line: string, command: string, end?: CommandEnd): void {
++    if (isQueuedWhenBusy(command) && this.busyReason(line, command) !== undefined) {
++      this.detach(async () => {
++        if (await this.awaitIdle(line, command)) {
++          this.enqueueNow(line, command, end);
++        } else {
++          ended(end, "failed");
++        }
++      });
++      return;
++    }
++    this.enqueueNow(line, command, end);
++  }
++
++  private enqueueNow(line: string, command: string, end?: CommandEnd): void {
+     this.chain = this.chain
+       .then(() => this.execute(command, line, async () => (this.ctx.host.runCommand === undefined ? undefined : this.ctx.host.runCommand(line)), end))
+       .catch(() => undefined);
+   }
+ 
++  /**
++   * Flow 419, AC4: main is busy and the command is one the shell would defer. Say it is queued, then wait
++   * until main is idle. Resolves true when it is, false when the wait was given up (the topic was told or
++   * is gone). Never on the line, so a status question or a stop is not stuck behind it.
++   */
++  private async awaitIdle(line: string, command: string): Promise<boolean> {
++    this.ctx.record(`/${command} queued: main is busy`);
++    await this.ctx.reply(this.ctx.compose(`${line} is queued: main is busy. It runs when main is idle.`)).catch(() => false);
++    const { idlePollMs = 250, queuedCommandLimitMs = 30 * 60_000 } = this.ctx.limits;
++    const until = Date.now() + queuedCommandLimitMs;
++    while (this.ctx.host.isBusy()) {
++      if (this.ctx.live?.() === false) {
++        this.ctx.record(`${line} dropped: remote control went off while it waited`);
++        return false;
++      }
++      if (Date.now() >= until) {
++        this.ctx.record(`${line} dropped: main stayed busy`);
++        await this.ctx.reply(`${line} was not run: main stayed busy for ${Math.max(1, Math.round(queuedCommandLimitMs / 60_000))} minutes. Send it again when the run ends.`).catch(() => false);
++        return false;
++      }
++      await new Promise<void>((resolve) => setTimeout(resolve, idlePollMs));
++    }
++    return true;
++  }
++
+   /** Run `work` after everything already on the line, and hold the line until it settles. */
+   private serial<T>(work: () => Promise<T>): Promise<T> {
+     const run = this.chain.then(work);
+
+--- src/remote/command-router.ts
+@@ 512,519 @@
+   private async picker(command: string, fromId: number | undefined, end: CommandEnd | undefined): Promise<AskResult> {
+     const line = `/${command}`;
+     const busy = this.busyReason(line, command);
+-    if (busy !== undefined) {
++    // A model picker is shown even while main is busy; only the switch itself waits for an idle main.
++    if (busy !== undefined && !isQueuedWhenBusy(command)) {
+       this.ctx.record(`${line} not run: ${busy}`);
+       await this.ctx.reply(`${line} was not run: ${busy}.`).catch(() => false);
+       return "failed";
+
+--- src/remote/command-router.ts
+@@ 555,563 @@
+       return "failed";
+     }
+     const switchModel = host.switchModel.bind(host);
++    if (this.busyReason("/model", "model") !== undefined && !(await this.awaitIdle(`/model ${chosen.label.replace(/^\* /, "")}`, "model"))) {
++      return "failed";
++    }
+     // On the same line as every other command: a switch never overlaps one that is still executing.
+     const switched = await this.serial(async (): Promise<CommandOutcome | { busy: string }> => {
+       const busy = this.busyReason("/model", "model");
+
+--- src/remote/command.test-helpers.ts
+@@ 37,52 @@
+   listSessions?: RemoteBridgeHost["listSessions"];
+   resumeSession?: RemoteBridgeHost["resumeSession"];
+   choiceTimeoutMs?: number;
++  idlePollMs?: number;
++  queuedCommandLimitMs?: number;
+   /** The run limit serve delivered, in milliseconds; 0 (the default) is no limit. */
+   runTimeoutMs?: number;
+   /** When set, serve refuses every question with this reason (the 429 and 409 answers); the fake then offers `askChoice`. */
+   refuseChoice?: string;
++  progressIntervalMs?: number;
++  progressToolThreshold?: number;
++  sessionState?: RemoteBridgeHost["sessionState"];
++  turnRunning?: RemoteBridgeHost["turnRunning"];
+   /** Answer for `askApproval` (flow 396). Absent: the fake has no such method, as an old client. */
+   askApproval?: NonNullable<RemoteClientLike["askApproval"]>;
+ }
+
+--- src/remote/command.test-helpers.ts
+@@ 76,83 @@
+             return (opts.runCommand as (line: string) => Promise<CommandOutcome>)(line);
+           },
+     ...(opts.busyRefusal !== undefined ? { busyRefusal: opts.busyRefusal } : {}),
++    ...(opts.sessionState !== undefined ? { sessionState: opts.sessionState } : {}),
++    ...(opts.turnRunning !== undefined ? { turnRunning: opts.turnRunning } : {}),
+     ...(opts.listModels !== undefined ? { listModels: opts.listModels } : {}),
+     ...(opts.switchModel !== undefined ? { switchModel: opts.switchModel } : {}),
+     ...(opts.listProviders !== undefined ? { listProviders: opts.listProviders } : {}),
+
+--- src/remote/command.test-helpers.ts
+@@ 92,101 @@
+     ...(opts.runningNoticeMs !== undefined ? { commandRunningNoticeMs: opts.runningNoticeMs } : {}),
+     ...(opts.commandLimitMs !== undefined ? { commandLimitMs: opts.commandLimitMs } : {}),
+     ...(opts.choiceTimeoutMs !== undefined ? { choiceTimeoutMs: opts.choiceTimeoutMs } : {}),
++    idlePollMs: opts.idlePollMs ?? 5,
++    ...(opts.progressIntervalMs !== undefined ? { progressIntervalMs: opts.progressIntervalMs } : {}),
++    ...(opts.progressToolThreshold !== undefined ? { progressToolThreshold: opts.progressToolThreshold } : {}),
++    ...(opts.queuedCommandLimitMs !== undefined ? { queuedCommandLimitMs: opts.queuedCommandLimitMs } : {}),
+     makeClient: (options: RemoteClientOptions) => {
+       const startResult: StartResult = { ok: true, name: "topic-a", threadId: 7, runTimeoutMs: 0 };
+       const fake = {
+
+--- src/remote/fake-bot-api.ts
+@@ 125,131 @@
+   | "sendChatAction"
+   | "createForumTopic"
+   | "deleteForumTopic"
++  | "closeForumTopic"
+   | "editForumTopic"
+   | "answerCallbackQuery"
+   | "getMe"
+
+--- src/remote/fake-bot-api.ts
+@@ 158,165 @@
+   myCommands: BotCommandMenuEntry[] = [];
+   readonly myCommandsCalls: BotCommandMenuEntry[][] = [];
+   readonly deletedTopics: { chatId: number; messageThreadId: number }[] = [];
++  /** Topics the bot closed (archived); they stay in `liveTopics` with their messages. */
++  readonly closedTopics: { chatId: number; messageThreadId: number }[] = [];
+   readonly renamedTopics: { messageThreadId: number; name: string }[] = [];
+   /** Every call, in order, by client label. */
+   readonly calls: { method: FakeMethod; label: string }[] = [];
+
+--- src/remote/fake-bot-api.ts
+@@ 212,218 @@
+       sendChatAction: (params) => this.chatActionFor(label, params),
+       createForumTopic: (params) => this.createTopicFor(label, params),
+       deleteForumTopic: (params) => this.deleteTopicFor(label, params),
++      closeForumTopic: (params) => this.closeTopicFor(label, params),
+       editForumTopic: (params) => this.editTopicFor(label, params),
+       answerCallbackQuery: (params) => this.answerFor(label, params),
+       getMe: () => this.getMeFor(label),
+
+--- src/remote/fake-bot-api.ts
+@@ 445,454 @@
+     return this.defaultClient.deleteForumTopic(params);
+   }
+ 
++  closeForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void> {
++    return this.defaultClient.closeForumTopic(params);
++  }
++
+   editForumTopic(params: { chatId: number; messageThreadId: number; name: string }): Promise<void> {
+     return this.defaultClient.editForumTopic(params);
+   }
+
+--- src/remote/fake-bot-api.ts
+@@ 815,828 @@
+     this.deletedTopics.push({ chatId: params.chatId, messageThreadId: params.messageThreadId });
+   }
+ 
++  private async closeTopicFor(label: string, params: { chatId: number; messageThreadId: number }): Promise<void> {
++    this.begin("closeForumTopic", label);
++    if (!this.liveTopics.has(params.messageThreadId)) {
++      throw rejected("closeForumTopic", 400, "Bad Request: message thread not found");
++    }
++    this.closedTopics.push({ chatId: params.chatId, messageThreadId: params.messageThreadId });
++  }
++
+   private async editTopicFor(label: string, params: { chatId: number; messageThreadId: number; name: string }): Promise<void> {
+     this.begin("editForumTopic", label);
+     const topic = this.liveTopics.get(params.messageThreadId);
+
+--- src/remote/http-surface.ts
+@@ 47,54 @@
+   choiceCallbackData,
+   DEFAULT_ACK_TIMEOUT_MS,
+   DEFAULT_APPROVAL_ACK_MS,
++  DEFAULT_PROMPT_REMINDER_MS,
++  MAX_PROMPT_REMINDERS,
+   DEFAULT_APPROVAL_TIMEOUT_MS,
+   DEFAULT_KEEPALIVE_MS,
+   encodeSseEvent,
+
+--- src/remote/http-surface.ts
+@@ 114,121 @@
+   ackTimeoutMs?: number;
+   /** How long a pressed approval waits for the shell to confirm it received the decision (flow 397). */
+   approvalAckMs?: number;
++  /** Flow 419: how long an unanswered approval or question waits before the topic is reminded of it. */
++  reminderMs?: number;
+   /** Test seam: the approval id generator. Must produce `ap` and 12 lowercase hex characters. */
+   approvalIds?: () => string;
+   /** Test seam: the choice prompt id generator. Must produce `pk` and 12 lowercase hex characters. */
+
+--- src/remote/http-surface.ts
+@@ 258,266 @@
+   text?: string;
+   /** The pattern an "Always" press would remember (flow 396), as shown in the topic. Absent: no Always button. */
+   remember?: string;
++  /** Flow 419: the pending reminder, and how many were already posted. */
++  reminder?: unknown;
++  reminded?: number;
+ }
+ 
+ /**
+
+--- src/remote/http-surface.ts
+@@ 369,375 @@
+   private readonly keepaliveMs: number;
+   private readonly ackTimeoutMs: number;
+   private readonly approvalAckMs: number;
++  private readonly reminderMs: number;
+   private readonly newApprovalId: () => string;
+   private readonly newPromptId: () => string;
+   private readonly streams = new Map<string, ShellStream>();
+
+--- src/remote/http-surface.ts
+@@ 394,400 @@
+     this.keepaliveMs = options.keepaliveMs ?? DEFAULT_KEEPALIVE_MS;
+     this.ackTimeoutMs = options.ackTimeoutMs ?? DEFAULT_ACK_TIMEOUT_MS;
+     this.approvalAckMs = options.approvalAckMs ?? DEFAULT_APPROVAL_ACK_MS;
++    this.reminderMs = options.reminderMs ?? DEFAULT_PROMPT_REMINDER_MS;
+     this.newApprovalId = options.approvalIds ?? (() => `ap${randomBytes(6).toString("hex")}`);
+     this.newPromptId = options.promptIds ?? (() => `pk${randomBytes(6).toString("hex")}`);
+     this.consumer = {
+
+--- src/remote/http-surface.ts
+@@ 728,734 @@
+       timer: this.timers.setTimeout(() => this.expireApproval(approvalId), timeoutMs),
+       ...(remember === undefined ? {} : { remember }),
+     });
++    this.scheduleReminder("approval", approvalId);
+     // The operator approves what is shown, so the prompt goes out as a code block: nothing in it is read as markup.
+     const offer = remember === undefined ? "" : `\nAlways would remember:\n${asCodeBlock(remember)}`;
+     const sent = await hub.send(sessionId, `Approval needed:\n${asCodeBlock(redactSensitiveText(value.prompt))}${offer}`, {
+
+--- src/remote/http-surface.ts
+@@ 872,878 @@
+       ...(own ? { own: true } : {}),
+       timer: this.timers.setTimeout(() => this.expireChoice(promptId), timeoutMs),
+     });
++    this.scheduleReminder("question", promptId);
+     const keyboard: InlineKeyboard = [];
+     let position = 0;
+     for (const width of layout) {
+
+--- src/remote/http-surface.ts
+@@ 911,925 @@
+     if (!isSessionId(value.sessionId)) {
+       return invalid("sessionId must be 1 to 64 characters of letters, digits, '-' and '_'.");
+     }
+-    if (typeof value.promptId !== "string" || !isPromptId(value.promptId)) {
+-      return invalid("promptId must be a prompt id this serve issued.");
++    if (typeof value.promptId !== "string" || !(isPromptId(value.promptId) || isApprovalId(value.promptId))) {
++      return invalid("promptId must be a prompt or approval id this serve issued.");
+     }
+     if (value.by !== undefined && value.by !== "shell" && value.by !== "cancelled") {
+       return invalid("by must be 'shell' or 'cancelled'.");
+     }
++    if (isApprovalId(value.promptId)) {
++      return this.closeApproval(value.promptId, value.sessionId, value.by);
++    }
+     const entry = this.choices.get(value.promptId);
+     if (entry === undefined || entry.sessionId !== value.sessionId) {
+       const done = this.finished.get(value.promptId);
+
+--- src/remote/http-surface.ts
+@@ 943,969 @@
+     return ok({ closed: true });
+   }
+ 
++  /**
++   * Flow 419: the shell answered an approval at the keyboard (or the turn stopped) while the buttons were
++   * still in the topic. The buttons go away and the message says where it was answered. An approval that was
++   * already pressed in the topic is left alone: that press is the answer and is being delivered.
++   */
++  private closeApproval(approvalId: string, sessionId: string, by: "shell" | "cancelled" | undefined): Response {
++    const entry = this.approvals.get(approvalId);
++    if (entry === undefined || entry.sessionId !== sessionId) {
++      return ok({ closed: false });
++    }
++    this.dropApproval(approvalId);
++    this.rememberDecided(approvalId, sessionId);
++    const when = clockText(this.now());
++    const answered = by !== "cancelled";
++    this.finishApproval(approvalId, sessionId, entry.messageId, entry.text, {
++      result: answered ? `Answered in the shell at ${when}.` : `Cancelled at ${when}: the request is no longer open.`,
++      shortReply: answered ? "Answered in the shell." : "That approval is no longer open.",
++    });
++    return ok({ closed: true });
++  }
++
+   /** The shell says where one of its messages is; the hub shows it as a reaction and typing (flow 387, AC18). */
+   private async messageState(hub: RemoteHub, request: Request): Promise<Response> {
+     const body = await readJsonBody(request);
+
+--- src/remote/http-surface.ts
+@@ 1502,1508 @@
+       return;
+     }
+     this.timers.clearTimeout(entry.timer);
++    this.timers.clearTimeout(entry.reminder);
+     this.choices.delete(promptId);
+     if (entry.armedReplyId !== undefined) {
+       const armed = this.armedOwn.get(entry.armedReplyId);
+
+--- src/remote/http-surface.ts
+@@ 1590,1596 @@
+       return;
+     }
+     this.timers.clearTimeout(entry.timer);
++    this.timers.clearTimeout(entry.reminder);
+     this.approvals.delete(approvalId);
+   }
+ 
+
+--- src/remote/http-surface.ts
+@@ 1629,1667 @@
+     });
+   }
+ 
++  /** Flow 419, AC3: arm the next reminder for an approval or question that is still open. */
++  private scheduleReminder(kind: "approval" | "question", id: string): void {
++    const entry = kind === "approval" ? this.approvals.get(id) : this.choices.get(id);
++    if (entry === undefined || (entry.reminded ?? 0) >= MAX_PROMPT_REMINDERS || this.reminderMs <= 0) {
++      return;
++    }
++    entry.reminder = this.timers.setTimeout(() => this.remind(kind, id), this.reminderMs);
++  }
++
++  private remind(kind: "approval" | "question", id: string): void {
++    const entry = kind === "approval" ? this.approvals.get(id) : this.choices.get(id);
++    const hub = this.hub;
++    if (entry === undefined || hub === undefined || this.closed) {
++      return;
++    }
++    entry.reminded = (entry.reminded ?? 0) + 1;
++    const left = entry.expiresAt - this.now();
++    const what = kind === "approval" ? "An approval is" : "A question is";
++    const topic = reminderExcerpt(entry.text);
++    const ends = left > 0 ? ` It expires at ${clockText(entry.expiresAt)}.` : "";
++    void hub
++      .send(entry.sessionId, `Reminder: ${what} still waiting for an answer here${topic === "" ? "" : `: ${topic}`}.${ends} The buttons are on the message above.`)
++      .catch(() => undefined);
++    this.scheduleReminder(kind, id);
++  }
++
+   private expireApproval(approvalId: string): void {
+     const entry = this.approvals.get(approvalId);
+     if (entry === undefined) {
+       return;
+     }
+     this.timers.clearTimeout(entry.timer);
++    this.timers.clearTimeout(entry.reminder);
+     this.approvals.delete(approvalId);
+     this.finishApproval(approvalId, entry.sessionId, entry.messageId, entry.text, {
+       result: `Expired at ${clockText(this.now())}: no answer, so it was denied.`,
+
+--- src/remote/http-surface.ts
+@@ 1722,1738 @@
+   }
+ }
+ 
++/** The first line of what was asked, for a reminder: no fences, no label, cut short. */
++export function reminderExcerpt(text: string | undefined): string {
++  const line =
++    (text ?? "")
++      .split("\n")
++      .map((part) => part.replace(/^`{3,}.*$/, "").replace(/^Approval needed:\s*/, "").trim())
++      .find((part) => part.length > 0) ?? "";
++  const flat = line.replace(/\s+/g, " ");
++  return flat.length <= 80 ? flat : `${flat.slice(0, 79)}…`;
++}
++
+ /** The button for an "Always" offer: the pattern, cut to Telegram's button length. */
+ export function alwaysButtonText(pattern: string): string {
+   const text = `Always: ${pattern.replace(/\s+/g, " ")}`;
+
+--- src/remote/hub.ts
+@@ 110,117 @@
+   | "topic-renamed"
+   | "topic-deleted"
+   | "topic-delete-failed"
++  | "topic-archived"
++  | "topic-close-failed"
+   | "session-unavailable"
+   | "session-returned"
+   | "sender-refused"
+
+--- src/remote/hub.ts
+@@ 470,476 @@
+       if (record === undefined) {
+         return { ok: true as const, existed: false };
+       }
+-      await this.retire(record, "closed by the session");
++      await this.archive(record, "The session was closed.");
+       return { ok: true as const, existed: true };
+     });
+   }
+
+--- src/remote/hub.ts
+@@ 533,539 @@
+     });
+   }
+ 
+-  /** Mark stale heartbeats unavailable and delete topics whose orphan timeout has run out. */
++  /** Mark stale heartbeats unavailable and archive topics whose orphan timeout has run out. */
+   sweep(): Promise<void> {
+     return this.serial(async () => {
+       const now = this.now();
+
+--- src/remote/hub.ts
+@@ 556,567 @@
+           if (now - record.unavailableSince < this.config.orphanMs) {
+             this.queueStatus(
+               record,
+-              `Session unavailable: the shell stopped responding. This topic is deleted in ${formatDuration(this.config.orphanMs)} unless the session returns.`,
++              `Session unavailable: the shell stopped responding. This topic is archived in ${formatDuration(this.config.orphanMs)} unless the session returns.`,
+             );
+           }
+         }
+         if (record.status === "unavailable" && record.unavailableSince !== undefined && now - record.unavailableSince >= this.config.orphanMs) {
+-          await this.retire(record, "orphan timeout");
++          await this.archive(record, "The shell stopped responding and did not return.");
+         }
+       }
+       await this.flushOutbound();
+
+--- src/remote/hub.ts
+@@ 925,931 @@
+   private markLive(record: RemoteSessionRecord): void {
+     record.status = "live";
+     delete record.unavailableSince;
++    delete record.closing;
+   }
+ 
+   private queueStatus(record: RemoteSessionRecord, text: string): void {
+
+--- src/remote/hub.ts
+@@ 1012,1050 @@
+     return { ok: true, name, threadId: record.threadId, reused: false };
+   }
+ 
++  /**
++   * End a session's topic without deleting it (flow 419): a closing note goes in, the topic is closed,
++   * and its messages stay readable. The record is forgotten, so a later session starts a new topic.
++   * A transient failure leaves an ownerless, already-expired record behind so the next sweep retries
++   * the close; the closing note is queued once.
++   */
++  private async archive(record: RemoteSessionRecord, reason: string): Promise<void> {
++    this.stopTyping(record);
++    if (record.closing !== true) {
++      record.closing = true;
++      this.queueStatus(record, `${reason} This topic is archived: the history stays here and nothing more will be posted. A new session opens a new topic.`);
++      this.registry.save();
++    }
++    await this.flushOutbound();
++    try {
++      await this.api.closeForumTopic({ chatId: record.chatId, messageThreadId: record.threadId });
++    } catch (error) {
++      if (isBotApiError(error) && isRetryable(error)) {
++        record.sessionId = "";
++        record.status = "unavailable";
++        record.unavailableSince = this.now() - this.config.orphanMs;
++        this.registry.save();
++        this.event("topic-close-failed", `${record.name}: ${describeError(error)}`);
++        return;
++      }
++      // A refusal (the topic is gone, or already closed) leaves nothing to close.
++    }
++    this.inbound.remove(nameKey(record.name));
++    this.registry.remove(record.name);
++    this.registry.save();
++    this.event("topic-archived", `${record.name}: ${reason}`);
++  }
++
+   /**
+    * Delete a record's topic and forget it. A topic that is already gone counts
+    * as deleted; a transient failure leaves an ownerless, already-expired record

@@ -1,0 +1,215 @@
+[
+  {
+    "id": "R1-01",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "An explicit refresh inside the five-minute failed-head window is served from the cached failure, and nothing tells the operator. refreshLayers skips the build when force is not set, the head is the same and failedRecently() holds. ensurePackageLayers has no force option, the TUI refresh argv has no --force, and both the PackageGraphError message and the detail view print only the old error, with no mention of the window or of --force.",
+    "impact": "Trigger: a transient build failure (disk full, git lock, network share), the operator fixes the cause and presses refresh in the TUI or runs layers block. Outcome: for up to five minutes the old error comes back with no retry and no hint why; only the CLI help documents the window, and only the CLI refresh can pass --force.",
+    "suggested_fix": "Pass force: true from the TUI refresh argv; add the window and --force to the PackageGraphError message and to the graph: line of the detail view (failed at <time>, retried automatically after 5 minutes, or run refresh --force); let ensurePackageLayers take a force option for callers that mean it.",
+    "evidence": "Traced by reading: layers.ts:581 and :629; review-layers.ts:66-84, :107 and :136; review-layers-actions.ts:25; layers-view.ts:37. The tests pin ensurePackageLayers inside the window and --force only. Not executed.",
+    "confidence": "high",
+    "file": "src/review/layers.ts",
+    "line": 581,
+    "quote": "} else if (input.force !== true && sameHead && failedRecently(existing as LayersFile, deps.now())) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 581
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/layers.ts:581",
+        "src/review/layers.ts:629",
+        "src/commands/review-layers.ts:66",
+        "src/commands/review-layers.ts:136",
+        "src/tui/review-layers-actions.ts:25",
+        "src/review/layers-view.ts:37"
+      ],
+      "enumeration_method": "keryx ctx rg -n \"failedRecently|ensurePackageLayers|layersRefreshArgv|PackageGraphError\" src --glob '!*.test.ts'; every caller of refreshLayers read"
+    },
+    "global_id": "2026-10-14-pr-1009-round1-f720fdb2#R1-01"
+  },
+  {
+    "id": "R1-02",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "The per-page guard in wikiFor that records an unreadable wiki page is not pinned: deleting it leaves the focused suite green. The guard is real (collectPages already read every page, so only a page removed or chmod-ed between the two reads reaches it) but no test can reach that state without a reader seam.",
+    "impact": "Trigger: a page disappears or loses its mode between collectPages and the second readFile. Outcome: with the guard gone the page is dropped without a word and the section is reported as read with fewer items, the exact silent-empty case AC2 exists to prevent, and no test would notice a regression.",
+    "suggested_fix": "Give wikiFor a readPage seam defaulting to readFile and pin the message 'N of M wiki page(s) could not be read', or have collectPages return the content it read so the second read and the guard disappear together.",
+    "evidence": "mutant:ac2-unreadable-page-dropped survived a recorded run on src/review/layers-payload.ts (research-evidence/mutation-1.md, exit 0); the author accepted it in survivors.md as not pinned.",
+    "confidence": "high",
+    "file": "src/review/layers-payload.ts",
+    "line": 176,
+    "quote": "unreadable.push(page.relativePath);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 176
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/layers-payload.ts:176",
+        "src/review/layers-payload.ts:184"
+      ],
+      "enumeration_method": "keryx ctx rg -n \"readFile|unreadable\" src/review/layers-payload.ts; the only per-item read after a collection step"
+    },
+    "global_id": "2026-10-14-pr-1009-round1-f720fdb2#R1-02",
+    "severity_audit": {
+      "from": "minor",
+      "to": "major",
+      "evidence": "mutation-1.json#ac2-unreadable-page-dropped"
+    }
+  },
+  {
+    "id": "R1-03",
+    "reviewer": "review-highload",
+    "severity": "minor",
+    "problem": "withDetachedWorktree unregisters its cleanup before awaiting it. A signal that arrives while the awaited git worktree remove runs finds no registered cleanup, so the handler removes the lock and re-raises while the removal is cut off.",
+    "impact": "Trigger: SIGTERM or SIGINT during the post-build worktree removal. Outcome: the worktree registration and the keryx-layers temp directory are left behind until the next refresh sweeps them after the sweep age.",
+    "suggested_fix": "Await cleanup() first and unregister in a nested finally, so the registered cleanup stays visible to the handler for as long as it runs; the cleanup is idempotent.",
+    "evidence": "Executed probe (order-probe.test.ts): git remove held for 400 ms, SIGTERM sent while it ran; afterwards 2 registered worktrees and a leftover keryx-layers-* directory. layers.ts:409-410.",
+    "confidence": "high",
+    "file": "src/review/layers.ts",
+    "line": 409,
+    "quote": "unregister();",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 409
+    },
+    "global_id": "2026-10-14-pr-1009-round1-f720fdb2#R1-03"
+  },
+  {
+    "id": "R1-04",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The text block prints '  unavailable <section>: <reason>' while AC2 states the format '<source>: unavailable (<reason>)'.",
+    "impact": "The operator confirms AC2 against wording the code does not produce; a reader or script keyed to the AC text does not match.",
+    "suggested_fix": "Change the line to '  <section>: unavailable (<reason>)' and update the test, or amend AC2 with keryx flow ac update before it is confirmed.",
+    "evidence": "layers-payload.ts:353 against acceptance-criteria.md AC2. Not executed.",
+    "confidence": "high",
+    "file": "src/review/layers-payload.ts",
+    "line": 353,
+    "quote": "for (const gap of block.unavailable) lines.push(`  unavailable ${gap.section}: ${gap.reason}`);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 353
+    },
+    "global_id": "2026-10-14-pr-1009-round1-f720fdb2#R1-04"
+  },
+  {
+    "id": "R1-05",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "layers-signal.test.ts stops the child in four places (sweep after the lock, build, wiki, memory); AC1 names five phases and says each. No phase stops in recoverGraphDirectory or at the layers.json write.",
+    "impact": "A regression that narrows the handler scope to the build-side phases, or that leaves the lock when the signal lands during the final write, passes the suite.",
+    "suggested_fix": "Add a phase for the layers.json write (a writeFileAtomic seam or a hook in deps) and one for recover, or reword AC1 to the four phases tested.",
+    "evidence": "layers-signal.test.ts:20-24 against AC1; layers.ts:573 and :605. Not executed.",
+    "confidence": "medium",
+    "file": "src/review/layers-signal.test.ts",
+    "line": 20,
+    "quote": "const PHASES: Record<string, string> = {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 20
+    },
+    "global_id": "2026-10-14-pr-1009-round1-f720fdb2#R1-05"
+  },
+  {
+    "id": "R1-06",
+    "reviewer": "review-highload",
+    "severity": "minor",
+    "problem": "The signal handler awaits every registered cleanup with no bound, so a hung git worktree remove keeps the process alive after SIGTERM.",
+    "impact": "Trigger: SIGTERM while git blocks. Outcome: the process does not die by the signal until git returns; a second signal or SIGKILL still ends it, so nothing leaks.",
+    "suggested_fix": "Race the cleanups against a short timer (a few seconds) before the lock removal and the re-raise.",
+    "evidence": "layers.ts:358-366. Not executed.",
+    "confidence": "medium",
+    "file": "src/review/layers.ts",
+    "line": 362,
+    "quote": "void Promise.all([...cleanups].map((cleanup) => cleanup().catch(() => {})))",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 362
+    },
+    "global_id": "2026-10-14-pr-1009-round1-f720fdb2#R1-06"
+  },
+  {
+    "id": "R1-07",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "The legacy fallback failedAt ?? refreshedAt makes the window a little longer for a layers.json written before this change, because refreshedAt follows the failure by the wiki and memory time.",
+    "impact": "Bounded and one-off; no action needed.",
+    "suggested_fix": "None.",
+    "evidence": "layers.ts:193. Mutant r1-failedat-ignored was killed.",
+    "confidence": "high",
+    "file": "src/review/layers.ts",
+    "line": 193,
+    "quote": "const age = now.getTime() - Date.parse(existing.graph.failedAt ?? existing.refreshedAt);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 193
+    },
+    "global_id": "2026-10-14-pr-1009-round1-f720fdb2#R1-07"
+  },
+  {
+    "id": "R1-08",
+    "reviewer": "review-style",
+    "severity": "info",
+    "problem": "Round ids remain in test names beyond the file AC6 names: layers-round3.test.ts, R1-nn in layers-isolation and layers-payload tests, R3-03 in layers-usage.test.ts.",
+    "impact": "AC6 is met as written (layers-round2 only); the other names stay unreadable without the review packages.",
+    "suggested_fix": "Rename after behaviour in a follow-up.",
+    "evidence": "layers-round3.test.ts:16; layers-isolation.test.ts:32, :53, :135, :173; layers-payload.test.ts:108, :124, :131; layers-usage.test.ts:29, :37, :44.",
+    "confidence": "high",
+    "file": "src/review/layers-round3.test.ts",
+    "line": 16,
+    "quote": "describe(\"the throwaway checkout is made without the operator's hooks or fsmonitor (R3-21)\", () => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 16
+    },
+    "global_id": "2026-10-14-pr-1009-round1-f720fdb2#R1-08"
+  },
+  {
+    "id": "R1-09",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "error.killed is also true when execFile kills the child for a maxBuffer overflow, and the message then reports a timeout.",
+    "impact": "Rare; a misleading message only.",
+    "suggested_fix": "Check error.signal and the elapsed time, or name both causes in the message.",
+    "evidence": "review-layers-actions.ts:53. Not executed.",
+    "confidence": "medium",
+    "file": "src/tui/review-layers-actions.ts",
+    "line": 53,
+    "quote": "if (error?.killed === true) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 53
+    },
+    "global_id": "2026-10-14-pr-1009-round1-f720fdb2#R1-09"
+  },
+  {
+    "id": "R1-10",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The bundled reviewer-input schema lists unavailable sections (symbols, relatedTests) that buildLayersBlock never emits, relatedTests is empty without a flag when affected fails, and the project-local copy of the schema was not updated and diverges from the bundled one.",
+    "impact": "A consumer may wait for sections that never appear; the two schema copies drift.",
+    "suggested_fix": "Trim the enum to affected, wiki and memory, or emit the other two; sync the project-local copy through the usual projection step.",
+    "evidence": "reviewer-input.schema.json diff at 263-275; layers-payload.ts:263-265.",
+    "confidence": "medium",
+    "file": "src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json",
+    "line": 263,
+    "quote": "\"unavailable\": {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 263
+    },
+    "global_id": "2026-10-14-pr-1009-round1-f720fdb2#R1-10"
+  }
+]

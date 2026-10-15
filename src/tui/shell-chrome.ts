@@ -48,7 +48,9 @@ import { boldChunk, dimChunk, roleChunk } from "./theme-text";
 import { destroyModalHost } from "./modal-host";
 import { currentDebugRun, debugEvent } from "./debug-log";
 import { attachRendererGuards } from "./renderer-debug";
+import { isCtrlC } from "./ctrl-c-policy";
 import { SIDEBAR_WIDTH } from "./sidebar-metrics";
+import { TRANSCRIPT_HISTORY_LIMIT, transcriptNodeProtected, forgetTranscriptNode } from "./transcript-history";
 
 /** The `@opentui/core` module shape, referenced structurally (type-only). */
 type OpenTui = typeof import("@opentui/core");
@@ -404,7 +406,7 @@ export interface ShellChrome {
    * Persistent queue dock above `dock`, listing queued main-turn messages
    * (`paintMainQueue` in `tui-shell.ts` mounts into it). Unlike `dock` it is
    * multi-item and stays mounted for as long as the queue is non-empty
-   * (`.visible` toggles with `mainQueue.length > 0`).
+   * (`.visible` toggles with `turnLoop.queue.length > 0`).
    */
   readonly queueDock: Box;
   readonly menu: Select;
@@ -576,23 +578,37 @@ export function selectThemeColors(theme: Theme): {
  */
 export async function createShellRenderer(
   otui: OpenTui,
-  opts: { onDestroy?: (() => void) | undefined } = {},
+  opts: {
+    onDestroy?: (() => void) | undefined;
+    /** Takes over Ctrl+C from OpenTUI's exit-on-Ctrl+C: the caller decides between cancel and quit. */
+    onCtrlC?: (() => void) | undefined;
+  } = {},
 ): Promise<Renderer> {
   // Input recovery (SIGUSR2) in every session, plus the `--debug` log when on.
   // Assigned after creation; `onDestroy` can only fire after that.
-  const guards: { detach?: () => void } = {};
+  const guards: { detach?: () => void; offCtrlC?: () => void } = {};
+  const onCtrlC = opts.onCtrlC;
   const renderer = await otui.createCliRenderer({
-    exitOnCtrlC: true,
+    exitOnCtrlC: onCtrlC === undefined,
     screenMode: "alternate-screen",
     clearOnShutdown: true,
     useMouse: true,
     backgroundColor: getTheme().bg,
     onDestroy: () => {
       guards.detach?.();
+      guards.offCtrlC?.();
       opts.onDestroy?.();
     },
   });
   guards.detach = attachRendererGuards(renderer);
+  if (onCtrlC !== undefined) {
+    guards.offCtrlC = onKeypress(renderer, (key) => {
+      if (!isCtrlC(key)) return;
+      key.preventDefault();
+      key.stopPropagation();
+      onCtrlC();
+    });
+  }
   // The config field above is declarative only — see `paintRendererBackground`.
   // THIS call is what puts the first frame, the boot animation and the startup
   // picker on the theme's background instead of the terminal's.
@@ -732,7 +748,7 @@ export async function createShellChrome(
   r.on(otui.CliRenderEvents.SELECTION, onSelection);
 
   // --- header -------------------------------------------------------------
-  // grok-style: identity on the left, a caller-owned meta slot on the right.
+  // Identity on the left, a caller-owned meta slot on the right.
   const header = new otui.BoxRenderable(r, {
     id: "header",
     flexShrink: 0,
@@ -841,14 +857,61 @@ export async function createShellChrome(
   // renderers — goes through this instance method, so pinning is free for all.
   const originalTranscriptAdd = transcript.add.bind(transcript);
   const originalTranscriptRemove = transcript.remove.bind(transcript);
+  let historyNotice: Text | undefined;
+  let historyAnchor: { node: ReturnType<typeof transcript.getChildren>[number]; y: number; scrollTop: number } | undefined;
+  const restoreHistoryAnchor = (): void => {
+    const anchor = historyAnchor;
+    historyAnchor = undefined;
+    if (anchor === undefined || anchor.node.isDestroyed || scroll.stickyScroll || scroll.scrollTop !== anchor.scrollTop) return;
+    scroll.scrollTop += anchor.node.y - anchor.y;
+  };
+  r.on(otui.CliRenderEvents.FRAME, restoreHistoryAnchor);
+  const trimHistory = (): void => {
+    const completed = transcript.getChildren().filter(
+      (node) => node !== liveStatus && node !== historyNotice && !transcriptNodeProtected(node),
+    );
+    const excess = completed.length - TRANSCRIPT_HISTORY_LIMIT;
+    if (excess <= 0) return;
+    if (!scroll.stickyScroll && historyAnchor === undefined) {
+      const evicted = new Set(completed.slice(0, excess));
+      const node = transcript.getChildren().find(
+        (child) => child !== liveStatus && child !== historyNotice && !evicted.has(child)
+          && child.y + child.height > scroll.y && child.y < scroll.y + scroll.height,
+      );
+      if (node !== undefined) historyAnchor = { node, y: node.y, scrollTop: scroll.scrollTop };
+    }
+    for (const node of completed.slice(0, excess)) {
+      forgetTranscriptNode(node);
+      node.destroyRecursively();
+    }
+    for (let i = userPrompts.length - 1; i >= 0; i--) {
+      if (userPrompts[i]?.box.isDestroyed) userPrompts.splice(i, 1);
+    }
+    if (pinnedPrompt?.box.isDestroyed) {
+      pinnedPrompt = undefined;
+      promptPin.visible = false;
+    }
+    if (historyNotice === undefined || historyNotice.isDestroyed) {
+      historyNotice = new otui.TextRenderable(r, {
+        id: "transcript-history-notice",
+        content: "Older output is no longer mounted in this view.",
+        fg: getTheme().muted,
+        flexShrink: 0,
+      });
+      originalTranscriptAdd(historyNotice, 0);
+    }
+  };
   transcript.add = (child: unknown, index?: number): number => {
     if (liveStatus !== undefined && child !== liveStatus) {
       originalTranscriptRemove(liveStatus);
       const added = originalTranscriptAdd(child, index);
       originalTranscriptAdd(liveStatus);
+      trimHistory();
       return added;
     }
-    return originalTranscriptAdd(child, index);
+    const added = originalTranscriptAdd(child, index);
+    trimHistory();
+    return added;
   };
 
   // --- queue dock -----------------------------------------------------------
@@ -856,7 +919,7 @@ export async function createShellChrome(
   // messages so they stop being painted into `transcript` (flow 170). Mirrors
   // `dock`'s own styling below so the two docks read as one visual family, but
   // starts hidden — `paintMainQueue()` in tui-shell.ts flips `.visible` once
-  // `mainQueue.length > 0`. Inserted between `scroll` and `dock` in add-order:
+  // `turnLoop.queue.length > 0`. Inserted between `scroll` and `dock` in add-order:
   // the passive queue reminder sits one step further from the composer than
   // the active choice dock.
   const queueDock = new otui.BoxRenderable(r, {
@@ -939,7 +1002,7 @@ export async function createShellChrome(
     return false;
   };
 
-  // Live `/` command dropdown (Pi/grok-style): a Select filtered as the composer
+  // Live `/` command dropdown: a Select filtered as the composer
   // changes.
   const menu = new otui.SelectRenderable(r, {
     id: "menu",
@@ -1368,9 +1431,9 @@ export async function createShellChrome(
   // A model-generated "what to do next" shown as the composer placeholder while
   // it is empty. Tab/Right fills it in without submitting; typing dismisses it.
   // AC14 (flow 268): Enter does NOT accept it — a bare Enter on an empty
-  // composer is always a no-op upstream, suggestion or not. Mirrors
-  // qwen-code's InputForm followup mechanism (placeholder swap + tab/right
-  // accept + dismiss on input), minus the enter-accepts variant.
+  // composer is always a no-op upstream, suggestion or not. The mechanism
+  // is a placeholder swap + tab/right accept + dismiss on input, without an
+  // enter-accepts variant.
   const defaultPlaceholder = opts.placeholder;
   let suggestion: string | null = null;
   const syncPlaceholder = (): void => {
@@ -1578,6 +1641,7 @@ export async function createShellChrome(
       }
       try {
         r.off(otui.CliRenderEvents.FRAME, syncPromptPin);
+        r.off(otui.CliRenderEvents.FRAME, restoreHistoryAnchor);
       } catch {
         // best-effort teardown
       }

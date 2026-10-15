@@ -1,0 +1,1429 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    ".metaproject/data/wiki/freshness-queue.jsonl",
+    "src/commands/review-jev-contract.ts",
+    "src/commands/review-jev-docs.ts",
+    "src/commands/review-jev-risk.ts",
+    "src/commands/review-jev-rules.ts",
+    "src/commands/review-jev-scenarios.ts",
+    "src/commands/review-jev-select.ts",
+    "src/commands/review-revision-operand.test.ts",
+    "src/commands/review.ts",
+    "src/lib/git-revision.ts",
+    "src/lib/trust-routine-command.test.ts",
+    "src/lib/trust-routine-command.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/agent.ts",
+      "hop": 1,
+      "fanIn": 80,
+      "via": "src/lib/trust-routine-command.ts",
+      "path": [
+        "src/commands/agent.ts",
+        "src/lib/trust-routine-command.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/cli-registry.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-jev-edit-guard.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/review-jev-rules.ts",
+      "path": [
+        "src/commands/review-jev-edit-guard.ts",
+        "src/commands/review-jev-rules.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/jev-contract-command.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/review-jev-contract.ts",
+      "path": [
+        "src/tui/jev-contract-command.ts",
+        "src/commands/review-jev-contract.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/jev-docs-command.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/review-jev-docs.ts",
+      "path": [
+        "src/tui/jev-docs-command.ts",
+        "src/commands/review-jev-docs.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/jev-risk-command.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/review-jev-risk.ts",
+      "path": [
+        "src/tui/jev-risk-command.ts",
+        "src/commands/review-jev-risk.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/jev-rules-command.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/review-jev-rules.ts",
+      "path": [
+        "src/tui/jev-rules-command.ts",
+        "src/commands/review-jev-rules.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/jev-scenarios-command.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/review-jev-scenarios.ts",
+      "path": [
+        "src/tui/jev-scenarios-command.ts",
+        "src/commands/review-jev-scenarios.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/agent-fewer-prompts.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "path": [
+        "src/commands/agent-fewer-prompts.test.ts",
+        "src/lib/trust-routine-command.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/agent-trust-orchestration.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "path": [
+        "src/commands/agent-trust-orchestration.test.ts",
+        "src/lib/trust-routine-command.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/import-only.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/import-only.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-ac-check-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-ac-check-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-ci-triage-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-ci-triage-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-comments-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-comments-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-conform-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-conform-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-floor-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-floor-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-help.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-help.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-comments-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-comments-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-contract-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review-jev-contract.ts",
+      "path": [
+        "src/commands/review-jev-contract-cli.test.ts",
+        "src/commands/review-jev-contract.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-docs-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review-jev-docs.ts",
+      "path": [
+        "src/commands/review-jev-docs-cli.test.ts",
+        "src/commands/review-jev-docs.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-profile-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-profile-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-risk-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-risk-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-rules-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-rules-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-rules-discovery.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review-jev-rules.ts",
+      "path": [
+        "src/commands/review-jev-rules-discovery.test.ts",
+        "src/commands/review-jev-rules.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-scenarios-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-scenarios-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-select-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-select-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-triage-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-triage-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-learn-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-learn-reviewer-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-learn-reviewer-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-slice.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-slice.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/flow/renumber-reviews.e2e.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/flow/renumber-reviews.e2e.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/flow/review-gate.e2e.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/flow/review-gate.e2e.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/cost-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/review/cost-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/cross-family.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/review/cross-family.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/review/filter-stats.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/loop-real-path.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/review/loop-real-path.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/review/managed.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/pr-comments.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/review/pr-comments.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/review-notes.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/review/review-notes.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/tui/jev-contract-command.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review-jev-contract.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 138 at hop 1, fan-in 0, reached via src/commands/review-jev-contract.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-docs-command.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review-jev-docs.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 138 at hop 1, fan-in 0, reached via src/commands/review-jev-docs.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-risk-command.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review-jev-risk.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 138 at hop 1, fan-in 0, reached via src/commands/review-jev-risk.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-rules-command.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review-jev-rules.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 138 at hop 1, fan-in 0, reached via src/commands/review-jev-rules.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-scenarios-command.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review-jev-scenarios.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 138 at hop 1, fan-in 0, reached via src/commands/review-jev-scenarios.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 2,
+      "fanIn": 22,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 138 at hop 2, fan-in 22, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "hop": 2,
+      "fanIn": 21,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 138 at hop 2, fan-in 21, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "hop": 2,
+      "fanIn": 18,
+      "via": "src/commands/review-jev-contract.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 138 at hop 2, fan-in 18, reached via src/commands/review-jev-contract.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger-dispatch.ts",
+      "hop": 2,
+      "fanIn": 14,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 138 at hop 2, fan-in 14, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 138 at hop 2, fan-in 12, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/review-system.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 138 at hop 2, fan-in 12, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent.test-helpers.ts",
+      "hop": 2,
+      "fanIn": 11,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 138 at hop 2, fan-in 11, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger-agent-task.ts",
+      "hop": 2,
+      "fanIn": 11,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 138 at hop 2, fan-in 11, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/permission.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 54 of 138 at hop 2, fan-in 9, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-approval.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 55 of 138 at hop 2, fan-in 8, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/acp-permission.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 56 of 138 at hop 2, fan-in 8, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/approval-cause.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 57 of 138 at hop 2, fan-in 7, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/settings-model.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 58 of 138 at hop 2, fan-in 7, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 59 of 138 at hop 2, fan-in 6, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/goal-command.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 60 of 138 at hop 2, fan-in 5, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/models.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 61 of 138 at hop 2, fan-in 4, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/acp-client.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 62 of 138 at hop 2, fan-in 4, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/acp-run.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 63 of 138 at hop 2, fan-in 4, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/arbiter-floor.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 64 of 138 at hop 2, fan-in 4, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/foreground-operation.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 65 of 138 at hop 2, fan-in 4, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/agent-io.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 66 of 138 at hop 2, fan-in 3, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/settings-state.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 67 of 138 at hop 2, fan-in 3, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-containment.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 68 of 138 at hop 2, fan-in 2, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-safety.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 69 of 138 at hop 2, fan-in 2, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/server.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 70 of 138 at hop 2, fan-in 2, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/acp.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 71 of 138 at hop 2, fan-in 2, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/help.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 72 of 138 at hop 2, fan-in 2, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/supervise-mcp.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 73 of 138 at hop 2, fan-in 2, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/remote/telegram-permission.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 74 of 138 at hop 2, fan-in 2, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/deep-enrich.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 75 of 138 at hop 2, fan-in 2, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-mutating.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 76 of 138 at hop 2, fan-in 1, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-raw.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 77 of 138 at hop 2, fan-in 1, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 78 of 138 at hop 2, fan-in 1, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/long-runner-turn.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 79 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-long.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 80 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/stress/keryx-shell-stress.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 81 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/permission.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 82 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/bus/delivery.integration.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 83 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-approval-binding.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 84 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-bus-notification.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 85 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-destructive-gate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 86 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-instruction-roster.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 87 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-lifecycle-hooks.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 88 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 89 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-review-gate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 90 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-rewind-seam.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 91 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-task-notification.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 92 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-tool-call-budget.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 93 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-untrusted-batch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 94 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent.context-guard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 95 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent.error-hint.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 96 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent.host-contracts.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 97 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent.overflow-retry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 98 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent.recovery.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 99 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent.repeat-guard-prune.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 100 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent.slate-trail.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 101 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 102 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent.working-memory.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 103 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/approvals.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 104 of 138 at hop 2, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/goal-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 105 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-tool-surface.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 106 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-untrusted.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 107 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/permissions-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 108 of 138 at hop 2, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-arbiter.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 109 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-edit-guard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-jev-rules.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 110 of 138 at hop 2, fan-in 0, reached via src/commands/review-jev-rules.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/schedule-security.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 111 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/schedule-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 112 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-agent-repl.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 113 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 114 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 115 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills-remove.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 116 of 138 at hop 2, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger-unattended.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 117 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/decisions/coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 118 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/acp-client.process.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 119 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/acp-interop.process.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 120 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/shell-exec-spill.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 121 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 122 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/remote/telegram-permission.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 123 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 124 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/review-system.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 125 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/security/web-taint-durable-boundary.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 126 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/foreground-operation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 127 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/settings-model.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 128 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/trust-routine-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 129 of 138 at hop 2, fan-in 0, reached via src/lib/trust-routine-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/automatic-review.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 130 of 138 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-arbiter-config.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 131 of 138 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-arbiter-eval.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 132 of 138 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-ledger.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 133 of 138 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-result-contract.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 134 of 138 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-run.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 135 of 138 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-slice-paths.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 136 of 138 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/schedule-review.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 137 of 138 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger-review.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 138 of 138 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 15,
+    "changedFilesResolved": 11,
+    "changedFilesUnresolved": 4,
+    "candidates": 138,
+    "retained": 40,
+    "droppedByCap": 98,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 9,
+    "testsRetained": 32,
+    "hopHistogram": {
+      "1": 40
+    }
+  },
+  "graph": {
+    "nodes": 3046,
+    "edges": 10605
+  }
+}

@@ -29,6 +29,22 @@ export interface AskUserRequest {
   irreversible?: boolean;
   /** Which surface asked (journal `source`), set by the host code that asks, never by the model. */
   source?: string;
+  /**
+   * Flow 425: the question's kind and the structured facts about the recommended option, for the review arbiter. It is
+   * the only part of a question the arbiter reads; everything else in the request (question, labels, descriptions) is
+   * free text and never reaches the arbiter's prompt. Unvalidated here: the arbiter validates it.
+   */
+  policy?: AskUserPolicy;
+  /**
+   * Set by the agent loop, never by the model: untrusted external content was read earlier in this turn, so the
+   * question may have been shaped by it and no automatic answerer may decide it.
+   */
+  untrustedContent?: boolean;
+}
+
+export interface AskUserPolicy {
+  kind: string;
+  facts: Record<string, unknown>;
 }
 
 /**
@@ -49,10 +65,105 @@ export const ASK_USER_DESCRIPTION =
   "Use when requirements are unclear, for interview steps, or to confirm a plan. " +
   "Provide 2–6 options with short descriptions; mark at most ONE option recommended when sensible (more than one is rejected). " +
   "Whenever you mark an option recommended, ALWAYS set recommendationReason: one sentence on why it is the better choice. " +
-  "Input: { question: string, options: [{ id, label, description, recommended? }], recommendationReason?: string, allow_freeform?: boolean, action?: string, irreversible?: boolean }. " +
+  "Input: { question: string, options: [{ id, label, description, recommended? }], recommendationReason?: string, allow_freeform?: boolean, action?: string, irreversible?: boolean, emergency?: string }. " +
   "Returns the chosen option id (or freeform text if allow_freeform). " +
   "irreversible: true means the question decides something that cannot be undone (release, publish, deploy, delete, push, merge to a shared branch, drop, force, reset, tag a version). " +
-  "action names that irreversible action (e.g. action: \"release\").";
+  "action names that irreversible action (e.g. action: \"release\"). " +
+  "policy: { kind, facts } optionally tags a review question with its kind (scope, budget, option_choice, partial_coverage, smaller_slice, slice_order) " +
+  "and numeric or boolean facts about the recommended option; only the automatic answerer reads it, as numbers and flags, never as text. " +
+  "emergency: \"gate-waiver\" (a gate refusal needs the operator's quote) or \"reduced-reviewer-set\"; the only two cases an automatic review may put to the operator.";
+
+function policyOf(raw: unknown): AskUserPolicy | undefined {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const { kind, facts } = raw as Record<string, unknown>;
+  if (typeof kind !== "string" || kind.trim().length === 0 || kind.length > 64) return undefined;
+  if (facts === null || typeof facts !== "object" || Array.isArray(facts)) return undefined;
+  return { kind: kind.trim(), facts: facts as Record<string, unknown> };
+}
+
+/**
+ * The only two questions an automatic review may put to the operator through
+ * `ask_user`: a gate refusal that needs an operator quote (a waiver), and a
+ * reduced-reviewer-set decision. Any other question is answered by the host.
+ */
+export const ASK_USER_EMERGENCIES = ["gate-waiver", "reduced-reviewer-set"] as const;
+
+/** The fewest options a question may carry: with one there is nothing to choose. */
+export const MIN_ASK_USER_OPTIONS = 2;
+
+/** A host answers this when the user saw the question and dismissed it. */
+export const ASK_USER_CANCEL = "__cancel__";
+
+/** The surface has no way to show a question at all (`--no-tui`, a non-TTY, the readline fallback): nobody was asked. */
+export const ASK_USER_NO_HOST = "__no_host__";
+
+export type ParsedAskUser = { ok: true; request: AskUserRequest } | { ok: false; output: string };
+
+/** The validated request a tool call carries, or the error text the model is told. Shared by `invoke` and the auto-mode self-answer. */
+export function parseAskUserInput(input: Record<string, unknown>): ParsedAskUser {
+  const question = typeof input.question === "string" ? input.question.trim() : "";
+  if (question.length === 0) {
+    return { ok: false, output: "ask_user requires a non-empty 'question'" };
+  }
+  const rawOpts = input.options;
+  if (!Array.isArray(rawOpts) || rawOpts.length < MIN_ASK_USER_OPTIONS) {
+    return { ok: false, output: `ask_user requires at least ${MIN_ASK_USER_OPTIONS} options` };
+  }
+  // at most one option may carry recommended: true (checked on the raw input, before invalid rows are dropped)
+  const flagged = rawOpts.filter((raw) => raw !== null && typeof raw === "object" && (raw as Record<string, unknown>).recommended === true);
+  if (flagged.length > 1) {
+    return { ok: false, output: `ask_user: ${flagged.length} options are marked recommended; mark at most one and explain it in recommendationReason` };
+  }
+  const options: AskUserOption[] = [];
+  for (const raw of rawOpts) {
+    if (raw === null || typeof raw !== "object") {
+      continue;
+    }
+    const o = raw as Record<string, unknown>;
+    const id = typeof o.id === "string" ? o.id.trim() : "";
+    const label = typeof o.label === "string" ? o.label.trim() : "";
+    if (id.length === 0 || label.length === 0) {
+      continue;
+    }
+    const description = typeof o.description === "string" ? o.description : "";
+    options.push({
+      id,
+      label,
+      description,
+      ...(o.recommended === true ? { recommended: true } : {}),
+    });
+  }
+  if (options.length < MIN_ASK_USER_OPTIONS) {
+    return { ok: false, output: `ask_user: need at least ${MIN_ASK_USER_OPTIONS} valid options with id+label` };
+  }
+  const reason = typeof input.recommendationReason === "string" ? input.recommendationReason.trim() : "";
+  const policy = policyOf(input.policy);
+  return {
+    ok: true,
+    request: {
+      question,
+      options,
+      ...(reason.length > 0 && options.some((o) => o.recommended === true) ? { recommendationReason: reason } : {}),
+      ...(input.allow_freeform === true ? { allowFreeform: true } : {}),
+      ...(typeof input.action === "string" && input.action.trim().length > 0 ? { action: input.action.trim() } : {}),
+      ...(input.irreversible === true ? { irreversible: true } : {}),
+      ...(policy === undefined ? {} : { policy }),
+    },
+  };
+}
+
+/** What `auto` mode chose in place of the user: the model's own recommended option, else the first. Never invented. */
+export function selfAnswerAskUser(request: AskUserRequest): { question: string; option: AskUserOption; result: { output: string; isError: false } } {
+  const option = request.options.find((o) => o.recommended === true) ?? request.options[0]!;
+  return {
+    question: request.question,
+    option,
+    result: {
+      output: `[auto mode] chose this without asking the user: id="${option.id}" label="${option.label}"${option.recommended === true ? " (recommended)" : ""}. The user did not answer this question.`,
+      isError: false,
+    },
+  };
+}
 
 /**
  * Build the `ask_user` tool. `ask` is injected by the host (TUI wires the
@@ -80,64 +191,39 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
               required: ["id", "label"],
               additionalProperties: false,
             },
-            minItems: 2,
+            minItems: MIN_ASK_USER_OPTIONS,
             maxItems: 8,
           },
           recommendationReason: { type: "string" },
           allow_freeform: { type: "boolean" },
           action: { type: "string" },
           irreversible: { type: "boolean" },
+          policy: {
+            type: "object",
+            properties: {
+              kind: { type: "string" },
+              facts: { type: "object" },
+            },
+            required: ["kind", "facts"],
+            additionalProperties: false,
+          },
+          emergency: { type: "string", enum: [...ASK_USER_EMERGENCIES] },
         },
         required: ["question", "options"],
         additionalProperties: false,
       },
       risk: "read",
     },
-    invoke: async (input) => {
-      const question = typeof input.question === "string" ? input.question.trim() : "";
-      if (question.length === 0) {
-        return { output: "ask_user requires a non-empty 'question'", isError: true };
+    invoke: async (input, ctx) => {
+      const parsed = parseAskUserInput(input);
+      if (!parsed.ok) {
+        return { output: parsed.output, isError: true };
       }
-      const rawOpts = input.options;
-      if (!Array.isArray(rawOpts) || rawOpts.length < 2) {
-        return { output: "ask_user requires at least 2 options", isError: true };
-      }
-      // at most one option may carry recommended: true (checked on the raw input, before invalid rows are dropped)
-      const flagged = rawOpts.filter((raw) => raw !== null && typeof raw === "object" && (raw as Record<string, unknown>).recommended === true);
-      if (flagged.length > 1) {
-        return { output: `ask_user: ${flagged.length} options are marked recommended; mark at most one and explain it in recommendationReason`, isError: true };
-      }
-      const options: AskUserOption[] = [];
-      for (const raw of rawOpts) {
-        if (raw === null || typeof raw !== "object") {
-          continue;
-        }
-        const o = raw as Record<string, unknown>;
-        const id = typeof o.id === "string" ? o.id.trim() : "";
-        const label = typeof o.label === "string" ? o.label.trim() : "";
-        if (id.length === 0 || label.length === 0) {
-          continue;
-        }
-        const description = typeof o.description === "string" ? o.description : "";
-        options.push({
-          id,
-          label,
-          description,
-          ...(o.recommended === true ? { recommended: true } : {}),
-        });
-      }
-      if (options.length < 2) {
-        return { output: "ask_user: need at least 2 valid options with id+label", isError: true };
-      }
+      const { options } = parsed.request;
       try {
-        const reason = typeof input.recommendationReason === "string" ? input.recommendationReason.trim() : "";
         const given = await ask({
-          question,
-          options,
-          ...(reason.length > 0 && options.some((o) => o.recommended === true) ? { recommendationReason: reason } : {}),
-          ...(input.allow_freeform === true ? { allowFreeform: true } : {}),
-          ...(typeof input.action === "string" && input.action.trim().length > 0 ? { action: input.action.trim() } : {}),
-          ...(input.irreversible === true ? { irreversible: true } : {}),
+          ...parsed.request,
+          ...(ctx?.untrustedContentSeen === true ? { untrustedContent: true } : {}),
         });
         if (typeof given !== "string" && given.kind === "own") {
           const text = given.text.trim();
@@ -156,7 +242,15 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
             isError: false,
           };
         }
-        if (chosen === "__cancel__") {
+        if (chosen === ASK_USER_NO_HOST) {
+          return {
+            output:
+              "No one was asked: this session has no way to show a question to the user. The user did not answer and did not decline. " +
+              "Decide with what you have and say which assumption you made, or stop and state what you need.",
+            isError: true,
+          };
+        }
+        if (chosen === ASK_USER_CANCEL) {
           return { output: "User cancelled the question (Esc).", isError: true };
         }
         return { output: `User answered (freeform): ${chosen}`, isError: false };

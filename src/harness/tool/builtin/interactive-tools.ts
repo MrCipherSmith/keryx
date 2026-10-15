@@ -57,12 +57,23 @@ export interface InteractiveToolContext {
    * something on confirmation can refuse an invoke that never went through the card.
    */
   confirmationToken?: string;
+  /**
+   * Flow 425: untrusted external content was read earlier in this turn. `ask_user` copies it onto the question, so
+   * the review arbiter can tell a question that may have been shaped by that content and never decide it.
+   */
+  untrustedContentSeen?: boolean;
 }
 
 /** A tool the interactive agent can offer to the model and execute for content. */
 export interface InteractiveTool {
   definition: NormalizedToolDefinition;
   invoke: (input: Record<string, unknown>, ctx?: InteractiveToolContext) => Promise<InteractiveToolResult>;
+  /**
+   * Flow 441 AC6: the directory a shell tool runs its commands in. The trust routine table judges a command
+   * (`bun test`, a review command's path flags) from here, not from the process working directory; absent, the
+   * process working directory stands in.
+   */
+  workingDirectory?: string;
   /**
    * Flow 295 (AC7): a tool whose every call needs the OPERATOR's explicit yes, whatever
    * the permission mode. `auto` included, it is never auto-approved, never remembered,
@@ -310,7 +321,12 @@ export function builtinReadOnlyTools(
       const target =
         confineToRoot(root, requested) ?? resolveSpillReadable(options.getSessionDir?.(), requested);
       if (target === null) {
-        return { output: `path escapes the project root: ${requested}`, isError: true };
+        return {
+          output:
+            `path escapes the project root: ${requested}. read_file only reads inside the working directory (${root}); ` +
+            `for a file outside it use shell_exec \`cat <path>\`, or run keryx from a directory that contains it.`,
+          isError: true,
+        };
       }
       try {
         const file = Bun.file(target);

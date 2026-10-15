@@ -115,7 +115,7 @@
     {
       "at": "2026-10-02T20:09:46.459Z",
       "event": "origin-set",
-      "detail": "unknown -> human-request; quote: \"за 7 дней работы расписания я хотя бы раз сделал что-то в GitHub или на доске из-за сводки раньше, чем заметил бы сам\"; source: ~/prompts/keryx-supervisor/flow-C-scheduled-agent.md (бриф оператора, строка Outcome) (решение оператора 2026-10-02 20:03, flow создан по запросу и корректировкам оператора; decided-by: altsay)"
+      "detail": "unknown -> human-request; quote: \"за 7 дней работы расписания я хотя бы раз сделал что-то в GitHub или на доске из-за сводки раньше, чем заметил бы сам\"; source: ~/prompts/keryx-supervisor/flow-C-scheduled-agent.md (бриф оператора, строка Outcome) (решение оператора 2026-10-02 20:03, flow создан по запросу и корректировкам оператора; decided-by: operator)"
     },
     {
       "at": "2026-10-03T18:14:55.946Z",
@@ -209,7 +209,7 @@
     {
       "at": "2026-10-04T10:15:05.999Z",
       "event": "owner-changed",
-      "detail": "Aleksandr -> MrCipherSmith (Standing rule: the owner of every keryx flow is MrCipherSmith)"
+      "detail": "operator -> MrCipherSmith (Standing rule: the owner of every keryx flow is MrCipherSmith)"
     },
     {
       "at": "2026-10-04T10:58:03.945Z",

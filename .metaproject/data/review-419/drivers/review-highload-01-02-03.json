@@ -1,0 +1,10 @@
+{
+ "reviewer": "review-highload",
+ "slices": [
+  "slice-01",
+  "slice-02",
+  "slice-03"
+ ],
+ "result": "raw/review-highload-01-02-03.txt",
+ "definition": "~/keryx-fcomplete/.metaproject/skills/gdskills/review/review-highload/SKILL.md"
+}

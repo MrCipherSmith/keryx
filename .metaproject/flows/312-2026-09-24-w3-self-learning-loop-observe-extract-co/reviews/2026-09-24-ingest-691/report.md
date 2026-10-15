@@ -1,6 +1,6 @@
 # PR #691 (flow 312, W3) review round 1 — relayed by the top orchestrator
 
-Worktree /Users/Goodea/goodea/keryx-ape-312-w3, branch flow/312-w3. 294 learning tests pass. Hygiene clean (no trailers, no external names, schema byte-identical to docs copy, no MCP/ACP learning, analyze unchanged, ctx hook stdin uncapped, agents verify accepts graduated candidate).
+Worktree ~/goodea/keryx-ape-312-w3, branch flow/312-w3. 294 learning tests pass. Hygiene clean (no trailers, no external names, schema byte-identical to docs copy, no MCP/ACP learning, analyze unchanged, ctx hook stdin uncapped, agents verify accepts graduated candidate).
 
 Verdict: 1 BLOCKER (consent invariant broken), 3 major, 5 minor.
 

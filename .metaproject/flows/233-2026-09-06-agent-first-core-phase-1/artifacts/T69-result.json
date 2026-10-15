@@ -33,19 +33,19 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T69-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T69-spec.md",
       "kind": "plan",
       "exists": true,
       "summary": "The site enumeration (method and result) written before any code change, the fix design (safeErrorCode/errorCodeSuffix mirroring T49's pattern), the per-site diagnostic-value analysis, what must not move (gate.ts's fold reasoning), the regression-test plan and the verification plan."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T69-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T69-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Full writeup: the enumeration re-confirmed, the fix, the diagnostic-value tradeoff per site, the mock.module cross-file hazard found and worked around (with the redesigned test approach), RED/GREEN transcripts, every verification command with raw log paths, and a Concerns section disclosing an accidental git stash on run.ts that was caught and reversed within the same turn."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T69-result.json",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T69-result.json",
       "kind": "final-report",
       "exists": true,
       "summary": "This file."

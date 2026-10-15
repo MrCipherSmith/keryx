@@ -107,7 +107,7 @@ describe("K-009: the roster follows the project it is in", () => {
   });
 
   test("an empty `.metaproject/` is not an initialized project, and withholds the same tools", async () => {
-    // The `vantage-specs` shape: `.metaproject/workspaces/` and nothing else. The
+    // The `acme-specs` shape: `.metaproject/workspaces/` and nothing else. The
     // `existsSync(".metaproject")` gate this replaced offered all eighteen index tools
     // here, and every call answered `index-incomplete`.
     const empty = await mkdtemp(join(tmpdir(), "keryx-tools-empty-meta-"));

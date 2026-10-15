@@ -1,0 +1,927 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t1",
+  "command": "bun test src/review/ledger.test.ts src/commands/review-slice.test.ts src/commands/review-ledger.test.ts src/flow/verify-exec-files.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 1708
+  },
+  "mutants": [
+    {
+      "id": "P01",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (labelled !== undefined) return labelled.result;",
+      "replacement": "if (labelled !== undefined && labelled.result !== undefined) return labelled.result;",
+      "line": 253,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1728
+    },
+    {
+      "id": "P02",
+      "file": "src/review/ledger.ts",
+      "anchor": "return afterMarker(raw) ?? scannedResult(raw);",
+      "replacement": "return scannedResult(raw) ?? afterMarker(raw);",
+      "line": 254,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1765
+    },
+    {
+      "id": "P04",
+      "file": "src/review/ledger.ts",
+      "anchor": "return afterMarker(raw) ?? scannedResult(raw);",
+      "replacement": "return scannedResult(raw);",
+      "line": 254,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 2280
+    },
+    {
+      "id": "P05",
+      "file": "src/review/ledger.ts",
+      "anchor": "return afterMarker(raw) ?? scannedResult(raw);",
+      "replacement": "return afterMarker(raw);",
+      "line": 254,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 2783
+    },
+    {
+      "id": "O01",
+      "file": "src/review/ledger.ts",
+      "anchor": "depth === 1 && !claimsResult",
+      "replacement": "depth >= 1 && !claimsResult",
+      "line": 105,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3091
+    },
+    {
+      "id": "O04",
+      "file": "src/review/ledger.ts",
+      "anchor": "claimsResult = KEY_COLON.test(raw);",
+      "replacement": "claimsResult = true;",
+      "line": 107,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3276
+    },
+    {
+      "id": "O05",
+      "file": "src/review/ledger.ts",
+      "anchor": "else if (char === \"\\\\\") escaped = true;",
+      "replacement": "else if (char === \"\\\\\") escaped = false;",
+      "line": 102,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3082
+    },
+    {
+      "id": "O06",
+      "file": "src/review/ledger.ts",
+      "anchor": "{ quoted = true; keyFrom = end + 1; }",
+      "replacement": "{ quoted = true; keyFrom = end; }",
+      "line": 110,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3231
+    },
+    {
+      "id": "O08",
+      "file": "src/review/ledger.ts",
+      "anchor": "const KEY_COLON = /\\s*:/y;",
+      "replacement": "const KEY_COLON = /:/y;",
+      "line": 86,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 2848
+    },
+    {
+      "id": "O09",
+      "file": "src/review/ledger.ts",
+      "anchor": "const RESULT_KEYS = new Set([\"status\", \"reviewer\", \"findings\"]);",
+      "replacement": "const RESULT_KEYS = new Set([\"status\"]);",
+      "line": 85,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 3078
+    },
+    {
+      "id": "O11",
+      "file": "src/review/ledger.ts",
+      "anchor": "const RESULT_KEYS = new Set([\"status\", \"reviewer\", \"findings\"]);",
+      "replacement": "const RESULT_KEYS = new Set([\"reviewer\", \"findings\"]);",
+      "line": 85,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 2960
+    },
+    {
+      "id": "T01",
+      "file": "src/review/ledger.ts",
+      "anchor": "const OBJECT_START = /\\{\\s*[\"}]/y;",
+      "replacement": "const OBJECT_START = /\\{/y;",
+      "line": 83,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3010
+    },
+    {
+      "id": "T02",
+      "file": "src/review/ledger.ts",
+      "anchor": "const OBJECT_START = /\\{\\s*[\"}]/y;",
+      "replacement": "const OBJECT_START = /\\{\"/y;",
+      "line": 83,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 2792
+    },
+    {
+      "id": "T03",
+      "file": "src/review/ledger.ts",
+      "anchor": "const MAX_UNCLOSED = 64;",
+      "replacement": "const MAX_UNCLOSED = 63;",
+      "line": 118,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3009
+    },
+    {
+      "id": "T04",
+      "file": "src/review/ledger.ts",
+      "anchor": "const MAX_UNCLOSED = 64;",
+      "replacement": "const MAX_UNCLOSED = 65;",
+      "line": 118,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6556
+    },
+    {
+      "id": "T05",
+      "file": "src/review/ledger.ts",
+      "anchor": "const MAX_UNCLOSED = 64;",
+      "replacement": "const MAX_UNCLOSED = 1;",
+      "line": 118,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6695
+    },
+    {
+      "id": "T06",
+      "file": "src/review/ledger.ts",
+      "anchor": "claimsResult || (unclosed += 1) > MAX_UNCLOSED",
+      "replacement": "(unclosed += 1) > MAX_UNCLOSED",
+      "line": 133,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3103
+    },
+    {
+      "id": "T07",
+      "file": "src/review/ledger.ts",
+      "anchor": "(unclosed += 1) > MAX_UNCLOSED",
+      "replacement": "(unclosed += 1) >= MAX_UNCLOSED",
+      "line": 133,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 2697
+    },
+    {
+      "id": "T08",
+      "file": "src/review/ledger.ts",
+      "anchor": "claimsResult || (unclosed += 1) > MAX_UNCLOSED",
+      "replacement": "claimsResult",
+      "line": 133,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 14064
+    },
+    {
+      "id": "T09",
+      "file": "src/review/ledger.ts",
+      "anchor": "return { found, truncated: true };",
+      "replacement": "return { found, truncated: false };",
+      "line": 133,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 2851
+    },
+    {
+      "id": "T10",
+      "file": "src/review/ledger.ts",
+      "anchor": "      start += 1;\n      continue;\n    }\n    try {",
+      "replacement": "      start = raw.length;\n      continue;\n    }\n    try {",
+      "line": 134,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 2628
+    },
+    {
+      "id": "T11",
+      "file": "src/review/ledger.ts",
+      "anchor": "start = end + 1;",
+      "replacement": "start += 1;",
+      "line": 138,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 2959
+    },
+    {
+      "id": "T12",
+      "file": "src/review/ledger.ts",
+      "anchor": "catch { /* not JSON: skipped whole */ }",
+      "replacement": "catch { start += 1; continue; }",
+      "line": 137,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 2978
+    },
+    {
+      "id": "F02",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (close === -1) break;",
+      "replacement": "if (close === -1) { ranges.push([open, raw.length] as const); break; }",
+      "line": 150,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 2911
+    },
+    {
+      "id": "F03",
+      "file": "src/review/ledger.ts",
+      "anchor": "open = raw.indexOf(\"```\", close + 3);",
+      "replacement": "open = raw.indexOf(\"```\", close);",
+      "line": 152,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3177
+    },
+    {
+      "id": "F04",
+      "file": "src/review/ledger.ts",
+      "anchor": "ranges[next]![1] <= position",
+      "replacement": "ranges[next]![1] < position",
+      "line": 162,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3137
+    },
+    {
+      "id": "F05",
+      "file": "src/review/ledger.ts",
+      "anchor": "const close = raw.indexOf(\"```\", lineEnd + 1);",
+      "replacement": "const close = raw.indexOf(\"```\", open + 3);",
+      "line": 149,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 3216
+    },
+    {
+      "id": "F06",
+      "file": "src/review/ledger.ts",
+      "anchor": "ranges.push([open, close + 3] as const);",
+      "replacement": "ranges.push([open, close] as const);",
+      "line": 151,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 3445
+    },
+    {
+      "id": "F07",
+      "file": "src/review/ledger.ts",
+      "anchor": "position >= ranges[next]![0]",
+      "replacement": "position > ranges[next]![0]",
+      "line": 163,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 3146
+    },
+    {
+      "id": "S01",
+      "file": "src/review/ledger.ts",
+      "anchor": "(inFence(start) ? fenced : bare)",
+      "replacement": "(inFence(start) ? bare : fenced)",
+      "line": 225,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 2712
+    },
+    {
+      "id": "S02",
+      "file": "src/review/ledger.ts",
+      "anchor": "fencedResults[fencedResults.length - 1]!",
+      "replacement": "fencedResults[0]!",
+      "line": 228,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3168
+    },
+    {
+      "id": "S03",
+      "file": "src/review/ledger.ts",
+      "anchor": "const fencedResults = fenced.filter(isReviewerResult);",
+      "replacement": "const fencedResults = fenced.filter(hasStatus);",
+      "line": 226,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3071
+    },
+    {
+      "id": "S04",
+      "file": "src/review/ledger.ts",
+      "anchor": "new Set(bare.filter(hasStatus).map((value) => value.status)).size > 1",
+      "replacement": "new Set(bare.filter(hasStatus).map((value) => value.status)).size > 2",
+      "line": 231,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 2743
+    },
+    {
+      "id": "S05",
+      "file": "src/review/ledger.ts",
+      "anchor": "new Set(bare.filter(hasStatus).map((value) => value.status)).size > 1",
+      "replacement": "new Set(bare.filter(isReviewerResult).map((value) => value.status)).size > 1",
+      "line": 231,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3013
+    },
+    {
+      "id": "S07",
+      "file": "src/review/ledger.ts",
+      "anchor": "return accepted[accepted.length - 1];",
+      "replacement": "return accepted[0];",
+      "line": 233,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3273
+    },
+    {
+      "id": "S08",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (truncated) return undefined;",
+      "replacement": "/* mutated: truncation ignored */",
+      "line": 221,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3252
+    },
+    {
+      "id": "B01",
+      "file": "src/review/ledger.ts",
+      "anchor": "? undefined : last;",
+      "replacement": "? last : last;",
+      "line": 229,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 2962
+    },
+    {
+      "id": "B02",
+      "file": "src/review/ledger.ts",
+      "anchor": "value.status !== last.status) ? undefined : last",
+      "replacement": "value.status === last.status) ? undefined : last",
+      "line": 229,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3462
+    },
+    {
+      "id": "B03",
+      "file": "src/review/ledger.ts",
+      "anchor": "bare.filter(isReviewerResult).some(",
+      "replacement": "bare.filter(isReviewerResult).every(",
+      "line": 229,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3206
+    },
+    {
+      "id": "B04",
+      "file": "src/review/ledger.ts",
+      "anchor": "bare.filter(isReviewerResult).some(",
+      "replacement": "bare.filter(hasStatus).some(",
+      "line": 229,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3132
+    },
+    {
+      "id": "B05",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (fencedResults.length > 0) {",
+      "replacement": "if (fencedResults.length > 1) {",
+      "line": 227,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3280
+    },
+    {
+      "id": "B06",
+      "file": "src/review/ledger.ts",
+      "anchor": "value.status !== last.status",
+      "replacement": "value.status !== fencedResults[0]!.status",
+      "line": 229,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 3186
+    },
+    {
+      "id": "B07",
+      "file": "src/review/ledger.ts",
+      "anchor": "value.status !== last.status",
+      "replacement": "value.reviewer !== last.reviewer",
+      "line": 229,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3267
+    },
+    {
+      "id": "R01",
+      "file": "src/review/ledger.ts",
+      "anchor": "typeof object.reviewer === \"string\" || Array.isArray(object.findings)",
+      "replacement": "typeof object.reviewer === \"string\" && Array.isArray(object.findings)",
+      "line": 176,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3427
+    },
+    {
+      "id": "R02",
+      "file": "src/review/ledger.ts",
+      "anchor": "Array.isArray(object.findings)",
+      "replacement": "object.findings !== undefined",
+      "line": 176,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3429
+    },
+    {
+      "id": "R03",
+      "file": "src/review/ledger.ts",
+      "anchor": "typeof object.reviewer === \"string\"",
+      "replacement": "object.reviewer !== undefined",
+      "line": 176,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3246
+    },
+    {
+      "id": "H01",
+      "file": "src/review/ledger.ts",
+      "anchor": "typeof (value as { status?: unknown }).status === \"string\"",
+      "replacement": "(value as { status?: unknown }).status !== undefined",
+      "line": 169,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 3126
+    },
+    {
+      "id": "L01",
+      "file": "src/review/ledger.ts",
+      "anchor": "/```REVIEW_RESULT[ \\t]*\\r?\\n([\\s\\S]*?)```/gi",
+      "replacement": "/```REVIEW_RESULT[ \\t]*\\r?\\n([\\s\\S]*?)```/g",
+      "line": 183,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3278
+    },
+    {
+      "id": "L02",
+      "file": "src/review/ledger.ts",
+      "anchor": "/```REVIEW_RESULT[ \\t]*\\r?\\n([\\s\\S]*?)```/gi",
+      "replacement": "/```REVIEW_RESULT[ \\t]*\\n([\\s\\S]*?)```/gi",
+      "line": 183,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3318
+    },
+    {
+      "id": "L03",
+      "file": "src/review/ledger.ts",
+      "anchor": "/```REVIEW_RESULT[ \\t]*\\r?\\n([\\s\\S]*?)```/gi",
+      "replacement": "/```REVIEW_RESULT\\r?\\n([\\s\\S]*?)```/gi",
+      "line": 183,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3395
+    },
+    {
+      "id": "L04",
+      "file": "src/review/ledger.ts",
+      "anchor": "/```REVIEW_RESULT[ \\t]*\\r?\\n([\\s\\S]*?)```/gi",
+      "replacement": "/```REVIEW_RESULT[ \\t]*\\r?\\n([\\s\\S]*)```/gi",
+      "line": 183,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3552
+    },
+    {
+      "id": "L05",
+      "file": "src/review/ledger.ts",
+      "anchor": "labelled[labelled.length - 1]![1]!",
+      "replacement": "labelled[0]![1]!",
+      "line": 186,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3407
+    },
+    {
+      "id": "L06",
+      "file": "src/review/ledger.ts",
+      "anchor": "hasStatus(parsed) ? parsed : undefined",
+      "replacement": "parsed",
+      "line": 187,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3445
+    },
+    {
+      "id": "L08",
+      "file": "src/review/ledger.ts",
+      "anchor": "catch { return { result: undefined }; }",
+      "replacement": "catch { return undefined; }",
+      "line": 188,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3527
+    },
+    {
+      "id": "A01",
+      "file": "src/review/ledger.ts",
+      "anchor": "REVIEW_RESULT(?:[ \\t]*[:=])?\\s*(?=\\{)/g",
+      "replacement": "REVIEW_RESULT(?:[ \\t]*[:])?\\s*(?=\\{)/g",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3397
+    },
+    {
+      "id": "A02",
+      "file": "src/review/ledger.ts",
+      "anchor": "REVIEW_RESULT(?:[ \\t]*[:=])?\\s*(?=\\{)/g",
+      "replacement": "REVIEW_RESULT(?:[ \\t]*[:=])?[ \\t]*(?=\\{)/g",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3377
+    },
+    {
+      "id": "A03",
+      "file": "src/review/ledger.ts",
+      "anchor": "REVIEW_RESULT(?:[ \\t]*[:=])?\\s*(?=\\{)/g",
+      "replacement": "REVIEW_RESULT(?:[ \\t]*[:=])\\s*(?=\\{)/g",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3342
+    },
+    {
+      "id": "A04",
+      "file": "src/review/ledger.ts",
+      "anchor": ".slice(-MAX_MARKERS)",
+      "replacement": ".slice(0, MAX_MARKERS)",
+      "line": 204,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3514
+    },
+    {
+      "id": "A05",
+      "file": "src/review/ledger.ts",
+      "anchor": "const MAX_MARKERS = 64;",
+      "replacement": "const MAX_MARKERS = 63;",
+      "line": 192,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3451
+    },
+    {
+      "id": "A06",
+      "file": "src/review/ledger.ts",
+      "anchor": "const MAX_MARKERS = 64;",
+      "replacement": "const MAX_MARKERS = 65;",
+      "line": 192,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3602
+    },
+    {
+      "id": "A07",
+      "file": "src/review/ledger.ts",
+      "anchor": "const MAX_MARKERS = 64;",
+      "replacement": "const MAX_MARKERS = 1;",
+      "line": 192,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3576
+    },
+    {
+      "id": "A10",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (end === undefined) continue;",
+      "replacement": "if (end === undefined) return undefined;",
+      "line": 209,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3579
+    },
+    {
+      "id": "A11",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (isReviewerResult(parsed)) return parsed;",
+      "replacement": "if (hasStatus(parsed)) return parsed;",
+      "line": 212,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3772
+    },
+    {
+      "id": "A13",
+      "file": "src/review/ledger.ts",
+      "anchor": "catch { /* prose after the word: try the marker before */ }",
+      "replacement": "catch { return undefined; }",
+      "line": 213,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 3616
+    },
+    {
+      "id": "M01",
+      "file": "src/review/ledger.ts",
+      "anchor": "/(?<![^\\n])[ \\t>*#-]*REVIEW_RESULT",
+      "replacement": "/[ \\t>*#-]*REVIEW_RESULT",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 27799
+    },
+    {
+      "id": "M02",
+      "file": "src/review/ledger.ts",
+      "anchor": "/(?<![^\\n])[ \\t>*#-]*REVIEW_RESULT",
+      "replacement": "/(?<!\\S)[ \\t>*#-]*REVIEW_RESULT",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 16337
+    },
+    {
+      "id": "M03",
+      "file": "src/review/ledger.ts",
+      "anchor": "[ \\t>*#-]*REVIEW_RESULT",
+      "replacement": "[ \\t*#-]*REVIEW_RESULT",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1607
+    },
+    {
+      "id": "M04",
+      "file": "src/review/ledger.ts",
+      "anchor": "[ \\t>*#-]*REVIEW_RESULT",
+      "replacement": "[ \\t>#-]*REVIEW_RESULT",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1623
+    },
+    {
+      "id": "M05",
+      "file": "src/review/ledger.ts",
+      "anchor": "[ \\t>*#-]*REVIEW_RESULT",
+      "replacement": "[ \\t>*-]*REVIEW_RESULT",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1585
+    },
+    {
+      "id": "M06",
+      "file": "src/review/ledger.ts",
+      "anchor": "[ \\t>*#-]*REVIEW_RESULT",
+      "replacement": "[ \\t>*#]*REVIEW_RESULT",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1546
+    },
+    {
+      "id": "M07",
+      "file": "src/review/ledger.ts",
+      "anchor": "[ \\t>*#-]*REVIEW_RESULT",
+      "replacement": "[\\t>*#-]*REVIEW_RESULT",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1559
+    },
+    {
+      "id": "M08",
+      "file": "src/review/ledger.ts",
+      "anchor": "[ \\t>*#-]*REVIEW_RESULT",
+      "replacement": "[ >*#-]*REVIEW_RESULT",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1548
+    },
+    {
+      "id": "M09",
+      "file": "src/review/ledger.ts",
+      "anchor": "[ \\t>*#-]*REVIEW_RESULT",
+      "replacement": "[>*#-]*REVIEW_RESULT",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1559
+    },
+    {
+      "id": "M10",
+      "file": "src/review/ledger.ts",
+      "anchor": "[ \\t>*#-]*REVIEW_RESULT",
+      "replacement": "[ \\t>*#-]+REVIEW_RESULT",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1541
+    },
+    {
+      "id": "M11",
+      "file": "src/review/ledger.ts",
+      "anchor": "[ \\t>*#-]*REVIEW_RESULT",
+      "replacement": "[^\\n]*REVIEW_RESULT",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1564
+    },
+    {
+      "id": "M12",
+      "file": "src/review/ledger.ts",
+      "anchor": "(?<![^\\n])",
+      "replacement": "(?<![^\\n\\r])",
+      "line": 195,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1560
+    },
+    {
+      "id": "N01",
+      "file": "src/review/ledger.ts",
+      "anchor": ".filter((marker) => !inFence(marker.index!))",
+      "replacement": ".filter(() => true)",
+      "line": 204,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1537
+    },
+    {
+      "id": "N02",
+      "file": "src/review/ledger.ts",
+      "anchor": ".filter((marker) => !inFence(marker.index!))",
+      "replacement": ".filter((marker) => inFence(marker.index!))",
+      "line": 204,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1572
+    },
+    {
+      "id": "N03",
+      "file": "src/review/ledger.ts",
+      "anchor": ".filter((marker) => !inFence(marker.index!)).slice(-MAX_MARKERS)",
+      "replacement": ".slice(-MAX_MARKERS).filter((marker) => !inFence(marker.index!))",
+      "line": 204,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1569
+    },
+    {
+      "id": "N04",
+      "file": "src/review/ledger.ts",
+      "anchor": "!inFence(marker.index!)",
+      "replacement": "!inFence(marker.index! + marker[0].length)",
+      "line": 204,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1677
+    },
+    {
+      "id": "N06",
+      "file": "src/review/ledger.ts",
+      "anchor": "for (let at = markers.length - 1; at >= 0; at -= 1) {",
+      "replacement": "for (let at = 0; at < markers.length; at += 1) {",
+      "line": 205,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1624
+    },
+    {
+      "id": "N07",
+      "file": "src/review/ledger.ts",
+      "anchor": "const start = marker.index! + marker[0].length;",
+      "replacement": "const start = marker.index! + marker[0].length - 1;",
+      "line": 207,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1585
+    },
+    {
+      "id": "W01",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "const parsed = wholeFileResult(raw) ?? parseReviewResult(raw);",
+      "replacement": "const parsed = parseReviewResult(raw) ?? wholeFileResult(raw);",
+      "line": 171,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1548
+    },
+    {
+      "id": "W02",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "const parsed = wholeFileResult(raw) ?? parseReviewResult(raw);",
+      "replacement": "const parsed = parseReviewResult(raw);",
+      "line": 171,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1023
+    },
+    {
+      "id": "W03",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "return hasStatus(whole) ? whole as ReviewerResult : undefined;",
+      "replacement": "return whole as ReviewerResult;",
+      "line": 180,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1576
+    },
+    {
+      "id": "W04",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "const parsed = wholeFileResult(raw) ?? parseReviewResult(raw);",
+      "replacement": "const parsed = wholeFileResult(raw);",
+      "line": 171,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1547
+    },
+    {
+      "id": "W06",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "async function readResult(source: string): Promise<ReviewerResult> {\n  let raw: string;\n  try {\n    raw = source === \"-\" ?",
+      "replacement": "async function readResult(source: string): Promise<ReviewerResult> {\n  let raw: string;\n  try {\n    raw = source === \"--\" ?",
+      "line": 164,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1030
+    },
+    {
+      "id": "D01",
+      "file": "src/commands/review-ledger.ts",
+      "anchor": "result !== undefined && !isReviewerResult(result)",
+      "replacement": "false",
+      "line": 99,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1591
+    },
+    {
+      "id": "D02",
+      "file": "src/commands/review-ledger.ts",
+      "anchor": "result !== undefined && !isReviewerResult(result)",
+      "replacement": "result !== undefined && result.reviewer === undefined",
+      "line": 99,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1577
+    },
+    {
+      "id": "D03",
+      "file": "src/commands/review-ledger.ts",
+      "anchor": "ignored.push(`raw/${name}`);\n      continue;",
+      "replacement": "ignored.push(`raw/${name}`);",
+      "line": 100,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1711
+    },
+    {
+      "id": "D05",
+      "file": "src/commands/review-ledger.ts",
+      "anchor": "result === undefined && !isEmptyOutput(body) && !isReviewerReply(name, body, replies)",
+      "replacement": "result === undefined && !isEmptyOutput(body)",
+      "line": 93,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1837
+    }
+  ],
+  "totals": {
+    "killed": 79,
+    "survived": 12,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

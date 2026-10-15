@@ -35,6 +35,7 @@
 // forward this way — the owner, group, ACLs and any extra hardlinks on the
 // previous inode are NOT preserved, because the replacement is a new inode
 // by construction (that is what makes the write atomic).
+import { renameSync } from "node:fs";
 import { chmod, lstat, mkdir, open, readdir, realpath, rename, rm, rmdir, stat } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -64,6 +65,7 @@ export class ContainedWriteError extends Error {
 }
 
 export interface WriteContainedOptions {
+  readonly signal?: AbortSignal;
   /** File mode for a newly created file. Ignored when the target already exists — see R4-F3. */
   readonly mode?: number;
   /** Refuse (reason `"already-exists"`) instead of overwriting when the target already exists. */
@@ -257,6 +259,8 @@ export async function writeContained(
 ): Promise<void> {
   const { resolvedPath, resolvedDir } = await assertContained(root, rel, { requireRegularIfExists: true });
 
+  opts.signal?.throwIfAborted();
+  if (opts.exclusive && opts.signal !== undefined) throw new Error("cancellable exclusive write unsupported");
   if (opts.exclusive) {
     // R1-F9: a true `O_EXCL` create — `open(resolvedPath, "wx")` atomically
     // fails with `EEXIST` if anything is there — rather than the old
@@ -323,7 +327,12 @@ export async function writeContained(
     if (existingMode !== undefined) {
       await chmod(tmp, existingMode);
     }
-    await rename(tmp, resolvedPath);
+    if (opts.signal !== undefined) {
+      opts.signal.throwIfAborted();
+      renameSync(tmp, resolvedPath);
+    } else {
+      await rename(tmp, resolvedPath);
+    }
   } catch (error) {
     await rm(tmp, { force: true }).catch(() => {});
     throw error;

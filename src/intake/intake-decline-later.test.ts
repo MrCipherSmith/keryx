@@ -45,8 +45,8 @@ describe("decisions without an action (AC8)", () => {
   test("a decided card cannot be decided again", async () => {
     const card = await seedCard(env.root);
     const fakes = makeFakes();
-    await decideIntakeCard(env.root, card.id, "decline", { decidedBy: "1", deps: fakes.deps });
-    const again = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", deps: fakes.deps });
+    await decideIntakeCard(env.root, card.id, "decline", { decidedBy: "1", now: local(10, 42), deps: fakes.deps });
+    const again = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "1", now: local(10, 42), deps: fakes.deps });
     expect(again).toEqual({ ok: false, message: "уже решено" });
     expect(fakes.flows.initCalls).toEqual([]);
   });

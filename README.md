@@ -40,7 +40,7 @@ the completion itself signed.
 
 ## Quick start
 
-**Requirements:** `git` and `bun` (>= 1.3.14 — older Bun can close the terminal input of `keryx shell`; see [onboarding](docs/docs/onboarding.md#bun-version)).
+**Requirements:** `git` (>= 2.24) and `bun` (>= 1.3.14 — older Bun can close the terminal input of `keryx shell`; see [onboarding](docs/docs/onboarding.md#bun-version)).
 
 ```bash
 npm install -g @mrciphersmith/keryx
@@ -275,6 +275,13 @@ keryx shell --chat                            # chat without tools
 keryx shell --provider ollama --model gemma4:e4b     # fully local
 ```
 
+Interactive agent turns automatically recover from temporary provider/network
+outages in both the TUI and readline shell. The shell shows the next retry and
+keeps the same prompt active; use the normal stop control (Ctrl-C in readline)
+to cancel. Permanent access errors such as generic HTTP 403 require correcting
+provider access. See [shell recovery](docs/docs/shell-recovery.md) for timing,
+partial-output handling and limits.
+
 ### Finding a command
 
 `keryx help` prints every command grouped by task — Start here; Connect a
@@ -484,7 +491,17 @@ What is in it today:
   inside a running session, decide whether that approval is asked for at all
   — `ask` (default), `trust` (safe calls run, a destructive one still asks),
   `auto` (nothing asks except a credentials-touching command, which no mode
-  ever auto-approves). A session-level layer only: `harness run`/`exec`,
+  ever auto-approves; it also answers the agent's own questions by picking the
+  recommended option and saying so, while questions about irreversible or
+  untrusted actions still ask you). The mode also sets how many model rounds one turn may
+  run: 40 in `ask`, 200 in `trust` (asks at the limit) and 200 in `auto`, where
+  reaching the limit extends the turn without asking and the turn stops at 200
+  (`KERYX_AGENT_MAX_ROUNDS` overrides all three, up to 200). A turn that
+  belongs to an **automatic review** (named in the request; the package is
+  created with `keryx review start --automatic`) gets the 200 limit in any
+  mode, runs that review's own commands without a prompt and asks only in a
+  closed list of emergencies; `review complete` and its gate are unchanged.
+  A session-level layer only: `harness run`/`exec`,
   `keryx serve`, and MCP keep the unconditional policy engine above,
   untouched. See the [permission modes guide](docs/docs/guides/permission-modes.md).
 - **Kernel-enforced containment underneath.** The OS sandbox sits *below* the
@@ -593,12 +610,18 @@ Grouped by what you are trying to do, not by internal module layout.
   trends.
 - **review** — managed review packages, standalone under `.metaproject/reviews/`
   or inside the flow package when attached to a flow, so review findings become
-  durable project artifacts. A finding points at the code it **quotes**: the
+  durable project artifacts. `review-orchestrator` is the default way a review is
+  done: the main session runs it inline, and a session that cannot spawn the
+  reviewers stops with one `STATUS: BLOCKED` line instead of reviewing alone. A finding points at the code it **quotes**: the
   line is derived by locating that quote at the commit the round records, not
   taken on the reviewer's word, and a quote that cannot be found is marked
   unlocatable rather than carrying a number nobody checked. Each round also
   states its price — estimated before dispatch, recorded after, and divided by
-  the findings that survived it.
+  the findings that survived it. A round also says what it left undone: mutation
+  candidates that never ran (`review mutate --cap`), severities held because only
+  a presentation mutant survived, and follow-ups handed back to the parent, in
+  `review status` and `review report-parity`. A pull-request round adds
+  `review-pr-contract`, which reads the diff against the PR's own stated contract.
 
 **Operate agents**
 
@@ -839,7 +862,7 @@ next.
 | Requirement | Status |
 |-------------|--------|
 | Bun | >= 1.3.14 |
-| Git | Required for hooks, `--changed` scopes and the managed installer; the core runs without it |
+| Git | >= 2.24 (`--end-of-options`, used wherever a typed revision reaches git). Required for hooks, `--changed` scopes and the managed installer; the core runs without it |
 | ripgrep | Required only for `keryx ctx rg` and the agent's `search_code` tool |
 | Model provider credential | Required only for the optional AI commands below |
 | macOS | Full support, including the complete policy sandbox |
@@ -1051,13 +1074,25 @@ runs. At most 500 lines wait per topic, and turning it off tells the topic which
 queued lines will not run. From the topic you can also run a fixed list of slash
 commands (`/status`, `/model` and `/connect` as buttons, `/new`, `/clear`, `/resume`
 in the same topic); `/mode trust`, `/plan off`, `/delegate` and `/external*` run only
-after a Yes press, and commands such as `/mcp`, `/guard`, `/route`, `/provider`,
-`/schedule`, `/rewind`, `/conform` and `/ci` stay local. A topic is deleted when the
-shell exits, so `/history [N]` (1 to 20, 10 by default) posts the session's last messages
+after a Yes press (so do `/route on` and `/route off`; bare `/route` shows at once),
+and commands such as `/mcp`, `/guard`, `/provider`, `/schedule`, `/rewind`,
+`/conform` and `/ci` stay local. When main is busy, `/route`, `/external`,
+`/external-agents` and `/model` are queued with a notice in the topic and run when
+it goes idle; `/mode` takes effect at once. A topic is archived when the shell
+exits (a closing note, the topic and its history stay readable), but a resumed
+session gets a new one, so `/history [N]` (1 to 20, 10 by default) posts the session's last messages
 back into the topic, yours and the agent's final answers, one message each; a resumed
 session whose topic was just created gets the last 10 by itself, once (the first time remote control is turned on in that shell); a turn that looks like it holds a secret is replaced by a placeholder. Each message shows its state as a reaction and the topic shows typing
 while a turn runs; see
 [commands from the topic](docs/docs/guides/drive-keryx-remotely.md#commands-from-the-topic).
+Every approval, `ask_user` question and queue dialog the shell raises is posted to
+the topic with buttons, whoever started the turn; the first answer wins, from the
+terminal or the topic, and an unanswered one gets a reminder every 2 minutes (at most 3).
+While a turn runs, the topic gets at most one progress note a minute (at wave
+boundaries and after tool-heavy stretches: counts and tool names, never tool output),
+and a short status question such as "how is it going?" is answered from session state
+without waiting for the turn; see
+[What the topic hears](docs/docs/guides/drive-keryx-remotely.md#what-the-topic-hears).
 Without a connection `serve` starts as before, with remote control off, and only
 offers the local `/channels` routes. Replies are rendered in one of four modes,
 `remote.rendering` = `auto` (the default), `rich`, `html` or `plain`, set from the
@@ -1113,6 +1148,14 @@ repository checkout, since the evaluation corpus is not shipped in the npm
 package. See
 [run keryx in CI](docs/docs/guides/run-in-ci.md).
 
+### Layers and coverage in a review
+
+Every managed review start, attach or ingest (and any `dispatch-check` or `blast-radius` given `--package`) refreshes the graph, the wiki and the memory index for the PR head and writes `layers.json`, with **no model call**; `wiki enrich` is the only model step and is never automatic (`keryx review layers refresh --package <dir> [--write-wiki]`). Blast-radius files beyond the 40-file cap are reviewed in chunks (`keryx review chunks estimate|next|record|merge`; the ceiling is 25 passes of 40 files, `reviewChunks.maxPasses` in `routing.config.json`), `keryx review coverage` counts what is covered, omitted by name, and uncovered, and `keryx review complete` refuses while a file is uncovered unless you pass `--waive-coverage "<your words>"`. `/reviews` and `/review layers` in the shell show it.
+
+### Gates that keep a review report honest
+
+`keryx review complete` on a pull-request package (one that targets a PR, or whose `--ref` is a PR URL under any `--target`) refuses a merged PR or a moved head until the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`; a package ingested before the field existed only warns). `keryx review ingest` reads each finding's quote at its `path` at the reviewed SHA and refuses one that does not resolve there, adds a `citation not found` line to a rebuttal that cites a rule or document missing from the tree (the finding is never deleted), and a finding can close as `narrowed` only with a "what remains" text. See [review with a record](docs/docs/guides/review-with-a-record.md).
+
 ### Review bot on pull requests
 
 A GitHub Action reviews each same-repository pull request, has a second model
@@ -1150,6 +1193,7 @@ Full documentation site: **<https://mrciphersmith.github.io/keryx/>**
 - **[Limitations](docs/docs/limitations.md)** — known gaps, platform caveats, and what to do instead.
 - **[Shared Agent Context](docs/docs/guides/shared-agent-context.md)** *(experimental)* — local-first work-context layer: FWK overview, proposals, runtime policy guard.
 - **[Review as a pull request bot](docs/docs/guides/review-as-a-pr-bot.md)** — the GitHub Action, secrets, the same-repository rule, dry run, cost, and the precision and resolved-before-merge metrics.
+- **[Review a pull request with nobody at the keyboard](docs/docs/guides/autonomous-review.md)** — `keryx review run --autonomous`: exit codes, safe-default answers, budgets, the stall watchdog, `summary.json` and `report.md`, `/autoreview`, and a scheduled review on cron or a systemd timer.
 - **[Permission modes](docs/docs/guides/permission-modes.md)** — `ask`/`trust`/`auto` for the interactive shell: how to set them and exactly where the per-project default is stored.
 - **[Changelog](CHANGELOG.md)** — what has landed since `v0.1.0`.
 

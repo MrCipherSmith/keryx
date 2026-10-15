@@ -63,9 +63,9 @@ Collected by `keryx flow init` and enriched. (T1 context.) Release 2, Wave R2-2.
   no live smoke; offline/deterministic.
 
 ## Operational
-- keryx = `bun ./src/cli.ts`. Root = `/Users/Goodea/goodea/keryx` (branch feature/keryx-release2-ext-provenance).
+- keryx = `bun ./src/cli.ts`. Root = `~/goodea/keryx` (branch feature/keryx-release2-ext-provenance).
   Never commit to main; PR at the end (no co-authorship).
 - State only via `keryx flow` (flow 024); workers via subagent-dispatch/result (STATUS: first line).
-- WORKTREE-GUARD: every writing worker `cd /Users/Goodea/goodea/keryx && pwd` first, write ONLY
+- WORKTREE-GUARD: every writing worker `cd ~/goodea/keryx && pwd` first, write ONLY
   under it. Guard array indexing; injected id/clock; no real fs/network; `.toThrow()` for immutability.
 - Order: T5 (RED) → T6 (impl) → T7 (review).

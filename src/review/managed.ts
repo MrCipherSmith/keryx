@@ -1,4 +1,12 @@
-import { mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
+import { type CoverageWaiver, recordCoverageWaiver } from "./coverage-complete";
+import { flagMissingCitations } from "./rebuttal-citation";
+import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
+import { REPORT_FIELD_EVIDENCE_LEVEL, parseEvidenceLevel } from "./evidence-level";
+import { packageCoverageWarnings } from "./coverage";
+import { packageParityWarnings } from "./parity";
+import { PENDING_RESEARCH, packageResearchErrors } from "./research";
+import { computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
+import { lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { loadSchema, validateJson } from "../gdskills/contracts";
@@ -174,6 +182,7 @@ export async function findRelatedFlow(input: {
  * is NOT inside the package.
  */
 export type ManagedReviewIngestInput = ManagedReviewInput & {
+  research?: unknown;
   /** The set scope B was dispatched over. See {@link screenScopeBFindings}. */
   blastRadius?: BlastRadiusScreenInput | undefined;
 };
@@ -240,6 +249,7 @@ export async function createManagedReviewPackage(
   // checked. A finding with no quote is untouched — it keeps whatever it said,
   // and says so by carrying no locator.
   await anchorFindings(reported, input, head);
+  refuseUnresolvedLocators(reported, input, head);
 
   // Minted BEFORE the verifier runs, because a claim names a finding by
   // `global_id` and the key has to exist for it to be resolvable. Round N+1
@@ -309,6 +319,10 @@ export async function createManagedReviewPackage(
     ...roundDismissed,
   ];
   assignGlobalIds(findings, reviewId);
+
+  // A rebuttal that cites a rule or document gets that citation looked up. A missing one
+  // is said on the finding; the finding itself is never removed.
+  await flagMissingCitations(findings, (cited) => citationExists(input.cwd, head, cited));
 
   // Read BEFORE the write, because the write is what used to destroy it. The
   // orchestrator is told to run `keryx review scope --append <package>/scope.md`
@@ -407,6 +421,7 @@ export async function createManagedReviewPackage(
   // named class_scope in sentences passed the guard and was persisted without
   // the property the schema requires — and the round-2 input built from it was
   // rejected by the same schema. One gate, one place, both paths.
+  Object.assign(manifest.artifacts, { research: "research.json", reviewerDispatch: "research.json" });
   const contractErrors = await schemaErrors(findings);
   if (contractErrors.length > 0) {
     throw new Error(
@@ -417,7 +432,11 @@ export async function createManagedReviewPackage(
   }
 
   await mkdir(packageDir, { recursive: true });
+  await writeFileAtomic(path.join(packageDir, "research.json"), `${JSON.stringify(input.research ?? PENDING_RESEARCH, null, 2)}\n`);
   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+  if (input.scope?.files !== undefined) {
+    await writeFileAtomic(path.join(packageDir, "scope-files.json"), `${JSON.stringify({ version: 1, files: input.scope.files }, null, 2)}\n`);
+  }
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
     renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats),
@@ -717,6 +736,19 @@ export async function getManagedReviewStatus(cwd: string, ref: string): Promise<
   return JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
 }
 
+/** What `completeManagedReview` would refuse on right now, without closing anything. */
+export async function reviewCompletionBlockers(packageDir: string): Promise<string[]> {
+  const missing = await missingArtifacts(packageDir);
+  if (missing.length > 0) return [`missing artifacts: ${missing.join(", ")}`];
+  try {
+    const manifest = JSON.parse(await readFile(path.join(packageDir, "manifest.json"), "utf8")) as ManagedReviewManifest;
+    const findings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8"));
+    return await packageResearchErrors(packageDir, manifest.artifacts, findings);
+  } catch (error) {
+    return [`package unreadable: ${error instanceof Error ? error.message : String(error)}`];
+  }
+}
+
 /**
  * One recorded outcome, naming the finding it is about.
  *
@@ -735,6 +767,21 @@ export type CompleteManagedReviewOptions = {
   dispositions?: readonly FindingDispositionRecord[] | undefined;
   /** Injectable clock, so a note's `Created:` date is deterministic in a test. */
   now?: Date | undefined;
+  /** The operator's own words waiving every file the coverage gate finds uncovered (`--waive-coverage`). */
+  waiveCoverage?: string | undefined;
+  /** Reads a PR's state and head. Absent means the head and merge check is not made (a library caller with no tracker). */
+  prLookup?: PrLookup | undefined;
+  /**
+   * The commit this round reviewed (`--head`), a 7-40 hex SHA. When given it is what the head gate
+   * checks and what the closed manifest records as `target.head`, in place of the head recorded at
+   * start. The gate itself is unchanged: a head that is not the PR's head still needs the report
+   * to name it and say the PR moved.
+   */
+  head?: string | undefined;
+  /** Readiness items the operator waives in their own words (`--waive <item> "<quote>"`), one entry per flag. */
+  waiveReadiness?: ReadonlyArray<{ items: readonly string[]; quote: string }> | undefined;
+  /** Reads the PR's own file list for readiness item 9; absent means that comparison is not made. */
+  prFiles?: ((ref: string) => Promise<string[] | null>) | undefined;
 };
 
 export type CompleteManagedReviewResult = {
@@ -753,6 +800,12 @@ export type CompleteManagedReviewResult = {
    * earlier are just as recorded.
    */
   dispositions: FindingDispositionTally;
+  /** The waiver this close recorded for files no reviewer covered; absent when none was passed or nothing was uncovered. */
+  coverageWaiver?: CoverageWaiver;
+  /** The readiness checklist this close passed, with any items the operator waived. */
+  readiness?: ReadinessReport;
+  /** Things the close let through that a current package would have been refused for. */
+  warnings: string[];
 };
 
 /**
@@ -778,25 +831,86 @@ export async function completeManagedReview(
 ): Promise<CompleteManagedReviewResult> {
   const packageDir = await resolveReviewPackagePath(cwd, ref);
   const manifestPath = path.join(packageDir, "manifest.json");
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
+  const stored = JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
   const missing = await missingArtifacts(packageDir);
   if (missing.length > 0) {
     throw new Error(`Cannot complete managed review; missing artifacts: ${missing.join(", ")}`);
   }
-  const dispositions = options.dispositions ?? [];
-  if (dispositions.length > 0) {
-    await recordDispositions(packageDir, dispositions);
+  const warnings: string[] = [];
+  let manifest = stored;
+  if (options.head !== undefined) {
+    if (!isPrBound(stored.target)) {
+      throw new Error(`--head applies to a pull request package; ${stored.reviewId} targets a ${stored.target.kind}.`);
+    }
+    const head = options.head.trim().toLowerCase();
+    if (!/^[0-9a-f]{7,40}$/.test(head)) {
+      throw new Error(`--head "${options.head}" is not a commit SHA. Give the commit this round ran against, 7-40 hex characters.`);
+    }
+    const recordedHead = stored.target.head;
+    if (typeof recordedHead === "string" && recordedHead !== "" && !recordedHead.toLowerCase().startsWith(head) && !head.startsWith(recordedHead.toLowerCase())) {
+      warnings.push(`--head ${head.slice(0, 7)} replaces the head recorded when the round started (${recordedHead.slice(0, 7)}); the manifest now records ${head.slice(0, 7)}`);
+    }
+    manifest = { ...stored, target: { ...stored.target, head } };
   }
-  const updated: ManagedReviewManifest = {
-    ...manifest,
-    status: "closed",
-    updatedAt: new Date().toISOString(),
-  };
-  const validation = await validateManagedReviewManifest(cwd, updated);
-  if (!validation.valid) {
-    throw new Error(`Invalid managed review manifest: ${validation.errors.map((item) => `${item.path} ${item.message}`).join("; ")}`);
+  const reportText = await readFile(path.join(packageDir, "report.md"), "utf8");
+  if (options.prLookup !== undefined) warnings.push(...(await completeHeadGate({ manifest, report: withoutPartialHeader(reportText), lookup: options.prLookup })).warnings);
+  const evidence = parseEvidenceLevel(reportText);
+  if (!evidence.ok) {
+    const problem = `the report's evidence level is missing or invalid: ${evidence.reason}`;
+    if (manifest.report_fields?.includes(REPORT_FIELD_EVIDENCE_LEVEL)) {
+      throw new Error(`Cannot complete managed review; ${problem}. Add a line \`Evidence level: static only — did not run: <what>\` or \`Evidence level: ran — <what>\` to report.md`);
+    }
+    warnings.push(`${problem} (this package predates the field, so it is a warning)`);
   }
-  await writeFileAtomic(manifestPath, `${JSON.stringify(updated, null, 2)}\n`);
+  // A warning, never a refusal: leftovers (Not run candidates, held severities, open follow-ups) the report does not name.
+  warnings.push(...(await packageParityWarnings(packageDir, reportText).catch(() => [])));
+  warnings.push(...(await packageCoverageWarnings(packageDir)));
+  const researchFindings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8"));
+  // The waiver is written first because the coverage gate reads it from research.json; a close that then fails takes it back,
+  // so the next run does not pass the same gate without the flag.
+  const researchPath = path.join(packageDir, "research.json");
+  const researchBefore = options.waiveCoverage === undefined ? undefined : await readFile(researchPath, "utf8").catch(() => undefined);
+  let coverageWaiver: CoverageWaiver | undefined;
+  let readiness: ReadinessReport | undefined;
+  let updated: ManagedReviewManifest;
+  const waiverBackup = (options.waiveReadiness ?? []).length === 0 ? undefined : { manifest: await readFile(manifestPath, "utf8"), report: reportText };
+  try {
+    coverageWaiver = options.waiveCoverage === undefined ? undefined : await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now);
+    for (const waiver of options.waiveReadiness ?? []) {
+      await waiveReadiness(packageDir, waiver.items, waiver.quote, { prFiles: options.prFiles, headChecked: options.prLookup !== undefined, ...(options.now === undefined ? {} : { now: options.now }) });
+    }
+    if ((options.waiveReadiness ?? []).length > 0) manifest = { ...(JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest), ...(options.head === undefined ? {} : { target: manifest.target }) };
+    const waivedRadius = (manifest.readiness_waivers ?? []).some((waiver) => ["files-covered", "blast-radius", "reviewers", "ledger"].includes(waiver.item));
+    // The operator's quoted waiver of one of these items replaces the research gate's refusal for it; the checklist below still names it.
+    const researchProblems = waivedRadius ? [] : await packageResearchErrors(packageDir, manifest.artifacts, researchFindings);
+    if (researchProblems.length) {
+      throw new Error(`Cannot complete managed review; ${researchProblems.join("; ")}`);
+    }
+    readiness = await computeReadiness(packageDir, { prLookup: options.prLookup, prFiles: options.prFiles, headChecked: options.prLookup !== undefined });
+    if (readiness.verdict !== "READY") throw new Error(readinessRefusal(readiness, "complete the review"));
+    const dispositions = options.dispositions ?? [];
+    if (dispositions.length > 0) {
+      await recordDispositions(packageDir, dispositions);
+    }
+    updated = {
+      ...manifest,
+      status: "closed",
+      updatedAt: new Date().toISOString(),
+    };
+    const validation = await validateManagedReviewManifest(cwd, updated);
+    if (!validation.valid) {
+      throw new Error(`Invalid managed review manifest: ${validation.errors.map((item) => `${item.path} ${item.message}`).join("; ")}`);
+    }
+    await writeFileAtomic(manifestPath, `${JSON.stringify(updated, null, 2)}\n`);
+  } catch (error) {
+    // Any failure before the manifest is closed takes the waiver back, so the next plain close meets the gate again.
+    if (researchBefore !== undefined) await writeFileAtomic(researchPath, researchBefore).catch(() => undefined);
+    if (waiverBackup !== undefined) {
+      await writeFileAtomic(manifestPath, waiverBackup.manifest).catch(() => undefined);
+      await writeFileAtomic(path.join(packageDir, "report.md"), waiverBackup.report).catch(() => undefined);
+    }
+    throw error;
+  }
 
   // Flow 207 AC5, the second of the two places a `dismissed-incorrect` becomes
   // durable. This one is the attended path by construction: somebody ran
@@ -817,7 +931,7 @@ export async function completeManagedReview(
     ...(options.now === undefined ? {} : { now: options.now }),
   });
 
-  return { manifest: updated, reviewNotes, dispositions: tallyDispositions(recorded) };
+  return { manifest: updated, reviewNotes, dispositions: tallyDispositions(recorded), warnings, ...(coverageWaiver === undefined ? {} : { coverageWaiver }), ...(readiness === undefined ? {} : { readiness }) };
 }
 
 export async function validateManagedReviewManifest(
@@ -949,9 +1063,12 @@ function buildManifest(args: {
     // distinction never arose — the same rule `cross_family_review` above
     // follows, and for the same reason.
     ...(args.repairs.length === 0 ? {} : { repairs: args.repairs }),
+    // Marks a package whose report must carry an evidence level; one without the mark predates the field and only gets a warning.
+    report_fields: [REPORT_FIELD_EVIDENCE_LEVEL],
     // Same rule: absent means nobody reported, which is not the same as zero.
     ...(args.input.cost === undefined ? {} : { cost: args.input.cost }),
     ...(crossFamily === undefined ? {} : { cross_family_review: crossFamily }),
+    ...(args.input.automatic === true ? { automatic: true as const } : {}),
     createdAt: args.at,
     updatedAt: args.at,
   };
@@ -984,7 +1101,13 @@ async function readReport(input: ManagedReviewInput): Promise<string> {
     return input.reportText;
   }
   if (input.reportPath) {
-    return readFile(path.resolve(input.cwd, input.reportPath), "utf8");
+    try {
+      return await readFile(path.resolve(input.cwd, input.reportPath), "utf8");
+    } catch (error) {
+      // `start` opens a round before any report exists: a report path that is not there yet is the normal case.
+      const code = (error as NodeJS.ErrnoException).code;
+      if (input.mode === "ingest" || (code !== "ENOENT" && code !== "EISDIR")) throw error;
+    }
   }
   if (input.mode === "ingest") {
     throw new Error("ingest requires --report or reportText");
@@ -1096,7 +1219,10 @@ async function anchorFindings(
     (head === null
       ? readFromWorkingTree(input)
       : async (relative: string): Promise<string | null> => {
-          const contained = await containedRelativePath(input.cwd, relative);
+          // Contained by spelling, not by the working tree: the file only has to exist
+          // at the head, and `git show` reads a blob without following a link, so a
+          // symlink in the tree cannot lead the read outside it.
+          const contained = lexicalRelativePath(relative);
           return contained === null ? null : readFileAtCommit(input.cwd, head, contained);
         });
   for (const finding of findings) {
@@ -1132,24 +1258,63 @@ async function anchorFindings(
 }
 
 /**
- * `relative` as an absolute path inside `cwd`, or null when it is not.
- *
- * `realpath` on both sides, because a lexical comparison is what a symlink
- * defeats — see the round that found it.
+ * A round is a claim about a commit. Where the commit is known and an internal
+ * finding's quote is not at its `path:line` there, the finding cites something the
+ * reviewer did not read at that SHA — refuse the ingest and name each one, rather
+ * than record a locator that points nowhere. Findings the round already dismissed,
+ * external comments and findings without a quote are not asked to resolve.
  */
-async function containedRelativePath(cwd: string, relative: string): Promise<string | null> {
-  const root = await realpath(cwd).catch(() => path.resolve(cwd));
-  const resolved = path.resolve(root, relative);
-  const real = await realpath(resolved).catch(() => null);
-  if (real === null || (real !== root && !real.startsWith(`${root}${path.sep}`))) {
+function refuseUnresolvedLocators(
+  findings: ReadonlyArray<StructuredReviewFinding & { summary: string }>,
+  input: ManagedReviewInput,
+  head: string | null,
+): void {
+  if (head === null || input.readTreeFile !== undefined) {
+    return;
+  }
+  const unresolved = findings.filter(
+    (finding) =>
+      finding.source !== "external" && finding.disposition === undefined && finding.locator?.state === "unlocatable",
+  );
+  if (unresolved.length === 0) {
+    return;
+  }
+  const lines = unresolved.map((finding) => {
+    const locator = finding.locator?.state === "unlocatable" ? finding.locator : undefined;
+    const line = locator?.reported_line ?? null;
+    return `  - ${finding.id ?? finding.summary} (${finding.file}${line === null ? "" : `:${line}`}): ${locator?.reason ?? ""}`;
+  });
+  throw new Error(
+    `Cannot ingest review; ${unresolved.length} finding(s) cite a quote that does not resolve at the reviewed SHA ${head.slice(0, 12)}:\n${lines.join("\n")}\nCauses: the quote is not in the file at that commit, appears in it more than once, or the file or the commit is not in this checkout (check \`git cat-file -e ${head.slice(0, 12)}\`). Re-quote one distinct line from \`git show ${head.slice(0, 7)}:<path>\` or dismiss the finding with evidence.`,
+  );
+}
+
+/** Whether a cited document is in the tree at the reviewed commit or as the tree stands. */
+async function citationExists(cwd: string, head: string | null, cited: string): Promise<boolean> {
+  const relative = lexicalRelativePath(cited);
+  if (relative === null) {
+    return false;
+  }
+  if (head !== null && (await readFileAtCommit(cwd, head, relative)) !== null) {
+    return true;
+  }
+  return lstat(path.resolve(cwd, relative)).then(
+    () => true,
+    () => false,
+  );
+}
+
+/** `relative` normalised to a path inside the tree, or null when it climbs out or is absolute. */
+export function lexicalRelativePath(relative: string): string | null {
+  const normalised = path.posix.normalize(relative.replace(/\\/g, "/"));
+  if (normalised === "." || normalised === ".." || normalised.startsWith("../") || path.posix.isAbsolute(normalised)) {
     return null;
   }
-  return real;
+  return normalised;
 }
 
 /** One file as it stood at `commit`, or null. */
-async function readFileAtCommit(cwd: string, commit: string, absolute: string): Promise<string | null> {
-  const relative = path.relative(await realpath(cwd).catch(() => path.resolve(cwd)), absolute);
+async function readFileAtCommit(cwd: string, commit: string, relative: string): Promise<string | null> {
   try {
     const proc = Bun.spawn(["git", "show", `${commit}:${relative}`], {
       cwd,
@@ -2416,7 +2581,7 @@ async function missingArtifacts(packageDir: string): Promise<string[]> {
   return missing;
 }
 
-async function resolveReviewPackagePath(cwd: string, ref: string): Promise<string> {
+export async function resolveReviewPackagePath(cwd: string, ref: string): Promise<string> {
   const absolute = path.resolve(cwd, ref);
   if (await pathExists(path.join(absolute, "manifest.json"))) {
     return absolute;

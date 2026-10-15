@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "files": [
+    "src/commands/review-ledger.test.ts",
+    "src/commands/review-ledger.ts",
+    "src/commands/review-slice.test.ts",
+    "src/commands/review-slice.ts",
+    "src/flow/verify-exec-files.test.ts",
+    "src/review/ledger.test.ts",
+    "src/review/ledger.ts"
+  ]
+}

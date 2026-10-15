@@ -1,0 +1,385 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { CHUNKS_FILE, CHUNK_PASS_FILE, CHUNK_LOCK_WAIT_MS, ensureChunkPlan, mergeChunkPass, mergeFindings, nextChunk, planChunks, readChunkPlan, readChunkState, recordChunk, withChunkStateLock } from "./chunks";
+import { recordRadiusAndPlan } from "./chunks";
+import { answerChunkEstimate, estimateChunkRun, recordChunkEstimate } from "./chunks-estimate";
+
+let root: string;
+let packageDir: string;
+
+const drop = (file: string, hop = 1, fanIn = 1) => ({ file, hop, fanIn, via: "src/a.ts", source: "graph" as const, reason: "cap" as const, detail: "over the cap" });
+
+async function writeRadius(dropped: ReturnType<typeof drop>[]): Promise<void> {
+  await writeFile(
+    path.join(packageDir, "blast-radius.json"),
+    JSON.stringify({ schemaVersion: 1, scope: "blast-radius", depth: 2, maxFiles: 40, changedFiles: ["src/a.ts"], files: [], dropped, unresolved: [], counts: {}, graph: { nodes: 1, edges: 0 } }),
+  );
+}
+
+async function sizedFiles(names: string[], bytes = 600): Promise<void> {
+  for (const name of names) {
+    await mkdir(path.dirname(path.join(root, name)), { recursive: true });
+    await writeFile(path.join(root, name), "x".repeat(bytes));
+  }
+}
+
+const names = (count: number): string[] => Array.from({ length: count }, (_, index) => `src/dep-${String(index).padStart(3, "0")}.ts`);
+
+beforeEach(async () => {
+  root = await mkdtemp(path.join(tmpdir(), "keryx-chunks-"));
+  packageDir = path.join(root, ".metaproject", "reviews", "r1");
+  await mkdir(packageDir, { recursive: true });
+});
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true });
+});
+
+describe("the chunk plan over the dropped blast-radius files (AC8a)", () => {
+  test("puts every dropped file in exactly one chunk, at most 40 per chunk", async () => {
+    const files = names(95);
+    await sizedFiles(files, 10);
+    await writeRadius(files.map((file) => drop(file)));
+    const plan = await ensureChunkPlan(packageDir, root);
+    expect(plan).not.toBeNull();
+    const placed = plan!.chunks.flatMap((chunk) => chunk.files);
+    expect(placed.sort()).toEqual([...files].sort());
+    expect(new Set(placed).size).toBe(95);
+    expect(plan!.chunks.map((chunk) => chunk.files.length)).toEqual([40, 40, 15]);
+    expect(plan!.dropped).toBe(95);
+  });
+
+  test("respects the byte cap: files that do not fit together go to separate chunks", () => {
+    const chunks = planChunks({ dropped: names(6).map((file) => drop(file)), maxBytes: 1000, sizeOf: () => 400 });
+    expect(chunks.map((chunk) => chunk.files.length)).toEqual([2, 2, 2]);
+    const alone = planChunks({ dropped: names(2).map((file) => drop(file)), maxBytes: 100, sizeOf: () => 5000 });
+    expect(alone.map((chunk) => chunk.files.length)).toEqual([1, 1]);
+  });
+
+  test("is deterministic: the same dropped set in any order gives the same plan", () => {
+    const files = names(50).map((file, index) => drop(file, (index % 3) + 1, index % 5));
+    const first = planChunks({ dropped: files });
+    const second = planChunks({ dropped: [...files].reverse() });
+    expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+    expect(first[0]?.files[0]).toBeDefined();
+  });
+
+  test("writes chunks.json before any pass, and keeps it afterwards", async () => {
+    const files = names(3);
+    await sizedFiles(files);
+    await writeRadius(files.map((file) => drop(file)));
+    expect(existsSync(path.join(packageDir, CHUNKS_FILE))).toBe(false);
+    const first = await ensureChunkPlan(packageDir, root);
+    expect(existsSync(path.join(packageDir, CHUNKS_FILE))).toBe(true);
+    await writeRadius([...files, "src/extra.ts"].map((file) => drop(file)));
+    await recordChunk(packageDir, "chunk-001", { status: "INCOMPLETE" });
+    await expect(ensureChunkPlan(packageDir, root)).rejects.toThrow(/different dropped set/);
+    expect((await readChunkPlan(packageDir))?.chunks).toEqual(first!.chunks);
+  });
+
+  test("a dropped set that moved before any pass was recorded replans (R1-18)", async () => {
+    const files = names(3);
+    await sizedFiles([...files, "src/extra.ts"]);
+    await writeRadius(files.map((file) => drop(file)));
+    const first = await ensureChunkPlan(packageDir, root);
+    expect(await ensureChunkPlan(packageDir, root)).toEqual(first);
+    await writeRadius([...files, "src/extra.ts"].map((file) => drop(file)));
+    const second = await ensureChunkPlan(packageDir, root);
+    expect(second?.dropped).toBe(4);
+    expect(second?.chunks.flatMap((chunk) => chunk.files)).toContain("src/extra.ts");
+    const onDisk = JSON.parse(await readFile(path.join(packageDir, CHUNKS_FILE), "utf8")) as { dropped: number; droppedKey: string };
+    expect(onDisk.dropped).toBe(4);
+    expect(onDisk.droppedKey).toBe(second?.droppedKey as string);
+    expect(onDisk.droppedKey).not.toBe(first?.droppedKey as string);
+  });
+
+  test("a plan written before droppedKey existed is kept with its recorded passes, even when the dropped set differs (R2-30)", async () => {
+    const files = names(3);
+    await sizedFiles([...files, "src/extra.ts"]);
+    await writeRadius(files.map((file) => drop(file)));
+    const first = (await ensureChunkPlan(packageDir, root))!;
+    const { droppedKey: _key, ...legacy } = first;
+    await writeFile(path.join(packageDir, CHUNKS_FILE), JSON.stringify(legacy));
+    await recordChunk(packageDir, "chunk-001", { status: "DONE" });
+    await writeRadius([...files, "src/extra.ts"].map((file) => drop(file)));
+    const kept = await ensureChunkPlan(packageDir, root);
+    expect(kept).toEqual(legacy as typeof kept);
+    expect(JSON.parse(await readFile(path.join(packageDir, CHUNKS_FILE), "utf8"))).toEqual(legacy);
+    expect(Object.keys((await readChunkState(packageDir)).outcomes)).toEqual(["chunk-001"]);
+  });
+
+  test("no dropped files means no plan and no file", async () => {
+    await writeRadius([]);
+    expect(await ensureChunkPlan(packageDir, root)).toBeNull();
+    expect(existsSync(path.join(packageDir, CHUNKS_FILE))).toBe(false);
+    expect(await ensureChunkPlan(path.join(root, "nothing"), root)).toBeNull();
+  });
+});
+
+describe("running the chunks one at a time through the retry plan (AC8b, AC8c)", () => {
+  async function planOf(count: number, bytes = 600, extra: { maxFiles?: number } = {}): Promise<void> {
+    const files = names(count);
+    await sizedFiles(files, bytes);
+    await writeRadius(files.map((file) => drop(file)));
+    await ensureChunkPlan(packageDir, root, extra);
+  }
+
+  test("hands out one chunk at a time on the middle tier, review-regression", async () => {
+    await planOf(6, 600, { maxFiles: 2 });
+    const first = await nextChunk(packageDir);
+    expect(first.chunk?.id).toBe("chunk-001");
+    expect(first.reviewer).toBe("review-regression");
+    expect(first.tier).toBe("middle");
+    expect(first.remaining).toBe(3);
+    await recordChunk(packageDir, "chunk-001", { status: "DONE", findings: [] });
+    expect((await nextChunk(packageDir)).chunk?.id).toBe("chunk-002");
+  });
+
+  test("a failed chunk is retried smaller per the retry plan", async () => {
+    await planOf(4, 600, { maxFiles: 4 });
+    const outcome = await recordChunk(packageDir, "chunk-001", { status: "INCOMPLETE" });
+    expect(outcome.decision).toBe("retry");
+    expect(outcome.state).toBe("failed");
+    const next = await nextChunk(packageDir);
+    expect(next.chunk?.retryOf).toEqual(["chunk-001"]);
+    expect(next.chunk?.files).toHaveLength(2);
+    await recordChunk(packageDir, next.chunk!.id, { status: "DONE" });
+    const second = await nextChunk(packageDir);
+    await recordChunk(packageDir, second.chunk!.id, { status: "DONE" });
+    const pass = await mergeChunkPass(packageDir);
+    expect(pass?.chunks[0]?.state).toBe("done");
+    expect(pass?.uncoveredFiles).toEqual([]);
+  });
+
+  test("DONE_WITH_CONCERNS finishes the chunk and keeps its findings (round 1)", async () => {
+    await planOf(2, 600, { maxFiles: 2 });
+    const outcome = await recordChunk(packageDir, "chunk-001", {
+      status: "DONE_WITH_CONCERNS",
+      findings: [{ file: "src/dep-000.ts", line: 3, severity: "minor", title: "a concern" }],
+    });
+    expect(outcome.state).toBe("done");
+    expect(outcome.decision).not.toBe("retry");
+    expect((await readChunkState(packageDir)).outcomes["chunk-001"]?.findings).toHaveLength(1);
+  });
+
+  test("a chunk already split is not split again by a second failure (round 1)", async () => {
+    await planOf(4, 600, { maxFiles: 4 });
+    await recordChunk(packageDir, "chunk-001", { status: "INCOMPLETE" });
+    const afterFirst = (await readChunkState(packageDir)).derived.length;
+    expect(afterFirst).toBe(2);
+    await recordChunk(packageDir, "chunk-001.r1-1", { status: "DONE" });
+    const again = await recordChunk(packageDir, "chunk-001", { status: "INCOMPLETE" });
+    expect(again.decision).toBe("retry");
+    expect((await readChunkState(packageDir)).derived).toHaveLength(afterFirst);
+  });
+
+  test("a chunk the retry plan gives up on stays pending, never done", async () => {
+    await planOf(2, 600, { maxFiles: 2 });
+    let last = await recordChunk(packageDir, "chunk-001", { status: "BLOCKED" });
+    for (let round = 0; round < 8 && last.decision !== "not-run"; round += 1) {
+      const next = await nextChunk(packageDir);
+      if (next.chunk === null) break;
+      last = await recordChunk(packageDir, next.chunk.id, { status: "BLOCKED" });
+    }
+    expect(last.decision).toBe("not-run");
+    expect(last.state).toBe("pending");
+    const pass = await mergeChunkPass(packageDir);
+    expect(pass?.chunks[0]?.state).toBe("pending");
+    expect(pass?.uncoveredFiles.length).toBe(2);
+  });
+
+  test("merge writes chunk-pass.json with per-chunk state and collapses duplicates by file and line", async () => {
+    await planOf(4, 600, { maxFiles: 2 });
+    await recordChunk(packageDir, "chunk-001", { status: "DONE", findings: [{ file: "src/x.ts", line: 3, severity: "low", title: "a" }, { file: "src/y.ts", line: 9, severity: "high", title: "b" }] });
+    await recordChunk(packageDir, "chunk-002", { status: "INCOMPLETE" });
+    const pass = await mergeChunkPass(packageDir);
+    expect(existsSync(path.join(packageDir, CHUNK_PASS_FILE))).toBe(true);
+    expect(pass?.chunks.map((chunk) => [chunk.id, chunk.state])).toEqual([["chunk-001", "done"], ["chunk-002", "failed"]]);
+    expect(pass?.totals).toMatchObject({ chunks: 2, files: 4, done: 1, failed: 1, pending: 0 });
+    expect(pass?.findings).toHaveLength(2);
+    expect(JSON.parse(await readFile(path.join(packageDir, CHUNK_PASS_FILE), "utf8"))).toEqual(pass as object);
+  });
+
+  test("two findings on one file and line collapse into the more severe one", () => {
+    const merged = mergeFindings([
+      { chunk: "chunk-001", findings: [{ file: "src/x.ts", line: 3, severity: "low", title: "weak" }] },
+      { chunk: "chunk-002", findings: [{ file: "src/x.ts", line: 3, severity: "high", title: "strong" }, { file: "src/x.ts", line: 4, severity: "low", title: "other" }] },
+    ]);
+    expect(merged).toHaveLength(2);
+    expect(merged[0]).toMatchObject({ file: "src/x.ts", line: 3, severity: "high", title: "strong", chunks: ["chunk-001", "chunk-002"] });
+  });
+
+  test("severity is ranked in the finding contract's names, in either order (R1-05)", () => {
+    const at = (severity: string, title: string) => ({ file: "src/x.ts", line: 3, severity, title });
+    const merge = (first: string, second: string) =>
+      mergeFindings([
+        { chunk: "chunk-001", findings: [at(first, first)] },
+        { chunk: "chunk-002", findings: [at(second, second)] },
+      ])[0]?.severity;
+    expect(merge("info", "blocker")).toBe("blocker");
+    expect(merge("blocker", "info")).toBe("blocker");
+    expect(merge("major", "blocker")).toBe("blocker");
+    expect(merge("blocker", "major")).toBe("blocker");
+    expect(merge("minor", "major")).toBe("major");
+    expect(merge("major", "minor")).toBe("major");
+    expect(merge("info", "minor")).toBe("minor");
+    expect(merge("low", "high")).toBe("high");
+  });
+
+  test("a chunk that fails twice is cut into one pair of halves, not two (R1-15)", async () => {
+    await planOf(4, 600, { maxFiles: 4 });
+    await recordChunk(packageDir, "chunk-001", { status: "INCOMPLETE" });
+    await recordChunk(packageDir, "chunk-001", { status: "INCOMPLETE" });
+    const derived = (await readChunkState(packageDir)).derived;
+    expect(derived.filter((entry) => entry.retryOf?.includes("chunk-001"))).toHaveLength(2);
+  });
+
+  test("records that overlap do not erase each other (R1-07)", async () => {
+    await planOf(8, 600, { maxFiles: 2 });
+    const ids = ["chunk-001", "chunk-002", "chunk-003", "chunk-004"];
+    await Promise.all(ids.map((id) => recordChunk(packageDir, id, { status: "DONE", findings: [] })));
+    const state = await readChunkState(packageDir);
+    expect(Object.keys(state.outcomes).sort()).toEqual(ids);
+    expect(new Set(Object.values(state.outcomes).map((outcome) => outcome.seq)).size).toBe(4);
+  });
+
+  test("a successful merge leaves no temp file and no lock behind (R1-17, R2-28: pins the leftovers, not atomicity)", async () => {
+    await planOf(2, 600, { maxFiles: 2 });
+    await recordChunk(packageDir, "chunk-001", { status: "DONE" });
+    await mergeChunkPass(packageDir);
+    expect((await readdir(packageDir)).filter((entry) => entry.endsWith(".tmp"))).toEqual([]);
+    expect(existsSync(path.join(packageDir, "chunk-state.lock"))).toBe(false);
+  });
+
+  test("an unknown severity loses to minor in either order, and a tie keeps the first finding (R2-30)", () => {
+    const at = (severity: string, title: string) => ({ file: "src/x.ts", line: 3, severity, title });
+    const merge = (first: string, second: string) =>
+      mergeFindings([
+        { chunk: "chunk-001", findings: [at(first, "first")] },
+        { chunk: "chunk-002", findings: [at(second, "second")] },
+      ])[0];
+    expect(merge("weird", "minor")?.severity).toBe("minor");
+    expect(merge("minor", "weird")?.severity).toBe("minor");
+    expect(merge("minor", "minor")?.title).toBe("first");
+    expect(merge("weird", "odd")?.title).toBe("first");
+  });
+
+  test("the same chunk merged twice is listed once (R2-30)", () => {
+    const merged = mergeFindings([
+      { chunk: "chunk-001", findings: [{ file: "src/x.ts", line: 3, severity: "minor", title: "a" }] },
+      { chunk: "chunk-001", findings: [{ file: "src/x.ts", line: 3, severity: "major", title: "b" }] },
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ severity: "major", chunks: ["chunk-001"] });
+  });
+});
+
+describe("every writer of the chunk files waits for the chunk lock (R2-19)", () => {
+  async function planned(): Promise<void> {
+    const files = names(4);
+    await sizedFiles(files, 600);
+    await writeRadius(files.map((file) => drop(file)));
+    await ensureChunkPlan(packageDir, root, { maxFiles: 2 });
+    await recordChunkEstimate(packageDir, (await estimateChunkRun(packageDir, root))!, "interactive");
+  }
+
+  async function blockedWhile(start: () => Promise<unknown>, settled: () => Promise<boolean>): Promise<void> {
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let acquired: () => void = () => {};
+    const inside = new Promise<void>((resolve) => (acquired = resolve));
+    const holder = withChunkStateLock(packageDir, async () => {
+      acquired();
+      await held;
+    });
+    await inside;
+    const writer = start();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(await settled()).toBe(false);
+    release();
+    await holder;
+    await writer;
+    expect(await settled()).toBe(true);
+  }
+
+  test("ensureChunkPlan", async () => {
+    const files = names(3);
+    await sizedFiles(files);
+    await writeRadius(files.map((file) => drop(file)));
+    await blockedWhile(() => ensureChunkPlan(packageDir, root), async () => existsSync(path.join(packageDir, CHUNKS_FILE)));
+  });
+
+  test("recordChunkEstimate", async () => {
+    await planned();
+    await rm(path.join(packageDir, "chunk-estimate.json"));
+    await blockedWhile(
+      async () => recordChunkEstimate(packageDir, (await estimateChunkRun(packageDir, root))!, "interactive"),
+      async () => existsSync(path.join(packageDir, "chunk-estimate.json")),
+    );
+  });
+
+  test("answerChunkEstimate", async () => {
+    await planned();
+    await blockedWhile(
+      () => answerChunkEstimate(packageDir, "yes", "go ahead"),
+      async () => JSON.parse(await readFile(path.join(packageDir, "chunk-estimate.json"), "utf8")).answer !== undefined,
+    );
+  });
+
+  test("mergeChunkPass", async () => {
+    await planned();
+    await blockedWhile(() => mergeChunkPass(packageDir), async () => existsSync(path.join(packageDir, CHUNK_PASS_FILE)));
+  });
+
+  test("nextChunk returns only after the holder lets go", async () => {
+    await planned();
+    let done = false;
+    await blockedWhile(
+      async () => {
+        await nextChunk(packageDir);
+        done = true;
+      },
+      async () => done,
+    );
+  });
+
+  test("the wait is long enough for a slow record on a large pass", () => {
+    expect(CHUNK_LOCK_WAIT_MS).toBeGreaterThanOrEqual(60_000);
+  });
+});
+
+describe("the cut blast radius leaves the waves one command away (flow 451 AC6)", () => {
+  const radiusOf = (dropped: ReturnType<typeof drop>[]) => ({ schemaVersion: 1, scope: "blast-radius", depth: 2, maxFiles: 40, changedFiles: ["src/a.ts"], files: [], dropped, unresolved: [], counts: {} }) as never;
+
+  test("writes blast-radius.json and the chunk plan when the cap dropped files, and says how to start", async () => {
+    const files = names(85);
+    await sizedFiles(files, 10);
+    const line = await recordRadiusAndPlan(packageDir, root, radiusOf(files.map((file) => drop(file))), "r1");
+    expect(line).toContain("3 chunk(s) for 85 dropped file(s)");
+    expect(line).toContain("keryx review chunks estimate --package r1");
+    expect(existsSync(path.join(packageDir, "blast-radius.json"))).toBe(true);
+    expect((await readChunkPlan(packageDir))?.chunks).toHaveLength(3);
+  });
+
+  test("writes no plan when nothing was dropped", async () => {
+    const line = await recordRadiusAndPlan(packageDir, root, radiusOf([]), "r1");
+    expect(line).toContain("no waves needed");
+    expect(existsSync(path.join(packageDir, CHUNKS_FILE))).toBe(false);
+  });
+});
+
+describe("an autonomous run runs every wave without a question (flow 451 AC6)", () => {
+  test("the default ceiling is 25 passes and a run under it proceeds in automatic mode, over it waits for one answer", async () => {
+    const files = names(60);
+    await sizedFiles(files, 10);
+    await writeRadius(files.map((file) => drop(file)));
+    const estimate = await estimateChunkRun(packageDir, root);
+    expect(estimate?.chunks).toBe(2);
+    const record = await recordChunkEstimate(packageDir, estimate!, "automatic");
+    expect(record.decision).toBe("proceed");
+    const over = await recordChunkEstimate(packageDir, { ...estimate!, chunks: 26, overCeiling: true }, "automatic");
+    expect(over.decision).toBe("ask-once");
+  });
+});

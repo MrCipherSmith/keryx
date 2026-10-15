@@ -1,0 +1,437 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t3b",
+  "command": "bun test src/tui/turn-loop.test.ts src/tui/busy-dispatch.test.ts src/tui/main-queue.test.ts src/tui/main-queue-drain.test.ts src/tui/remote-queue-wiring.test.ts src/tui/tui-hold.test.ts src/tui/tui-bus.test.ts src/tui/tui-shell.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 7107
+  },
+  "mutants": [
+    {
+      "id": "T01-drain-queue-empty",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "queue: () => queue,",
+      "replacement": "queue: () => [],",
+      "line": 78,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7064
+    },
+    {
+      "id": "T02-drain-run-noop",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "run: (next) => remote.runQueued(next),",
+      "replacement": "run: () => {},",
+      "line": 80,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7036
+    },
+    {
+      "id": "T03-drain-forced-dropped",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "forced: deps.forced,",
+      "replacement": "forced: { takeNext: () => undefined, pendingCount: 0, isAwaitingSettlement: false },",
+      "line": 77,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7072
+    },
+    {
+      "id": "T04-drain-onSettle-noop",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "onSettle: deps.onSettle,",
+      "replacement": "onSettle: () => {},",
+      "line": 82,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7017
+    },
+    {
+      "id": "T05-drain-onDetachedFailure-noop",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "onDetachedFailure: deps.onDetachedFailure,",
+      "replacement": "onDetachedFailure: () => {},",
+      "line": 83,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 6969
+    },
+    {
+      "id": "T06-drain-turnWorkInFlight-false",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "turnWorkInFlight: deps.turnWorkInFlight,",
+      "replacement": "turnWorkInFlight: () => false,",
+      "line": 81,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7182
+    },
+    {
+      "id": "T07-remote-nextId-constant",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "nextId: () => `mq${seq++}`,",
+      "replacement": "nextId: () => `mq0`,",
+      "line": 70,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 7117
+    },
+    {
+      "id": "T07b-enqueue-id-constant",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "id: `mq${seq++}`, question: line",
+      "replacement": "id: `mq0`, question: line",
+      "line": 59,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 7090
+    },
+    {
+      "id": "T08-enqueue-no-paint",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "deps.paint();\n    return queue.length;",
+      "replacement": "return queue.length;",
+      "line": 60,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 6994
+    },
+    {
+      "id": "T09-gate-flip",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "deferredBusyAction(line, commandName) !== \"queue\"",
+      "replacement": "deferredBusyAction(line, commandName) === \"queue\"",
+      "line": 95,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6915
+    },
+    {
+      "id": "T09b-gate-deleted",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "if (deferredBusyAction(line, commandName) !== \"queue\") return false;",
+      "replacement": "",
+      "line": 95,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7099
+    },
+    {
+      "id": "T10-notice-dropped",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "deps.say(`${queuedCommandNotice(position)}",
+      "replacement": "void (`${queuedCommandNotice(position)}",
+      "line": 97,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7218
+    },
+    {
+      "id": "T10b-notice-position-const-1",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "queuedCommandNotice(position)",
+      "replacement": "queuedCommandNotice(1)",
+      "line": 97,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7015
+    },
+    {
+      "id": "T11-idle-takeForced-undefined",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "takeForced: () => deps.forced.takeNext(),",
+      "replacement": "takeForced: () => undefined,",
+      "line": 103,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 7578
+    },
+    {
+      "id": "T12-idle-isIdle-always-true",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "isIdle,\n        takeForced",
+      "replacement": "isIdle: () => true,\n        takeForced",
+      "line": 102,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 7953
+    },
+    {
+      "id": "T13-idle-dispatch-no-paint",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "deps.paint();\n          remote.runQueued(next);",
+      "replacement": "remote.runQueued(next);",
+      "line": 105,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 8307
+    },
+    {
+      "id": "T13b-idle-dispatch-no-run",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "deps.paint();\n          remote.runQueued(next);",
+      "replacement": "deps.paint();",
+      "line": 105,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 8321
+    },
+    {
+      "id": "T14-replaceQueue-noop",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "replaceQueue(next) {\n      queue = next;\n    },",
+      "replacement": "replaceQueue(next) {\n      void next;\n    },",
+      "line": 90,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 8272
+    },
+    {
+      "id": "T15-setQueue-noop",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "setQueue: (next) => {\n      queue = next;\n    },",
+      "replacement": "setQueue: (next) => {\n      void next;\n    },",
+      "line": 67,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 8273
+    },
+    {
+      "id": "T16-remote-getQueue-copy",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "getQueue: () => queue,",
+      "replacement": "getQueue: () => [...queue],",
+      "line": 66,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 8467
+    },
+    {
+      "id": "T17-enqueue-question-display-swapped",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "question: line, displayQuestion: displayLine",
+      "replacement": "question: displayLine, displayQuestion: line",
+      "line": 59,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 8195
+    },
+    {
+      "id": "T18-enqueue-source-dropped",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": ", ...(source !== undefined ? { source } : {}) });",
+      "replacement": " });",
+      "line": 59,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 8135
+    },
+    {
+      "id": "T19-whileBusy-source-dropped",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "const position = enqueue(line, displayLine, source);",
+      "replacement": "const position = enqueue(line, displayLine);",
+      "line": 96,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 8239
+    },
+    {
+      "id": "T20-whileBusy-line-display-swapped",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "const position = enqueue(line, displayLine, source);",
+      "replacement": "const position = enqueue(displayLine, line, source);",
+      "line": 96,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 8148
+    },
+    {
+      "id": "T21-enqueue-returns-1",
+      "file": "src/tui/turn-loop.ts",
+      "anchor": "return queue.length;",
+      "replacement": "return 1;",
+      "line": 61,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 8437
+    },
+    {
+      "id": "S01-shell-forced-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "forced: forceHandoff,",
+      "replacement": "forced: { takeNext: () => undefined, pendingCount: 0, isAwaitingSettlement: false },",
+      "line": 5006,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 8226
+    },
+    {
+      "id": "S02-shell-inflight-without-foregroundOperation",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
+      "replacement": "turnWorkInFlight: () => chrome.isBusy() || forceHandoff.isAwaitingSettlement,",
+      "line": 5020,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 8248
+    },
+    {
+      "id": "S03-shell-inflight-without-awaitingSettlement",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
+      "replacement": "turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive,",
+      "line": 5020,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 8446
+    },
+    {
+      "id": "S04-shell-onSettle-noop",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "onSettle: () => busWakeController?.onSettle(),",
+      "replacement": "onSettle: () => undefined,",
+      "line": 5021,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 8703
+    },
+    {
+      "id": "S05-shell-onDetachedFailure-silent",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "onDetachedFailure: (error) => {",
+      "replacement": "onDetachedFailure: (error) => {\n        if (error !== undefined) return;",
+      "line": 5022,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 8020
+    },
+    {
+      "id": "S06-shell-runLine-source-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "runLine: (line, origin, source) => runLine(line, origin, source),",
+      "replacement": "runLine: (line, origin) => runLine(line, origin),",
+      "line": 5019,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 7846
+    },
+    {
+      "id": "S07-shell-getBridge-undefined",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "getBridge: () => remoteBridge,",
+      "replacement": "getBridge: () => undefined,",
+      "line": 5008,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 7790
+    },
+    {
+      "id": "S08-shell-say-noop",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "say: (text) => io.onSystem?.(text),",
+      "replacement": "say: () => undefined,",
+      "line": 5018,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 7887
+    },
+    {
+      "id": "S09-shell-whileBusy-source-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "turnLoop.enqueueWhileBusy(line, displayLine, command?.name, source)",
+      "replacement": "turnLoop.enqueueWhileBusy(line, displayLine, command?.name)",
+      "line": 8592,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7721
+    },
+    {
+      "id": "S10-shell-held-busy-enqueue-source-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "if (leaseView()?.held() === true) {\n          const position = turnLoop.enqueue(line, displayLine, source);",
+      "replacement": "if (leaseView()?.held() === true) {\n          const position = turnLoop.enqueue(line, displayLine);",
+      "line": 8624,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7889
+    },
+    {
+      "id": "S11-shell-held-idle-enqueue-source-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "if (origin === \"operator\") {\n          const position = turnLoop.enqueue(line, displayLine, source);",
+      "replacement": "if (origin === \"operator\") {\n          const position = turnLoop.enqueue(line, displayLine);",
+      "line": 9436,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7854
+    },
+    {
+      "id": "S12-shell-recipient-choice-no-drain",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "turnLoop.drainWhenIdle(",
+      "replacement": "((_idle: () => boolean) => undefined)(",
+      "line": 8669,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7887
+    },
+    {
+      "id": "S13-shell-force-replaceQueue-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "turnLoop.replaceQueue(removeMainQueueItem(turnLoop.queue, index));",
+      "replacement": "removeMainQueueItem(turnLoop.queue, index);",
+      "line": 8064,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7783
+    },
+    {
+      "id": "S14-shell-drainSites-fresh-object",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "const drainSites = turnLoop.drain;",
+      "replacement": "const drainSites = { ...turnLoop.drain };",
+      "line": 7992,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7869
+    },
+    {
+      "id": "S15-shell-settle-drain-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "drainSites.onTurnSettle();",
+      "replacement": "",
+      "line": 9941,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 7726
+    },
+    {
+      "id": "S16-shell-lease-release-drain-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "onRelease: () => drainSites.onLeaseRelease(),",
+      "replacement": "onRelease: () => undefined,",
+      "line": 10022,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6937
+    },
+    {
+      "id": "S17-shell-foreground-complete-drain-dropped",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "drainSites.onForegroundOperationComplete();",
+      "replacement": "",
+      "line": 9636,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6877
+    }
+  ],
+  "totals": {
+    "killed": 26,
+    "survived": 16,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

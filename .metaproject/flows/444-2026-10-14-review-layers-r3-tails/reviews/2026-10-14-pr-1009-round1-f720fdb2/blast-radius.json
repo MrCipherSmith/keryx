@@ -1,0 +1,750 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/acceptance-criteria.md",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/context.md",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/description.md",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/flow.json",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/journal.md",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/mutation/mutants.json",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/mutation/research-evidence/mutation-1.json",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/mutation/research-evidence/mutation-1.md",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/mutation/survivors.md",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/plan.md",
+    ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/tasks.md",
+    "CHANGELOG.md",
+    "docs/docs/cli-reference.md",
+    "src/commands/review-layers.test.ts",
+    "src/commands/review-layers.ts",
+    "src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json",
+    "src/review/layers-payload.test.ts",
+    "src/review/layers-payload.ts",
+    "src/review/layers-refresh-lifecycle.test.ts",
+    "src/review/layers-signal.test.ts",
+    "src/review/layers-usage.test.ts",
+    "src/review/layers.ts",
+    "src/tui/review-layers-actions.ts",
+    "src/tui/review-layers-child.test.ts",
+    "src/tui/reviews-inspector.test.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/review.ts",
+      "hop": 1,
+      "fanIn": 31,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-chunks.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-chunks.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/layers-view.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/layers.ts",
+      "path": [
+        "src/review/layers-view.ts",
+        "src/review/layers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/review-panel.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/layers.ts",
+      "path": [
+        "src/tui/review-panel.ts",
+        "src/review/layers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/reviews-inspector.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/tui/review-layers-actions.ts",
+      "path": [
+        "src/tui/reviews-inspector.ts",
+        "src/tui/review-layers-actions.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-slice.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-slice.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-slice-paths.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-slice-paths.test.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/layers-clean-tree.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/layers.ts",
+      "path": [
+        "src/review/layers-clean-tree.test.ts",
+        "src/review/layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/layers-current.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/layers.ts",
+      "path": [
+        "src/review/layers-current.test.ts",
+        "src/review/layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/layers-divergence.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/layers.ts",
+      "path": [
+        "src/review/layers-divergence.test.ts",
+        "src/review/layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/layers-isolation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/review/layers-isolation.test.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/layers-round3.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/layers.ts",
+      "path": [
+        "src/review/layers-round3.test.ts",
+        "src/review/layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/layers-worktree.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/layers.ts",
+      "path": [
+        "src/review/layers-worktree.test.ts",
+        "src/review/layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/layers.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/layers.ts",
+      "path": [
+        "src/review/layers.test.ts",
+        "src/review/layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/review-layers-actions.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/layers.ts",
+      "path": [
+        "src/tui/review-layers-actions.test.ts",
+        "src/review/layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 2,
+      "fanIn": 22,
+      "via": "src/review/layers.ts",
+      "path": [
+        "src/commands/shell.ts",
+        "src/tui/review-panel.ts",
+        "src/review/layers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "hop": 2,
+      "fanIn": 18,
+      "via": "src/review/layers.ts",
+      "path": [
+        "src/tui/tui-shell.ts",
+        "src/tui/review-panel.ts",
+        "src/review/layers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/cli-registry.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/import-only.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/import-only.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-ac-check-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-ac-check-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-chunks.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-chunks.test.ts",
+        "src/commands/review-chunks.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-ci-triage-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-ci-triage-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-comments-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-comments-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-conform-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-conform-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-floor-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-floor-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-help.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-help.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-comments-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-jev-comments-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-contract-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-jev-contract-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-docs-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-jev-docs-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-profile-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-jev-profile-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-risk-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-jev-risk-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-rules-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-jev-rules-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-scenarios-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-jev-scenarios-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-select-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-jev-select-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-triage-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-jev-triage-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-learn-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-learn-reviewer-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-learn-reviewer-cli.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-ledger.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-ledger.test.ts",
+        "src/commands/review-chunks.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-slice.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review-slice.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "path": [
+        "src/commands/review.test.ts",
+        "src/commands/review.ts",
+        "src/commands/review-layers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/review-layers-actions.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 53 at hop 2, fan-in 0, reached via src/tui/review-layers-actions.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/renumber-reviews.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 53 at hop 2, fan-in 0, reached via src/commands/review-layers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/review-gate.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 53 at hop 2, fan-in 0, reached via src/commands/review-layers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/chunks-estimate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 53 at hop 2, fan-in 0, reached via src/commands/review-layers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/cost-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 53 at hop 2, fan-in 0, reached via src/commands/review-layers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/coverage-complete.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 53 at hop 2, fan-in 0, reached via src/commands/review-layers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 53 at hop 2, fan-in 0, reached via src/commands/review-layers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 53 at hop 2, fan-in 0, reached via src/commands/review-layers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/loop-real-path.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 53 at hop 2, fan-in 0, reached via src/commands/review-layers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 53 at hop 2, fan-in 0, reached via src/commands/review-layers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/pr-comments.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 53 at hop 2, fan-in 0, reached via src/commands/review-layers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/review-notes.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review-layers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 53 at hop 2, fan-in 0, reached via src/commands/review-layers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/review-panel.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/layers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 53 at hop 2, fan-in 0, reached via src/review/layers.ts. It was NOT reviewed."
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/description.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/mutation/mutants.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/mutation/research-evidence/mutation-1.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/mutation/research-evidence/mutation-1.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/mutation/survivors.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/444-2026-10-14-review-layers-r3-tails/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "CHANGELOG.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 25,
+    "changedFilesResolved": 11,
+    "changedFilesUnresolved": 14,
+    "candidates": 53,
+    "retained": 40,
+    "droppedByCap": 13,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 0,
+    "testsRetained": 31,
+    "hopHistogram": {
+      "1": 15,
+      "2": 25
+    }
+  },
+  "graph": {
+    "nodes": 3089,
+    "edges": 10812
+  }
+}

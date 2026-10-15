@@ -11,6 +11,7 @@ import { loadGraph } from "../../gdgraph/query";
 import { runCapabilityOrFallback } from "../../capability/seam";
 import { resolveTreesitterCapability } from "../../gdgraph/treesitter/adapter";
 import type { SymbolLayer } from "../../gdgraph/types";
+import { revisionOperand } from "../../lib/git-revision";
 import { gitCmdResult } from "../../sync/provenance";
 import { classifyChanges, type FileChange, type SymbolExtractor } from "./classify-change";
 import { clearQueue, drainQueue, earliestRev } from "./queue";
@@ -95,6 +96,42 @@ export async function runFreshness(input: RunFreshnessInput): Promise<FreshnessR
   return report;
 }
 
+export interface PreviewFreshnessInput {
+  cwd: string;
+  /** Base of the range; the report covers `since..toRev`. */
+  since: string;
+  toRev: string;
+  /** Read the code graph from this gdgraph data directory instead of the project's own. */
+  dataDir?: string | undefined;
+  git?: GitRunner;
+  now?: () => Date;
+}
+
+/**
+ * The freshness report for an explicit range, with none of `runFreshness`'s
+ * side effects: it neither drains the queue nor writes `latest.json`/`latest.md`.
+ * A review reads wiki staleness through this so it cannot move the operator's
+ * queue or dirty their tree.
+ */
+export async function previewFreshness(input: PreviewFreshnessInput): Promise<FreshnessReport> {
+  const git = input.git ?? gitCmdResult;
+  const changes = await collectChanges(input.cwd, git, input.since, input.toRev);
+  const classified = await classifyChanges({ changes, extractSymbols: await resolveSymbolExtractor(input.cwd) });
+  const graph = await loadGraph(input.cwd, input.dataDir);
+  return buildFreshnessReport({
+    cwd: input.cwd,
+    graph,
+    changes: classified.changes,
+    symbolLayerAvailable: classified.symbolLayerAvailable,
+    git,
+    fromRev: input.since,
+    toRev: input.toRev,
+    gitAvailable: true,
+    dataDir: input.dataDir,
+    ...(input.now ? { now: input.now } : {}),
+  });
+}
+
 async function persist(cwd: string, report: FreshnessReport): Promise<void> {
   const dir = freshnessDir(cwd);
   await mkdir(dir, { recursive: true });
@@ -102,17 +139,18 @@ async function persist(cwd: string, report: FreshnessReport): Promise<void> {
   await writeFile(path.join(dir, "latest.md"), renderMarkdown(report), "utf8");
 }
 
-/** Changed files between `fromRev` and the working tree, with rename info. */
+/** Changed files between `fromRev` and `toRev` (default HEAD), with rename info. */
 async function collectChanges(
   cwd: string,
   git: GitRunner,
   fromRev: string,
+  toRev = "HEAD",
 ): Promise<FileChange[]> {
   // `fromRev HEAD`, not a bare `fromRev`. A bare base diffs against the
   // WORKING TREE, so uncommitted edits would land in a report whose header
   // says "fromRev → <sha>" — a range label that quietly does not describe
   // what was measured. The queue is commit-driven; the report matches it.
-  const status = await git(cwd, ["diff", "--name-status", "-M", fromRev, "HEAD"]);
+  const status = await git(cwd, ["diff", "--name-status", "-M", ...revisionOperand(fromRev), toRev]);
   if (status.kind !== "ok") {
     // A range that could not be read yields no changes. The report's own
     // git-availability limitation (`report.ts`) is what says so; this
@@ -131,7 +169,7 @@ async function collectChanges(
         path: parts[2],
         previousPath: parts[1],
         before: await showFile(cwd, git, fromRev, parts[1]),
-        after: await readCurrent(cwd, git, parts[2]),
+        after: await readCurrent(cwd, git, parts[2], toRev),
       });
       continue;
     }
@@ -139,14 +177,14 @@ async function collectChanges(
     if (!file) continue;
 
     if (code.startsWith("A")) {
-      changes.push({ path: file, after: await readCurrent(cwd, git, file) });
+      changes.push({ path: file, after: await readCurrent(cwd, git, file, toRev) });
     } else if (code.startsWith("D")) {
       changes.push({ path: file, before: await showFile(cwd, git, fromRev, file) });
     } else {
       changes.push({
         path: file,
         before: await showFile(cwd, git, fromRev, file),
-        after: await readCurrent(cwd, git, file),
+        after: await readCurrent(cwd, git, file, toRev),
       });
     }
   }
@@ -182,8 +220,9 @@ async function readCurrent(
   cwd: string,
   git: GitRunner,
   file: string,
+  toRev = "HEAD",
 ): Promise<string | undefined> {
-  const fromGit = await git(cwd, ["show", `HEAD:${file}`]);
+  const fromGit = await git(cwd, ["show", `${toRev}:${file}`]);
   if (fromGit.kind === "ok") {
     return fromGit.stdout;
   }

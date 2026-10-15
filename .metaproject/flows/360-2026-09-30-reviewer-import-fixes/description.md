@@ -13,7 +13,7 @@ of this from the CLI.
 
 1. `keryx skills import --from <tree> --module review` imports every package that does
    not collide with a bundled name. `keryx review import` filters by a hardcoded
-   `review-vantage-` prefix. The doc calls the second an alias of the first. A package
+   `review-acme-` prefix. The doc calls the second an alias of the first. A package
    with `deprecated: true` is imported like any other.
 2. There is no command that removes a project skill (directory, registry entry, catalog
    row, verification report).
@@ -61,7 +61,7 @@ doc carries an end-to-end example that matches the fixed behaviour.
 ## Out of Scope
 
 - Changing which skills the `minimal` / `recommended` / `full` profiles contain.
-- Any change to the Vantage overlay itself or to its `keryx-reviewer-setup` script.
+- Any change to the consumer overlay itself or to its `keryx-reviewer-setup` script.
 - Fetching rules for remote (URL) imports.
 - Behaviour changes beyond the nine items and the scope extension below; a claim that
   does not reproduce on this branch is reported with evidence, not "fixed".

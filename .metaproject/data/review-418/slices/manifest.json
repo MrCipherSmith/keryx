@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 30000,
+  "waveBytes": 90000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 26532,
+      "contentHash": "a823e341c22699836c185e569e2c4b3adb1ceed1ebfb25e5b9cd7789ff3b949b",
+      "files": [
+        ".metaproject/flows/418-2026-10-09-shell-review-orchestration/acceptance-criteria.md",
+        ".metaproject/flows/418-2026-10-09-shell-review-orchestration/context.md",
+        ".metaproject/flows/418-2026-10-09-shell-review-orchestration/description.md",
+        ".metaproject/flows/418-2026-10-09-shell-review-orchestration/journal.md",
+        ".metaproject/flows/418-2026-10-09-shell-review-orchestration/plan.md",
+        ".metaproject/flows/418-2026-10-09-shell-review-orchestration/tasks.md",
+        ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/acceptance-criteria.md",
+        ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/context.md",
+        ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/description.md",
+        ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/journal.md",
+        ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/plan.md",
+        ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/tasks.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md"
+      ],
+      "domain": ".metaproject [docs]",
+      "split": "file"
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 20456,
+      "contentHash": "1d5192e25c92736df3833289f33b3df431694f4f599d27ea2d297d3973cc776f",
+      "files": [
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        ".metaproject/flows/418-2026-10-09-shell-review-orchestration/flow.json",
+        ".metaproject/flows/419-2026-10-09-telegram-remote-control-relay/flow.json",
+        ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-input.schema.json",
+        "CHANGELOG.md"
+      ],
+      "domain": ".metaproject [docs], .metaproject, . [docs]",
+      "split": "file"
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 10158,
+      "contentHash": "52b34d043b591eb6be3cc91264e41c0627be8823e27c2267a831a8496b3f7a94",
+      "files": [
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/permission-modes.md",
+        "docs/requirements/keryx-shell-split/source-text-audit-inventory.md",
+        "package.json"
+      ],
+      "domain": "docs [docs], .",
+      "split": "domain"
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 28858,
+      "contentHash": "de9470bb9ac95e2775d61d106d723b39144c48d85bf185bb1db68bb1e658ae44",
+      "files": [
+        "src/commands/agent-trust-orchestration.test.ts",
+        "src/commands/agent.test.ts",
+        "src/commands/ctx.test.ts",
+        "src/commands/review.test.ts"
+      ],
+      "domain": "src/commands [test]",
+      "split": "file"
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 1236,
+      "contentHash": "de78dfbf303985a53d765ca985411362045f3f742050352441cfd26d5bde5664",
+      "files": [
+        "src/commands/shell-pty-launch.smoke.test.ts"
+      ],
+      "domain": "src/commands [test]",
+      "split": "file"
+    },
+    {
+      "id": "slice-06",
+      "path": "slice-06.diff",
+      "bytes": 20275,
+      "contentHash": "c5e909d8b342abb0d585157f7820d327704466af2f691bcb45b5cd86f56a24e3",
+      "files": [
+        "src/commands/agent.ts",
+        "src/commands/ctx.ts"
+      ],
+      "domain": "src/commands",
+      "split": "file"
+    },
+    {
+      "id": "slice-07",
+      "path": "slice-07.diff",
+      "bytes": 28544,
+      "contentHash": "1a161005b225f7c5e7b430d9fcd178398ff4084dab9284d5007bb915fb6fbb3a",
+      "files": [
+        "src/commands/review-slice.ts",
+        "src/commands/review.ts",
+        "src/commands/shell.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json",
+        "src/gdskills/skill-length-ceilings.ts",
+        "src/harness/tool/builtin/interactive-tools.test.ts",
+        "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+        "src/harness/tool/builtin/interactive-tools.ts",
+        "src/harness/tool/builtin/spawn-subagent-tool.ts"
+      ],
+      "domain": "src/commands, src/gdskills [docs], src/gdskills +2 more",
+      "split": "file"
+    },
+    {
+      "id": "slice-08",
+      "path": "slice-08.diff",
+      "bytes": 3830,
+      "contentHash": "36b730035fb6cf94d58eb9367cdc45901b2858257c0918bab1e9fc9b6d4a52c9",
+      "files": [
+        "src/lib/group-subcommands.ts",
+        "src/lib/trust-routine-command.ts"
+      ],
+      "domain": "src/lib",
+      "split": "domain"
+    },
+    {
+      "id": "slice-09",
+      "path": "slice-09.diff",
+      "bytes": 27211,
+      "contentHash": "d6d19037230c6fbfdb6e4b7bcef5ccf6ecfa6c82834c183d12c018b2133018b9",
+      "files": [
+        "src/review/dispatch-check.ts",
+        "src/review/dispatch.ts",
+        "src/review/retry-plan.ts",
+        "src/review/slice.ts"
+      ],
+      "domain": "src/review",
+      "split": "domain"
+    },
+    {
+      "id": "slice-10",
+      "path": "slice-10.diff",
+      "bytes": 26411,
+      "contentHash": "fd89bf1a9a11c9c14d5056db033c38437a33b253701a1344cd30dee296f8527c",
+      "files": [
+        "src/review/dispatch.test.ts",
+        "src/review/slice-dispatch.test.ts",
+        "src/review/slice.test.ts",
+        "src/session/ask-answer-notes.ts",
+        "src/tui/busy-dispatch.test.ts",
+        "src/tui/ctrl-c-policy.test.ts",
+        "src/tui/shell-chrome.test.ts"
+      ],
+      "domain": "src/review [test], src/session, src/tui [test]",
+      "split": "domain"
+    },
+    {
+      "id": "slice-11",
+      "path": "slice-11.diff",
+      "bytes": 9368,
+      "contentHash": "602aa655cf855b79ce952ab2e9b7f83ecec9e4c542058b00d423363f18ee931b",
+      "files": [
+        "src/tui/busy-dispatch.ts",
+        "src/tui/ctrl-c-policy.ts",
+        "src/tui/shell-chrome.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "domain": "src/tui",
+      "split": "domain"
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 11,
+    "bytes": 202879,
+    "files": 57,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  }
+}

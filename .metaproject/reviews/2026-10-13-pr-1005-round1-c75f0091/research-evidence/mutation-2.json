@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f045",
+  "command": "bun test src/lib/trust-routine-command.test.ts src/commands/review-revision-operand.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 15954
+  },
+  "mutants": [
+    {
+      "id": "R8b-condition-inverted-needle-intact",
+      "file": "src/commands/review-jev-docs.ts",
+      "anchor": "...(ref === undefined ? [] : [\"--end-of-options\", assertGitRevision(ref)])];",
+      "replacement": "...(ref !== undefined ? [] : [\"--end-of-options\", assertGitRevision(ref)])];",
+      "line": 472,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 16095
+    }
+  ],
+  "totals": {
+    "killed": 0,
+    "survived": 1,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

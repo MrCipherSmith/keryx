@@ -24,7 +24,7 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T23-review.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T23-review.md",
       "kind": "review",
       "exists": true,
       "summary": "T23 containment/SAC Stage 1 review and blocker finding",

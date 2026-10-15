@@ -1,11 +1,11 @@
 # PRD: Telegram permissions parity with the shell
 
 Status: operator answers received 2026-10-02; criteria frozen with this text. Flow 396.
-Owner: MrCipherSmith. Origin: human-request (helyx-channel message 178829, 2026-10-02T19:14Z; decisions in poll 47).
+Owner: MrCipherSmith. Origin: human-request (operator chat channel message 178829, 2026-10-02T19:14Z; decisions in poll 47).
 
 ## 1. Problem
 
-The operator asked: "Why such restrictions? I said Telegram should be an interface giving, where possible, the full functionality of keryx shell. How are permissions done in helyx? It hardly asks me anything."
+The operator asked: "Why such restrictions? I said Telegram should be an interface giving, where possible, the full functionality of keryx shell. How are permissions done in the chat bot? It hardly asks me anything."
 
 Observed in the topic geekom:keryx: a permission request for a Docker status check expired, and a run was cut with "Stopped: this run went over the time limit for runs started from Telegram."
 
@@ -17,7 +17,7 @@ What the code does today (investigated on origin/main, 0.3.63):
 4. The run limit is `runTimeoutMs` in the remote `config.json`, default 30 minutes (`src/remote/config.ts`), enforced by the bridge timer.
 5. There is no way to stop a Telegram run from Telegram. The gateway refusal text for `/interrupt` says "use the Stop button on a message", but no such button exists in the code.
 
-helyx, for comparison, has no policy of its own. It relays Claude Code permission prompts, honours `~/.claude/settings.local.json` allow patterns (`Bash(*)`, `Read(*)`, `Edit(*)`, ...), offers an "Always" button that persists a rule, and waits 10 minutes. Its quietness comes from broad allow rules plus "Always", not from a smarter policy.
+the chat bot, for comparison, has no policy of its own. It relays Claude Code permission prompts, honours `~/.claude/settings.local.json` allow patterns (`Bash(*)`, `Read(*)`, `Edit(*)`, ...), offers an "Always" button that persists a rule, and waits 10 minutes. Its quietness comes from broad allow rules plus "Always", not from a smarter policy.
 
 ## 2. Goals
 

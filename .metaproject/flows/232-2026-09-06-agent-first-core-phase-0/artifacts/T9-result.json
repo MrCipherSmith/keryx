@@ -24,7 +24,7 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T9-verification.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T9-verification.md",
       "kind": "report",
       "exists": true,
       "summary": "Integrated TypeScript, full-test, focused repair, MCP boundary, HTTP security, health, and tooling evidence with precise snapshot boundaries.",

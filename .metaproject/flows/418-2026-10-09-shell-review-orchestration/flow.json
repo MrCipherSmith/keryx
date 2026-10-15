@@ -1,0 +1,667 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "418",
+  "slug": "shell-review-orchestration",
+  "title": "Keryx Shell: review orchestration completes a round (follow-through, trust mode, 200 rounds)",
+  "status": "done",
+  "createdAt": "2026-10-09T19:42:51.573Z",
+  "updatedAt": "2026-10-12T20:10:49.804Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-09T20:57:26.034Z",
+      "note": "src/commands/agent.test.ts + agent-trust-orchestration.test.ts: round 41 runs in trust, refused in ask; TRUST_MODE_MAX_ROUNDS=200 named constant (PR 940, CI green)"
+    },
+    "AC2": {
+      "at": "2026-10-09T20:57:26.230Z",
+      "note": "agent-trust-orchestration.test.ts: trust session with routine review command (isTrustRoutineCommand allowlist) observes zero prompts; non-allowlisted commands and escalation floors still prompt; src/lib/trust-routine-command.test.ts"
+    },
+    "AC3": {
+      "at": "2026-10-09T20:57:26.432Z",
+      "note": "agent-trust-orchestration.test.ts: four-item plan finishes with no operator message, bound MAX_PLAN_FOLLOW_THROUGHS=8, stops on no progress"
+    },
+    "AC4": {
+      "at": "2026-10-09T20:57:26.626Z",
+      "note": "agent-trust-orchestration.test.ts + src/session/ask-answer-notes.ts: question asked twice yields one prompt; answer survives compaction as slate note; irreversible questions always asked"
+    },
+    "AC5": {
+      "at": "2026-10-09T20:57:26.818Z",
+      "note": "src/tui/busy-dispatch.test.ts: slash line queued while busy, queuedCommandNotice shown, drained via runLine after the turn; /new /clear /resume refused while busy"
+    },
+    "AC6": {
+      "at": "2026-10-09T20:57:27.011Z",
+      "note": "src/tui/ctrl-c-policy.test.ts + shell-pty-launch.smoke.test.ts (two Ctrl+C presses): turn cancelled on first, idle exit on second within 2000 ms, /exit always exits"
+    },
+    "AC7": {
+      "at": "2026-10-09T20:57:27.208Z",
+      "note": "src/review/dispatch-check.test.ts: REVIEWER_INPUT_INVALID / _NO_SLICE / _SLICE_UNKNOWN / _TOO_LARGE refuse before dispatch, exit 1; skill text updated"
+    },
+    "AC8": {
+      "at": "2026-10-09T20:57:27.410Z",
+      "note": "src/review/slice.test.ts + review-slice.ts: 150000-byte ceiling, domain slices with manifest, data ledgers (csv, lockfile, snapshot) omitted and listed in omissions"
+    },
+    "AC9": {
+      "at": "2026-10-09T20:57:27.597Z",
+      "note": "src/review/retry-plan.test.ts + dispatch.ts not-run branch: one smaller-slice retry, then Not run, never counted as a clean pass"
+    },
+    "AC10": {
+      "at": "2026-10-09T20:57:27.783Z",
+      "note": "spawn-subagent-tool.test.ts: DEFAULT_MAX_SUBAGENT_CONCURRENCY=10, effective concurrency was 3; agent-trust-orchestration.test.ts"
+    },
+    "AC11": {
+      "at": "2026-10-09T20:57:27.971Z",
+      "note": "interactive-tools.ts: outside-cwd read error names the cause and the alternative; keryx ctx run --raw added for machine artifacts; tests in interactive-tools and ctx suites"
+    },
+    "AC13": {
+      "at": "2026-10-09T20:57:28.168Z",
+      "note": "CHANGELOG [0.3.87]; docs/docs/guides/permission-modes.md section Long runs in the shell; mkdocs build --strict passed in CI on PR 940"
+    },
+    "AC12": {
+      "at": "2026-10-12T04:53:18.552Z",
+      "note": "Live 2026-10-12 on Presight-AI/vantage-frontend PR 7840 (0.3.110, openai-codex gpt-6.1-sol, keryx review run --autonomous): complete, exit 0, package closed via ingest, 2 rounds, 950 s, 5.86M tokens, 0 blocker 3 major 3 minor, 0 floor refusals. Claude run on the same PR: 10 reviewers + verifier + blast radius + design-system pass, 2 major. Compared by the operator 2026-10-12; depth parity (blast radius, verifier, mutation, design-system reviewer) moves to a separate flow. Operator accepted 198741."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/940"
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "origin": {
+    "kind": "human-request",
+    "quote": "Заводи, так же нужно починить режим trust, и для него увеличить количество раундов. Например с 40 до 200",
+    "source": "helyx 195221, 2026-10-09T19:42Z"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Agent loop: trust round limit 200 (named setting, reset increment), trust-mode approvals/untrusted latch, plan follow-through bound, ask_user answers into slate, subagent concurrency 10 (AC1-AC4, AC10) in src/commands/agent.ts + shell.ts + tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-09T19:52:55.967Z",
+            "outcome": "started",
+            "detail": "worker dispatched in keryx-f418"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "TUI: queue slash commands while main is busy (AC5); Ctrl+C cancels turn, second Ctrl+C at idle exits (AC6) in tui-shell.ts/shell-chrome.ts + tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-09T19:52:56.152Z",
+            "outcome": "started",
+            "detail": "worker dispatched in keryx-f418"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Review tooling: keryx review slice (domain slices, manifest, ledger omission), reviewer-input validation before dispatch, INCOMPLETE retry on smaller slice, ctx run raw passthrough, read-outside-cwd error (AC7-AC9, AC11) + skill text + tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-09T19:52:56.338Z",
+            "outcome": "started",
+            "detail": "worker dispatched in keryx-f418"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Docs: CHANGELOG, shell docs (trust limit, slash queue, Ctrl+C, review slicing), version bump; mkdocs --strict (AC13)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-09T19:42:51.573Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-09T19:45:41.390Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-09T19:45:50.262Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-09T19:52:50.484Z",
+      "event": "task-added",
+      "detail": "T5: Agent loop: trust round limit 200 (named setting, reset increment), trust-mode approvals/untrusted latch, plan follow-through bound, ask_user answers into slate, subagent concurrency 10 (AC1-AC4, AC10) in src/commands/agent.ts + shell.ts + tests"
+    },
+    {
+      "at": "2026-10-09T19:52:50.668Z",
+      "event": "task-added",
+      "detail": "T6: TUI: queue slash commands while main is busy (AC5); Ctrl+C cancels turn, second Ctrl+C at idle exits (AC6) in tui-shell.ts/shell-chrome.ts + tests"
+    },
+    {
+      "at": "2026-10-09T19:52:50.860Z",
+      "event": "task-added",
+      "detail": "T7: Review tooling: keryx review slice (domain slices, manifest, ledger omission), reviewer-input validation before dispatch, INCOMPLETE retry on smaller slice, ctx run raw passthrough, read-outside-cwd error (AC7-AC9, AC11) + skill text + tests"
+    },
+    {
+      "at": "2026-10-09T19:52:55.779Z",
+      "event": "task-added",
+      "detail": "T8: Docs: CHANGELOG, shell docs (trust limit, slash queue, Ctrl+C, review slicing), version bump; mkdocs --strict (AC13)"
+    },
+    {
+      "at": "2026-10-09T19:52:55.967Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — worker dispatched in keryx-f418"
+    },
+    {
+      "at": "2026-10-09T19:52:56.152Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — worker dispatched in keryx-f418"
+    },
+    {
+      "at": "2026-10-09T19:52:56.338Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — worker dispatched in keryx-f418"
+    },
+    {
+      "at": "2026-10-09T20:16:28.231Z",
+      "event": "task-done",
+      "detail": "T5: Agent loop: trust round limit 200 (named setting, reset increment), trust-mode approvals/untrusted latch, plan follow-through bound, ask_user answers into slate, subagent concurrency 10 (AC1-AC4, AC10) in src/commands/agent.ts + shell.ts + tests"
+    },
+    {
+      "at": "2026-10-09T20:16:28.442Z",
+      "event": "task-done",
+      "detail": "T6: TUI: queue slash commands while main is busy (AC5); Ctrl+C cancels turn, second Ctrl+C at idle exits (AC6) in tui-shell.ts/shell-chrome.ts + tests"
+    },
+    {
+      "at": "2026-10-09T20:16:28.656Z",
+      "event": "task-done",
+      "detail": "T7: Review tooling: keryx review slice (domain slices, manifest, ledger omission), reviewer-input validation before dispatch, INCOMPLETE retry on smaller slice, ctx run raw passthrough, read-outside-cwd error (AC7-AC9, AC11) + skill text + tests"
+    },
+    {
+      "at": "2026-10-09T20:16:28.869Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-09T20:16:29.081Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-09T20:16:29.278Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-09T20:20:08.818Z",
+      "event": "task-done",
+      "detail": "T8: Docs: CHANGELOG, shell docs (trust limit, slash queue, Ctrl+C, review slicing), version bump; mkdocs --strict (AC13)"
+    },
+    {
+      "at": "2026-10-09T20:20:09.034Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-09T20:57:12.605Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/940 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-10-09T20:57:26.034Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/commands/agent.test.ts + agent-trust-orchestration.test.ts: round 41 runs in trust, refused in ask; TRUST_MODE_MAX_ROUNDS=200 named constant (PR 940, CI green) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T20:57:26.230Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: agent-trust-orchestration.test.ts: trust session with routine review command (isTrustRoutineCommand allowlist) observes zero prompts; non-allowlisted commands and escalation floors still prompt; src/lib/trust-routine-command.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T20:57:26.432Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: agent-trust-orchestration.test.ts: four-item plan finishes with no operator message, bound MAX_PLAN_FOLLOW_THROUGHS=8, stops on no progress (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T20:57:26.626Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: agent-trust-orchestration.test.ts + src/session/ask-answer-notes.ts: question asked twice yields one prompt; answer survives compaction as slate note; irreversible questions always asked (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T20:57:26.818Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/tui/busy-dispatch.test.ts: slash line queued while busy, queuedCommandNotice shown, drained via runLine after the turn; /new /clear /resume refused while busy (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T20:57:27.011Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: src/tui/ctrl-c-policy.test.ts + shell-pty-launch.smoke.test.ts (two Ctrl+C presses): turn cancelled on first, idle exit on second within 2000 ms, /exit always exits (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T20:57:27.208Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: src/review/dispatch-check.test.ts: REVIEWER_INPUT_INVALID / _NO_SLICE / _SLICE_UNKNOWN / _TOO_LARGE refuse before dispatch, exit 1; skill text updated (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T20:57:27.410Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: src/review/slice.test.ts + review-slice.ts: 150000-byte ceiling, domain slices with manifest, data ledgers (csv, lockfile, snapshot) omitted and listed in omissions (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T20:57:27.597Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: src/review/retry-plan.test.ts + dispatch.ts not-run branch: one smaller-slice retry, then Not run, never counted as a clean pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T20:57:27.783Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: spawn-subagent-tool.test.ts: DEFAULT_MAX_SUBAGENT_CONCURRENCY=10, effective concurrency was 3; agent-trust-orchestration.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T20:57:27.971Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: interactive-tools.ts: outside-cwd read error names the cause and the alternative; keryx ctx run --raw added for machine artifacts; tests in interactive-tools and ctx suites (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-09T20:57:28.168Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: CHANGELOG [0.3.87]; docs/docs/guides/permission-modes.md section Long runs in the shell; mkdocs build --strict passed in CI on PR 940 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-12T04:53:18.552Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: Live 2026-10-12 on Presight-AI/vantage-frontend PR 7840 (0.3.110, openai-codex gpt-6.1-sol, keryx review run --autonomous): complete, exit 0, package closed via ingest, 2 rounds, 950 s, 5.86M tokens, 0 blocker 3 major 3 minor, 0 floor refusals. Claude run on the same PR: 10 reviewers + verifier + blast radius + design-system pass, 2 major. Compared by the operator 2026-10-12; depth parity (blast radius, verifier, mutation, design-system reviewer) moves to a separate flow. Operator accepted 198741. (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-12T20:10:43.795Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-12T20:10:49.803Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-12T20:10:49.804Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    },
+    "AC9": {
+      "kind": "unclassified"
+    },
+    "AC10": {
+      "kind": "unclassified"
+    },
+    "AC11": {
+      "kind": "unclassified"
+    },
+    "AC12": {
+      "kind": "unclassified"
+    },
+    "AC13": {
+      "kind": "unclassified"
+    }
+  },
+  "baseBranch": "main",
+  "signatures": [
+    {
+      "at": "2026-10-09T20:57:26.034Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
+    },
+    {
+      "at": "2026-10-09T20:57:26.230Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
+    },
+    {
+      "at": "2026-10-09T20:57:26.432Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
+    },
+    {
+      "at": "2026-10-09T20:57:26.626Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
+    },
+    {
+      "at": "2026-10-09T20:57:26.818Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
+    },
+    {
+      "at": "2026-10-09T20:57:27.011Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
+    },
+    {
+      "at": "2026-10-09T20:57:27.208Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
+    },
+    {
+      "at": "2026-10-09T20:57:27.410Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
+    },
+    {
+      "at": "2026-10-09T20:57:27.597Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
+    },
+    {
+      "at": "2026-10-09T20:57:27.783Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
+    },
+    {
+      "at": "2026-10-09T20:57:27.971Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
+    },
+    {
+      "at": "2026-10-09T20:57:28.168Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
+    },
+    {
+      "at": "2026-10-12T04:53:18.552Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
+    },
+    {
+      "at": "2026-10-12T20:10:49.804Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc",
+      "headCommit": "489d410fa0a01c78ed42e6c96580245c65486d8a"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-12T20:10:49.803Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "13 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "8 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "418-2026-10-09-shell-review-orchestration is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:34f9270d1eb98dfd3e56e6cab1aa172cc37c32cf50443c26175931ebefa7a5fc"
+    }
+  ]
+}

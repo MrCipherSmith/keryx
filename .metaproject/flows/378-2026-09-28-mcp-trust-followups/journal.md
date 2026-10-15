@@ -1,7 +1,7 @@
 # Flow Journal
 
 - 2026-09-28T22:13:49.999Z - flow created
-- 2026-09-29T10:00:12.056Z - owner-set: not set -> altsay (operator confirmed flow 360 as release 0.3.34)
+- 2026-09-29T10:00:12.056Z - owner-set: not set -> operator (operator confirmed flow 360 as release 0.3.34)
 - 2026-09-29T10:00:12.208Z - frozen: 9 criteria; checksum recorded
 - 2026-09-29T10:00:12.362Z - started
 - 2026-09-29T10:43:27.928Z - ac-confirmed: AC1: approval-render.trust.test.ts and agent-permission-mode.test.ts (drives runAgentTurn) green in CI on beea5d48: destructiveHint true is never offered, absent/false keeps T (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])

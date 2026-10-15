@@ -1,23 +1,23 @@
 # Keryx Background Task Execution — Brainstorm and Decisions
 Version: 1.1.0
 
-This file records the competitor prior art the design is grounded in and the
+This file records the prior art from other agent harnesses the design is grounded in and the
 decisions taken from it. The forks were read at `~/sandbox/forks/<name>/` on
 2026-09-14; they are outside this repository and are cited as external evidence,
 not as project code.
 
-## Competitor prior art
+## Prior art
 
 | Tool | Mechanism | Source |
 |---|---|---|
 | **Codex** | Every exec is a PTY session that **yields** after `yield_time_ms` (clamped 250 ms–30 s) with output-so-far and a process handle; continue via `write_stdin`, background-terminal cap 300 s. No background flag exists. | `~/sandbox/forks/codex/codex-rs/core/src/unified_exec/mod.rs:60-67,99,118,194-201` |
-| **Grok Build** | Explicit `is_background`, **plus** `auto_background_on_timeout` with `foreground_block_budget_ms` (default 15 s): a foreground command past its block budget is **moved to background, not killed**. Completion is **event-driven** (`x.ai/task_completed` + completion reminder). `Ctrl+B` demotes a running command. `MAX_FOREGROUND_BLOCK` 5 min, `BACKGROUND_TIMEOUT` 24 h. Separate `monitor` + `/loop`/scheduler. | `.../grok-build/crates/codegen/xai-grok-tools/src/implementations/grok_build/bash/mod.rs:139-208,261-307,978-1004`; `.../xai-grok-pager/src/app/acp_handler/background.rs`; `.../docs/user-guide/20-background-tasks.md` |
+| **Harness A** | Explicit `is_background`, **plus** `auto_background_on_timeout` with `foreground_block_budget_ms` (default 15 s): a foreground command past its block budget is **moved to background, not killed**. Completion is **event-driven** (a task-completed notification + completion reminder). `Ctrl+B` demotes a running command. `MAX_FOREGROUND_BLOCK` 5 min, `BACKGROUND_TIMEOUT` 24 h. Separate `monitor` + `/loop`/scheduler. | external fork, read 2026-09-14 |
 | **Gemini CLI** | `is_background` + `delay_ms` (200 ms) early return; timeout is **inactivity**-based (`resetTimeout()` on any output event), not wall-clock. | `~/sandbox/forks/gemini-cli/packages/core/src/tools/shell.ts:491,582-590,605,696-723,792-798` |
-| **Qwen Code** | `is_background` + system-prompt policy; **blocks foreground `sleep N` (N≥2 s)** with an escape comment `# intentional-sleep: <reason>` (max 10 min); long-run advisory; separate `monitor` tool with `idle_timeout_ms`. | `~/sandbox/forks/qwen-code/packages/core/src/tools/shell.ts:1239-1319,5147-5168,5005-5019`; `docs/developers/tools/monitor.md` |
-| **Cline** | Operator-triggered **detach** ("Proceed While Running"): the pending tool call resolves with partial output while the command keeps running. | `~/sandbox/forks/cline/apps/vscode/src/sdk/sdk-foreground-command-coordinator.ts:15-73` |
-| **Crush** | `run_in_background` + `auto_background_after` (default 60 s): synchronous path polls and **moves to background** past the threshold. | `~/sandbox/forks/crush/internal/agent/tools/bash.go:28-29,53,303-384` |
-| **OpenCode / Kilocode** | Background-job registry with `promote` (foreground→background) and `wait`; the V2 bash tool deliberately **removed** model-facing background launch pending owner-bound get/wait/cancel tools. | `~/sandbox/forks/opencode/packages/core/src/background-job.ts:292-335`; `.../tool/bash.ts:19-20,73` |
-| **Continue** | `waitForCompletion` with a 2-min timeout and a `CheckBackgroundJob` read tool. | `~/sandbox/forks/continue/core/tools/implementations/runTerminalCommand.ts` |
+| **Harness B** | `is_background` + system-prompt policy; **blocks foreground `sleep N` (N≥2 s)** with an escape comment `# intentional-sleep: <reason>` (max 10 min); long-run advisory; separate `monitor` tool with `idle_timeout_ms`. | external fork, read 2026-09-14 |
+| **Harness C** | Operator-triggered **detach** ("Proceed While Running"): the pending tool call resolves with partial output while the command keeps running. | external fork, read 2026-09-14 |
+| **Harness D** | `run_in_background` + `auto_background_after` (default 60 s): synchronous path polls and **moves to background** past the threshold. | external fork, read 2026-09-14 |
+| **Harness E** | Background-job registry with `promote` (foreground→background) and `wait`; the V2 bash tool deliberately **removed** model-facing background launch pending owner-bound get/wait/cancel tools. | external fork, read 2026-09-14 |
+| **Harness F** | `waitForCompletion` with a 2-min timeout and a `CheckBackgroundJob` read tool. | external fork, read 2026-09-14 |
 
 ## Decisions
 
@@ -30,15 +30,15 @@ addresses the observed incident.
 
 - Rejected: keeping `background: true` as the primary mechanism with a better
   description (the description was already present; the model still omitted it).
-- Rejected: an auto-background threshold alone (Crush/Grok) — better than
+- Rejected: an auto-background threshold alone (harnesses A and D) — better than
   nothing, but it still blocks the turn for the threshold and leaves the
   wall-clock timeout in place.
 
 ### D-02 — Event-driven completion, reversing flow 173's "Poll, not push"
 
-**Adopt** a terminal completion event that can wake the agent (Grok Build's
-`x.ai/task_completed` + completion reminder). Flow 173 recorded "push is not
-shipped anywhere surveyed"; that is no longer true — Grok Build ships it.
+**Adopt** a terminal completion event that can wake the agent (harness A's
+task-completed notification + completion reminder). Flow 173 recorded "push is not
+shipped anywhere surveyed"; that is no longer true — harness A ships it.
 
 - The event is exactly-once and idempotent on replay.
 - Polling tools remain, but are no longer the only way to learn a task finished.
@@ -51,7 +51,7 @@ killed at a fixed deadline; a silent task is killed after `idle_ms`.
 - The `KERYX_SHELL_TIMEOUT_MS` wall-clock deadline becomes a deprecated alias
   for `idleMs`.
 - Escape: a genuinely silent long wait must be requested explicitly, mirroring
-  Qwen's `# intentional-sleep: <reason>` idea, rather than silently surviving.
+  harness B's `# intentional-sleep: <reason>` idea, rather than silently surviving.
 
 ### D-04 — Keep session-scoped lifetime; no detached tasks
 
@@ -80,7 +80,7 @@ yield". It stops being the only way to avoid blocking.
 
 ### D-08 — `monitor` and scheduler are follow-on packages
 
-A streaming `monitor` (Qwen/Grok) and a recurring scheduler / `/loop` (Grok) are
+A streaming `monitor` (harnesses A and B) and a recurring scheduler / `/loop` (harness A) are
 valuable but separable. Including them would widen this package past the defect.
 They are named here and left to follow-on packages.
 
@@ -234,7 +234,7 @@ of their own and are a follow-on package.
 | Alternative | Why rejected |
 |---|---|
 | A longer `DEFAULT_SHELL_TIMEOUT_MS` | Delays the freeze; does not remove it, and makes a stuck command harder to notice. |
-| A `sleep`-pattern guard only (Qwen) | Fixes one command shape; the blocking model remains for every other long command. |
-| Auto-background threshold only (Crush/Grok) | The turn still blocks for the threshold and the wall-clock deadline remains. |
-| A user-only escape hatch (Cline) | Requires the operator to notice and act; the model still freezes the turn by default. |
+| A `sleep`-pattern guard only (harness B) | Fixes one command shape; the blocking model remains for every other long command. |
+| Auto-background threshold only (harnesses A and D) | The turn still blocks for the threshold and the wall-clock deadline remains. |
+| A user-only escape hatch (harness C) | Requires the operator to notice and act; the model still freezes the turn by default. |
 | Detached tasks surviving session exit | Expands ownership/persistence; violates flow 173's deliberate boundary (D-04). |

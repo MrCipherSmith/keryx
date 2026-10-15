@@ -1,0 +1,244 @@
+{
+ "mutants": [
+  {
+   "id": "A1-no-dash-check",
+   "file": "src/lib/git-revision.ts",
+   "anchor": "if (ref.startsWith(\"-\")) throw",
+   "replacement": "if (false) throw"
+  },
+  {
+   "id": "A2-double-dash-only",
+   "file": "src/lib/git-revision.ts",
+   "anchor": "ref.startsWith(\"-\")",
+   "replacement": "ref.startsWith(\"--\")"
+  },
+  {
+   "id": "A3-output-bare-dropped",
+   "file": "src/lib/git-revision.ts",
+   "anchor": "a === \"--output\" || ",
+   "replacement": ""
+  },
+  {
+   "id": "A4-output-eq-dropped",
+   "file": "src/lib/git-revision.ts",
+   "anchor": "a.startsWith(\"--output=\") || ",
+   "replacement": ""
+  },
+  {
+   "id": "A5-ext-diff-dropped",
+   "file": "src/lib/git-revision.ts",
+   "anchor": " || a === \"--ext-diff\"",
+   "replacement": ""
+  },
+  {
+   "id": "A6-no-end-of-options",
+   "file": "src/lib/git-revision.ts",
+   "anchor": "[\"--end-of-options\", assertGitRevision(ref)]",
+   "replacement": "[assertGitRevision(ref)]"
+  },
+  {
+   "id": "A7-order-swapped",
+   "file": "src/lib/git-revision.ts",
+   "anchor": "[\"--end-of-options\", assertGitRevision(ref)]",
+   "replacement": "[assertGitRevision(ref), \"--end-of-options\"]"
+  },
+  {
+   "id": "A8-no-assert",
+   "file": "src/lib/git-revision.ts",
+   "anchor": "[\"--end-of-options\", assertGitRevision(ref)]",
+   "replacement": "[\"--end-of-options\", ref]"
+  },
+  {
+   "id": "B1-c-flag-dropped",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "if (rest === 2 && word.startsWith(\"-c\", at)) return true;",
+   "replacement": "if (false) return true;"
+  },
+  {
+   "id": "B2-c-flag-prefix",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "rest === 2 &&",
+   "replacement": "rest >= 2 &&"
+  },
+  {
+   "id": "B3-flag-prefix-match",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "(rest === f.length && word.startsWith(f, at))",
+   "replacement": "word.startsWith(f, at)"
+  },
+  {
+   "id": "B4-flag-eq-dropped",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": " || word.startsWith(`${f}=`, at)",
+   "replacement": ""
+  },
+  {
+   "id": "B5-nondash-walks",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "if (!word.startsWith(\"-\", at) || eq === -1) return false;",
+   "replacement": "if (eq === -1) return false;"
+  },
+  {
+   "id": "B6-shell-spelled-dropped",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "words.some(isExecWord) || words.some(isShellSpelledOption)",
+   "replacement": "words.some(isExecWord)"
+  },
+  {
+   "id": "B7-shell-spelled-too-broad",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/[\\\\{}$]/.test(word) && /^[\\\\{$]*-/.test(word)",
+   "replacement": "/[\\\\{}$]/.test(word)"
+  },
+  {
+   "id": "B8-shell-spelled-any-dash",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/[\\\\{}$]/.test(word) && /^[\\\\{$]*-/.test(word)",
+   "replacement": "/^[\\\\{$]*-/.test(word)"
+  },
+  {
+   "id": "B9-no-dollar",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/^[\\\\{$]*-/.test(word)",
+   "replacement": "/^[\\\\{]*-/.test(word)"
+  },
+  {
+   "id": "B10-no-brace",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/^[\\\\{$]*-/.test(word)",
+   "replacement": "/^[\\\\$]*-/.test(word)"
+  },
+  {
+   "id": "B11-no-backslash",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/^[\\\\{$]*-/.test(word)",
+   "replacement": "/^[{$]*-/.test(word)"
+  },
+  {
+   "id": "B12-no-brace-char",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/[\\\\{}$]/.test(word) && /^",
+   "replacement": "/[\\\\}$]/.test(word) && /^"
+  },
+  {
+   "id": "B13-no-close-brace-char",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/[\\\\{}$]/.test(word) && /^",
+   "replacement": "/[\\\\{$]/.test(word) && /^"
+  },
+  {
+   "id": "B14-lone-dash-refused",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/^--[^=]+=-./s.test(w)",
+   "replacement": "/^--[^=]+=-/.test(w)"
+  },
+  {
+   "id": "B15-single-dash-value-routine",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/^--[^=]+=-./s.test(w)",
+   "replacement": "/^--[^=]+=--/s.test(w)"
+  },
+  {
+   "id": "B16-dot-all-dropped",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/^--[^=]+=-./s.test(w)",
+   "replacement": "/^--[^=]+=-./.test(w)"
+  },
+  {
+   "id": "B17-short-flag-prefix",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "/^--[^=]+=-./s.test(w)",
+   "replacement": "/^-[^=]+=-./s.test(w)"
+  },
+  {
+   "id": "B18-dash-value-dropped",
+   "file": "src/lib/trust-routine-command.ts",
+   "anchor": "words.some((w) => /^--[^=]+=-./s.test(w))",
+   "replacement": "false"
+  },
+  {
+   "id": "C1-ctx-guard-dropped",
+   "file": "src/commands/ctx.ts",
+   "anchor": "  assertNoWritingDiffOption(args);\n",
+   "replacement": ""
+  },
+  {
+   "id": "C2-check-ac-merge-base",
+   "file": "src/commands/flow-check-ac.ts",
+   "anchor": "\"merge-base\", \"HEAD\", ...revisionOperand(refName)]",
+   "replacement": "\"merge-base\", \"HEAD\", refName]"
+  },
+  {
+   "id": "C3-check-ac-diff",
+   "file": "src/commands/flow-check-ac.ts",
+   "anchor": "\"-U20\", ...revisionOperand(ref)]",
+   "replacement": "\"-U20\", ref]"
+  },
+  {
+   "id": "C4-ingest-merge-base",
+   "file": "src/commands/flow-check-ac.ts",
+   "anchor": "assertGitRevision(head), assertGitRevision(refName)]",
+   "replacement": "head, refName]"
+  },
+  {
+   "id": "C5-ingest-diff",
+   "file": "src/commands/flow-check-ac.ts",
+   "anchor": "\"-U20\", \"--end-of-options\", ref, head]",
+   "replacement": "\"-U20\", ref, head]"
+  },
+  {
+   "id": "C6-review-names",
+   "file": "src/commands/review.ts",
+   "anchor": "\"--diff-filter=d\", ...(ref === undefined ? [] : revisionOperand(ref))]",
+   "replacement": "\"--diff-filter=d\", ...(ref === undefined ? [] : [ref])]"
+  },
+  {
+   "id": "C7-review-diff",
+   "file": "src/commands/review.ts",
+   "anchor": "`-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref))]",
+   "replacement": "`-U${contextLines}`, ...(ref === undefined ? [] : [ref])]"
+  },
+  {
+   "id": "C8-review-merge-base",
+   "file": "src/commands/review.ts",
+   "anchor": "[\"merge-base\", \"HEAD\", ...revisionOperand(ref)]",
+   "replacement": "[\"merge-base\", \"HEAD\", ref]"
+  },
+  {
+   "id": "C9-health",
+   "file": "src/health/run.ts",
+   "anchor": "\"--name-only\", ...revisionOperand(ref)]",
+   "replacement": "\"--name-only\", ref]"
+  },
+  {
+   "id": "C10-testing",
+   "file": "src/testing/service.ts",
+   "anchor": "\"--name-only\", ...revisionOperand(since)]",
+   "replacement": "\"--name-only\", since]"
+  },
+  {
+   "id": "C11-flow-base",
+   "file": "src/commands/flow.ts",
+   "anchor": "value === undefined ? undefined : assertGitRevision(value)",
+   "replacement": "value"
+  },
+  {
+   "id": "C12-wiki-freshness-guard",
+   "file": "src/wiki/freshness/run.ts",
+   "anchor": "if (fromRev.startsWith(\"-\")) return [];",
+   "replacement": ""
+  },
+  {
+   "id": "C13-sync-guard",
+   "file": "src/sync/diff.ts",
+   "anchor": "if (base.startsWith(\"-\")) return null;",
+   "replacement": ""
+  },
+  {
+   "id": "C14-sync-eoo",
+   "file": "src/sync/diff.ts",
+   "anchor": "\"--name-status\", \"--end-of-options\", base]",
+   "replacement": "\"--name-status\", base]"
+  }
+ ]
+}

@@ -4,6 +4,7 @@ import {
   isPermissionMode,
   PERMISSION_MODES,
   resolveApprovalDecision,
+  resolveQuestionAnswerer,
   type ApprovalGateDecision,
   type GatedToolRisk,
   type PermissionMode,
@@ -381,4 +382,12 @@ test("readOnly: false reproduces existing (pre-readOnly) behavior unchanged — 
       readOnly: false,
     }),
   ).toBe("auto");
+});
+
+test("resolveQuestionAnswerer: only auto hands a question to the model; trust is about actions, not judgement", () => {
+  expect(PERMISSION_MODES.map((mode) => [mode, resolveQuestionAnswerer(mode)])).toEqual([
+    ["ask", "human"],
+    ["trust", "human"],
+    ["auto", "model"],
+  ]);
 });

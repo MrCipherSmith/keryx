@@ -1,0 +1,98 @@
+STATUS: DONE
+
+```REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Round 3, head 07730d87. F-011, F-012, F-013, F-014, F-015, F-001 and F-002 are closed against the code and the caps are pinned at 63/64/65. 91 mutants ran in a scratch copy (79 killed, 12 survived, 0 invalid anchors). 7 survivors are observable and unpinned (three minor findings); 5 are equivalent. No regression from the round-2 fix found.",
+  "findings": [
+    {
+      "id": "F-101",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "line": 105,
+      "problem": "Unpinned behaviour: the truncation test (a cut-off object that claims a result key means no result) is pinned only for compact JSON and for a cut-off object carrying all keys. Mutants O08 (KEY_COLON /\\s*:/y to /:/y), O09 (RESULT_KEYS reduced to status) and O11 (RESULT_KEYS reduced to reviewer, findings) survive with the suite green.",
+      "impact": "A cut-off reply whose first key is written as \"status\" : or whose only result key is reviewer or status would be read as prose, and a complete nested result inside it would be returned instead of a gap.",
+      "evidence": "Scratch copy, parseReviewResult. O08 input: {\"status\" : \"DONE\", \"slices\":[{\"status\":\"DONE\",\"reviewer\":\"r\",\"findings\":[]}   original undefined, mutant returns the nested result. O09 input: {\"reviewer\":\"r\",\"slices\":[<same nested result>   original undefined, mutant returns the nested result. O11 input: {\"status\":\"DONE\",\"slices\":[<same nested result>   same.",
+      "suggested_fix": "One table test in the 'an unclosed object that carries the result keys' block: three cut-off outer objects (space before the colon; only reviewer; only status) each wrapping a complete nested reviewer result, each expecting undefined.",
+      "confidence": "high",
+      "dedupe_key": "r3-unpinned-claimsresult-keys"
+    },
+    {
+      "id": "F-102",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "line": 204,
+      "problem": "Unpinned behaviour in two round-3 branches. B06 (compare the bare status with fencedResults[0] instead of the last fenced result) and N03 (slice(-MAX_MARKERS) before the fence filter instead of after) survive. The 63/64/65 test uses unfenced markers only, so the order of filter and slice is not exercised.",
+      "impact": "N03: a real marker followed by a fenced block quoting 64 or more marker lines would be lost and the reply becomes a gap. B06: with two differing fenced samples, the ambiguity check would compare against the wrong one.",
+      "evidence": "N03 input: 'REVIEW_RESULT {DONE result}' then a ``` fence holding 64 lines 'REVIEW_RESULT {BLOCKED result}' then the closing fence: original returns the DONE result, mutant undefined. B06 input: fence DONE, fence BLOCKED, then a bare BLOCKED result: original returns BLOCKED, mutant undefined.",
+      "suggested_fix": "N03: add to the 'only the last 64 markers' test a case of one real marker plus 64 fenced marker lines expecting the real result. B06: add two fenced results with different statuses plus a bare result equal to the last one, expecting the last fenced result.",
+      "confidence": "high",
+      "dedupe_key": "r3-unpinned-filter-order-and-last-fenced"
+    },
+    {
+      "id": "F-103",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "line": 149,
+      "problem": "Unpinned behaviour: F05 (closing-fence search starting at open + 3 instead of the next line) and H01 (hasStatus accepting any defined status, not a string) survive. The rule that the closing fence is searched after the opening line, so an inline ``` pair in prose is read as an opener, has no test either way.",
+      "impact": "F05: changes which object counts as fenced when a prose line holds an inline ```x``` span. H01: a numeric status in a labelled fence would be accepted as a result.",
+      "evidence": "F05 input: 'see ```x``` {DONE reviewer line1}' newline '```json' newline '{DONE reviewer fenced}' newline '```': original returns reviewer line1, mutant returns reviewer fenced. H01 input: '```REVIEW_RESULT' newline '{\"status\":1}' newline '```': original undefined, mutant {\"status\":1}. Related fail-closed behaviour of the current rule: prose 'I quote ```code``` here.' then 'REVIEW_RESULT {DONE}' then a fenced BLOCKED sample gives undefined (a gap), not a wrong result.",
+      "suggested_fix": "H01: one assertion that a labelled fence with {\"status\":1} gives undefined. F05: pin the intended outcome of an inline ``` span on a prose line (either fix fenceRanges to ignore a ``` that is not at a line start and pin that, or pin the current gap).",
+      "confidence": "high",
+      "dedupe_key": "r3-unpinned-fence-open-line-and-status-type"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 0 }
+}
+```
+
+## Findings
+
+- F-101 minor, F-102 minor, F-103 minor: unpinned behaviour, see the JSON above. No blocker or major.
+
+## Questions
+
+- None. W01 (review-slice.ts: wholeFileResult tried before parseReviewResult) I judge equivalent: a whole file that is one JSON object parses to the same object either way; a status-only object is rejected by parseReviewResult and then taken by wholeFileResult; a pretty-printed whole file cannot hold a real newline inside a string, so the labelled-fence regex and the marker cannot match inside it.
+
+## Pre-existing
+
+- F-016 and F-017 carried, not re-raised. Four-backtick fences and an inline ``` in prose end in a gap (undefined), never a wrong result; that is the fail-closed ambiguity rule, not a defect of this PR.
+
+## Verified clean
+
+- Regression probes on the round-3 head (scratch copy): CRLF markers and fences parse; an unclosed fence does not hide a following marker; 20000 unclosed markers 53 ms, 20000 closed non-JSON markers 4 ms, 50000 fences 2 ms, 50000 prose braces 30 ms, 20000 fenced markers in 1.2 MB 14 ms. No quadratic behaviour.
+- Caps: MAX_UNCLOSED pinned at 63/64/65 (T03, T04, T05, T07 killed), MAX_MARKERS at 63/64/65 plus slice(-) versus slice(0, n) (A04, A05, A06, A07 killed).
+- Round-3 delta killed: line-start lookbehind (M01, M02), every prefix class member (M03 to M09), the + quantifier (M10), a lax prefix (M11), fence filter on and inverted (N01, N02), marker scan order (N06), separators (A01 to A03), pass-over of cut-off and non-JSON markers (A10, A13, A07), fenced-versus-bare comparison (S01 to S05, B01 to B05, B07).
+
+## Prior findings in my domain
+
+- F-011 closed: review-ledger.test.ts:215 pins the labelled-fence status-only and null-reviewer results as ignored by name, no raw, no gap (D01, D02, D03 killed); :230 pins the bare status-only reply as NOT READY with a named gap.
+- F-012 closed: review-slice.test.ts covers the whole-file status-only result with --reviewer (written), the same object after a bare marker (exit 2, nothing written), stdin, and the status-less refusal (W02, W03, W04, W06 killed).
+- F-013 closed: both caps pinned at 63/64/65 (see above).
+- F-014 closed: separators, cut-off last marker, trailing prose mention, scan order (A01 to A03, A10, A13, P02 killed).
+- F-015 closed: the labelled-fence and fence-pairing table (L01 to L06, L08, F02 to F04, T01, T02 killed; F05 remains, F-103).
+- F-001 and F-002 closed as tested: the quoted and fenced marker cases, the buildLedger gap and the ambiguity tests kill M01, M02, M11, N01, B01, B02, S04.
+- F-009, F-010 minor, unchanged and not re-raised.
+
+## Mutation table
+
+91 mutants in /home/altsay/keryx-fdm/.metaproject/flows/441-2026-10-13-deferred-majors-of-pr-940-and-pr-975/reviews/2026-10-13-pr-997-round3-07730d87/research-evidence/mutants.json (D01, W01, P02, L05 re-anchored). Gates mutated: all; not reached: 0; invalid anchors: 0. Killed 79, survived 12.
+
+| Survivor | Verdict |
+|---|---|
+| O08, O09, O11 | observable, F-101 |
+| B06, N03 | observable, F-102 |
+| F05, H01 | observable, F-103 |
+| F06 (range end close, not close+3) | equivalent: the three closing backticks hold no object start and no marker start |
+| F07 (position > open) | equivalent: the opening backtick is never an object or marker start |
+| N04 (test the marker end, not its start) | equivalent: the marker text between has no backtick, so it cannot cross a fence edge |
+| M12 (lookbehind also excludes \r) | equivalent for CRLF and LF input; differs only after a lone carriage return, which a reply does not hold |
+| W01 | equivalent, see Questions |
+
+All other 79 killed, including D01, P02, L05, T07 (>= versus >), A05, A06.
+
+Scratch work under /tmp/claude-1000/-home-altsay-keryx/9ee4644d-bb9e-4e03-805d-a42446e23fea/scratchpad/review-testing-practices/. The worktree was not edited. An early keryx ctx rg call ran with the worktree as cwd and may have written gdctx artifacts under its .metaproject/data/gdctx (not source).

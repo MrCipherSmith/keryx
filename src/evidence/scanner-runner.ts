@@ -25,4 +25,3 @@ export function runEvidenceScan(worker: Worker, signal?: AbortSignal): Promise<S
     if (signal?.aborted) abort();
   });
 }
-

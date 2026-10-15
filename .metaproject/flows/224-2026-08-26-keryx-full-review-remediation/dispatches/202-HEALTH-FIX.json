@@ -13,11 +13,11 @@
   ],
   "context_refs": [{"path": "docs/requirements/keryx-full-review-remediation/specification.md", "kind": "custom", "exists": true}],
   "files_to_read": [
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/health/service.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/health/types.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/commands/health.ts"
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/health/service.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/health/types.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/commands/health.ts"
   ],
   "constraints": [
     "Read exact worktree index and testing context first; use gdgraph/gdctx/keryx ctx rg.",

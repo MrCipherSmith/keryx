@@ -63,5 +63,5 @@ Harness never writes flow.json. Docs/evidence never touch runtime state.
 ## Operational
 - keryx = `bun ./src/cli.ts`; new worktree needs `bun install`. Never commit to main.
 - State only via `keryx flow`; workers via subagent-dispatch/result (STATUS: first line).
-- WORKTREE-GUARD: every writing worker `cd /Users/Goodea/goodea/keryx/.claude/worktrees/feature-keryx-harness-impl && pwd` first, write ONLY under it. fetch-mocks `as unknown as typeof fetch`; guard array indexing.
+- WORKTREE-GUARD: every writing worker `cd ~/goodea/keryx/.claude/worktrees/feature-keryx-harness-impl && pwd` first, write ONLY under it. fetch-mocks `as unknown as typeof fetch`; guard array indexing.
 - Order: T5 (H-01) → T6 (E-01) → T7 (E-02) → T8 (E-03, gated) → T9 (verify).

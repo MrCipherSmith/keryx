@@ -623,3 +623,17 @@ export function switchLeasedSession<R extends { lease: SessionLeaseHandle }>(
   }
   return next;
 }
+
+/** Preserve under ownership before transferring the current lease. */
+export async function switchPreservedSession<R extends { lease: SessionLeaseHandle }>(
+  current: SessionLeaseHandle | undefined,
+  openTarget: () => R,
+  preserve: () => Promise<void>,
+): Promise<R> {
+  const next = openTarget();
+  if (next.lease === current) return next;
+  try { await preserve(); }
+  catch (error) { releaseSessionLease(next.lease); throw error; }
+  releaseSessionLease(current);
+  return next;
+}

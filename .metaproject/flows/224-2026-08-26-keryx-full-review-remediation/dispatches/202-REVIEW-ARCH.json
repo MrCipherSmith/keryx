@@ -19,9 +19,9 @@
     {"path": "docs/requirements/keryx-full-review-remediation/specification.md", "kind": "plan", "exists": true}
   ],
   "files_to_read": [
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-architecture/SKILL.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/docs/requirements/keryx-full-review-remediation/specification.md"
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-architecture/SKILL.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/docs/requirements/keryx-full-review-remediation/specification.md"
   ],
   "constraints": [
     "Read the exact worktree index and reviewer skill before navigation; use gdgraph/gdwiki/gdctx and keryx ctx rg.",

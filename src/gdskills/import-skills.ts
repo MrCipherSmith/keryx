@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { lstat, readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { optionValue, optionValues } from "../lib/args";
@@ -185,12 +185,48 @@ export type ImportedRule = {
   security?: ImportSecurity;
 };
 
+/**
+ * A file from a package's `templates/` directory, copied beside its SKILL.md.
+ *
+ * - `imported` / `would-import` — the project had no such file.
+ * - `overwritten` / `would-overwrite` — it had another one, replaced because of
+ *   `--force` (or because `keryx skills update` always takes the source's).
+ * - `unchanged` — the project's file is the source's, byte for byte.
+ * - `differs` — the project's file is not the source's and was left alone; the
+ *   source's version goes in with `--force`.
+ * - `refused` / `would-refuse` — the security gate would not let it through.
+ * - `skipped` — not a file this import can copy (not UTF-8 text, or the
+ *   destination is not a regular file).
+ */
+export type ImportedTemplate = {
+  /** `module/name` of the package that ships it. */
+  package: string;
+  /** Path under the package's `templates/`, posix. */
+  file: string;
+  status:
+    | "imported"
+    | "would-import"
+    | "overwritten"
+    | "would-overwrite"
+    | "unchanged"
+    | "differs"
+    | "skipped"
+    | "refused"
+    | "would-refuse";
+  /** Project-relative path it is, or would be, written to. */
+  path: string;
+  reason?: string;
+  /** Absent when the gate had nothing to say about the file. */
+  security?: ImportSecurity;
+};
+
 export type ImportProjectSkillsResult = {
   from: string;
   /** The `--only` globs the selection was made with; empty when none were given. */
   only: string[];
   imported: ImportedProjectSkill[];
   rules: ImportedRule[];
+  templates: ImportedTemplate[];
   dryRun: boolean;
   force: boolean;
 };
@@ -245,20 +281,55 @@ export async function importProjectSkills(options: ImportProjectSkillsOptions): 
   const refusedPackages = new Set(
     plans.flatMap((plan) => ("row" in plan && isRefusedStatus(plan.row.status) ? [plan.row.name] : [])),
   );
-  const ruleDecisions = await decideReferencedRules(
-    options,
-    sources
-      .filter((source) => !skippedAsDeprecated(source))
-      .filter((source) => options.force === true || !BUNDLED_NAMES.has(source.name)),
-    refusedPackages,
-  );
+  const candidates = sources
+    .filter((source) => !skippedAsDeprecated(source))
+    .filter((source) => options.force === true || !BUNDLED_NAMES.has(source.name));
+  // Templates follow the packages the way rules do: also for one the project
+  // already has, so a project imported before templates were copied gets them.
+  // A package whose template the gate refuses is refused with it, and its
+  // rules are left alone like those of any refused package.
+  const templatePlans: TemplatePlan[] = [];
+  const refusedByTemplates = new Set<string>();
+  for (const source of candidates) {
+    if (source.sourcePath === undefined || refusedPackages.has(source.name)) continue;
+    const own = await planTemplates(options, { module: source.module, name: source.name, sourcePath: source.sourcePath }, options.force === true);
+    if (packageRefusedByTemplates(own)) {
+      refusedByTemplates.add(source.name);
+      // Only a package being written is refused; one the project already has
+      // keeps its row, and the rules it cites are written as before.
+      if (plans.some((plan) => "write" in plan && plan.write.name === source.name)) refusedPackages.add(source.name);
+      templatePlans.push(...withheldTemplates(own));
+    } else {
+      templatePlans.push(...own);
+    }
+  }
+  const ruleDecisions = await decideReferencedRules(options, candidates, refusedPackages);
   await refuseUncontainedWrites(label, options.projectRoot, [
-    ...plans.flatMap((plan) => ("write" in plan ? projectSkillWritePaths(plan.write.module, plan.write.name, "single") : [])),
+    ...plans.flatMap((plan) =>
+      "write" in plan && !refusedByTemplates.has(plan.write.name)
+        ? projectSkillWritePaths(plan.write.module, plan.write.name, "single")
+        : [],
+    ),
     ...ruleDecisions.flatMap((decision) => ("placement" in decision ? [decision.placement.target] : [])),
+    ...templateTargets(templatePlans),
   ]);
 
   const imported: ImportedProjectSkill[] = [];
   for (const plan of plans) {
+    if ("write" in plan && refusedByTemplates.has(plan.write.name)) {
+      imported.push(
+        refusedByTemplateRow(
+          {
+            name: plan.write.name,
+            module: plan.write.module,
+            path: projectSkillPackagePath(plan.write.module, plan.write.name),
+            origin: plan.write.origin,
+          },
+          options.dryRun === true,
+        ),
+      );
+      continue;
+    }
     imported.push("row" in plan ? plan.row : await writeOne(options, plan));
   }
   addFlagWarnings(imported, sources, existingFlags);
@@ -276,11 +347,13 @@ export async function importProjectSkills(options: ImportProjectSkillsOptions): 
           : await writePlacedRule(options, decision.placement, decision.gate),
     );
   }
+  const templates = await writeTemplates(options, templatePlans);
   return {
     from: options.from,
     only: options.only ?? [],
     imported,
     rules,
+    templates,
     dryRun: options.dryRun === true,
     force: options.force === true,
   };
@@ -339,21 +412,47 @@ export async function updateProjectSkills(options: UpdateProjectSkillsOptions): 
   for (const entry of selected) {
     plans.push(await planUpdate(options, entry));
   }
-  await refuseUncontainedWrites(
-    "keryx skills update",
-    options.projectRoot,
+  // The templates beside each origin are read with it. An update takes the
+  // source's version of every one, as it does of SKILL.md.
+  const templatePlans: TemplatePlan[] = [];
+  const refusedByTemplates = new Set<UpdatePlan>();
+  for (const plan of plans) {
+    if (!("content" in plan) || plan.sourcePath === undefined) continue;
+    const own = await planTemplates(
+      options,
+      { module: projectSkillSlug(plan.entry.module), name: projectSkillSlug(plan.entry.name), sourcePath: plan.sourcePath },
+      true,
+    );
+    if (packageRefusedByTemplates(own)) {
+      refusedByTemplates.add(plan);
+      templatePlans.push(...withheldTemplates(own));
+    } else {
+      templatePlans.push(...own);
+    }
+  }
+  await refuseUncontainedWrites("keryx skills update", options.projectRoot, [
     // createProjectSkill writes under the slugs of the registered module and name.
-    plans.flatMap((plan) =>
-      "content" in plan
+    ...plans.flatMap((plan) =>
+      "content" in plan && !refusedByTemplates.has(plan)
         ? projectSkillWritePaths(projectSkillSlug(plan.entry.module), projectSkillSlug(plan.entry.name), "single")
         : [],
     ),
-  );
+    ...templateTargets(templatePlans),
+  ]);
   // Read before the first write, as in the import, so a dry run and a real run
   // compare the refreshed packages with the same set of reviewers.
   const existingFlags = await projectReviewerFlags(options.projectRoot);
   const imported: ImportedProjectSkill[] = [];
   for (const plan of plans) {
+    if (refusedByTemplates.has(plan) && "entry" in plan) {
+      imported.push(
+        refusedByTemplateRow(
+          { name: plan.entry.name, module: plan.entry.module, path: plan.entry.path, origin: plan.origin },
+          options.dryRun === true,
+        ),
+      );
+      continue;
+    }
     imported.push("row" in plan ? plan.row : await writeUpdate(options, plan));
   }
   addFlagWarnings(
@@ -361,11 +460,13 @@ export async function updateProjectSkills(options: UpdateProjectSkillsOptions): 
     plans.map((plan) => ("content" in plan ? plan : undefined)),
     existingFlags,
   );
+  const templates = await writeTemplates(options, templatePlans);
   return {
     from: options.from ?? "(each skill Origin)",
     only: [],
     imported,
     rules: [],
+    templates,
     dryRun: options.dryRun === true,
     force: true,
   };
@@ -413,10 +514,12 @@ export function renderImportProjectSkillsMarkdown(result: ImportProjectSkillsRes
   }
   if (
     result.imported.some((row) => isRefusedStatus(row.status)) ||
-    result.rules.some((rule) => isRefusedStatus(rule.status))
+    result.rules.some((rule) => isRefusedStatus(rule.status)) ||
+    result.templates.some((template) => isRefusedStatus(template.status))
   ) {
     lines.push(refusedNote(result), "");
   }
+  lines.push(...renderTemplateLines(result.templates));
   if (result.rules.length > 0) {
     lines.push("## rules the skills cite", "");
     for (const rule of result.rules) {
@@ -485,9 +588,13 @@ export function renderUpdateProjectSkillsMarkdown(result: ImportProjectSkillsRes
     }
   }
   lines.push("");
-  if (result.imported.some((row) => isRefusedStatus(row.status))) {
+  if (
+    result.imported.some((row) => isRefusedStatus(row.status)) ||
+    result.templates.some((template) => isRefusedStatus(template.status))
+  ) {
     lines.push(refusedNote(result), "");
   }
+  lines.push(...renderTemplateLines(result.templates));
   if (result.imported.some((row) => row.module === PROJECT_REVIEWER_MODULE && isWrittenRow(row))) {
     lines.push(
       `Reviewers: \`keryx review reviewers\` must list every updated ${PROJECT_REVIEWER_MODULE}/* name. That is the same call review-orchestrator makes.`,
@@ -1053,7 +1160,7 @@ function isRefusedStatus(status: string): boolean {
 
 /** The note under a result with a refusal; the --allow-flagged hint only when that flag could change a refusal. */
 function refusedNote(result: ImportProjectSkillsResult): string {
-  const refused = [...result.imported, ...result.rules].filter((row) => isRefusedStatus(row.status));
+  const refused = [...result.imported, ...result.rules, ...result.templates].filter((row) => isRefusedStatus(row.status));
   const overridable = refused.some((row) =>
     row.security?.findings.some((finding) => finding.policyId.startsWith("prompt-injection.")),
   );
@@ -1065,7 +1172,7 @@ function refusedNote(result: ImportProjectSkillsResult): string {
  * run only predicts (`would-refuse`) and exits 0.
  */
 export function exitNonZeroOnRefusal(result: ImportProjectSkillsResult): void {
-  if ([...result.imported, ...result.rules].some((row) => row.status === "refused")) {
+  if ([...result.imported, ...result.rules, ...result.templates].some((row) => row.status === "refused")) {
     process.exitCode = 1;
   }
 }
@@ -1246,7 +1353,7 @@ async function planOne(options: ImportProjectSkillsOptions, source: ImportSource
         status: "skipped",
         path: dest,
         origin: source.origin,
-        reason: "already exists; pass --force to overwrite",
+        reason: "already exists; pass --force to overwrite, or run `keryx skills update` to refresh it from its origin",
         wired: wiringNote(source.module),
       },
     };
@@ -1329,7 +1436,7 @@ type RegistryEntry = { module: string; name: string; path: string };
 /** What an update does with one registry entry: a final row, or new content to write over it. */
 type UpdatePlan =
   | { row: ImportedProjectSkill }
-  | { entry: RegistryEntry; origin: string; content: string; gate: WriteGate };
+  | { entry: RegistryEntry; origin: string; content: string; gate: WriteGate; sourcePath?: string };
 
 async function planUpdate(options: UpdateProjectSkillsOptions, entry: RegistryEntry): Promise<UpdatePlan> {
   const skillMd = path.join(options.projectRoot, entry.path, "SKILL.md");
@@ -1343,6 +1450,7 @@ async function planUpdate(options: UpdateProjectSkillsOptions, entry: RegistryEn
   }
 
   let content: string;
+  let sourcePath: string | undefined;
   if (isHttpsSkillUrl(origin)) {
     const fetcher = options.fetcher ?? DEFAULT_FETCHER;
     const response = await fetcher(githubBlobToRaw(origin));
@@ -1356,6 +1464,7 @@ async function planUpdate(options: UpdateProjectSkillsOptions, entry: RegistryEn
       return skippedRow("origin file can no longer be read", origin);
     }
     content = await readFile(resolved, "utf8");
+    sourcePath = resolved;
     origin = portableOriginRef(resolved, options.projectRoot);
   }
   const verdict = await gateText(
@@ -1369,7 +1478,7 @@ async function planUpdate(options: UpdateProjectSkillsOptions, entry: RegistryEn
       row: refusedSkillRow({ name: entry.name, module: entry.module, path: entry.path, origin }, verdict, options.dryRun === true),
     };
   }
-  return { entry, origin, content, gate: verdict };
+  return { entry, origin, content, gate: verdict, ...(sourcePath !== undefined ? { sourcePath } : {}) };
 }
 
 /** Write one planned update — or, on a dry run, say it would be written. */
@@ -1794,6 +1903,205 @@ async function decideReferencedRules(
   return decisions;
 }
 
+const TEMPLATES_DIR = "templates";
+
+/**
+ * Every regular file under the `templates/` directory beside a source
+ * SKILL.md, as posix paths below it, sorted. Subdirectories are walked.
+ * A symlink — to a file or a directory — is not followed or copied, and
+ * neither is anything else that is not a regular file; a `templates` that is
+ * itself a symlink is not a templates directory.
+ */
+async function listTemplateFiles(sourcePath: string): Promise<string[]> {
+  const root = path.join(path.dirname(sourcePath), TEMPLATES_DIR);
+  try {
+    if (!(await lstat(root)).isDirectory()) return [];
+  } catch {
+    return [];
+  }
+  const files: string[] = [];
+  const walk = async (dir: string, prefix: string): Promise<void> => {
+    const entries = (await readdir(dir, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      const rel = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+      if (entry.isDirectory()) await walk(path.join(dir, entry.name), rel);
+      else if (entry.isFile()) files.push(rel);
+    }
+  };
+  await walk(root, "");
+  return files;
+}
+
+type TemplateOptions = { projectRoot: string; dryRun?: boolean; allowFlagged?: boolean };
+
+/** The first existing parent of `target` (project-relative, posix) that resolves to something other than a directory; a link that leaves the project or dangles is the containment check's business. */
+async function fileInTheWay(projectRoot: string, target: string): Promise<string | undefined> {
+  let current = projectRoot;
+  let relative = "";
+  for (const part of target.split("/").slice(0, -1)) {
+    current = path.join(current, part);
+    relative = relative === "" ? part : `${relative}/${part}`;
+    try {
+      if (!(await stat(current)).isDirectory()) return relative;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+/** The destinations of the template plans that go through the containment check: a row that is `skipped` writes nothing and names a path that is not there to write, so it is reported instead of refusing the run. */
+const templateTargets = (plans: readonly TemplatePlan[]): string[] =>
+  plans.flatMap((plan) => ("write" in plan ? [plan.write.target] : plan.row.status === "skipped" ? [] : [plan.row.path]));
+
+/** A refused template refuses its whole package: nothing of it is written, so it never lands without the overlay it was imported for. */
+function packageRefusedByTemplates(plans: readonly TemplatePlan[]): boolean {
+  return plans.some((plan) => "row" in plan && isRefusedStatus(plan.row.status));
+}
+
+/** The plans of a refused package: the rows stay, a template that would have been written is reported as withheld. */
+function withheldTemplates(plans: readonly TemplatePlan[]): TemplatePlan[] {
+  return plans.map((plan) =>
+    "row" in plan
+      ? plan
+      : {
+          row: {
+            ...plan.write.row,
+            status: "skipped",
+            reason: "not written: another template of this package was refused",
+          },
+        },
+  );
+}
+
+function refusedByTemplateRow(
+  pkg: { name: string; module: string; path: string; origin: string },
+  dryRun: boolean,
+): ImportedProjectSkill {
+  return {
+    ...pkg,
+    status: dryRun ? "would-refuse" : "refused",
+    reason: "a template of this package was refused by the security gate; nothing of the package was written",
+  };
+}
+
+/** A template either has its final row already, or a gated text still to be written. */
+type TemplatePlan =
+  | { row: ImportedTemplate }
+  | { write: { row: Omit<ImportedTemplate, "status">; target: string; exists: boolean; gate: WriteGate } };
+
+/**
+ * What an import or update does about each file in one package's `templates/`.
+ * Nothing is written here: a text is read, put through the security gate, and
+ * compared with the project's copy, so a refusal anywhere is known before the
+ * first write and a dry run reports what the real run does.
+ *
+ * `replace` says whether a project copy with other content is replaced: it is
+ * under `--force`, and always for an update.
+ */
+async function planTemplates(
+  options: TemplateOptions,
+  pkg: { module: string; name: string; sourcePath: string },
+  replace: boolean,
+): Promise<TemplatePlan[]> {
+  const plans: TemplatePlan[] = [];
+  const packageKey = `${pkg.module}/${pkg.name}`;
+  const packagePath = projectSkillPackagePath(pkg.module, pkg.name);
+  for (const file of await listTemplateFiles(pkg.sourcePath)) {
+    const target = `${packagePath}/${TEMPLATES_DIR}/${file}`;
+    const base = { package: packageKey, file, path: target };
+    const bytes = await readFile(path.join(path.dirname(pkg.sourcePath), TEMPLATES_DIR, file));
+    const text = bytes.toString("utf8");
+    if (!Buffer.from(text, "utf8").equals(bytes)) {
+      plans.push({ row: { ...base, status: "skipped", reason: "not UTF-8 text; the importer copies text templates only" } });
+      continue;
+    }
+    const targetAbs = path.join(options.projectRoot, target);
+    const blocker = await fileInTheWay(options.projectRoot, target);
+    if (blocker !== undefined) {
+      plans.push({ row: { ...base, status: "skipped", reason: `${blocker} is a file, not a directory; nothing was written there` } });
+      continue;
+    }
+    const exists = await pathExists(targetAbs);
+    if (exists && !(await isRegularFile(targetAbs))) {
+      plans.push({ row: { ...base, status: "skipped", reason: `${target} is not a regular file; nothing was written there` } });
+      continue;
+    }
+    const existing = exists ? await readFile(targetAbs, "utf8") : undefined;
+    if (existing === text) {
+      plans.push({ row: { ...base, status: "unchanged" } });
+      continue;
+    }
+    // The gate runs before the comparison with a project copy: a template it
+    // redacted is written as redacted, and the copy it wrote is that file's
+    // `unchanged` on the next run.
+    const verdict = await gateText(options.projectRoot, text, target, options.allowFlagged === true);
+    if (verdict.kind === "write" && existing === verdict.content) {
+      plans.push({ row: { ...base, status: "unchanged" } });
+      continue;
+    }
+    // A refusal is reported whether or not the copy would be replaced, so the
+    // advice on a `differs` row never leads to a refusal on the next run.
+    if (existing !== undefined && !replace && verdict.kind === "write") {
+      plans.push({
+        row: {
+          ...base,
+          status: "differs",
+          reason: "the project's copy is another file than the package's; pass --force to replace it, or run `keryx skills update`, which replaces it too",
+        },
+      });
+      continue;
+    }
+    if (verdict.kind !== "write") {
+      plans.push({
+        row: {
+          ...base,
+          status: options.dryRun ? "would-refuse" : "refused",
+          reason: verdict.kind === "blocked" ? `blocked by the security gate: ${verdict.reason}` : verdict.reason,
+          ...(verdict.kind === "refuse" ? { security: verdict.security } : {}),
+        },
+      });
+      continue;
+    }
+    plans.push({ write: { row: base, target, exists: existing !== undefined, gate: verdict } });
+  }
+  return plans;
+}
+
+/** Write the planned templates — or, on a dry run, say they would be written — and return every row. */
+async function writeTemplates(options: TemplateOptions, plans: readonly TemplatePlan[]): Promise<ImportedTemplate[]> {
+  const rows: ImportedTemplate[] = [];
+  for (const plan of plans) {
+    if ("row" in plan) {
+      rows.push(plan.row);
+      continue;
+    }
+    const { row, target, exists, gate } = plan.write;
+    const parts = gateRowParts(gate, options.dryRun === true);
+    if (options.dryRun !== true) await writeContained(options.projectRoot, target, gate.content);
+    rows.push({
+      ...row,
+      status: options.dryRun === true ? (exists ? "would-overwrite" : "would-import") : exists ? "overwritten" : "imported",
+      ...(parts.reason !== undefined ? { reason: parts.reason } : {}),
+      ...(parts.security !== undefined ? { security: parts.security } : {}),
+    });
+  }
+  return rows;
+}
+
+/** The "templates" section of the text output; nothing when no package shipped any. */
+function renderTemplateLines(templates: readonly ImportedTemplate[]): string[] {
+  if (templates.length === 0) return [];
+  const lines = ["## templates the packages ship", ""];
+  for (const template of templates) {
+    lines.push(
+      `- ${template.package} ${TEMPLATES_DIR}/${template.file}: ${template.status}${template.reason ? ` — ${template.reason}` : ""}`,
+    );
+  }
+  lines.push("");
+  return lines;
+}
+
 function inferNameFromPath(filePath: string, content: string): string {
   const fromFrontmatter = frontmatterName(content);
   if (fromFrontmatter) return fromFrontmatter;
@@ -2006,7 +2314,7 @@ A package directory, or a SKILL.md or URL name, with no letter or digit is
 refused: it has no name to be written under.
 
 Before anything is written, every destination — the package, the registry in
-.metaproject/metaproject.json, the catalog and each rule — is checked for a
+.metaproject/metaproject.json, the catalog, each rule and each template — is checked for a
 symlink on the way that resolves outside the project. One is refused, and the
 import writes nothing; --dry-run refuses it the same way.
 
@@ -2016,6 +2324,18 @@ answers the reference with other content, or keryx ships a core/ rule of that
 name, the copy goes to .metaproject/rules/project/<dir>/<name>.mdc, which a
 reviewer's reference resolves to first; an existing copy there that differs is
 replaced only with --force.
+
+A package's templates/ directory (a report overlay, say) is copied, with its
+subdirectories, to .metaproject/project-skills/<module>/<name>/templates/, byte
+for byte, so the skill reads it from the project and not from the repository it
+was imported from. Only regular text files are copied; a symlink or a non-UTF-8
+file is not. Each file gets a row: imported (would-import on a dry run),
+unchanged when the project has it, differs when the project's copy is another
+file — left as it is, and replaced only with --force. Templates go through the
+same security gate as SKILL.md. A package that is already in the project still
+gets its templates, as it gets its rules. A URL source has none.
+\`keryx skills update\` re-reads them with SKILL.md; \`keryx skills remove\` deletes
+them with the package.
 
 Examples:
   keryx skills import --from ./overlays --module review --only 'review-house-*'
@@ -2029,6 +2349,8 @@ export function printSkillsUpdateHelp(): void {
   console.log(`keryx skills update
 
 Re-read a project-skill's Origin and overwrite SKILL.md when the source moved on.
+The templates/ directory beside a local Origin is re-read with it, and each
+file in it replaces the project's copy.
 
 Usage:
   keryx skills update <module>/<name> [--from <new-origin>] [--dry-run] [--allow-flagged] [--json]

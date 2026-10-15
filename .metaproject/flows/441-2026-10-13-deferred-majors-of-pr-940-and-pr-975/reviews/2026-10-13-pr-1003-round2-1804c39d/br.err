@@ -1,0 +1,3 @@
+recompute: yes — no previous blast radius on this flow: the first round always computes one
+cap: 100 of 140 candidate files were NOT reviewed (blast_radius_max_files=40). They are listed in the record.
+unresolved: 20 changed file(s) are absent from the code graph; their blast radius is unknown, not empty.

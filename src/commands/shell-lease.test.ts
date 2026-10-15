@@ -33,6 +33,7 @@ import type { ShellDeps, ShellSessionOpts } from "./shell-types";
 let root: string;
 let cwd: string;
 let savedDataDir: string | undefined;
+let savedExitCode: typeof process.exitCode;
 const holders: LeaseHandle<SessionLeaseOwner>[] = [];
 
 beforeEach(() => {
@@ -40,6 +41,7 @@ beforeEach(() => {
   cwd = path.join(root, "project");
   mkdirSync(cwd, { recursive: true });
   savedDataDir = process.env.KERYX_DATA_DIR;
+  savedExitCode = process.exitCode;
   process.env.KERYX_DATA_DIR = path.join(root, "data");
 });
 
@@ -48,6 +50,7 @@ afterEach(() => {
   if (savedDataDir === undefined) delete process.env.KERYX_DATA_DIR;
   else process.env.KERYX_DATA_DIR = savedDataDir;
   rmSync(root, { recursive: true, force: true });
+  process.exitCode = savedExitCode ?? 0;
 });
 
 /** A session with a transcript, so context/archive/summary all exist on disk. */
@@ -525,6 +528,8 @@ describe("a shell that lost its lease stops saving (review F1)", () => {
     expect(notices[0]).toContain(`(pid ${process.pid})`);
     expect(notices[0]).toContain("--fork to keep your turns");
     expect(system.join("")).toContain("Not compacted");
+    // Losing ownership prevents the final checkpoint: report a failed shutdown.
+    expect(process.exitCode).toBe(1);
     // The shell exits without releasing the lease it lost: the rival keeps it.
     expect(readFileSync(path.join(dir as string, "active.lease", "owner.json"), "utf8")).toContain(
       (rival as SessionLeaseOwner).token,

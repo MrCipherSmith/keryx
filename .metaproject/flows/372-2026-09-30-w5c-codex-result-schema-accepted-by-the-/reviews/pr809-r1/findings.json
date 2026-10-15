@@ -96,7 +96,7 @@
     },
     "disposition": {
       "state": "dismissed-wont-fix",
-      "evidence": "decided-by: altsay — strict copy cannot express the root if/then of review-finding; validation stays fail-closed; documented in CHANGELOG 0.3.43 Notes"
+      "evidence": "decided-by: operator — strict copy cannot express the root if/then of review-finding; validation stays fail-closed; documented in CHANGELOG 0.3.43 Notes"
     }
   },
   {

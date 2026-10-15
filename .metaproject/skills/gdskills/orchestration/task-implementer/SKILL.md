@@ -368,8 +368,8 @@ account for most achievable gains"*
 ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197)); correctness falls
 **0.820 -> 0.673** across two forced revisions while cumulative ever-correct is
 **0.847** ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)) — the agent
-finds the fix and then destroys it. Aider hardcodes `max_reflections = 3`;
-OpenHands' critic uses 3.
+finds the fix and then destroys it. Other agent tools hardcode the same bound
+(`max_reflections = 3`).
 
 **Stop earlier on repetition, whatever the count says.** If an attempt produces
 the same failure output as the previous attempt — the same failing test with the
@@ -435,8 +435,8 @@ Write full JSON to `<JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json`:
 Set `skill_drift` from Phase 2.0b: if the project-skill you used was not `fresh`, or the code you wrote diverged from what a skill documents, name the skill and the divergence. The orchestrator uses this to decide whether to trigger `skills learn` (do NOT run `learn` yourself — it is a mutating step the orchestrator dispatches; see `rules/core/skill-lifecycle.mdc`).
 
 Three of those fields have a bar, and a field that collects noise trains the
-reader to skim all three. Omit one rather than pad it. The trio is adapted (MIT)
-from [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) as contract fields rather than a free-text template; the bars below are ours.
+reader to skim all three. Omit one rather than pad it. The trio is adapted (MIT;
+see THIRD_PARTY_NOTICES.md) as contract fields rather than a free-text template; the bars below are ours.
 
 - `assumptions` — what you assumed where the task was silent AND acted on. If
   the assumption being wrong would not change a line you wrote, it is a hedge,

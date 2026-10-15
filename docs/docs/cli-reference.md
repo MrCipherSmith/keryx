@@ -263,6 +263,7 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
 | `--debug` | Record the session to `~/.local/share/keryx/debug/<run>/` (`shell.ndjson`: terminal-input state, stdin calls with stacks, key names but never typed text, dialogs, tools, agent state) and start a watcher process (`watcher.ndjson`) that re-arms terminal input if the shell stops reading it. The newest run is named in `debug/latest.txt`. |
 | `--name <name>` | Set this shell's bus name. Names follow D-06: lowercase letters, digits and `-`, up to 32 characters. `all`, `cli` and `system` are reserved. If a live shell already holds the name, the new shell gets `<name>-2`. |
 | `--guard` | Turn on the turn guard for this session only (TUI, agent mode; off by default). `/guard on` turns it on for every future session too. |
+| `--review-system <inherit\|review-auto>` | Who answers a review run's approval questions. `inherit` (default) follows the permission mode; `review-auto` answers them itself (reviewer spawns, `ask_user` menus) while destructive, credential, publish and hook-tightened calls still ask you. A call you refuse stays refused (same fingerprint, any spelling: "refused earlier: choose another path", no modal) until the shell restarts. Saying "сделай автоматическое ревью" in the session has the same effect. See [Review system](guides/permission-modes.md#review-system). |
 
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.
@@ -1005,8 +1006,12 @@ Refusals print their code and exit non-zero (except where noted):
   in a dedicated panel above the composer input and drains FIFO right after
   the current turn completes. Each queued item shows clickable Force/Edit/Delete
   buttons in the panel; `Ctrl+Q` opens a keyboard-only selector for the same
-  actions (↑/↓ select, ←/→ choose action, Enter fire, Esc exit). The `/queue`
-  text command (`remove`/`edit`/`force`) remains available unchanged.
+  actions (↑/↓ select, ←/→ choose action, Enter fire, Esc exit). Each item also
+  says why it waits ("waits for the current turn", "waits for approval of:
+  <call>"), and one line under the panel explains `[Force]`. The `/queue` text
+  command (`remove`/`edit`/`force`) remains available and lists the same text.
+  Every approval modal (and its Telegram relay) starts with one `why:` line naming
+  the cause; see [Why am I being asked?](guides/permission-modes.md#why-am-i-being-asked).
 
 When side-worker context is still processing, queued questions do not block the
 session state and still see recent context about the busy main turn.
@@ -1060,7 +1065,7 @@ session state and still see recent context about the busy main turn.
   one is set — absent, no `temperature` is sent at all, unchanged from
   before this setting existed.
 - **Subagent budgets.** A `spawn_subagent` child stops on its round budget
-  (`max_rounds`, default 10, capped at 24), its wall-clock deadline
+  (`max_rounds`, default 40, capped at 200), its wall-clock deadline
   (`KERYX_SUBAGENT_TIMEOUT_MS` can tighten it; `0` disables it) and the
   no-progress detector. The `max_tool_calls` value the parent model passes
   is advisory: it never stops the child. A hard tool-call cap applies only
@@ -1902,7 +1907,7 @@ raw token from older shells is still accepted by `serve`.
 | Route | Description |
 |---|---|
 | `POST /v1/remote/register` | A shell asks for a topic for its session. Idempotent per session. |
-| `POST /v1/remote/deregister` | The shell stops remote control; the topic is deleted. |
+| `POST /v1/remote/deregister` | The shell stops remote control; the topic gets a closing note and is archived (closed, still readable), not deleted. |
 | `POST /v1/remote/heartbeat` | Keeps the session alive; a heartbeat from an unregistered session is refused with a reason. |
 | `POST /v1/remote/reply` | Text for the topic. Replies over 4096 characters are split. |
 | `POST /v1/remote/approval` | Raises an approval question in the topic, with Allow and Deny buttons. |
@@ -2097,7 +2102,7 @@ keryx research --help
 
 | Subcommand | Description |
 |---|---|
-| `sync` | Run from the repository root. Writes `part1-counts-latest.json` (the unchanged `part1-counts.py` over the flows committed at `HEAD`), `decisions-export-latest.jsonl` (the text-free decisions export from 2026-10-02 on, the same as `keryx decisions export`) and `sync-status.md` (the UTC time of the run, the `HEAD` hash, the counts of the snapshot next to the counts now, the journal summary and the number of rows in `contribution-log.md`). A file is rewritten only when its content changed, so a second run with no new data changes only the run time in `sync-status.md`. It makes no commit, no branch and no pull request. Takes no arguments. When it fails, the previous `-latest` files are left as they were and the reason is written into `sync-status.md`; the exit code is `1`. |
+| `sync` | Run from the repository root. Writes `part1-counts-latest.json` (the unchanged `part1-counts.py` over the flows committed at `HEAD`), `decisions-export-latest.jsonl` (the text-free decisions export from 2026-10-02 on, the same as `keryx decisions export`) and `sync-status.md` (the UTC time of the run, the `HEAD` hash, the counts of the snapshot next to the counts now, the journal summary and the number of rows in `contribution-log.md`, and a "verification kinds" line: the share of unclassified criteria among the flows frozen in the last 7 days, with a warning above 20%, and a "sensitivity" line: the share of `exec` and `invariant` criteria carrying a sensitivity note among the same flows, with no threshold and no warning). A file is rewritten only when its content changed, so a second run with no new data changes only the run time in `sync-status.md`. It makes no commit, no branch and no pull request. Takes no arguments. When it fails, the previous `-latest` files are left as they were and the reason is written into `sync-status.md`; the exit code is `1`. |
 | `--help`, `-h` | Print `research` usage and exit. |
 
 The daily run is a scheduler entry: when the `keryx serve` scheduler is on and the
@@ -2546,6 +2551,9 @@ keryx schedule add --name <name> --every "<cadence>" --prompt "<task>" \
 keryx schedule add --digest --name <name> --every "<cadence>" \
     --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \
     [--repo owner/name]... [--topic <name>] [--memory-mb 512] [--max-seconds 600] [--yes]
+keryx schedule add --review-pr <pull request URL> --name <name> --every "<cadence>" \
+    --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \
+    [--budget-minutes N] [--budget-tokens N] [--stall-minutes 10] [--max-seconds N] [--yes]
 keryx schedule list
 keryx schedule show <name>
 keryx schedule pause <name>
@@ -2588,6 +2596,17 @@ closed, effect not checked" chain, in Telegram. See the guide
   no changes has no items.
 - **Seeing it.** `list` and `show` print the digest, its next run, the last run's status and
   the last delivery; `/schedules` in `keryx shell` shows the same, with `p` to pause or resume.
+
+**Autonomous review (`add --review-pr`).** A schedule that reviews one pull request with nobody at
+the keyboard. Each fire runs [`keryx review run --autonomous`](#review-run) through the OS timer, so
+it needs no `--prompt` and is covered by the same confirmation card; the pull request, the profile
+and the budgets are part of what you confirm. `--budget-minutes` and `--budget-tokens` stop a run at
+a safe point and `--stall-minutes` (default 10) stops one that makes no progress; they belong to a
+review and are refused without `--review-pr`. `--digest` and `--review-pr` cannot be combined. A fire
+on a head that was already reviewed to the end reuses the finished review; a fire that finds the
+previous run alive refuses. The run's `report.md` is copied to
+`.metaproject/data/trigger/reports/<name>/<runId>.md`. See
+[Review a pull request with nobody at the keyboard](guides/autonomous-review.md).
 
 **Drafting checks the provider before the card is even shown.** `add`, `/schedule`
 and the agent's `schedule_create` tool all draft through the same code, which
@@ -3268,7 +3287,7 @@ keryx gdgraph find "<terms>"
 keryx gdgraph symbol "<name>" [--impact] [--depth N]
 keryx gdgraph symbols <enable|disable|status>
 keryx gdgraph path "<A>" "<B>"
-keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json]
+keryx gdgraph affected <file-or-symbol> [--depth N] [--ranked] [--json] [--data-dir <dir>]
 keryx gdgraph repomap [--budget N] [--seed <path>...] [--changed]
 keryx gdgraph context
 keryx gdgraph assets list | verify [<id>] | pull <id>
@@ -3313,7 +3332,7 @@ keryx ctx status
 keryx ctx diff [git-diff-args...]
 keryx ctx rg "<pattern>" [path]
 keryx ctx read <file> [--mode outline|compact|full]
-keryx ctx run -- <command...>
+keryx ctx run [--raw] -- <command...>
 keryx ctx show [latest|<name>] [--raw]
 keryx ctx install-hook [--runtime <id|all>]
 keryx ctx uninstall-hook [--runtime <id|all>]
@@ -3325,7 +3344,7 @@ keryx ctx uninstall-hook [--runtime <id|all>]
 | `diff` | git-diff args (e.g. `--staged`, `--stat`) | Run `git diff <args>` and summarize (files, risk hints, hunks, errors). |
 | `rg` | `"<pattern>" [path]` | Run ripgrep and summarize top files + example matches. Requires ≥1 arg. |
 | `read` | `<file>`, `--mode outline\|compact\|full` | Read and summarize a file. Default mode `compact`. |
-| `run` | `-- <command...>` | Run an arbitrary command after `--` and summarize its output. Errors if empty. |
+| `run` | `[--raw] -- <command...>` | Run an arbitrary command after `--` and summarize its output. Errors if empty. `--raw` (before the `--`) streams stdout/stderr unmodified and returns the command's exit code, with no summary, redaction or artifact: use it for machine artifacts (`keryx ctx run --raw -- keryx review scope --json > scope.json`). |
 | `show` | `[latest\|<name>]`, `--raw` | Print a saved artifact summary (`.md`), or the raw `.log` with `--raw`. |
 | `install-hook` | `--runtime <id\|all>` | Install an opt-in routing guard that blocks broad raw search/read/diff commands and points the agent to the bounded `ctx` equivalent. |
 | `uninstall-hook` | `--runtime <id\|all>` | Remove only the managed routing-guard integration for the selected runtime(s). |
@@ -3462,9 +3481,9 @@ keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 | `doctor` | `--target <harness>`, `--json` | Compare the recorded install-state for a target against disk: `ok`/`drifted`/`missing`/`orphaned` per path. Exits `1` if anything is not `ok`. |
 | `uninstall` | `--target <harness>` (required), `--module <module-id>`, `--force`, `--json` | Remove only the paths recorded in install-state for a target, optionally scoped to one module. A drifted file is refused unless `--force`. |
 | `create <target>` | `--module <m>`, `--name <n>`, `--format auto\|single\|package`, `--dry-run` | Create and register a project-skill package. (`generate` is an alias.) |
-| `import --from <src>` | `--module <m>`, `--name <n>`, `--only <glob>` (repeatable), `--dry-run`, `--force`, `--allow-flagged`, `--json` | Copy a SKILL.md (directory, file, or https GitHub blob/raw URL) into `.metaproject/project-skills/<module>/<name>/`, recording Origin. `--module review` is the only module `review-orchestrator` auto-dispatches. `--only` is a glob (`*`, `?`) matched against the package directory name as it is on disk; it is required when `--from` is a tree of several packages and the import targets module `review` — the import is refused with the candidate list until it is given. An `--only` with an empty value is an error. In a tree, `--name` likewise selects by the directory name. What is written is the slug of that name (`review_house_api` → `review-house-api`): the destination, the already-exists and bundled-name checks and the reported row all use the slug, and two selected directories that slug to one destination are refused before anything is written. In a tree import a `deprecated: true` package is skipped. Other hosts and GitHub tree URLs are refused. A bundled name is skipped unless `--force`. A package landing in module `review` gets `warning:` lines for: no path trigger (`paths: none`), each `metadata.flags` entry dropped as not a flag, each flag exactly one existing project reviewer carries (it becomes a family flag for both), and — on a `--force` overwrite — each family flag the new version drops that leaves exactly one other reviewer carrying it (that reviewer is dispatched outright under it from then on). A name with no letter or digit (a package directory, or a SKILL.md or URL name) is refused. Before anything is written, every destination — package, registry, catalog, each rule — is checked for a symlink on the way that resolves outside the project; one is refused and nothing is written, `--dry-run` included. Frontmatter is read as a YAML subset (BOM and CRLF accepted, trailing `#` comments dropped, `metadata.paths`/`metadata.flags` as a flow, block or comma-separated list, only keys directly under `metadata:`); a shape outside it reads as not declared. Rules the skills cite are copied as described under [`review import`](#review). Every file is passed through the security gate on its final text while the import is planned, `--dry-run` included. A secret is masked and the row says `redacted by the security gate (…)` (`would be redacted …` on a dry run); another finding is reported on the row as `flagged by the security gate (…)`, following the project's security mode. A prompt-injection finding refuses the file in every mode: the row is `refused` (`would-refuse` on a dry run) with the gate's own summary, nothing is written, and the other packages go on. With the security module disabled the import runs the deterministic injection detector itself and refuses on a match the same way (the reason says the security module is disabled and the import ran its own injection check); a secret is still masked and clean text imports as usual. A rule cited only by refused packages is not written: its row is `skipped — cited only by a refused package`. A real run with any `refused` row prints every row and then exits `1`; a dry run (`would-refuse`) exits `0`. The final text is gated once, before the scaffold, registry entry or catalog row is written, and the text written is the text gated. `--allow-flagged` writes an injection-flagged file after you have read it (the row says it was flagged and written because of the flag); it does not override a block by the project's security mode, so under `enforced` a secret is refused either way. The `--allow-flagged` hint under the rows is printed only when a refused row carries a prompt-injection finding. A row carries a `security` object in `--json` (`action`, `findings[]` of `policyId`/`category`/`action`, `redacted`, `refused`). |
-| `update [<module>/<name>]` | `--all`, `--from <origin>`, `--dry-run`, `--allow-flagged`, `--json` | Re-read Origin and overwrite SKILL.md when the source moved on. Name one skill, or `--all`. A skill with no Origin is skipped. A destination behind a symlink that resolves outside the project is refused before anything is written, `--dry-run` included. The refreshed text goes through the same security gate as `import`: a prompt-injection finding makes the row `refused` (`would-refuse` on a dry run) and leaves the installed copy as it was, unless `--allow-flagged`; the text is gated before anything is written, so a refusal never touches the installed `SKILL.md`, registry or catalog. With the security module disabled the update runs the injection detector itself, as `import` does. A real run with any `refused` row prints every row and exits `1`; a dry run exits `0`. A secret is redacted and reported on the row; rows carry a `security` object in `--json`. |
-| `remove <module>/<name>` | `--dry-run`, `--json` | Remove a project skill — the inverse of `create`/`import`, in this order: the verification report, the catalog row, the package directory (and its `<module>/` directory when it was the last skill there), and the `projectSkillRegistry` entry last. Each part is listed as `removed` or `absent`; an already-missing part is not an error, and a skill whose entry and package are gone is still found by a leftover catalog row or verification report, so a skill half-removed by hand can be finished. If a step fails (e.g. a read-only directory), the error names that part and lists what is already gone and what is still in place (a package directory whose removal failed part-way is listed as `(may be partly removed)`); the registry entry is still there, so re-running the same command after fixing the cause finishes the removal. `--dry-run` lists what would be removed and changes nothing. Refused with exit `1`, always before anything is changed: a bundled skill (use `install`/`uninstall`); an unknown name (names are case-sensitive: `Review/Alpha` is refused, naming the registered `review/alpha`, even on a case-insensitive filesystem); a skill whose package directory is on disk only under another spelling (`review/Alpha/` for `review/alpha`) — the refusal names the on-disk spelling; rename the directory to the registered one and retry; a registry entry whose `path` is not its own `.metaproject/project-skills/<module>/<name>` or whose module/name is not a plain path segment; a symlink where something would be deleted (`project-skills/`, the `<module>/` directory, the package itself, the reports directory) — nothing is deleted through a link and the link is not unlinked; a `metaproject.json` or `catalog.md` that resolves outside the project (one reached through a symlink inside the project is rewritten in place and listed with its `resolvedPath`). A verification report whose body names another package (`skillPath`) is left alone even when its file name matches. Imported rules, runtime exports and learning proposals are left in place. |
+| `import --from <src>` | `--module <m>`, `--name <n>`, `--only <glob>` (repeatable), `--dry-run`, `--force`, `--allow-flagged`, `--json` | Copy a SKILL.md (directory, file, or https GitHub blob/raw URL) into `.metaproject/project-skills/<module>/<name>/`, recording Origin. `--module review` is the only module `review-orchestrator` auto-dispatches. `--only` is a glob (`*`, `?`) matched against the package directory name as it is on disk; it is required when `--from` is a tree of several packages and the import targets module `review` — the import is refused with the candidate list until it is given. An `--only` with an empty value is an error. In a tree, `--name` likewise selects by the directory name. What is written is the slug of that name (`review_house_api` → `review-house-api`): the destination, the already-exists and bundled-name checks and the reported row all use the slug, and two selected directories that slug to one destination are refused before anything is written. In a tree import a `deprecated: true` package is skipped. Other hosts and GitHub tree URLs are refused. A bundled name is skipped unless `--force`. A package landing in module `review` gets `warning:` lines for: no path trigger (`paths: none`), each `metadata.flags` entry dropped as not a flag, each flag exactly one existing project reviewer carries (it becomes a family flag for both), and — on a `--force` overwrite — each family flag the new version drops that leaves exactly one other reviewer carrying it (that reviewer is dispatched outright under it from then on). A name with no letter or digit (a package directory, or a SKILL.md or URL name) is refused. Before anything is written, every destination — package, registry, catalog, each rule, each template — that would be written or compared is checked for a symlink on the way that resolves outside the project; one is refused and nothing is written, `--dry-run` included. A template destination that is only reported (`skipped`) is not written and does not refuse the run. Frontmatter is read as a YAML subset (BOM and CRLF accepted, trailing `#` comments dropped, `metadata.paths`/`metadata.flags` as a flow, block or comma-separated list, only keys directly under `metadata:`); a shape outside it reads as not declared. Rules the skills cite are copied as described under [`review import`](#review). A package's `templates/` directory (a report overlay, say) is copied byte for byte, subdirectories included, to `.metaproject/project-skills/<module>/<name>/templates/`, so the skill reads it from the project and not from the repository it was imported from; a URL source has none. Only regular UTF-8 text files are copied (a symlink or a binary file is not; the latter gets a `skipped` row). Each file has its own row, in a `templates` array in `--json`: `imported` (`would-import` on a dry run), `unchanged` when the project already has it byte for byte, `differs` when the project's copy is another file — left as it is, and replaced (`overwritten`, `would-overwrite`) only with `--force`, or by `keryx skills update`, which refreshes the package from its origin. Running `import` a second time therefore skips what the source has not changed and reports what it has as `differs`. A package that is already in the project still gets the templates it lacks. A template that cannot be written because a file (or a link to one) stands where its directory belongs, or because a directory stands where the file belongs, is `skipped` with the path named, in a dry run and a real run alike; the rest of the package is written. Every file is passed through the security gate on its final text while the import is planned, `--dry-run` included. A secret is masked and the row says `redacted by the security gate (…)` (`would be redacted …` on a dry run); another finding is reported on the row as `flagged by the security gate (…)`, following the project's security mode. A prompt-injection finding refuses the file in every mode: the row is `refused` (`would-refuse` on a dry run) with the gate's own summary, nothing is written, and the other packages go on. A template the gate refuses refuses its whole package: the package row is `refused` (`would-refuse`), its other templates are `skipped`, and neither `SKILL.md`, the registry entry, the catalog row nor any template is written; other packages of the same run are not affected, and a rule cited only by the refused package is not written. A package the project already has keeps its row (`skipped`) and its rules without `--force`; only its templates are withheld. With `--force` the package is being written, so its row is `refused`, its installed `SKILL.md` stays, and the rules only it cites are skipped. The refusal is reported before a `differs` verdict, so `--force` is never advised for a file that would then be refused. With the security module disabled the import runs the deterministic injection detector itself and refuses on a match the same way (the reason says the security module is disabled and the import ran its own injection check); a secret is still masked and clean text imports as usual. A rule cited only by refused packages is not written: its row is `skipped — cited only by a refused package`. A real run with any `refused` row prints every row and then exits `1`; a dry run (`would-refuse`) exits `0`. The final text is gated once, before the scaffold, registry entry or catalog row is written, and the text written is the text gated. `--allow-flagged` writes an injection-flagged file after you have read it (the row says it was flagged and written because of the flag); it does not override a block by the project's security mode, so under `enforced` a secret is refused either way. The `--allow-flagged` hint under the rows is printed only when a refused row carries a prompt-injection finding. A row carries a `security` object in `--json` (`action`, `findings[]` of `policyId`/`category`/`action`, `redacted`, `refused`). |
+| `update [<module>/<name>]` | `--all`, `--from <origin>`, `--dry-run`, `--allow-flagged`, `--json` | Re-read Origin and overwrite SKILL.md when the source moved on. Name one skill, or `--all`. A skill with no Origin is skipped. The `templates/` directory beside a local Origin is re-read with it: each file replaces the project's copy and a file the source gained is added, through the same gate, containment check and `templates` rows as `import`; a file the source dropped stays. A refused template refuses its package here too: the installed `SKILL.md` and templates stay as they were. A destination behind a symlink that resolves outside the project is refused before anything is written, `--dry-run` included. The refreshed text goes through the same security gate as `import`: a prompt-injection finding makes the row `refused` (`would-refuse` on a dry run) and leaves the installed copy as it was, unless `--allow-flagged`; the text is gated before anything is written, so a refusal never touches the installed `SKILL.md`, registry or catalog. With the security module disabled the update runs the injection detector itself, as `import` does. A real run with any `refused` row prints every row and exits `1`; a dry run exits `0`. A secret is redacted and reported on the row; rows carry a `security` object in `--json`. |
+| `remove <module>/<name>` | `--dry-run`, `--json` | Remove a project skill — the inverse of `create`/`import`, in this order: the verification report, the catalog row, the package directory (its imported `templates/` with it, and its `<module>/` directory when it was the last skill there), and the `projectSkillRegistry` entry last. Each part is listed as `removed` or `absent`; an already-missing part is not an error, and a skill whose entry and package are gone is still found by a leftover catalog row or verification report, so a skill half-removed by hand can be finished. If a step fails (e.g. a read-only directory), the error names that part and lists what is already gone and what is still in place (a package directory whose removal failed part-way is listed as `(may be partly removed)`); the registry entry is still there, so re-running the same command after fixing the cause finishes the removal. `--dry-run` lists what would be removed and changes nothing. Refused with exit `1`, always before anything is changed: a bundled skill (use `install`/`uninstall`); an unknown name (names are case-sensitive: `Review/Alpha` is refused, naming the registered `review/alpha`, even on a case-insensitive filesystem); a skill whose package directory is on disk only under another spelling (`review/Alpha/` for `review/alpha`) — the refusal names the on-disk spelling; rename the directory to the registered one and retry; a registry entry whose `path` is not its own `.metaproject/project-skills/<module>/<name>` or whose module/name is not a plain path segment; a symlink where something would be deleted (`project-skills/`, the `<module>/` directory, the package itself, the reports directory) — nothing is deleted through a link and the link is not unlinked; a `metaproject.json` or `catalog.md` that resolves outside the project (one reached through a symlink inside the project is rewritten in place and listed with its `resolvedPath`). A verification report whose body names another package (`skillPath`) is left alone even when its file name matches. Imported rules, runtime exports and learning proposals are left in place. |
 | `verify <skill-or-target>` | `--dry-run`, `--json` | Verify a project skill against evidence; write a report. `--all` verifies every registered skill. |
 | `verify --bundled` | `--root <dir>`, `--json` | Structurally validate the **shipped** skill tree (the 65 `SKILL.md` files copied into every install), not this project's project-skills. Exits `1` on any finding and on an empty tree. |
 | `learn --from-<source> <path> --skill <m>/<s>` | `--from-review\|--from-test\|--from-failure\|--from-health\|--from-memory <path>`, `--skill`, `--dry-run`, `--json` | Create an auditable learning proposal (does not mutate SKILL.md). |
@@ -3523,8 +3542,8 @@ Accepts the same flags as `skills verify` (`--dry-run`, `--json`, `--all`).
 
 ## health
 
-Aggregate code-quality signals from multiple tools (ESLint, TypeScript, tests,
-dependency audit, SonarQube, plus built-in complexity/coverage/churn) into
+Aggregate code-quality signals from multiple tools (ESLint or oxlint, TypeScript,
+tests, dependency audit, SonarQube, plus built-in complexity/coverage/churn) into
 per-scope health scores, compare against a baseline, and evaluate a pass/warn/fail
 quality gate.
 
@@ -3547,6 +3566,52 @@ keryx health trend [--scope <key>] [--limit <n>]
 | `explain <file-or-module>` | `--narrate`, `--provider <p>`, `--json` | Print a scope's metrics + its first 20 findings from the last report. `--narrate` adds a model-written explanation and **needs a credential** — without one it exits `1`. Note it returns `0` before reaching the model when the scope has no metrics yet; run `keryx health run` first. |
 | `baseline update` | `--scope <sel>` | Write current scores into the baseline (all scopes, or those matching the selector). Runs health first if no report exists. |
 | `trend` | `--scope <scope-key>`, `--limit <n>` | Print a scope's health-score trend over history. Defaults: scope `project`, limit `20`. |
+
+**Lint is a capability, not a tool name (flow 352, AC1–AC3).** `health` runs the
+linter the project actually has: ESLint is detected from its config files, oxlint
+from `.oxlintrc.*` or a `package.json` dependency, and each parses its own JSON
+output into findings tagged with the tool that produced them. `sources.eslint.required`
+means "this project is linted" — so when oxlint runs and parses, a skipped ESLint
+no longer blocks the run (the gate says `NOTE: eslint skipped; lint capability
+provided by oxlint` instead of `INCOMPLETE`). A project with neither linter keeps
+the previous required-ESLint `INCOMPLETE`, and a half-installed one (config present,
+binary absent → `missing`) still blocks.
+
+`required` on a linter therefore means the capability, not the tool: any source
+whose adapter declares the lint capability satisfies it, and there is no setting
+for "must be linted by ESLint specifically". oxlint is a default optional source,
+so a configuration that switches ESLint off and uses neither linter now reports
+`coverage: partial` (lint is genuinely unmeasured there) where it used to report
+`complete`; the gate status does not change. A linter excused because another
+one ran gets no `OPTIONAL: … skipped` line, so the reasons agree with coverage.
+A linter left out by `--sources` is never excused: a filtered run does not
+report a clean gate.
+
+**The baseline records which sources it measured.** A source that starts being
+measured after the baseline was taken — oxlint on a project that already named
+it, for example — adds findings, but they are new measurement of unchanged
+code, so they are left out of `regression_score` and `trend` and cannot fail
+the gate as a regression; `health_score` still counts them (a coverage report
+seen for the first time is treated the same way). The gate names them —
+`NOTE: not in the baseline yet, so not compared for regression: oxlint` — on
+every run until you run `keryx health baseline update`; from then on the new
+source is compared like any other. `health run` never rewrites an existing
+baseline. "Measured" means *shaped the scores*: sources that produced a
+result, plus coverage whenever its data was applied, whatever coverage's mode.
+A baseline taken before sources were recorded is read as every source keryx
+had before oxlint. `keryx health baseline update` refuses a report from a
+`--sources` run, and a module/file update while the report measured a source
+the baseline has not recorded (update the whole project's baseline first).
+
+**A `missing` source names what it looked for (flow 352, AC5).** `eslint`, `oxlint`
+and `typescript` now report e.g. `tsconfig.json found, binary not found
+(node_modules/.bin/tsc and PATH)`, so the fix is visible in `latest.md` instead of
+requiring a guess about whether the tool or the config was absent. oxlint's reason
+names the signal that fired: `.oxlintrc.*` found, or oxlint named in
+`package.json`. The TypeScript source resolves `tsc` from the project's own
+`node_modules/.bin` before `PATH`, so a repository whose compiler is a
+dev-dependency is checked by that compiler; that behaviour predates flow 352,
+which pins it with a test that puts a decoy `tsc` on `PATH` (AC4).
 
 **The `tests` source (flow 353, AC6).** In `auto` mode, `keryx health run`
 used to report the `tests` source as `missing` whenever no persisted
@@ -3765,7 +3830,7 @@ keryx flow schema [--out <path>]
 | `outcome author <id> agent\|human` | `--reason "<why>"` | Change who wrote the flow's outcome criterion. Refuses a missing or empty `--reason` and any other value. Writes the `outcomeAuthor` field and appends one `journal.md` line naming the old value (or `unknown`), the new value and the reason, together; setting the value already held writes nothing. Gates nothing. |
 | `list` | — | List all flows with status + task counts. |
 | `status <id>` | — | Print one flow: status, source, AC state, PR, outcome author (`agent`, `human` or `unknown`), origin (kind, quote, source; `origin: unknown` for a flow without one), owner, latest signature, tasks, recent history. For a `done` flow whose directory git tracks, it ends with a `note:` when that directory has uncommitted changes (a common cause is the closing state `flow complete` writes after the merge; informational; nothing gates on it, and a flow directory git does not track gets no note). The TUI's `/flows` detail tab shows the same note. |
-| `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. Also derives each criterion's verification kind from its trailing marker (see [verification kinds](#verification-kinds)) into `acKinds` and prints the distribution. A kind never refuses a freeze; a malformed marker is printed as a warning and reads `unclassified`. |
+| `freeze <id>` | `--yes` (or env `KERYX_NONINTERACTIVE=1`) | Record the AC checksum; transition `initializing → ready`. Also derives each criterion's verification kind from its trailing marker (see [verification kinds](#verification-kinds)) into `acKinds` and prints the distribution. A kind never refuses a freeze; a malformed marker is printed as a warning and reads `unclassified`. Criteria with no marker print `warning: no verification kind on AC1, AC2 — …`; on a terminal (not under `NODE_ENV=test` or `CI`) the command then asks `freeze without a verification kind on …? [Y/n]`; an empty answer or yes freezes, and only an explicit no cancels (the flow is left unchanged). `--yes` or `KERYX_NONINTERACTIVE=1` skips the prompt. A non-interactive run always freezes. The warning and prompt appear only when the freeze can happen (a flow in the right status with real criteria). Either way that freezes appends one `journal.md` line (the warning, or "operator froze without a verification kind on …"). |
 | `plan <id>` | `--provider <p>`, `--json` | **Needs a model credential.** Break the flow's frozen acceptance criteria into a proposed task breakdown. Exits `1` without a credential. |
 | `start <id>` | — | Transition `ready → in-progress`. |
 | `next <id>` | `--json` | The first task that is not `done` and whose declared `dependsOn` are all `done` — the resume decision, computed from the record rather than re-derived from prose. Exits `1` when work remains and nothing can start (an unsatisfiable dependency or a cycle); `keryx flow check` names which. Also reports the task's **resume state** — `never-started`, `ended` (a prior attempt reported how it finished), or `unresolved` (an attempt was opened and no end was recorded, so whether its work landed cannot be told from the record) — plus every other not-done task carrying an unresolved attempt. `--json` carries this as `resume` and `unresolved`. |
@@ -3774,10 +3839,10 @@ keryx flow schema [--out <path>]
 | `task attempt <id> <taskId>` | `--outcome started\|failed\|blocked` (required), `--detail "<what happened>"` | Record one execution attempt explicitly. Appends to the same append-only log `task done` writes to. |
 | `task depends <id> <taskId>` | `--on T1,T2\|none` (required), `--reason "<why>"` (required) | Rewrite one task's `dependsOn` — the repair for the three unsatisfiable shapes `flow check` reports. Until this existed, `--depends` wrote the field once at creation and nothing could rewrite it, so the only remedy was editing `flow.json` by hand; flow 178 carried a self-dependent `T10` for two weeks because the check was right and the operator had nowhere to go. Ids are normalised, so `t1`, `T1` and ` t1 ` are one edge. The change is validated against the same `dependencyIssues` the check uses and **refused if it would introduce an issue that was not already there** — deliberately narrower than "the graph must end clean", because a flow with two broken tasks has to be repairable one task at a time. A refused change leaves the record exactly as it was found. `--on none` clears the field. |
 | `owner set <id>` | `--owner "<name>"` (required), `--reason "<why>"` (required) | Set or change the flow's owner — the human accountable for it. **Never inferred**, and a `--reason` is required even for the first assignment. Every change is kept, not overwritten: it appends a `history` event naming the previous owner, the new owner, the reason and the time, so no earlier owner is ever lost. See [the owner and completion signatures](#the-owner-and-completion-signatures). |
-| `ac confirm <id> <ACn>` | `--note "<evidence>"`, `--signed-by "<name>"` | Confirm one acceptance criterion. Appends an append-only signature recording who confirmed it (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — a repeated confirmation of the same criterion adds a new signature rather than replacing the last one. |
+| `ac confirm <id> <ACn>` | `--note "<evidence>"`, `--signed-by "<name>"` | Confirm one acceptance criterion. Warns, and still confirms, when the criterion carries a sensitivity note and `--note` has no `evidence: <ref>` label (case-insensitive, with a word boundary before it, so `no-evidence:` does not count; the reference is the rest of the note up to the next `;`, trimmed, and must be non-empty and not `n/a`, `na`, `none`, `-`, `tbd`, `todo` or `ref`; leading and trailing punctuation, symbols and whitespace are ignored, so `n/a.` and `(none)` do not count, and the `<ref>` template pasted from the warning does not count either; nothing else in the note is inferred as evidence). Appends an append-only signature recording who confirmed it (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — a repeated confirmation of the same criterion adds a new signature rather than replacing the last one. |
 | `ac update <id>` | `--reason "<why>"` (required); or `--criterion ACn --text "<criterion>"` together with `--reason` | Re-freeze the AC checksum **and void every prior confirmation** — right when the criteria changed, because a criterion nobody confirmed in its current wording has not been confirmed. Wrong when only the seal is stale; use `ac reseal` for that. Without `--criterion`/`--text`, re-freezes the file exactly as an operator already edited it (the only behaviour before flow 293). With both, rewrites that one `ACn` line's text itself — **only when the criterion is genuinely a single line**, the format the file's own Rules section prescribes — or appends it, when `ACn` is the **next unused number** (highest existing `ACn` + 1; a gap in the numbering, e.g. AC1/AC2/AC4 with AC3 missing, can never be filled this way — the refusal names the gap and says to edit the file directly and re-freeze with `--reason` alone). If the target criterion has ANY indented, non-blank line following it before the next `- ACn:` line, a blank line, or a heading — a criterion wrapped across two lines, a sub-bullet evidence note, a fenced code block, anything — the command **refuses**, naming the criterion, and writes nothing; there is no way to tell "this is the criterion continuing" from "this is unrelated content under it" from the file alone, so it never guesses at either. Edit the file directly and re-freeze with `--reason` alone instead. `--text` and `--reason` must each be non-empty, fit on one line, and (for `--text`) not repeat its own `- ACn:` prefix. `--criterion` and `--text` must be given together; either alone is refused. The flow's `history` records the criterion, its (single-line) previous text and its new text alongside the reason. The write itself preserves the rest of the file's bytes exactly: an untouched line keeps its own original line ending (even in a file with mixed `\n`/`\r\n` endings), and an appended line takes the ending of the line it follows. |
 | `ac reseal <id>` | `--reason "<why>"` (required, one line) | Re-seal a stale checksum over a file that did **not** change, keeping the confirmations. Refuses unless git reports the criteria file tracked and unchanged against HEAD, and refuses when git cannot answer at all — no evidence must not read the same as clean. It proves the file being sealed now is the file committed now; it cannot prove the old checksum was ever right. Exists because the only other repair destroys the record: flow 002 carries ten dated confirmations against a criteria file byte-identical to its first commit, with a checksum sealed against content predating the squashed `0.1.0` import. |
-| `ac kinds <id>` | `--json` | Report each criterion's verification kind, the distribution and the runnable coverage, read from the criteria file (see [verification kinds](#verification-kinds)). Read-only, no model call; exits `1` when a marker is malformed, naming the criterion. |
+| `ac kinds <id>` | `--json` | Report each criterion's verification kind, the distribution, the runnable coverage and how many `exec`/`invariant` criteria carry a sensitivity note, read from the criteria file (see [verification kinds](#verification-kinds)). Read-only, no model call; exits `1` when a marker is malformed, naming the criterion. |
 
 Every `ac` subcommand refuses an argument it does not use — an extra positional, an unrecognised flag, or `--text` without `--criterion` (or the reverse) — rather than dropping it silently and reporting success. `ac update <id> AC1 --text "…" --reason "…"` (the syntax before flow 293) is refused: `AC1` is not a positional `ac update` accepts. Every value flag (`--note`, `--signed-by`, `--reason`, `--criterion`, `--text`) consumes the very next token as its value even when that value itself starts with `--` (e.g. `--note "--dry-run mode was used"`), unless that next token is itself one of the subcommand's own flag names — then it is refused as a missing value (`missing value for --note`) rather than silently swallowing the next flag as text.
 | `check-ac <id>` | `--diff <ref>`, `--pr <n>`, `--json`, `--refresh` | **ADVISORY.** Jev checks the flow's change against its FROZEN acceptance criteria; never changes flow state and never confirms an AC. `--refresh` bypasses a cached result even when the diff and criteria checksum match. See [check-ac](#flow-check-ac) below. |
@@ -3830,9 +3895,31 @@ missing decision is not a decision that nothing can be checked.
 `acKinds` on `flow.json` is **derived** from `acceptance-criteria.md` at
 `flow freeze` and `flow ac update`; the file stays the source of truth. A flow
 frozen before kinds existed has no `acKinds`, which reads as fully unclassified
-(not as zero criteria). A kind is **information only**: it never refuses a
+(not as zero criteria). An `exec` or `invariant` marker may carry one optional sensitivity note, which
+says how the check was shown to catch a regression:
+
+```markdown
+- AC5: a failed save shows an error and a retry creates no duplicate [verify: exec `bun test src/save.test.ts` · sensitive: failure-scenario]
+```
+
+The separator is `·` or an ASCII `;`. The values are `revert` (the check fails
+with the change reverted), `mutation` (it fails against a mutated build) and
+`failure-scenario` (it exercises the failure path and asserts an observable
+result). The note is rejected on `judged` and `none`: such a criterion reads as
+`unclassified` with a parser error. `flow ac kinds` counts the criteria that
+carry it, and `flow ac confirm` warns when the `--note` has no `evidence: <ref>` label.
+
+A kind is **information only**: it never refuses a
 freeze, a confirmation or a completion, and it never makes a step mandatory.
 `flow check-ac` strips the marker before it looks at a criterion's wording.
+
+Writing the marker: `flow init` scaffolds each criterion as
+`- AC1: <replace …> [verify: <exec|invariant|judged|none>]`, and the
+flow-init and flow-orchestrator skills require a marker on every criterion,
+with one question to the operator before the freeze when a kind is unclear.
+Flows that `/goal --auto` provisions carry `[verify: judged]`. `flow freeze`
+warns about criteria still unclassified (see its entry above); this is the only
+place a missing kind is asked about, and the answer gates nothing.
 
 Where it shows up: the distribution block printed by `flow freeze`;
 `flow ac kinds <id> [--json]` (exit `1` naming the criterion on a malformed
@@ -4626,18 +4713,28 @@ Create and manage durable review packages. Managed reviews preserve target
 identity, reviewer coverage, findings, decisions, learning candidates, and an
 optional flow relationship instead of leaving review state only in chat output.
 
+`--automatic` on `start`, `attach` and `ingest` marks the package as an
+**automatic review** run (`manifest.automatic: true`; `review status` prints
+`run mode: automatic review`). The mark is a run mode, not a permission mode and
+not a way around the gate: `review complete` and every one of its refusals work
+exactly as without it. Inside `keryx shell` it is what lets a turn run the
+review's own commands without a prompt — see
+[Automatic review](guides/permission-modes.md#automatic-review).
+
 ```text
 keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
-                    [--reviewers a,b] [--report <path>]
-keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
-keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
+                    [--reviewers a,b] [--report <path>] [--automatic]
+keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>] [--automatic]
+keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--automatic]
                     [--verifications <file|->] [--verification-mode off|annotate|filter]
                     [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                     [--refuted <file|->]
                     [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                     [--parallel <n>] [--outstanding <n>]
+keryx review run --autonomous --target pr --ref <pull request URL>
+                 [--budget-minutes N] [--budget-tokens N] [--stall-minutes N] [--out <dir>] [--no-notify] [--json]
 keryx review budget [--spent <usd>] [--ceiling <usd>]
-                    [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
+                    [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
 keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
                   [--findings <n>] [--diff-lines <n>]
                   [--verifier execution|site-check|reasoning] [--security]
@@ -4671,16 +4768,35 @@ keryx review learn --pr <n> [--dry-run] [--json]
 keryx review learn --reviewer <id> [--dry-run] [--json]
 keryx review loop --flow <flow-id> [--task <Tn>]
 keryx review status <review-id-or-path>
+keryx review report-parity <review-id-or-path>
 keryx review complete <review-id-or-path>
                       [--finding <id> --disposition <state> --evidence <ref>]...
 keryx review lightweight
 keryx review reviewers [--json]
+keryx review required [--mode all|diff] [--scope <scope.json>] [--operator-quote "<words>"] [--blast-radius <blast-radius.json>] [--pr-context <pr-context.md>] [--json]
+keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>] [--spec <mutants.json>] [--timeout-ms <n>] [--cap <n>] [--json]
+keryx review severity-audit --package <review-dir> [--dry-run] [--json]
+keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir> [--self <login>] [--checks <gh-checks.json>] [--json]
+keryx review compare-reference --reference <report.md> --package <review-dir> [--input <dir>] [--json]
 keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]
 keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>] [--json|--scoped-diff] [--append <file>]
 keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--report-only]
 keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                          [--json|--brief] [--out <file>]
+                          [--package <review-dir>] [--json|--brief] [--out <file>]
+keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes <n>] [--wave-bytes <n>] [--out <dir>] [--json]
+keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--package <review-dir>] [--json]
+keryx review retry-plan --manifest <file> [--result <file|->] [--reviewer <id>] [--slices a,b] [--covered a,b] [--next-wave]
+                        [--state <file>] [--dry-run] [--json]
+keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff] [--findings <file>] [--dispositions <file>] [--out <file>] [--dry-run] [--json]
+keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
+keryx review layers status  --package <review-dir> [--json]
+keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--force] [--json]
+keryx review chunks plan|estimate|next|record|merge --package <review-dir> [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive] [--answer yes|no --quote "<words>"] [--json]
+keryx review coverage --package <review-dir> [--json]
+keryx review complete ... [--waive-coverage "<operator quote>"] [--head <sha>] [--waive <item> "<operator quote>"]...
+keryx review readiness <review-id-or-path> [--json]
+keryx review publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE] [--partial] [--yes]
 ```
 
 **An unrecognised option is refused, not ignored**, and the command exits 1. A
@@ -4695,17 +4811,33 @@ will merge *fails* the gate instead of passing it. With no checkout to ask and a
 `pr` target, the pull request's head is used instead; with neither, the head is
 left off and the gate reports it as unobserved.
 
+`review complete --head <sha>` names the commit the round actually reviewed when the one recorded
+at start is wrong or missing. The completion gate then checks that commit and the closed manifest
+records it (with a warning when it replaces a different recorded head). The gate is not loosened: a
+head that is not the pull request's head still needs the first line of `report.md` to name it and
+say the PR moved, and the SHA must be 7-40 hex characters on a package bound to a pull request.
+
+A package is bound to a pull request when it targets one or when its `--ref` is a pull request URL, whatever `--target` was typed: `review ingest --target report --ref <PR URL>` gets the same check, so a head recorded at ingest that is no longer the PR's head cannot close a package unchecked.
+
+`review complete` on a package bound to a pull request refuses a merged PR or a moved head unless the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed completes with a warning. `review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA and refuses one that does not resolve there, and adds a `citation not found: <path>` line to a dismissal whose rebuttal cites a rule or document that is not in the tree. A research obligation may close as `narrowed` with a `remains` text; without it, it stays open.
+
 | Subcommand | Description |
 |---|---|
 | `attach` | Create a managed package linked to an existing Task Manager flow. |
 | `start` | Create a standalone managed review package. |
 | `ingest` | Convert an existing report into a managed package, optionally linked to a flow. |
-| `status` | Print mode, status, target, flow link, coverage count, and `filter_stats`. Exits 1 when `filter_stats` does not hold together. |
+| `status` | Print mode, status, target, flow link, coverage count, and `filter_stats`. Exits 1 when `filter_stats` does not hold together. After those it prints what the round left behind that no count shows, and nothing when there is none: `Not run: <n> candidates (cap <c>): <mutant ids>` for proposed mutants no pass has run, `held: <finding> stays <severity> (mutant <id>): <reason>` for a severity a presentation-only survivor did not raise, and `follow-up open: <id> <text>` (or `follow-up narrowed: … (remains: …)`) for each parent follow-up no disposition closes. |
+| `readiness` | Print the nine-item checklist that gates `completed` and publishing (`keryx review readiness <review-id-or-path> [--json]`): every changed file covered, no file the blast radius cut left unreviewed, every planned reviewer ingested, the verifier's coverage stated, the ledger READY, coverage.md truthful, the head matching the PR, leftovers named in the report, and the changed-file count equal to the PR's own list. Each failing item prints its evidence and the command that repairs it. It writes nothing and exits 1 when the verdict is NOT READY. `review complete` refuses `completed` while an item fails; only the operator waives one, in a terminal (`--waive <item> "<quote>"`, recorded with the time). `review status`, the Review depth tab, the sidebar and `/review readiness` show the same verdict from the same projection. |
+| `publish` | Post a package to its pull request as a GitHub review (`keryx review publish <review-id-or-path> [--event COMMENT\|REQUEST_CHANGES\|APPROVE] [--partial] [--yes]`). It refuses a package that is not READY. `--partial` posts it anyway under a "Partial review" header and never approves. The keryx shell guard refuses a raw `gh pr review` or `gh api` review post for a package that is not READY; a publisher outside the keryx shell (CI, another agent, a script file) is not stopped. |
+| `report-parity` | Print the Markdown to paste into `report.md` so the leftovers of a round are named (`keryx review report-parity <review-id-or-path>`): a `## Review parity` block with one line each for `Not run: <n> candidates`, `Held severity:` and `Not verified:`; with nothing to carry it says so and prints no block. It reads the package and writes nothing. `review complete` adds a warning, never a refusal, for each kind of leftover the report does not name (a line that opens with `Not run`, `Held severity` or `Not verified`, or one that mentions the mutant or obligation id). `/review parity` in the shell, the readline `/reviews` and the sidebar show the same counts from the same projection. In an automatic review, `report-parity <this review>` runs without a prompt. |
 | `complete` | Validate the package, record what became of its findings, write the learning note for anything dismissed as incorrect, and mark it complete only when required artifacts exist. See below. |
 | `lightweight` | Confirm report-only mode; creates no managed artifacts. |
 | `scope` | Build the bounded review scope deterministically. See below. |
 | `floor` | Report the edits in a diff that lower the bar: a threshold moved the weakening way, a disabled test, a test region that checks fewer things, a new suppression. Exits 1 when it finds any. See below. |
 | `blast-radius` | Compute what the change can **break**, as opposed to whether it is correct. See below. |
+| `layers` | Refresh the graph, the wiki and the memory index for one review, with no model, and write `layers.json`. See below. |
+| `chunks` | Plan, estimate and run the blast-radius files the per-pass cap dropped, one chunk at a time. See below. |
+| `coverage` | Print how many in-scope files are covered, covered by a named omission, and uncovered. See below. |
 | `budget` | The spend and concurrency gate, run **before** dispatch. Exits 1 when the spend ceiling is reached. See below. |
 | `tier` | The `model` block a dispatch document carries, computed from signals the orchestrator already holds. See below. |
 | `loop` | Loop detection over a flow's review rounds. Exits 1 when repetition escalates. See below. |
@@ -4721,11 +4853,64 @@ left off and the gate reports it as unobserved.
 | `jev-triage` | Advisory, annotate-only: severity calibration, duplicate-merge candidates, and verifier queue order over a review package's consolidated findings, scored by Jev. See below. |
 | `learn` | Turn collected PR comments from the authors this project configured into a learning proposal for its own local review skill. Reads the collected record; never fetches. See below. |
 | `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `flagWarnings`, `familyFlags`, `stackRequires`, `unresolvedRules`, `shadowedRules`, `unresolvedReferences` and `drift` for the orchestrator's filters and dispatch. `paths` come from `metadata.paths`, else from the globs in the description plus any literal file path named beside them; a description with no glob gives `pathsSource: none` (dispatched on every round) even when it names a file. `flags` come from `metadata.flags` when it has at least one non-empty entry — entries split on commas/whitespace, trimmed, lower-cased and `--`-prefixed; one that is still not `--name` is dropped and reported in `flagWarnings` (a `warning:` line in the text output), and the description's flags are not used even if none survives or the list holds only `--all` (no flags, and no warning for `--all`) — else from the description; an empty `metadata.flags` (`[]`, `''`) leaves the description's flags in force. `metadata.flags` and `metadata.paths` accept a comma-separated string, a flow list or a YAML block list; the frontmatter reader accepts a BOM and CRLF, drops trailing `#` comments, counts only keys directly under `metadata:`, and reads any shape outside that subset as not declared. `drift` is `clean`, `changed`, `missing`, or `none` when no origin was recorded (the text row reads `(no recorded origin)`). The top-level `bundledSource` says where the bundled half was read: `project` (this project's installed `.metaproject/skills/gdskills/review`), `package` (that directory is absent, so the keryx package's own review skills are listed — not evidence of what is installed here) or `not-found` (neither; exit `1`). |
+| `required` | Print the reviewers a round must dispatch (`keryx review required [--mode all\|diff] [--scope <scope.json>] [--blast-radius <blast-radius.json>] [--pr-context <pr-context.md>] [--json]`). Mode `all` (the default) is every installed `review-*` reviewer plus the project reviewers, minus the router, verifier, regression, PR-contract, PR-feedback, greptile and strict entries, minus engine reviewers, minus those the stack scoping rules out, minus path-gated ones no scope-A file matches. Mode `diff` is the set derived from the changed files plus the project reviewers; it needs `--scope` with the file list. Each excluded reviewer prints with its reason. `keryx review start\|ingest --scope <scope.json>` stores the file list as `scope-files.json`, and `keryx review complete` refuses a `research.json` whose `dispatch.mode` is missing or whose `dispatch.selected` omits a required reviewer, unless `dispatch.override` carries `operatorQuote` and `reason`. `review-pr-contract` joins the set, in both modes, only when `pr-context.md` is in the package (`--pr-context` names it, as `--blast-radius` does for `review-regression`); without it the reviewer prints as excluded with that reason. The rule binds a package whose `research.json` was written by `review ledger build` of this version, which stamps `dispatch.roles` with the roles it knows; a `dispatch` without that stamp predates the role, so a package already in flight is not newly refused: the gate passes and `review complete` warns `review-pr-contract not run (package predates the role)`. |
+| `mutate` | Run the reviewers' proposed mutants against the tests (`keryx review mutate --test "<command>" --package <review-dir>`). Each mutant is one exact-text replacement in a scratch copy of the worktree; the worktree is never written, and the baseline must pass first or no mutant runs. A mutant is `killed` (the tests failed), `survived` (they passed: no assertion pins that behaviour), `invalid` (the anchor is missing or not unique) or `timeout`. A mutant may carry `"kind": "behavior"` (the default; it changes what the code does) or `"presentation"` (it changes only how something looks or reads: copy, class names, the order of display rows); any other `kind` is refused when the spec is read. `--cap <n>` runs the first `<n>` candidates only: the record gets `cap` and `not_reached` (the candidates it was given but did not run), the table prints `Not run: <n> candidates (cap <c>)`, and those candidates stay pending, so they still block `review complete` for an attended run exactly as a candidate nobody ran does. Without `--cap` the pass runs every candidate and the record has neither field. The testing reviewers propose a `mutant_candidates` entry for every changed branch, and on a shell host, where a reviewer cannot write, the main session writes them to `mutants.json` unchanged. The default spec is `<review-dir>/research-evidence/mutants.json`; results go to `research-evidence/mutation-<n>.json` and `.md`. For an attended run, `review complete` refuses a package with proposed mutants no pass has run, unless `dispatch.mutationWaiver` carries `operatorQuote` and `reason`; a spec with `"runnable": false` says the tests cannot be run here. |
+| `severity-audit` | Check the severity of findings against what the mutation pass proved (`keryx review severity-audit --package <review-dir> [--dry-run] [--json]`). A finding that cites `mutant:<id>` in its `evidence` is raised to `major` when that mutant survived a recorded run on a file the review changed, no mutant in that file was `killed` or `timeout` in any recorded pass, and the finding was rated `minor`, `nit`, `info` or `low`; the change is recorded as `severity_audit`. A survivor in a file where another mutant was killed is a gap in covered code, and a survivor of kind `presentation` changes no behaviour: in both cases the severity is held, the finding gets `severity_audit.held` (`mutant`, `kind` `covered` or `presentation`, `evidence`, `reason`; a covered note names the kill count), and the command prints `[held]` and counts it apart (`<n> held (survivor does not show wrong behaviour)`); a mutant with no `kind`, and a record written before the field existed, reads as `behavior`. A cited mutant no run executed leaves the finding as it is, labelled `unproven`. It never deletes a finding, and it is separate from the verifier. |
+| `context-collect` | Collect what a reviewer cannot get from the diff (`keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir>`): every review comment in full, the round-1 intent, the CI status and the backend pins the pull request names, written to `pr-context.json` and `pr-context.md`. Comments by `--self` are left out. A pull-request review dispatches with `pr_context` set to the `.md`, and `dispatch-check --pr-context` refuses a payload without it. |
+| `compare-reference` | Compare a reference report's items with a package (`keryx review compare-reference --reference <report.md> --package <review-dir> [--input <dir>] [--json]`), per item: **A** the role that would find it was not run, **B** the role ran and nothing matches, **C** it was seen and lost after the answer (`--input` supplies the raw reviewer replies), **D** it was kept, with its severity, **E** the reference ran a mutant and this package has no mutation pass. |
 | `import` | The review-shaped spelling of `keryx skills import --module review`: same importer, same rules, module implied (`keryx review import --from <package-dir\|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]`). A tree of several packages is refused, with the candidate list, until `--only <glob>` (repeatable, matched against the package directory name as it is on disk; an empty value is an error) says which ones: every package in module `review` is dispatched as a reviewer. The package is written under the slug of its directory name, and two selected directories that slug to one destination are refused. A `deprecated: true` package is skipped in a tree import, a bundled name is skipped unless `--force`, and a reviewer with no path trigger — no `metadata.paths` and no glob in its description; a lone literal file path is not one — is imported with a `paths: none` warning. More warnings can follow a row: a `metadata.flags` entry dropped as not a flag; a flag that exactly one existing project reviewer carries, which becomes a family flag for both; and, on a `--force` overwrite, a family flag the new version drops that leaves one other reviewer its only carrier. A package directory with no letter or digit is refused, and so is any destination behind a symlink that resolves outside the project — before anything is written, `--dry-run` included. Also copies the `<dir>/<name>.mdc` rules the skills cite from the overlay's `rules/`: a rule the project lacks goes to `.metaproject/rules/<dir>/<name>.mdc`; one whose reference is already answered by a file with other content, or a `core/` rule keryx ships under the same name, goes to the reference's project slot `.metaproject/rules/project/<dir>/<name>.mdc` (statuses `differs`, `imported-project`; `core/x.mdc` → `rules/project/core/x.mdc`), which a reviewer's reference resolves to first. `rules/core` is rewritten by `keryx init`, `keryx update` and the legacy-profile `keryx skills install` (the manifest form with `--target keryx-shell` skips an existing file it did not record unless `--force`); `rules/project` is written by none of them. A file lying directly in `rules/project/` answers only a literal `project/<name>.mdc` citation. Re-run it over an existing import to fetch only the rules. The security gate runs on every `SKILL.md` and rule while the import is planned, `--dry-run` included: a secret is redacted and the row says so, and a file with a prompt-injection finding is `refused` (`would-refuse` on a dry run), writes nothing and leaves the rest of the import going, unless `--allow-flagged` is passed after you have read it (see [`skills import`](#skills)). That holds with the security module disabled too (the import runs the injection detector itself). A rule cited only by refused packages is not written (`skipped — cited only by a refused package`). A real run with any `refused` row prints every row and exits `1`; a dry run exits `0`. Undo with `keryx skills remove review/<name>`. |
 
 Target kinds are validated by the runtime. Review packages are stored under the
 linked flow when attached, or in the managed standalone review location selected
 by the review service.
+
+### `review run` {#review-run}
+
+```text
+keryx review run --autonomous --target pr --ref <pull request URL>
+                 [--budget-minutes N] [--budget-tokens N] [--stall-minutes N]
+                 [--out <dir>] [--provider p] [--model m] [--no-notify] [--json]
+```
+
+One review of one pull request with nobody at the keyboard, in the `review-autonomous` profile
+(`keryx shell --print` in `trust` mode under `--review-system review-auto`, source only). It needs no
+terminal. It starts the review package, dispatches the reviewers, ingests their findings and closes
+the package with `review complete`.
+
+| Flag | Meaning |
+|---|---|
+| `--autonomous` | Required: the only mode. |
+| `--target pr`, `--ref <URL>` | Required. `--ref` is `https://github.com/<owner>/<repo>/pull/<n>`. |
+| `--budget-minutes N`, `--budget-tokens N` | Stop at a safe point when spent. Exit 4. Default: none. |
+| `--stall-minutes N` | Stop a run with no new event for this long. Exit 5. Default 10. |
+| `--out <dir>` | Where the run directory goes. Default `.metaproject/data/review-autonomous/<owner>-<repo>-pr<N>/`. |
+| `--provider`, `--model` | Passed to the child shell. |
+| `--no-notify` | Send no Telegram line at start and end. |
+| `--json` | Print `summary.json` instead of two lines. |
+
+| Exit code | Status |
+|---|---|
+| 0 | `complete`: the package was closed. A re-run on a head already reviewed to the end also exits 0 (`reused`). |
+| 2 | `incomplete`: ended or stopped (SIGTERM, SIGINT) before the package was closed. |
+| 3 | `floor`: an action that always needs a human was refused and the run could go no further. |
+| 4 | `budget`: `--budget-minutes` or `--budget-tokens` was spent. |
+| 5 | `stalled`: no progress for `--stall-minutes`. |
+| 1 | Refused: bad arguments, or another run of the same pull request holds the lock. |
+
+Questions the model asks are answered by the safe default (the recommended option, else the first;
+an irreversible one is refused) and each answer is recorded with its basis in `answers.ndjson`. The
+run directory also holds `summary.json`, `report.md`, `events.ndjson`, `progress.json`, `lock.json`,
+`run.json` and `child.log`. A run on the same head resumes an open package; a run on a new head
+starts fresh. The pull request head resolved at the start is named in the child's prompt, and the
+child passes it as `--head <sha>` to `review start`, `review attach`, `review ingest` and
+`review complete`, so the package records the commit that was reviewed rather than the commit checked out in the directory.
+While the run goes it writes a `heartbeat: phase <phase>, <n> round(s), <n> tokens` line to
+stderr whenever the phase, the rounds or the tokens change (at most one a minute) and, as a
+keep-alive, again whenever a minute passes with no line, so a wrapper with an idle timeout does
+not kill a healthy run. It is printed with or without `--json`; stdout stays the summary alone.
+The keep-alive never counts as child progress: a run that really stalls is still stopped by
+`--stall-minutes` (exit 5). In `keryx shell`, `/autoreview start|list|stop|arbiter` runs and watches the same command; `arbiter` lists the run's review-arbiter log.
+See [Review a pull request with nobody at the keyboard](guides/autonomous-review.md).
 
 ### `review comments`
 
@@ -5016,6 +5201,24 @@ heredoc, and a comment carrying a tool directive (`@ts-expect-error`,
 `eslint-disable`, `go:build`, `noqa`) is never treated as comment-only, because
 it changes behaviour.
 
+**A comment-only block is kept when the repository has a rule about comments.**
+The comment-only drop assumes a comment cannot be wrong; a repository that limits
+comments (one line at most, no narration, a comment gate) has said otherwise.
+`review scope` and `review slice` read `CLAUDE.md`, `AGENTS.md` and
+`.metaproject/rules/**` (`.md` and `.mdc`, at most 200 files of 512 KiB each) and
+turn `retainCommentBlocks` on when one line both names comments and carries limiting
+wording (`limit`, `at most`, `no more than`, `one-line`, `gate`, `forbidden` and the
+like); a line that only mentions a comment is not a rule. With it on, a comment-only
+block that adds at least one comment line is retained and recorded under `kept` with
+the reason `kept:comment-rule` (its path, line range and changed-line count), counted
+in `counts.keptByReason` and in `blocksRetained`, not in `blocksDropped` or
+`droppedByReason`; `scope.md` lists it under "Kept past a drop rule". A block that
+only removes comments is still dropped. The setting itself is `false`, `true`, or a
+case-insensitive pattern that the added comment lines must match (a pattern that is
+not a valid expression keeps every such block). With no comment rule, or the setting
+off, the scope is byte-identical to one built before the option existed: no `kept`
+and no `keptByReason`.
+
 ### `review floor`
 
 A review asks whether the change is correct. It does not ask whether the change
@@ -5120,6 +5323,23 @@ vendored or generated path is invisible by construction — and it depends on
 `review scope` never dropping a comment that carries a tool directive, which is
 why that carve-out exists.
 
+### `review layers`, `review chunks` and `review coverage`
+
+A review reads three derived layers besides the diff: the code graph, the wiki and the memory. `keryx review layers refresh --package <dir>` brings them up to date and writes `<dir>/layers.json`; a managed review start, attach or ingest does it for you, and so does any `dispatch-check` or `blast-radius` given `--package`. **It calls no model.** It runs the graph build, `wiki refresh` and `memory index` (without `--embeddings`); `wiki enrich` is the only model step in the wiki and is never run automatically. The wiki refresh is a dry run unless you pass `--write-wiki`. A graph that is intact at the same head is reused and `--force` rebuilds it. A graph that failed at the same head is not rebuilt for 5 minutes (counted from the failure, so polling does not extend it); `--force` or a new head rebuilds it at once. A reader that failed (the wiki, the memory, or the affected-files computation) is reported under `unavailable` in the layers block with its reason, not as an empty result. A `SIGTERM` or `SIGINT` during any phase releases the lock and removes the checkout and the staging directory. One refresh runs per package at a time, and a second one waits for the first for up to 16 minutes.
+
+- The graph is built at the PR head into `<dir>/layers/graph`, in a fresh worktree; the tracked graph artifacts, the working tree and the PR are not touched. `layers.json` records the commit it was built from, and `graph@<sha7> = head` means it equals the PR head.
+- The wiki and the memory are read from the project's working copy. `layers.json` marks how far that copy is from the PR head (`differs`, with the commits and wiki/memory paths between).
+- `layers status` prints the same lines plus the coverage counts. `layers block --files a,b` prints the bounded, deterministic `layers` block a reviewer payload carries for those files: affected files, symbol neighbours, related tests, wiki pages and memory entries, with a command that fetches whatever was cut.
+- Per reviewer run the package records `layersUsed` (`graph`, `wiki`, `memory`, `ctx`), counted from the reviewer's tool-call log, `<input-dir>/tool-calls/<reviewer>.jsonl`, one JSON line per call. A run without a log is `unknown`, never zero, and never blocks `ledger build`, `compare-reference` or `review complete`.
+
+The blast radius keeps at most 40 files per pass; the rest are `dropped`. `review chunks plan` writes `<dir>/chunks.json`, a deterministic split of every dropped file into chunks (at most 40 files and the slice byte cap), each file in exactly one chunk; no dropped files means no plan. Chunks run one at a time through `review-regression` on the middle tier: `chunks next` prints the chunk to dispatch, `chunks record` takes what it returned and applies the retry plan (a failed chunk is retried per the plan, else stays `pending`), and `chunks merge` writes `<dir>/chunk-pass.json` with the state of each chunk and the merged findings (two on the same file and line count once).
+
+`chunks estimate` states the chunk count, the files, the estimated tokens and cost at the middle tier, and the duration before a run. The ceiling is **25 passes of 40 files (1,000 files)**; `reviewChunks.maxPasses` in `routing.config.json` moves it. In automatic mode a run at or under the ceiling goes through without a question and a run over it asks once; in interactive mode a run over it waits for `--answer yes --quote "<words>"`. The estimate and the answer are recorded in `<dir>/chunk-estimate.json`.
+
+`review coverage` writes `<dir>/coverage.json` and prints four counts for the changed files and the blast radius together: in scope, covered, covered by a named omission (with the reasons), and uncovered. Every changed file lands in a slice or under a named omission, and `coverage.json` lists each omitted file with its reason. **`review complete` refuses while any in-scope file is uncovered**: it names the count, the first files and the command that runs the missing chunks. The only way past is `--waive-coverage "<operator quote>"`, which records the quote, the time and the files not reviewed in the dispatch record and shows the waiver in the report and the panel. The waiver needs an interactive terminal (a command run from a script or an agent is refused), its quote must be at least 8 characters with a letter or digit once the flag text is removed, and the command asks for confirmation in every permission mode. There is no "unchecked remainder" outcome.
+
+In the shell, `/reviews` shows one line per review (`graph@<sha7> = head|differs`, wiki and memory divergence, `layers used n/m`, `unknown k`, `chunks d/t, uncovered u`) in the sidebar and the full lines in the Review depth tab, with `l` (refresh layers) and `c` (run missing chunks) in the modal. `/review layers` prints the same lines.
+
 ### `review blast-radius`
 
 `review scope` bounds **the change**, and a review of it answers *is this change
@@ -5135,6 +5355,7 @@ a depth and a file cap, closest first.
 | `--depth <n>` | Edge distance kept. Default **2**. |
 | `--max-files <n>` | File cap, closest first. Default **40**. |
 | `--no-related-tests` | Skip the naming-related tests of the changed files. |
+| `--package <review-dir>` | Read the graph built for that review at its PR head (refreshed first when the package has none), not the working tree's. |
 | `--previous <file>` | The previous round's `--json` record; decides whether this round must recompute. |
 | `--final` | This is the final round, so recompute regardless of what the changed-file set did. |
 | `--json` | Machine-readable record: the set, the drops, the unresolved changed files. |
@@ -5151,6 +5372,122 @@ it almost never costs a direct dependent.
 **Bounded on purpose.** Reviewing the whole repository every round is
 unaffordable *and* harmful — review quality decays as context grows, and an
 unbounded second scope makes later rounds worse than earlier ones.
+
+### `review slice`, `review dispatch-check`, `review retry-plan`, `review ledger`
+
+A reviewer on a shell host cannot open a path, and one handed the whole diff
+spends its rounds reading. These three commands keep each reviewer's input small
+enough to finish; none of them calls a model.
+
+`review slice` cuts the diff (a git diff, or `review scope --scoped-diff` output)
+into `slice-NN.diff` files of at most `--max-bytes` (default **150000**) and a
+`manifest.json` whose `path` values are relative to the manifest. Files of one
+directory or module stay together while they fit; a domain over the limit is cut
+by file, a file over it by hunk, a hunk over it by line. Data ledgers (csv, tsv,
+jsonl, parquet), lockfiles, snapshots, generated files and oversize json are
+never sliced: they are listed under `omissions` with their reason and byte count.
+`--out` defaults to `.metaproject/data/review/slices`.
+
+The path flags of these three commands (`--out`, `--diff`, `--manifest`, `--state`,
+`--result`, `--payload`) must resolve, symlinks followed, inside the project root; a path
+outside it is refused before anything is read or written. `-` is standard input where a
+flag accepts it (`--diff`, `--payload`, `--result`) and a file name for the others.
+
+| Flag | Description |
+|---|---|
+| `--ref <base>` / `--diff <file\|->` | Where the diff comes from. Default: `git diff`. |
+| `--context <n>` | Context lines kept around a change. |
+| `--max-bytes <n>` | Slice ceiling, at least 200. |
+| `--wave-bytes <n>` | What one reviewer dispatch may total (default **60000**, never below `--max-bytes`). The manifest records it as `waveBytes`. |
+| `--out <dir>` | Where the slices and the manifest are written. Must resolve (symlinks followed) inside the project root. |
+| `--json` | Print the manifest plus `dir` and `manifestPath`. |
+
+`review dispatch-check` validates reviewer payloads (one object, an array, or
+`{"dispatches": [...]}`) against `reviewer-input.schema.json`. A `diff`-scope
+payload must name its `slices` or carry a `diff` that fits, and what it is
+assigned must total at most the manifest's wave budget (`--max-bytes` overrides it): a role owning more is dispatched in slice waves, and each wave has to fit the reviewer's child deadline. Codes: `REVIEWER_INPUT_INVALID`,
+`REVIEWER_INPUT_NO_SLICE`, `REVIEWER_INPUT_SLICE_UNKNOWN`,
+`REVIEWER_INPUT_TOO_LARGE`. Exit 0 ok, 1 refused, 2 payload or manifest
+unreadable. The `model` block is closed to unknown keys but declares
+everything `review tier --json` prints, including `routed` (a boolean, true when
+the routing table made the pick), so the block the generator emits for a routed
+pick passes; a `routed` that is not a boolean, or any other unknown `model` key, is
+`REVIEWER_INPUT_INVALID`.
+
+`review retry-plan` decides what follows a reviewer result. `--result` is the
+reviewer's result JSON, or its saved raw reply (the last `REVIEW_RESULT` block is
+read); its `slices` list is what the reviewer covered, written as slice ids or as
+objects carrying an `id` (`{"id": "slice-03", "status": "DONE", "coverage": "…"}`).
+An object counts as covered only when its `status` is absent or DONE, COMPLETE, COMPLETED,
+COVERED or OK (any case); NOT_READ, INCOMPLETE, SKIPPED, PARTIAL or any other status leaves
+that slice uncovered, and the plan's reason names those slices with their statuses. An entry
+with no usable id covers nothing and is named by count in the plan's reason. An attempt is spent only by
+a result that covered no slice the reviewer had not covered before. A reviewer that
+makes progress is handed the next wave of the slices still uncovered (decision
+`retry`, or `wave` after a finished result with slices still open) and is not
+penalised. A result with nothing new covered cuts the open slices in half
+(`r<n>-<reviewer>-NN.diff`, appended to the manifest) and halves the wave; two such
+results in a row, or six failed rounds in all, are `not-run` and print
+`- **Not run:** <reviewer> — <status> after a smaller-slice retry; never counted as a clean pass`.
+The dispatch list is the next wave, at most the manifest's wave budget, and
+`remaining` counts what is left. `--next-wave` plans the next wave without a result
+(`--result` becomes optional) and counts no stall; `--covered a,b` adds slice ids
+covered by earlier results. Progress is kept in `retry-state.json` beside the
+manifest. `--dry-run` plans without writing; the exit code is 0 for every decision.
+Only the operator can accept a smaller set than that, with their own quote at
+`review complete`.
+
+`NEEDS_CONTEXT` (or any result with an open `needs_context` list) is not a finished
+scope either. It prints decision `context` with the questions: answer them and
+re-dispatch the uncovered slices. Asking again with nothing new covered is `not-run`.
+One refill is the contract: a second `NEEDS_CONTEXT` from the same role is `not-run`
+whatever it covered, with the reason `layout: no engine` for `review-layout` (it needs
+a browser) and `no engine` for any other role, and the report line
+`- **Not run:** <reviewer> — <reason>; it asked for context twice and the host could not supply it, never counted as a clean pass`.
+On a shell host the main session runs the browser measurements before it dispatches
+`review-layout` and passes them as `context_files`, so the first answer already has them.
+
+`review ledger build <input-dir> [--package <review-dir>]` writes the
+`research.json` that `review ingest --research` and `review complete` demand, from
+files only: `raw/*.txt` (reviewer replies), `drivers/*.json`, `slices/manifest.json`
+and `slices/retry-state.json` in the input directory, and `scope-files.json`,
+`findings.json` in the package. The latest result of each required reviewer decides.
+`DONE` / `DONE_WITH_CONCERNS` with no open `needs_context`, and every slice its path
+gate requires covered by its dispatched payloads, is a complete source-only run
+(`executionRequired: false`, with the reason). Anything else — `NEEDS_CONTEXT`,
+`BLOCKED`, `INCOMPLETE`, missing slices, no result, a retry-state `not-run` — stays
+`incomplete` or `not-run`: the builder never declares a reviewer complete on its own
+word. Each raw finding becomes an obligation that is closed only by a matching
+canonical finding (same reviewer and id) or by a `--dispositions` entry
+`{id, status: finding|refuted|out-of-scope, evidence, reason, finding?}`; otherwise it
+stays `unresolved`. A reviewer's `follow_ups` (strings in its result) and each
+`Parent follow-up: <text>` line after its last `REVIEW_RESULT` block are work handed
+back to the parent: each becomes an obligation `<reviewer>:fu<n>` that stays `unresolved`, and
+is a gap, until a `--dispositions` entry closes it (`narrowed` needs `remains`); a
+quoted line before the block is not read. `status` and `report-parity` list the open
+ones. The ledger's `dispatch` carries `roles`, the roles added after the original
+roster that this version knows (today `review-pr-contract`); `review complete` binds a
+round to them only when the stamp is present. `scopeReviewed` and `rawReconciled` are true only when
+established. The command prints `READY`, or `NOT READY` with every gap and its next
+step (the exact `retry-plan --next-wave` command with the waves left, the uncovered slices, the disposition to add),
+using the gate's own validators; exit 1 when not ready, so
+`ledger build && ingest --research` stops. Flags: `--package`, `--mode all|diff`,
+`--findings`, `--dispositions` (default: the obligations already in `research.json`),
+`--out` (default `<package>/research.json`), `--dry-run`, `--json`.
+
+`drivers/<reviewer>.json` records one dispatch:
+`{"reviewer", "slices": [...], "result": "raw/<reviewer>.txt", "definition": "<path of the reviewer's SKILL.md>"}`.
+The rule file is taken from `definition`, or from a `skill_path` at the top level or
+inside a `payload` object, whichever names a file that exists; a reviewer with none
+stays a named gap (`no resolved rule file`). Only reviewer replies belong in `raw/`.
+A file there with no `REVIEW_RESULT` block, that no driver names as its `result`, and
+whose name does not start with a dispatched or required reviewer's id is not a reply:
+the ledger lists it under `ignored` as `set aside: …`, records it in `setAside` in
+`research.json`, and leaves it where it is, never deleting it. A driver's `slices` is
+the list of slices handed to the reviewer, so a `status` on one of its entries is not
+read; an entry with no usable id there is reported as a gap by count, and none of that
+dispatch's slices counts as handed out until it is fixed. A file that holds a `REVIEW_RESULT` block, or is named by a driver, still
+has to be reconciled.
 
 **The set is under regression check, not under review**, and that is refused in
 code rather than discouraged in prose. Three rules, and every one of them is a
@@ -5186,7 +5523,8 @@ refused rather than reported as an empty radius.
 Nothing in the review pipeline was capped: `budget.max_findings` was required by
 the schema with no default anywhere, there was no cost ceiling, and reviewers
 were dispatched in parallel with no wave size while `review-orchestrator` itself
-runs nested under `flow-orchestrator` and `job-orchestrator`.
+runs inline in the main session, next to the subagents that session has already
+dispatched.
 
 The defaults are in code (`src/review/caps.ts`), so a caller that says nothing
 still gets a bound.
@@ -5195,7 +5533,7 @@ still gets a bound.
 |---|---|---|---|
 | Findings | **10 per reviewer**, blockers exempt | `--max-findings <n>` | Truncates a reviewer's ordinary findings. `blocker` and `blocking_merge` findings are exempt and do not consume the budget. |
 | Spend | **3.00 USD** per round | `--spent <usd>`, `--spend-ceiling <usd>` | Stops and asks rather than proceeding. |
-| Concurrency | **4** reviewers in flight | `--parallel <n>`, `--outstanding <n>` | Splits the reviewer set into dispatch waves. |
+| Concurrency | Waves split by diff domain (logic and security, then frontend and backend, then style and tests); **10** reviewers at most per wave for `--all` and a full review | `--parallel <n>`, `--outstanding <n>` | Splits the reviewer set into dispatch waves. A reviewer that returns `STATUS: RATE_LIMITED` halves the wave, is requeued and waits out `retry-after` (at most 300 seconds); after two halvings the round is `BLOCKED rate_limited` and names the queue left. |
 
 **Every cap records what it dropped**, in the package's `scope.md` under
 `## Caps` and on the terminal — a count, and for the findings cap the id of every
@@ -5218,12 +5556,12 @@ is denominated in, and token counts convert to it while the reverse does not.
 3.00 USD follows SWE-agent's $3/instance cap; a keryx review round is one target
 and one reviewer fan-out, the analogue of one instance.
 
-**The concurrency cap does not bind the nested total on its own, and says so.**
-keryx is a CLI invoked once per command: it cannot observe subagents running in
-another orchestrator's process, and there is no lease between the three
-orchestration levels. `--outstanding <n>` is an enclosing orchestrator declaring
-what it already has in flight, which shrinks the effective wave; it is a
-declaration, not an observation, and nothing verifies it. The record therefore
+**The concurrency cap does not bind the session's total on its own, and says so.**
+keryx is a CLI invoked once per command: it cannot observe the subagents the main
+session still has running, and there is no lease between them and this dispatch.
+`--outstanding <n>` is the main session declaring how many it has running, which
+shrinks the effective wave; it is a declaration, not an observation, and nothing
+verifies it. The record therefore
 carries `holds_across_nesting: yes (against the declared count)` or `no`, rather
 than implying a guarantee that does not exist.
 
@@ -6096,15 +6434,16 @@ keryx review budget --spent 2.10 --reviewers review-logic,review-style --outstan
 
 Exits 1 when spend has reached the ceiling, with a message naming the overage and
 asking the operator. Prints the dispatch waves, the queue size, and whether the
-concurrency cap holds across the nesting.
+concurrency cap is measured against a declared count of running subagents.
 
 | Flag | Description |
 |---|---|
 | `--spent <usd>` | Spend so far. Omitted, the record reads `not recorded` — which is **not** `under`: staying inside the ceiling was never demonstrated. |
 | `--ceiling <usd>` | Override the 3.00 USD default. |
 | `--reviewers a,b` | The reviewer set to plan into waves. |
-| `--parallel <n>` | Override the wave size (default 4). |
-| `--outstanding <n>` | Subagents the caller already has in flight. The only thing that makes the cap mean anything across the orchestration nesting. |
+| `--parallel <n>` | Override the wave size (default 10, split by diff domain). With `--full` it can only lower it. |
+| `--full` | A full review or `--all`: holds the wave to 10 whatever `--parallel` says. |
+| `--outstanding <n>` | Subagents the main session still has running. The only thing that makes the cap mean anything beyond this dispatch. |
 
 ### `review bot` and `review metrics`
 

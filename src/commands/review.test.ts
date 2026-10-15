@@ -16,6 +16,7 @@ import path from "node:path";
 import { pinsModel, reviewCommand, runReviewers, setTierRankHostForTests } from "./review";
 import type { DispatchModelDecision, TierRankAgent, TierRankCache } from "../gdskills/model-tier";
 import type { StructuredReviewFinding } from "../review/types";
+import { readyResearchFixture } from "../review/research.test-helpers";
 import { loadRoutingConfigRaw } from "../harness/routing/config";
 import { approveProjectRouting } from "../harness/routing/trust";
 
@@ -98,10 +99,11 @@ const FINDING = {
 
 /** A report carrying the structured block, which is how ingest gets findings. */
 function reportWith(findings: readonly unknown[]): string {
-  return `# Round\n\n\`\`\`json keryx:findings\n${JSON.stringify(findings, null, 2)}\n\`\`\`\n`;
+  return `# Round\n\nEvidence level: static only — did not run: tests\n\n\`\`\`json keryx:findings\n${JSON.stringify(findings, null, 2)}\n\`\`\`\n`;
 }
 
 async function ingest(reviewId: string, extra: string[] = []): Promise<string> {
+  await writeFile(path.join(ROOT, "research.json"), JSON.stringify(readyResearchFixture([FINDING.reviewer], [FINDING.id])), "utf8");
   await writeFile(path.join(ROOT, "report.md"), reportWith([FINDING]), "utf8");
   await reviewCommand([
     "ingest",
@@ -111,6 +113,8 @@ async function ingest(reviewId: string, extra: string[] = []): Promise<string> {
     "report.md",
     "--review-id",
     reviewId,
+    "--research",
+    "research.json",
     ...extra,
   ]);
   return path.join(ROOT, ".metaproject", "reviews", reviewId);
@@ -207,6 +211,7 @@ test("several findings can be dispositioned in one close", async () => {
     reportWith([FINDING, { ...FINDING, id: "F-002", problem: "a second observation" }]),
     "utf8",
   );
+  await writeFile(path.join(ROOT, "research.json"), JSON.stringify(readyResearchFixture([FINDING.reviewer], ["F-001", "F-002"])), "utf8");
   await reviewCommand([
     "ingest",
     "--report",
@@ -215,6 +220,8 @@ test("several findings can be dispositioned in one close", async () => {
     "report.md",
     "--review-id",
     "2026-08-29-cli-two-dispositions",
+    "--research",
+    "research.json",
   ]);
   const pkg = path.join(ROOT, ".metaproject", "reviews", "2026-08-29-cli-two-dispositions");
 
@@ -240,6 +247,36 @@ test("several findings can be dispositioned in one close", async () => {
   expect(findings.map((f) => f.disposition?.state)).toEqual(["acted-on", "dismissed-incorrect"]);
 });
 
+test("`review complete --head` reaches the gate: it is not read as a disposition flag, and a head that is not the PR's still fails", async () => {
+  const PR_URL = "https://github.com/acme/app/pull/7";
+  const RECORDED = "a".repeat(40);
+  const OTHER = "b".repeat(40);
+  const prLookup = async () => ({ exists: true, state: "OPEN", headSha: RECORDED });
+  const pkg = await ingest("2026-10-14-cli-complete-head", ["--target", "pr", "--ref", PR_URL, "--head", OTHER]);
+  await reviewCommand(["complete", pkg, "--head", RECORDED], { prLookup });
+  expect(process.exitCode).toBe(0);
+  expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).target.head).toBe(RECORDED);
+  expect(errors.join("\n")).toContain("replaces the head recorded");
+
+  const strict = await ingest("2026-10-14-cli-complete-head-strict", ["--target", "pr", "--ref", PR_URL, "--head", RECORDED]);
+  process.exitCode = 0;
+  await reviewCommand(["complete", strict, "--head", OTHER], { prLookup });
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("first line");
+});
+
+test("`review complete --head` with no value, or a value that is not a SHA, is refused", async () => {
+  const pkg = await ingest("2026-10-14-cli-complete-head-bad", ["--target", "pr", "--ref", "https://github.com/acme/app/pull/7", "--head", "a".repeat(40)]);
+  await reviewCommand(["complete", pkg, "--head"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--head");
+  process.exitCode = 0;
+  errors = [];
+  await reviewCommand(["complete", pkg, "--head", "zzz"], { prLookup: async () => null });
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("not a commit SHA");
+});
+
 test("an unknown disposition state is refused by name", async () => {
   const pkg = await ingest("2026-08-29-cli-bad-state");
   await reviewCommand(["complete", pkg, "--finding", "F-001", "--disposition", "dismissed", "--evidence", "x"]);
@@ -254,12 +291,74 @@ test("`--disposition` without `--finding` is refused rather than applied to ever
   expect(errors.join("\n")).toContain("--finding");
 });
 
+test("CLI completion refuses a newly ingested package without research and dispatch evidence", async () => {
+  await writeFile(path.join(ROOT, "report.md"), reportWith([FINDING]), "utf8");
+  await reviewCommand(["ingest", "--report", "report.md", "--ref", "report.md", "--review-id", "cli-pending-research"]);
+  expect(process.exitCode).toBe(0);
+  const pkg = path.join(ROOT, ".metaproject", "reviews", "cli-pending-research");
+  await reviewCommand(["complete", pkg]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("research scope census");
+  expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).status).not.toBe("closed");
+  const { dispatch: _dispatch, ...researchOnly } = readyResearchFixture([FINDING.reviewer], [FINDING.id]);
+  await writeFile(path.join(pkg, "research.json"), JSON.stringify(researchOnly), "utf8");
+  errors = [];
+  process.exitCode = 0;
+  await reviewCommand(["complete", pkg]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("reviewer dispatch evidence is missing");
+  expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).status).not.toBe("closed");
+});
+
 test("closing with no disposition flags still works, and writes nothing", async () => {
   const pkg = await ingest("2026-08-29-cli-plain-complete");
   const before = await readFile(path.join(pkg, "findings.json"), "utf8");
   await reviewCommand(["complete", pkg]);
   expect(process.exitCode).toBe(0);
   expect(await readFile(path.join(pkg, "findings.json"), "utf8")).toBe(before);
+});
+
+// The head and merge gate is switched on only by the command's default lookup, so
+// these two drive the real default against a stand-in `gh` on PATH.
+const GATE_PR = "https://github.com/acme/app/pull/7";
+const GATE_HEAD = "a".repeat(40);
+
+async function prBoundPackage(reviewId: string): Promise<string> {
+  return ingest(reviewId, ["--target", "pr", "--ref", GATE_PR, "--head", GATE_HEAD]);
+}
+
+/** Runs `review complete` in a child whose PATH starts with a stand-in `gh`: Bun resolves `gh` from the PATH it started with. */
+async function completeWithStandInGh(pkg: string, script: string): Promise<{ code: number; stderr: string }> {
+  const bin = path.join(ROOT, "bin");
+  await mkdir(bin, { recursive: true });
+  await writeFile(path.join(bin, "gh"), `#!/bin/sh\n${script}\n`, { mode: 0o755 });
+  const entry = path.join(ROOT, "complete-child.ts");
+  await writeFile(entry, `import { reviewCommand } from ${JSON.stringify(path.resolve(import.meta.dir, "review"))};\nawait reviewCommand(["complete", ${JSON.stringify(pkg)}]);\n`);
+  const child = Bun.spawn([process.execPath, "run", entry], {
+    cwd: ROOT,
+    env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}` },
+    stdout: "ignore",
+    stderr: "pipe",
+  });
+  const [stderr, code] = await Promise.all([new Response(child.stderr).text(), child.exited]);
+  return { code, stderr };
+}
+
+test("`review complete` on a PR-bound package asks the tracker by default and refuses a merged PR", async () => {
+  const pkg = await prBoundPackage("2026-10-14-cli-gate-merged");
+  const merged = `{"isDraft":false,"state":"MERGED","headRefOid":"${"b".repeat(40)}","baseRefName":"main"}`;
+  const { code, stderr } = await completeWithStandInGh(pkg, `case "$1 $2" in "auth status") exit 0;; "pr view") echo '${merged}';; "pr checks") exit 0;; esac`);
+  expect(code).toBe(1);
+  expect(stderr).toMatch(/merged/i);
+  expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).status).not.toBe("closed");
+});
+
+test("`review complete` prints a warning, and still closes, when the tracker cannot be reached", async () => {
+  const pkg = await prBoundPackage("2026-10-14-cli-gate-offline");
+  const { code, stderr } = await completeWithStandInGh(pkg, "exit 1");
+  expect(code).toBe(0);
+  expect(stderr).toContain("warning: could not read the PR state");
+  expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).status).toBe("closed");
 });
 
 // ---------------------------------------------------------------------------
@@ -278,6 +377,7 @@ test("a bare `complete` on a fully dispositioned package does not claim nobody r
     reportWith([FINDING, { ...FINDING, id: "F-002", problem: "a second observation" }]),
     "utf8",
   );
+  await writeFile(path.join(ROOT, "research.json"), JSON.stringify(readyResearchFixture([FINDING.reviewer], ["F-001", "F-002"])), "utf8");
   await reviewCommand([
     "ingest",
     "--report",
@@ -286,6 +386,8 @@ test("a bare `complete` on a fully dispositioned package does not claim nobody r
     "report.md",
     "--review-id",
     "2026-09-12-cli-all-dispositioned",
+    "--research",
+    "research.json",
   ]);
   const pkg = path.join(ROOT, ".metaproject", "reviews", "2026-09-12-cli-all-dispositioned");
 
@@ -336,6 +438,7 @@ test("a partly dispositioned package is reported as partly dispositioned", async
     reportWith([FINDING, { ...FINDING, id: "F-002", problem: "a second observation" }]),
     "utf8",
   );
+  await writeFile(path.join(ROOT, "research.json"), JSON.stringify(readyResearchFixture([FINDING.reviewer], ["F-001", "F-002"])), "utf8");
   await reviewCommand([
     "ingest",
     "--report",
@@ -344,6 +447,8 @@ test("a partly dispositioned package is reported as partly dispositioned", async
     "report.md",
     "--review-id",
     "2026-09-12-cli-partly-dispositioned",
+    "--research",
+    "research.json",
   ]);
   const pkg = path.join(ROOT, ".metaproject", "reviews", "2026-09-12-cli-partly-dispositioned");
 
@@ -490,7 +595,7 @@ test("AC10: unreported spend reads `not recorded`, not `under`", async () => {
 });
 
 test("AC7/AC10: `review budget` plans waves and says whether the cap holds across nesting", async () => {
-  await reviewCommand(["budget", "--reviewers", "a,b,c,d,e,f"]);
+  await reviewCommand(["budget", "--reviewers", "a,b,c,d,e,f", "--parallel", "4"]);
   const output = logs.join("\n");
 
   expect(output).toContain("concurrency_cap: 4");
@@ -500,7 +605,7 @@ test("AC7/AC10: `review budget` plans waves and says whether the cap holds acros
 });
 
 test("AC7: a declared outstanding count is the only thing that reaches the nesting", async () => {
-  await reviewCommand(["budget", "--reviewers", "a,b,c,d", "--outstanding", "2"]);
+  await reviewCommand(["budget", "--reviewers", "a,b,c,d", "--parallel", "4", "--outstanding", "2"]);
   const output = logs.join("\n");
 
   expect(output).toContain("effective_wave_size: 2");
@@ -1491,4 +1596,173 @@ test("`review reviewers --json` exits 1 and reports `bundledSource: \"not-found\
   const parsed = JSON.parse(logs.join("\n"));
   expect(parsed.bundledSource).toBe("not-found");
   expect(parsed.bundled).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------
+// Slice, dispatch-check, retry-plan (flow 418, AC7/AC8/AC9)
+// ---------------------------------------------------------------------------
+
+function sliceGitFile(filePath: string, count: number): string {
+  const lines = Array.from({ length: count }, (_, n) => `+export const v${n} = ${n};`);
+  return `diff --git a/${filePath} b/${filePath}\n--- a/${filePath}\n+++ b/${filePath}\n@@ -1,0 +1,${count} @@\n${lines.join("\n")}\n`;
+}
+
+test("`review slice --help` prints usage and writes nothing", async () => {
+  await reviewCommand(["slice", "--help"]);
+  expect(process.exitCode).toBe(0);
+  const out = logs.join("\n");
+  expect(out).toContain("keryx review slice");
+  expect(out).toContain("--max-bytes");
+});
+
+test("`review slice` writes bounded slices and a manifest, and omits a csv ledger by name", async () => {
+  const csv = Array.from({ length: 6000 }, () => "+2026-10-01,acct-000123,debit,19.99,EUR,settled").join("\n");
+  const diff =
+    sliceGitFile("src/alpha/a.ts", 400) +
+    sliceGitFile("src/beta/b.ts", 400) +
+    `diff --git a/data/ledger.csv b/data/ledger.csv\n--- a/data/ledger.csv\n+++ b/data/ledger.csv\n@@ -1,0 +1,6000 @@\n${csv}\n`;
+  await writeFile(path.join(ROOT, "change.diff"), diff, "utf8");
+
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "9000", "--out", "out", "--json"]);
+  expect(process.exitCode).toBe(0);
+  const printed = JSON.parse(logs.join("\n"));
+  expect(printed.omissions.map((o: { path: string }) => o.path)).toEqual(["data/ledger.csv"]);
+  expect(printed.omissions[0].reason).toBe("data-ledger");
+  expect(printed.slices.length).toBeGreaterThan(2);
+
+  const manifest = JSON.parse(await readFile(path.join(ROOT, "out", "manifest.json"), "utf8"));
+  for (const slice of manifest.slices) {
+    const text = await readFile(path.join(ROOT, "out", slice.path), "utf8");
+    expect(Buffer.byteLength(text)).toBe(slice.bytes);
+    expect(slice.bytes).toBeLessThanOrEqual(9000);
+  }
+});
+
+test("`review slice` refuses an unknown flag and a ceiling below the minimum", async () => {
+  await reviewCommand(["slice", "--nope"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--nope");
+
+  errors = [];
+  process.exitCode = 0;
+  await writeFile(path.join(ROOT, "empty.diff"), "", "utf8");
+  await reviewCommand(["slice", "--diff", "empty.diff", "--max-bytes", "5"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--max-bytes");
+});
+
+test("`review dispatch-check` refuses a diff payload with no slice and exits 1", async () => {
+  const payload = {
+    review_context: {
+      request: { raw: "review" },
+      scope: { mode: "diff", files: ["src/a.ts"] },
+      routing: { selected_reviewers: ["review-logic"] },
+      token_policy: { context_mode: "light", omissions: [] },
+    },
+    reviewer: "review-logic",
+    scope_mode: "diff",
+    model: { tier: "standard", tier_reasons: ["base"], tier_resolution: "session-fallback", model_discovery: {}, inherit: true },
+    budget: { max_findings: 10 },
+  };
+  await writeFile(path.join(ROOT, "payload.json"), JSON.stringify(payload), "utf8");
+  await reviewCommand(["dispatch-check", "--payload", "payload.json", "--json"]);
+  expect(process.exitCode).toBe(1);
+  expect(JSON.parse(logs.join("\n")).errors[0].code).toBe("REVIEWER_INPUT_NO_SLICE");
+
+  logs = [];
+  process.exitCode = 0;
+  await reviewCommand(["dispatch-check", "--payload", "missing.json"]);
+  expect(process.exitCode).toBe(2);
+});
+
+test("`review retry-plan` retries once on smaller slices, then reports Not run", async () => {
+  await writeFile(path.join(ROOT, "change.diff"), Array.from({ length: 4 }, (_, i) => sliceGitFile(`src/m/f${i}.ts`, 80)).join(""), "utf8");
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "30000", "--out", "out"]);
+  await writeFile(path.join(ROOT, "result.json"), JSON.stringify({ reviewer: "review-logic", status: "INCOMPLETE" }), "utf8");
+  logs = [];
+
+  await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--result", "result.json", "--json"]);
+  expect(process.exitCode).toBe(0);
+  const first = JSON.parse(logs.join("\n"));
+  expect(first.decision).toBe("retry");
+  expect(first.dispatch.length).toBeGreaterThan(1);
+  const retried = JSON.parse(await readFile(path.join(ROOT, "out", "manifest.json"), "utf8"));
+  expect(retried.slices.some((s: { id: string }) => s.id.startsWith("r1-review-logic-"))).toBe(true);
+
+  logs = [];
+  await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--result", "result.json", "--json"]);
+  const second = JSON.parse(logs.join("\n"));
+  expect(second.decision).toBe("not-run");
+  expect(second.reportLine).toContain("- **Not run:** review-logic");
+  expect(second.dispatch).toEqual([]);
+});
+
+test("`review slice --wave-bytes` records the wave budget and refuses one below the slice ceiling", async () => {
+  await writeFile(path.join(ROOT, "change.diff"), Array.from({ length: 6 }, (_, i) => sliceGitFile(`src/w${i}/f.ts`, 120)).join(""), "utf8");
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "4000", "--wave-bytes", "9000", "--out", "out", "--json"]);
+  expect(process.exitCode).toBe(0);
+  expect(JSON.parse(logs.join("\n")).waveBytes).toBe(9000);
+
+  errors = [];
+  process.exitCode = 0;
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "4000", "--wave-bytes", "3000", "--out", "out2"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--wave-bytes");
+});
+
+test("`review retry-plan --next-wave` hands out bounded waves without a result, and progress costs no attempt", async () => {
+  await writeFile(path.join(ROOT, "change.diff"), Array.from({ length: 6 }, (_, i) => sliceGitFile(`src/w${i}/f.ts`, 120)).join(""), "utf8");
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "4000", "--wave-bytes", "9000", "--out", "out"]);
+  const manifest = JSON.parse(await readFile(path.join(ROOT, "out", "manifest.json"), "utf8"));
+  const ids: string[] = manifest.slices.map((s: { id: string }) => s.id);
+
+  logs = [];
+  await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--reviewer", "review-logic", "--next-wave", "--json"]);
+  expect(process.exitCode).toBe(0);
+  const first = JSON.parse(logs.join("\n"));
+  expect(first.decision).toBe("wave");
+  expect(first.dispatch.length).toBeGreaterThan(0);
+  expect(first.dispatch.reduce((sum: number, d: { bytes: number }) => sum + d.bytes, 0)).toBeLessThanOrEqual(9000);
+  expect(first.remaining.slices).toBe(ids.length);
+
+  for (let round = 1; round <= 2; round += 1) {
+    const state = JSON.parse(await readFile(path.join(ROOT, "out", "retry-state.json"), "utf8"));
+    const done: string[] = state.reviewers["review-logic"].covered ?? [];
+    const next = ids.filter((id) => !done.includes(id)).slice(0, 2);
+    await writeFile(path.join(ROOT, "result.json"), JSON.stringify({ reviewer: "review-logic", status: "INCOMPLETE", slices: next }), "utf8");
+    logs = [];
+    await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--result", "result.json", "--json"]);
+    const plan = JSON.parse(logs.join("\n"));
+    expect(plan.progress).toBe(true);
+    expect(plan.stalls).toBe(0);
+    expect(plan.decision).toBe("retry");
+  }
+});
+
+test("`review retry-plan` reads a saved raw reply carrying a REVIEW_RESULT block", async () => {
+  await writeFile(path.join(ROOT, "change.diff"), Array.from({ length: 4 }, (_, i) => sliceGitFile(`src/m/f${i}.ts`, 80)).join(""), "utf8");
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "30000", "--out", "out"]);
+  await writeFile(path.join(ROOT, "raw.txt"), 'findings below\n\n```json\n{"reviewer":"review-logic","status":"DONE","slices":["slice-01"]}\n```\n', "utf8");
+  logs = [];
+  await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--result", "raw.txt", "--json"]);
+  expect(process.exitCode).toBe(0);
+  expect(JSON.parse(logs.join("\n")).reviewer).toBe("review-logic");
+});
+
+test("flow 429: --automatic is recorded on the manifest, printed on create and shown by status; absent otherwise", async () => {
+  const plain = await ingest("plain-round");
+  expect(JSON.parse(await readFile(path.join(plain, "manifest.json"), "utf8")).automatic).toBeUndefined();
+  expect(logs.join("\n")).not.toContain("run mode: automatic review");
+
+  logs = [];
+  const marked = await ingest("auto-round", ["--automatic"]);
+  expect(JSON.parse(await readFile(path.join(marked, "manifest.json"), "utf8")).automatic).toBe(true);
+  expect(logs.join("\n")).toContain("run mode: automatic review");
+
+  logs = [];
+  await reviewCommand(["status", "auto-round"]);
+  expect(logs.join("\n")).toContain("run mode: automatic review");
+  logs = [];
+  await reviewCommand(["status", "plain-round"]);
+  expect(logs.join("\n")).not.toContain("run mode: automatic review");
 });

@@ -8,7 +8,7 @@
 // `keryx decisions open|answer` for an interview, and no code of the repository runs a question list itself.
 //
 // This test drives that exact path: the tool name is parsed out of each SKILL.md copy, looked up in the real roster,
-// and invoked the way the model calls it. Without a host the same tool answers "cancelled", which is the skill's cue
+// and invoked the way the model calls it. Without a host the same tool answers that no one was asked, which is the skill's cue
 // to ask nothing and return NEEDS_CONTEXT with assumptions; nothing may reach the journal then.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
@@ -130,7 +130,7 @@ describe("a host is present: the interviewer's question goes through ask_user in
   });
 });
 
-describe("no host: ask_user answers cancelled, nothing is journaled, and the skill says what to do then", () => {
+describe("no host: ask_user answers that no one was asked, nothing is journaled, and the skill says what to do then", () => {
   for (const copy of COPIES) {
     test(`${copy}: the cancel is the cue for NEEDS_CONTEXT with assumptions`, async () => {
       const section = await hostSection(copy);
@@ -140,13 +140,13 @@ describe("no host: ask_user answers cancelled, nothing is journaled, and the ski
       const result = await rosterTool(cwd, toolName).invoke(INTERVIEW_QUESTION);
 
       expect(result.isError).toBe(true);
-      expect(result.output).toContain("cancelled");
+      expect(result.output).toMatch(/no one was asked/i);
       expect((await readJournal(cwd)).records).toEqual([]);
       // the skill's reaction to that answer, in its own words
       expect(section, copy).toContain("**No host:** ask NO question");
       expect(section, copy).toContain('status: "NEEDS_CONTEXT"');
       expect(section, copy).toContain("`assumptions`");
-      expect(section, copy).toContain(`A cancelled or empty \`${toolName}\` answer is not an answer`);
+      expect(section, copy).toContain(`A "No one was asked", cancelled or empty \`${toolName}\` answer is not an answer`);
     });
   }
 });

@@ -211,7 +211,7 @@ test("AC4 F-014: a session switch turns remote control off and no Telegram line 
   // The closing line comes once the topic is really gone.
   await Promise.resolve();
   await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(r.said.join("")).toContain("remote control off: the topic is deleted.");
+  expect(r.said.join("")).toContain("remote control off: the topic is archived.");
 });
 
 test("AC4 F-014: with remote control off a session switch says nothing", async () => {
@@ -257,6 +257,36 @@ test("AC4 F-014: a switch asked for from the topic keeps the topic and closes on
 
   expect(calls).toEqual(["sessionLeaving"]);
   expect(said).toEqual([]);
+});
+
+test("flow 419 AC5: the tool's name reaches the bridge, its input does not", () => {
+  const seen: unknown[][] = [];
+  const bridge = {
+    active: true,
+    keepingTopic: false,
+    disable: async () => true,
+    sessionLeaving: () => {},
+    queuedLineRemoved: () => {},
+    turnStarted: () => {},
+    assistantText: () => {},
+    toolCall: (...args: unknown[]) => seen.push(args),
+    turnSettled: async () => {},
+  } satisfies RemoteQueueBridge;
+  const wiring = createRemoteQueueWiring({
+    getBridge: () => bridge,
+    getQueue: () => [],
+    setQueue: () => {},
+    nextId: () => "q",
+    summarize: (text) => text,
+    paint: () => {},
+    composer: { setText: () => {}, focus: () => {} },
+    say: () => {},
+    runLine: () => {},
+  });
+  const base: string[] = [];
+  wiring.wrapOnToolCall((name: string, input: string) => base.push(`${name}:${input}`))("shell_exec", '{"command":"ls"}');
+  expect(seen).toEqual([["shell_exec"]]);
+  expect(base).toEqual(['shell_exec:{"command":"ls"}']);
 });
 
 // ---- F-015: narration before a tool call is not the answer ---------------------------
@@ -366,14 +396,16 @@ function shellOccurrences(source: string, needle: string): number {
 test("AC4 F-010 F-014 F-015 F-016: tui-shell.ts still delegates every remote-queue call into the wiring", () => {
   const source = readFileSync(SHELL_SOURCE, "utf8");
   const expected: Array<[string, number]> = [
-    ["createRemoteQueueWiring({", 1],
+    ["createTurnLoop({", 1],
+    ["const remoteQueue = turnLoop.remote;", 1],
     ["remoteQueue.assistantText(text);", 1],
     ["remoteQueue.wrapOnToolCall(", 1],
     ["remoteQueue.stopRemoteForSessionSwitch()", 1],
     ["remoteQueue.removeMainQueue(", 1],
     ["remoteQueue.editMainQueue(", 1],
     ["remoteQueue.requeuePendingEdit(", 1],
-    ["remoteQueue.runQueued(", 5],
+    // the other two (the drain and the recipient choice) are in turn-loop.ts, counted below
+    ["remoteQueue.runQueued(", 1],
     ["remoteQueue.turnStarted(source);", 1],
     // Flow 397 review T-2: the whole argument mapping, so constant flags (no failure reply) turn the test red.
     ["void remoteQueue.turnSettled({ failed: turnFailed, aborted: turnSignal.aborted });", 1],
@@ -383,6 +415,8 @@ test("AC4 F-010 F-014 F-015 F-016: tui-shell.ts still delegates every remote-que
   ];
   const found = expected.map(([needle]) => [needle, shellOccurrences(source, needle)] as const);
   expect(found).toEqual(expected.map(([needle, count]) => [needle, count] as const));
+  const loop = readFileSync(new URL("./turn-loop.ts", import.meta.url), "utf8");
+  expect(shellOccurrences(loop, "remote.runQueued(")).toBe(2);
 });
 
 // Flow 399 review (T-2): the topic-history restore is pure logic (`history-host.ts`, `history.ts`,

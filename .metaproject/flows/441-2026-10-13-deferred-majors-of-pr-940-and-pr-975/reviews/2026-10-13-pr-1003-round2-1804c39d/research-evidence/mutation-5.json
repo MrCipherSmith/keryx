@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t3b",
+  "command": "bun test src/tui/turn-loop.test.ts src/tui/busy-dispatch.test.ts src/tui/main-queue.test.ts src/tui/main-queue-drain.test.ts src/tui/remote-queue-wiring.test.ts src/tui/tui-hold.test.ts src/tui/tui-bus.test.ts src/tui/tui-shell.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 7127
+  },
+  "mutants": [
+    {
+      "id": "P01-idle-and-to-or-1",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "!destroyed &&\n                !chrome.isBusy() &&",
+      "replacement": "!destroyed ||\n                !chrome.isBusy() &&",
+      "line": 8671,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 7079
+    },
+    {
+      "id": "P02-idle-and-to-or-lease",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "!forceHandoff.isAwaitingSettlement &&\n                leaseView()?.held() !== true,",
+      "replacement": "!forceHandoff.isAwaitingSettlement ||\n                leaseView()?.held() !== true,",
+      "line": 8674,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 7061
+    },
+    {
+      "id": "P03-settle-drain-conditional",
+      "file": "src/tui/tui-shell.ts",
+      "anchor": "drainSites.onTurnSettle();",
+      "replacement": "if (Date.now() < 0) drainSites.onTurnSettle();",
+      "line": 9941,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 6916
+    }
+  ],
+  "totals": {
+    "killed": 0,
+    "survived": 3,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

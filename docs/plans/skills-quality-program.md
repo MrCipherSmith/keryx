@@ -7,9 +7,8 @@ not one for the program: 256 on `skills/quality-program` (merged, #533), 257 on
 
 ## Why
 
-A side-by-side reading of our gdskills and rules against
-[addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) (MIT,
-v0.6.9) found that our execution machinery (flow state, contracts, STATUS
+A side-by-side reading of our gdskills and rules against an external skills
+library (MIT; see THIRD_PARTY_NOTICES.md) found that our execution machinery (flow state, contracts, STATUS
 protocol, execution-verified review, skill learning, hook-enforced routing) is
 ahead, while the way our skills themselves are written and checked is behind:
 
@@ -29,11 +28,9 @@ ahead, while the way our skills themselves are written and checked is behind:
 
 ## What we take, and what we do not
 
-Taken (re-expressed in our own words and mechanisms, with MIT attribution
-inline in the document that adapts the technique — this repo's convention, as
-`docs/skills/rejected-skill-changes.md` does it. A root `THIRD_PARTY_NOTICES.md`
-was considered and dropped: `package.json` `files` would not publish it, so it
-would reach nobody. Flow 258 T16 placed the credits: `quality/root-cause`,
+Taken (re-expressed in our own words and mechanisms; the MIT notice for the
+external skills library lives in root `THIRD_PARTY_NOTICES.md`). Flow 258 T16
+placed the credits: `quality/root-cause`,
 `quality/fresh-eyes`, `quality/api-truth`, `quality/deprecation-path`,
 `src/review/floor.ts`, and one line each at the adapted mechanic in
 `orchestration/task-implementer`, `planning/interviewer` and
@@ -48,7 +45,7 @@ the list is below the bullets**):
   ratcheted baseline;
 - a required skill anatomy checked by lint, plus a length budget;
 - description discipline: triggers, "NOT for", never a summary of the workflow;
-- behavioural evals with pressure scenarios — and, unlike the source, a
+- behavioural evals with pressure scenarios — and, unlike the external skills library, a
   without-skill control arm and repeated runs, so impact is measured;
 - debugging, doubt-driven review, source-driven development, deprecation and
   migration skills;
@@ -73,7 +70,7 @@ overlaps:
   skill anatomy checked by lint (`anatomy:sections`), the length budget
   (`anatomy:length`), and description discipline (`description:collision`, and
   the trigger / "NOT for" shape `anatomy:sections` demands). All three are the
-  source's techniques made executable over our own tree; the thresholds, the
+  external skills library's techniques made executable over our own tree; the thresholds, the
   Jaccard collision test on the router's own tokenisation, and the
   `anatomy:red-flags-collision` check are ours.
 - `src/commands/routing-corpus.ts` — one credit for the corpus shape: positive
@@ -115,7 +112,7 @@ acceptance criteria are written against the tree it will actually change.
 
 ## Constraints for every task
 
-- Worktree: `/Users/Goodea/goodea/keryx/.claude/worktrees/skills-quality`.
+- Worktree: `~/goodea/keryx/.claude/worktrees/skills-quality`.
   Each flow runs on its own branch cut from main after the previous one merged
   (256: `skills/quality-program`, merged as #533; 257: `skills/quality-gate`,
   merged as #540 at `ea569c92`; 258: `skills/skill-gaps`, open as #545).

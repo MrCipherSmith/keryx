@@ -15,6 +15,7 @@ import {
   classifyRemoteCommand,
   type GatewayDecision,
   isBusyDeferred,
+  isQueuedWhenBusy,
   refusalText,
   remoteHelpText,
 } from "./command-gateway";
@@ -89,9 +90,19 @@ export interface RouterLimits {
   commandLimitMs: number;
   /** How long a picker or a Yes/No waits for a press. */
   choiceTimeoutMs: number;
+  /** How often a command held for an idle main looks again (flow 419, AC4). */
+  idlePollMs?: number;
+  /** After this long a held command is dropped, and the topic is told. */
+  queuedCommandLimitMs?: number;
 }
 
-export const DEFAULT_ROUTER_LIMITS: RouterLimits = { runningNoticeMs: 4_000, commandLimitMs: 120_000, choiceTimeoutMs: 120_000 };
+export const DEFAULT_ROUTER_LIMITS: RouterLimits = {
+  runningNoticeMs: 4_000,
+  commandLimitMs: 120_000,
+  choiceTimeoutMs: 120_000,
+  idlePollMs: 250,
+  queuedCommandLimitMs: 30 * 60_000,
+};
 
 /** The most items on one picker page; with the navigation row this stays within the eight rows a keyboard may have. */
 export const PICKER_PAGE_SIZE = 7;
@@ -106,6 +117,8 @@ export interface RouterContext {
   host: RemoteCommandHost;
   /** Send text to the topic. False when it could not be sent. */
   reply(text: string): Promise<boolean>;
+  /** False once remote control is off: a command held for an idle main is dropped. Absent: always live. */
+  live?(): boolean;
   /**
    * `/history [N]` (flow 399): post the session's last messages to the topic. Resolves with the one
    * line to answer with when nothing was posted (usage, empty history), undefined when the messages went out.
@@ -261,9 +274,48 @@ export class RemoteCommandRouter {
 
   /** Put a run on the line. Used by the gateway's `run` and by an answered Yes/No. */
   enqueue(line: string, command: string, end?: CommandEnd): void {
+    if (isQueuedWhenBusy(command) && this.busyReason(line, command) !== undefined) {
+      this.detach(async () => {
+        if (await this.awaitIdle(line, command)) {
+          this.enqueueNow(line, command, end);
+        } else {
+          ended(end, "failed");
+        }
+      });
+      return;
+    }
+    this.enqueueNow(line, command, end);
+  }
+
+  private enqueueNow(line: string, command: string, end?: CommandEnd): void {
     this.chain = this.chain
       .then(() => this.execute(command, line, async () => (this.ctx.host.runCommand === undefined ? undefined : this.ctx.host.runCommand(line)), end))
       .catch(() => undefined);
+  }
+
+  /**
+   * Flow 419, AC4: main is busy and the command is one the shell would defer. Say it is queued, then wait
+   * until main is idle. Resolves true when it is, false when the wait was given up (the topic was told or
+   * is gone). Never on the line, so a status question or a stop is not stuck behind it.
+   */
+  private async awaitIdle(line: string, command: string): Promise<boolean> {
+    this.ctx.record(`/${command} queued: main is busy`);
+    await this.ctx.reply(this.ctx.compose(`${line} is queued: main is busy. It runs when main is idle.`)).catch(() => false);
+    const { idlePollMs = 250, queuedCommandLimitMs = 30 * 60_000 } = this.ctx.limits;
+    const until = Date.now() + queuedCommandLimitMs;
+    while (this.ctx.host.isBusy()) {
+      if (this.ctx.live?.() === false) {
+        this.ctx.record(`${line} dropped: remote control went off while it waited`);
+        return false;
+      }
+      if (Date.now() >= until) {
+        this.ctx.record(`${line} dropped: main stayed busy`);
+        await this.ctx.reply(`${line} was not run: main stayed busy for ${Math.max(1, Math.round(queuedCommandLimitMs / 60_000))} minutes. Send it again when the run ends.`).catch(() => false);
+        return false;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, idlePollMs));
+    }
+    return true;
   }
 
   /** Run `work` after everything already on the line, and hold the line until it settles. */
@@ -460,7 +512,8 @@ export class RemoteCommandRouter {
   private async picker(command: string, fromId: number | undefined, end: CommandEnd | undefined): Promise<AskResult> {
     const line = `/${command}`;
     const busy = this.busyReason(line, command);
-    if (busy !== undefined) {
+    // A model picker is shown even while main is busy; only the switch itself waits for an idle main.
+    if (busy !== undefined && !isQueuedWhenBusy(command)) {
       this.ctx.record(`${line} not run: ${busy}`);
       await this.ctx.reply(`${line} was not run: ${busy}.`).catch(() => false);
       return "failed";
@@ -502,6 +555,9 @@ export class RemoteCommandRouter {
       return "failed";
     }
     const switchModel = host.switchModel.bind(host);
+    if (this.busyReason("/model", "model") !== undefined && !(await this.awaitIdle(`/model ${chosen.label.replace(/^\* /, "")}`, "model"))) {
+      return "failed";
+    }
     // On the same line as every other command: a switch never overlaps one that is still executing.
     const switched = await this.serial(async (): Promise<CommandOutcome | { busy: string }> => {
       const busy = this.busyReason("/model", "model");

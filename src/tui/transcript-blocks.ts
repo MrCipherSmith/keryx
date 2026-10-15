@@ -87,9 +87,13 @@ export interface BlockRegistryOptions {
   onEvict?: (dropped: readonly BlockState[]) => void;
 }
 
+import { trackTranscriptNode } from "./transcript-history";
+
 export interface BlockRegistry {
   /** Register a block (starts collapsed) and return its id. */
   register(block: BlockInput): string;
+  /** Forget metadata when its UI view leaves the mounted window. */
+  remove(id: string): void;
   /** A snapshot of one block, or `undefined` for an unknown id. */
   get(id: string): BlockState | undefined;
   /** Flip one block's collapse state; unknown ids are inert. */
@@ -197,6 +201,13 @@ export function createBlockRegistry(options: BlockRegistryOptions = {}): BlockRe
         options.onEvict?.(dropped);
       }
       return id;
+    },
+    remove: (id) => {
+      const index = blocks.findIndex((block) => block.id === id);
+      if (index < 0) return;
+      blocks.splice(index, 1);
+      if (focusIndex > index) focusIndex -= 1;
+      focusIndex = Math.min(focusIndex, blocks.length - 1);
     },
     get: (id) => {
       const block = find(id);
@@ -772,6 +783,7 @@ export function createAssistantMessageStream(
 ): AssistantMessageStream {
   type Message = {
     container: Box;
+    complete: () => void;
     segmenter: StreamSegmenter;
     views: SegmentView[];
     /** Views whose segment is final; never repainted again. */
@@ -787,8 +799,11 @@ export function createAssistantMessageStream(
       flexDirection: "column",
       flexShrink: 0,
     });
+    let live = true;
+    trackTranscriptNode(container, { protected: () => live });
+    const complete = (): void => { live = false; };
     parent.add(container);
-    return { container, segmenter: createStreamSegmenter(), views: [], frozen: 0 };
+    return { complete, container, segmenter: createStreamSegmenter(), views: [], frozen: 0 };
   };
 
   const paint = (m: Message, segments: readonly MdSegment[], frozen: number): void => {
@@ -833,9 +848,10 @@ export function createAssistantMessageStream(
       m.frozen = 0;
       const segments = segmentMarkdown(text);
       paint(m, segments, segments.length);
+      m.complete();
       if (segments.length === 0) {
         try {
-          parent.remove(m.container);
+          m.container.destroyRecursively();
         } catch {
           // best-effort teardown
         }
@@ -847,11 +863,12 @@ export function createAssistantMessageStream(
       if (message === undefined) {
         return;
       }
+      message.complete();
       for (const view of message.views.splice(0)) {
         view.destroy();
       }
       try {
-        parent.remove(message.container);
+        message.container.destroyRecursively();
       } catch {
         // already unmounted
       }
@@ -892,6 +909,8 @@ export interface BlockViewOptions {
    * directly to it.
    */
   startExpanded?: boolean;
+  /** Release bookkeeping on mounted-history eviction. */
+  onHistoryEvict?: () => void;
 }
 
 export interface BlockView {
@@ -935,6 +954,8 @@ export function createBlockView(
   });
   const header = new otui.TextRenderable(renderer, { id: `${id}-h`, content: "" });
   box.add(header);
+  let protectedView = false;
+  trackTranscriptNode(box, { protected: () => protectedView, evict: () => options.onHistoryEvict?.() });
   parent.add(box);
   let body: Box | undefined;
   let bodyText: Text | undefined;
@@ -1036,6 +1057,8 @@ export function createBlockView(
   return {
     id: block.id,
     render: (state, opts = {}) => {
+      if (box.isDestroyed) return;
+      protectedView = opts.focused === true;
       paintHeader(state, opts.focused === true);
       if (state.collapsed) {
         if (options.collapsedPreview !== undefined) {
@@ -1152,7 +1175,14 @@ export function createBlockMount(
       }
       const state = registry.get(id);
       if (state !== undefined) {
-        views.set(id, createBlockView(otui, renderer, parent, state, options));
+        views.set(id, createBlockView(otui, renderer, parent, state, {
+          ...options,
+          onHistoryEvict: () => {
+            views.delete(id);
+            registry.remove(id);
+            options.onHistoryEvict?.();
+          },
+        }));
       }
       return id;
     },

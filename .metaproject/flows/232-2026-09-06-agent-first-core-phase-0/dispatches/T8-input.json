@@ -18,7 +18,7 @@
       "AC4: M10: stress JSON creation uses an existing resolver and writes a report in the offline fixture; optional containment port is handled with no unsafe default.",
       "AC5: M10: a scripts TypeScript check covers the benchmark/stress scripts and fails on an injected type error; root and scripts checks pass without external model calls."
     ],
-    "context": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md",
+    "context": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md",
     "existing_tests": [
       "src/commands/agent-tool-call-budget.test.ts",
       "scripts/stress/keryx-shell-stress.test.ts",
@@ -38,9 +38,9 @@
     }
   },
   "workspace": {
-    "codebase_path": "/Users/Goodea/goodea/keryx",
+    "codebase_path": "~/goodea/keryx",
     "branch": "codex/agent-first-core",
-    "context_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md"
+    "context_path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md"
   },
   "automation": {
     "skip_confirmation": true,

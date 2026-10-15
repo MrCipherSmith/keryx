@@ -1,0 +1,346 @@
+{
+  "mutants": [
+    {
+      "id": "P01",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (labelled !== undefined) return labelled.result;",
+      "replacement": "if (labelled !== undefined && labelled.result !== undefined) return labelled.result;"
+    },
+    {
+      "id": "P02",
+      "file": "src/review/ledger.ts",
+      "anchor": "return afterMarker(raw) ?? scannedResult(raw);",
+      "replacement": "return scannedResult(raw) ?? afterMarker(raw);"
+    },
+    {
+      "id": "P04",
+      "file": "src/review/ledger.ts",
+      "anchor": "return afterMarker(raw) ?? scannedResult(raw);",
+      "replacement": "return scannedResult(raw);"
+    },
+    {
+      "id": "O01",
+      "file": "src/review/ledger.ts",
+      "anchor": "depth === 1 && !claimsResult",
+      "replacement": "depth >= 1 && !claimsResult"
+    },
+    {
+      "id": "O04",
+      "file": "src/review/ledger.ts",
+      "anchor": "claimsResult = KEY_COLON.test(raw);",
+      "replacement": "claimsResult = true;"
+    },
+    {
+      "id": "O05",
+      "file": "src/review/ledger.ts",
+      "anchor": "else if (char === \"\\\\\") escaped = true;",
+      "replacement": "else if (char === \"\\\\\") escaped = false;"
+    },
+    {
+      "id": "O06",
+      "file": "src/review/ledger.ts",
+      "anchor": "{ quoted = true; keyFrom = end + 1; }",
+      "replacement": "{ quoted = true; keyFrom = end; }"
+    },
+    {
+      "id": "O08",
+      "file": "src/review/ledger.ts",
+      "anchor": "const KEY_COLON = /\\s*:/y;",
+      "replacement": "const KEY_COLON = /:/y;"
+    },
+    {
+      "id": "O09",
+      "file": "src/review/ledger.ts",
+      "anchor": "const RESULT_KEYS = new Set([\"status\", \"reviewer\", \"findings\"]);",
+      "replacement": "const RESULT_KEYS = new Set([\"status\"]);"
+    },
+    {
+      "id": "O11",
+      "file": "src/review/ledger.ts",
+      "anchor": "const RESULT_KEYS = new Set([\"status\", \"reviewer\", \"findings\"]);",
+      "replacement": "const RESULT_KEYS = new Set([\"reviewer\", \"findings\"]);"
+    },
+    {
+      "id": "T01",
+      "file": "src/review/ledger.ts",
+      "anchor": "const OBJECT_START = /\\{\\s*[\"}]/y;",
+      "replacement": "const OBJECT_START = /\\{/y;"
+    },
+    {
+      "id": "T02",
+      "file": "src/review/ledger.ts",
+      "anchor": "const OBJECT_START = /\\{\\s*[\"}]/y;",
+      "replacement": "const OBJECT_START = /\\{\"/y;"
+    },
+    {
+      "id": "T03",
+      "file": "src/review/ledger.ts",
+      "anchor": "const MAX_UNCLOSED = 8;",
+      "replacement": "const MAX_UNCLOSED = 7;"
+    },
+    {
+      "id": "T04",
+      "file": "src/review/ledger.ts",
+      "anchor": "const MAX_UNCLOSED = 8;",
+      "replacement": "const MAX_UNCLOSED = 9;"
+    },
+    {
+      "id": "T05",
+      "file": "src/review/ledger.ts",
+      "anchor": "const MAX_UNCLOSED = 8;",
+      "replacement": "const MAX_UNCLOSED = 1;"
+    },
+    {
+      "id": "T06",
+      "file": "src/review/ledger.ts",
+      "anchor": "claimsResult || (unclosed += 1) > MAX_UNCLOSED",
+      "replacement": "(unclosed += 1) > MAX_UNCLOSED"
+    },
+    {
+      "id": "T09",
+      "file": "src/review/ledger.ts",
+      "anchor": "return { found, truncated: true };",
+      "replacement": "return { found, truncated: false };"
+    },
+    {
+      "id": "T10",
+      "file": "src/review/ledger.ts",
+      "anchor": "      start += 1;\n      continue;\n    }\n    try {",
+      "replacement": "      start = raw.length;\n      continue;\n    }\n    try {"
+    },
+    {
+      "id": "T11",
+      "file": "src/review/ledger.ts",
+      "anchor": "start = end + 1;",
+      "replacement": "start += 1;"
+    },
+    {
+      "id": "T12",
+      "file": "src/review/ledger.ts",
+      "anchor": "catch { /* not JSON: skipped whole */ }",
+      "replacement": "catch { start += 1; continue; }"
+    },
+    {
+      "id": "F02",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (close === -1) break;",
+      "replacement": "if (close === -1) { ranges.push([open, raw.length] as const); break; }"
+    },
+    {
+      "id": "F03",
+      "file": "src/review/ledger.ts",
+      "anchor": "open = raw.indexOf(\"```\", close + 3);",
+      "replacement": "open = raw.indexOf(\"```\", close);"
+    },
+    {
+      "id": "F04",
+      "file": "src/review/ledger.ts",
+      "anchor": "ranges[next]![1] <= start",
+      "replacement": "ranges[next]![1] < start"
+    },
+    {
+      "id": "S01",
+      "file": "src/review/ledger.ts",
+      "anchor": "(inFence(start) ? fenced : bare)",
+      "replacement": "(inFence(start) ? bare : fenced)"
+    },
+    {
+      "id": "S02",
+      "file": "src/review/ledger.ts",
+      "anchor": "return fencedResults[fencedResults.length - 1];",
+      "replacement": "return fencedResults[0];"
+    },
+    {
+      "id": "S03",
+      "file": "src/review/ledger.ts",
+      "anchor": "const fencedResults = fenced.filter(isReviewerResult);",
+      "replacement": "const fencedResults = fenced.filter(hasStatus);"
+    },
+    {
+      "id": "S04",
+      "file": "src/review/ledger.ts",
+      "anchor": "new Set(bare.filter(hasStatus).map((value) => value.status)).size > 1",
+      "replacement": "new Set(bare.filter(hasStatus).map((value) => value.status)).size > 2"
+    },
+    {
+      "id": "S07",
+      "file": "src/review/ledger.ts",
+      "anchor": "return accepted[accepted.length - 1];",
+      "replacement": "return accepted[0];"
+    },
+    {
+      "id": "S08",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (truncated) return undefined;",
+      "replacement": "/* mutated: truncation ignored */"
+    },
+    {
+      "id": "R01",
+      "file": "src/review/ledger.ts",
+      "anchor": "typeof object.reviewer === \"string\" || Array.isArray(object.findings)",
+      "replacement": "typeof object.reviewer === \"string\" && Array.isArray(object.findings)"
+    },
+    {
+      "id": "R02",
+      "file": "src/review/ledger.ts",
+      "anchor": "Array.isArray(object.findings)",
+      "replacement": "object.findings !== undefined"
+    },
+    {
+      "id": "R03",
+      "file": "src/review/ledger.ts",
+      "anchor": "typeof object.reviewer === \"string\"",
+      "replacement": "object.reviewer !== undefined"
+    },
+    {
+      "id": "H01",
+      "file": "src/review/ledger.ts",
+      "anchor": "typeof (value as { status?: unknown }).status === \"string\"",
+      "replacement": "(value as { status?: unknown }).status !== undefined"
+    },
+    {
+      "id": "L01",
+      "file": "src/review/ledger.ts",
+      "anchor": "/```REVIEW_RESULT[ \\t]*\\r?\\n([\\s\\S]*?)```/gi",
+      "replacement": "/```REVIEW_RESULT[ \\t]*\\r?\\n([\\s\\S]*?)```/g"
+    },
+    {
+      "id": "L02",
+      "file": "src/review/ledger.ts",
+      "anchor": "/```REVIEW_RESULT[ \\t]*\\r?\\n([\\s\\S]*?)```/gi",
+      "replacement": "/```REVIEW_RESULT[ \\t]*\\n([\\s\\S]*?)```/gi"
+    },
+    {
+      "id": "L03",
+      "file": "src/review/ledger.ts",
+      "anchor": "/```REVIEW_RESULT[ \\t]*\\r?\\n([\\s\\S]*?)```/gi",
+      "replacement": "/```REVIEW_RESULT\\r?\\n([\\s\\S]*?)```/gi"
+    },
+    {
+      "id": "L04",
+      "file": "src/review/ledger.ts",
+      "anchor": "/```REVIEW_RESULT[ \\t]*\\r?\\n([\\s\\S]*?)```/gi",
+      "replacement": "/```REVIEW_RESULT[ \\t]*\\r?\\n([\\s\\S]*)```/gi"
+    },
+    {
+      "id": "L05",
+      "file": "src/review/ledger.ts",
+      "anchor": "labelled[labelled.length - 1]![1]!",
+      "replacement": "labelled[0]![1]!"
+    },
+    {
+      "id": "L06",
+      "file": "src/review/ledger.ts",
+      "anchor": "hasStatus(parsed) ? parsed : undefined",
+      "replacement": "parsed"
+    },
+    {
+      "id": "L08",
+      "file": "src/review/ledger.ts",
+      "anchor": "catch { return { result: undefined }; }",
+      "replacement": "catch { return undefined; }"
+    },
+    {
+      "id": "A01",
+      "file": "src/review/ledger.ts",
+      "anchor": "/REVIEW_RESULT(?:[ \\t]*[:=])?\\s*(?=\\{)/g",
+      "replacement": "/REVIEW_RESULT(?:[ \\t]*[:])?\\s*(?=\\{)/g"
+    },
+    {
+      "id": "A02",
+      "file": "src/review/ledger.ts",
+      "anchor": "/REVIEW_RESULT(?:[ \\t]*[:=])?\\s*(?=\\{)/g",
+      "replacement": "/REVIEW_RESULT(?:[ \\t]*[:=])?[ \\t]*(?=\\{)/g"
+    },
+    {
+      "id": "A03",
+      "file": "src/review/ledger.ts",
+      "anchor": "/REVIEW_RESULT(?:[ \\t]*[:=])?\\s*(?=\\{)/g",
+      "replacement": "/REVIEW_RESULT(?:[ \\t]*[:=])\\s*(?=\\{)/g"
+    },
+    {
+      "id": "A04",
+      "file": "src/review/ledger.ts",
+      "anchor": ".slice(-MAX_MARKERS)",
+      "replacement": ".slice(0, MAX_MARKERS)"
+    },
+    {
+      "id": "A05",
+      "file": "src/review/ledger.ts",
+      "anchor": "const MAX_MARKERS = 8;",
+      "replacement": "const MAX_MARKERS = 7;"
+    },
+    {
+      "id": "A06",
+      "file": "src/review/ledger.ts",
+      "anchor": "const MAX_MARKERS = 8;",
+      "replacement": "const MAX_MARKERS = 9;"
+    },
+    {
+      "id": "A07",
+      "file": "src/review/ledger.ts",
+      "anchor": "const MAX_MARKERS = 8;",
+      "replacement": "const MAX_MARKERS = 1;"
+    },
+    {
+      "id": "A10",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (end === undefined) continue;",
+      "replacement": "if (end === undefined) return undefined;"
+    },
+    {
+      "id": "A11",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (isReviewerResult(parsed)) return parsed;",
+      "replacement": "if (hasStatus(parsed)) return parsed;"
+    },
+    {
+      "id": "A13",
+      "file": "src/review/ledger.ts",
+      "anchor": "catch { /* prose after the word: try the marker before */ }",
+      "replacement": "catch { return undefined; }"
+    },
+    {
+      "id": "W01",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "const parsed = wholeFileResult(raw) ?? parseReviewResult(raw);",
+      "replacement": "const parsed = parseReviewResult(raw) ?? wholeFileResult(raw);"
+    },
+    {
+      "id": "W02",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "const parsed = wholeFileResult(raw) ?? parseReviewResult(raw);",
+      "replacement": "const parsed = parseReviewResult(raw);"
+    },
+    {
+      "id": "W06",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "async function readResult(source: string): Promise<ReviewerResult> {\n  let raw: string;\n  try {\n    raw = source === \"-\" ?",
+      "replacement": "async function readResult(source: string): Promise<ReviewerResult> {\n  let raw: string;\n  try {\n    raw = source === \"--\" ?"
+    },
+    {
+      "id": "D01",
+      "file": "src/commands/review-ledger.ts",
+      "anchor": "result.reviewer === undefined && !Array.isArray(result.findings)",
+      "replacement": "false"
+    },
+    {
+      "id": "D02",
+      "file": "src/commands/review-ledger.ts",
+      "anchor": "result.reviewer === undefined && !Array.isArray(result.findings)",
+      "replacement": "result.reviewer === undefined || !Array.isArray(result.findings)"
+    },
+    {
+      "id": "D03",
+      "file": "src/commands/review-ledger.ts",
+      "anchor": "ignored.push(`raw/${name}`);\n      continue;",
+      "replacement": "ignored.push(`raw/${name}`);"
+    },
+    {
+      "id": "X02",
+      "file": "src/review/retry-plan.ts",
+      "anchor": "read === undefined ? entry.contentHash : createHash(\"sha256\").update(read(entry)).digest(\"hex\")",
+      "replacement": "entry.contentHash"
+    }
+  ]
+}

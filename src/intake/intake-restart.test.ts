@@ -86,7 +86,7 @@ describe("restart in `taking` (AC13)", () => {
     const fakes = await crashAfterInit(card);
     await recoverIntakeTaking(env.root, aged(fakes));
     // `taken` is final, so a re-press is refused outright
-    expect(await decideIntakeCard(env.root, card.id, "take", { decidedBy: "4242", deps: fakes.deps })).toEqual({ ok: false, message: "уже решено" });
+    expect(await decideIntakeCard(env.root, card.id, "take", { decidedBy: "4242", now: local(10, 42), deps: fakes.deps })).toEqual({ ok: false, message: "уже решено" });
     expect(fakes.flows.flows).toHaveLength(1);
   });
 
@@ -109,10 +109,10 @@ describe("restart in `taking` (AC13)", () => {
     const card = await seedCard(env.root);
     const fakes = makeFakes();
     fakes.flows.dieAfterCreate = true;
-    const first = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "4242", deps: fakes.deps });
+    const first = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "4242", now: local(10, 42), deps: fakes.deps });
     expect(first.ok).toBe(false);
     fakes.flows.dieAfterCreate = false;
-    const second = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "4242", deps: fakes.deps });
+    const second = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "4242", now: local(10, 42), deps: fakes.deps });
     expect(second).toMatchObject({ ok: true, flowId: "412" });
     expect(fakes.flows.flows).toHaveLength(1);
     expect(fakes.flows.initCalls).toHaveLength(1);
@@ -149,7 +149,7 @@ describe("restart in `taking` (AC13)", () => {
     const b = await seedCard(env.root);
     const fakes = makeFakes();
     const release = held(fakes);
-    const claimedAt = new Date();
+    const claimedAt = local(10, 42);
     const pressA = decideIntakeCard(env.root, a.id, "take", { decidedBy: "tui", now: claimedAt, deps: fakes.deps });
     const pressB = decideIntakeCard(env.root, b.id, "take", { decidedBy: "tui", now: claimedAt, deps: fakes.deps });
     await until(() => fakes.flows.initCalls.length === 2, "both presses to reach flow init");
@@ -187,7 +187,7 @@ describe("restart in `taking` (AC13)", () => {
     const card = await seedCard(env.root);
     const fakes = makeFakes();
     const release = held(fakes);
-    const press = decideIntakeCard(env.root, card.id, "take", { decidedBy: "tui", deps: fakes.deps });
+    const press = decideIntakeCard(env.root, card.id, "take", { decidedBy: "tui", now: local(10, 42), deps: fakes.deps });
     await until(() => fakes.flows.initCalls.length === 1, "the press to reach flow init");
     // another process's recovery pass marks the card failed while the init is still running
     expect((await appendIntakeIfState(env.root, card.id, ["taking"], { state: "failed", reason: "interrupted by a restart; no flow found, check and press again" })).ok).toBe(true);
@@ -199,7 +199,7 @@ describe("restart in `taking` (AC13)", () => {
     expect(result.statusLine).toBeUndefined();
     expect((await readIntakeCardView(env.root, card.id))?.state).toBe("failed");
 
-    const second = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "tui", deps: fakes.deps });
+    const second = await decideIntakeCard(env.root, card.id, "take", { decidedBy: "tui", now: local(10, 42), deps: fakes.deps });
     expect(second).toMatchObject({ ok: true, flowId: "412" });
     expect(fakes.flows.initCalls).toHaveLength(1);
     expect((await readIntakeCardView(env.root, card.id))?.state).toBe("taken");
@@ -217,7 +217,7 @@ describe("restart in `taking` (AC13)", () => {
       await slow;
       return run(project, input);
     };
-    const press = decideIntakeCard(env.root, card.id, "ci-triage", { decidedBy: "tui", deps: fakes.deps });
+    const press = decideIntakeCard(env.root, card.id, "ci-triage", { decidedBy: "tui", now: local(10, 42), deps: fakes.deps });
     await until(async () => (await readIntakeCardView(env.root, card.id))?.state === "taking", "the claim");
     await appendIntakeIfState(env.root, card.id, ["taking"], { state: "failed", reason: "interrupted" });
     settle();
@@ -231,7 +231,7 @@ describe("restart in `taking` (AC13)", () => {
     const card = await seedCard(env.root);
     const done = await seedCard(env.root);
     const fakes = makeFakes();
-    await decideIntakeCard(env.root, done.id, "decline", { decidedBy: "1", deps: fakes.deps });
+    await decideIntakeCard(env.root, done.id, "decline", { decidedBy: "1", now: local(10, 42), deps: fakes.deps });
     expect(await recoverIntakeTaking(env.root, aged(fakes))).toBe(0);
     expect((await readIntakeCardView(env.root, card.id))!.state).toBe("sent");
     expect((await readIntakeCardView(env.root, done.id))!.state).toBe("decided");

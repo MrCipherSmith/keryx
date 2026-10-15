@@ -30,8 +30,9 @@ describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
     // defensive no-op for task-notification/bus-message) just returns.
     expect(between).toContain('if (origin === "operator")');
     // Flow 376: a Telegram line keeps its `tg` label through the hold queue.
-    expect(between).toContain("mainQueue.push({ id, question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });");
-    expect(between).toContain("paintMainQueue();");
+    // (`enqueue` repaints; the position it returns goes into the notice.)
+    expect(between).toContain("const position = turnLoop.enqueue(line, displayLine, source);");
+    expect(between).toContain("queued as q${position}.\\n");
     expect(between).toContain("return;");
     // And it must return BEFORE the echo ever runs — i.e. this whole gate
     // sits ahead of `appendUserEcho`, not the other way around.
@@ -46,8 +47,8 @@ describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
     expect(pendingEditIdx).toBeLessThan(choiceIdx);
     const block = source.slice(pendingEditIdx, choiceIdx);
     expect(block).toContain("leaseView()?.held() === true");
-    expect(block).toContain("mainQueue.push({ id, question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });");
-    expect(block).toContain("no side worker while held");
+    expect(block).toContain("const position = turnLoop.enqueue(line, displayLine, source);");
+    expect(block).toContain("queued as q${position} (no side worker while held).\\n");
     // The held branch must return BEFORE the composer-choice IIFE below it.
     const heldIdx = block.indexOf("leaseView()?.held() === true");
     expect(block.indexOf("return;", heldIdx)).toBeGreaterThan(heldIdx);
@@ -64,13 +65,13 @@ describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
     // queue and handed to `forceForegroundQueueItem` — else it would already
     // be gone by the time the guard ran.
     const heldIdx = body.indexOf("leaseView()?.held() === true");
-    const removeIdx = body.indexOf("removeMainQueueItem(mainQueue, index)");
+    const removeIdx = body.indexOf("removeMainQueueItem(turnLoop.queue, index)");
     expect(heldIdx).toBeGreaterThan(0);
     expect(removeIdx).toBeGreaterThan(heldIdx);
   });
 
   test("the task-notification wake's idle test includes \"not held\", alongside busy and the queue", () => {
-    const idx = source.indexOf("const idle = !busy && mainQueue.length === 0 && leaseView()?.held() !== true;");
+    const idx = source.indexOf("const idle = !busy && turnLoop.queue.length === 0 && leaseView()?.held() !== true;");
     expect(idx).toBeGreaterThan(0);
   });
 });
@@ -112,16 +113,85 @@ describe("held turns: banner (specification §4.3, AC4)", () => {
 });
 
 describe("held turns: release drains the queue (specification §5.2 step 5, AC4)", () => {
-  test("leaseHoldController is built from leaseView().held() and drains the FIFO queue (forced item first) on release, skipped while a turn is busy", () => {
+  test("leaseHoldController is built from leaseView().held() and drains through the shared sites on release (behaviour: main-queue-drain.test.ts)", () => {
     const start = source.indexOf("leaseHoldController = createLeaseHoldController({");
     expect(start).toBeGreaterThan(0);
     const end = source.indexOf("\n    });", start);
+    expect(end).toBeGreaterThan(start);
     const block = source.slice(start, end);
     expect(block).toContain("isHeld: () => leaseView()?.held() === true");
-    expect(block).toContain("chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement");
-    expect(block).toContain("forceHandoff.takeNext() ?? mainQueue.shift()");
-    expect(block).toContain("paintMainQueue();");
-    expect(block).toContain("remoteQueue.runQueued(drained);");
+    expect(block).toContain("onRelease: () => drainSites.onLeaseRelease()");
+  });
+
+  // Flow 441 (AC1): the shell builds `createTurnLoop` from the real objects. The inputs
+  // turn-loop.test.ts cannot reach (it models them) are pinned here, whitespace-normalised and
+  // comment-free, so a reformat is not a failure and a commented-out field is not a pass.
+  test("the shell builds the turn loop with every real input in place (behaviour: turn-loop.test.ts)", () => {
+    const flat = (text: string): string => text.replace(/\/\/[^\n]*/g, "").replace(/\s+/g, " ").trim();
+    const loop = source.indexOf("const turnLoop = createTurnLoop({");
+    expect(loop).toBeGreaterThan(0);
+    const loopEnd = source.indexOf("\n    });", loop);
+    expect(loopEnd).toBeGreaterThan(loop);
+    const loopBody = flat(source.slice(loop, loopEnd));
+    for (const field of [
+      "forced: forceHandoff,",
+      "paint: () => paintMainQueue(),",
+      "turnWorkInFlight: () => chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement,",
+      "onSettle: () => busWakeController?.onSettle(),",
+      // The reply path to the topic, the label of a queued line, the composer, the transcript line,
+      // the Telegram source on a drained line and the report of a failed detached command.
+      "getBridge: () => remoteBridge,",
+      "summarize: summarizeSubmittedLine,",
+      "setText: (text) => { input.value = text; },",
+      "focus: () => input.focus(),",
+      "say: (text) => io.onSystem?.(text),",
+      "runLine: (line, origin, source) => runLine(line, origin, source),",
+      "onDetachedFailure: (error) => { const reason = error instanceof Error ? error.message : String(error); io.onSystem?.(`◇ a slash command failed: ${terminalSafe(reason).text}\\n`); },",
+    ]) {
+      expect(loopBody).toContain(field);
+    }
+    expect(source).toContain("const drainSites = turnLoop.drain;");
+    // The one turn-loop.ts internal worth a source pin: a getter, because the loop replaces its queue
+    // array, so a reference taken once drains a dead queue (F-016). Every other field of the drain is
+    // killed by a behaviour test in turn-loop.test.ts.
+    const moduleSource = readFileSync(path.join(import.meta.dir, "turn-loop.ts"), "utf8");
+    const factory = moduleSource.indexOf("const drain = createMainQueueDrain({");
+    expect(factory).toBeGreaterThan(0);
+    const factoryEnd = moduleSource.indexOf("\n  });", factory);
+    expect(factoryEnd).toBeGreaterThan(factory);
+    const body = flat(moduleSource.slice(factory, factoryEnd));
+    expect(body).toContain("queue: () => queue,");
+    expect(body).not.toContain("queue: queue,");
+  });
+
+  test("the sidebar's session state reads the live queue length from the turn loop", () => {
+    expect(source).toContain("sessionState: () => ({ queued: turnLoop.queue.length, mode: formatModeInForce(modeForTurn(true)) }),");
+  });
+
+  test("the bus wake is idle only when the shared in-flight predicate is clear (flow 441 F-019)", () => {
+    const start = source.indexOf("busWakeController = createBusWakeController({");
+    expect(start).toBeGreaterThan(0);
+    const isIdle = source.slice(start, source.indexOf("inbox: busInbox,", start));
+    expect(isIdle).toContain("!drainSites.workInFlight() &&");
+    expect(isIdle).toContain("turnLoop.queue.length === 0 &&");
+    expect(isIdle).toContain("leaseView()?.held() !== true");
+  });
+
+  test("every slash command whose work outlives its handler is held in the queue (flow 441 F-001)", () => {
+    const detaching = ["/schedule", "/goal", "/search-provider", "/search-connect", "/model", "/connect"];
+    for (const name of detaching) {
+      const at = source.indexOf(`if (command.name === "${name}"`);
+      expect(at).toBeGreaterThan(0);
+      expect(source.slice(at, at + 400)).toContain("detachSlashWork(");
+    }
+    expect(source.match(/detachSlashWork\(/g)?.length).toBe(detaching.length);
+    // the counter and the end-of-work drain live in the factory (behaviour: main-queue-drain.test.ts)
+    expect(source).toContain("const detachSlashWork = (work: Promise<unknown>): void => drainSites.detach(work);");
+    expect(source).not.toContain("detachedSlashWork");
+  });
+
+  test("a finished foreground operation drains the queue (flow 441)", () => {
+    expect(source.match(/drainSites\.onForegroundOperationComplete\(\);/g)?.length).toBe(1);
   });
 });
 

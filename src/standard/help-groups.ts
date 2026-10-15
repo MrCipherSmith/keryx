@@ -219,7 +219,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/mode",
     group: "Look and feel",
-    summary: "Show or switch the permission mode — /mode [ask|trust|auto].",
+    summary: "Show or switch the permission mode — /mode [ask|trust|auto]. Round limit: 40 rounds per turn, 200 in trust, 200 in auto and in automatic review; KERYX_AGENT_MAX_ROUNDS overrides.",
   },
   {
     kind: "slash",
@@ -346,7 +346,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "review",
     group: "Managed work",
-    summary: "Managed review packages and lightweight report-only review mode.",
+    summary: "Managed review packages and lightweight report-only review mode; `review ledger build` writes the research ledger the completion gate demands.",
   },
   { kind: "slash", name: "/flows", group: "Managed work", summary: "Browse project flows and inspect one." },
   {
@@ -538,6 +538,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "/schedules",
     group: "Automation",
     summary: "Scheduled tasks: next run, last outcome, report — pause, resume, run now, delete.",
+  },
+  {
+    kind: "slash",
+    name: "/autoreview",
+    group: "Automation",
+    summary: "Autonomous PR review with nobody at the keyboard: start, list, stop, arbiter — phase, rounds and tokens in the sidebar; arbiter lists what the question arbiter decided.",
   },
   {
     kind: "slash",

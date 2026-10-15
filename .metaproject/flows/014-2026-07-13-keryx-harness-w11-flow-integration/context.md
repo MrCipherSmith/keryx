@@ -36,5 +36,5 @@ Harness NEVER writes flow.json. Only the Task Manager (`src/flow` FlowService) w
 ## Operational
 - keryx = `bun ./src/cli.ts`; new worktree needs `bun install`. Never commit to main.
 - State only via `keryx flow`; workers via subagent-dispatch/result (STATUS: first line).
-- WORKTREE-GUARD: every writing worker `cd /Users/Goodea/goodea/keryx/.claude/worktrees/feature-keryx-harness-impl && pwd` first, write ONLY under it. Verify after each. fetch-mocks `as unknown as typeof fetch`; guard array indexing; immutability via `.toThrow()`. Harness never writes flow.json (only via FlowService API).
+- WORKTREE-GUARD: every writing worker `cd ~/goodea/keryx/.claude/worktrees/feature-keryx-harness-impl && pwd` first, write ONLY under it. Verify after each. fetch-mocks `as unknown as typeof fetch`; guard array indexing; immutability via `.toThrow()`. Harness never writes flow.json (only via FlowService API).
 - TDD order: FI-01 (T5→T6), FI-02 (T7), review T8.

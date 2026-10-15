@@ -1,10 +1,10 @@
-# Flow 052 — agent-mode UI redesign (codex/grok/pi aesthetic)
+# Flow 052 — agent-mode UI redesign (codex aesthetic)
 
 ## Problem
 User screenshot shows: (1) a duplicate prompt `❯ ❯` before the first input —
 `printHeader` prints a prompt AND `runAgentRepl` prints another; (2) a heavy
 double-cyan-ruled `banner()` header; (3) inconsistent, verbose role labeling. The
-user asked to base the look on the codex / grok / pi CLIs (minimal header, single
+user asked to base the look on the codex CLI (minimal header, single
 clean prompt, understated role markers, whitespace over rules).
 
 ## Approach (line-based, readline-safe — no full-screen/alt-screen)

@@ -96,7 +96,7 @@ describe("the PR description is a typed field, not a naming convention", () => {
 
 describe("cross_repo can describe a producer that has not merged", () => {
   const merged = {
-    repo: "vantage-backend",
+    repo: "acme-backend",
     state: "merged",
     sha: "f5219d5d4",
     reason: "DQ report payload: which halves are null vs 0",
@@ -105,7 +105,7 @@ describe("cross_repo can describe a producer that has not merged", () => {
   };
 
   const open = {
-    repo: "vantage-backend",
+    repo: "acme-backend",
     state: "open",
     pr: "https://github.com/o/backend/pull/98",
     branch: "feat/new-timeout",
@@ -126,7 +126,7 @@ describe("cross_repo can describe a producer that has not merged", () => {
         baseContext({
           cross_repo: [
             {
-              repo: "vantage-backend",
+              repo: "acme-backend",
               state: "unavailable",
               reason: "the DQ payload shape",
               facts: ["not readable from this checkout; dependent findings held at info"],
@@ -174,6 +174,36 @@ describe("cross_repo can describe a producer that has not merged", () => {
   });
 });
 
+describe("a result reports the slices it covered (flow 430 AC2)", () => {
+  const result = (slices: unknown): Record<string, unknown> => ({
+    status: "DONE",
+    reviewer: "review-logic",
+    summary: "nothing found",
+    findings: [],
+    stats: { blocker: 0, major: 0, minor: 0, info: 0 },
+    slices,
+  });
+
+  test("ids, objects with an id, and a mix of both validate", async () => {
+    expect(await errorsFor(result(["slice-01", "slice-02"]), FINDING)).toEqual([]);
+    expect(await errorsFor(result([{ id: "slice-01", status: "DONE", coverage: "read in full" }]), FINDING)).toEqual([]);
+    expect(await errorsFor(result(["slice-01", { id: "slice-02" }]), FINDING)).toEqual([]);
+  });
+
+  test("an empty list and an object entry carrying a status or coverage note validate", async () => {
+    expect(await errorsFor(result([]), FINDING)).toEqual([]);
+    expect(await errorsFor(result([{ id: "slice-01", status: "NOT_READ", coverage: "ran out of budget" }]), FINDING)).toEqual([]);
+  });
+
+  test("an entry with no id, an empty id, or another type is refused", async () => {
+    expect(await errorsFor(result([{ status: "DONE" }]), FINDING)).toEqual(["$.slices[0].id: Missing required property"]);
+    expect(await errorsFor(result([{ id: "" }]), FINDING)).not.toEqual([]);
+    expect(await errorsFor(result([""]), FINDING)).not.toEqual([]);
+    expect(await errorsFor(result([7]), FINDING)).not.toEqual([]);
+    expect(await errorsFor(result("slice-01"), FINDING)).not.toEqual([]);
+  });
+});
+
 describe("a finding can name the repository its evidence lives in", () => {
   function report(finding: Record<string, unknown>): Record<string, unknown> {
     return {
@@ -200,7 +230,7 @@ describe("a finding can name the repository its evidence lives in", () => {
   test("repo validates on the reviewer-side schema", async () => {
     expect(
       await errorsFor(
-        report({ repo: "vantage-backend", file: "src/config.ts", line: 42 }),
+        report({ repo: "acme-backend", file: "src/config.ts", line: 42 }),
         FINDING,
       ),
     ).toEqual([]);
@@ -223,7 +253,7 @@ describe("a finding can name the repository its evidence lives in", () => {
         id: "F-001",
         reviewer: "review-backend",
         severity: "info",
-        repo: "vantage-backend",
+        repo: "acme-backend",
         file: "src/config.ts",
         line: 42,
         problem: "the client assumes a 5s producer timeout",

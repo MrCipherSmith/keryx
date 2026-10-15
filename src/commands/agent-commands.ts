@@ -14,6 +14,7 @@
 // (see {@link describeCommand} / {@link commandsForMode}).
 
 import { EXTERNAL_AGENTS, canonicalExternalAgentId, getExternalAgent } from "../harness/external/registry";
+import { describeRoundLimitSplit } from "./round-limit";
 
 /** The two shell modes. `agent` has tools; `chat` is a plain conversation. */
 export type ShellMode = "chat" | "agent";
@@ -277,6 +278,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 424 (AC10): the unattended pull request review. Starts `keryx review run --autonomous` as
+    // a separate process; the sidebar shows its phase, rounds, tokens and last automatic answer.
+    name: "/autoreview",
+    description: "Autonomous PR review: /autoreview start <URL> [--budget-minutes N] [--budget-tokens N], list, stop, arbiter",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 369 (R4d): calls a remote `keryx serve` turn is waiting on. Allow or deny
     // is one call, once; the local answer path of the serve approval broker.
     name: "/approvals",
@@ -504,7 +512,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   {
     name: "/mode",
-    description: "Show or switch the permission mode — /mode [ask|trust|auto]",
+    description: `Show or switch the permission mode — /mode [ask|trust|auto]. Round limit: ${describeRoundLimitSplit()}`,
     // Chat mode has no tools, so there is nothing for a permission mode to gate.
     modes: AGENT_ONLY,
   },

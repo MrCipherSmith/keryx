@@ -1,6 +1,6 @@
 # Flow 317 / PR #702 — review round 1
 
-Checkout: /Users/Goodea/goodea/keryx-ape-317-gfu, branch flow/317-grader-fu, HEAD 153e29f6.
+Checkout: ~/goodea/keryx-ape-317-gfu, branch flow/317-grader-fu, HEAD 153e29f6.
 Reviewer: sonnet, adversarial mode, dispatched by the flow runner.
 Scope: full PR diff (12 commits, feat/agent-platform-expansion...HEAD) plus
 the flow journal's evidence trail for every claimed fix.

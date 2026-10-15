@@ -21,7 +21,7 @@ lean-dependency invariant (AC15). Phase 1 must ratify expanding that set.
 ## R2 — Inline vs full-screen + scrollback: RESOLVED (configurable)
 - `CliRendererConfig.screenMode: "alternate-screen" | "main-screen" | "split-footer"`.
 - **`split-footer`** = a fixed footer composer over a scrolling main region — exactly
-  the Pi/grok layout, and the mode we should adopt (preserves the main-screen
+  the conventional terminal-agent layout, and the mode we should adopt (preserves the main-screen
   transcript rather than a full alt-screen takeover). `footerHeight`, `exitOnCtrlC`,
   `exitSignals`, `clearOnShutdown`, `onDestroy` are all configurable.
 

@@ -1,0 +1,257 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t1",
+  "command": "bun test src/review/ledger.test.ts src/commands/review-slice.test.ts src/commands/review.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 878
+  },
+  "mutants": [
+    {
+      "id": "M01-objectEnd-never-closes-returns-last-index",
+      "file": "src/review/ledger.ts",
+      "anchor": "  return undefined;\n}\n\n/** The objects that stand",
+      "replacement": "  return raw.length - 1;\n}\n\n/** The objects that stand",
+      "line": 100,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 847
+    },
+    {
+      "id": "M02-objectEnd-ignore-nested-open-brace",
+      "file": "src/review/ledger.ts",
+      "anchor": "else if (char === \"{\") depth += 1;",
+      "replacement": "else if (char === \"{\") depth += 0;",
+      "line": 97,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 760
+    },
+    {
+      "id": "M03-objectEnd-escape-never-set",
+      "file": "src/review/ledger.ts",
+      "anchor": "else if (char === \"\\\\\") escaped = true;",
+      "replacement": "else if (char === \"\\\\\") escaped = false;",
+      "line": 94,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 768
+    },
+    {
+      "id": "M05-objectEnd-close-at-first-brace",
+      "file": "src/review/ledger.ts",
+      "anchor": "else if (char === \"}\" && --depth === 0) return end;",
+      "replacement": "else if (char === \"}\") return end;",
+      "line": 98,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 784
+    },
+    {
+      "id": "M06-topLevel-truncated-skips-instead-of-stopping",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (end === undefined) return { found, truncated: true };",
+      "replacement": "if (end === undefined) { start += 1; continue; }",
+      "line": 110,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 799
+    },
+    {
+      "id": "M07-topLevel-enter-nested-after-object",
+      "file": "src/review/ledger.ts",
+      "anchor": "    start = end + 1;\n  }\n  return { found, truncated: false };",
+      "replacement": "    start += 1;\n  }\n  return { found, truncated: false };",
+      "line": 112,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 704
+    },
+    {
+      "id": "M08-topLevel-object-start-any-brace",
+      "file": "src/review/ledger.ts",
+      "anchor": "const OBJECT_START = /\\{\\s*[\"}]/y;",
+      "replacement": "const OBJECT_START = /\\{/y;",
+      "line": 83,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 854
+    },
+    {
+      "id": "M09-topLevel-unparseable-enters-inside",
+      "file": "src/review/ledger.ts",
+      "anchor": "catch { /* not JSON: skipped whole */ }",
+      "replacement": "catch { start += 1; continue; }",
+      "line": 111,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 842
+    },
+    {
+      "id": "M11-isReviewerResult-reviewer-and-findings",
+      "file": "src/review/ledger.ts",
+      "anchor": "typeof object.reviewer === \"string\" || Array.isArray(object.findings)",
+      "replacement": "typeof object.reviewer === \"string\" && Array.isArray(object.findings)",
+      "line": 140,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 864
+    },
+    {
+      "id": "M12-isReviewerResult-status-not-required",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (!hasStatus(value)) return false;",
+      "replacement": "if (value === null || typeof value !== \"object\") return false;",
+      "line": 138,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 780
+    },
+    {
+      "id": "M13-marker-picks-first",
+      "file": "src/review/ledger.ts",
+      "anchor": "const marker = markers[markers.length - 1]!;",
+      "replacement": "const marker = markers[0]!;",
+      "line": 159,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 757
+    },
+    {
+      "id": "M14-marker-object-unchecked",
+      "file": "src/review/ledger.ts",
+      "anchor": "return { result: isReviewerResult(parsed) ? parsed : undefined };",
+      "replacement": "return { result: parsed };",
+      "line": 165,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 866
+    },
+    {
+      "id": "M15-scan-truncation-ignored",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (truncated) return undefined;",
+      "replacement": "if (truncated && found.length === 0) return undefined;",
+      "line": 172,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 706
+    },
+    {
+      "id": "M16-scan-fenced-preference-dropped",
+      "file": "src/review/ledger.ts",
+      "anchor": "if (fencedResults.length > 0) return fencedResults[fencedResults.length - 1];",
+      "replacement": "if (false as boolean) return undefined;",
+      "line": 183,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 837
+    },
+    {
+      "id": "M17-scan-ambiguity-also-counts-fenced",
+      "file": "src/review/ledger.ts",
+      "anchor": "new Set(bare.filter(hasStatus)",
+      "replacement": "new Set([...fenced, ...bare].filter(hasStatus)",
+      "line": 184,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 808
+    },
+    {
+      "id": "M19-scan-last-accepted-becomes-first",
+      "file": "src/review/ledger.ts",
+      "anchor": "return accepted[accepted.length - 1];",
+      "replacement": "return accepted[0];",
+      "line": 186,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 803
+    },
+    {
+      "id": "M30-fence-pointer-ignores-range-start",
+      "file": "src/review/ledger.ts",
+      "anchor": "return next < ranges.length && start >= ranges[next]![0];",
+      "replacement": "return next < ranges.length;",
+      "line": 177,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 801
+    },
+    {
+      "id": "M31-labelled-fence-status-not-required",
+      "file": "src/review/ledger.ts",
+      "anchor": "return { result: hasStatus(parsed) ? parsed : undefined };",
+      "replacement": "return { result: parsed };",
+      "line": 151,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 894
+    },
+    {
+      "id": "M20-readResult-wholeFile-bypass-removed",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "const parsed = wholeFileResult(raw) ?? parseReviewResult(raw);",
+      "replacement": "const parsed = parseReviewResult(raw);",
+      "line": 171,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 825
+    },
+    {
+      "id": "M21-wholeFileResult-accepts-any-object",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "return hasStatus(whole) ? whole as ReviewerResult : undefined;",
+      "replacement": "return whole as ReviewerResult;",
+      "line": 180,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 883
+    },
+    {
+      "id": "M23-failUnreadable-exit-1",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "process.exitCode = 2;",
+      "replacement": "process.exitCode = 1;",
+      "line": 187,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 971
+    },
+    {
+      "id": "M25-readResult-no-result-returns-empty",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "if (parsed === undefined) throw new UnreadableInput(`result holds no usable reviewer result",
+      "replacement": "if (parsed === undefined) return {} as ReviewerResult; if (false as boolean) throw new UnreadableInput(`result holds no usable reviewer result",
+      "line": 172,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 952
+    },
+    {
+      "id": "M26-scopeFingerprint-uses-manifest-hash-not-content",
+      "file": "src/review/retry-plan.ts",
+      "anchor": "const contentHash = read === undefined ? entry.contentHash : createHash(\"sha256\").update(read(entry)).digest(\"hex\");",
+      "replacement": "const contentHash = entry.contentHash;",
+      "line": 71,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 896
+    },
+    {
+      "id": "M27-readSliceText-size-only",
+      "file": "src/commands/review-slice.ts",
+      "anchor": "return readFileSync(file, \"utf8\");",
+      "replacement": "return String(statSync(file).size);",
+      "line": 277,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 804
+    }
+  ],
+  "totals": {
+    "killed": 20,
+    "survived": 4,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

@@ -46,7 +46,7 @@ still writes the gate's output, not the pre-gate text.
 
 **D4 — measure false positives before shipping.** Run the gate the way the import does over every bundled
 skill (`src/gdskills/bundled/skills/**/SKILL.md`), the bundled rules, and the real overlay
-`~/.vantage-frontend/skills/*/SKILL.md` + `rules/core/*.mdc` (read-only), and report which would be refused.
+`~/.acme-frontend/skills/*/SKILL.md` + `rules/core/*.mdc` (read-only), and report which would be refused.
 A security reviewer skill that quotes "ignore previous instructions" as an example is the expected false
 positive; the decision for those is `--allow-flagged`, not weakening D1 — unless the measurement shows the
 refusal hits ordinary reviewers, in which case stop and report.

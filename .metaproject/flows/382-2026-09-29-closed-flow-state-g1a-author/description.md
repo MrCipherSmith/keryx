@@ -1,7 +1,7 @@
 # Closed-flow state hole: report uncommitted state, commit flow 359, G1a split by author
 
 Status: ready
-Source: operator instruction on the helyx channel, 2026-09-29 (confirmed after relay from arena-83)
+Source: operator instruction on the operator chat channel, 2026-09-29 (confirmed after relay from arena-83)
 
 ## Problem
 

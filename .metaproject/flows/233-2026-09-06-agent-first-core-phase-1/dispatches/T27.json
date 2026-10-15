@@ -15,19 +15,19 @@
     "Policy fold (policies.md): FAIL on an established threshold violation; INCOMPLETE when a required check is missing/skipped/unparsed/unfinished; strict CI accepts only PASS. The guard test file's 17 tests pass; no raw error, path or content leaks into reasons or details."
   ],
   "context_refs": [
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-spec.md", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation.md", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md", "kind": "custom", "exists": true },
-    { "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md", "kind": "custom", "exists": true }
+    { "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-spec.md", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation.md", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md", "kind": "custom", "exists": true },
+    { "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md", "kind": "custom", "exists": true }
   ],
   "files_to_read": [
-    "/Users/Goodea/goodea/keryx/src/security/guard.ts",
-    "/Users/Goodea/goodea/keryx/src/security/guard.test.ts",
-    "/Users/Goodea/goodea/keryx/src/security/service.ts",
-    "/Users/Goodea/goodea/keryx/src/security/types.ts"
+    "~/goodea/keryx/src/security/guard.ts",
+    "~/goodea/keryx/src/security/guard.test.ts",
+    "~/goodea/keryx/src/security/service.ts",
+    "~/goodea/keryx/src/security/types.ts"
   ],
   "constraints": [
-    "Root /Users/Goodea/goodea/keryx. Read .metaproject/index.md first, then .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md and .metaproject/rules/core/tdd-workflow.mdc. Code search only via bun src/cli.ts ctx rg; long outputs via bun src/cli.ts ctx run.",
+    "Root ~/goodea/keryx. Read .metaproject/index.md first, then .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md and .metaproject/rules/core/tdd-workflow.mdc. Code search only via bun src/cli.ts ctx rg; long outputs via bun src/cli.ts ctx run.",
     "Ownership: ONLY src/security/guard.ts and src/security/guard.test.ts. Read service.ts/types.ts but do not edit them: another worker owns service.ts concurrently. If the fix truly needs a runGate change in service.ts, stop and return BLOCKED naming the exact needed change instead of editing.",
     "Keep the existing RED tests unchanged except for genuinely wrong expectations, which must be justified in the report. Do not delete tests. Run: bun src/cli.ts ctx run -- bun test src/security/guard.test.ts src/security/persistence-sinks.test.ts src/security/service.memo.test.ts (the memo test line 162 failure is pre-existing and owned by T29; report it, do not fix it). Then run targeted eslint on guard.ts and bun run typecheck.",
     "No git state changes, no network, no model calls, no global suite, no dependency changes, no flow file edits. Stats disabled.",
@@ -36,7 +36,7 @@
   "allowed_actions": ["read", "write", "run-command"],
   "output_contract": {
     "schema": "subagent-result",
-    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-result.json"
+    "artifact_path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-result.json"
   },
   "budget": { "max_output_tokens": null },
   "provenance": { "created_at": "2026-09-06T13:08:00+00:00", "created_by": "flow-orchestrator" }

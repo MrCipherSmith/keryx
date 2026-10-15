@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "093",
   "slug": "os-sandbox-for-shell-exec-v1-workspace-w",
-  "title": "OS-sandbox for shell_exec (v1: workspace-write + network-off, grok-build model)",
+  "title": "OS-sandbox for shell_exec (v1: workspace-write + network-off)",
   "status": "done",
   "createdAt": "2026-07-20T20:25:58.473Z",
   "updatedAt": "2026-07-20T20:52:21.477Z",

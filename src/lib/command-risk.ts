@@ -498,7 +498,7 @@ function drivesKeryxTerminal(words: readonly string[], depth: number): boolean {
     const w = rest[i]!;
     const commandFlag = /^-[a-z]*c$/i.test(w) || w === "--command";
     const value = commandFlag ? rest[i + 1] : w.startsWith("--command=") ? w.slice("--command=".length) : /\s/.test(w) ? w : undefined;
-    if (value !== undefined && depth < 4 && parsedSchedulerControl(value, depth + 1)) return true;
+    if (value !== undefined && depth < MAX_SHELL_NESTING && parsedSchedulerControl(value, depth + 1)) return true;
   }
   // The rest of the line as a program and its arguments (`screen keryx shell`, BSD
   // `script -q /dev/null keryx`, `unbuffer bun src/cli.ts shell`).
@@ -559,7 +559,7 @@ function peelWrappers(input: readonly string[]): { words: string[]; inner?: stri
 /** One parsed segment: does it control a schedule or the OS scheduler? */
 function segmentControlsScheduler(input: readonly string[], cwdHint: string, depth: number): boolean {
   const peeled = peelWrappers(input);
-  if (peeled.inner !== undefined) return depth < 4 && parsedSchedulerControl(peeled.inner, depth + 1);
+  if (peeled.inner !== undefined) return depth < MAX_SHELL_NESTING && parsedSchedulerControl(peeled.inner, depth + 1);
   const words = peeled.words;
   if (words.length === 0) return false;
   const cmd = (words[0]!.split("/").pop() ?? "").toLowerCase();
@@ -626,5 +626,172 @@ export function touchesHumanConfirmation(command: string): boolean {
   // ERL index/clear mutate derived state. Conservatively include quoted/wrapped
   // forms: an extra prompt is preferable to an inherited corpus-write grant.
   const evidenceMutation = /(?:^|\s)evidence\s+(?:index|clear|maintenance)(?=$|[\s;&|])/i.test(command.replace(/["'`\\]/g, ""));
-  return touchesSacConfirmReview(command) || touchesFlowConfirm(command) || touchesSchedulerControl(command) || evidenceMutation;
+  return touchesSacConfirmReview(command) || touchesFlowConfirm(command) || touchesSchedulerControl(command) || evidenceMutation || touchesCoverageWaiver(command) || touchesChunkEstimateAnswer(command) || touchesReviewPublish(command);
+}
+
+const COVERAGE_WAIVER_FLAG = "--waive";
+const ANSI_C_ESCAPES: Readonly<Record<string, string>> = { n: "\n", t: "\t", r: "\r", a: "\x07", b: "\b", e: "\x1b", E: "\x1b", f: "\f", v: "\v", "\\": "\\", "'": "'", '"': '"', "?": "?" };
+
+/** Decode the body of a `$'…'` word the way bash does (`\xHH`, `\uHHHH`, `\UHHHHHHHH`, octal, `\n` …). */
+function decodeAnsiC(body: string): string {
+  return body.replace(/\\(?:x([0-9a-fA-F]{1,2})|u([0-9a-fA-F]{1,4})|U([0-9a-fA-F]{1,8})|([0-7]{1,3})|(.))/gs, (_m, x?: string, u?: string, big?: string, oct?: string, ch?: string) => {
+    const code = x ?? u ?? big;
+    if (code !== undefined) return String.fromCodePoint(Math.min(Number.parseInt(code, 16), 0x10ffff));
+    if (oct !== undefined) return String.fromCharCode(Number.parseInt(oct, 8) & 0xff);
+    return ANSI_C_ESCAPES[ch ?? ""] ?? `\\${ch ?? ""}`;
+  });
+}
+
+/** A backslash-newline is removed by the shell before any word is cut, so `--waive-c\<NL>overage` is the flag. */
+function joinContinuations(command: string): string {
+  return command.replace(/\\\r?\n/g, "");
+}
+
+/** Replace each `$'…'` word with its decoded text in single quotes, so the word splitter sees what the shell will. */
+function expandAnsiCQuotes(command: string): string {
+  return command.replace(/\$'((?:[^'\\]|\\.)*)'/gs, (_m, body: string) => `'${decodeAnsiC(body).replace(/'/g, "'\\''")}'`);
+}
+
+/** Text with every quote and backslash removed: the form a split-quote or escaped spelling collapses to. */
+function collapseQuoting(command: string): string {
+  return expandAnsiCQuotes(command).replace(/["'\\]/g, "");
+}
+
+/**
+ * Segments of the command as written AND with its `$'…'` words expanded. Inside a double-quoted `bash -c` body the shell
+ * leaves `$'…'` for the inner shell to expand, so only the as-written spelling carries it intact into the recursion.
+ */
+function segmentsOfBothSpellings(raw: string): ReturnType<typeof splitSegments> {
+  const command = joinContinuations(raw);
+  const expanded = expandAnsiCQuotes(command);
+  return expanded === command ? splitSegments(command) : [...splitSegments(command), ...splitSegments(expanded)];
+}
+
+/** A word the shell will still rewrite (parameter or command substitution, brace expansion), so its text is not its value. */
+function wordIsOpaque(word: string): boolean {
+  return /[$`{]/.test(word);
+}
+
+/** How deep a `bash -c`/`eval` body or a word that is itself a command line is followed. */
+const MAX_SHELL_NESTING = 4;
+
+/**
+ * The arguments after the keryx entry of a simple command, or undefined when the command is not keryx. A head the
+ * shell has yet to expand (`$K review complete`) counts as keryx: it may be.
+ */
+function keryxArgs(words: readonly string[]): string[] | undefined {
+  if (words.length === 0) return undefined;
+  if (wordIsOpaque(words[0]!)) return words.slice(1);
+  let at = 0;
+  if (JS_RUNNERS.has(baseName(words[0]))) {
+    at = words.findIndex((w, i) => i > 0 && !w.startsWith("-") && !["run", "x", "exec"].includes(w));
+    if (at < 0) return undefined;
+  }
+  return KERYX_ENTRY_NAMES.has(baseName(words[at])) ? words.slice(at + 1) : undefined;
+}
+
+/** Words the shell will expand, leaving out the value of a `--package` flag (a path, never a flag). */
+function opaqueArgs(args: readonly string[]): boolean {
+  return args.some((w, i) => wordIsOpaque(w) && args[i - 1] !== "--package");
+}
+
+/** Run `visit` over every simple command, descending into `bash -c`/`eval` bodies and any word that is itself a command line. */
+function anySimpleCommand(command: string, visit: (words: string[]) => boolean, depth = 0): boolean {
+  for (const seg of segmentsOfBothSpellings(command)) {
+    const words = seg.words.map(unescapeWord);
+    const peeled = peelWrappers(words);
+    if (visit(peeled.words)) return true;
+    if (depth < MAX_SHELL_NESTING) {
+      if (peeled.inner !== undefined && anySimpleCommand(peeled.inner, visit, depth + 1)) return true;
+      if (words.some((w) => /\s/.test(w) && anySimpleCommand(w, visit, depth + 1))) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Parsed check: does a keryx command (found through wrappers, `bash -c`, `eval` and any word that is itself a
+ * command line) carry the waiver flag once quoting and escapes are resolved, or run `review complete` with a word
+ * the shell has yet to expand? Prose that merely names the flag (a commit message, a search pattern) is not a keryx
+ * command and does not match.
+ */
+function parsedCoverageWaiver(command: string): boolean {
+  return anySimpleCommand(command, (words) => {
+    const args = keryxArgs(words);
+    if (args === undefined) return false;
+    const lower = args.map((w) => w.toLowerCase());
+    if (lower[0] === "ctx" && lower[1] === "rg") return false;
+    if (lower.some((w) => w.includes(COVERAGE_WAIVER_FLAG))) return true;
+    const review = lower.indexOf("review");
+    if (review < 0) return false;
+    const rest = args.slice(review + 1);
+    const completeLike = lower.slice(review + 1).includes("complete") || (rest[0] !== undefined && wordIsOpaque(rest[0]));
+    return completeLike && opaqueArgs(rest);
+  });
+}
+
+/**
+ * Flow 431 (AC10): `keryx review complete --waive-coverage "<quote>"` is the operator accepting that in-scope files
+ * went unreviewed. The quote has to be theirs, so the command asks in every permission mode, like `flow confirm`.
+ *
+ * Matched on PARSED words like {@link touchesSchedulerControl}, for a keryx command only: split quotes
+ * (`--waive-""coverage`), `$'\x2d…'` ANSI-C words, backslash escapes, environment prefixes and `bash -c`/`eval`
+ * bodies are resolved first, and a `review complete` whose arguments hold an expansion (`$X`, `$(…)`, a backtick, a
+ * brace) asks too, because the flag could be inside it. Globs are left out on purpose: they expand to existing file
+ * names, never to a flag. The quote-collapsed text is one more net, for nesting beyond {@link MAX_SHELL_NESTING} and
+ * for a keryx command behind a program the parser does not unwrap (`find -exec`); it needs `review` and `complete`
+ * beside the flag, so a search for the flag or a commit message about it is not caught. HONEST LIMIT: a script file
+ * or an interpreter one-liner is out of reach; `runComplete` therefore also requires a terminal for the waiver. Pure.
+ */
+export function touchesCoverageWaiver(raw: string): boolean {
+  const command = joinContinuations(raw);
+  const collapsed = collapseQuoting(command).toLowerCase();
+  if (collapsed.includes(COVERAGE_WAIVER_FLAG) && /\breview\b/.test(collapsed) && /\bcomplete\b/.test(collapsed)) return true;
+  return parsedCoverageWaiver(command);
+}
+
+/**
+ * Flow 431 (R2-16): `keryx review chunks estimate --answer …` lifts the pass ceiling on the operator's word, so it
+ * asks like the waiver. Parsed words, so a split or escaped spelling is seen too, and so is a verb or flag the shell
+ * assembles (`$A`, `--ans${X}wer`) in a keryx command. `runChunks` also requires a terminal for the answer.
+ */
+export function touchesChunkEstimateAnswer(raw: string): boolean {
+  const isAnswer = (w: string): boolean => w === "--answer" || w.startsWith("--answer=");
+  const found = anySimpleCommand(joinContinuations(raw), (words) => {
+    const lower = words.map((w) => w.toLowerCase());
+    const chunks = lower.indexOf("chunks");
+    const after = chunks >= 0 ? lower.slice(chunks + 1) : [];
+    if (after.includes("estimate") && after.some(isAnswer)) return true;
+    const args = keryxArgs(words);
+    if (args === undefined) return false;
+    const lowerArgs = args.map((w) => w.toLowerCase());
+    if (lowerArgs[0] === "ctx" && lowerArgs[1] === "rg") return false;
+    if (lowerArgs.includes("estimate") && lowerArgs.some(isAnswer)) return true;
+    if (lowerArgs.some(isAnswer) && opaqueArgs(args)) return true;
+    const verb = lowerArgs.indexOf("chunks");
+    if (verb < 0) return false;
+    const rest = args.slice(verb + 1);
+    return (rest[0] !== undefined && wordIsOpaque(rest[0])) || (lowerArgs.slice(verb + 1).includes("estimate") && opaqueArgs(rest));
+  });
+  if (found) return true;
+  // Past the recursion limit the quoting of a deeply nested `bash -c` is all that hides the flag.
+  return /chunks\s+estimate\b[^;&|]*--answer/i.test(collapseQuoting(joinContinuations(raw)));
+}
+
+/**
+ * Flow 451: `keryx review publish` posts a review to GitHub under the operator's name, so it asks in every permission mode
+ * and no answer is remembered; the body is shown to the operator before they say yes. Parsed words, like the waiver, so a
+ * split or escaped spelling and a `review` verb the shell assembles are seen too. Pure.
+ */
+export function touchesReviewPublish(raw: string): boolean {
+  return anySimpleCommand(joinContinuations(raw), (words) => {
+    const args = keryxArgs(words);
+    if (args === undefined) return false;
+    const lower = args.map((w) => w.toLowerCase());
+    if (lower[0] === "ctx" && lower[1] === "rg") return false;
+    const review = lower.indexOf("review");
+    if (review < 0) return false;
+    const rest = args.slice(review + 1);
+    return lower.slice(review + 1).includes("publish") || (rest[0] !== undefined && wordIsOpaque(rest[0]));
+  });
 }

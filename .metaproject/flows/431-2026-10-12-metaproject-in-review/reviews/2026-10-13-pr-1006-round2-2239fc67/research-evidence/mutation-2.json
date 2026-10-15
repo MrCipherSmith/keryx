@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-f431i",
+  "command": "bun test src/review src/commands/review-layers.test.ts src/commands/review-ledger.test.ts src/commands/review-slice-paths.test.ts src/gdskills/reviewer-layer-block.test.ts src/tui/review-panel.test.ts src/tui/reviews-inspector.test.ts src/lib/command-risk src/lib/trust-routine-command.test.ts src/commands/automatic-review.test.ts src/trigger src/flow src/tui/review-layers",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 83301
+  },
+  "mutants": [
+    {
+      "id": "cr3-words-includes-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "if (words.some((w) => w.toLowerCase().includes(COVERAGE_WAIVER_FLAG))) return true;",
+      "replacement": "if (false) return true;",
+      "line": 665,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 123555
+    },
+    {
+      "id": "cr6-opaque-sub-only",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "return /[$`]/.test(word);",
+      "replacement": "return /[`]/.test(word);",
+      "line": 654,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 142661
+    },
+    {
+      "id": "cr9-hex-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "const code = x ?? u ?? big;",
+      "replacement": "const code = u ?? big;",
+      "line": 635,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 154151
+    },
+    {
+      "id": "cr12-confirm-waiver-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": " || touchesCoverageWaiver(command) || touchesChunkEstimateAnswer(command);",
+      "replacement": " || touchesChunkEstimateAnswer(command);",
+      "line": 626,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 142236
+    },
+    {
+      "id": "cr15-answer-flag-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "after.some((w) => w === \"--answer\" ||",
+      "replacement": "after.some((w) => false ||",
+      "line": 701,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 159526
+    },
+    {
+      "id": "cr18-chunk-unescape-off",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "const words = seg.words.map(unescapeWord).map((w) => w.toLowerCase());",
+      "replacement": "const words = seg.words.map((w) => w.toLowerCase());",
+      "line": 698,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 148088
+    },
+    {
+      "id": "cr21-ansi-big",
+      "file": "src/lib/command-risk.ts",
+      "anchor": "|U([0-9a-fA-F]{1,8})",
+      "replacement": "",
+      "line": 634,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 159230
+    },
+    {
+      "id": "rv2-terminal-always",
+      "file": "src/commands/review.ts",
+      "anchor": "if (waiver !== undefined && !isTerminal()) {",
+      "replacement": "if (waiver !== undefined) {",
+      "line": 3881,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 161348
+    },
+    {
+      "id": "rg1-completeness-true",
+      "file": "src/flow/review-gate.ts",
+      "anchor": "{ completeness: readString(manifest?.[\"status\"]) !== \"closed\" }",
+      "replacement": "{ completeness: true }",
+      "line": 446,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 129923
+    },
+    {
+      "id": "tr1-chunks",
+      "file": "src/lib/trust-routine-command.ts",
+      "anchor": "    \"chunks\",\n",
+      "replacement": "",
+      "line": 95,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 128005
+    },
+    {
+      "id": "ar1-wikiwrite",
+      "file": "src/commands/automatic-review.ts",
+      "anchor": " && !flags.has(\"--write-wiki\");",
+      "replacement": ";",
+      "line": 406,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 127544
+    },
+    {
+      "id": "ar4-result",
+      "file": "src/commands/automatic-review.ts",
+      "anchor": "!flags.has(\"--quote\") && absentOrUnderCwd(\"--result\");",
+      "replacement": "!flags.has(\"--quote\");",
+      "line": 408,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 155543
+    },
+    {
+      "id": "ly1-current-head",
+      "file": "src/review/layers.ts",
+      "anchor": "if (head !== undefined && existing.prHead !== head) return false;",
+      "replacement": "",
+      "line": 247,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 177764
+    },
+    {
+      "id": "ly4-intact-build",
+      "file": "src/review/layers.ts",
+      "anchor": "if (build?.commit !== layers.graphCommit) return false;",
+      "replacement": "",
+      "line": 235,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 200335
+    },
+    {
+      "id": "ly7-resolve-hex",
+      "file": "src/review/layers.ts",
+      "anchor": "return full !== null && /^[0-9a-f]{40,64}$/.test(full) ? full : null;",
+      "replacement": "return full;",
+      "line": 227,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 185909
+    },
+    {
+      "id": "ly10-keep-failed",
+      "file": "src/review/layers.ts",
+      "anchor": "if (graph.status === \"failed\" && sameHead && (await layersCurrent(input.packageDir, existing, prHead))) {",
+      "replacement": "if (false) {",
+      "line": 551,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 183440
+    },
+    {
+      "id": "ly13-sweep-dir",
+      "file": "src/review/layers.ts",
+      "anchor": "if (path.dirname(worktree) !== temp || ",
+      "replacement": "if (",
+      "line": 334,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 156831
+    },
+    {
+      "id": "ly16-recover-call",
+      "file": "src/review/layers.ts",
+      "anchor": "      await recoverGraphDirectory(input.packageDir);\n",
+      "replacement": "",
+      "line": 540,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 163907
+    },
+    {
+      "id": "pl2-batch-break",
+      "file": "src/review/layers-payload.ts",
+      "anchor": "if (taken > 0 && removed + entryBytes >= overshoot) break;",
+      "replacement": "",
+      "line": 297,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 112957
+    },
+    {
+      "id": "us1-size",
+      "file": "src/review/layers-usage.ts",
+      "anchor": " || info.size > MAX_TOOL_LOG_BYTES",
+      "replacement": "",
+      "line": 80,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 103053
+    },
+    {
+      "id": "cc2-alnum",
+      "file": "src/review/coverage-complete.ts",
+      "anchor": " || !/[\\p{L}\\p{N}]/u.test(quote)",
+      "replacement": "",
+      "line": 201,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 166315
+    },
+    {
+      "id": "ch3-next-lock",
+      "file": "src/review/chunks.ts",
+      "anchor": "return withChunkStateLock(packageDir, () => nextChunkLocked(packageDir));",
+      "replacement": "return nextChunkLocked(packageDir);",
+      "line": 241,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 179328
+    }
+  ],
+  "totals": {
+    "killed": 19,
+    "survived": 3,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

@@ -646,8 +646,8 @@ async function submitTurn(request: Request, ctx: ServeContext): Promise<Response
 
   // (4) Resolve the session identity-first from the declared project. Never
   // infer. An unknown project fails rather than falling back to "the obvious
-  // one" — the failure mode that made helyx cross-link transports between
-  // projects.
+  // one" — the failure mode that makes an inferring server cross-link
+  // transports between projects.
   const project = resolveProject(validated.request.project, ctx.dir);
   if (!project.ok) {
     return errorResponse(404, project.code, project.message);
@@ -1256,7 +1256,24 @@ export async function startServeListener(input: StartServeInput): Promise<StartS
         } catch (error) {
           console.error(`keryx serve: remote surface did not close cleanly: ${error instanceof Error ? error.message : String(error)}`);
         }
-        await server.stop(true);
+        if (input.remote === undefined) {
+          await server.stop(true);
+        } else {
+          // The surface ended its SSE streams. Flush their closing frames
+          // before forcing sockets shut: Bun 1.3.14 can lose the frame and
+          // hang stop(true) with multiple live SSE sockets. Bound the grace
+          // period so an unrelated slow request cannot hold serve open.
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            await Promise.race([
+              server.stop(false),
+              new Promise<void>((resolve) => { timer = setTimeout(resolve, 250); }),
+            ]);
+            await server.stop(true);
+          } finally {
+            clearTimeout(timer);
+          }
+        }
         state = "stopped";
       },
     },

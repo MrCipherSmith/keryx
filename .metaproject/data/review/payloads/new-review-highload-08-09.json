@@ -1,0 +1,95 @@
+{
+ "review_context": {
+  "request": {
+   "text": "Review PR 939 (flow 417)",
+   "target": "pr",
+   "ref": "https://github.com/MrCipherSmith/keryx/pull/939"
+  },
+  "scope": {
+   "mode": "diff",
+   "files": [
+    ".metaproject/flows/417-2026-10-09-review-orchestrator-inline/acceptance-criteria.md",
+    ".metaproject/flows/417-2026-10-09-review-orchestrator-inline/context.md",
+    ".metaproject/flows/417-2026-10-09-review-orchestrator-inline/description.md",
+    ".metaproject/flows/417-2026-10-09-review-orchestrator-inline/flow.json",
+    ".metaproject/flows/417-2026-10-09-review-orchestrator-inline/journal.md",
+    ".metaproject/flows/417-2026-10-09-review-orchestrator-inline/plan.md",
+    ".metaproject/flows/417-2026-10-09-review-orchestrator-inline/tasks.md",
+    ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+    ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+    ".metaproject/skills/gdskills/planning/autodoc-orchestrator/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+    "CHANGELOG.md",
+    "README.md",
+    "docs/docs/cli-reference.md",
+    "docs/docs/guides/review-with-a-record.md",
+    "package.json",
+    "src/agents/tools.test.ts",
+    "src/agents/tools.ts",
+    "src/commands/review.test.ts",
+    "src/commands/review.ts",
+    "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+    "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "src/gdskills/bundled/skills/planning/autodoc-orchestrator/SKILL.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "src/gdskills/catalog.ts",
+    "src/gdskills/review-orchestrator-preflight.test.ts",
+    "src/gdskills/skill-length-ceilings.ts",
+    "src/lib/agent-entrypoint-blocks.ts",
+    "src/lib/orchestrators-inline.test.ts",
+    "src/lib/orchestrators-inline.ts",
+    "src/lib/templates.ts",
+    "src/review/caps.test.ts",
+    "src/review/caps.ts",
+    "src/review/managed.test.ts",
+    "src/review/round-need.test.ts",
+    "src/review/round-need.ts"
+   ],
+   "changed_lines": 2608
+  },
+  "routing": {
+   "selected_reviewers": [
+    "review-logic",
+    "review-security-code",
+    "review-architecture"
+   ]
+  },
+  "token_policy": {
+   "context_mode": "light",
+   "omissions": []
+  }
+ },
+ "reviewer": "review-highload",
+ "skill_path": null,
+ "scope_mode": "diff",
+ "slices": [
+  "slice-08",
+  "slice-09"
+ ],
+ "model": {
+  "tier": "standard",
+  "tier_reasons": [
+   "base:standard",
+   "resolve:ranking-refused"
+  ],
+  "inherit": true,
+  "tier_resolution": "session-fallback",
+  "model_discovery": {
+   "provider": "",
+   "candidates": [],
+   "ranked": [],
+   "session_rank": null,
+   "fallback_reason": "the session names no model to anchor the ranking on"
+  }
+ },
+ "budget": {
+  "max_findings": 10
+ },
+ "base_sha": "79a18ba00a185a0a16b306ff948e9e16550a86a6",
+ "pr_context": "~/keryx-fcomplete/.metaproject/flows/417-2026-10-09-review-orchestrator-inline/reviews/2026-10-12-pr-github-com-mrciphersmith-keryx-pull-939/pr-context.md",
+ "round": 1,
+ "is_fix_round": false,
+ "prior_findings": []
+}

@@ -101,14 +101,20 @@ describe("parseCadence", () => {
 
 describe("nextCronRuns: the expression is read in the machine's local time", () => {
   function runsIn(zone: string, expression: string, from: string, count: number): string[] {
-    const before = process.env["TZ"];
-    process.env["TZ"] = zone;
-    try {
-      return nextCronRuns(expression, new Date(from), count).map((d) => d.toISOString());
-    } finally {
-      if (before === undefined) delete process.env["TZ"];
-      else process.env["TZ"] = before;
+    // Set TZ before startup: changing it in-process can leave Bun's Date timezone cached.
+    // A child also keeps the parent test process's timezone unchanged.
+    const cronModule = new URL("./cron.ts", import.meta.url).href;
+    const script = `import { nextCronRuns } from ${JSON.stringify(cronModule)};
+      console.log(JSON.stringify(nextCronRuns(${JSON.stringify(expression)}, new Date(${JSON.stringify(from)}), ${count}).map(d => d.toISOString())));`;
+    const child = Bun.spawnSync([process.execPath, "-e", script], {
+      env: { ...process.env, TZ: zone },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (child.exitCode !== 0) {
+      throw new Error(`cron probe for ${zone} failed (${child.exitCode}): ${new TextDecoder().decode(child.stderr)}`);
     }
+    return JSON.parse(new TextDecoder().decode(child.stdout)) as string[];
   }
 
   test("L-4: the same 09:00 cron is a different instant in each zone (09:00 where serve runs, not 09:00 UTC)", () => {

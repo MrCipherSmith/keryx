@@ -9,9 +9,9 @@ friction, and contributor/issue-flow tooling (changesets, issue-triage). An
 explicit choice was made to scope this package to install friction only —
 see the parent conversation's decision, not re-litigated here.
 
-## Reference design studied: opencode
+## Reference design studied: a single-script install
 
-A single root-level `install` shell script (served at opencode.ai/install)
+Another agent CLI's single root-level `install` shell script
 auto-detects OS/arch/libc(musl)/CPU baseline and fetches the matching
 prebuilt binary from GitHub Releases; the README lists 10+ parallel install
 channels (npm/bun/pnpm/yarn, Homebrew tap + official formula, scoop, choco,

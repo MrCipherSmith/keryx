@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+import { keryxConfigDir } from "../lib/config-dir";
 import { ensureOpenAiCodexGrant } from "../lib/oauth/openai-subscription";
 import { resolveCodexCatalogVersion } from "../lib/oauth/codex-catalog-version";
 import type { ModelsResolveResult, OpenAiCompatProvider } from "./providers";
@@ -33,7 +35,28 @@ export async function fetchOpenAiCodexModels(
   return result;
 }
 
-export async function fetchOpenAiCodexCatalog(
+// Only overlapping requests are shared; settled results and credentials are not cached.
+const catalogInFlight = new WeakMap<typeof fetch, Map<string, Promise<OpenAiCodexCatalog>>>();
+
+export function fetchOpenAiCodexCatalog(
+  fetchFn: typeof fetch,
+  opts: { configDir?: string; timeoutMs?: number; refreshCatalogVersion?: boolean } = {},
+): Promise<OpenAiCodexCatalog> {
+  let requests = catalogInFlight.get(fetchFn);
+  if (requests === undefined) {
+    requests = new Map();
+    catalogInFlight.set(fetchFn, requests);
+  }
+  const key = JSON.stringify([resolve(keryxConfigDir(opts.configDir)), opts.timeoutMs ?? 8_000, opts.refreshCatalogVersion ?? false]);
+  const existing = requests.get(key);
+  if (existing !== undefined) return existing;
+  const scope = requests;
+  const request = requestOpenAiCodexCatalog(fetchFn, opts).finally(() => scope.delete(key));
+  scope.set(key, request);
+  return request;
+}
+
+async function requestOpenAiCodexCatalog(
   fetchFn: typeof fetch,
   opts: { configDir?: string; timeoutMs?: number; refreshCatalogVersion?: boolean } = {},
 ): Promise<OpenAiCodexCatalog> {

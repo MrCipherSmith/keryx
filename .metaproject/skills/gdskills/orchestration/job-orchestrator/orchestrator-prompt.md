@@ -22,7 +22,7 @@ Phase 2: Execute plan, bracketing every step with keryx job step:
      ├─ git worktree add → feature branch (NEVER git checkout -b)
      ├─ FOR EACH wave → [tests-creator × tasks] then [task-implementer × tasks]
      ├─ [code-verifier sub-agent] → quality gate
-     ├─ keryx review start → [review-orchestrator sub-agent] → keryx review ingest
+     ├─ keryx review start → [review-orchestrator, inline] → keryx review ingest
      ├─ IF blocker/major → [task-implementer (fix)] → next managed round (max 3)
      ├─ keryx review complete --finding … --disposition … --evidence …
      └─ keryx job document → each step's artifact recorded in the package
@@ -162,7 +162,7 @@ keryx review scope        --ref "$BASE_SHA" --json > scope.json
 keryx review blast-radius --ref "$BASE_SHA" --json > blast-radius.json    # KEEP BOTH
 keryx review stack --json                                                # which reviewers apply
 keryx review tier  --scope <scope> --diff-lines <n> --json                # model per dispatch
-# dispatch review-orchestrator (skills/gdskills/review/review-orchestrator/SKILL.md);
+# run review-orchestrator inline (skills/gdskills/review/review-orchestrator/SKILL.md);
 # it runs review-verifier in Wave C and emits the ```json keryx:findings``` block
 keryx review ingest --report <report.md> --ref <feature-branch> --head <sha> \
   --scope scope.json --blast-radius blast-radius.json \

@@ -49,6 +49,7 @@ import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { buildAgentSystemInstruction, generateControlNonce, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
+import { resolveAgentMaxRounds } from "./round-limit";
 import { buildShellHookRuntime } from "./agent-hooks";
 import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
 import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
@@ -514,7 +515,7 @@ export function deniedUnattendedApproval(
   permissionMode: TriggerDispatch["permissionMode"],
   denials: UnattendedDenial[],
 ): NonNullable<AgentIO["requestApproval"]> {
-  return async (tool, _input, meta) => {
+  const approver: NonNullable<AgentIO["requestApproval"]> = async (tool, _input, meta) => {
     const floors = [
       meta?.credentials === true ? "touches credential files" : undefined,
       meta?.publishLease === true ? "a publish lease applies" : undefined,
@@ -530,6 +531,8 @@ export function deniedUnattendedApproval(
     });
     return false;
   };
+  // Nobody is behind this `false`, so it is not the operator refusing anything.
+  return Object.assign(approver, { attended: false });
 }
 
 /** Run one dispatch for `entry` (a `flow-next` with a `dispatch` block). */
@@ -834,6 +837,8 @@ async function dispatchLocked(
         }),
         idSeq: () => randomUUID(),
         unattended: true,
+        // An unattended run keeps the `ask` limit whatever its entry's mode: the larger limits (trust 200, auto 200) are for an operator at the keyboard.
+        maxRounds: resolveAgentMaxRounds(process.env, "ask"),
         hardDeny: unattendedRefusal,
         ...(shellHooks !== undefined ? { hooks: shellHooks } : {}),
       };
@@ -863,6 +868,7 @@ async function dispatchLocked(
       const history: NormalizedMessage[] = [];
       const result = await runAgentTurn(io, agentDeps, history, buildTaskPrompt(state.id, state.title, flowDir, task), {
         signal: controller.signal,
+        automaticReview: false,
       });
       finishReason = result.finishReason;
       if (result.caughtToolErrors !== undefined && result.caughtToolErrors.length > 0) {

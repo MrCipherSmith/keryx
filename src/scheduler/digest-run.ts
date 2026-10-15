@@ -34,6 +34,7 @@ import {
 import { dispatchLockPath } from "../commands/trigger-dispatch";
 import { withFileLock } from "../lib/fs";
 import { ensureLocksDir } from "../lib/maintenance-lock";
+import { detectPii, applyRedaction } from "../security/service";
 import type { AgentTaskAction, TriggerEntry } from "../trigger/config";
 import { DIGEST_DEFAULT_TOPIC } from "../trigger/digest-config";
 import { DIGEST_TOOL_IDS } from "../trigger/granted-tools";
@@ -63,6 +64,19 @@ export interface DigestDeps extends AgentTaskDeps {
 
 /** A Telegram message is at most 4096 characters; leave room for the pointer. */
 export const DELIVERY_TEXT_MAX = 3800;
+
+/** Restore only phone false positives wholly inside a generated report basename.
+ * Any other redaction, including directory PII and exact env secrets spanning a
+ * path boundary, keeps the scrubbed locator. Never apply to source/model text.
+ */
+export function scrubDigestReportLocator(locator: string, env: Record<string, string | undefined>): string {
+  const scrubbed = scrubGrantedOutput(locator, env);
+  const basename = path.basename(locator);
+  if (!/^dig-\d{8}T\d{6}-[a-f0-9]{8}\.md$/.test(basename)) return scrubbed;
+  const from = locator.length - basename.length;
+  const phones = detectPii(locator).filter((m) => m.mask === "phone" && m.start >= from);
+  return scrubbed === applyRedaction(locator, phones) ? locator : scrubbed;
+}
 
 function capForDelivery(text: string, reportPath: string | undefined): string {
   if (text.length <= DELIVERY_TEXT_MAX) return text;
@@ -318,7 +332,7 @@ async function runLocked(
   // then cap, so a cut can never split a token into something no pattern matches.
   const message =
     statusReason !== undefined
-      ? scrubGrantedOutput(`Digest ${entry.name} stopped — ${statusReason}${statusDetail}${reportPath !== undefined ? `\nReport: ${reportPath}` : ""}`, env)
+      ? `${scrubGrantedOutput(`Digest ${entry.name} stopped — ${statusReason}${statusDetail}`, env)}${reportPath !== undefined ? `\nReport: ${scrubDigestReportLocator(reportPath, env)}` : ""}`
       : capForDelivery(scrubGrantedOutput(summaryText !== undefined ? `Summary (written by the model)\n${summaryText}\n\n${body}` : body, env), reportPath);
   await enqueueDelivery(projectRoot, entry.name, { runId, text: message, topic: digest.topic, ...(reportPath !== undefined ? { reportPath } : {}) }, now());
   // Queued: only now is this run's view of the world the baseline of the next one.

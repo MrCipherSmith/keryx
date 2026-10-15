@@ -1,12 +1,12 @@
 # keryx shell spends fewer tokens than competing harnesses without losing quality
 
 Status: draft (flow-init skill formalizes this)
-Source: user description (Aleksandr Tsaitler, 2026-10-02)
+Source: user description (MrCipherSmith, 2026-10-02)
 
 ## Problem
 
 `keryx shell` re-sends its whole model context on every round and has no working mechanism
-that shrinks it. A live vantage-frontend session (`c420e265…f8e7a378`, openai-codex/gpt-6.1-sol)
+that shrinks it. A live acme-frontend session (`c420e265…f8e7a378`, openai-codex/gpt-6.1-sol)
 carried ~1 MB of `context.jsonl` — 335 messages, roughly 200–250K tokens per request — of which
 ~600K chars were tool outputs, ~143K encrypted reasoning, ~82K duplicated `Anchors:` blocks and
 ~37K task notifications, against ~12K chars of actual assistant text.
@@ -38,7 +38,7 @@ harnesses studied in `~/sandbox/forks`.
 
 ## Outcome criteria
 
-Effects requested by Aleksandr Tsaitler (owner, outcome author: human):
+Effects requested by MrCipherSmith (owner, outcome author: human):
 
 - I want to see that keryx / `keryx shell` saves tokens better than other harnesses, and helps
   save them without losing quality.
@@ -50,7 +50,7 @@ Concretely, that is judged by:
   `keryx shell` lowest or tied.
 - Task quality held: the same task success rate (and no rise in re-asked questions or repeated
   reads after compaction) as before the change.
-- Replaying the 2026-10-01 vantage-frontend session shape shows the per-request context staying
+- Replaying the 2026-10-01 acme-frontend session shape shows the per-request context staying
   under the compaction threshold instead of growing to ~250K tokens.
 
 ## Out of Scope

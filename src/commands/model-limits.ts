@@ -1,6 +1,5 @@
 // Provider-neutral model limits for `/status`.
 //
-// Grok Build's `/usage` shows a real context window and a usage-limit %.
 // Keryx talks to many providers, so this module NEVER invents a window
 // (no hardcoded 128k). It only surfaces numbers the provider actually
 // reported: live `/models` fields, Ollama `/api/show`, optional balance,
@@ -378,6 +377,23 @@ async function fetchCodexLimits(
  * Live limits for the active selection. Never throws. Missing fields stay
  * absent — `/status` renders them as "—" rather than a guessed window.
  */
+/** Selection-local background state; callbacks stay live through dependency copies. */
+export function startSessionLimits(
+  input: LoadSessionLimitsInput,
+  load: typeof loadSessionLimits = loadSessionLimits,
+): { getContextWindow: () => number | undefined; ready: Promise<void> } {
+  let contextWindow: number | undefined;
+  // Yield before starting even the synchronous part of the probe.
+  const ready = new Promise<void>((resolve) => setTimeout(resolve, 0)).then(async () => {
+    try {
+      contextWindow = (await load(input)).contextWindow;
+    } catch {
+      // Unknown stays unknown; a failed probe must never prevent startup.
+    }
+  });
+  return { getContextWindow: () => contextWindow, ready };
+}
+
 export async function loadSessionLimits(input: LoadSessionLimitsInput): Promise<ModelLimits> {
   const fetchFn = input.fetch ?? globalThis.fetch;
   const env = envWithSavedApiKeys(input.env ?? process.env);

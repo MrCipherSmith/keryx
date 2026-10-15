@@ -17,7 +17,9 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadSchema, validateJson } from "../gdskills/contracts";
+import type { BlastRadiusScreenInput } from "./blast-radius";
 import { completeManagedReview, createManagedReviewPackage, findingDispositionState } from "./managed";
+import { readyResearchFixture } from "./research.test-helpers";
 import type { ManagedReviewInput, StructuredReviewFinding } from "./types";
 
 const REPO_ROOT = process.cwd();
@@ -85,6 +87,8 @@ const REVIEWER_RESULTS = [
 const ROUND_1_REPORT = [
   "# Consolidated Review — round 1",
   "",
+  "Evidence level: static only — did not run: tests",
+  "",
   "## Major",
   "",
   "### [F-001] the shared config directory is created group-writable",
@@ -123,6 +127,7 @@ async function round1Findings(
     reviewId: "2026-08-29-round-1",
     target: { kind: "report", ref: "review.md" },
     reportText: ROUND_1_REPORT,
+    research: readyResearchFixture(["review-security-code", "review-testing-practices"], ["F-001", "F-002"]),
     now: new Date("2026-08-29T10:00:00Z"),
     ...over,
   });
@@ -276,6 +281,8 @@ describe("a disposition and a finding key survive the round trip", () => {
   test("round 2's dispatch carries what round 1 decided, and validates", async () => {
     await withTempRoot(async (root) => {
       const findings = await round1Findings(root);
+      const reportFile = path.join(root, ".metaproject/reviews/2026-08-29-round-1/report.md");
+      await writeFile(reportFile, `${await readFile(reportFile, "utf8")}\nNot verified: ${findings.length}\n`);
       await completeManagedReview(root, ".metaproject/reviews/2026-08-29-round-1", {
         dispositions: [
           {
@@ -371,15 +378,21 @@ describe("legacy markdown reports are not stranded", () => {
   // before it emitted anything structured, and each must still ingest.
   const REVIEWS_DIR = path.join(REPO_ROOT, ".metaproject", "reviews");
 
-  function realReports(): Array<{ id: string; text: string }> {
+  function realReports(): Array<{ id: string; text: string; blastRadius?: BlastRadiusScreenInput }> {
     if (!existsSync(REVIEWS_DIR)) {
       return [];
     }
-    const out: Array<{ id: string; text: string }> = [];
+    const out: Array<{ id: string; text: string; blastRadius?: BlastRadiusScreenInput }> = [];
     for (const entry of readdirSync(REVIEWS_DIR, { withFileTypes: true })) {
       const report = path.join(REVIEWS_DIR, entry.name, "report.md");
       if (entry.isDirectory() && existsSync(report)) {
-        out.push({ id: entry.name, text: readFileSync(report, "utf8") });
+        // A round that ran scope B keeps the set it was dispatched over beside its report; without it the screen refuses.
+        const radius = path.join(REVIEWS_DIR, entry.name, "blast-radius.json");
+        out.push({
+          id: entry.name,
+          text: readFileSync(report, "utf8"),
+          ...(existsSync(radius) ? { blastRadius: JSON.parse(readFileSync(radius, "utf8")) as BlastRadiusScreenInput } : {}),
+        });
       }
     }
     return out;
@@ -450,6 +463,7 @@ describe("legacy markdown reports are not stranded", () => {
           reviewId: `legacy-${index}`,
           target: { kind: "report", ref: report.id },
           reportText: report.text,
+          ...(report.blastRadius === undefined ? {} : { blastRadius: report.blastRadius }),
           now: new Date("2026-08-29T10:00:00Z"),
         });
         const findings = JSON.parse(

@@ -24,49 +24,49 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-spec.md",
       "kind": "custom",
       "exists": true,
       "summary": "Pre-implementation spec written before any production code change, covering all four findings and the TerminalStateReason compatibility check.",
       "hash": "998eab19a351a626e548f9e9cdd2b31f5721f97e025e5f3d91d7db0f2e7f504b"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T20-implementation.md",
       "kind": "report",
       "exists": true,
       "summary": "Per-finding evidence (F-001..F-004) with raw log paths and file hashes.",
       "hash": "3e19a7a86d4bba1a1580f25d378dd0dc5ec0ccd8c98862b436bf9f0d66a1afad"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-39-29-322Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-39-29-322Z_run.log",
       "kind": "custom",
       "exists": true,
       "summary": "Reviewer's unchanged core budget probe: 11/11 pass; C11 now reports terminalStateReasons=[\"no_progress\"] with 16 rounds and 47 calls remaining.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-39-35-429Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-39-35-429Z_run.log",
       "kind": "custom",
       "exists": true,
       "summary": "Reviewer's unchanged child budget probe: 4/4 pass.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-39-18-181Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-39-18-181Z_run.log",
       "kind": "custom",
       "exists": true,
       "summary": "Focused agent/budget/child suite: 111 pass, 0 fail, 452 assertions.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-39-53-313Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-39-53-313Z_run.log",
       "kind": "custom",
       "exists": true,
       "summary": "bun run typecheck: exit 0.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-40-02-821Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-40-02-821Z_run.log",
       "kind": "custom",
       "exists": true,
       "summary": "bun run typecheck:scripts: exit 0.",

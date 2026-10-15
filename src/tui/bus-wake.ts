@@ -9,7 +9,7 @@
 
 export interface BusWakeInput {
   /**
-   * `!chrome.isBusy() && !foregroundOperation.isActive && mainQueue.length === 0`
+   * `!chrome.isBusy() && !foregroundOperation.isActive && turnLoop.queue.length === 0`
    * (specification §5.3) — the SAME idle test the task-notification wake
    * uses. The caller is responsible for also checking the "destroyed" guard
    * (Ctrl+C) before ever constructing this input; this function has no
@@ -62,9 +62,10 @@ export function decideBusWake(input: BusWakeInput): BusWakeDecision {
  *   nothing new arrived) so the NEXT distinct backlog gets its own notice.
  *   `onPoll` also only evaluates anything when `newEvents` is true — a poll
  *   that delivered nothing new cannot itself justify a fresh decision;
- *   `onSettle` has no such gate, since a turn settling is itself the "check
- *   what's left" moment regardless of whether that particular turn delivered
- *   anything.
+ *   `onSettle` has no such gate, since a drain that leaves nothing queued (a
+ *   turn settling, a foreground operation completing, a lease released,
+ *   detached slash work ending) is itself the "check what's left" moment
+ *   regardless of whether anything delivered a message.
  * - F4: `hasBusDeps` guards BOTH entry points. A poll can land while the
  *   TUI's own join-success `deps` rebuild is still in flight (`await
  *   opts.makeAgentDeps(...)` in `tui-shell.ts`) — `deps.busInbox`/`busAck`
@@ -72,7 +73,7 @@ export function decideBusWake(input: BusWakeInput): BusWakeDecision {
  *   nothing to drain, burning the auto-wake budget on an empty round.
  */
 export interface BusWakeControllerOptions {
-  /** `!chrome.isBusy() && !foregroundOperation.isActive && mainQueue.length === 0` — read fresh at every decision, never cached. */
+  /** `!destroyed && !drainSites.workInFlight() && turnLoop.queue.length === 0 && no held lease` — read fresh at every decision, never cached. */
   isIdle: () => boolean;
   /** The live `BusInbox` this session drains from. */
   inbox: { hasWakeEligible(): boolean };
@@ -105,10 +106,11 @@ export interface BusWakeController {
    */
   onPoll(newEvents: boolean): void;
   /**
-   * Call when a turn settles and no queued operator item ran instead. Unlike
-   * `onPoll`, this always re-checks pending messages — a turn settling is
-   * itself the moment to notice a still-backlogged inbox, whether or not
-   * THIS turn is what delivered any of it.
+   * Call when a queue drain left nothing queued and started nothing: after a
+   * turn settles, a foreground operation completes, a lease is released or
+   * detached slash work ends. Unlike `onPoll`, this always re-checks pending
+   * messages — it is itself the moment to notice a still-backlogged inbox,
+   * whether or not anything just now delivered any of it.
    */
   onSettle(): void;
 }

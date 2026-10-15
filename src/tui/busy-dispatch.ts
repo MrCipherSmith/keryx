@@ -102,6 +102,11 @@ export type BusyDispatchTarget =
    */
   | "schedules"
   /**
+   * `/autoreview` (flow 424): start, list and stop an autonomous pull request review. It starts and
+   * signals a separate process and reads its run files; it never touches the main turn.
+   */
+  | "autoreview"
+  /**
    * `/approvals` (flow 369): the pending remote approvals. Listing is read-only and an
    * answer is one call, once, in the store; neither touches the main turn.
    */
@@ -165,6 +170,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/intake") return "intake";
   if (commandName === "/remote-policy") return "remote-policy";
   if (commandName === "/schedules") return "schedules";
+  if (commandName === "/autoreview") return "autoreview";
   if (commandName === "/approvals") return "approvals";
   if (commandName === "/permissions") return "permissions";
   if (commandName === "/decisions") return "decisions";
@@ -181,4 +187,21 @@ export function classifyBusyDispatch(params: {
   if (isBusyReadonlyCommand && isMcp) return "mcp";
   if (commandName !== undefined || line.startsWith("/")) return "deferred";
   return "not-a-command";
+}
+
+/**
+ * Commands that swap the session out from under the main turn and the questions queued behind it, so
+ * a deferred line of this kind is refused rather than queued: run later, it would rewrite the history
+ * those queued questions were typed against.
+ */
+export const BUSY_REFUSED_COMMANDS: ReadonlySet<string> = new Set(["/new", "/clear", "/resume"]);
+
+/** What `runLine` does with a line classified `"deferred"`: queue it for the turn's end, or refuse it. */
+export function deferredBusyAction(line: string, commandName: string | undefined): "queue" | "refuse" {
+  const name = (commandName ?? line.trim().split(/\s+/)[0] ?? "").toLowerCase();
+  return BUSY_REFUSED_COMMANDS.has(name) ? "refuse" : "queue";
+}
+
+export function queuedCommandNotice(position: number): string {
+  return `◇ main is busy — queued as q${position} (runs when the turn ends).`;
 }

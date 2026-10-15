@@ -75,6 +75,9 @@ export type ReviewCoverageEntry = {
   reason: string;
 };
 
+/** A readiness item the operator waived in their own words (`keryx review complete --waive <item> "<quote>"`). */
+export type ReadinessWaiver = { item: string; operator_quote: string; time: string };
+
 export type ManagedReviewManifest = {
   schemaVersion: 1;
   reviewId: string;
@@ -89,6 +92,9 @@ export type ManagedReviewManifest = {
     findings: string;
     learning: string;
     decisions: string;
+    /** Package-local evidence locators; absent only on legacy packages. */
+    research?: string | undefined;
+    reviewerDispatch?: string | undefined;
   };
   coverage: ReviewCoverageEntry[];
   /**
@@ -108,12 +114,20 @@ export type ManagedReviewManifest = {
    * back and says `not recorded` rather than letting the silence pass.
    */
   filter_stats?: ReviewFilterStats | undefined;
+  /** Readiness items waived by the operator; each also heads report.md as a "Partial review" line. */
+  readiness_waivers?: ReadinessWaiver[] | undefined;
   /**
    * Fields the ingest supplied rather than the reviewer authoring them.
    * Written only when something was repaired — see
    * {@link module:review/repair}.
    */
   repairs?: FindingRepair[] | undefined;
+  /**
+   * Report fields this package's report is required to carry. Written by every
+   * ingest from the release that introduced `evidence-level`; absent means the
+   * package predates the field, and `complete` warns instead of refusing.
+   */
+  report_fields?: string[] | undefined;
   /**
    * What the round reported having used. Absent means nobody reported —
    * never zero. See {@link module:review/cost}.
@@ -133,6 +147,15 @@ export type ManagedReviewManifest = {
    * block distinguishes them. See {@link module:review/cross-family}.
    */
   cross_family_review?: CrossFamilyReviewDecision | undefined;
+  /**
+   * `true` when the operator asked for an AUTOMATIC review: the shell drove this
+   * round on its own, with the round limit raised to 200 and no round-limit
+   * question, the review's own commands run against this package without a
+   * prompt, and only the closed list of emergencies reaches the operator. Written
+   * only when set, so absent reads as "an ordinary round" and never as `false`.
+   * It changes how the shell prompts, never what the completion gate requires.
+   */
+  automatic?: true | undefined;
   createdAt?: string | undefined;
   updatedAt?: string | undefined;
 };
@@ -492,6 +515,8 @@ export type ManagedReviewInput = {
   target: ManagedReviewTarget;
   flowId?: string | undefined;
   reviewId?: string | undefined;
+  /** Mark the package as an automatic review. See {@link ManagedReviewManifest.automatic}. */
+  automatic?: boolean | undefined;
   reviewers?: string[] | undefined;
   coverage?: ReviewCoverageEntry[] | undefined;
   reportPath?: string | undefined;
@@ -592,10 +617,10 @@ export type ManagedReviewInput = {
   /**
    * The parallel dispatch plan, when the caller has one.
    *
-   * `outstanding` is the subagent count the CALLER declares it already has in
-   * flight. It is the only thing that lets the cap say anything about the
-   * `job-orchestrator` -> `flow-orchestrator` -> `review-orchestrator` nesting,
-   * and it is a declaration rather than an observation — see
+   * `outstanding` is the count of subagents the main session still has running,
+   * as the CALLER declares it. It is the only thing that lets the cap say anything
+   * beyond this dispatch plan, and it is a declaration rather than an
+   * observation — see
    * {@link module:review/caps.ConcurrencyPlan.holdsAcrossNesting}.
    */
   concurrency?:

@@ -2,7 +2,9 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { gdgraphStorageDir } from "../gdgraph/data-dir";
 import { pathExists } from "../lib/fs";
+import { revisionOperand } from "../lib/git-revision";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 import { wikiAsk } from "./ask";
 import { backlinksFor, buildBacklinkIndex } from "./backlinks";
@@ -29,6 +31,7 @@ import {
   pageVersion,
   parseChangelog,
 } from "./page-invariants";
+import { type ModulePageLink, rewriteReadmeLinks, truncateMarkdown } from "./readme-links";
 import { buildSectionIndex } from "./section-index";
 import { readSectionRegistryState } from "./section-tombstone";
 import { HEAD_NOT_REQUESTED, resolveWikiSourceGate } from "./staleness";
@@ -406,10 +409,16 @@ export async function wikiPruneOrphans(cwd: string, history?: WikiWriteContext):
   if (!(await pathExists(componentsDir))) {
     return { pruned: [], orphanedAccepted: [] };
   }
-  const at = new Date().toISOString();
-  const candidates = await collectGraphWikiCandidates(cwd, at, DEFAULT_COLLECT_LIMIT, null);
+  // Every module in the graph, not the capped candidate list: a module ranked
+  // past the collect limit still exists and must keep its page. A module that
+  // shrank below MIN_MODULE_FILES no longer gets a page from collect, so its
+  // old page is stale and goes with the orphans.
+  const counts = await moduleFileCounts(cwd);
+  if (counts === undefined || counts.size === 0) {
+    return { pruned: [], orphanedAccepted: [] };
+  }
   const validSlugs = new Set(
-    candidates.filter((candidate) => candidate.type === "component").map((candidate) => candidate.slug),
+    [...counts].filter(([, files]) => files >= MIN_MODULE_FILES).map(([name]) => slugifyPath(name)),
   );
 
   const pruned: string[] = [];
@@ -455,18 +464,24 @@ export async function wikiPruneOrphans(cwd: string, history?: WikiWriteContext):
  * posture. The caller must treat "graph unavailable" as "nothing to flag
  * yet," not as "everything is invalid."
  */
-export async function validModuleNames(cwd: string): Promise<Set<string> | undefined> {
-  const nodesPath = path.join(cwd, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl");
+export async function validModuleNames(cwd: string, dataDir?: string): Promise<Set<string> | undefined> {
+  const counts = await moduleFileCounts(cwd, dataDir);
+  return counts === undefined ? undefined : new Set(counts.keys());
+}
+
+async function moduleFileCounts(cwd: string, dataDir?: string): Promise<Map<string, number> | undefined> {
+  const nodesPath = path.join(gdgraphStorageDir(cwd, dataDir), "nodes.jsonl");
   if (!(await pathExists(nodesPath))) {
     return undefined;
   }
-  const modules = new Set<string>();
+  const counts = new Map<string, number>();
   for (const node of parseJsonl(await readFile(nodesPath, "utf8"))) {
     if (node.kind === "asset") continue;
     const nodePath = String(node.path ?? node.id ?? "unknown");
-    modules.add(moduleNameFromProjectPath(nodePath));
+    const moduleName = moduleNameFromProjectPath(nodePath);
+    counts.set(moduleName, (counts.get(moduleName) ?? 0) + 1);
   }
-  return modules;
+  return counts;
 }
 
 // AFC-W04 (flow 235, phase 3, T12) — the evidence surface.
@@ -712,9 +727,10 @@ export async function collectGraphWikiCandidates(
   generatedAt: string,
   limit: number,
   onlyModules: Set<string> | null,
+  dataDir?: string,
 ): Promise<WikiCollectCandidate[]> {
-  const nodesPath = path.join(cwd, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl");
-  const edgesPath = path.join(cwd, ".metaproject", "data", "gdgraph", "storage", "edges.jsonl");
+  const nodesPath = path.join(gdgraphStorageDir(cwd, dataDir), "nodes.jsonl");
+  const edgesPath = path.join(gdgraphStorageDir(cwd, dataDir), "edges.jsonl");
   if (!(await pathExists(nodesPath)) || !(await pathExists(edgesPath))) {
     return [];
   }
@@ -822,9 +838,20 @@ export async function collectGraphWikiCandidates(
   };
 
   const moduleCandidates: WikiCollectCandidate[] = [];
-  // Only these modules get a wiki page - link Related Wiki to them so slugs are
-  // always valid (no guessed/broken links from the enrich step).
+  // A module is linked only when its page is written by this run or is already
+  // on disk, so a link never dangles (no guessed/broken links from the enrich
+  // step). Every other neighbour is named as a plain code path.
   const pageModules = new Set(topModules.map((entry) => entry.name));
+  const componentsDir = path.join(wikiRootPath(cwd), "components");
+  const existingSlugs = new Set(
+    ((await pathExists(componentsDir)) ? await readdir(componentsDir) : [])
+      .filter((entry) => entry.endsWith(".md"))
+      .map((entry) => entry.slice(0, -3)),
+  );
+  const pageLink = (name: string): string | null => {
+    const slug = slugifyPath(name);
+    return pageModules.has(name) || existingSlugs.has(slug) ? `${slug}.md` : null;
+  };
   for (const item of topModules) {
     const moduleName = item.name;
     const moduleFileList = moduleFiles.get(moduleName) ?? [];
@@ -839,9 +866,9 @@ export async function collectGraphWikiCandidates(
     const entryFiles = moduleFileList.filter((file) => /(^|\/)index\.[jt]sx?$/.test(file)).slice(0, 4);
     const deps = topCounts(moduleDeps.get(moduleName), 6);
     const dependents = topCounts(moduleDependents.get(moduleName), 6);
-    const readme = await readModuleReadme(cwd, moduleName);
+    const readme = await readModuleReadme(cwd, moduleName, pageLink);
     const exportsFrom = entryFiles.length > 0 ? entryFiles : keyFiles.slice(0, 2).map((entry) => entry.file);
-    const exportApi = await extractModuleApi(cwd, exportsFrom);
+    const exportApi = await extractModuleApi(cwd, exportsFrom, dataDir);
 
     const reference: string[] = [];
     const pushRef = (heading: string, lines: string[]): void => {
@@ -884,17 +911,20 @@ export async function collectGraphWikiCandidates(
       summaryParts.push("Exposes " + exportApi.length + " public symbol(s).");
     }
 
-    const relatedNames: string[] = [];
+    const linkedNames: string[] = [];
+    const unlinkedNames: string[] = [];
     const seenRelated = new Set<string>([moduleName]);
     for (const [name] of [...deps, ...dependents]) {
-      if (!seenRelated.has(name) && pageModules.has(name)) {
-        seenRelated.add(name);
-        relatedNames.push(name);
+      if (seenRelated.has(name)) {
+        continue;
       }
+      seenRelated.add(name);
+      (pageLink(name) === null ? unlinkedNames : linkedNames).push(name);
     }
-    const related = relatedNames
-      .slice(0, 8)
-      .map((name) => ({ name, slug: slugifyPath(name) }));
+    const related = [
+      ...linkedNames.slice(0, 8).map((name) => ({ name, page: pageLink(name) })),
+      ...unlinkedNames.slice(0, 8).map((name) => ({ name, page: null })),
+    ];
 
     moduleCandidates.push({
       type: "component",
@@ -972,7 +1002,11 @@ function topCounts(bucket: Map<string, number> | undefined, limit: number): Arra
   return [...bucket.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
 }
 
-async function readModuleReadme(cwd: string, moduleName: string): Promise<string | null> {
+async function readModuleReadme(
+  cwd: string,
+  moduleName: string,
+  pageLink: ModulePageLink,
+): Promise<string | null> {
   const readmePath = path.join(cwd, ...moduleName.split("/"), "README.md");
   if (!(await pathExists(readmePath))) {
     return null;
@@ -986,7 +1020,10 @@ async function readModuleReadme(cwd: string, moduleName: string): Promise<string
     if (!paragraph) {
       return null;
     }
-    const normalized = paragraph.replace(/\s+/g, " ").slice(0, 400);
+    const normalized = truncateMarkdown(
+      rewriteReadmeLinks(paragraph.replace(/\s+/g, " "), moduleName, pageLink),
+      400,
+    );
     return "- " + normalized + " (from module README)";
   } catch {
     return null;
@@ -1035,9 +1072,9 @@ async function extractModuleExports(cwd: string, files: string[]): Promise<strin
 // each with its real kind (function/class/interface/method) from `symbols.jsonl`,
 // so the scaffold carries `\`build\` (function)` instead of a bare name. Degrades
 // to plain names when the symbol layer is absent (golden-rule floor).
-export async function extractModuleApi(cwd: string, files: string[]): Promise<string[]> {
+export async function extractModuleApi(cwd: string, files: string[], dataDir?: string): Promise<string[]> {
   const names = await extractModuleExports(cwd, files);
-  const symbolsPath = path.join(cwd, ".metaproject", "data", "gdgraph", "storage", "symbols.jsonl");
+  const symbolsPath = path.join(gdgraphStorageDir(cwd, dataDir), "symbols.jsonl");
   if (names.length === 0 || !(await pathExists(symbolsPath))) {
     return names.map((name) => "`" + name + "`");
   }
@@ -1456,7 +1493,7 @@ function renderModuleWikiPage({
   generatedAt: string;
   summary: string;
   reference: string[];
-  related: Array<{ name: string; slug: string }>;
+  related: Array<{ name: string; page: string | null }>;
 }): string {
   // Prose sections lead (agent/human-owned, filled by the gdwiki enrich
   // workflow); graph-derived facts live under Reference and are regenerated by
@@ -1499,10 +1536,13 @@ ${reference.join("\n")}
 ## Related Wiki
 
 Graph-derived - regenerated by \`keryx wiki collect --force\`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+exist are linked, other modules are named as code paths; when enriching, add
+new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
-${related.map((entry) => "- [Module " + entry.name + "](" + entry.slug + ".md)").join("\n")}
+${related.map((entry) => entry.page === null
+    ? "- `" + entry.name + "` (no wiki page)"
+    : "- [Module " + entry.name + "](" + entry.page + ")").join("\n")}
 
 ## Changelog
 
@@ -1581,8 +1621,9 @@ async function changedModules(cwd: string, since: string | undefined): Promise<S
 }
 
 function gitDiffNames(cwd: string, base: string): Promise<string[] | null> {
+  if (base.startsWith("-")) return Promise.resolve(null);
   return new Promise((resolve) => {
-    const child = spawn("git", ["diff", "--name-only", base], { cwd });
+    const child = spawn("git", ["diff", "--name-only", ...revisionOperand(base)], { cwd });
     let out = "";
     child.stdout.on("data", (chunk) => {
       out += String(chunk);

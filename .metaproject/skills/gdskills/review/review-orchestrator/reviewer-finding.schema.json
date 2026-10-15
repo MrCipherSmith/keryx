@@ -184,6 +184,31 @@
         "type": "string"
       }
     },
+    "follow_ups": {
+      "title": "Follow-ups handed back to the parent",
+      "description": "Work the reviewer could not do itself and leaves to the parent. Each entry becomes a research obligation `<raw>:fu<N>` (N counts from 1, in this order; a `Parent follow-up:` line after the REVIEW_RESULT block is appended) with status `unresolved`. It closes only through a disposition (`finding`, `refuted`, `out-of-scope` or `narrowed` with a \"what remains\" text); until then the ledger is not reconciled and the report lists it as not verified.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "slices": {
+      "title": "Slices this result covered",
+      "description": "The ids of the dispatched slices the reviewer read. An entry is an id string, or an object with an `id`, an optional `coverage` note and an optional `status`. `keryx review retry-plan` and `ledger build` read both. An object counts as covered only when its `status` is absent or one of DONE, COMPLETE, COMPLETED, COVERED, OK (any case); any other status (NOT_READ, INCOMPLETE, SKIPPED, PARTIAL, …) leaves the slice uncovered and is named in the plan reason or the ledger gap. An entry with no id counts for nothing.",
+      "type": "array",
+      "items": {
+        "type": ["string", "object"],
+        "minLength": 1,
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "coverage": { "type": "string" },
+          "status": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
     "stats": {
       "type": "object",
       "required": [

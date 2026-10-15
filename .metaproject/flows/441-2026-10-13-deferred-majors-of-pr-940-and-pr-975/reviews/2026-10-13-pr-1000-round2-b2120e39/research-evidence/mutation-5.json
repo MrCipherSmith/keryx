@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx-fdm-t2",
+  "command": "bun test src/commands/agent-fewer-prompts.test.ts src/commands/agent-trust-orchestration.test.ts src/commands/agent.test.ts src/harness/tool/builtin",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 20735
+  },
+  "mutants": [
+    {
+      "id": "ag-baseline-process",
+      "file": "src/commands/agent.ts",
+      "anchor": "  recordBunfigBaseline();\n",
+      "replacement": "",
+      "note": "agent: process-cwd baseline not recorded",
+      "line": 2250,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20922
+    },
+    {
+      "id": "ag-baseline-tool",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (tool.workingDirectory !== undefined) recordBunfigBaseline(tool.workingDirectory);",
+      "replacement": "",
+      "note": "agent: tool-cwd baseline not recorded",
+      "line": 2252,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20848
+    },
+    {
+      "id": "ag-baseline-tool-guard",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (tool.workingDirectory !== undefined) recordBunfigBaseline(",
+      "replacement": "if (true) recordBunfigBaseline(",
+      "note": "agent: baseline for undefined cwd (default arg)",
+      "line": 2252,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 20756
+    },
+    {
+      "id": "ag-latch-cwd",
+      "file": "src/commands/agent.ts",
+      "anchor": "      ...(tool.workingDirectory === undefined ? {} : { cwd: tool.workingDirectory }),\n",
+      "replacement": "",
+      "note": "agent: routine context loses tool cwd",
+      "line": 5647,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20734
+    },
+    {
+      "id": "ag-latch-untrusted",
+      "file": "src/commands/agent.ts",
+      "anchor": "untrustedContent: untrustedOrigin,",
+      "replacement": "untrustedContent: false,",
+      "note": "agent: routine context loses untrusted",
+      "line": 5646,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20799
+    },
+    {
+      "id": "ag-gate-mode",
+      "file": "src/commands/agent.ts",
+      "anchor": "((mode === \"trust\" && gated.decision === \"auto\") || reviewAutoActive())",
+      "replacement": "(mode === \"trust\" || reviewAutoActive())",
+      "note": "agent: latch lift mode+decision",
+      "line": 5685,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 21132
+    },
+    {
+      "id": "ag-gate-reviewauto",
+      "file": "src/commands/agent.ts",
+      "anchor": "((mode === \"trust\" && gated.decision === \"auto\") || reviewAutoActive())",
+      "replacement": "(mode === \"trust\" && gated.decision === \"auto\")",
+      "note": "agent: latch lift not in review-auto",
+      "line": 5685,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 27820
+    },
+    {
+      "id": "sh-workdir",
+      "file": "src/harness/tool/builtin/shell-exec-tool.ts",
+      "anchor": "    workingDirectory: root,\n",
+      "replacement": "",
+      "note": "shellExecTool: workingDirectory not exposed",
+      "line": 422,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 105243
+    },
+    {
+      "id": "agent-routine-memo",
+      "file": "src/commands/agent.ts",
+      "anchor": "(routineVerdict ??= isTrustRoutineCommand(command, routineContext))",
+      "replacement": "isTrustRoutineCommand(command, { untrustedContent: untrustedOrigin })",
+      "note": "F-023: verdict loses cwd",
+      "line": 5650,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 64570
+    },
+    {
+      "id": "ag-refusal-off",
+      "file": "src/commands/agent.ts",
+      "anchor": "if (reviewAutoActive() && command.length > 0 && !isRoutine()) {",
+      "replacement": "if (false) {",
+      "note": "refusal memory check removed",
+      "line": 5652,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 20853
+    },
+    {
+      "id": "ag-gate-routine-dropped",
+      "file": "src/commands/agent.ts",
+      "anchor": "        isRoutine() &&\n",
+      "replacement": "        true &&\n",
+      "note": "latch lifted without the table",
+      "line": 5684,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 21047
+    },
+    {
+      "id": "ag-gate-hook",
+      "file": "src/commands/agent.ts",
+      "anchor": "        !gated.hookAsked &&\n        isRoutine() &&",
+      "replacement": "        isRoutine() &&",
+      "note": "hook ask no longer keeps the latch",
+      "line": 5683,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 20665
+    }
+  ],
+  "totals": {
+    "killed": 9,
+    "survived": 3,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

@@ -1,0 +1,46 @@
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	2026-10-07T17:27:34.8010759Z  20930 pass
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	2026-10-07T17:27:34.8010977Z  13 skip
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	2026-10-07T17:27:34.8011177Z  0 fail
+typecheck-and-tests	Typecheck and core gate (offline, model-free)	2026-10-07T17:27:34.8011687Z Ran 20943 tests across 949 files. [552.78s]
+metrics-contract	Observability contract tests	2026-10-07T17:16:58.7021323Z  54 pass
+metrics-contract	Observability contract tests	2026-10-07T17:16:58.7021443Z  0 fail
+metrics-contract	Observability contract tests	2026-10-07T17:16:58.7021689Z Ran 54 tests across 3 files. [526.00ms]
+opentui native (linux-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	2026-10-07T17:18:05.8759211Z  1881 pass
+opentui native (linux-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	2026-10-07T17:18:05.8759543Z  0 fail
+opentui native (linux-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	2026-10-07T17:18:05.8760265Z Ran 1881 tests across 142 files. [66.91s]
+opentui native (darwin-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	2026-10-07T17:18:33.4907420Z  1881 pass
+opentui native (darwin-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	2026-10-07T17:18:33.4907720Z  0 fail
+opentui native (darwin-x64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	2026-10-07T17:18:33.4908380Z Ran 1881 tests across 142 files. [86.38s]
+vscode-extension	Unit tests (logic layer, no VS Code host required)	2026-10-07T17:16:59.0623858Z  88 pass
+vscode-extension	Unit tests (logic layer, no VS Code host required)	2026-10-07T17:16:59.0624046Z  0 fail
+vscode-extension	Unit tests (logic layer, no VS Code host required)	2026-10-07T17:16:59.0624462Z Ran 88 tests across 8 files. [106.00ms]
+opentui native (darwin-arm64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	2026-10-07T17:18:26.7709880Z  1881 pass
+opentui native (darwin-arm64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	2026-10-07T17:18:26.7710320Z  0 fail
+opentui native (darwin-arm64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	2026-10-07T17:18:26.7711310Z Ran 1881 tests across 142 files. [74.80s]
+client matrix (cancel-resume)	Client gate — cancel-resume	2026-10-07T17:17:39.1907641Z  1970 pass
+client matrix (cancel-resume)	Client gate — cancel-resume	2026-10-07T17:17:39.1907747Z  0 fail
+client matrix (cancel-resume)	Client gate — cancel-resume	2026-10-07T17:17:39.1907989Z Ran 1970 tests across 136 files. [31.26s]
+client matrix (runtime)	Client gate — runtime	2026-10-07T17:18:08.8583230Z  6001 pass
+client matrix (runtime)	Client gate — runtime	2026-10-07T17:18:08.8583389Z  38 skip
+client matrix (runtime)	Client gate — runtime	2026-10-07T17:18:08.8583540Z  0 fail
+client matrix (runtime)	Client gate — runtime	2026-10-07T17:18:08.8583872Z Ran 6039 tests across 359 files. [62.88s]
+client matrix (streaming)	Client gate — streaming	2026-10-07T17:17:07.0750107Z  429 pass
+client matrix (streaming)	Client gate — streaming	2026-10-07T17:17:07.0750211Z  0 fail
+client matrix (streaming)	Client gate — streaming	2026-10-07T17:17:07.0750460Z Ran 429 tests across 30 files. [385.00ms]
+opentui native (linux-arm64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	2026-10-07T17:18:04.3408535Z  1881 pass
+opentui native (linux-arm64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	2026-10-07T17:18:04.3408695Z  0 fail
+opentui native (linux-arm64)	Run OpenTUI-dependent tests with zero skips (fail on skip)	2026-10-07T17:18:04.3409167Z Ran 1881 tests across 142 files. [66.09s]
+client matrix (terminal)	Client gate — terminal	2026-10-07T17:18:59.3469490Z  2202 pass
+client matrix (terminal)	Client gate — terminal	2026-10-07T17:18:59.3469647Z  3 skip
+client matrix (terminal)	Client gate — terminal	2026-10-07T17:18:59.3469791Z  0 fail
+client matrix (terminal)	Client gate — terminal	2026-10-07T17:18:59.3470135Z Ran 2205 tests across 162 files. [106.30s]
+linux sandbox (bubblewrap) live smoke	OS-sandbox live smokes (real subprocesses under bwrap)	2026-10-07T17:17:11.2495854Z  9 pass
+linux sandbox (bubblewrap) live smoke	OS-sandbox live smokes (real subprocesses under bwrap)	2026-10-07T17:17:11.2496151Z  1 skip
+linux sandbox (bubblewrap) live smoke	OS-sandbox live smokes (real subprocesses under bwrap)	2026-10-07T17:17:11.2496481Z  0 fail
+linux sandbox (bubblewrap) live smoke	OS-sandbox live smokes (real subprocesses under bwrap)	2026-10-07T17:17:11.2497437Z Ran 10 tests across 4 files. [792.00ms]
+macOS real-host legs — OS sandbox + TUI pty launch	OS-sandbox macOS legs — seatbelt, allowlist proxy, dual-axis (fail on skip)	2026-10-07T17:17:08.1125780Z  92 pass
+macOS real-host legs — OS sandbox + TUI pty launch	OS-sandbox macOS legs — seatbelt, allowlist proxy, dual-axis (fail on skip)	2026-10-07T17:17:08.1126440Z  0 fail
+macOS real-host legs — OS sandbox + TUI pty launch	OS-sandbox macOS legs — seatbelt, allowlist proxy, dual-axis (fail on skip)	2026-10-07T17:17:08.1126870Z Ran 92 tests across 9 files. [1.96s]
+macOS real-host legs — OS sandbox + TUI pty launch	Launch the real shell on an allocated pty (fail on skip)	2026-10-07T17:17:21.0219840Z  4 pass
+macOS real-host legs — OS sandbox + TUI pty launch	Launch the real shell on an allocated pty (fail on skip)	2026-10-07T17:17:21.0224000Z  0 fail
+macOS real-host legs — OS sandbox + TUI pty launch	Launch the real shell on an allocated pty (fail on skip)	2026-10-07T17:17:21.0230760Z Ran 4 tests across 1 file. [12.84s]

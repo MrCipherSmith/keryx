@@ -1,7 +1,7 @@
 # TUI: clickable subagent list and inspector modal
 
 Status: ready
-Source: user description + Grok Build reference (`~/goodea/misk/grok-build`)
+Source: user description
 
 ## Problem
 
@@ -9,8 +9,7 @@ The OpenTUI agent shell already surfaces spawned subagents in the sidebar Status
 panel (`WorkerFleet` + `formatFleetSidebar`), but the list is a single
 non-interactive `TextRenderable`, truncated to ~12 lines (`… +N more`), and
 finished children disappear after 15s. There is no way to open a child and
-watch its work the way Grok Build does (full clickable list → overlay of the
-child transcript).
+watch its work (full clickable list → overlay of the child transcript).
 
 ## Expected Outcome
 
@@ -23,6 +22,6 @@ child transcript).
 
 ## Out of Scope
 
-- Grok Build's fullscreen takeover, kill buttons, or worktree isolation UI.
+- A fullscreen takeover, kill buttons, or worktree isolation UI.
 - Changing MAE spawn policy, child tool lists, or the 15s parent-summary bound.
 - Readline-shell parity (inspector is OpenTUI-only; missing otui is a no-op).

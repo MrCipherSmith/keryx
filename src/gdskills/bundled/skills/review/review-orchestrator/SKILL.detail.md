@@ -33,7 +33,7 @@ comma-separated list, `stack_requires` as a string, only keys directly under
 has already applied it — use the fields, not the raw frontmatter.
 
 A description saying another entry point dispatches it ("Dispatched by
-vantage-review …") is its author's routing note, not a restriction: this
+acme-review …") is its author's routing note, not a restriction: this
 orchestrator dispatches it through the fields above.
 
 ### Family flags — why a shared flag does not lift the path gate
@@ -369,55 +369,422 @@ itself draws between a reviewer's claim (`severity`, `problem`, …) and what
 became of it (`disposition`), which a reviewer never states and this pass
 does not either.
 
-## Default budget guidance
+## Start questions (Step 5) — once per round, after the context pack
 
-Linked from SKILL.md § "Token and Context Budget Management".
+The round asks its operator three questions, once, in one interaction, after
+Step 1 (context pack) and Step 3 (scope) — never before them: the counterpart
+question cannot be answered well until the context pack has looked for the
+other side. On Claude Code that is one `AskUserQuestion` call carrying the
+three questions; on any other host, the lettered prompt below. An unattended
+round (job pipeline, trigger, schedule) asks nothing, applies the defaults and
+records them under `### How this review was run`.
 
-| Review size | Detection | Context mode | Dispatch style |
-|---|---|---|---|
-| small | <= 5 files and <= 300 changed lines | `light` | full relevant diff to selected reviewers |
-| medium | <= 20 files or <= 2,000 changed lines | `light` | per-domain filtered diff |
-| large | > 20 files or > 2,000 changed lines | ask `full` | staged waves by domain |
-| high-risk | auth/API/core/security/data migrations | ask `full` | staged waves, verifier included |
+1. **Reviewers** — default `--all`: every reviewer the engine detects plus every
+   project and convention reviewer its gates admit. Narrowing is an explicit
+   choice (tests only, one domain, a custom list). Flags the caller passed
+   answer this question and skip it. Convention reviewers are part of this
+   question; the job setting `convention_reviewers` still answers it in a
+   `job-orchestrator` pipeline.
+2. **Counterpart** — the other side of every contract the diff consumes or
+   mirrors: the backend for a frontend change, the frontend and other consumers
+   for a backend change. Before asking, the context pack looks for it:
+   endpoints, DTOs and rules the diff calls or mirrors, a paired PR
+   (`gh pr list --repo <counterpart> --search <branch-or-feature>`), the
+   producer at a freshly fetched SHA. The question shows what was found —
+   "no link found" included — and one checkbox, **verify the counterpart**, ON
+   by default even when nothing was found. Verification is not limited to a
+   paired PR: the other side's contracts and logic are re-read at a pinned SHA
+   every round. When the round cannot locate that code itself (repository,
+   handler, validator), it asks the operator where it is; it never records
+   `state: unavailable` on its own. Skipping verification takes a reason, and
+   the reason goes in the report.
+3. **Models** — the complexity the round already holds signals for (changed
+   files and lines, the risk class from Depth floor below, domains, scope B),
+   the per-role tier `keryx review tier` prints for each planned dispatch, and
+   the model each tier resolves to on this host. Choices: accept the plan (the
+   default), all `deep`, or custom. The plan is shown once per round, never per
+   dispatch (`rules/core/model-selection.mdc`). Skills, rules and this file name
+   tiers only; model ids appear in the rendered question and the report.
 
-## Scope before severity
+```text
+Context: <PR or branch>, <N> files / <N> lines, <domains>; risk: <class>
 
-Linked from SKILL.md § "Severity (canonical)" → `### Scope before severity`, and
-from the Review Context Pack's owner-intent input. The ownership rules it applies
-— who decides scope, what counts as settled — live in
-`.metaproject/rules/core/owner-intent.mdc`.
+1) Reviewers     A) --all (default)  B) tests only  C) <domain> only  D) choose
+2) Counterpart   found: <endpoints, rules, paired PR — or "no link found">
+                 A) verify <backend|frontend> (default)  B) skip — give a reason
+3) Models        complexity: <low|medium|high>; <role>: <tier> → <model>, …
+                 A) accept (default)  B) all deep  C) custom
 
-**The question.** Before any finding is graded: should this change exist in this
-PR? A fix PR that carries a new shared mechanism or an architecture change — a
-new store, framework or audit tool, wiring every caller must adopt — answers no.
-It is reported first as `Mis-scoped: split`, naming what stays in this PR and
-what moves out to its own owner-agreed PR (owner-intent rule 4).
+> answers (default: 1A 2A 3A)
+```
 
-**Why it is not a severity.** The ladder grades how wrong the code is. A
-mechanism that should not be in the PR can be correct at every site, so the
-ladder files it as `minor` or `info` ("architecture opinion"), and a round that
-fixes every `minor` then hardens the mechanism instead of questioning it. That
-is how a fix PR grows round over round while every reviewer's findings are
-"addressed".
+## Policy questions mid-round — the `policy` tag and the arbiter
 
-**What escalates.** "Who owns this", "this belongs elsewhere", "a second
-mechanism next to the existing one", "this should be its own PR". Reviewers
-that see one report it under this verdict, never as `minor`.
+A question the round raises with `ask_user` about scope, budget, partial coverage, a smaller slice, slice order or
+which option to take carries a `policy` tag: `{ kind, facts }`. `kind` is one of `scope`, `budget`,
+`option_choice`, `partial_coverage`, `smaller_slice`, `slice_order`. `facts` holds only numbers and booleans that
+describe the **recommended** option (for `budget`: `budgetUsedPercent`, `raisesBudget`; the guide lists the rest).
+Nothing from the diff, a finding or a PR comment goes into the facts: the arbiter builds its prompt from the tag and
+nothing else, so a quote there is dropped, and a question that carries one is shaped by outside content, which the
+arbiter does not decide.
 
-**What happens to it.** It is never auto-fixed: the round stops and asks the
-operator, and a fix loop does not dispatch a task for it. Only the part that
-stays is reviewed further.
+In `review-auto` and in an unattended run the review arbiter answers a tagged question from its numbered rules and
+writes `arbiter.log` into the package; `allow` takes the recommended option, `deny` and `escalate` refuse in an
+unattended run and ask the operator in `review-auto`. An untagged question keeps the old behaviour. A release, a
+merge, a credential, a destructive action or a publish is never tagged and never the arbiter's: those ask a person,
+and in an unattended run they are refused. In an interactive `ask` round the operator is asked, tagged or not.
 
-**Record.** `location_class: pr-process`, title starting `Mis-scoped: split`,
-machine verdict `REQUEST_CHANGES`; the visible first line is in
-`templates/review-report.md`. The schema's `severity` field holds `info` only
-because it is required — it is not counted, sorted or capped. This is a prose
-contract; no CLI enforces it yet.
+## Depth floor — a gating round does not degrade
 
-**Owner intent in the brief.** The context pack's `requirements.owner_intent`
-carries the owning spec's open questions and the code owner's and reviewers'
-latest comments on the PR and its linked issue. The author's issue, PR body and
-same-PR doc edits are the author's position, not a settled one (owner-intent
-rule 5). Every architecture, core-boundary and design reviewer is asked the
-scope question first. A brief never sets "other reviewers must find nothing" as
-its goal: that goal turns every round into hardening the current approach.
+A round is **gating** when its verdict lets a change move: the review step of a
+flow (`flow-orchestrator` Phase 3), a pre-merge or pre-ship review, a
+re-request after fixes. A gating round runs the composition the start questions
+selected.
+
+- **No dispatch tool, no review.** A host that cannot dispatch subagents — no
+  spawn tool, or the depth budget spent — returns
+  `STATUS: BLOCKED` with reason `nested_dispatch_unavailable` and no verdict.
+  It does not review the diff alone and call that a round. Measured (flow 405):
+  a single-agent round on a 150-line frontend PR wrote "did not dispatch any
+  sub-reviewers", approved it with two cosmetic minors, and the next human round
+  filed six real findings, every one reachable from the diff and the backend at
+  a pinned SHA.
+- **Size never lowers depth below the risk class.** The budget table sizes the
+  context, not the depth.
+- **High-risk includes a client-side mirror of a server rule** — validation,
+  limits, permissions, uniqueness, reserved names — beside the triggers the main
+  file lists.
+
+## Counterpart verification — the contract is enumerated, not summarised
+
+For an **input rule** the diff mirrors or depends on (what the server accepts
+for a name, a value, a role), the `cross_repo` entry records the producer's
+complete check set in `checks` and how that set was found in
+`enumeration_method` (`review-context.schema.json`):
+
+- every check the producer runs on that input: validators, restriction
+  utilities, uniqueness queries, reserved-name registries, and the storage bound
+  (column width, index, a downstream identifier);
+- for each check: its `source` (`file:line` at the pinned SHA), whether it is
+  case-sensitive, and the `paths` it runs on (create, update, rename, copy,
+  import, move, …).
+
+Put these rules in every reviewer dispatch:
+
+- **The facts are a starting point, not a boundary.** A reviewer may read the
+  producer itself and file what the entry missed.
+- **"The producer has no limit" is a question, not a fact.** Find what bounds
+  the value — that is where an over-long or unexpected value fails, usually as a
+  server error.
+- **Build the surfaces × checks matrix**: every surface that sends the input
+  against every check, each cell `same`, `missing`, `stricter` or `looser`.
+  `missing` is a refusal the user meets late; `stricter` blocks legal input; a
+  check the producer lacks but storage enforces is a producer defect — filed as
+  pre-existing, or fixed by a paired change.
+- **Every refusal the producer can return is shown where the user can act on
+  it** — next to the field, not as a generic toast.
+
+## Round obligations — always on, never asked
+
+These apply to every round without a question:
+
+1. **Enumerate before concluding.** Every caller and surface of a changed value
+   is found with `keryx ctx rg` or gdgraph, and the query is recorded — never
+   taken from the diff's own list.
+2. **Quantified claims are checked.** "Every", "all", "only" and "never" in the
+   PR body or the commits are compared with that enumeration; an over-claim is a
+   `minor` finding, the same class as the description-versus-diff rule.
+3. **A verified-clean line names its sites.** Each line of the `Verified clean`
+   lane names the files, sites or commands it rests on; "the frontend does the
+   same" without them is not verified.
+4. **A pre-existing defect gets a disposition.** Every pre-existing defect the
+   round finds in the contract the change touches is recorded with one: fixed in
+   the change (small, same contract), named out of scope in the PR body, or a
+   recommended issue. Found and dropped is the failure this rule exists for.
+5. **Red on the parent, per test.** Every added test fails with the parent
+   commit's production files restored; the run is the evidence.
+6. **A threaded value is pinned per site.** A parameter, key or prop passed at
+   several render sites is asserted at each site, or centralised so there is
+   one.
+7. **One rule, one implementation.** The same check implemented twice is a
+   finding, even while both copies agree.
+8. **"Do not re-raise" needs a record.** A dispatch may exclude an item only by
+   citing the PR comment, issue or decision that settled it — never a whole
+   surface ("X has no test; covered elsewhere").
+
+### Runtime research-completion ledger
+
+New managed packages carry `research.json`, initially pending. Before closing a round, enumerate unresolved observations from raw reviewers and the changed-file/consumer census, assign stable obligation IDs, and investigate them. Run the probe or inspect the relevant source and assertions: merely proposing a check does not resolve it. An unexecuted probe is not a verified claim. `keryx review ledger build` writes the ledger from the saved raw results and turns each raw finding into an obligation; it closes one only from a matching canonical finding or a `--dispositions` entry that carries evidence and a reason, and it leaves everything else `unresolved`.
+
+Supply the ledger using `keryx review ingest --research <ledger.json>` alongside the report and findings. Format: `version: 1`, `scopeReviewed: true`, `rawReconciled: true`, `obligations: [...]`. Each obligation requires `id`, `source`, `question`, `status`, `evidence`, `reason`. Status `finding` additionally requires `finding` pointing to exactly one canonical finding ID or global ID. Other terminal statuses are `refuted` and `out-of-scope`, both requiring evidence and reason. Preserve distinct scenarios when deduplicating. Assert census/reconciliation flags only after performing those checks; an empty obligations array is valid only if the actual census found no open observations.
+
+Open, deferred and unverifiable obligations block completion. If context, runtime or budget prevents resolution, retain the obligation and report incomplete; do not relabel it refuted or out-of-scope. Completion and the flow gate re-read the ledger even when the manifest says closed. Legacy packages without this artifact remain compatible, not proven complete. This gate validates the declared ledger, not the truth or exhaustiveness of its census; independent source/raw audits remain necessary.
+
+## Why Wave C verifies instead of re-scoring
+
+Wave C used to run `review-strict`: a meta-pass that re-read the consolidated
+findings and **adjusted their severity with no new evidence**, under an elevation
+table biased 3:1 toward escalation. It was **removed, not improved**, and the
+reason is measured rather than stylistic:
+
+- **GPT-4 on GSM8K across self-correction rounds: 95.5 → 91.5 → 89.0.**
+  **GPT-3.5 on CommonSenseQA: 75.8 → 38.1.** Among the answers that changed,
+  correct → incorrect exceeded incorrect → correct (Huang et al., *Large Language
+  Models Cannot Self-Correct Reasoning Yet*, ICLR 2024, arXiv:2310.01798).
+- **Self-Refine (arXiv:2303.17651): +49.2 on dialogue response generation, +0.2
+  on maths.** Self-refinement gains are on subjective tasks and vanish on
+  verifiable reasoning. Judging whether a null-guard is missing is verifiable
+  reasoning.
+
+Re-scoring a finding by re-reading it is therefore not a rigour pass; it is a
+coin flip weighted toward more findings. **Do not restore it because it looks
+obviously useful — it looked obviously useful the first time.**
+
+`review-verifier` occupies the slot and differs in exactly one way that matters:
+**it runs something.** Verification that executes rejects 85–96% of false reports
+against 4–15% unaided while finding 30–44% more true bugs (AnyPoC,
+arXiv:2604.11950); Meta's TestGen-LLM funnel discards 75% of its own output
+(75% build → 57% build and pass → 25% improve coverage) and the surviving quarter
+reaches 73% human acceptance (arXiv:2402.09171).
+
+## Scope B — bounds, rejections and recompute
+
+It walks `gdgraph affected` outward from every changed file, ranks by edge
+distance, keeps distance ≤ 2, cuts at 40 files closest-first, and adds a changed
+file's naming-related tests when the graph did not already reach them. Requires a
+built graph — run `keryx gdgraph build` if it refuses.
+
+**Do not pick the files yourself, and do not widen it.** "Review the
+functionality so nothing breaks" naively means "review the whole repository every
+round", which is unaffordable *and* actively harmful: review quality decays as
+context grows — measured F1 0.65 at round 2 falling to 0.29 at round 10. An
+unbounded scope B makes later rounds worse than earlier ones.
+
+The bounds are measured on this repository, not guessed: at depth 2 the set is a
+median of 19 files (p90 65); depth 3 buys eight more in the median and doubles
+the p90. The 40-file cap fires on 25% of commits and removes only hop-2 entries
+on all but 2 of 80, so it almost never costs a direct dependent — and when it
+does, it says so.
+
+**Record the whole thing.** `--out "<review-package>/blast-radius.md"` writes the
+set, the depth, and **every file the cap removed**. A truncation nobody can see
+reads afterwards as "we checked everything", which is the claim this pipeline
+exists to stop making. An empty radius is reported as `unresolved`, not as clean:
+the graph indexes code, so a change to a skill, a rule or a schema has no blast
+radius at all and that is a different fact from "nothing depends on it".
+
+### The scope-B question, and what is rejected
+
+> Does this change break an existing behaviour **at these sites**?
+
+Nothing else. The blast-radius set is **under regression check, not under
+review**. A finding about style, naming or architecture in code the change did
+not touch is refused **by the orchestrator in code** — not discouraged here —
+under three rules, every one of them a fact about the claim rather than about who
+made it:
+
+| Rule | Refused because |
+|---|---|
+| `outside-set` | the file is neither in the computed set nor in the changed set; the reviewer went browsing |
+| `non-regression-severity` | below `major`. Under the canonical rubric `minor` states the code behaves correctly and `info` names neither trigger nor outcome; neither can be a claim that something broke |
+| `no-link-to-change` | nothing in the finding names a changed file, module or symbol. A regression claim says THE CHANGE broke this site |
+
+Rejections are **recorded, not deleted** — raise the observation under scope A or
+as a separate review. Pass `--brief` output verbatim into the scope-B dispatch:
+the code rejection is the enforcement, but a reviewer told afterwards has already
+spent the round producing findings that will all be refused.
+
+`class_scope` on a scope-B finding names the **caller that breaks**, not the
+changed line, because that is the site a human has to look at.
+
+### When it is recomputed
+
+| Round | Scope A | Scope B |
+|---|---|---|
+| 1 (first after the draft PR) | yes | yes |
+| 2..N | yes | recomputed only if the changed-file set moved |
+| final | yes | **yes, always** |
+
+Do not decide this by memory:
+
+```bash
+keryx review blast-radius --ref "${BASE_SHA}" --previous blast-radius.json [--final]
+```
+
+It prints the decision and the reason, and reuses the previous record when
+nothing moved. The final round recomputes whatever the file set did — otherwise a
+fix introduced in round 3 gets no regression check at all, and the round that
+certifies the flow is the one that checked the least.
+
+## Readiness — the checklist behind `completed` and behind publishing
+
+`keryx review readiness <review-id-or-path> [--json]` reads the package and prints nine items, READY or NOT READY, each with the evidence and the command that repairs it. It writes nothing, and exits non-zero when the verdict is NOT READY. Only item 9 reaches GitHub (the PR's own file list); the TUI and `review status` read the package alone.
+
+1. `files-covered` — every changed file is in a wave or carries a recorded waiver.
+2. `blast-radius` — no file the blast radius cut is left unreviewed. A cut radius writes `chunks.json`; run `keryx review chunks plan`, `estimate`, `next`/`record`, `merge`. In an unattended run every wave runs without a question, up to the 25-pass ceiling; in an interactive run the operator is asked once.
+3. `reviewers` — every planned reviewer was dispatched and its result ingested.
+4. `verifier` — the verifier checked every finding it should, or the report says how many it did not.
+5. `ledger` — the ledger is READY.
+6. `coverage-md` — coverage.md does not list a reviewer as `run` that the dispatch record says did not finish. Re-run `keryx review ingest` for the package.
+7. `head` — the report's head is the PR head.
+8. `report-names` — pending mutation candidates and parity warnings are named in the report.
+9. `pr-files` — the changed-file count equals the PR's own file list. A recount more than 3x the recorded scope is refused: it came from the wrong base. Recount with `keryx review blast-radius --package <ref> --changed <the PR's files>`.
+
+`keryx review complete` refuses status `completed` while any item fails. A failing item is waived only by the operator, in a terminal: `keryx review complete --waive <item> "<their own words>"`, repeatable; the waiver is recorded with the quote and the time. `keryx review publish` is held by the same checklist. A not-ready package goes to GitHub only through `keryx review publish --partial`, which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
+
+## Fix rounds — dispositions, regressions, withdrawal
+
+### Every prior finding leaves the round with a disposition
+
+A fix round that reports only new findings is unreadable: the author cannot tell
+which of their fixes landed. Close the loop explicitly — one line per prior
+finding, in the report, before the new findings:
+
+| Disposition | Meaning |
+|---|---|
+| `closed` | Checked against the code, not against the commit message, and the defect is gone |
+| `open` | The fix does not reach the defect; say what is still true |
+| `partial` | One site of the class was fixed and the enumeration named others |
+| `regressed` | The fix removed this defect and introduced another — file the new one separately |
+| `withdrawn` | The finding was wrong. See below |
+
+**Check the code, not the commit message.** A commit titled *"report an abandoned
+sync as abandoned"* is a claim; the disposition is whether the branch it renamed
+is reachable and pinned. On a recorded round, two such commits asserted behaviour
+on lines no test could reach.
+
+### A fix is a change, and changes get reviewed
+
+The most expensive class in a multi-round review is **the defect the fix
+introduced**. It is systematically under-found, for a structural reason: the fix
+arrives framed as the answer to a finding, so it is read as an answer rather than
+as new code. It is new code.
+
+So scope A of a fix round includes the fix, reviewed on its own merits, and the
+report carries its own section:
+
+```markdown
+## Regressions the fixes introduced
+<[F-NNN] — the finding it was answering, and the new defect it created>
+```
+
+Recorded shapes, all from fixes that correctly closed the finding they answered:
+an early return added to stop a fall-through, which then skipped the work the
+caller needed; a persistence call added to save expanded state, which then
+persisted the broken state on the error path too. Both were closed correctly and
+both shipped a new bug in the same commit.
+
+### Withdrawing your own earlier finding
+
+A finding from a previous round that this round disproves is **withdrawn**,
+explicitly, at the top of the report, with the evidence — before any new finding.
+
+This is not a courtesy. An uncorrected wrong finding costs the author a fix they
+did not need, and it stays in `prior_findings` steering later rounds. Withdrawal
+is also the one self-correction this pipeline permits, and it is permitted because
+it is asymmetric: it *deletes* a claim, so it cannot inflate the finding count,
+which is the failure mode that removed the re-scoring pass from Wave C.
+
+State what made the original claim wrong, in one sentence, and if the same
+reasoning error has now happened twice in one review, say that too. A reviewer
+that names its own recurring error is calibrating; one that quietly drops a
+finding is hiding a result.
+
+## Job Context Awareness
+
+When dispatched by `job-orchestrator` or called with an explicit context path, the prompt MAY include:
+
+```
+JOB_NAME:     <job-name>
+CONTEXT_PATH: .metaproject/jobs/<job-name>/ai/context.md
+```
+
+If provided and the file exists, read the context document **before** running scope detection.
+Use it to understand:
+- Intentionally chosen libraries and patterns (do not flag as issues)
+- Architectural decisions already agreed upon, and acceptance criteria driving the Stage 1 spec compliance gate
+
+If absent, proceed normally — context is optional and non-blocking.
+
+## The mutation pass — `keryx review mutate`
+
+Attended, the pass is not optional once mutants were proposed. The testing reviewer writes
+each proposed mutant to `<review-dir>/research-evidence/mutants.json`:
+`{ "mutants": [{ "id", "file", "anchor", "replacement" }] }`. `anchor` is exact text that
+occurs once in `file`; `"runnable": false` at the top level says the suite cannot run here.
+
+The testing reviewer's contract is `mutant_candidates` for **every changed branch**, including
+code downstream of the diff that the diff makes reachable differently. The main session writes
+that list to `mutants.json` unchanged. It may not narrow, drop or merge candidates to fit a
+budget: a smaller pass is a cap (below), stated, never a smaller list.
+
+Run `keryx review mutate --test "<the nearest suite command>" --package <review-dir>`. It
+applies each mutant in a scratch copy of the worktree (never in the worktree), refuses to
+start when the baseline is red, and writes the table to `research-evidence/mutation-<n>.md`
+and `.json`. A mutant is `killed` (the suite went red), `survived` (nothing pins that
+behaviour), `timeout`, or `invalid` (anchor missing or not unique, file outside the copy).
+A survivor is evidence for the finding that names it.
+
+`keryx review complete` refuses while proposed mutants are unrun, unless
+`dispatch.mutationWaiver = { operatorQuote, reason }` carries the operator's own words.
+`keryx review run --autonomous` is unchanged: it records `Not run: mutation pass` as before.
+
+`keryx review mutate --cap <n>` runs the first `n` candidates and records `cap` and `not_reached`
+in `mutation-<n>.json`. The table then prints `Not run: N candidates` (and the report must carry
+that line, see `keryx review report-parity`). A candidate the cap left out is still pending, so it
+keeps blocking the coverage gate until a later pass runs it; a cap moves work to the next pass, it
+never closes it.
+
+### Severity audit — `keryx review severity-audit`
+
+A reviewer that argues a finding from a mutant writes `mutant:<id>` in the finding's `evidence`.
+After the mutation pass run `keryx review severity-audit --package <review-dir>`: a cited mutant
+that survived on a file the review changed moves a minor finding up to major only when no mutant
+in that file was `killed` (or `timeout`) in any recorded pass, because then nothing in the suite
+exercises the changed behaviour. It records `severity_audit {from, to, evidence: "mutation-<n>.json#<id>"}`.
+When the file has a killed mutant, the suite covers the code, the survivor is a gap in covered
+code, and the severity is held (see below). A survivor shows a missing assertion, not wrong
+behaviour. A finding that cites a mutant no
+run executed stays minor (a major is capped at minor) and gets the label `unproven`. The audit
+never deletes a finding and never touches a blocker; it is a separate pass from the verifier,
+which can only delete. `--dry-run` prints the changes without writing `findings.json`.
+
+Each mutant in `mutants.json` carries a `kind`: `behavior` (the default, and what a record written
+before the field reads as) or `presentation` (it changes only what a reader sees: a label, a
+column, copy, spacing). A behavior survivor in a file with no killed mutant raises as above. When
+the only survivors a finding cites are `presentation`, or every behavior survivor sits in a file
+with a killed mutant, the severity stays, and the finding gets
+`severity_audit {held: {severity, mutant, kind: "presentation" | "covered", evidence, reason}}` instead of
+`{from, to}`. A held note is not a raise and not a deletion; it is the record that a survivor was
+seen and did not move the severity, so the report must say so.
+
+`keryx review report-parity <review-dir>` prints what the round left behind as Markdown to paste
+into `report.md`: the `Not run: N candidates` line, each held note, and each follow-up still open
+as `Not verified: <text>`. The same lines show in `keryx review status`, in the shell
+`/review parity` view and in the sidebar. `keryx review complete` warns, and does not refuse, when
+any of them exists and the report names none.
+
+### Layout measurements on a shell host
+
+A shell reviewer cannot start a browser. Before dispatching `review-layout` the main session runs
+the browser measurements itself (Playwright, or Storybook with its test runner) for the changed
+components and passes the output files as `context_files` in the **first** dispatch. A measurement
+counts as evidence for `review-layout` when it names the command and the viewport it ran at; one
+without them is context, not evidence.
+
+`src/review/retry-plan.ts` treats `NEEDS_CONTEXT` as one refill: the first one re-dispatches the
+role with what it asked for. A second `NEEDS_CONTEXT` from the same role that covered no new slice and
+asks nothing new is `notRun`; the reason is `layout: no engine` for `review-layout` and `no engine` for any other
+role when its questions ask for a browser or engine and name no route without one, else `no progress after one
+context refill`, and the round goes on. A second one that covered a new slice or asked a new question still gets its refill.
+
+### Pull request context — `keryx review context-collect`
+
+A pull-request review starts with `keryx review context-collect --repo <o/r> --pr <n> --package <review-dir>`.
+It writes `pr-context.json` and `pr-context.md` into the package: every review comment in full (the
+800-character cut applies only to a finding's `problem`), the round-1 intent (kept when a later round
+collects a new head), the CI status (`--checks <file>` or `gh pr checks`; `unknown` when neither is
+available) and the backend pins the pull request names (refs on lines that talk about the backend).
+Set `pr_context` in every reviewer payload to the `.md` path; reviewers read it before the diff.
+`keryx review dispatch-check --payload <file> --pr-context` refuses a payload without it
+(`REVIEWER_INPUT_NO_PR_CONTEXT`).

@@ -1,3 +1,5 @@
+import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
+import { createShellFinalizer, preservationProgress } from "../session/shell-finalizer";
 // Interactive `keryx` shell REPL (flow 021, T6 / AC1-AC4).
 //
 // `runShell(io, deps)` is the injectable, deterministic REPL core: it reaches NO
@@ -18,6 +20,7 @@
 // / `Math.random`). Offline: the core never imports a provider SDK or touches
 // the network directly; all provider I/O flows through the injected port.
 
+import { describeAutomaticReviewMode } from "./automatic-review";
 import { randomUUID } from "node:crypto";
 import { join as joinPath } from "node:path";
 import * as readline from "node:readline";
@@ -37,6 +40,8 @@ import { createBusInbox, type BusInbox } from "../bus/inbox";
 // inbox-overflow notice is the SAME fix for both).
 import { busInboxFullNotice, createBusDropNotifier } from "../tui/bus-wake";
 import { loadOAuthGrant } from "../lib/oauth/grants";
+import { mergeLiveCodexModels, startLiveCodexModels } from "./live-codex-models";
+import { loadRankHints } from "../harness/routing/model-profile";
 import { providerByName, resolveProviderModelParamsByName } from "./providers";
 import { makeProvider } from "../harness/provider/make-provider";
 import type {
@@ -51,6 +56,7 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
 import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interactive-agent-tools";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
+import { approvalCauseLine, causeOfMeta } from "./approval-cause";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
 import {
   catalogDestructiveResolver,
@@ -113,7 +119,10 @@ import { defaultExternalDiffDeps, externalDiffSlashText } from "../tui/external-
 import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
 import { computeBotMetrics } from "../review/bot/metrics";
-import { isReviewsCommand, renderReviewsText } from "../tui/reviews-inspector";
+import { parseReviewSystem, resetOperatorDenials, setReviewSystem, type ReviewSystem } from "../review/review-system";
+import { selfAnsweredLine } from "../lib/terminal-safe";
+import { loadReviewDepth } from "../tui/review-panel";
+import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, isReviewsCommand, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, renderReviewsText } from "../tui/reviews-inspector";
 import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
 import { ChannelsClient } from "../remote/channels-client";
 import { isChannelsCommand, loadChannelsSnapshot, readlineChannelsText } from "../tui/channels-surface";
@@ -123,7 +132,7 @@ import {
   formatSessionInfoText,
   isSessionInfoCommand,
 } from "../tui/session-info";
-import { loadSessionLimits } from "./model-limits";
+import { loadSessionLimits, startSessionLimits } from "./model-limits";
 import { applySavedApiKeys, envWithSavedApiKeys, loadShellConfig, saveShellConfig } from "../lib/shell-config";
 import { formatReasoningOneLiner, resolveThinkDisplayMode } from "../tui/reasoning-display";
 import { parseShellExecCommand, shellPermissionsFingerprint } from "../lib/shell-permissions";
@@ -173,10 +182,10 @@ import {
   generateControlNonce,
   DEFAULT_MAX_OUTPUT_TOKENS,
   describeReasoningEffortSource,
+  describeRoundLimit,
   isReasoningEffortLevel,
   REASONING_EFFORT_LEVELS,
   resolveAgentMaxOutputTokens,
-  resolveAgentMaxRounds,
   resolveMaxAutoWake,
   resolveReasoningEffort,
   runAgentTurn,
@@ -203,6 +212,7 @@ import {
   gateBoxByLease,
   LOST_LEASE_COMPACT_REFUSAL,
   switchLeasedSession,
+  switchPreservedSession,
   watchLeaseLoss,
 } from "../session/lease";
 import {
@@ -702,6 +712,7 @@ export async function runWithLeaseChoice(
         cwd: current.cwd,
         ...(current.enabled !== undefined ? { enabled: current.enabled } : {}),
         ...(current.leaseBox !== undefined ? { leaseBox: current.leaseBox } : {}),
+        ...(current.finalizerBox !== undefined ? { finalizerBox: current.finalizerBox } : {}),
         ...(current.openLeased !== undefined ? { openLeased: current.openLeased } : {}),
         // Flow 273 T6: a lease-conflict retry (fork/view/take-over) re-opens
         // under a NEW `ShellSessionOpts` — without carrying these forward the
@@ -920,9 +931,42 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         model: modelName,
       });
     } catch {
-      // best-effort
+      if (!saveFailureShown) {
+        saveFailureShown = true;
+        system("keryx: session history could not be saved; it may be missing on resume.\n");
+      }
     }
   };
+  let saveFailureShown = false;
+
+  let closing = false;
+  let activeTurn: { user: string; text: string; abort: AbortController } | undefined;
+  const finalizeChat = createShellFinalizer({
+    stop: () => { closing = true; activeTurn?.abort.abort(); },
+    checkpoint: () => {
+      if (live === undefined) return;
+      if (!leaseWatch.canPersist()) throw new Error("chat session ownership lost");
+      if (activeTurn !== undefined) {
+        archive.push({ role: "user", content: activeTurn.user, provenance: "project" });
+        if (activeTurn.text.length > 0) {
+          const reply: NormalizedMessage = { role: "assistant", content: activeTurn.text, provenance: "model" };
+          history.push(reply);
+          archive.push(reply);
+        } else if (history[history.length - 1]?.role === "user") {
+          history.pop();
+        }
+        activeTurn = undefined;
+      }
+      live = persistHistory(live, history, { archive, provider: providerName, model: modelName });
+    },
+    // Chat has no Slate; do not fabricate Seeds or accepted memory.
+    preserve: async () => {},
+    cleanup: async () => {},
+    release: () => { leaveBus(); releaseLease(); },
+    progress: (stage) => { if (stage === "failed") process.exitCode = 1; if (sessionsOn) system(`${preservationProgress(stage)}\n`); },
+  });
+  const finalize = async (): Promise<void> => { await finalizeChat(); };
+  if (deps.session?.finalizerBox !== undefined) deps.session.finalizerBox.current = finalize;
 
   const makeActive = (): ProviderPort =>
     baseUrl === undefined
@@ -965,6 +1009,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   // lease and bus presence outlived the process's useful life.
   try {
   for await (const line of io.lines) {
+    if (closing) break;
     io.onSafeBoundary?.();
     // Slash commands FIRST — a slash line NEVER reaches `provider.stream`.
     if (line.startsWith("/")) {
@@ -1192,6 +1237,8 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
 
     let accumulated = "";
     let errored = false;
+    const turn = { user: line, text: "", abort: new AbortController() };
+    activeTurn = turn;
     // A turn is now running: the bus heartbeat reports `working` until this
     // one settles, cleared right before the loop's trailing blank line below.
     busWorking = true;
@@ -1201,13 +1248,16 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     try {
       const streamOptions = {
         attemptId: deps.idSeq(),
+        signal: turn.abort.signal,
         ...(modelParams.timeoutMs !== undefined ? { timeoutMs: modelParams.timeoutMs } : {}),
       };
       for await (const event of provider.stream(request, streamOptions)) {
+        if (closing) break;
         if (event.kind === "text_delta") {
           const text = event.text ?? "";
           io.write(text);
           accumulated += text;
+          turn.text = accumulated;
         } else if (event.kind === "provider_error") {
           const detail = event.error?.message ?? event.error?.kind ?? "provider error";
           system(`\n[error] ${detail}\n`);
@@ -1218,12 +1268,15 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         }
       }
     } catch (cause) {
+      if (closing) break;
       // A reused adapter emits `provider_error` events rather than throwing, but
       // guard against an unexpected throw so one bad turn never ends the session.
       system(`\n[error] ${cause instanceof Error ? cause.message : String(cause)}\n`);
       errored = true;
     }
 
+    if (closing) break;
+    activeTurn = undefined;
     // Hand the FULL accumulated reply to a rich wrapper for a markdown re-render
     // (any turn that streamed content, errored or not). No-op when unattached.
     if (accumulated.length > 0) {
@@ -1256,11 +1309,8 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     io.write("\n\n");
   }
   } finally {
-    // AC7: every exit — `/exit`, end of input, a thrown turn — leaves the bus
-    // first (a peer never sees presence outlive the lease it names), then
-    // releases the lease.
-    leaveBus();
-    releaseLease();
+    await finalize();
+    if (deps.session?.finalizerBox?.current === finalize) deps.session.finalizerBox.current = undefined;
   }
 }
 
@@ -1681,6 +1731,10 @@ export async function runAgentRepl(
      * bounded without reaching into this function's closure.
      */
     onCompletionWaitersSize?: (size: number) => void;
+    /** Shutdown cancels a stream or recovery timer before cleanup. */
+    signal?: AbortSignal;
+    /** Deterministic interactive recovery test seams. */
+    recovery?: import("./agent").InteractiveRecovery;
   },
   deps: AgentDeps,
   metaprojectPort: MetaprojectPort,
@@ -1829,9 +1883,10 @@ export async function runAgentRepl(
     for (const wake of waiters) wake();
   });
 
-  // Per-turn token usage (last `usage_update` the provider reported), printed
-  // once when the turn ends.
+  // Latest request usage describes context size; turn totals describe reported spend.
   let lastUsage: NormalizedUsage | undefined;
+  // Includes failed recovery requests; unreported usage remains unknown.
+  let turnUsage: NormalizedUsage | undefined;
   // Per-turn, for the machine-readable transcript. Reset with `lastUsage`.
   let turnToolCalls = 0;
   let turnText: string | undefined;
@@ -1874,7 +1929,9 @@ export async function runAgentRepl(
     blockActive = false;
   };
 
+  let activeTurnAbort: AbortController | undefined;
   const agentIo: AgentIO = {
+    onAttemptInterrupted: () => endBlock(),
     // Live path: append the token to the differential block (a coalescing timer
     // repaints it). Non-live path: no-op — `onAssistantText` renders once. Either
     // way the first token drops the spinner.
@@ -1929,6 +1986,12 @@ export async function runAgentRepl(
     },
     onUsage: (usage) => {
       lastUsage = usage;
+      const total = { ...turnUsage };
+      for (const key of ["inputTokens", "outputTokens", "totalTokens", "cacheReadTokens", "cacheWriteTokens"] as const) {
+        if (usage[key] !== undefined) total[key] = (total[key] ?? 0) + usage[key];
+      }
+      total.exact = (turnUsage === undefined || turnUsage.exact === true) && usage.exact === true;
+      turnUsage = total;
       events?.emit({ type: "usage", usage });
     },
     requestApproval: async (tool, input, meta) => {
@@ -2069,6 +2132,7 @@ export async function runAgentRepl(
       for (const hint of formatShellApprovalHints(evaled)) {
         out(`${GUTTER}${style.yellow(hint)}\n`);
       }
+      out(`${GUTTER}${style.dim(approvalCauseLine(causeOfMeta("shell_exec", meta)))}\n`);
       // Flow 275 (agent bus P4, T8; specification §4.4): a `git-publish` pause
       // lease that applies to this command must not be remembered, exactly
       // like `destructive`/`credentials`/`sacReviewConfirmation` — a saved
@@ -2134,7 +2198,7 @@ export async function runAgentRepl(
       // searched and found nothing — and a reader scores a failure as a result.
       // Observed on the first live run of this flag, against a provider with no
       // credentials configured.
-      if (text.includes("[error]")) {
+      if (/\[error\]|\[budget\]|\[stopped\]/.test(text)) {
         turnError = turnError === undefined ? text.trim() : `${turnError}\n${text.trim()}`;
       }
       stopSpinner();
@@ -2190,6 +2254,12 @@ export async function runAgentRepl(
     const flag = meta.destructive ? style.yellow(" [destructive]") : "";
     const trustedFlag = meta.mcpTrusted === true ? style.yellow(` ${TRUSTED_MARKER}`) : "";
     out(`${GUTTER}${style.yellow(`◇ auto-approved (${permissionMode})`)}${flag}${trustedFlag} ${style.dim(preview)}\n`);
+  };
+  agentIo.onQuestionSelfAnswered = (question, answerLabel) => {
+    stopSpinner();
+    // Model-written text: control and escape characters are shown as escapes, never executed by the terminal.
+    const line = selfAnsweredLine(question, answerLabel);
+    out(`${GUTTER}${style.yellow("◇ answered without asking (auto):")} ${style.dim(line)}\n`);
   };
 
   let live: SessionHandle | undefined;
@@ -2260,6 +2330,7 @@ export async function runAgentRepl(
     // Flow 271 R3-1: detach the ref itself, not only these variables. A turn or
     // a `/goal --auto` loop that is already running holds the same object, and
     // every slate write through a detached ref refuses.
+    activeTurnAbort?.abort("session lease lost");
     detachSlateSession(slateSession);
     slateSession = undefined;
     slateSessionBox.current = undefined;
@@ -2280,18 +2351,38 @@ export async function runAgentRepl(
    * current one is touched, and release the current lease only after. On a
    * refusal, say so and return false: the current session and lease stay.
    */
-  const switchNewSession = (): SessionHandle | false => {
+  let activeSessionSwitch: Promise<SessionHandle | false> | undefined;
+  const performSessionSwitch = async (): Promise<SessionHandle | false> => {
     try {
-      const next = switchLeasedSession(lease, () =>
+      if (finalizing) return false;
+      const next = await switchPreservedSession(lease, () =>
         openLeased({ cwd: sessionCwd, provider: deps.providerId, model: deps.modelId }),
+        async () => {
+          if (finalizing) throw new Error("shell is shutting down");
+          // A taken-over generation belongs to the successor; never close or write it.
+          if (!leaseWatch.canPersist()) return;
+          if (sessionPersistTimer !== undefined) clearTimeout(sessionPersistTimer);
+          sessionPersistTimer = undefined;
+          syncArchive();
+          if (live !== undefined) live = persistHistory(live, history, { archive, provider: deps.providerId, model: deps.modelId });
+          await (sessionOpts?.closeSlateForSwitch ?? closeSlateSession)(slateSession, mintTimestampAttemptId);
+          if (finalizing || !leaseWatch.canPersist()) throw new Error("session ownership unavailable");
+        },
       );
       holdLease(next.lease);
       agentIo.trustedMcpTools?.clear();
+      resetOperatorDenials();
       return next.handle;
     } catch (cause) {
       agentIo.onSystem?.(`${cause instanceof Error ? cause.message : String(cause)}\nKept the current session.\n`);
       return false;
     }
+  };
+  const switchNewSession = async (): Promise<SessionHandle | false> => {
+    const flight = Promise.resolve().then(performSessionSwitch);
+    activeSessionSwitch = flight;
+    try { return await flight; }
+    finally { if (activeSessionSwitch === flight) activeSessionSwitch = undefined; }
   };
   const releaseLease = (): void => {
     releaseSessionLease(lease);
@@ -2479,6 +2570,57 @@ export async function runAgentRepl(
     syncArchive();
     save();
   };
+  const preservationAbort = new AbortController();
+  let finalizing = false;
+  let activeAgentAbort: AbortController | undefined;
+  let activeAgentFlight: Promise<unknown> | undefined;
+
+  const finalizeShell = createShellFinalizer({
+    stop: async () => {
+      finalizing = true;
+      preservationAbort.abort();
+      activeAgentAbort?.abort();
+      await activeAgentFlight?.catch(() => {});
+      await activeSessionSwitch?.catch(() => {});
+    },
+    checkpoint: () => {
+      if (sessionPersistTimer !== undefined) clearTimeout(sessionPersistTimer);
+      sessionPersistTimer = undefined;
+      syncArchive();
+      if (live !== undefined) {
+        if (!leaseWatch.canPersist()) throw new Error("session ownership lost");
+        live = persistHistory(live, history, { archive, provider: deps.providerId, model: deps.modelId });
+      }
+    },
+    preserve: async () => {
+      await closeSlateSession(slateSession, mintTimestampAttemptId);
+    },
+    cleanup: async (signal) => {
+      if (live !== undefined && leaseWatch.canPersist()) {
+        await replayPreservationOutbox({ cwd: sessionCwd, dir: live.dir, signal, deadline: Date.now() + 2_000 });
+      }
+      signal.throwIfAborted();
+      await deps.sweepBackgroundJobs?.();
+    },
+    release: () => {
+      detachSlateSession(slateSession);
+      if (sessionPersistTimer !== undefined) clearTimeout(sessionPersistTimer);
+      leaveBus(); releaseLease();
+    },
+    progress: (stage) => {
+      if (stage === "failed") process.exitCode = 1;
+      process.stderr.write(`${preservationProgress(stage)}\n`);
+    },
+  });
+  const finalizeForSignal = async (): Promise<void> => { await finalizeShell(); };
+  if (sessionOpts?.finalizerBox !== undefined) sessionOpts.finalizerBox.current = finalizeForSignal;
+  if (live !== undefined && leaseWatch.canPersist()) {
+    try {
+      const replay = await replayProjectPreservationOutboxes({ cwd: sessionCwd, dir: live.dir, signal: preservationAbort.signal });
+      if (replay.proposed + replay.deferred > 0) process.stderr.write(`keryx: preserved evidence: ${replay.proposed} proposed, ${replay.deferred} deferred (not accepted memory).\n`);
+    } catch { /* an unreadable sessions root must not keep the lease held or end the shell */ }
+  }
+  if (finalizing) return;
   // `/rewind`: per-turn file snapshots in a shadow repo under the session dir.
   const rewindRecorder = createRewindRecorder({
     workTree: sessionCwd,
@@ -2503,6 +2645,7 @@ export async function runAgentRepl(
     },
   });
   agentIo.onHistoryChange = (kind) => {
+    if (finalizing) return;
     syncArchive();
     if (kind === "assistant_delta") {
       if (sessionPersistTimer === undefined) {
@@ -2520,6 +2663,7 @@ export async function runAgentRepl(
   const runOperatorLine = async (operatorLine: string): Promise<void> => {
     out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
     lastUsage = undefined;
+    turnUsage = undefined;
     turnToolCalls = 0;
     turnText = "";
     turnError = undefined;
@@ -2529,8 +2673,18 @@ export async function runAgentRepl(
     deps.resetSubagentBudget?.();
     startSpinner();
     busWorking = true;
+    activeTurnAbort = new AbortController();
     try {
-      await runAgentTurn(agentIo, deps, history, operatorLine, slateSession !== undefined ? { slateSession, pruneArchive: true } : {});
+      if (finalizing) return;
+      const abort = new AbortController();
+      activeAgentAbort = abort;
+      const flight = runAgentTurn(agentIo, deps, history, operatorLine, {
+        recovery: rich.recovery ?? {},
+        signal: AbortSignal.any([abort.signal, activeTurnAbort.signal, ...(rich.signal === undefined ? [] : [rich.signal])]),
+        ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
+      });
+      activeAgentFlight = flight;
+      await flight;
     } catch (error) {
       // Recorded before it is rethrown. A turn that threw and a turn that
       // answered nothing produce the same empty text in the transcript, and a
@@ -2538,6 +2692,9 @@ export async function runAgentRepl(
       turnError = error instanceof Error ? error.message : String(error);
       throw error;
     } finally {
+      activeAgentFlight = undefined;
+      activeAgentAbort = undefined;
+      activeTurnAbort = undefined;
       busWorking = false;
       endBlock(); // close any still-open live block (e.g. on a mid-turn throw)
       stopSpinner();
@@ -2545,13 +2702,14 @@ export async function runAgentRepl(
         type: "turn_end",
         text: turnText ?? "",
         toolCalls: turnToolCalls,
-        ...(lastUsage === undefined ? {} : { usage: lastUsage }),
+        ...(turnUsage === undefined ? {} : { usage: turnUsage }),
         ...(turnError === undefined ? {} : { errorMessage: turnError }),
       };
       events?.emit(end);
     }
+    if (finalizing) return;
     flushSessionCheckpoint();
-    const usageLine = formatUsage(lastUsage);
+    const usageLine = formatUsage(turnUsage);
     if (usageLine.length > 0) {
       out(`\n${GUTTER}${usageLine}\n`);
     }
@@ -2622,16 +2780,28 @@ export async function runAgentRepl(
       out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
       startSpinner();
       busWorking = true;
+      activeTurnAbort = new AbortController();
       try {
-        await runAgentTurn(agentIo, deps, history, "", {
+        if (finalizing) return;
+        const abort = new AbortController();
+        activeAgentAbort = abort;
+        const flight = runAgentTurn(agentIo, deps, history, "", {
+          recovery: rich.recovery ?? {},
           origin: "task-notification",
+          signal: AbortSignal.any([abort.signal, activeTurnAbort.signal, ...(rich.signal === undefined ? [] : [rich.signal])]),
           ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
         });
+        activeAgentFlight = flight;
+        await flight;
       } finally {
+        activeAgentFlight = undefined;
+        activeAgentAbort = undefined;
+        activeTurnAbort = undefined;
         busWorking = false;
         endBlock();
         stopSpinner();
       }
+      if (finalizing) return;
       flushSessionCheckpoint();
       out(`\n${GUTTER}${turnSeparator()}\n\n`);
       printPromptWithBusNotice();
@@ -2642,10 +2812,7 @@ export async function runAgentRepl(
     consecutiveAutoWakes = 0;
     if (line === undefined) {
       // SLATE-5 close trigger: shell exit (end of input / Ctrl-D).
-      await closeSlateSession(slateSession, mintTimestampAttemptId);
-      // Flow 173 (AC7): sweep every tracked background job (process-group
-      // SIGTERM→SIGKILL) on real session exit.
-      await deps.sweepBackgroundJobs?.();
+      await finalizeShell();
       // flow 273 / AC7: `leaveBus()`/`releaseLease()` used to run here too;
       // the wrapping `finally` around this whole loop now covers every
       // `return` (this one included) exactly once — see its comment.
@@ -2659,8 +2826,7 @@ export async function runAgentRepl(
       const rest = parts.slice(1).join(" ").trim();
       if (command === "/exit" || command === "/quit") {
         // SLATE-5 close trigger: shell exit (explicit command).
-        await closeSlateSession(slateSession, mintTimestampAttemptId);
-        await deps.sweepBackgroundJobs?.(); // flow 173 AC7: sweep on exit
+        await finalizeShell();
         // flow 273 T6 / flow 271 AC7: same note as the EOF path above — the
         // wrapping `finally` now leaves the bus and releases the lease.
         return;
@@ -2677,10 +2843,28 @@ export async function runAgentRepl(
         agentIo.onSystem?.(`${formatDoctorReport(report)}\n`);
       } else if (command === "/setup") {
         agentIo.onSystem?.(renderSetupSlash(rest));
+      } else if (isReviewLayersCommand(line)) {
+        try {
+          agentIo.onSystem?.(renderReviewLayersText(await loadReviewDepth(sessionCwd)));
+        } catch {
+          agentIo.onSystem?.("The managed reviews could not be read.\n");
+        }
+      } else if (isReviewParityCommand(line)) {
+        try {
+          agentIo.onSystem?.(renderReviewParityText(await loadReviewDepth(sessionCwd)));
+        } catch {
+          agentIo.onSystem?.("The managed reviews could not be read.\n");
+        }
+      } else if (isReviewReadinessCommand(line)) {
+        try {
+          agentIo.onSystem?.(renderReviewReadinessText(await loadReviewDepth(sessionCwd)));
+        } catch {
+          agentIo.onSystem?.("The managed reviews could not be read.\n");
+        }
       } else if (isReviewsCommand(command)) {
         // Same numbers as `keryx review metrics` and the TUI's /reviews modal, as text.
         try {
-          agentIo.onSystem?.(renderReviewsText(await computeBotMetrics(sessionCwd)));
+          agentIo.onSystem?.(renderReviewsText(await computeBotMetrics(sessionCwd), await loadReviewDepth(sessionCwd)));
         } catch {
           agentIo.onSystem?.("The managed reviews could not be read.\n");
         }
@@ -2768,18 +2952,19 @@ export async function runAgentRepl(
         // close). Archive whatever slate the ABOUT-TO-BE-ABANDONED session
         // was building before switching away from it. Flow 271 (§6.2): lease
         // the new session first; a refusal keeps session, slate and lease.
-        const nextLive = sessionsOn ? switchNewSession() : undefined;
+        const nextLive = sessionsOn ? await switchNewSession() : undefined;
         if (nextLive === false) {
           printPromptWithBusNotice();
           continue;
         }
-        await closeSlateSession(slateSession, mintTimestampAttemptId);
+        if (!sessionsOn) await closeSlateSession(slateSession, mintTimestampAttemptId);
         // L-14 (flow 354): `/new`/`/clear` abandon this session's history —
         // the collapsed tool-output cache `/expand` reads must go with it,
         // or a `/expand` right after prints the ABANDONED session's last
         // tool result instead of "nothing to expand".
         lastToolOutput = undefined;
         lastToolName = undefined;
+        resetOperatorDenials();
         if (nextLive !== undefined) {
           live = nextLive;
           history = [];
@@ -2864,6 +3049,8 @@ export async function runAgentRepl(
           agentIo.onSystem?.(
             `Permission mode: ${permissionMode}` +
               (stored !== undefined ? ` (project default: ${stored})\n` : " (no project default set)\n") +
+              `Round limit: ${describeRoundLimit(permissionMode)}\n` +
+              `${describeAutomaticReviewMode()}\n` +
               `Usage: /mode <${PERMISSION_MODES.join("|")}> [save] · /mode clear\n`,
           );
         } else if (wanted === "clear") {
@@ -2881,7 +3068,8 @@ export async function runAgentRepl(
           if (wanted === "auto") {
             agentIo.onSystem?.(
               "⚠ auto mode skips confirmation for EVERY action, including destructive commands.\n" +
-                "Only credential-touching commands still ask. Type 'yes' to confirm: ",
+                "Only credential-touching commands still ask. The agent also answers its own questions (recommended option, said so); irreversible or untrusted ones still ask you.\n" +
+                "Type 'yes' to confirm: ",
             );
             const answer = ((await readLine()) ?? "").trim();
             confirmed = /^y(es)?$/i.test(answer);
@@ -2890,7 +3078,8 @@ export async function runAgentRepl(
             agentIo.onSystem?.("Cancelled — mode unchanged.\n");
           } else {
             permissionMode = wanted;
-            agentIo.onSystem?.(`Permission mode: ${permissionMode}\n`);
+            resetOperatorDenials();
+            agentIo.onSystem?.(`Permission mode: ${permissionMode} (${describeRoundLimit(permissionMode)})\n`);
             if (saveFlag) {
               const saved = setProjectPermissionMode(sessionCwd, permissionMode);
               agentIo.onSystem?.(saved ? "Saved as this project's default.\n" : "Could not save the project default.\n");
@@ -3106,10 +3295,8 @@ export async function runAgentRepl(
     printPromptWithBusNotice();
   }
   } finally {
-    // AC7: the one place these two now run — see the comment above the
-    // loop for why the per-`return` duplicates were removed.
-    leaveBus();
-    releaseLease();
+    await finalizeShell();
+    if (sessionOpts?.finalizerBox?.current === finalizeForSignal) sessionOpts.finalizerBox.current = undefined;
   }
 }
 
@@ -3228,6 +3415,8 @@ export interface ShellCliFlags {
    * leftover flag from a shell alias should not fail the whole launch.
    */
   permissionModeFlag?: PermissionMode;
+  /** `--review-system <inherit|review-auto>`: `review-auto` answers a review run's approval questions itself. */
+  reviewSystemFlag?: ReviewSystem;
   /**
    * `--deny-tools <a,b>` — tool names this session must not have.
    *
@@ -3340,6 +3529,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   let fork: boolean | undefined;
   let takeOver: boolean | undefined;
   let permissionModeFlag: PermissionMode | undefined;
+  let reviewSystemFlag: ReviewSystem | undefined;
   let denyTools: string[] | undefined;
   let printPromptArg: string | undefined;
   let eventsFile: string | undefined;
@@ -3397,6 +3587,10 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
       permissionModeFlag = next as PermissionMode;
     } else if (arg === "--ask" || arg === "--trust" || arg === "--auto") {
       permissionModeFlag = arg.slice(2) as PermissionMode;
+    } else if (arg === "--review-system") {
+      const parsed = parseReviewSystem(valueAfter(i++));
+      if (parsed === undefined) invalid("--review-system must be inherit or review-auto");
+      reviewSystemFlag = parsed;
     } else if (arg === "--deny-tools") {
       // Comma-separated, like every other value-taking flag here. Repeated use
       // ACCUMULATES rather than replacing, so `--deny-tools a --deny-tools b`
@@ -3465,6 +3659,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     ...(fork === true ? { fork: true } : {}),
     ...(takeOver === true ? { takeOver: true } : {}),
     ...(permissionModeFlag !== undefined ? { permissionModeFlag } : {}),
+    ...(reviewSystemFlag !== undefined ? { reviewSystemFlag } : {}),
     ...(denyTools !== undefined ? { denyTools } : {}),
     ...(printPromptArg !== undefined ? { printPrompt: printPromptArg } : {}),
     ...(eventsFile !== undefined ? { eventsFile } : {}),
@@ -3540,8 +3735,15 @@ export interface SignalShutdownParts {
   readonly jobRegistryBox: { current: Pick<JobRegistry, "sweepAll"> | undefined };
   readonly closeMcp: () => Promise<void> | undefined;
   readonly closeReadline: () => void;
+  readonly abortTurn?: () => void;
   readonly releaseLease: (lease: SessionLeaseHandle | undefined) => void;
   readonly exit: (code: number) => void;
+  readonly preserve?: () => Promise<void>;
+  readonly cleanupTimeoutMs?: number;
+  /** Shared by every handler of one process so SIGINT/SIGTERM/SIGHUP do not each start a shutdown. */
+  readonly guard?: { startedAt: number | undefined };
+  /** A signal arriving this long after the first one forces the exit instead of being ignored. */
+  readonly forceGraceMs?: number;
 }
 
 /**
@@ -3555,24 +3757,44 @@ export interface SignalShutdownParts {
  * closes and the process exits.
  */
 export function makeSignalShutdown(parts: SignalShutdownParts, code: number): () => void {
-  return (): void => {
+  const state = parts.guard ?? { startedAt: undefined as number | undefined };
+  const release = (): void => {
     parts.busBox.current?.leave();
     parts.busBox.current = undefined;
     parts.releaseLease(parts.leaseBox.current);
     parts.leaseBox.current = undefined;
-    void (async (): Promise<void> => {
-      try {
-        await parts.jobRegistryBox.current?.sweepAll();
-      } catch {
-        // Exiting; a failed sweep must not become the last thing printed.
+  };
+  return (): void => {
+    if (state.startedAt !== undefined) {
+      if (Date.now() - state.startedAt >= (parts.forceGraceMs ?? 1000)) {
+        release();
+        parts.exit(code);
       }
+      return;
+    }
+    state.startedAt = Date.now();
+    parts.abortTurn?.();
+    if (parts.preserve === undefined) release();
+    void (async (): Promise<void> => {
+      let failed = false;
+      if (parts.preserve !== undefined) {
+        try { await parts.preserve(); } catch { failed = true; }
+        release();
+      }
+      let timer: ReturnType<typeof setTimeout> | undefined;
       try {
-        await parts.closeMcp();
-      } catch {
-        // Exiting; a failed close must not become the last thing printed.
+        await Promise.race([
+          Promise.allSettled([
+            Promise.resolve().then(() => parts.jobRegistryBox.current?.sweepAll()),
+            Promise.resolve().then(() => parts.closeMcp()),
+          ]),
+          new Promise<void>((resolve) => { timer = setTimeout(resolve, parts.cleanupTimeoutMs ?? 10_000); }),
+        ]);
+      } finally {
+        if (timer !== undefined) clearTimeout(timer);
       }
       parts.closeReadline();
-      parts.exit(code);
+      parts.exit(failed && code === 0 ? 1 : code);
     })();
   };
 }
@@ -3585,6 +3807,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
     return;
   }
   const flags = parseShellCliFlags(args);
+  if (flags.reviewSystemFlag !== undefined) setReviewSystem(flags.reviewSystemFlag);
   if (flags.help) {
     console.log(`Usage: keryx shell [options]
 
@@ -3602,6 +3825,9 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   --permission-mode <mode>      Agent permissions: ask, trust or auto
   --deny-tools <a,b>            Withhold these tools from the session entirely
   --ask | --trust | --auto       Permission shortcuts; last flag wins
+  --review-system <mode>        inherit (default: approvals follow the permission mode) or review-auto
+                                (the review's own approval questions are answered automatically;
+                                destructive, credential, publish and hook-tightened calls still ask)
   --print, -p <prompt>          Run one agent turn on this prompt and exit
   --events-file <path>          Append an NDJSON transcript (turns, tools, usage)
   --events-max-field <n>        Per-field character cap in that transcript (default 4000)
@@ -3888,8 +4114,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           for (const d of tuiDetected) {
             byName.set(d.name, { name: d.name, models: d.models ?? [] });
           }
-          return [...byName.values()];
+          return mergeLiveCodexModels([...byName.values()], startLiveCodexModels().models());
         },
+        getRankHints: (providerId) => loadRankHints(providerId),
         // Flow 358: when the size words and version cannot settle a `model_tier`
         // (ranking refused, or only an older-generation larger class above the
         // session), a one-shot call on this provider's light tier orders the
@@ -3932,26 +4159,14 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           steerable: true,
         }),
       });
-      // Flow 267: fetch the provider's real context window for the auto-
-      // compaction guard (`AgentDeps.contextWindow`). This runs on every
-      // `makeAgentDeps` call — the initial launch AND every `/model`/
-      // `/connect` rebuild (see this function's own doc comment above) — so
-      // the guard's window always matches the CURRENTLY selected model,
-      // never a stale one from before a switch. Best-effort: an unreachable
-      // gateway or unrecognized provider just leaves `contextWindow`
-      // undefined, same as `loadSessionLimits`'s own "never invent a window"
-      // contract for `/status`.
-      let contextWindow: number | undefined;
-      try {
-        const limits = await loadSessionLimits({
-          provider: sel.provider,
-          model: sel.model,
-          ...(sel.baseUrl !== undefined ? { baseUrl: sel.baseUrl } : {}),
-        });
-        contextWindow = limits.contextWindow;
-      } catch {
-        // best-effort — the guard simply stays off.
-      }
+      // A rebuild owns its probe, so late responses cannot change another model.
+      // Do not wait for a network request behind the TUI startup indicator.
+      const limits = startSessionLimits({
+        provider: sel.provider,
+        model: sel.model,
+        ...(sel.baseUrl !== undefined ? { baseUrl: sel.baseUrl } : {}),
+        ...(runtime.cacheDir !== undefined ? { configDir: runtime.cacheDir } : {}),
+      });
       const { loadAutomaticEvidenceFactory } = await import("../evidence/automatic");
       const automaticEvidence = await loadAutomaticEvidenceFactory(cwd);
       const deps = {
@@ -3988,9 +4203,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // configured server, which calling `getMcpRuntime()` here would
         // do for `--chat` sessions that never build a tool list.
         mcpRuntime: () => mcpRuntime,
-        // Generous default so multi-step operator prompts do not hit the
-        // loop-safety round budget mid-task; override with KERYX_AGENT_MAX_ROUNDS.
-        maxRounds: resolveAgentMaxRounds(),
+        // No `maxRounds` here on purpose: the turn resolves its own limit from
+        // the live permission mode (40 in ask, 200 in trust and auto), and an
+        // explicit value would pin it for the whole session.
         // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's
         // per-provider override (`resolvedModelParams.maxOutputTokens`,
         // resolved above via `resolveProviderModelParamsByName` — an
@@ -4019,7 +4234,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
         jobRegistry,
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
-        ...(contextWindow !== undefined ? { contextWindow } : {}),
+        getContextWindow: limits.getContextWindow,
         ...(Object.keys(resolvedModelParams).length > 0 ? { modelParams: resolvedModelParams } : {}),
         ...((): { hooks: ShellHookContext } | Record<string, never> => {
           const h = getShellHooks();
@@ -4049,7 +4264,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         env: process.env,
         ...(baseUrl !== undefined ? { baseUrl } : {}),
       });
-    // Persisted config (flow 080/085, opencode-style): reuse the last
+    // Persisted config (flow 080/085): reuse the last
     // provider/model and every saved provider API key so the user need not
     // re-enter them. Applied in BOTH modes since flow 112 — chat used to skip
     // this entirely (AC12).
@@ -4062,6 +4277,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     });
     const tuiInitial = startup.initial;
     const tuiDetected = startup.detected;
+    startLiveCodexModels();
     // The chat TUI's session lease (flow 271), written by `runShell` and
     // released in the `finally` below on every exit from the TUI branch.
     const chatLeaseBox: { current: SessionLeaseHandle | undefined } = { current: undefined };
@@ -4216,6 +4432,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // session exit — Ctrl-C/SIGTERM killed the readline process without ever
   // sweeping, leaving every job's process group running.
   const jobRegistryBox: { current: JobRegistry | undefined } = { current: undefined };
+  const finalizerBox: { current: (() => Promise<void>) | undefined } = { current: undefined };
 
   // SIGINT: exit, but CLOSE FIRST.
   //
@@ -4230,14 +4447,19 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   //
   // `close()` is bounded (see `CLOSE_GRACE_MS`), so this cannot turn Ctrl-C
   // into a hang.
+  const readlineAbort = new AbortController();
+  const signalGuard: { startedAt: number | undefined } = { startedAt: undefined };
   const closeAndExit = (code: number): (() => void) =>
     makeSignalShutdown(
       {
+        guard: signalGuard,
         busBox,
         leaseBox,
         jobRegistryBox,
+        preserve: async () => { await finalizerBox.current?.(); },
         closeMcp: () => readlineMcp?.close(),
         closeReadline: () => rl.close(),
+        abortTurn: () => readlineAbort.abort("shell shutdown"),
         releaseLease: releaseSessionLease,
         exit: (c) => process.exit(c),
       },
@@ -4249,6 +4471,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // the default disposition and left one child process per connected
   // server behind.
   process.on("SIGTERM", closeAndExit(143));
+  process.on("SIGHUP", closeAndExit(129));
   // A SINGLE shared line iterator so the picker and the REPL consume stdin in
   // sequence (two independent iterators would race over the same readline).
   const lineIterator = rl[Symbol.asyncIterator]();
@@ -4432,7 +4655,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         }),
         makeProvider: (providerId, modelId, childBaseUrl) =>
           baseFactory(providerId, modelId, childBaseUrl ?? baseUrl),
-        getDetectedProviders: () => [{ name: provider }],
+        getDetectedProviders: () => mergeLiveCodexModels([{ name: provider }], startLiveCodexModels().models()),
+        getRankHints: (providerId) => loadRankHints(providerId),
         // Finding 1 fix (fix round, code review of PR #306): read
         // `slateSessionBox.current` BY REFERENCE, at fold time — same
         // "live box" idiom this exact call site already uses for
@@ -4472,7 +4696,6 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           // review fixed. `runAgentRepl` splices `bus_list`/`bus_send` in
           // directly (`buildBusTools`) right after its own join succeeds.
         }),
-        maxRounds: resolveAgentMaxRounds(),
         // Same precedence as the TUI's `makeAgentDeps` above — routed through
         // `initialModelParams.maxOutputTokens` (resolved once above) rather
         // than a second, independent `providerByName(...).maxOutputTokens`
@@ -4568,7 +4791,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         }
         let endReason = "normal";
         try {
-          await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient);
+          await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary, signal: readlineAbort.signal }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient);
         } catch (cause) {
           endReason = "error";
           throw cause;
@@ -4593,6 +4816,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
               ...(flags.name !== undefined ? { busName: flags.name } : {}),
               leaseBox,
               busBox,
+              finalizerBox,
             },
             runRepl,
             leaseChoiceRuntime,
@@ -4620,6 +4844,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             ...(flags.name !== undefined ? { busName: flags.name } : {}),
             leaseBox,
             busBox,
+            finalizerBox,
           },
           (session) => runShell(io, { ...deps, session }),
           leaseChoiceRuntime,

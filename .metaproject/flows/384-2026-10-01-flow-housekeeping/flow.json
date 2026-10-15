@@ -50,7 +50,7 @@
     "url": "https://github.com/MrCipherSmith/keryx/pull/835"
   },
   "owner": {
-    "value": "altsay",
+    "value": "operator",
     "basis": "stated",
     "source": "`--owner` flag on `flow init`"
   },
@@ -356,7 +356,7 @@
         {
           "name": "owner",
           "status": "pass",
-          "detail": "owner: altsay"
+          "detail": "owner: operator"
         },
         {
           "name": "folder-committed",

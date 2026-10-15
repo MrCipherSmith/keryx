@@ -110,6 +110,27 @@ export type ScopeDrop = {
   changedLines: number;
 };
 
+/** Why a block that a drop rule matched was kept anyway. Only a rule the repository itself declares can do this. */
+export const SCOPE_KEEP_REASONS = ["kept:comment-rule"] as const;
+export type ScopeKeepReason = (typeof SCOPE_KEEP_REASONS)[number];
+
+/**
+ * One change block the pre-filter would have dropped and did not.
+ *
+ * Kept apart from {@link ScopeDrop}: a retained block is reviewed, so it must not
+ * be counted into `blocksDropped` or `droppedByReason`. Absent from a scope unless
+ * `retainCommentBlocks` is on AND it actually kept something, so a scope built
+ * without the option is byte-identical to one built before the option existed.
+ */
+export type ScopeKept = {
+  path: string;
+  reason: ScopeKeepReason;
+  detail: string;
+  startLine: number;
+  endLine: number;
+  changedLines: number;
+};
+
 /**
  * One bounded window a reviewer is dispatched over: the changed lines plus
  * `contextLines` on each side, never the whole file.
@@ -152,6 +173,8 @@ export type ReviewScopeCounts = {
   changedLinesRetained: number;
   changedLinesDropped: number;
   droppedByReason: Record<ScopeDropReason, number>;
+  /** Present only when a block was kept past a drop rule; see {@link ScopeKept}. */
+  keptByReason?: Partial<Record<ScopeKeepReason, number>>;
 };
 
 export type ReviewScope = {
@@ -163,6 +186,8 @@ export type ReviewScope = {
   /** Empty in path mode: there is no diff to bound. */
   regions: ScopedRegion[];
   drops: ScopeDrop[];
+  /** Blocks the pre-filter would have dropped but kept; omitted when there are none. */
+  kept?: ScopeKept[];
   counts: ReviewScopeCounts;
 };
 
@@ -194,6 +219,20 @@ export type ReviewScopeConfig = {
   detectWhitespaceOnly: boolean;
   detectCommentOnly: boolean;
   /**
+   * Keep a comment-only block whose added lines are comments, because the
+   * repository has a rule about comments (a length limit, a one-line gate). The
+   * comment-only drop assumes a comment cannot be wrong; a comment rule says it can.
+   *
+   * `false` (default) changes nothing. `true` keeps every comment-only block that
+   * adds at least one comment line (a block that only removes comments is still
+   * dropped: there is nothing for the rule to check). A string is a
+   * case-insensitive regular expression: the block is kept only when the text of
+   * its added comment lines matches it; a string that is not a valid expression
+   * keeps every such block, the safe direction. Blocks carrying a tool directive
+   * are already kept and are unaffected. Recorded as `kept:comment-rule`.
+   */
+  retainCommentBlocks?: boolean | string | undefined;
+  /**
    * Project-local directory names to treat as generated, on top of the built-in
    * list. Matched as a whole path segment at any depth and unconditionally: a
    * configured name is an explicit statement about *this* repository, so unlike
@@ -210,6 +249,7 @@ export const DEFAULT_REVIEW_SCOPE_CONFIG: ReviewScopeConfig = {
   contextLines: DEFAULT_CONTEXT_LINES,
   detectWhitespaceOnly: true,
   detectCommentOnly: true,
+  retainCommentBlocks: false,
   additionalGeneratedDirectories: [],
 };
 
@@ -914,6 +954,7 @@ function resolveConfig(config?: Partial<ReviewScopeConfig>): ReviewScopeConfig {
     contextLines: Number.isFinite(contextLines) ? Math.max(0, Math.trunc(contextLines)) : DEFAULT_CONTEXT_LINES,
     detectWhitespaceOnly: config?.detectWhitespaceOnly ?? DEFAULT_REVIEW_SCOPE_CONFIG.detectWhitespaceOnly,
     detectCommentOnly: config?.detectCommentOnly ?? DEFAULT_REVIEW_SCOPE_CONFIG.detectCommentOnly,
+    retainCommentBlocks: config?.retainCommentBlocks ?? DEFAULT_REVIEW_SCOPE_CONFIG.retainCommentBlocks,
     additionalGeneratedDirectories:
       config?.additionalGeneratedDirectories ?? DEFAULT_REVIEW_SCOPE_CONFIG.additionalGeneratedDirectories,
   };
@@ -941,6 +982,37 @@ function windowsFor(blocks: readonly ChangeBlock[], contextLines: number): Windo
 }
 
 /**
+ * True when `retainCommentBlocks` says this comment-only block stays in review:
+ * it adds at least one non-blank comment line, and, for a pattern, one of those
+ * lines matches it. Called only for a block `isCommentOnly` already accepted.
+ */
+function keepsCommentBlock(setting: boolean | string, hunk: ParsedHunk, block: ChangeBlock): boolean {
+  if (setting === false) {
+    return false;
+  }
+  const added: string[] = [];
+  for (let index = block.from; index < block.to; index += 1) {
+    const line = hunk.lines[index];
+    if (line !== undefined && line.kind === "add" && line.text.trim().length > 0) {
+      added.push(line.text);
+    }
+  }
+  if (added.length === 0) {
+    return false;
+  }
+  if (setting === true) {
+    return true;
+  }
+  let pattern: RegExp;
+  try {
+    pattern = new RegExp(setting, "i");
+  } catch {
+    return true;
+  }
+  return added.some((text) => pattern.test(text));
+}
+
+/**
  * Build the bounded scope reviewers are dispatched over, from a unified diff.
  *
  * Pure: same input, same output, no filesystem, no network, no model. The
@@ -951,6 +1023,7 @@ export function buildReviewScope(diff: string, config?: Partial<ReviewScopeConfi
   const resolved = resolveConfig(config);
   const counts = emptyCounts();
   const drops: ScopeDrop[] = [];
+  const kept: ScopeKept[] = [];
   const regions: ScopedRegion[] = [];
   const files: string[] = [];
 
@@ -1022,6 +1095,21 @@ export function buildReviewScope(diff: string, config?: Partial<ReviewScopeConfi
           continue;
         }
         if (resolved.detectCommentOnly && isCommentOnly(hunk, block, file.path)) {
+          if (keepsCommentBlock(resolved.retainCommentBlocks ?? false, hunk, block)) {
+            kept.push({
+              path: file.path,
+              reason: "kept:comment-rule",
+              detail: `kept:comment-rule: comment-only block in ${extensionOf(file.path)} retained because the repository has a rule about comments`,
+              startLine: span.startLine,
+              endLine: span.endLine,
+              changedLines,
+            });
+            counts.keptByReason = { ...counts.keptByReason, "kept:comment-rule": (counts.keptByReason?.["kept:comment-rule"] ?? 0) + 1 };
+            counts.blocksRetained += 1;
+            counts.changedLinesRetained += changedLines;
+            retained.push(block);
+            continue;
+          }
           counts.blocksDropped += 1;
           counts.changedLinesDropped += changedLines;
           counts.droppedByReason["comment-only"] += 1;
@@ -1076,7 +1164,16 @@ export function buildReviewScope(diff: string, config?: Partial<ReviewScopeConfi
     }
   }
 
-  return { schemaVersion: 1, mode: "diff", contextLines: resolved.contextLines, files, regions, drops, counts };
+  return {
+    schemaVersion: 1,
+    mode: "diff",
+    contextLines: resolved.contextLines,
+    files,
+    regions,
+    drops,
+    ...(kept.length > 0 ? { kept } : {}),
+    counts,
+  };
 }
 
 /**
@@ -1181,6 +1278,16 @@ export function renderReviewScopeMarkdown(scope: ReviewScope): string {
   lines.push("");
   lines.push("Counts by reason: " + SCOPE_DROP_REASONS.map((reason) => `${reason}=${scope.counts.droppedByReason[reason]}`).join(", "));
   lines.push("");
+  if (scope.kept !== undefined && scope.kept.length > 0) {
+    lines.push("### Kept past a drop rule");
+    lines.push("");
+    lines.push("| path | where | reason | why |");
+    lines.push("|---|---|---|---|");
+    for (const entry of scope.kept) {
+      lines.push(`| ${escapePipes(entry.path)} | lines ${entry.startLine}-${entry.endLine} (${entry.changedLines}) | ${entry.reason} | ${escapePipes(entry.detail)} |`);
+    }
+    lines.push("");
+  }
   return lines.join("\n");
 }
 

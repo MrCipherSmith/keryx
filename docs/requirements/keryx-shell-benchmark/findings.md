@@ -1,6 +1,6 @@
 # What the benchmark found
 
-Run 2, `docs/benchmark-run-report`, target `helyx` at `bfad745b`, keryx **0.2.16**.
+Run 2, `docs/benchmark-run-report`, target `<target-project>` at `bfad745b`, keryx **0.2.16**.
 
 Two kinds of finding, kept apart on purpose. **Product** findings are defects in
 keryx that the benchmark surfaced — they need fixing. **Method** findings are

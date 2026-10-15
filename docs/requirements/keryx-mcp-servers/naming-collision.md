@@ -54,7 +54,7 @@ usage trap.
 ## What the two sides of the argument are
 
 **Ecosystem convention says the new surface is right.** Claude Code, Cursor and
-Grok Build all use `mcp add|list|remove` for servers the tool consumes. Users
+other agent CLIs all use `mcp add|list|remove` for servers the tool consumes. Users
 arrive with that expectation. Refusing it costs discoverability permanently, and
 `keryx mcp add` will be typed by people who have never read our docs.
 
@@ -142,8 +142,8 @@ which one they invoked until after it runs.
 
 ## Not decided here
 
-This document does not change `decisions.md`, which currently adopts Grok
-Build's naming wholesale — `mcp add|list|remove|enable|disable|doctor` and
+This document does not change `decisions.md`, which currently adopts the
+ecosystem naming wholesale — `mcp add|list|remove|enable|disable|doctor` and
 `/mcps` — without recording that keryx already uses `mcp` for the opposite
 direction. If an option here is adopted, that decision needs amending with the
 reason, not silently overwriting.
@@ -164,7 +164,7 @@ name that says what it does.
 | project config | `<project>/.keryx/mcp-servers.json` |
 
 Unchanged from the specification. This is the ecosystem spelling; a user
-arriving from Claude Code, Cursor or Grok Build types it without reading docs.
+arriving from Claude Code, Cursor or another agent CLI types it without reading docs.
 
 ### Publisher: keryx is the server
 

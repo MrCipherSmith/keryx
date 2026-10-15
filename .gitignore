@@ -7,6 +7,10 @@ coverage/
 .tmp-*/
 *.vsix
 
+# Shared Agent Context workspaces hold per-machine agent working material
+# (session transcripts, proposals, receipts, local paths). Never project content.
+.metaproject/workspaces/
+
 # Agent-harness scratch space. `.claude/worktrees/` holds git worktrees — full
 # checkouts of this repository — which must never be committed or source-indexed
 # (see IGNORE_DIRS in src/gdgraph/build.ts). Committed here rather than left in
@@ -94,6 +98,18 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 # recent-docs.json runtime state there — same reasoning as the entry above,
 # just at a nested path the root-anchored pattern above does not reach.
 bench/jev-review/fixtures/conform-project/.metaproject/data/
+
+# Shared Agent Context session evidence holds raw agent-session transcripts
+# (prompts, tool output, local paths). They are personal working material, not
+# project content, and must never reach a public repository. Outside the
+# managed block for the same reason as the entries above.
+.metaproject/workspaces/*/session-evidence/
+# `keryx integrate opencode` writes a machine-specific absolute --cwd path.
+opencode.json
+
+# Security runtime secrets stay local even when commands run in nested projects.
+# Outside the managed block so `keryx update` cannot remove this protection.
+**/.metaproject/data/security/raw/
 
 # keryx:begin
 # Metaproject: keep agent-facing context versioned, ignore executable/generated internals.

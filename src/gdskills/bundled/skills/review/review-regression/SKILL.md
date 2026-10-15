@@ -163,25 +163,16 @@ rejected anyway, so in practice every finding you report carries one.
 - **Fix**: concrete suggestion
 ```
 
-Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`.
-This reviewer keeps no table of its own.
+Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`; no table here. When dispatched, follow the `reviewer-input.schema.json` payload and return a `REVIEW_RESULT` object compatible with
+`.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a short summary; `NEEDS_CONTEXT` rather than a guess.
 
 ### Shared laws (every reviewer)
 
-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
-   name the input, call, or condition that reaches the code, you have an
-   observation, not a finding. Report it as `info` and say what would settle it.
-2. **Never flag the theoretical.** The path you describe must exist in the code
-   under review. Do not report a safe API because it could be misused, or a
-   pattern because it is often wrong elsewhere.
-3. **One finding per class, not one per occurrence.** When the same shape appears
-   at several sites, report it once and list every site. Ten findings that are one
-   finding hide the other nine problems.
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
 
-Severity levels are defined once, in `review-orchestrator/SKILL.md` →
-**Severity (canonical)**. This reviewer does not restate them: `blocker` is the
-four merge-blocking shapes named there and nothing else, and the `major`/`minor`
-boundary is the trigger-and-outcome test.
+Severity levels are defined once, in `review-orchestrator/SKILL.md` → **Severity (canonical)**. This reviewer does not restate them: `blocker` is the four merge-blocking shapes named there and nothing else, and the `major`/`minor` boundary is the trigger-and-outcome test.
 
 ---
 
@@ -203,14 +194,21 @@ boundary is the trigger-and-outcome test.
 
 Report done only once all of these hold:
 
-- Every finding is anchored inside the computed set or the changed set, at the
-  code that **breaks** rather than the code that changed.
-- Every finding is `major` or above, and every `major` names the changed file,
-  module or symbol whose behaviour moved — the anchor alone does not carry it.
-- Every finding carries `class_scope` whose `sites` are the callers that break and
-  whose `enumeration_method` is the walk over the blast-radius set that produced
-  them.
-- The summary states whether the cap dropped files, and whether the radius could
-  answer the question at all for the shape of this change.
-- Nothing that is merely an observation about pre-existing code is filed here; it
-  is either raised under scope A or not at all.
+- Every finding is anchored inside the computed set or the changed set, at the code that **breaks** rather than the code that changed.
+- Every finding is `major` or above, and every `major` names the changed file, module or symbol whose behaviour moved — the anchor alone does not carry it.
+- Every finding carries `class_scope` whose `sites` are the callers that break and whose `enumeration_method` is the walk over the blast-radius set that produced them.
+- The summary states whether the cap dropped files, and whether the radius could answer the question at all for the shape of this change.
+- Nothing that is merely an observation about pre-existing code is filed here; it is either raised under scope A or not at all.
+
+<!-- keryx:layers-block:start -->
+## Project layers: graph, tests, wiki, memory
+
+Your payload may carry a `layers` block for your files: the files the graph says are affected, symbol neighbours, related tests, the wiki pages that describe the files and the memory entries for their module. It is bounded, and `truncated` names what was cut and the command that fetches the rest. When the diff alone does not settle a question, ask the project. Each command below is read-only and calls no model.
+
+- `keryx gdgraph affected <file>`: who depends on the file. Use it before you call a change contained, and whenever a changed export, signature or behaviour may have callers outside your files.
+- `keryx test related <file>`: the tests that cover the file. Use it before you say a behaviour is untested, and to judge whether a test would fail if the code broke.
+- `keryx wiki ask "<q>"`: what the project wiki says a module is for and which rules bind it. Use it when the intent of the code is unclear and the diff does not state it.
+- `keryx memory search "<q>"`: recorded lessons, decisions and known mistakes. Use it before you report a pattern the project may already have decided on, and when a failure looks like one it has seen.
+
+In a review package, `keryx gdgraph affected <file> --data-dir <package>/layers/graph` reads the graph built at the PR head; the tracked graph may be from another commit. A finding still rests on the code you read: what a layer says is a lead, not evidence. If a layer is empty or a command fails, say so in the report instead of guessing.
+<!-- keryx:layers-block:end -->
