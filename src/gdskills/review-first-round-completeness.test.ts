@@ -49,7 +49,7 @@ describe("AC1: start questions, once, after the context pack and the scope", () 
   test("Step 5 of the workflow is the start questions, with their three defaults", () => {
     const step5 = SKILL.split("\n").find((line) => line.startsWith("- [ ] Step 5:")) ?? "";
     expect(step5).toContain("Start questions, once, after Steps 1 and 3");
-    expect(step5).toContain("reviewers (default `--all`)");
+    expect(step5).toContain("reviewers (default: the set `keryx review required --depth auto` prints; `--all` only when the operator asks)");
     expect(step5).toContain("counterpart verification (default on)");
     expect(step5).toContain("model plan");
   });
@@ -57,10 +57,10 @@ describe("AC1: start questions, once, after the context pack and the scope", () 
   test("the main file asks after Steps 1 and 3, in one interaction, with the defaults", () => {
     expect(START_MAIN).toContain("Ask once, after the context pack (Step 1) and the scope (Step 3), in one interaction");
     expect(START_MAIN).toContain("`AskUserQuestion` call on Claude Code");
-    expect(START_MAIN).toContain("**Reviewers** — default `--all`");
+    expect(START_MAIN).toContain("**Reviewers** — default the set `keryx review required --depth auto` prints");
     expect(START_MAIN).toContain("ON by default even with no link");
     expect(START_MAIN).toContain("accept (default), all `deep`, or custom. Once per round.");
-    expect(START_MAIN).toContain("Unattended rounds ask nothing: `--all`, counterpart verified, computed models");
+    expect(START_MAIN).toContain("Unattended rounds ask nothing: the `required --depth auto` set, counterpart verified, computed models");
   });
 
   test("the lettered prompt for other hosts defaults to the same answers", () => {

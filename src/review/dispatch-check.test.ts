@@ -63,3 +63,30 @@ describe("checkDispatch model block", () => {
     expect(Object.keys(loaded.properties.model.properties)).toContain("routed");
   });
 });
+
+describe("checkDispatch path fields", () => {
+  const existing = new Set(["/skills/review-logic/SKILL.md", "/pkg/context.md"]);
+  const pathExists = (file: string): boolean => existing.has(file);
+  const withPaths = (extra: Record<string, unknown>): Record<string, unknown> => ({ ...payload(ROUTED_MODEL), ...extra });
+
+  test("a missing skill_path is refused, naming the field and the path", async () => {
+    const result = await checkDispatch([withPaths({ skill_path: "/skills/gone/SKILL.md" })], { pathExists });
+    const error = result.errors.find((entry) => entry.code === "REVIEWER_INPUT_PATH_MISSING");
+    expect(result.ok).toBe(false);
+    expect(error?.path).toBe("$.skill_path");
+    expect(error?.message).toContain("/skills/gone/SKILL.md");
+  });
+
+  test("a missing context_doc is refused", async () => {
+    const result = await checkDispatch([withPaths({ context_doc: "/pkg/nope.md" })], { pathExists });
+    const error = result.errors.find((entry) => entry.code === "REVIEWER_INPUT_PATH_MISSING");
+    expect(error?.path).toBe("$.context_doc");
+    expect(error?.message).toContain("/pkg/nope.md");
+  });
+
+  test("a payload whose paths all exist passes, and inline text fields are not paths", async () => {
+    const result = await checkDispatch([withPaths({ skill_path: "/skills/review-logic/SKILL.md", context_doc: "/pkg/context.md", diff: "/not/a/file", file_contents: "/also/not" })], { pathExists });
+    expect(result.errors).toEqual([]);
+    expect(result.ok).toBe(true);
+  });
+});

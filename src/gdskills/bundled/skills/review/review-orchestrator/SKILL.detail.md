@@ -326,7 +326,7 @@ model: `docs/docs/jev-in-review.md`.
 reviewer above: it never produces a `findings` array of its own, and it is
 never merged into the consolidated array. It runs AFTER the Sub-Agent Report
 Quality Gate has already validated/merged/deduplicated the round's findings
-(Step 9) and BEFORE Wave C verification (Step 10) — Step 9b in the Workflow
+(Step 9) and BEFORE the later Wave C passes (Step 10; the early verifier pass starts first, on the findings held then) — Step 9b in the Workflow
 block — annotating the findings that already exist. It is advisory and
 annotate-only by construction: nothing it returns drops or demotes a finding,
 and no downstream step is permitted to treat its output as anything but a
@@ -353,7 +353,7 @@ differently in the report:
 |---|---|---|
 | `severity_check` | `{id, p, flagged}` per blocker/major finding — `flagged` means `p < 0.4` | Show `flagged` findings as a soft note next to their existing severity ("Jev's own trigger+outcome check scored this low"). Never change the finding's `severity` field from this alone. |
 | `merge_candidates` | `{id, a, b, reason, p}` per candidate pair | A high `p` is a suggestion to a human that `a` and `b` may be the same defect — surface it in the report as a note on both findings. Never merge, drop, or renumber either finding from this alone. |
-| `verify_order` | `{id, p}`, sorted lowest-`p`-first | Feed this order into Wave C's own dispatch — verify the lowest-plausibility findings first — never as a reason to skip verifying any of them. |
+| `verify_order` | `{id, p}`, sorted lowest-`p`-first | Feed this order into the later Wave C passes — verify the lowest-plausibility findings first — never as a reason to skip verifying any of them. |
 
 `status` is `DONE_WITH_CONCERNS` — never `DONE` — when any `severity_check` is
 `flagged` OR any `merge_candidates` pair scores `p >= 0.5`
@@ -399,8 +399,9 @@ three questions; on any other host, the lettered prompt below. An unattended
 round (job pipeline, trigger, schedule) asks nothing, applies the defaults and
 records them under `### How this review was run`.
 
-1. **Reviewers** — default `--all`: every reviewer the engine detects plus every
-   project and convention reviewer its gates admit. Narrowing is an explicit
+1. **Reviewers** — default the set `keryx review required --depth auto` prints
+   (light, or the full set the engine detects plus every project and convention
+   reviewer its gates admit); `--all` only when the operator asks. Narrowing is an explicit
    choice (tests only, one domain, a custom list). Flags the caller passed
    answer this question and skip it. Convention reviewers are part of this
    question; the job setting `convention_reviewers` still answers it in a
@@ -470,7 +471,17 @@ selected.
   filed six real findings, every one reachable from the diff and the backend at
   a pinned SHA.
 - **Size never lowers depth below the risk class.** The budget table sizes the
-  context, not the depth.
+  context, not the depth. Outside the risk class a small change does not need the
+  whole roster: `keryx review required --depth auto` picks the **light** round —
+  `review-logic`, `review-testing-practices` and the stack-conventions reviewer
+  only — when the diff is at most 5 files and 300 changed lines, matches no risk
+  path gate, and is neither `--all` nor gating. Auto needs a file list AND a line
+  count: `--scope <scope.json>` gives both (`review start|ingest --scope` stores
+  the count in `scope-files.json`, so `--package <review-dir>` has both too);
+  with either missing the round is full. Light is only ever granted by those auto
+  checks; `--all`, gating and `--depth full` force full. A light round records `Not run: mutation
+  (light round)` instead of the mutation gate and says so in the report. Inside the
+  risk class the round is full.
 - **High-risk includes a client-side mirror of a server rule** — validation,
   limits, permissions, uniqueness, reserved names — beside the triggers the main
   file lists.
@@ -808,3 +819,36 @@ available) and the backend pins the pull request names (refs on lines that talk 
 Set `pr_context` in every reviewer payload to the `.md` path; reviewers read it before the diff.
 `keryx review dispatch-check --payload <file> --pr-context` refuses a payload without it
 (`REVIEWER_INPUT_NO_PR_CONTEXT`).
+
+## Preflight 4 — PR state, depth and estimate before dispatch
+
+Two 2026-10-15 rounds took 2 h and 3.5 h. One verdict was ready at minute 55, was held to
+minute 119, and the PR merged first; the other re-dispatched a finished wave and ended at 27 of
+41 slices. The operator can only act on a risk they were told about.
+
+1. On a PR target read merged / approved / CI (`gh pr view <n> --json state,reviewDecision,statusCheckRollup`). Say in one line what the state means for the round: an approved PR with green CI can merge any minute, and a merged PR makes the rest of the round a post-merge audit.
+2. **Later, once the package and slices exist** (after `review scope`, `review start` and `review slice`, before the first reviewer starts): `keryx review required --mode all --scope .metaproject/data/review/scope.json --depth auto [--package <review-dir>]` prints the reviewer set and the depth it chose (see "Depth floor"); auto needs the file list and a line count, else the round is full. `keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>]` prints assignments, waves and a duration range; the manifest defaults to `<package>/slices/manifest.json`, then `.metaproject/data/review/slices/manifest.json`.
+3. Show the operator depth + estimate and the merge risk before the first dispatch. Attended: let them choose `full` over a light default. Unattended: record both in the report and continue.
+
+## Early verdict — the verdict is interim until `complete`
+
+As soon as every reviewer result and the verifier's are on disk, save each verifier pass to `research-evidence/verifications.json` first (without it a refuted finding still counts), then run `keryx review verdict <id|path> --raw .metaproject/data/review/raw [--json]` on the shell host, or without `--raw` where the round's raw results sit in `<package>/raw`. It prints the interim verdict and writes `verdict-interim.md` into the package. Give the operator that verdict in the same message; do not hold it for the mutation pass, the ledger or `complete`.
+
+The tail keeps running after it: the mutation pass (`keryx review mutate`), `ledger build`, `ingest`, `readiness` and `keryx review complete`. Every managed round finishes them. The round is **not done** until `complete`: the verdict you gave is interim, and the report says so and names what the tail may still change (a surviving mutant, a verifier refutation, a late reviewer result). A light round has no mutation pass: its tail is `ledger build`, `ingest`, `readiness`, `complete`.
+
+## Early verifier — start on the first blocker or major
+
+Do not wait for the last reviewer. When the first `blocker` or `major` finding arrives, dispatch `review-verifier` over the findings you hold, while the other reviewers keep running. Each later blocker or major starts another verifier pass over just the new findings (each pass is its own run; Wave C overlaps A and B here, and Step 9b's `verify_order` orders the later passes), so verification finishes within minutes of the last reviewer. The verifier stays delete-only and never verifies a finding its own reviewer raised; the merge still comes from `keryx review ingest --verifications <file>`, once per pass.
+
+## Recovery — collect, validate, ingest, dispatch only what is missing
+
+After a timeout, a crash or a resumed session, in this order:
+
+1. **Collect.** `keryx review retry-plan --manifest <slices>/manifest.json --package <input-dir> --reviewer <id> --next-wave` reads `raw/` first and collects late reviewer results; it prints `collected late: N` and never re-hands a slice that is finished.
+2. **Validate** each collected reply (a `STATUS:` line and a `REVIEW_RESULT` block matching `reviewer-finding.schema.json`), **ingest** it, and rebuild `research.json` with `ledger build`; run `ingest --research` once it prints READY.
+3. **Dispatch only what is missing:** the wave `retry-plan` prints. A wave whose results are on disk is never dispatched again.
+4. **A second timeout of the same reviewer changes the task, not only the diff size:** fewer slices per dispatch, a narrower focus (one concern or one directory), or a lighter model tier for a mechanical slice. Two results in a row with nothing new are `Not run`, as `retry-plan` prints.
+
+## dispatch-check on every payload
+
+Before any mass dispatch run `keryx review dispatch-check --payload <file> --manifest <dir>/manifest.json` on every payload, on every host. It fails `REVIEWER_INPUT_PATH_MISSING` when a `skill_path` or `context_doc` names a file that is not there, and still fails a payload that names no slice, exceeds the wave ceiling or breaks `reviewer-input.schema.json`. Fix the payload; a dead path costs a whole wave of refusals. Related: `review mutate` runs in a scratch copy under the repo and prints the baseline's tail when the baseline is red; `review start --graph-timeout <s>` bounds the graph build.

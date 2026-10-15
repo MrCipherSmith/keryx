@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { coverageErrors, coverageWarnings, derivedFromFiles, globToRegExp, packageHasBlastRadius, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
+import { coverageErrors, coverageWarnings, decideRoundDepth, derivedFromFiles, globToRegExp, packageHasBlastRadius, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
 
 let root: string;
 
@@ -256,5 +256,179 @@ describe("review-pr-contract on packages already in flight", () => {
     const selected = await withoutIt();
     expect(coverageWarnings({ mode: "all", selected }, { prContext: false })).toEqual([]);
     expect(coverageWarnings({ mode: "all", selected: [...selected, "review-pr-contract"] }, { prContext: true })).toEqual([]);
+  });
+});
+
+describe("round depth (light vs full)", () => {
+  const small = ["src/a.ts", "src/b.ts"];
+  const files = (n: number): string[] => Array.from({ length: n }, (_, i) => `src/f${i}.ts`);
+
+  test("5 files and 300 lines is a light round, outside the risk class", async () => {
+    const d = await decideRoundDepth(root, "auto", { files: files(5), changedLines: 300 });
+    expect(d.depth).toBe("light");
+    expect(d.reason).toContain("5 file(s), 300 changed line(s)");
+  });
+
+  test("6 files is full, and the reason names the limit", async () => {
+    const d = await decideRoundDepth(root, "auto", { files: files(6), changedLines: 10 });
+    expect(d.depth).toBe("full");
+    expect(d.reason).toContain("6 files exceeds 5");
+  });
+
+  test("301 changed lines is full", async () => {
+    const d = await decideRoundDepth(root, "auto", { files: small, changedLines: 301 });
+    expect(d.depth).toBe("full");
+    expect(d.reason).toContain("301 changed lines exceeds 300");
+  });
+
+  test("a risk-class path gate hit on a small diff is full", async () => {
+    const d = await decideRoundDepth(root, "auto", { files: ["src/core/store.ts"], changedLines: 5 });
+    expect(d.depth).toBe("full");
+    expect(d.reason).toContain("review-core-boundaries");
+  });
+
+  test("a test file or a plain .ts file alone does not count as the risk class", async () => {
+    expect((await decideRoundDepth(root, "auto", { files: ["src/a.test.ts", "src/a.ts"], changedLines: 40 })).depth).toBe("light");
+  });
+
+  test("--depth light is honoured only where auto would say light", async () => {
+    expect((await decideRoundDepth(root, "light", { files: small, changedLines: 20 })).depth).toBe("light");
+    const big = await decideRoundDepth(root, "light", { files: files(60), changedLines: 20 });
+    expect(big).toMatchObject({ depth: "full", requested: "light" });
+    expect(big.reason).toContain("--depth light not honoured");
+    expect((await decideRoundDepth(root, "light", { files: ["src/core/store.ts"], changedLines: 5 })).depth).toBe("full");
+    expect((await decideRoundDepth(root, "light", { files: small, changedLines: 1, forceFull: "--all" })).depth).toBe("full");
+    expect((await decideRoundDepth(root, "light", { files: small })).reason).toContain("no line count");
+  });
+
+  test("--depth full overrides a small diff; --all and --gating force full; unknown size is full", async () => {
+    expect((await decideRoundDepth(root, "full", { files: small, changedLines: 1 })).depth).toBe("full");
+    expect((await decideRoundDepth(root, "auto", { files: small, changedLines: 1, forceFull: "--all" })).depth).toBe("full");
+    expect((await decideRoundDepth(root, "auto", { files: small })).reason).toContain("changed-line count unknown");
+  });
+
+  test("the light set is logic, testing and one conventions reviewer; full is unchanged", async () => {
+    const light = await requiredReviewers(root, "all", small, { depth: "light" });
+    expect(light.depth).toBe("light");
+    expect(light.required).toEqual(["review-clean-code", "review-logic", "review-testing-practices"]);
+    expect(light.excluded.find((e) => e.reviewer === "review-style")?.reason).toContain("light round");
+    const full = await requiredReviewers(root, "all", undefined);
+    expect(full.depth).toBe("full");
+    expect(full.required).toContain("review-style");
+  });
+});
+
+describe("round-depth.json is tied to the package it was decided for", () => {
+  const files = ["src/a.ts", "src/b.ts"];
+  async function setup(recorded: Record<string, unknown>, scope: Record<string, unknown> = { version: 1, files, changedLines: 40 }): Promise<string> {
+    const dir = path.join(root, ".metaproject", "reviews", "r1");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "scope-files.json"), JSON.stringify(scope));
+    await writeFile(path.join(dir, "manifest.json"), JSON.stringify({ target: { head: "aaa" } }));
+    await writeFile(path.join(dir, "round-depth.json"), JSON.stringify({ requested: "auto", depth: "light", reason: "auto: small", ...recorded }));
+    return dir;
+  }
+
+  test("a matching record is read back as light", async () => {
+    const dir = await setup({ head: "aaa", files, changedLines: 40 });
+    expect(await packageRoundDepth(dir)).toMatchObject({ depth: "light" });
+  });
+
+  test("a scope that changed since falls back to full and says why", async () => {
+    const dir = await setup({ head: "aaa", files, changedLines: 40 }, { version: 1, files: Array.from({ length: 60 }, (_, i) => `src/f${i}.ts`), changedLines: 40 });
+    const decision = await packageRoundDepth(dir);
+    expect(decision).toMatchObject({ depth: "full" });
+    expect(decision?.stale).toContain("scope file list");
+  });
+
+  test("a different line count or head is stale; a record without a file list is stale", async () => {
+    expect((await packageRoundDepth(await setup({ head: "aaa", files, changedLines: 41 })))?.stale).toContain("line count");
+    expect((await packageRoundDepth(await setup({ head: "bbb", files, changedLines: 40 })))?.stale).toContain("head");
+    expect((await packageRoundDepth(await setup({ head: "aaa" })))?.stale).toContain("scope file list");
+  });
+});
+
+describe("mutation gate by round depth", () => {
+  const attended = { attended: true, pendingMutants: 3 } as const;
+
+  test("a full attended round with pending mutants is still refused", async () => {
+    const full = await requiredReviewers(root, "all", undefined);
+    const errors = await coverageErrors({ mode: "all", depth: "full", selected: full.required }, { root, ...attended });
+    expect(errors.join("\n")).toContain("never run");
+    const legacy = await coverageErrors({ mode: "all", selected: full.required }, { root, ...attended });
+    expect(legacy.join("\n")).toContain("never run");
+  });
+
+  const lightScope = { files: ["src/a.ts", "src/b.ts"], changedLines: 40 } as const;
+  const bigScope = { files: Array.from({ length: 60 }, (_, i) => `src/f${i}.ts`), changedLines: 40 } as const;
+
+  test("a light round on a real light scope is not refused for pending mutants", async () => {
+    const light = await requiredReviewers(root, "all", lightScope.files, { depth: "light" });
+    expect(await coverageErrors({ mode: "all", depth: "light", selected: light.required }, { root, ...attended, ...lightScope })).toEqual([]);
+  });
+
+  test("a forged light depth on a 60-file scope gets the full-round rules", async () => {
+    const light = await requiredReviewers(root, "all", bigScope.files, { depth: "light" });
+    const errors = (await coverageErrors({ mode: "all", depth: "light", selected: light.required }, { root, ...attended, ...bigScope })).join("\n");
+    expect(errors).toContain("missing: review-architecture");
+    expect(errors).toContain("depth light, but the full set applies: 60 files exceeds 5");
+    expect(errors).toContain("never run");
+  });
+
+  test("a forged light depth on a risk-path scope is refused", async () => {
+    const files = ["src/core/store.ts"];
+    const light = await requiredReviewers(root, "all", files, { depth: "light" });
+    const errors = (await coverageErrors({ mode: "all", depth: "light", selected: light.required }, { root, ...attended, files, changedLines: 5 })).join("\n");
+    expect(errors).toContain("review-core-boundaries");
+    expect(errors).toContain("never run");
+  });
+
+  test("a light dispatch without a known line count is not accepted", async () => {
+    const light = await requiredReviewers(root, "all", lightScope.files, { depth: "light" });
+    const errors = await coverageErrors({ mode: "all", depth: "light", selected: light.required }, { root, ...attended, files: lightScope.files });
+    expect(errors.join("\n")).toContain("no line count");
+  });
+
+  test("a light dispatch still must cover the light set", async () => {
+    const errors = await coverageErrors({ mode: "all", depth: "light", selected: ["review-logic"] }, { root, ...attended });
+    expect(errors.join("\n")).toContain("missing");
+  });
+});
+
+describe("light depth cannot be forged", () => {
+  const attended = { attended: true, pendingMutants: 3 } as const;
+  const files = ["src/a.ts", "src/b.ts"];
+
+  test("a forged changedLines is overruled by the diff recomputed from git", async () => {
+    const light = await requiredReviewers(root, "all", files, { depth: "light" });
+    const errors = (
+      await coverageErrors(
+        { mode: "all", depth: "light", selected: light.required },
+        { root, ...attended, files, changedLines: 10, diffStats: async () => ({ files, changedLines: 3000 }) },
+      )
+    ).join("\n");
+    expect(errors).toContain("3000 changed lines exceeds 300");
+    expect(errors).toContain("never run");
+  });
+
+  test("an unresolvable diff is a full round", async () => {
+    const light = await requiredReviewers(root, "all", files, { depth: "light" });
+    const errors = (await coverageErrors({ mode: "all", depth: "light", selected: light.required }, { root, ...attended, files, changedLines: 10, diffStats: async () => undefined })).join("\n");
+    expect(errors).toContain("could not be resolved");
+  });
+
+  test("a recomputed small diff keeps the light round", async () => {
+    const light = await requiredReviewers(root, "all", files, { depth: "light" });
+    expect(await coverageErrors({ mode: "all", depth: "light", selected: light.required }, { root, ...attended, files, changedLines: 10, diffStats: async () => ({ files, changedLines: 40 }) })).toEqual([]);
+  });
+
+  test("a recorded full round-depth binds over a light dispatch", async () => {
+    const dir = path.join(root, "pkg");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "round-depth.json"), JSON.stringify({ requested: "full", depth: "full", reason: "--depth full" }));
+    const light = await requiredReviewers(root, "all", files, { depth: "light" });
+    const errors = (await coverageErrors({ mode: "all", depth: "light", selected: light.required }, { root, ...attended, files, changedLines: 10, packageDir: dir, diffStats: async () => ({ files, changedLines: 10 }) })).join("\n");
+    expect(errors).toContain("binds");
+    expect(errors).toContain("never run");
   });
 });

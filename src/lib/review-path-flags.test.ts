@@ -30,3 +30,16 @@ test("- is standard input for --diff, --payload and --result, and a path that is
   expect(reviewPathFlagRefusal("slice", ["--out", "-"], where)).toMatch(/outside the project root/);
   expect(reviewPathFlagRefusal("retry-plan", ["--manifest", "-"], where)).toMatch(/outside the project root/);
 });
+
+test("required --package, estimate --package/--manifest and verdict --raw are confined to the project", () => {
+  const root = tempDir("keryx-flags-");
+  mkdirSync(path.join(root, ".git"));
+  const outside = tempDir("keryx-flags-out-");
+  const where = { projectRoot: root, cwd: root };
+  expect(reviewPathFlagRefusal("required", ["--package", outside], where)).toMatch(/outside the project root/);
+  expect(reviewPathFlagRefusal("estimate", ["--manifest", path.join(outside, "manifest.json")], where)).toMatch(/outside the project root/);
+  expect(reviewPathFlagRefusal("estimate", ["--package", outside], where)).toMatch(/outside the project root/);
+  expect(reviewPathFlagRefusal("verdict", ["--raw", outside], where)).toMatch(/outside the project root/);
+  expect(reviewPathFlagRefusal("required", ["--package", path.join(root, ".metaproject", "reviews", "r1")], where)).toBeUndefined();
+  expect(reviewPathFlagRefusal("verdict", ["--raw", path.join(root, ".metaproject", "data", "review", "raw")], where)).toBeUndefined();
+});

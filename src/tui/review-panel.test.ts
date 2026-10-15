@@ -78,6 +78,7 @@ describe("loadReviewDepth", () => {
       [`${PKG}/research.json`]: { dispatch: { version: 1, mode: "all", selected: [] } },
       [`${PKG}/research-evidence/mutation-1.json`]: record(2, 1),
       [`${PKG}/research-evidence/mutation-2.json`]: record(1, 0),
+      [`${PKG}/research-evidence/mutation-baseline-1.json`]: { ...record(0, 0), mutants: [] },
       [`${PKG}/research-evidence/mutants.json`]: {
         mutants: [
           { id: "m1", file: "a.ts", anchor: "a", replacement: "b" },

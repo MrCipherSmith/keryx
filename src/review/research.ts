@@ -1,6 +1,6 @@
 import { dispatchErrors } from "./dispatch";
 import { pendingMutants } from "./mutate";
-import { coverageErrors, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage } from "./coverage";
+import { coverageErrors, packageChangedLines, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage } from "./coverage";
 import { coverageGateErrors } from "./coverage-complete";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -49,7 +49,9 @@ export async function packageResearchErrors(packageDir: string, artifacts: unkno
       ? []
       : await coverageErrors(ledger?.dispatch, {
           root: projectRootOfPackage(packageDir),
+          packageDir,
           files: await packageScopeFiles(packageDir),
+          changedLines: await packageChangedLines(packageDir),
           blastRadius: await packageHasBlastRadius(packageDir),
           prContext: packageHasPrContext(packageDir),
           pendingMutants: (await pendingMutants(packageDir)).length,

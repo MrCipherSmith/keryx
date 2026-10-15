@@ -4,7 +4,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
-import { DISPATCH_KNOWN_ROLES, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
+import { DISPATCH_KNOWN_ROLES, packageChangedLines, packageRoundDepth, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
 import { SLICE_MANIFEST_COPY } from "../review/coverage-complete";
 import { readToolLog } from "../review/layers-usage";
 import { pendingMutants } from "../review/mutate";
@@ -240,7 +240,10 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   const dispositions = (Array.isArray(given) ? given : given?.obligations) ?? [];
 
   const blastRadius = await packageHasBlastRadius(packageDir);
-  const required = await requiredReviewers(root, mode, files, { blastRadius, prContext: packageHasPrContext(packageDir) });
+  const recordedDepth = await packageRoundDepth(packageDir);
+  if (recordedDepth?.stale !== undefined) console.error(`round-depth.json ignored (${recordedDepth.stale}); building the full round. Re-run \`keryx review required --package\` to decide again.`);
+  const depth = recordedDepth?.depth;
+  const required = await requiredReviewers(root, mode, files, { blastRadius, prContext: packageHasPrContext(packageDir), depth });
   const { payloadSlices, payloadDispatchCounts, ruleFiles, toolLogs: toolLogPaths, assignments, replies, dropped } = await readDrivers(inputDir, root);
   const { raws, ignored, setAside } = await loadRaws(inputDir, { files: replies.files, reviewers: [...new Set([...replies.reviewers, ...required.required])] });
 
@@ -250,6 +253,7 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   const { ledger, gaps } = buildLedger({
     dispatchRoles: await knownDispatchRoles(out, replies.reviewers),
     mode,
+    depth,
     selected: required.required,
     manifest,
     payloadSlices,
@@ -266,7 +270,7 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     gaps.push({ reviewer: driver.reviewer, detail: `drivers/${driver.file}: ${driver.unusable} slice entr${driver.unusable === 1 ? "y" : "ies"} without a usable id; none of this dispatch's slices counts as handed to ${driver.reviewer}`, next: `give every entry in drivers/${driver.file} an id string, or an object with an id` });
   }
   if (setAside.length > 0) ledger.setAside = setAside;
-  const blockers = await ledgerBlockers(ledger, canonical, { root, files, blastRadius, pendingMutants: (await pendingMutants(packageDir)).length });
+  const blockers = await ledgerBlockers(ledger, canonical, { root, packageDir, files, changedLines: await packageChangedLines(packageDir), blastRadius, pendingMutants: (await pendingMutants(packageDir)).length });
   const ready = blockers.length === 0;
   if (!rest.includes("--dry-run")) {
     await writeFileAtomic(out, `${JSON.stringify(ledger, null, 2)}\n`);

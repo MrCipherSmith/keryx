@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+import { closeSync, openSync } from "node:fs";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import path, { join } from "node:path";
 import { optionValue } from "../lib/args";
@@ -35,9 +37,10 @@ import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats"
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
 import { auditPackage } from "../review/severity-audit";
 import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
-import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
+import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR, BaselineError, SCRATCH_MODES, type ScratchMode } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
-import { packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers } from "../review/coverage";
+import { DEPTH_REQUESTS, ROUND_DEPTH_FILE, decideRoundDepth, packageChangedLines, packageDepthBasis, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, type DepthRequest } from "../review/coverage";
+import { estimatePackage, renderEstimate } from "../review/estimate";
 import { FIRST_FILES } from "../review/coverage-complete";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
@@ -52,10 +55,13 @@ import { RUN_HELP, runReviewRun } from "./review-run";
 import { runJevRisk } from "./review-jev-risk";
 import { printLedgerHelp, runLedger } from "./review-ledger";
 import { resolveProjectRoot } from "../lib/contained-path";
+import { guardReviewPaths } from "../lib/review-path-flags";
 import { startOrchestratorLog } from "../review/orchestrator-log";
 import { printChunksHelp, printCoverageHelp, runChunks, runCoverage } from "./review-chunks";
 import { ensurePackageLayers, printLayersHelp, resolvePackageDir, runLayers } from "./review-layers";
-import { PackageGraphError, loadPackageGraph } from "../review/layers";
+import { PackageGraphError, loadPackageGraph, readLayers } from "../review/layers";
+import { keryxSelfCommand } from "../harness/tool/builtin/metaproject-tools";
+import { shellWord } from "../lib/shell-quote";
 import { layersSummaryLine } from "../review/layers-view";
 import { type SliceDeps, printDispatchCheckHelp, printRetryPlanHelp, printSliceHelp, runDispatchCheck, runRetryPlan, runSlice } from "./review-slice";
 import { runJevScenarios } from "./review-jev-scenarios";
@@ -145,6 +151,7 @@ import {
 import { createTierRankHost, type TierRankHost } from "../harness/routing/tier-rank-agent";
 import { TEST_FILE_RE } from "../testing/selection";
 import { isVerificationMode, verificationClaims } from "../review/verification";
+import { writeVerdict } from "../review/verdict";
 import {
   buildReplyPass,
   collectPrComments,
@@ -320,6 +327,7 @@ export const CREATE_FLAGS = [
   "--parallel",
   "--outstanding",
   "--memory-query",
+  "--graph-timeout",
   AUTOMATIC_REVIEW_FLAG,
 ] as const;
 
@@ -380,6 +388,8 @@ const LOOP_FLAGS = ["--flow", "--task"] as const;
  * with a labelled-case manifest; `--live` (only meaningful with `--eval`)
  * replays it against the real `gh`/Jev instead of each case's fixtures.
  */
+export const VERDICT_FLAGS = ["--raw", "--json"] as const;
+
 const CI_TRIAGE_FLAGS = ["--run", "--job", "--test", "--repo", "--model", "--fixtures", "--json", "--eval", "--live"] as const;
 
 /**
@@ -526,10 +536,11 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-cov
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
 const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"] as const;
-const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--json"] as const;
+const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--scratch", "--json"] as const;
 const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
 const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
-const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--json"] as const;
+export const REQUIRED_FLAGS = ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--package", "--json"] as const;
+export const ESTIMATE_FLAGS = ["--package", "--manifest", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
 /**
@@ -774,6 +785,10 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       await runRequired(args.slice(1));
       return;
     }
+    if (command === "estimate") {
+      await runEstimate(args.slice(1));
+      return;
+    }
     if (command === "mutate") {
       await runMutate(args.slice(1));
       return;
@@ -803,6 +818,10 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       await runReportParity(args.slice(1));
       return;
     }
+    if (command === "verdict") {
+      await runVerdict(args.slice(1));
+      return;
+    }
     if (command === "complete") {
       await runComplete(args.slice(1), seams);
       return;
@@ -820,14 +839,91 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
   }
 }
 
-/** A new package starts with fresh layers. A failure is printed and never blocks the package. */
-async function refreshCreatedPackageLayers(packageDir: string, head: string | undefined, cwd: string): Promise<void> {
+/** Seconds `review start` waits for the layers refresh before deferring it. 0 = no bound. */
+export const DEFAULT_GRAPH_TIMEOUT_SECONDS = 90;
+/** The longest `--graph-timeout` accepted: an hour is already past any refresh worth waiting for in front of a review. */
+export const MAX_GRAPH_TIMEOUT_SECONDS = 3600;
+
+function parseGraphTimeout(value: string | undefined): number {
+  if (value === undefined) return DEFAULT_GRAPH_TIMEOUT_SECONDS;
+  if (!/^\d+(\.\d+)?$/.test(value)) throw new Error("--graph-timeout must be a non-negative number of seconds (0 = no bound)");
+  const seconds = Number(value);
+  if (seconds > MAX_GRAPH_TIMEOUT_SECONDS) throw new Error(`--graph-timeout ${value} is above the ${MAX_GRAPH_TIMEOUT_SECONDS} s (1 hour) cap; use 0 for no bound or a value up to ${MAX_GRAPH_TIMEOUT_SECONDS}`);
+  return seconds;
+}
+
+/** The slice of a child process `refreshCreatedPackageLayers` needs; a test injects a fake. */
+export interface LayersRefreshChild {
+  onExit(callback: (code: number | null) => void): void;
+  unref(): void;
+}
+export type LayersRefreshSpawner = (command: string, args: string[], options: { cwd: string; logFile: string }) => LayersRefreshChild;
+
+const LAYERS_REFRESH_LOG = "layers-refresh.log";
+
+const spawnDetachedRefresh: LayersRefreshSpawner = (command, args, options) => {
+  const fd = openSync(options.logFile, "a");
   try {
-    const layers = await ensurePackageLayers(packageDir, {
-      projectRoot: resolveProjectRoot(cwd),
-      ...(head === undefined ? {} : { prHead: head }),
+    const child = spawn(command, args, { cwd: options.cwd, detached: true, stdio: ["ignore", fd, fd] });
+    return {
+      onExit: (callback) => {
+        child.once("exit", (code) => callback(code));
+        child.once("error", () => callback(1));
+      },
+      unref: () => child.unref(),
+    };
+  } finally {
+    closeSync(fd);
+  }
+};
+
+/** `keryx review layers refresh ...` as this running build would launch it (source, npm `dist/cli.js` or compiled binary). */
+function layersRefreshCommand(packageDir: string, head: string | undefined): { command: string; args: string[] } {
+  const [command, ...self] = keryxSelfCommand();
+  const refresh = ["review", "layers", "refresh", "--package", packageDir, ...(head === undefined ? [] : ["--head", head])];
+  return { command: command as string, args: [...self, ...refresh] };
+}
+
+/**
+ * A new package starts with fresh layers. A failure is printed and never blocks the package.
+ *
+ * With a bound (`timeoutSeconds` > 0) the refresh runs in a detached `keryx review layers refresh` process: past the
+ * bound the child is unref'd and left to finish and publish under its own lock, so this process can exit instead of
+ * being held open by an in-process build. Without one (0) the refresh is awaited in process.
+ */
+export async function refreshCreatedPackageLayers(
+  packageDir: string,
+  head: string | undefined,
+  cwd: string,
+  options: { timeoutSeconds?: number; spawner?: LayersRefreshSpawner } = {},
+): Promise<void> {
+  const timeoutSeconds = options.timeoutSeconds ?? DEFAULT_GRAPH_TIMEOUT_SECONDS;
+  try {
+    if (timeoutSeconds <= 0) {
+      const layers = await ensurePackageLayers(packageDir, { projectRoot: resolveProjectRoot(cwd), ...(head === undefined ? {} : { prHead: head }) });
+      console.log(`layers: ${layersSummaryLine(layers)}`);
+      return;
+    }
+    const logFile = path.join(packageDir, LAYERS_REFRESH_LOG);
+    const { command, args } = layersRefreshCommand(packageDir, head);
+    const child = (options.spawner ?? spawnDetachedRefresh)(command, args, { cwd, logFile });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const outcome = await new Promise<{ code: number | null } | "timeout">((resolve) => {
+      child.onExit((code) => resolve({ code }));
+      timer = setTimeout(() => resolve("timeout"), timeoutSeconds * 1000);
     });
-    console.log(`layers: ${layersSummaryLine(layers)}`);
+    if (timer !== undefined) clearTimeout(timer);
+    if (outcome === "timeout") {
+      child.unref();
+      console.log(
+        `layers: deferred — refresh continues in the background (log: ${logFile}); check with \`keryx review layers status --package ${shellWord(packageDir)}\``,
+      );
+      return;
+    }
+    const layers = await readLayers(packageDir);
+    if (outcome.code === 0 && layers !== null) console.log(`layers: ${layersSummaryLine(layers)}`);
+    else if (layers !== null) console.error(`layers: ${layersSummaryLine(layers)} (refresh exited ${outcome.code ?? "abnormally"}; log: ${logFile})`);
+    else console.error(`layers: not refreshed — refresh exited ${outcome.code ?? "abnormally"} (log: ${logFile})`);
   } catch (error) {
     console.error(`layers: not refreshed — ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -841,6 +937,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     throw new Error("Usage: keryx review <attach|start|ingest> --target <kind> --ref <ref>");
   }
   const reviewers = optionValue(args, "--reviewers")?.split(",").map((item) => item.trim()).filter(Boolean);
+  const graphTimeout = parseGraphTimeout(optionValue(args, "--graph-timeout"));
   const cwd = process.cwd();
   const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
   const input: ManagedReviewIngestInput = {
@@ -882,7 +979,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
   if (mode !== "ingest") await startOrchestratorLog(cwd, result.reviewId, result.path);
-  await refreshCreatedPackageLayers(result.path, result.manifest.target.head, cwd);
+  await refreshCreatedPackageLayers(result.path, result.manifest.target.head, cwd, { timeoutSeconds: graphTimeout });
   const startRadius = input.blastRadius as { dropped?: unknown } | undefined;
   if (mode === "review-flow" && Array.isArray(startRadius?.dropped) && startRadius.dropped.length > 0) {
     console.log(await recordRadiusAndPlan(result.path, resolveProjectRoot(cwd), startRadius as unknown as BlastRadius, result.reviewId));
@@ -3038,23 +3135,61 @@ async function runRequired(args: string[]): Promise<void> {
   rejectUnknownFlags(args, REQUIRED_FLAGS, "required");
   const mode = optionValue(args, "--mode") ?? "all";
   if (mode !== "all" && mode !== "diff") throw new Error('--mode must be "all" or "diff"');
+  const placed = guardReviewPaths("required", args);
   const scope = await readScope(optionValue(args, "--scope"));
+  // --package supplies what the operator did not pass: the stored scope-A file list, changed-line count, blast-radius record and PR context. Explicit flags win.
+  const packageDir = placed("--package");
+  const packageFiles = scope?.files === undefined && packageDir !== undefined ? await packageScopeFiles(packageDir) : undefined;
+  const packageLines = packageDir !== undefined ? await packageChangedLines(packageDir) : undefined;
   if (mode === "diff" && (optionValue(args, "--operator-quote") ?? "").trim() === "")
     throw new Error('--mode diff narrows the reviewer set and needs --operator-quote "<the operator\'s own words>"; a pull request defaults to --mode all');
-  if (mode === "diff" && scope?.files === undefined) throw new Error("--mode diff needs --scope <scope.json> with the scope-A file list");
+  if (mode === "diff" && scope?.files === undefined && packageFiles === undefined) throw new Error("--mode diff needs --scope <scope.json> (or a --package holding scope-files.json) with the scope-A file list");
   const radiusFile = optionValue(args, "--blast-radius");
   const prContextFile = optionValue(args, "--pr-context");
-  const set = await requiredReviewers(process.cwd(), mode, scope?.files === undefined ? undefined : [...scope.files], {
-    blastRadius: radiusFile !== undefined && (await packageHasBlastRadius(path.dirname(path.resolve(radiusFile)), path.basename(radiusFile))),
-    prContext: prContextFile !== undefined && packageHasPrContext(path.dirname(path.resolve(prContextFile)), path.basename(prContextFile)),
+  const depthArg = (optionValue(args, "--depth") ?? "auto") as DepthRequest;
+  if (!DEPTH_REQUESTS.includes(depthArg)) throw new Error(`--depth must be one of ${DEPTH_REQUESTS.join(", ")}`);
+  // Changed lines: --diff-lines wins, else the scope record's retained changed lines (what reviewers actually see).
+  const diffLinesArg = optionValue(args, "--diff-lines");
+  if (diffLinesArg !== undefined && !/^\d+$/.test(diffLinesArg)) throw new Error("--diff-lines must be a non-negative integer");
+  const retained = (scope?.counts as { changedLinesRetained?: unknown } | undefined)?.changedLinesRetained;
+  const changedLines = diffLinesArg !== undefined ? Number(diffLinesArg) : typeof retained === "number" ? retained : scope?.files === undefined ? packageLines : undefined;
+  const files = scope?.files !== undefined ? [...scope.files] : packageFiles;
+  const forceFull = args.includes("--all") ? "--all" : args.includes("--gating") ? "--gating" : undefined;
+  const decision = await decideRoundDepth(process.cwd(), depthArg, { files, changedLines, forceFull });
+  const set = await requiredReviewers(process.cwd(), mode, files, {
+    blastRadius:
+      radiusFile !== undefined
+        ? await packageHasBlastRadius(path.dirname(path.resolve(radiusFile)), path.basename(radiusFile))
+        : packageDir !== undefined && (await packageHasBlastRadius(packageDir)),
+    prContext:
+      prContextFile !== undefined
+        ? packageHasPrContext(path.dirname(path.resolve(prContextFile)), path.basename(prContextFile))
+        : packageDir !== undefined && packageHasPrContext(packageDir),
+    depth: decision.depth,
   });
+  if (packageDir !== undefined) {
+    // The one write: `ledger build` reads the round's depth back from the package.
+    // The decision is tied to the head, file list and line count it was made for; `ledger build` drops it when any of them moved.
+    const basis = await packageDepthBasis(packageDir);
+    await writeFileAtomic(path.join(packageDir, ROUND_DEPTH_FILE), `${JSON.stringify({ ...decision, head: basis.head, files: files === undefined ? undefined : [...files].sort(), changedLines }, null, 2)}\n`);
+  }
   if (args.includes("--json")) {
-    console.log(JSON.stringify(set, null, 2));
+    console.log(JSON.stringify({ ...set, depthReason: decision.reason, depthRequested: decision.requested }, null, 2));
     return;
   }
+  console.log(`depth: ${set.depth} (${decision.reason})`);
   console.log(`mode: ${set.mode}${set.filesKnown ? "" : " (no scope file list: path-gated reviewers stay required)"}`);
   console.log(`required (${set.required.length}): ${set.required.join(", ")}`);
   for (const item of set.excluded) console.log(`excluded: ${item.reviewer} - ${item.reason}`);
+}
+
+async function runEstimate(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, ESTIMATE_FLAGS, "estimate");
+  const placed = guardReviewPaths("estimate", args);
+  const packageDir = placed("--package");
+  if (packageDir === undefined) throw new Error("estimate needs --package <review-dir>");
+  const estimate = await estimatePackage(packageDir, { manifest: placed("--manifest") });
+  console.log(args.includes("--json") ? JSON.stringify(estimate, null, 2) : renderEstimate(estimate));
 }
 
 async function runCompareReference(args: string[]): Promise<void> {
@@ -3083,10 +3218,23 @@ async function runMutate(args: string[]): Promise<void> {
   const capArg = optionValue(args, "--cap");
   const cap = capArg === undefined ? undefined : Number(capArg);
   if (cap !== undefined && (!Number.isInteger(cap) || cap < 0)) throw new Error("--cap must be a non-negative integer");
+  const scratchArg = optionValue(args, "--scratch");
+  if (scratchArg !== undefined && !SCRATCH_MODES.includes(scratchArg as ScratchMode)) throw new Error(`--scratch must be one of ${SCRATCH_MODES.join(", ")}`);
+  const scratch = scratchArg as ScratchMode | undefined;
   const spec = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
   // A capped pass takes the next mutants nobody has judged yet; otherwise `--cap 3` twice would re-run the first three.
   const mutants = cap === undefined ? spec : await unjudgedMutants(packageDir, spec);
-  const record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs, cap });
+  let record;
+  try {
+    record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs, cap, scratch });
+  } catch (error) {
+    // A red baseline still leaves evidence: the command, its cwd and the output tail say why no mutant ran.
+    if (error instanceof BaselineError) {
+      const written = await writeMutationEvidence(packageDir, error.record);
+      throw new Error(`${error.message}\nevidence: ${written.md}`, { cause: error });
+    }
+    throw error;
+  }
   const written = await writeMutationEvidence(packageDir, record);
   if (args.includes("--json")) console.log(JSON.stringify({ ...record, evidence: written }, null, 2));
   else console.log(`${renderMutationTable(record)}\nevidence: ${written.md}`);
@@ -3829,6 +3977,38 @@ async function runReportParity(args: string[]): Promise<void> {
   console.log(markdown === "" ? "Nothing to carry into the report: no Not run candidates, held severity notes or open follow-ups." : markdown.trimEnd());
 }
 
+/** `keryx review verdict <review> [--json]`: the verdict of a round as it stands, before ingest, ledger, mutation or `complete`. Writes `verdict-interim.md` into the package. */
+async function runVerdict(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, VERDICT_FLAGS, "verdict <review-id-or-path> [--json]");
+  const ref = args.find((argument, index) => !argument.startsWith("--") && args[index - 1] !== "--raw");
+  if (!ref) throw new Error("Usage: keryx review verdict <review-id-or-path> [--raw <dir>] [--json]");
+  const placed = guardReviewPaths("verdict", args);
+  const packageDir = await resolveReviewPackagePath(process.cwd(), ref);
+  const { verdict, markdown, file } = await writeVerdict(packageDir, path.basename(packageDir), { rawDir: placed("--raw") });
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ ...verdict, file: path.relative(process.cwd(), file) }, null, 2));
+    return;
+  }
+  console.log(markdown.trimEnd());
+  console.log(`written: ${path.relative(process.cwd(), file)}`);
+}
+
+function printVerdictHelp(): void {
+  console.log(`keryx review verdict
+
+Usage:
+  keryx review verdict <review-id-or-path> [--raw <dir>] [--json]
+
+The verdict of a review round as it stands: finding counts by severity, verified vs
+unverified (refuted excluded), open blockers and majors, and the reviewers that have
+not reported. Reads the ingested round (findings.json) when there is one, else the raw
+reviewer results in --raw <dir> (default <package>/raw; a shell host keeps them in
+.metaproject/data/review/raw). Verifier results in research-evidence/verifications.json are applied
+first, so a refuted finding is excluded; a finding whose disposition is acted-on is not open. Works before ledger, mutation and complete. Writes
+verdict-interim.md into the package. A package with no findings says so and exits 0.
+`);
+}
+
 async function runStatus(args: string[]): Promise<void> {
   rejectUnknownFlags(args, [], "status <review-id-or-path>");
   const ref = args[0];
@@ -4296,11 +4476,20 @@ ${reviewHelpSection("learn")}
  * subcommand, mutating or not; a subcommand with no entry gets the group help.
  */
 const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
+  ["start", printStartHelp],
+  ["ingest", printIngestHelp],
+  ["mutate", printMutateHelp],
+  ["blast-radius", printBlastRadiusHelp],
+  ["complete", printCompleteHelp],
+  ["status", printStatusHelp],
+  ["estimate", printEstimateHelp],
+  ["required", printRequiredHelp],
   ["scope", printScopeHelp],
   ["slice", printSliceHelp],
   ["dispatch-check", printDispatchCheckHelp],
   ["retry-plan", printRetryPlanHelp],
   ["ledger", printLedgerHelp],
+  ["verdict", printVerdictHelp],
   ["layers", printLayersHelp],
   ["chunks", printChunksHelp],
   ["coverage", printCoverageHelp],
@@ -4318,6 +4507,82 @@ export function printReviewHelpFor(rest: readonly string[] = []): void {
   (own ?? printHelp)();
 }
 
+function printEstimateHelp(): void {
+  console.log("keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--json]\n\nThe manifest is --manifest, else <review-dir>/slices/manifest.json, else .metaproject/data/review/slices/manifest.json; the output names the one used.\nRoles x slices = assignments, dispatches (waves) at the slice manifest's wave budget, and an expected duration range.\nNot sliced: assignments = roles. Reads only; the per-dispatch minutes assumption is printed with the result.");
+}
+
+const GRAPH_TIMEOUT_HELP = `--graph-timeout <seconds> bounds the wait for the graph, wiki and memory refresh of the new package
+(default ${DEFAULT_GRAPH_TIMEOUT_SECONDS}, 0 = refresh in this process, no bound). The refresh runs as a separate \`keryx review layers refresh\`
+process; past the bound the package is still created, the command returns, and the refresh finishes in the background
+(log: <package>/layers-refresh.log; check with \`keryx review layers status --package <dir>\`). The cap is ${MAX_GRAPH_TIMEOUT_SECONDS} s.`;
+
+function printStartHelp(): void {
+  console.log(`keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+                   [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
+                   [--graph-timeout <seconds>]
+
+Starts a managed review package for a flow. Also accepted: ${CREATE_FLAGS.join(" ")} (--target-ref is an alias of --ref).
+${GRAPH_TIMEOUT_HELP}`);
+}
+
+function printIngestHelp(): void {
+  console.log(`keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--research <ledger.json>]
+                    [--review-id <id>] [--automatic] [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
+                    [--scope <scope.json>] [--blast-radius <blast-radius.json>] [--cross-family-review <file|->]
+                    [--refuted <file|->] [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
+                    [--tokens-in <n>] [--tokens-out <n>] [--parallel <n>] [--outstanding <n>]
+                    [--target <kind>] [--target-ref <ref>] [--memory-query "<query>"] [--graph-timeout <seconds>]
+
+Records a finished review report as a package. All accepted flags: ${CREATE_FLAGS.join(" ")}.
+Without --research the package stays PENDING and \`review complete\` refuses.
+${GRAPH_TIMEOUT_HELP}`);
+}
+
+function printMutateHelp(): void {
+  console.log(`keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>] [--spec <mutants.json>]
+                    [--timeout-ms <n>] [--cap <n>] [--scratch repo|tmp] [--json]
+
+Runs the reviewers' proposed mutants (default spec: <review-dir>/research-evidence/mutants.json) in a scratch copy of
+the worktree; the worktree is never written. The baseline must pass first. --cap bounds the mutants run.
+Writes mutation-<n>.json and .md to research-evidence/.`);
+}
+
+function printBlastRadiusHelp(): void {
+  console.log(`keryx review blast-radius [--ref <base> | --changed a,b] [--base <ref>] [--depth <n>] [--max-files <n>]
+                          [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                          [--package <review-dir>] [--json | --brief] [--out <file>]
+
+The files a change can reach: dependants of the changed files, up to --depth, capped at --max-files, with related tests.
+--package stores the record in the package; --previous/--final carry the dropped files across rounds.`);
+}
+
+function printCompleteHelp(): void {
+  console.log(`keryx review complete <review-id-or-path> [--finding <id>] [--disposition <value>] [--evidence <text>]
+                      [--waive-coverage "<reason>"] [--waive "<reason>"] [--head <sha>]
+
+Marks the review complete once scope, raw reconciliation, dispatch evidence and coverage hold. --finding, --disposition
+and --evidence record one finding's disposition (repeatable); --waive-coverage and --waive record an operator waiver;
+--head is the pull request head the round must match.`);
+}
+
+function printStatusHelp(): void {
+  console.log("keryx review status <review-id-or-path>\n\nPrints the package's mode, status, target, head, flow, coverage and what the round left open. Takes no flags.");
+}
+
+function printRequiredHelp(): void {
+  console.log(`keryx review required [--mode all|diff] [--scope <scope.json>] [--operator-quote "<words>"]
+                      [--blast-radius <file>] [--pr-context <file>] [--depth auto|light|full] [--diff-lines <n>]
+                      [--all] [--gating] [--package <review-dir>] [--json]
+
+The reviewer set a round must dispatch. --depth auto (default) picks a light round (logic, testing, the stack's conventions
+reviewer) for at most 5 files and 300 changed lines outside the risk class; --all, --gating and --depth full keep the full set.
+--depth light is honoured only when those same checks pass; otherwise the round is full and the reason is printed.
+Changed lines: --diff-lines, else --scope's changedLinesRetained, else the count start/ingest stored in the package
+(scope-files.json); with none the round stays full ("no line count"). --package (confined to the project) writes
+round-depth.json tied to the head, file list and line count it was decided for, and supplies the scope-A file list,
+blast-radius.json and pr-context.md when the matching flag is not given. ledger build and complete re-check a light round.`);
+}
+
 function printHelp(): void {
   console.log(reviewHelpText());
 }
@@ -4331,6 +4596,7 @@ Usage:
                       [--automatic]
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                      [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
+                     [--graph-timeout <seconds>]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--research <ledger.json>] [--review-id <id>] [--automatic]
                       [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
@@ -4339,7 +4605,7 @@ Usage:
                     [--refuted <file|->]
                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                       [--tokens-in <n>] [--tokens-out <n>]
-                      [--parallel <n>] [--outstanding <n>]
+                      [--parallel <n>] [--outstanding <n>] [--graph-timeout <seconds>]
                       --research is the research ledger {version, scopeReviewed, rawReconciled,
                       obligations, dispatch}; without it the package stays PENDING and
                       \`review complete\` refuses on scope, raw reconciliation and dispatch evidence.
@@ -4351,11 +4617,15 @@ Usage:
                      ledgers (csv, lockfiles, snapshots) are omitted with a reason.
                      --wave-bytes is the most one reviewer dispatch carries.
   keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>]
-                        [--spec <mutants.json>] [--timeout-ms <n>] [--json]
+                        [--spec <mutants.json>] [--timeout-ms <n>] [--scratch repo|tmp] [--json]
                         Runs the reviewers' proposed mutants (default spec:
                         <review-dir>/research-evidence/mutants.json) in a scratch
                         copy of the worktree; the worktree is never written. The
-                        baseline must pass first. A survivor means no assertion
+                        copy lives under .metaproject/data/review/mutate-scratch
+                        (--scratch repo, default, so ancestor node_modules still
+                        resolve) or in the OS temp dir (--scratch tmp). The
+                        baseline must pass first; a red one exits non-zero and
+                        prints the command, its cwd and the last 60 output lines. A survivor means no assertion
                         pins that behaviour; it raises a finding only where no
                         mutant in the same file was killed. Writes mutation-<n>.json and .md to
                         research-evidence/.
@@ -4381,7 +4651,22 @@ Usage:
                         reference ran a mutant and this package has no mutation
                         pass. --input adds the raw reviewer replies for class C.
   keryx review required [--mode all|diff] [--scope <scope.json>]
-                        [--operator-quote "<words>"] [--blast-radius <blast-radius.json>] [--json]
+                        [--operator-quote "<words>"] [--blast-radius <blast-radius.json>]
+                        [--depth auto|light|full] [--diff-lines <n>] [--all] [--gating]
+                        [--package <review-dir>] [--json]
+                        --depth auto (default) runs a light round (logic, testing and
+                        the stack's conventions reviewer; no mandatory mutation pass)
+                        for a diff of at most 5 files and 300 changed lines outside
+                        the risk class (core/flow-graph/layout path gates, data files,
+                        project reviewer path gates); --all, --gating or --depth full
+                        keep the full set. Changed lines come from --diff-lines, else
+                        --scope's changedLinesRetained; unknown means full. The text
+                        and --json output state the depth and why. --package records
+                        the depth in <review-dir>/round-depth.json for ledger build.
+  keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--json]
+                        Roles x slices = assignments, waves at the manifest's wave
+                        budget, and an expected duration range (2-5 min per dispatch,
+                        4 in parallel); not sliced: assignments = roles.
                         --blast-radius adds review-regression to the set; without a
                         computed blast radius it is excluded with that reason.
                         The reviewer set a round must dispatch: every available
@@ -4395,8 +4680,8 @@ Usage:
                               Refuses a reviewer payload with no slice, one over the
                               manifest's wave budget, or a shape the schema rejects.
   keryx review retry-plan --manifest <file> --result <file|-> [--reviewer <id>]
-                          [--slices a,b] [--covered a,b] [--next-wave] [--state <file>]
-                          [--dry-run] [--json]
+                          [--slices a,b] [--covered a,b] [--next-wave] [--package <dir>]
+                          [--state <file>] [--dry-run] [--json]
                           Hands out the next wave of uncovered slices. A reviewer that
                           covered new slices keeps its attempt; two results in a row with
                           nothing new, or 6 failed rounds, are "Not run" — never a clean
@@ -4531,6 +4816,7 @@ ${COMMENTS_USAGE}
   keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--json]
   keryx review status <review-id-or-path>
   keryx review report-parity <review-id-or-path>
+  keryx review verdict <review-id-or-path> [--raw <dir>] [--json]
   keryx review readiness <review-id-or-path> [--json]
                         One checklist (10 items) that a review passes before it is
                         completed or published; each failing item names its repair.

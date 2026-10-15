@@ -7,15 +7,19 @@
 // new flag cannot join a command without being sorted into one of them.
 
 import { optionValues } from "./args";
-import { type PlacedPathResult, placePathWithinSync } from "./contained-path";
+import { optionValue } from "./args";
+import { type PlacedPathResult, placePathWithinSync, resolveProjectRoot } from "./contained-path";
 
 export const REVIEW_CONFINED_PATH_FLAGS: Readonly<Record<string, readonly string[]>> = {
   slice: ["--diff", "--out"],
-  "retry-plan": ["--manifest", "--result", "--state"],
+  "retry-plan": ["--manifest", "--result", "--state", "--package"],
   "dispatch-check": ["--manifest", "--payload", "--package"],
   layers: ["--package"],
   chunks: ["--package", "--result"],
   coverage: ["--package"],
+  required: ["--package"],
+  estimate: ["--package", "--manifest"],
+  verdict: ["--raw"],
 };
 
 /** The flags of the same commands that name no path (ids, numbers, switches). Not confined by design. */
@@ -26,6 +30,10 @@ export const REVIEW_NON_PATH_FLAGS: Readonly<Record<string, readonly string[]>> 
   layers: ["--head", "--base", "--write-wiki", "--files", "--max-bytes", "--force", "--json", "--help", "-h"],
   chunks: ["--chunk", "--status", "--mode", "--answer", "--quote", "--json", "--help", "-h"],
   coverage: ["--json", "--help", "-h"],
+  // `required` also reads --scope, --blast-radius and --pr-context; those are read-only inputs that were never confined and stay as they were.
+  required: ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--json"],
+  estimate: ["--json"],
+  verdict: ["--json"],
 };
 
 /** `-` means standard input for these flags and names no file. */
@@ -61,4 +69,21 @@ export function reviewPathFlagRefusal(
     }
   }
   return undefined;
+}
+
+/**
+ * Refuse, before anything is read, a confined path flag of `command` that lands outside the project, and hand back
+ * `placed(flag, fallback?)`: where a flag (or its default) really lands, judged again at the moment of use.
+ */
+export function guardReviewPaths(command: string, args: readonly string[], cwd: string = process.cwd()): (flag: string, fallback?: string) => string | undefined {
+  const where = { projectRoot: resolveProjectRoot(cwd), cwd };
+  const refusal = reviewPathFlagRefusal(command, args, where);
+  if (refusal !== undefined) throw new Error(refusal);
+  return (flag, fallback) => {
+    const value = optionValue([...args], flag) ?? fallback;
+    if (value === undefined) return undefined;
+    const placed = placeReviewPath(command, flag, value, where);
+    if (!placed.ok) throw new Error(placed.message);
+    return placed.path;
+  };
 }
