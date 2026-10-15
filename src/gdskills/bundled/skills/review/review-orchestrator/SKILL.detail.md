@@ -723,17 +723,22 @@ never closes it.
 
 A reviewer that argues a finding from a mutant writes `mutant:<id>` in the finding's `evidence`.
 After the mutation pass run `keryx review severity-audit --package <review-dir>`: a cited mutant
-that survived on a file the review changed raises a minor finding to major and records
-`severity_audit {from, to, evidence: "mutation-<n>.json#<id>"}`. A finding that cites a mutant no
+that survived on a file the review changed moves a minor finding up to major only when no mutant
+in that file was `killed` (or `timeout`) in any recorded pass, because then nothing in the suite
+exercises the changed behaviour. It records `severity_audit {from, to, evidence: "mutation-<n>.json#<id>"}`.
+When the file has a killed mutant, the suite covers the code, the survivor is a gap in covered
+code, and the severity is held (see below). A survivor shows a missing assertion, not wrong
+behaviour. A finding that cites a mutant no
 run executed stays minor (a major is capped at minor) and gets the label `unproven`. The audit
 never deletes a finding and never touches a blocker; it is a separate pass from the verifier,
 which can only delete. `--dry-run` prints the changes without writing `findings.json`.
 
 Each mutant in `mutants.json` carries a `kind`: `behavior` (the default, and what a record written
 before the field reads as) or `presentation` (it changes only what a reader sees: a label, a
-column, copy, spacing). A behavior survivor raises as above. When the only survivors a finding
-cites are `presentation`, the severity stays, and the finding gets
-`severity_audit {held: {severity, mutant, kind: "presentation", evidence, reason}}` instead of
+column, copy, spacing). A behavior survivor in a file with no killed mutant raises as above. When
+the only survivors a finding cites are `presentation`, or every behavior survivor sits in a file
+with a killed mutant, the severity stays, and the finding gets
+`severity_audit {held: {severity, mutant, kind: "presentation" | "covered", evidence, reason}}` instead of
 `{from, to}`. A held note is not a raise and not a deletion; it is the record that a survivor was
 seen and did not move the severity, so the report must say so.
 

@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { MUTANT_KINDS, type MutantResult, type MutationRecord, parseMutantSpec, renderMutationTable } from "./mutate";
+import { readReviewParity } from "./parity";
 import { auditPackage, auditSeverity, type NamedMutationRecord } from "./severity-audit";
 
 function mutant(over: Partial<MutantResult> = {}): MutantResult {
@@ -98,6 +99,82 @@ describe("auditSeverity and mutant kind", () => {
       const written = JSON.parse(await readFile(path.join(dir, "findings.json"), "utf8")) as Record<string, unknown>[];
       expect(written[0]?.severity).toBe("minor");
       expect(written[0]?.severity_audit).toMatchObject({ held: { mutant: "M1", kind: "presentation" } });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("auditSeverity and covered code", () => {
+  const killed = (id: string, over: Partial<MutantResult> = {}) => mutant({ id, status: "killed", ...over });
+
+  test("a survivor in a file where another mutant was killed holds the severity and names the kill count", () => {
+    const records = [run(mutant({ id: "M1" }), killed("K1"), killed("K2"))];
+    const { findings, changes } = auditSeverity([finding()], records, { changedFiles: ["src/a.ts"] });
+    const reason = "mutant M1 survived but 2 of 3 mutants in src/a.ts were killed: the suite covers this code, so it is a gap in covered code, severity held";
+    expect(findings[0]?.severity).toBe("minor");
+    expect(findings[0]?.severity_audit).toEqual({ held: { severity: "minor", mutant: "M1", kind: "covered", evidence: "mutation-1.json#M1", reason } });
+    expect(changes).toEqual([{ id: "F1", from: "minor", to: "minor", evidence: "mutation-1.json#M1", held: true, reason }]);
+  });
+
+  test("a timeout counts as caught, an invalid mutant counts as neither", () => {
+    const timedOut = [run(mutant({ id: "M1" }), mutant({ id: "T1", status: "timeout" }))];
+    expect(auditSeverity([finding()], timedOut, { changedFiles: ["src/a.ts"] }).findings[0]?.severity).toBe("minor");
+    const invalid = [run(mutant({ id: "M1" }), mutant({ id: "I1", status: "invalid" }))];
+    expect(auditSeverity([finding()], invalid, { changedFiles: ["src/a.ts"] }).findings[0]?.severity).toBe("major");
+  });
+
+  test("a kill in another file does not cover this file", () => {
+    const records = [run(mutant({ id: "M1" }), killed("K1", { file: "src/b.ts" }))];
+    expect(auditSeverity([finding()], records, { changedFiles: ["src/a.ts"] }).findings[0]).toMatchObject({ severity: "major", severity_audit: { from: "minor", to: "major" } });
+  });
+
+  test("a later pass that kills the mutant a first pass left alive replaces it", () => {
+    const first = run(mutant({ id: "M1" }), killed("K1"));
+    const second: NamedMutationRecord = { name: "mutation-2.json", record: { ...run(killed("M1")).record } };
+    const { findings } = auditSeverity([finding({ evidence: "mutant:M1" })], [first, second], { changedFiles: ["src/a.ts"] });
+    expect(findings[0]?.severity).toBe("minor");
+    expect(findings[0]?.severity_audit).toBeUndefined();
+  });
+
+  test("two cited survivors, one in covered code and one unpinned, still raise on the unpinned one", () => {
+    const records = [run(mutant({ id: "M1" }), killed("K1"), mutant({ id: "M2", file: "src/c.ts" }))];
+    const { findings } = auditSeverity([finding({ evidence: "mutant:M1 and mutant:M2" })], records, { changedFiles: ["src/a.ts", "src/c.ts"] });
+    expect(findings[0]).toMatchObject({ severity: "major", severity_audit: { evidence: "mutation-1.json#M2" } });
+  });
+
+  test("an unproven major is still capped, and a blocker is still untouched", () => {
+    const records = [run(mutant({ id: "M1" }), killed("K1"))];
+    expect(auditSeverity([finding({ severity: "major", evidence: "mutant:NOPE" })], records)).toMatchObject({ findings: [{ severity: "minor", labels: ["unproven"] }] });
+    expect(auditSeverity([finding({ severity: "blocker" })], records).changes).toEqual([]);
+  });
+
+  test("a package shaped like PR 7643: three test-gap findings in covered code stay minor, one unpinned finding is raised", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "keryx-sev-audit-covered-"));
+    try {
+      const rows = [
+        mutant({ id: "G1", file: "src/overview.tsx" }),
+        mutant({ id: "G2", file: "src/overview.tsx" }),
+        mutant({ id: "G3", file: "src/page.tsx" }),
+        mutant({ id: "U1", file: "src/unpinned.ts" }),
+        killed("K1", { file: "src/overview.tsx" }),
+        killed("K2", { file: "src/overview.tsx" }),
+        killed("K3", { file: "src/page.tsx" }),
+      ];
+      const findings = [
+        finding({ id: "F-001", evidence: "mutant:G1" }),
+        finding({ id: "F-002", evidence: "mutant:G2" }),
+        finding({ id: "F-003", evidence: "mutant:G3" }),
+        finding({ id: "F-009", evidence: "mutant:U1" }),
+      ];
+      await mkdir(path.join(dir, "research-evidence"), { recursive: true });
+      await writeFile(path.join(dir, "findings.json"), JSON.stringify(findings));
+      await writeFile(path.join(dir, "research-evidence", "mutation-1.json"), JSON.stringify(run(...rows).record));
+      await writeFile(path.join(dir, "scope-files.json"), JSON.stringify(["src/overview.tsx", "src/page.tsx", "src/unpinned.ts"]));
+      await auditPackage(dir);
+      const written = JSON.parse(await readFile(path.join(dir, "findings.json"), "utf8")) as Record<string, unknown>[];
+      expect(written.map((f) => f.severity)).toEqual(["minor", "minor", "minor", "major"]);
+      expect((await readReviewParity(dir)).held.map((h) => h.finding)).toEqual(["F-001", "F-002", "F-003"]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
