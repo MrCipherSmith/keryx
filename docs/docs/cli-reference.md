@@ -4775,7 +4775,7 @@ keryx review complete <review-id-or-path>
 keryx review lightweight
 keryx review reviewers [--json]
 keryx review required [--mode all|diff] [--scope <scope.json>] [--operator-quote "<words>"] [--blast-radius <blast-radius.json>] [--pr-context <pr-context.md>] [--json]
-keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>] [--spec <mutants.json>] [--timeout-ms <n>] [--cap <n>] [--json]
+keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>] [--spec <mutants.json>] [--timeout-ms <n>] [--cap <n>] [--scratch repo|tmp] [--json]
 keryx review severity-audit --package <review-dir> [--dry-run] [--json]
 keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir> [--self <login>] [--checks <gh-checks.json>] [--json]
 keryx review compare-reference --reference <report.md> --package <review-dir> [--input <dir>] [--json]

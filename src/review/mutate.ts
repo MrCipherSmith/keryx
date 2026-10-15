@@ -46,7 +46,7 @@ export type MutationRecord = {
   schemaVersion: 1;
   worktree: string;
   command: string;
-  baseline: { exitCode: number; ms: number };
+  baseline: { exitCode: number; ms: number; timedOut?: boolean | undefined; cwd?: string | undefined; tail?: string | undefined };
   mutants: MutantResult[];
   totals: Record<MutantStatus, number>;
   /** The most candidates this pass was allowed to run; absent when the pass ran with no cap. */
@@ -59,6 +59,29 @@ export const MUTANTS_SPEC = "mutants.json";
 export const EVIDENCE_DIR = "research-evidence";
 
 const SKIP_COPY = new Set([".git", "node_modules"]);
+
+/** Where the scratch copy goes by default, relative to the repository root. It is git-ignored and never copied into itself. */
+export const SCRATCH_DIR = path.join(".metaproject", "data", "review", "mutate-scratch");
+export type ScratchMode = "repo" | "tmp";
+export const SCRATCH_MODES: readonly ScratchMode[] = ["repo", "tmp"];
+const BASELINE_TAIL_LINES = 60;
+const OUTPUT_KEEP_CHARS = 256 * 1024;
+
+/** The last `lines` lines of `text`, without trailing blank lines. */
+export function tailLines(text: string, lines = BASELINE_TAIL_LINES): string {
+  return text.replace(/\s+$/, "").split(/\r?\n/).slice(-lines).join("\n");
+}
+
+/** A red or timed-out baseline. Carries the evidence record so the caller can persist the tail before failing. */
+export class BaselineError extends Error {
+  constructor(
+    message: string,
+    readonly record: MutationRecord,
+  ) {
+    super(message);
+    this.name = "BaselineError";
+  }
+}
 
 export function parseMutantSpec(raw: unknown): MutantSpec[] {
   const list = Array.isArray(raw) ? raw : (raw as { mutants?: unknown } | undefined)?.mutants;
@@ -84,10 +107,18 @@ export function parseMutantSpec(raw: unknown): MutantSpec[] {
   });
 }
 
-function runCommand(command: string, cwd: string, timeoutMs: number): Promise<{ exitCode: number; timedOut: boolean; ms: number }> {
+function runCommand(command: string, cwd: string, timeoutMs: number): Promise<{ exitCode: number; timedOut: boolean; ms: number; output: string }> {
   return new Promise((resolve) => {
     const started = Date.now();
-    const child = spawn(command, { cwd, shell: true, stdio: "ignore", detached: true });
+    const child = spawn(command, { cwd, shell: true, stdio: ["ignore", "pipe", "pipe"], detached: true });
+    // stdout and stderr are interleaved in arrival order; only the end is kept, so a chatty suite cannot grow memory without bound.
+    let output = "";
+    const collect = (chunk: Buffer) => {
+      output += chunk.toString("utf8");
+      if (output.length > OUTPUT_KEEP_CHARS) output = output.slice(-OUTPUT_KEEP_CHARS);
+    };
+    child.stdout?.on("data", collect);
+    child.stderr?.on("data", collect);
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
@@ -99,11 +130,11 @@ function runCommand(command: string, cwd: string, timeoutMs: number): Promise<{ 
     }, timeoutMs);
     child.on("close", (code) => {
       clearTimeout(timer);
-      resolve({ exitCode: code ?? 1, timedOut, ms: Date.now() - started });
+      resolve({ exitCode: code ?? 1, timedOut, ms: Date.now() - started, output });
     });
     child.on("error", () => {
       clearTimeout(timer);
-      resolve({ exitCode: 127, timedOut, ms: Date.now() - started });
+      resolve({ exitCode: 127, timedOut, ms: Date.now() - started, output });
     });
   });
 }
@@ -119,11 +150,22 @@ function lineOf(text: string, index: number): number {
   return line;
 }
 
-async function copyTree(source: string, target: string): Promise<void> {
-  await cp(source, target, {
-    recursive: true,
-    filter: (entry) => !SKIP_COPY.has(path.basename(entry)) || path.resolve(entry) === path.resolve(source),
-  });
+/**
+ * Copies the tree entry by entry instead of with one `cp`: the scratch directory can sit inside the
+ * tree being copied, and `cp` refuses a destination under its own source. `skip` holds absolute paths
+ * (the scratch directory) that are left out.
+ */
+async function copyTree(source: string, target: string, skip: ReadonlySet<string>): Promise<void> {
+  const walk = async (from: string, to: string): Promise<void> => {
+    await mkdir(to, { recursive: true });
+    for (const entry of await readdir(from, { withFileTypes: true })) {
+      const entryPath = path.join(from, entry.name);
+      if (SKIP_COPY.has(entry.name) || skip.has(entryPath)) continue;
+      if (entry.isDirectory()) await walk(entryPath, path.join(to, entry.name));
+      else await cp(entryPath, path.join(to, entry.name));
+    }
+  };
+  await walk(source, target);
   const modules = path.join(source, "node_modules");
   if (existsSync(modules)) await symlink(modules, path.join(target, "node_modules"), "dir");
 }
@@ -137,19 +179,41 @@ export async function runMutation(options: {
   command: string;
   mutants: readonly MutantSpec[];
   timeoutMs?: number | undefined;
+  /** Explicit directory to make the scratch copy in; wins over `scratch`. */
   scratchRoot?: string | undefined;
+  /** `repo` (default) puts the copy under `<worktree>/.metaproject/data/review/mutate-scratch` so ancestor node_modules still resolve; `tmp` uses the OS temp dir. */
+  scratch?: ScratchMode | undefined;
   /** Run at most this many candidates; the rest, and any that came out invalid, are counted in `not_reached` and stay pending. */
   cap?: number | undefined;
 }): Promise<MutationRecord> {
   const worktree = path.resolve(options.worktree);
   const timeoutMs = options.timeoutMs ?? 300_000;
-  const scratch = await mkdtemp(path.join(options.scratchRoot ?? tmpdir(), "keryx-mutate-"));
+  const scratchBase = options.scratchRoot !== undefined ? path.resolve(options.scratchRoot) : options.scratch === "tmp" ? tmpdir() : path.join(worktree, SCRATCH_DIR);
+  await mkdir(scratchBase, { recursive: true });
+  const scratch = await mkdtemp(path.join(scratchBase, "keryx-mutate-"));
   try {
     const copy = path.join(scratch, "tree");
-    await copyTree(worktree, copy);
+    await copyTree(worktree, copy, new Set([scratchBase, scratch]));
     const baseline = await runCommand(options.command, copy, timeoutMs);
-    if (baseline.exitCode !== 0 || baseline.timedOut)
-      throw new Error(`the baseline run of \`${options.command}\` ${baseline.timedOut ? "timed out" : `exited ${baseline.exitCode}`} on an unmodified copy; mutants would all read as killed, so none were run`);
+    if (baseline.exitCode !== 0 || baseline.timedOut) {
+      const tail = tailLines(baseline.output);
+      const what = baseline.timedOut ? `timed out after ${timeoutMs} ms` : `exited ${baseline.exitCode}`;
+      const message = [
+        `the baseline run of \`${options.command}\` ${what} on an unmodified copy; mutants would all read as killed, so none were run`,
+        `baseline command: ${options.command}`,
+        `baseline cwd: ${copy}`,
+        `last ${BASELINE_TAIL_LINES} lines of output:`,
+        tail === "" ? "(no output)" : tail,
+      ].join("\n");
+      throw new BaselineError(message, {
+        schemaVersion: 1,
+        worktree,
+        command: options.command,
+        baseline: { exitCode: baseline.exitCode, ms: baseline.ms, timedOut: baseline.timedOut, cwd: copy, tail },
+        mutants: [],
+        totals: { killed: 0, survived: 0, invalid: 0, timeout: 0 },
+      });
+    }
 
     const results: MutantResult[] = [];
     const cap = options.cap === undefined ? undefined : Math.max(0, Math.floor(options.cap));
@@ -211,6 +275,9 @@ export function renderMutationTable(record: MutationRecord): string {
     "",
     `Command: \`${record.command}\` (baseline exit ${record.baseline.exitCode}, ${record.baseline.ms} ms). Run in a scratch copy; the worktree was not written.`,
     "",
+    ...(record.baseline.tail === undefined
+      ? []
+      : [`Baseline ${record.baseline.timedOut ? "timed out" : `failed (exit ${record.baseline.exitCode})`}; no mutant ran. cwd: \`${record.baseline.cwd ?? "-"}\`. Last output:`, "", "```", record.baseline.tail.replace(/```/g, "'"), "```", ""]),
     `Killed ${t.killed}, survived ${t.survived}, timeout ${t.timeout}, invalid ${t.invalid}.`,
     "",
     line(columns.map((c) => c.header)),

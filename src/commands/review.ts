@@ -35,7 +35,7 @@ import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats"
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
 import { auditPackage } from "../review/severity-audit";
 import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
-import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
+import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR, BaselineError, SCRATCH_MODES, type ScratchMode } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
 import { packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers } from "../review/coverage";
 import { FIRST_FILES } from "../review/coverage-complete";
@@ -526,7 +526,7 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-cov
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
 const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"] as const;
-const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--json"] as const;
+const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--scratch", "--json"] as const;
 const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
 const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
 const REQUIRED_FLAGS =["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--json"] as const;
@@ -3083,10 +3083,23 @@ async function runMutate(args: string[]): Promise<void> {
   const capArg = optionValue(args, "--cap");
   const cap = capArg === undefined ? undefined : Number(capArg);
   if (cap !== undefined && (!Number.isInteger(cap) || cap < 0)) throw new Error("--cap must be a non-negative integer");
+  const scratchArg = optionValue(args, "--scratch");
+  if (scratchArg !== undefined && !SCRATCH_MODES.includes(scratchArg as ScratchMode)) throw new Error(`--scratch must be one of ${SCRATCH_MODES.join(", ")}`);
+  const scratch = scratchArg as ScratchMode | undefined;
   const spec = parseMutantSpec(JSON.parse(await readFile(specFile, "utf8")));
   // A capped pass takes the next mutants nobody has judged yet; otherwise `--cap 3` twice would re-run the first three.
   const mutants = cap === undefined ? spec : await unjudgedMutants(packageDir, spec);
-  const record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs, cap });
+  let record;
+  try {
+    record = await runMutation({ worktree, command: testCommand, mutants, timeoutMs, cap, scratch });
+  } catch (error) {
+    // A red baseline still leaves evidence: the command, its cwd and the output tail say why no mutant ran.
+    if (error instanceof BaselineError) {
+      const written = await writeMutationEvidence(packageDir, error.record);
+      throw new Error(`${error.message}\nevidence: ${written.md}`);
+    }
+    throw error;
+  }
   const written = await writeMutationEvidence(packageDir, record);
   if (args.includes("--json")) console.log(JSON.stringify({ ...record, evidence: written }, null, 2));
   else console.log(`${renderMutationTable(record)}\nevidence: ${written.md}`);
@@ -4351,11 +4364,15 @@ Usage:
                      ledgers (csv, lockfiles, snapshots) are omitted with a reason.
                      --wave-bytes is the most one reviewer dispatch carries.
   keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>]
-                        [--spec <mutants.json>] [--timeout-ms <n>] [--json]
+                        [--spec <mutants.json>] [--timeout-ms <n>] [--scratch repo|tmp] [--json]
                         Runs the reviewers' proposed mutants (default spec:
                         <review-dir>/research-evidence/mutants.json) in a scratch
                         copy of the worktree; the worktree is never written. The
-                        baseline must pass first. A survivor means no assertion
+                        copy lives under .metaproject/data/review/mutate-scratch
+                        (--scratch repo, default, so ancestor node_modules still
+                        resolve) or in the OS temp dir (--scratch tmp). The
+                        baseline must pass first; a red one exits non-zero and
+                        prints the command, its cwd and the last 60 output lines. A survivor means no assertion
                         pins that behaviour; it raises a finding only where no
                         mutant in the same file was killed. Writes mutation-<n>.json and .md to
                         research-evidence/.
@@ -4395,8 +4412,8 @@ Usage:
                               Refuses a reviewer payload with no slice, one over the
                               manifest's wave budget, or a shape the schema rejects.
   keryx review retry-plan --manifest <file> --result <file|-> [--reviewer <id>]
-                          [--slices a,b] [--covered a,b] [--next-wave] [--state <file>]
-                          [--dry-run] [--json]
+                          [--slices a,b] [--covered a,b] [--next-wave] [--package <dir>]
+                          [--state <file>] [--dry-run] [--json]
                           Hands out the next wave of uncovered slices. A reviewer that
                           covered new slices keeps its attempt; two results in a row with
                           nothing new, or 6 failed rounds, are "Not run" — never a clean
