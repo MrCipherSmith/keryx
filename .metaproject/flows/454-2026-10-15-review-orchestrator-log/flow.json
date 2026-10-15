@@ -9,9 +9,9 @@
   "id": "454",
   "slug": "review-orchestrator-log",
   "title": "Review orchestrator call log written by keryx",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-15T09:05:38.077Z",
-  "updatedAt": "2026-10-15T09:06:12.578Z",
+  "updatedAt": "2026-10-15T10:11:30.246Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:ac9181a4f821e816c73dc05eca480b943bce2cd3704987c9bcd097d5e3f0880a",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1027"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -107,6 +107,11 @@
       "at": "2026-10-15T09:06:12.578Z",
       "event": "origin-set",
       "detail": "unknown -> human-request; quote: \"Да, ок, заводи флоу и замораживай\"; source: helyx poll 182 (operator approved PRD and AC and asked to create the flow (poll 182); the log itself was chosen in poll 180)"
+    },
+    {
+      "at": "2026-10-15T10:11:30.246Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1027 (warning: PR is not a draft) (base: main)"
     }
   ],
   "acKinds": {
@@ -155,5 +160,6 @@
     "kind": "human-request",
     "quote": "Да, ок, заводи флоу и замораживай",
     "source": "helyx poll 182"
-  }
+  },
+  "baseBranch": "main"
 }
