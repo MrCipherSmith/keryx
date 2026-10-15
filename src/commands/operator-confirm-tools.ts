@@ -108,6 +108,19 @@ export const OPERATOR_CONFIRM_NOTE =
   " The operator ALWAYS sees a yes/no card in the shell and must answer it — you cannot confirm it, and you " +
   "must not ask them to run a command in a terminal instead.";
 
+/**
+ * A keryx started from an agent's `shell_exec` inherits `KERYX_TOOL_CALL=1`, and an agent can type into such a
+ * nested shell through a pseudo-terminal — so no card is ever asked there, whatever answers its prompt. The same
+ * defence `nestedAgentScheduleRefusal` gives schedules, for every gate.
+ */
+export function nestedAgentCardRefusal(env: Readonly<Record<string, string | undefined>>): string | undefined {
+  if (env["KERYX_TOOL_CALL"] !== "1") return undefined;
+  return (
+    "refused: this keryx was started from an agent's shell (KERYX_TOOL_CALL=1), and an agent can type into it. " +
+    "An operator-confirmed decision is taken only in your own terminal's keryx."
+  );
+}
+
 /** The card as the approver prints it: title, the decision lines, the subject. */
 export function renderOperatorCard(card: OperatorCard): readonly string[] {
   return [card.title, ...card.lines, `subject: ${card.subject}`];
@@ -142,6 +155,8 @@ export function operatorConfirmTool<P>(spec: OperatorConfirmSpec<P>, binding: Op
       risk: "write",
     },
     confirmation: async (input) => {
+      const nested = nestedAgentCardRefusal(env);
+      if (nested !== undefined) return { error: nested };
       let built: OperatorCardResult<P>;
       try {
         built = await spec.buildCard(input, context());

@@ -49,6 +49,25 @@ A person pressed yes, in this keryx shell session or in its remote topic, on a c
 - **That a same-user process cannot forge the stores.** The stores are plain files in the project and under `~/.keryx`. An agent with an unrestricted shell as the same user can still write a waiver, a learning record or a token hash directly. TM-03 §5 applies unchanged. The card closes the honest path, not the dishonest one.
 - **That `flow_confirm`'s token stays private.** The tool returns the minted token to the agent so it can run `flow complete --confirm-token`. The token is therefore visible to the agent. That is delegation (TM-03 §4): the operator pressed yes on a card that said what the token completes.
 
+## 4a. What `flow_confirm` changes against TM-03
+
+TM-03's token was minted by one verb that demanded a typed challenge on `/dev/tty`. `flow_confirm` mints the same token behind a weaker proof:
+
+- **The challenge is one keypress or one button.** The operator presses Yes on the card in the shell, or an allowlisted Telegram account presses the button in the session's topic. No typed text, no `/dev/tty`.
+- **A remote allowlisted press can mint.** The flow completion token can be minted from the remote topic, by whoever is on the allowlist and answers first.
+- **The agent sees the token.** The tool returns it so the agent can run `flow complete --confirm-token`. In TM-03 the operator held it.
+- The mint sites are now two: the CLI verb and the `flow_confirm` card tool. The CLI verb is unchanged.
+
+Every other bypass in TM-03 §5 still applies.
+
+## 4b. Safeguards the framework adds
+
+- **Apply re-checks the state for every card.** The card is built from the state on disk, and `apply` reads it again before it writes. The binding per card: `review_publish` the target, event and body; `flow_confirm` the flow checksum and target; `learn_accept`, `learn_promote` and `learn_graduate` the content hash; `review_chunks_answer` the chunks plan; `review_waive_coverage` the coverage list; `review_waive_readiness` the readiness detail; `external_apply` the patch hash. A state that moved between the card and the yes applies nothing.
+- **Schedule decisions are written to an audit log**, with the card and where the yes came from.
+- **No is the default selection.** The card dialog opens with No highlighted, so an Enter typed as the dock opens declines. Yes needs a deliberate move or a click.
+- **A long card is not answered remotely.** A card the topic would cut gets no remote buttons. The topic is told the card is too long and must be answered in the shell, where the dialog still answers it.
+- **A nested shell refuses every card.** A keryx started from an agent's `shell_exec` carries `KERYX_TOOL_CALL=1`; an agent can type into it through a pseudo-terminal. Such a shell refuses every operator card tool, not only schedules.
+
 ## 5. Why child-process proofs were rejected
 
 The first idea was to let the CLI accept an environment variable, a file or a socket that proves "the shell's operator said yes", so the existing commands could stay the only implementation. It was rejected. `shell_exec` runs whatever command line the model writes, in an environment the model controls (`sh -c`), as a user who can read and write everything the operator can. Anything handed to that child can be read, copied or replayed by the model, so the proof would prove only that the model ran the command.

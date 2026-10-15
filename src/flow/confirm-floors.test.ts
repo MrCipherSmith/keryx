@@ -32,7 +32,7 @@ async function productionFiles(dir: string): Promise<string[]> {
   return out;
 }
 
-describe("AC4: nothing but the CLI verb mints a token", () => {
+describe("AC4: only two sites mint a token — the CLI verb and the flow_confirm card tool", () => {
   test("no MCP tool is a flow confirm/recover verb, and flow exposes only its read-only status tool", () => {
     const names = buildToolRegistry().map((tool) => tool.name);
     expect(names.filter((name) => /flow[._-]?(confirm|recover|complete)/i.test(name))).toEqual([]);

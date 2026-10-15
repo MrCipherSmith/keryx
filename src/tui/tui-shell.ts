@@ -86,7 +86,7 @@ import {
 } from "../commands/remote-policy-command";
 import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
-import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+import { describeApprovalForTopic, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
 import { type DockRace, raceApproval } from "./approval-mirror";
 import { BUSY_REASON } from "../remote/command-gateway";
@@ -1597,8 +1597,8 @@ export function isUserPromptApprovalCard(tool: string): boolean {
 /** The wording of the operator-confirmation dialog: the yes/no choice and the transcript line for each answer. */
 export interface OperatorCardDialog {
   readonly title: string;
-  readonly yes: { readonly id: string; readonly label: string; readonly description: string };
-  readonly no: { readonly id: string; readonly label: string; readonly description: string };
+  readonly yes: { readonly id: string; readonly label: string; readonly description: string; readonly preselected?: boolean };
+  readonly no: { readonly id: string; readonly label: string; readonly description: string; readonly preselected?: boolean };
   readonly confirmed: string;
   readonly declined: string;
   readonly phase: string;
@@ -1623,8 +1623,9 @@ export function operatorCardDialog(cardTitle: string | undefined): OperatorCardD
   }
   return {
     title: cardTitle,
-    yes: { id: "yes", label: "Yes", description: "Apply exactly what the card above says" },
-    no: { id: "no", label: "No", description: "Nothing is changed" },
+    // No opens highlighted: an Enter typed as the dock opens must never confirm a gate.
+    yes: { id: "yes", label: "Yes", description: "Apply exactly what the card above says", preselected: false },
+    no: { id: "no", label: "No", description: "Nothing is changed", preselected: true },
     confirmed: `◇ confirmed: ${cardTitle}`,
     declined: "◇ declined — nothing changed",
     phase: "confirmed",
@@ -5926,6 +5927,11 @@ export async function launchTuiAgentShell(opts: {
       if (bridge === undefined || !bridge.telegramTurnActive) {
         return requestApprovalLocally(tool, inputJson, meta);
       }
+      // A card the topic would cut gets no remote buttons: tell the topic, and let the dock answer it.
+      if (operatorCardTooLongForTopic(tool, inputJson, meta)) {
+        void bridge.noticeCardTooLong(tool);
+        return requestApprovalLocally(tool, inputJson, meta);
+      }
       const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
       const approvedAnswer = (): true | { approved: true; fingerprint: string } =>
         meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;
@@ -5988,6 +5994,10 @@ export async function launchTuiAgentShell(opts: {
       async (tool, inputJson, meta) => {
         const bridge = remoteBridge;
         if (bridge === undefined || !bridge.active) {
+          return inner(tool, inputJson, meta);
+        }
+        if (operatorCardTooLongForTopic(tool, inputJson, meta)) {
+          void bridge.noticeCardTooLong(tool);
           return inner(tool, inputJson, meta);
         }
         const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;

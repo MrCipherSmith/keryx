@@ -17,6 +17,7 @@ import { reviewAutoGrants, setReviewSystem } from "../review/review-system";
 import { isUnattendedExcludedTool, unattendedRefusal } from "../trigger/unattended";
 import { buildUnattendedRoster } from "./trigger-dispatch";
 import { operatorCardDialog } from "../tui/tui-shell";
+import { initialChoiceSelection } from "../tui/composer-choice";
 
 const DESCRIPTION: ProviderDescription = {
   capabilities: {
@@ -276,7 +277,27 @@ describe("AC1: the card's token is single-use and bound to the input", () => {
   });
 });
 
+describe("nested shell defence", () => {
+  test("every card is refused when this keryx runs with KERYX_TOOL_CALL=1", async () => {
+    const gate = testGate({ ceiling: 25 });
+    const nested = operatorConfirmTool(gate.spec, { projectRoot: "/nonexistent-root", now: () => NOW, env: { KERYX_TOOL_CALL: "1" } });
+    const result = await nested.confirmation!({ to: 31 });
+    expect("error" in result && result.error).toContain("KERYX_TOOL_CALL=1");
+    expect((await nested.invoke({ to: 31 }, { confirmationToken: "anything" })).isError).toBe(true);
+    expect(gate.applied).toEqual([]);
+  });
+  test("a shell outside an agent's shell_exec still asks", async () => {
+    const gate = testGate({ ceiling: 25 });
+    const plain = operatorConfirmTool(gate.spec, { projectRoot: "/nonexistent-root", now: () => NOW, env: {} });
+    expect("card" in (await plain.confirmation!({ to: 31 }))).toBe(true);
+  });
+});
 describe("AC1: the TUI dialog wording", () => {
+  test("No is the default selection, so an Enter typed as the dock opens declines", () => {
+    const dialog = operatorCardDialog("Lift the test ceiling from 25 to 31?");
+    expect(initialChoiceSelection([dialog.yes, dialog.no])).toBe(1);
+    expect(initialChoiceSelection([dialog.yes, dialog.no])).toBe([dialog.yes, dialog.no].findIndex((o) => o.id === dialog.no.id));
+  });
   test("an operator-confirm card asks its own title with a plain yes/no", () => {
     const dialog = operatorCardDialog("Lift the test ceiling from 25 to 31?");
     expect(dialog.title).toBe("Lift the test ceiling from 25 to 31?");
