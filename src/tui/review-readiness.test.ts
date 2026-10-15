@@ -151,8 +151,8 @@ describe("the orchestrator log note on every surface", () => {
     const lines: string[] = [];
     const original = console.log;
     console.log = (...parts: unknown[]) => void lines.push(parts.join(" "));
-    let status = "";
-    let readiness = "";
+    let status: string;
+    let readiness: string;
     try {
       await reviewCommand(["status", "pr7-r1"], { isTerminal: () => false });
       status = lines.splice(0).join("\n");
