@@ -1,0 +1,323 @@
+{
+  "commit": "94cfa1ea3",
+  "generated_at": "2026-10-15T08:32Z",
+  "protocol": "protocol-part2.md v2 (2026-10-04)",
+  "protocol_cut": "2026-10-04T15:26:00Z",
+  "status_note": "interim, descriptive; not the confirmatory analysis",
+  "flows": {
+    "total": 424,
+    "confirmatory": 36,
+    "confirmatory_ids": [
+      "403",
+      "404",
+      "406",
+      "407",
+      "408",
+      "409",
+      "410",
+      "411",
+      "412",
+      "413",
+      "414",
+      "415",
+      "417",
+      "418",
+      "419",
+      "421",
+      "422",
+      "423",
+      "424",
+      "425",
+      "426",
+      "427",
+      "428",
+      "429",
+      "430",
+      "431",
+      "441",
+      "443",
+      "444",
+      "445",
+      "446",
+      "447",
+      "448",
+      "449",
+      "450",
+      "451"
+    ],
+    "confirmatory_by_status": {
+      "implemented": 8,
+      "done": 3,
+      "in-progress": 16,
+      "blocked": 1,
+      "initializing": 5,
+      "ready": 3
+    },
+    "confirmatory_done": 3
+  },
+  "m1_verify_tags_by_period": {
+    "1 before flow 379": {
+      "unclassified": 2738,
+      "placeholder": 5,
+      "criteria": 2738,
+      "tagged_share": 0.0
+    },
+    "2 flow 379 to protocol": {
+      "unclassified": 196,
+      "exec": 224,
+      "none": 16,
+      "judged": 37,
+      "invariant": 21,
+      "criteria": 494,
+      "tagged_share": 0.6032
+    },
+    "3 protocol to 422 merge": {
+      "exec": 37,
+      "invariant": 6,
+      "judged": 14,
+      "none": 1,
+      "placeholder": 3,
+      "unclassified": 128,
+      "criteria": 186,
+      "tagged_share": 0.3118
+    },
+    "4 after 422 merge": {
+      "exec": 105,
+      "judged": 32,
+      "invariant": 3,
+      "unclassified": 30,
+      "criteria": 170,
+      "tagged_share": 0.8235
+    }
+  },
+  "m1_sensitivity_after_422": {
+    "exec_or_invariant": 108,
+    "with_sensitivity_note": 0
+  },
+  "m2_origin_confirmatory": {
+    "human-request": 23,
+    "agent-proposal": 3,
+    "agent-finding": 4,
+    "none": 6
+  },
+  "outcome_author_confirmatory": {
+    "human": 4,
+    "None": 19,
+    "agent": 13
+  },
+  "P2": {
+    "as_recorded": {
+      "flows_with_criteria": 33,
+      "criteria": 356,
+      "kinds": {
+        "exec": 142,
+        "invariant": 9,
+        "judged": 46,
+        "none": 1,
+        "unclassified": 158
+      },
+      "tagged": 198,
+      "residue_share_of_tagged": 0.2374,
+      "residue_ci95_cluster_bootstrap": [
+        0.0978,
+        0.4249
+      ],
+      "unknown_share": 0.4438
+    },
+    "with_retro_tags_410_419": {
+      "flows_with_criteria": 33,
+      "criteria": 356,
+      "kinds": {
+        "exec": 189,
+        "invariant": 15,
+        "judged": 71,
+        "none": 1,
+        "unclassified": 80
+      },
+      "tagged": 276,
+      "residue_share_of_tagged": 0.2609,
+      "residue_ci95_cluster_bootstrap": [
+        0.1458,
+        0.3937
+      ],
+      "unknown_share": 0.2247
+    },
+    "minimum": "150 criteria in 20 flows, after reformulation with blind equivalence check",
+    "status": "insufficient: reformulation step and blind equivalence rating not done; the numbers are the pre-reformulation residue"
+  },
+  "P3": {
+    "criteria_before_flow_379": 2738,
+    "tagged_criteria_from_flow_379": 496,
+    "minimum": "100 per group, matched by flow type; blind rubric 0-2, kappa >= 0.6",
+    "status": "insufficient: blind rubric scoring not done (data available for both groups)"
+  },
+  "P1": {
+    "confirmatory_flows": 36,
+    "minimum": "30 flows and 100 human decisions coded by stage",
+    "status": "insufficient: stage coding of human decisions in flow artefacts not done"
+  },
+  "P4": {
+    "confirmatory_flows_done": 3,
+    "first_30_day_window_closes": "2026-11-04",
+    "minimum": "40 reworks; 30-day window after closing; blind cause coding",
+    "status": "insufficient by design until 30-day windows close; rework search rule and coding not done"
+  },
+  "P5": {
+    "flows_with_effect_record": 0,
+    "status": "insufficient: M3 (expectation, metric, deadline, verdict) is not recorded in flow records"
+  },
+  "P6": {
+    "status": "insufficient: same window and coding as P4; 30 reworks per period needed"
+  },
+  "P7": {
+    "decisions_live_after_cut": 379,
+    "sources": 12,
+    "eligible": 161,
+    "forced": 218,
+    "forced_share": 0.5752,
+    "forced_by_stage": {
+      "tui-queue-route": 109,
+      "ask_user": 78,
+      "in-progress": 31
+    },
+    "eligible_without_recommendation_all_arm_A": 27,
+    "comparison_sample": 134,
+    "arm_balance": {
+      "observed": {
+        "A": 54,
+        "D": 27,
+        "B": 34,
+        "C": 19
+      },
+      "expected": {
+        "A": 53.6,
+        "B": 26.8,
+        "C": 26.8,
+        "D": 26.8
+      },
+      "chi2_df3": 4.21,
+      "p": 0.24
+    },
+    "by_arm": {
+      "A": {
+        "assigned": 54,
+        "with_outcome": 53,
+        "matches": 49,
+        "match_rate": 0.9245,
+        "ci95": [
+          0.8214,
+          0.9703
+        ],
+        "median_time_to_answer_s": 65.4,
+        "reason_requested": 13,
+        "reason_named": 13,
+        "other_answer": 0,
+        "changed_after_first": 0
+      },
+      "B": {
+        "assigned": 34,
+        "with_outcome": 34,
+        "matches": 32,
+        "match_rate": 0.9412,
+        "ci95": [
+          0.8091,
+          0.9837
+        ],
+        "median_time_to_answer_s": 70.6,
+        "reason_requested": 12,
+        "reason_named": 12,
+        "other_answer": 1,
+        "changed_after_first": 0
+      },
+      "C": {
+        "assigned": 19,
+        "with_outcome": 19,
+        "matches": 18,
+        "match_rate": 0.9474,
+        "ci95": [
+          0.7536,
+          0.9906
+        ],
+        "median_time_to_answer_s": 98.0,
+        "reason_requested": 9,
+        "reason_named": 6,
+        "other_answer": 1,
+        "changed_after_first": 0
+      },
+      "D": {
+        "assigned": 27,
+        "with_outcome": 25,
+        "matches": 21,
+        "match_rate": 0.84,
+        "ci95": [
+          0.6535,
+          0.936
+        ],
+        "median_time_to_answer_s": 106.3,
+        "reason_requested": 10,
+        "reason_named": 10,
+        "other_answer": 2,
+        "changed_after_first": 0
+      }
+    },
+    "contrasts_vs_A": {
+      "B-A": {
+        "diff": 0.0167,
+        "ci95": [
+          -0.1231,
+          0.1282
+        ],
+        "ci90": [
+          -0.0954,
+          0.1079
+        ]
+      },
+      "C-A": {
+        "diff": 0.0229,
+        "ci95": [
+          -0.1763,
+          0.1347
+        ],
+        "ci90": [
+          -0.135,
+          0.1148
+        ]
+      },
+      "D-A": {
+        "diff": -0.0845,
+        "ci95": [
+          -0.2766,
+          0.0564
+        ],
+        "ci90": [
+          -0.2425,
+          0.0347
+        ]
+      }
+    },
+    "rated_by_quality": 0,
+    "per_source_comparison_sample": {
+      "fa7c0ca1": 42,
+      "ce88bc99": 26,
+      "88997f59": 16,
+      "142cd74e": 15,
+      "f2ede59b": 15,
+      "8ff58fff": 10,
+      "1932608c": 6,
+      "0155ba5b": 2,
+      "03f624d1": 2
+    },
+    "thresholds": {
+      "min_per_arm": 150,
+      "mde_pp": 15,
+      "equivalence_pp": 10
+    },
+    "status": "insufficient: fewer than 150 questions per arm in every arm",
+    "pace": {
+      "days_since_first": 9.9,
+      "per_day": 13.5,
+      "questions_needed_total_for_150_in_B_C_D": 750,
+      "days_to_150_per_arm_at_current_pace": 46
+    }
+  }
+}
