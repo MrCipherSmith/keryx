@@ -174,6 +174,8 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "import",
       "status",
       "report-parity",
+      "readiness",
+      "publish",
       "complete",
       "lightweight",
     ],

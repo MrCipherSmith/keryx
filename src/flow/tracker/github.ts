@@ -123,3 +123,28 @@ export const githubAdapter: TrackerAdapter = {
     }
   },
 };
+
+/** The PR's own file list, from GitHub; null when `gh` cannot say. Read by the review readiness checklist. */
+export async function githubPrFiles(url: string): Promise<string[] | null> {
+  try {
+    if (!Bun.which("gh")) return null;
+    const result = await gh(["pr", "view", url, "--json", "files", "--jq", ".files[].path"]);
+    if (result.exitCode !== 0) return null;
+    return result.stdout.split("\n").map((line) => line.trim()).filter((line) => line !== "");
+  } catch {
+    return null;
+  }
+}
+
+/** Posts a pull-request review through `gh`; the body travels on stdin, never on the command line. */
+export async function githubPostReview(url: string, event: "COMMENT" | "REQUEST_CHANGES" | "APPROVE", body: string): Promise<{ ok: boolean; detail: string }> {
+  try {
+    if (!Bun.which("gh")) return { ok: false, detail: "gh is not installed" };
+    const flag = event === "APPROVE" ? "--approve" : event === "REQUEST_CHANGES" ? "--request-changes" : "--comment";
+    const proc = Bun.spawn(["gh", "pr", "review", url, flag, "--body-file", "-"], { stdin: new Blob([body]), stdout: "pipe", stderr: "pipe" });
+    const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+    return { ok: exitCode === 0, detail: (stderr.trim() || stdout.trim() || `gh exited ${exitCode}`).split("\n")[0]! };
+  } catch (error) {
+    return { ok: false, detail: error instanceof Error ? error.message : String(error) };
+  }
+}

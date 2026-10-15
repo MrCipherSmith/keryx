@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { touchesChunkEstimateAnswer, touchesCoverageWaiver, touchesHumanConfirmation } from "./command-risk";
+import { touchesChunkEstimateAnswer, touchesCoverageWaiver, touchesHumanConfirmation, touchesReviewPublish } from "./command-risk";
 
 function deepBashC(command: string, levels: number): string {
   let out = command;
@@ -142,4 +142,32 @@ describe("a verb or flag the shell assembles asks too (R3-01)", () => {
       expect(touchesCoverageWaiver(command)).toBe(true);
     });
   }
+});
+
+describe("readiness waiver and review publish floors (flow 451)", () => {
+  test("`review complete --waive <item> <quote>` asks like the coverage waiver did", () => {
+    expect(touchesHumanConfirmation('keryx review complete p --waive verifier "the operator\'s own words"')).toBe(true);
+    expect(touchesHumanConfirmation('bash -c \'keryx review complete p --wa""ive ledger "quote quote"\'')).toBe(true);
+    expect(touchesHumanConfirmation("keryx review complete p")).toBe(false);
+  });
+
+  test("`keryx review publish` asks in every mode, in any spelling the shell resolves", () => {
+    for (const command of [
+      "keryx review publish pr7932-r1 --yes",
+      "keryx review publish pr7932-r1 --partial --yes --event COMMENT",
+      "keryx review pub''lish pr7932-r1 --yes",
+      "env X=1 keryx review publish pr7932-r1 --yes",
+      `bash -c 'keryx review publish pr7932-r1 --yes'`,
+      "keryx review $VERB pr7932-r1 --yes",
+    ]) {
+      expect(touchesReviewPublish(command)).toBe(true);
+      expect(touchesHumanConfirmation(command)).toBe(true);
+    }
+  });
+
+  test("other review commands and prose that mentions publishing do not ask", () => {
+    for (const command of ["keryx review readiness pr7932-r1", "keryx review status", "keryx ctx rg review publish src", "echo keryx review publish"]) {
+      expect(touchesReviewPublish(command)).toBe(false);
+    }
+  });
 });

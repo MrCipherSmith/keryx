@@ -103,7 +103,12 @@ test("AC1: every table entry runs after untrusted content with zero prompts in t
 test("AC1: every table entry runs after untrusted content with zero prompts in review-auto", async () => {
   setReviewSystem("review-auto");
   const ran: string[] = [];
-  const { asked } = await run("ask", shellRounds(ROUTINE_COMMANDS, true), [fetchTool(), shellTool(ran)]);
+  const asked: Asked[] = [];
+  // One turn is capped at DEFAULT_MAX_ROUNDS tool rounds, so the table runs in turns of 20.
+  for (let i = 0; i < ROUTINE_COMMANDS.length; i += 20) {
+    const turn = await run("ask", shellRounds(ROUTINE_COMMANDS.slice(i, i + 20), true), [fetchTool(), shellTool(ran)]);
+    asked.push(...turn.asked);
+  }
   expect(asked).toEqual([]);
   expect(ran).toEqual(ROUTINE_COMMANDS);
 });

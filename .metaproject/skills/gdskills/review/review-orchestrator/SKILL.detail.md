@@ -616,6 +616,22 @@ nothing moved. The final round recomputes whatever the file set did — otherwis
 fix introduced in round 3 gets no regression check at all, and the round that
 certifies the flow is the one that checked the least.
 
+## Readiness — the checklist behind `completed` and behind publishing
+
+`keryx review readiness <review-id-or-path> [--json]` reads the package and prints nine items, READY or NOT READY, each with the evidence and the command that repairs it. It writes nothing, and exits non-zero when the verdict is NOT READY. Only item 9 reaches GitHub (the PR's own file list); the TUI and `review status` read the package alone.
+
+1. `files-covered` — every changed file is in a wave or carries a recorded waiver.
+2. `blast-radius` — no file the blast radius cut is left unreviewed. A cut radius writes `chunks.json`; run `keryx review chunks plan`, `estimate`, `next`/`record`, `merge`. In an unattended run every wave runs without a question, up to the 25-pass ceiling; in an interactive run the operator is asked once.
+3. `reviewers` — every planned reviewer was dispatched and its result ingested.
+4. `verifier` — the verifier checked every finding it should, or the report says how many it did not.
+5. `ledger` — the ledger is READY.
+6. `coverage-md` — coverage.md does not list a reviewer as `run` that the dispatch record says did not finish. Re-run `keryx review ingest` for the package.
+7. `head` — the report's head is the PR head.
+8. `report-names` — pending mutation candidates and parity warnings are named in the report.
+9. `pr-files` — the changed-file count equals the PR's own file list. A recount more than 3x the recorded scope is refused: it came from the wrong base. Recount with `keryx review blast-radius --package <ref> --changed <the PR's files>`.
+
+`keryx review complete` refuses status `completed` while any item fails. A failing item is waived only by the operator, in a terminal: `keryx review complete --waive <item> "<their own words>"`, repeatable; the waiver is recorded with the quote and the time. `keryx review publish` is held by the same checklist. A not-ready package goes to GitHub only through `keryx review publish --partial`, which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
+
 ## Fix rounds — dispositions, regressions, withdrawal
 
 ### Every prior finding leaves the round with a disposition

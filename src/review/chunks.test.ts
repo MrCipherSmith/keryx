@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { CHUNKS_FILE, CHUNK_PASS_FILE, CHUNK_LOCK_WAIT_MS, ensureChunkPlan, mergeChunkPass, mergeFindings, nextChunk, planChunks, readChunkPlan, readChunkState, recordChunk, withChunkStateLock } from "./chunks";
+import { recordRadiusAndPlan } from "./chunks";
 import { answerChunkEstimate, estimateChunkRun, recordChunkEstimate } from "./chunks-estimate";
 
 let root: string;
@@ -346,5 +347,39 @@ describe("every writer of the chunk files waits for the chunk lock (R2-19)", () 
 
   test("the wait is long enough for a slow record on a large pass", () => {
     expect(CHUNK_LOCK_WAIT_MS).toBeGreaterThanOrEqual(60_000);
+  });
+});
+
+describe("the cut blast radius leaves the waves one command away (flow 451 AC6)", () => {
+  const radiusOf = (dropped: ReturnType<typeof drop>[]) => ({ schemaVersion: 1, scope: "blast-radius", depth: 2, maxFiles: 40, changedFiles: ["src/a.ts"], files: [], dropped, unresolved: [], counts: {} }) as never;
+
+  test("writes blast-radius.json and the chunk plan when the cap dropped files, and says how to start", async () => {
+    const files = names(85);
+    await sizedFiles(files, 10);
+    const line = await recordRadiusAndPlan(packageDir, root, radiusOf(files.map((file) => drop(file))), "r1");
+    expect(line).toContain("3 chunk(s) for 85 dropped file(s)");
+    expect(line).toContain("keryx review chunks estimate --package r1");
+    expect(existsSync(path.join(packageDir, "blast-radius.json"))).toBe(true);
+    expect((await readChunkPlan(packageDir))?.chunks).toHaveLength(3);
+  });
+
+  test("writes no plan when nothing was dropped", async () => {
+    const line = await recordRadiusAndPlan(packageDir, root, radiusOf([]), "r1");
+    expect(line).toContain("no waves needed");
+    expect(existsSync(path.join(packageDir, CHUNKS_FILE))).toBe(false);
+  });
+});
+
+describe("an autonomous run runs every wave without a question (flow 451 AC6)", () => {
+  test("the default ceiling is 25 passes and a run under it proceeds in automatic mode, over it waits for one answer", async () => {
+    const files = names(60);
+    await sizedFiles(files, 10);
+    await writeRadius(files.map((file) => drop(file)));
+    const estimate = await estimateChunkRun(packageDir, root);
+    expect(estimate?.chunks).toBe(2);
+    const record = await recordChunkEstimate(packageDir, estimate!, "automatic");
+    expect(record.decision).toBe("proceed");
+    const over = await recordChunkEstimate(packageDir, { ...estimate!, chunks: 26, overCeiling: true }, "automatic");
+    expect(over.decision).toBe("ask-once");
   });
 });

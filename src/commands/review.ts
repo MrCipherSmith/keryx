@@ -37,7 +37,7 @@ import { auditPackage } from "../review/severity-audit";
 import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
 import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
-import { packageHasBlastRadius, packageHasPrContext, requiredReviewers } from "../review/coverage";
+import { packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers } from "../review/coverage";
 import { FIRST_FILES } from "../review/coverage-complete";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
@@ -83,7 +83,10 @@ import {
   renderCrossFamilyReviewLine,
 } from "../review/cross-family";
 import type { CrossFamilyReviewDecision } from "../lib/provider-config";
-import { githubAdapter } from "../flow/tracker/github";
+import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/tracker/github";
+import { recordRadiusAndPlan } from "../review/chunks";
+import { READINESS_ITEMS, computeReadiness, readinessDepthLines, recountRefusal, readinessLine, renderReadiness } from "../review/readiness";
+import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
 // Flow 328, AC6: attach the latest CACHED check-ac result to a review
 // package. Minimal, additive — this hook never triggers a fresh Jev call
 // (that spend only happens via `keryx flow check-ac`/the advisory notices in
@@ -516,7 +519,7 @@ const TIER_FLAGS = [
   "--json",
 ] as const;
 
-const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage", "--head"] as const;
+const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage", "--head", "--waive"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
@@ -575,6 +578,12 @@ export interface ReviewCommandSeams {
   isTerminal?: () => boolean;
   /** Test seam: reads a PR's state and head for `complete`. Default: the GitHub tracker adapter. */
   prLookup?: PrLookup;
+  /** Test seam: reads a PR's own file list for the readiness checklist. Default: `gh pr view --json files`. */
+  prFiles?: (ref: string) => Promise<string[] | null>;
+  /** Test seam: posts the review to GitHub for `publish`. Default: `gh pr review`. */
+  postReview?: (ref: string, event: ReviewEvent, body: string) => Promise<PostResult>;
+  /** Test seam: the operator's answer to "post this body?". Default: a prompt on the terminal. */
+  confirmPublish?: (body: string, ref: string, event: ReviewEvent) => Promise<boolean>;
 }
 
 async function trackerPrLookup(ref: string): Promise<PrSnapshot | null> {
@@ -624,6 +633,14 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     }
     if (command === "ledger") {
       await runLedger(args.slice(1), SLICE_DEPS);
+      return;
+    }
+    if (command === "readiness") {
+      await runReadiness(args.slice(1), seams);
+      return;
+    }
+    if (command === "publish") {
+      await runPublish(args.slice(1), seams);
       return;
     }
     if (command === "blast-radius") {
@@ -862,6 +879,10 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
   await refreshCreatedPackageLayers(result.path, result.manifest.target.head, cwd);
+  const startRadius = input.blastRadius as { dropped?: unknown } | undefined;
+  if (mode === "review-flow" && Array.isArray(startRadius?.dropped) && startRadius.dropped.length > 0) {
+    console.log(await recordRadiusAndPlan(result.path, resolveProjectRoot(cwd), startRadius as unknown as BlastRadius, result.reviewId));
+  }
   if (result.manifest.automatic === true) {
     console.log("run mode: automatic review");
   }
@@ -3520,6 +3541,18 @@ async function runBlastRadius(args: string[]): Promise<void> {
       ? explicit.split(",").map((item) => item.trim()).filter(Boolean)
       : await gitChangedFiles(ref);
 
+  // Flow 451 AC7: a recount against a base that changes the file count past RECOUNT_RATIO x the package's own scope
+  // (`--ref develop` turned 25 files into 1547) is refused, with both numbers, before anything is written.
+  const recountPackage = optionValue(args, "--package");
+  if (recountPackage !== undefined) {
+    const refusal = recountRefusal(changedFiles.length, (await packageScopeFiles(resolvePackageDir(args, cwd))) ?? [], recountPackage);
+    if (refusal !== undefined) {
+      console.error(refusal);
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   // AC4 first: a round that must not recompute should not pay for a graph load.
   const previousPath = optionValue(args, "--previous");
   const previous = previousPath === undefined ? undefined : await readPreviousRadius(previousPath);
@@ -3576,8 +3609,13 @@ async function runBlastRadius(args: string[]): Promise<void> {
 
   if (radius.counts.droppedByCap > 0) {
     console.error(
-      `cap: ${radius.counts.droppedByCap} of ${radius.counts.candidates} candidate files were NOT reviewed (blast_radius_max_files=${radius.maxFiles}). They are listed in the record.`,
+      `cap: ${radius.counts.droppedByCap} of ${radius.counts.candidates} candidate files were NOT reviewed (blast_radius_max_files=${radius.maxFiles}). They are listed in the record. ` +
+        `Cut blast radius: run the waves — keryx review chunks plan --package ${packageOption ?? "<review>"}`,
     );
+    if (packageOption !== undefined) {
+      const planned = await recordRadiusAndPlan(resolvePackageDir(args, cwd), resolveProjectRoot(cwd), radius, packageOption);
+      console.error(planned);
+    }
   }
   if (radius.counts.changedFilesUnresolved > 0) {
     console.error(
@@ -3804,6 +3842,7 @@ async function runStatus(args: string[]): Promise<void> {
   console.log(`coverage: ${manifest.coverage.length}`);
   // What a round leaves behind that no count shows: Not run candidates, held severities, open follow-ups. Prints nothing when there are none.
   for (const line of parityLines(await readReviewParity(await resolveReviewPackagePath(process.cwd(), ref)).catch(() => undefined))) console.log(line);
+  for (const line of readinessDepthLines(await computeReadiness(await resolveReviewPackagePath(process.cwd(), ref)).catch(() => undefined))) console.log(line);
 
   // Flow 207 AC3: the consumer. `filter_stats` is READ BACK HERE, out of the
   // manifest on disk, by a different invocation from the one that wrote it — and
@@ -3898,6 +3937,95 @@ function reportFilterStatsProblems(stats: unknown, where: string): void {
   process.exitCode = 1;
 }
 
+/**
+ * `--waive <item[,item]> "<operator's own words>"`, repeatable. The quote is the argument right after the item list, so a
+ * flag name or a missing quote is refused here rather than recorded as a waiver nobody wrote.
+ */
+function parseReadinessWaivers(args: readonly string[]): Array<{ items: string[]; quote: string }> {
+  const found: Array<{ items: string[]; quote: string }> = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] !== "--waive") continue;
+    const items = args[index + 1];
+    const quote = args[index + 2];
+    if (items === undefined || items.startsWith("--") || quote === undefined || quote.startsWith("--") || quote.trim() === "") {
+      throw new Error('--waive needs an item and the operator\'s own words: --waive <item> "<operator quote>". Items: ' + READINESS_ITEMS.map((item) => `${item.number} ${item.id}`).join(", ") + ".");
+    }
+    found.push({ items: items.split(",").map((item) => item.trim()).filter((item) => item !== ""), quote });
+    index += 2;
+  }
+  return found;
+}
+
+async function runReadiness(args: string[], seams?: ReviewCommandSeams): Promise<void> {
+  rejectUnknownFlags(args, ["--json"], "readiness <review-id-or-path> [--json]");
+  const ref = args.find((argument) => !argument.startsWith("--"));
+  if (ref === undefined) throw new Error("Usage: keryx review readiness <review-id-or-path> [--json]");
+  const packageDir = await resolveReviewPackagePath(process.cwd(), ref);
+  const report = await computeReadiness(packageDir, {
+    prLookup: seams?.prLookup ?? trackerPrLookup,
+    prFiles: seams?.prFiles ?? githubPrFiles,
+  });
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    for (const line of renderReadiness(report)) console.log(line);
+  }
+  if (report.verdict !== "READY") process.exitCode = 1;
+}
+
+const PUBLISH_FLAGS = ["--event", "--partial", "--yes"] as const;
+
+async function promptYes(question: string): Promise<boolean> {
+  const readline = await import("node:readline/promises");
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return /^y(es)?$/i.test((await rl.question(question)).trim());
+  } finally {
+    rl.close();
+  }
+}
+
+async function runPublish(args: string[], seams?: ReviewCommandSeams): Promise<void> {
+  const usage = "publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE] [--partial] [--yes]";
+  rejectUnknownFlags(args, PUBLISH_FLAGS, usage);
+  const ref = args[0];
+  if (ref === undefined || ref.startsWith("--")) throw new Error(`Usage: keryx review ${usage}`);
+  const tokens = flagTokens(args);
+  const event = reviewEvent(tokens.find((token) => token.name === "--event")?.value);
+  const partial = tokens.some((token) => token.name === "--partial");
+  const yes = tokens.some((token) => token.name === "--yes");
+  const packageDir = await resolveReviewPackagePath(process.cwd(), ref);
+  const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+  let shown = false;
+  const confirm = seams?.confirmPublish ?? (async (body: string, target: string, kind: ReviewEvent): Promise<boolean> => {
+    console.log(`--- review body (${kind}) for ${target} ---`);
+    console.log(body.trimEnd());
+    console.log("--- end of review body ---");
+    shown = true;
+    if (yes) return true;
+    if (!isTerminal()) {
+      console.log("Not posted: the operator has not read the body. Re-run with --yes once they have, or run the command in a terminal.");
+      return false;
+    }
+    return promptYes(`Post this ${kind} review to ${target}? [y/N] `);
+  });
+  const result = await publishReview(packageDir, {
+    event,
+    partial,
+    readiness: { prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles },
+    post: seams?.postReview ?? githubPostReview,
+    confirm,
+  });
+  console.log(readinessLine(result.readiness));
+  if (result.posted) {
+    console.log(`published: ${result.event}${result.partial ? " (partial review)" : ""}`);
+  } else {
+    if (!shown) console.log(result.body.trimEnd());
+    console.log("review not published");
+    process.exitCode = 1;
+  }
+}
+
 async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<void> {
   rejectUnknownFlags(args, COMPLETE_FLAGS, "complete <review-id-or-path>");
   const ref = args[0];
@@ -3919,13 +4047,18 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
   if (waiver !== undefined && !isTerminal()) {
     throw new Error("--waive-coverage needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Run the command yourself in a terminal.");
   }
+  const readinessWaivers = parseReadinessWaivers(args);
+  if (readinessWaivers.length > 0 && !isTerminal()) {
+    throw new Error("--waive needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Run the command yourself in a terminal.");
+  }
   const {
     manifest,
     reviewNotes,
     dispositions: tally,
     coverageWaiver,
+    readiness,
     warnings,
-  } = await completeManagedReview(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
+  } = await completeManagedReview(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
   for (const warning of warnings) console.error(`warning: ${warning}`);
   if (coverageWaiver !== undefined) {
     const shown = coverageWaiver.files.slice(0, FIRST_FILES).join(", ");
@@ -3933,6 +4066,7 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
   }
   console.log(`# managed review complete: ${manifest.reviewId}`);
   console.log(`status: ${manifest.status}`);
+  if (readiness !== undefined) console.log(readinessLine(readiness));
   console.log(`dispositions recorded: ${dispositions.length}`);
   // The price, now that both halves are known. This is the first moment the
   // round's cost and what survived it are on the same screen, and it is the
@@ -4007,7 +4141,7 @@ function parseDispositions(args: readonly string[]): FindingDispositionRecord[] 
     if (token.value === undefined) {
       throw new Error(`${token.name} needs a value.`);
     }
-    if (token.name === "--waive-coverage" || token.name === "--head") {
+    if (token.name === "--waive-coverage" || token.name === "--head" || token.name === "--waive") {
       continue;
     }
     if (token.name === "--finding") {
@@ -4393,9 +4527,18 @@ ${COMMENTS_USAGE}
   keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--json]
   keryx review status <review-id-or-path>
   keryx review report-parity <review-id-or-path>
+  keryx review readiness <review-id-or-path> [--json]
+                        One checklist (9 items) that a review passes before it is
+                        completed or published; each failing item names its repair.
+  keryx review publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE]
+                       [--partial] [--yes]
+                        The only keryx path to GitHub: refuses while the checklist
+                        fails; --partial posts a "Partial review" header that lists
+                        each failing item. The body is shown before it is posted.
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...
                         [--waive-coverage "<operator quote>"] [--head <sha>]
+                        [--waive <item> "<operator quote>"]...
   keryx review lightweight
 
 An unrecognised option is REFUSED, not ignored. A flag that is silently dropped

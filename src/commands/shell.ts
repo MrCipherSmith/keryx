@@ -122,7 +122,7 @@ import { computeBotMetrics } from "../review/bot/metrics";
 import { parseReviewSystem, resetOperatorDenials, setReviewSystem, type ReviewSystem } from "../review/review-system";
 import { selfAnsweredLine } from "../lib/terminal-safe";
 import { loadReviewDepth } from "../tui/review-panel";
-import { isReviewLayersCommand, isReviewParityCommand, isReviewsCommand, renderReviewLayersText, renderReviewParityText, renderReviewsText } from "../tui/reviews-inspector";
+import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, isReviewsCommand, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, renderReviewsText } from "../tui/reviews-inspector";
 import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
 import { ChannelsClient } from "../remote/channels-client";
 import { isChannelsCommand, loadChannelsSnapshot, readlineChannelsText } from "../tui/channels-surface";
@@ -2852,6 +2852,12 @@ export async function runAgentRepl(
       } else if (isReviewParityCommand(line)) {
         try {
           agentIo.onSystem?.(renderReviewParityText(await loadReviewDepth(sessionCwd)));
+        } catch {
+          agentIo.onSystem?.("The managed reviews could not be read.\n");
+        }
+      } else if (isReviewReadinessCommand(line)) {
+        try {
+          agentIo.onSystem?.(renderReviewReadinessText(await loadReviewDepth(sessionCwd)));
         } catch {
           agentIo.onSystem?.("The managed reviews could not be read.\n");
         }
