@@ -72,3 +72,15 @@ explicitly flags the starter's absent deleted-source fixture. It does not certif
 complete protocol coverage. Input must already be approved synthetic data: the
 declaration is not consent verification. Manifests retain IDs, projects and
 sessions; hashes do not anonymize them. Tests are picked up by CI's AC8 full suite.
+
+## Offline scoring helpers
+
+`scripts/benchmark/evidence-evaluation-metrics.ts` scores supplied observations;
+it does not run retrieval or establish eligibility. The runner must resolve exact
+visibility and source eligibility before supplying labels. Recall@10 requires a
+single ranked span to contain the complete label with matching source/version/hash.
+MRR uses the full supplied ranking; source precision uses unique versioned sources
+in the first ten results. Unanswerable recall/MRR and missing observations are null.
+Paired bootstrap resamples complete query pairs (fixed seed, percentile 95% CI),
+reports missing pairs, and withholds CI for fewer than two pairs. Latency uses
+nearest-rank p50/p95. These helpers alone are not a report or a rollout gate.
