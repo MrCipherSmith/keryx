@@ -1634,7 +1634,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
-    async confirmMint({ cwd, id, merged }): Promise<FlowConfirmMintResult> {
+    async confirmMint({ cwd, id, merged, confirmation }): Promise<FlowConfirmMintResult> {
       const dir = await resolveFlowDir(cwd, id);
       return withFileLock(flowLockPath(cwd, dir), async () => {
         let flow = await readFlow(cwd, dir);
@@ -1653,6 +1653,9 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
             // The target the CLI just showed the operator (security review of
             // PR #661): a later `flow implemented --pr <other>` cannot reuse it.
             target: completionTarget({ merged: merged === true, prUrl: flow.pr.url }),
+            ...(confirmation !== undefined
+              ? { confirmedVia: confirmation.confirmedVia, confirmationQuote: confirmation.quote }
+              : {}),
           },
           { now: deps.now },
         );

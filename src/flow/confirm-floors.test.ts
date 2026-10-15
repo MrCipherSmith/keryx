@@ -44,7 +44,7 @@ describe("AC4: nothing but the CLI verb mints a token", () => {
     expect(roster.filter((name) => /confirm|recover/i.test(name))).toEqual([]);
   });
 
-  test("the mint is CALLED from exactly two production files: the service, and the CLI verb", async () => {
+  test("the mint is CALLED from exactly three production files: the service, the CLI verb, and the shell's operator-confirmed card tool", async () => {
     const callers: string[] = [];
     for (const file of await productionFiles(SRC)) {
       const text = await readFile(file, "utf8");
@@ -54,7 +54,9 @@ describe("AC4: nothing but the CLI verb mints a token", () => {
         callers.push(path.relative(SRC, file));
       }
     }
-    expect(callers.sort()).toEqual(["commands/flow.ts", "flow/service.ts"]);
+    // Flow 456: `flow_confirm` mints only after the operator's yes on a card the driver always asks
+    // (every mode, never review-auto, denied unattended); see operator-confirm-other.ts.
+    expect(callers.sort()).toEqual(["commands/flow.ts", "commands/operator-confirm-other.ts", "flow/service.ts"]);
   });
 });
 

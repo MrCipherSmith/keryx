@@ -188,7 +188,9 @@ export { promotePattern, LearningPromoteError, type PromotePatternOptions } from
 
 export {
   applyGraduation,
+  readProposal,
   runGraduate,
+  type GraduationProposalFile,
   LearningGraduateError,
   type ApplyGraduationOptions,
   type RunGraduateOptions,

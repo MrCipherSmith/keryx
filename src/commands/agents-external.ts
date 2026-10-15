@@ -76,7 +76,7 @@ import { readExternalDepth } from "../harness/external/env";
 import { CODEC_WRITE_AGENT_IDS } from "../harness/external/dispatch";
 import { runExternalChild, type ExternalChildOutcome, type RunExternalChildInput } from "../harness/external/runtime";
 import { runExternalWriteChild, type ExternalWriteRunResult } from "../harness/external/write-run";
-import { discardWriteRun, landWriteRun, viewWriteRun, type WriteRunView } from "../harness/external/write-land";
+import { discardWriteRun, landWriteRun, viewWriteRun, writeRunLandBlock, type WriteRunView } from "../harness/external/write-land";
 import type { ExternalSpawnPort } from "../harness/external/supervise";
 import type { AcpChildOptions } from "../harness/external/acp-run";
 import { DEFAULT_MAX_EXTERNAL_DEPTH } from "../harness/run-external-factory";
@@ -791,9 +791,10 @@ async function applyCommand(runId: string, allowFlagged: boolean, deps: AgentsEx
   }
   for (const line of renderWriteReview(view)) log(line);
   const { record } = view;
-  if (record.state !== "pending-review" || record.patchHash === undefined || view.patch === undefined) {
+  const blocked = writeRunLandBlock(view);
+  if (blocked !== undefined || record.patchHash === undefined) {
     console.error(
-      record.state === "refused"
+      blocked === "capture-refused"
         ? `refused: this run can only be discarded (keryx agents external discard ${plain(record.runId)})`
         : "refused: the stored patch is missing or changed since capture; nothing was applied",
     );

@@ -61,6 +61,13 @@ export type StoredConfirmationToken = {
   mintedAt: string;
   expiresAt: string;
   usedAt?: string | undefined;
+  /**
+   * Flow 456: how the operator's yes arrived when it was not the terminal challenge — `tui-card`
+   * for the shell's yes/no card — and the card text that answer was given to. Absent on a token
+   * minted by `keryx flow confirm` in a terminal, and on every token minted before flow 456.
+   */
+  confirmedVia?: string | undefined;
+  confirmationQuote?: string | undefined;
 };
 
 export type ConfirmationTokenFailure =
@@ -103,7 +110,7 @@ function sha256(text: string): string {
 export async function mintConfirmationToken(
   cwd: string,
   dir: string,
-  binding: { flowId: string; acChecksum: string; target: string },
+  binding: { flowId: string; acChecksum: string; target: string; confirmedVia?: string; confirmationQuote?: string },
   deps: { now: () => Date; randomToken?: () => string },
 ): Promise<{ token: string; stored: StoredConfirmationToken }> {
   // The flow id is the token's visible prefix, so a token pasted into the wrong
@@ -121,6 +128,8 @@ export async function mintConfirmationToken(
     target: binding.target,
     mintedAt: mintedAt.toISOString(),
     expiresAt: new Date(mintedAt.getTime() + CONFIRMATION_TOKEN_TTL_MS).toISOString(),
+    ...(binding.confirmedVia !== undefined ? { confirmedVia: binding.confirmedVia } : {}),
+    ...(binding.confirmationQuote !== undefined ? { confirmationQuote: binding.confirmationQuote } : {}),
   };
   await writeFileAtomic(confirmTokenPath(cwd, dir), `${JSON.stringify(stored, null, 2)}\n`);
   return { token, stored };

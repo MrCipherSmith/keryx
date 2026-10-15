@@ -772,7 +772,13 @@ export interface FlowService {
    * requirements, which the service cannot observe. Returns the plaintext
    * token once; only its hash is stored.
    */
-  confirmMint(input: { cwd: string; id: string; merged?: boolean | undefined }): Promise<FlowConfirmMintResult>;
+  confirmMint(input: {
+    cwd: string;
+    id: string;
+    merged?: boolean | undefined;
+    /** Flow 456: set by the shell's yes/no card; recorded in the token store. Absent for the terminal verb. */
+    confirmation?: { confirmedVia: string; quote: string } | undefined;
+  }): Promise<FlowConfirmMintResult>;
   /**
    * Move a flow stuck in `completing` back to `in-progress` (flow 299, AC6),
    * recording why. Refuses from any other status, and while another process

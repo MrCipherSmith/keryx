@@ -46,6 +46,17 @@ export interface WriteRunView {
   readonly patch?: string;
 }
 
+/**
+ * Why a viewed run can never be landed (before any hash is asked): its capture was refused, or its
+ * stored patch is missing or changed since capture. Undefined when the run may be landed. Shared by
+ * `keryx agents external apply` and the shell's `external_apply` card.
+ */
+export function writeRunLandBlock(view: WriteRunView): "capture-refused" | "patch-unavailable" | undefined {
+  const { record } = view;
+  if (record.state === "pending-review" && record.patchHash !== undefined && view.patch !== undefined) return undefined;
+  return record.state === "refused" ? "capture-refused" : "patch-unavailable";
+}
+
 /** Runs one git command and returns stdout; rejects with git's own message. `input` goes to stdin. */
 export type WriteLandGit = (args: readonly string[], cwd: string, input?: string) => Promise<string>;
 
@@ -153,7 +164,14 @@ function decisionBody(decision: Record<string, string>): string {
  * are never touched. A run lands at most once.
  */
 export async function landWriteRun(
-  input: { readonly cwd: string; readonly runId: string; readonly confirmedPatchHash: string; readonly allowFlagged?: boolean },
+  input: {
+    readonly cwd: string;
+    readonly runId: string;
+    readonly confirmedPatchHash: string;
+    readonly allowFlagged?: boolean;
+    /** Flow 456: how the yes arrived (`tui-card`) and the card text it answered; stored in the decision file. */
+    readonly confirmation?: { readonly confirmedVia: string; readonly quote: string };
+  },
   deps: WriteLandDeps = {},
 ): Promise<LandResult> {
   const located = locate(input.cwd, input.runId, deps.dataDir);
@@ -204,7 +222,12 @@ export async function landWriteRun(
     createdBranch = true;
     const won = createOwnerOnlyFileExclusive(
       path.join(dir, EXTERNAL_WRITE_DECISION_FILE),
-      decisionBody({ decision: "landed", branch, commit }),
+      decisionBody({
+        decision: "landed",
+        branch,
+        commit,
+        ...(input.confirmation !== undefined ? { confirmedVia: input.confirmation.confirmedVia, quote: input.confirmation.quote } : {}),
+      }),
     );
     if (!won) {
       await git(["branch", "-D", branch], repo).catch(() => undefined);
