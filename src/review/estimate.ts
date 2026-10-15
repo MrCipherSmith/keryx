@@ -2,11 +2,14 @@
 // set, and prints roles x slices = assignments, how many dispatches (waves) those need at the manifest's wave budget, and
 // an expected duration range. Nothing here dispatches or writes.
 
-import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { readJsonFileOr } from "../lib/json";
+import { pathExists, writeFileAtomic } from "../lib/fs";
+import { readJsonFileOr, readJsonObjectFile } from "../lib/json";
 import { packageHasBlastRadius, packageHasPrContext, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers, type RoundDepth } from "./coverage";
-import { packWaves, waveBytesOf, type SliceManifest } from "./slice";
+import { manifestSizeProblem, packWaves, waveBytesOf, type SliceManifest } from "./slice";
+import { ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph } from "./waves";
 
 /** A spawned reviewer child is killed after 5 minutes (src/harness/tool/builtin/spawn-subagent-tool.ts), so one dispatch never runs longer than this. */
@@ -16,7 +19,20 @@ export const TYPICAL_DISPATCH_MINUTES = 2;
 /** How many reviewer dispatches the orchestrator runs side by side. */
 export const ASSUMED_PARALLEL_DISPATCHES = 4;
 
+/** Above this many dispatches the operator confirms the plan before it runs (`routing.config.json` `reviewPlan.maxDispatches`). */
+export const DEFAULT_MAX_DISPATCHES = 40;
+/** Above this upper duration, in minutes, the operator confirms the plan (`reviewPlan.maxMinutes`). */
+export const DEFAULT_MAX_MINUTES = 90;
+/** The card tool that records a plan confirmation inside keryx shell. */
+export const CONFIRM_PLAN_TOOL = "review_confirm_plan";
+export const PLAN_CONFIRMATION_FILE = "plan-confirmation.json";
+
+export type PlanThresholds = { maxDispatches: number; maxMinutes: number; source: "default" | "routing.config.json"; warning?: string };
+
 export type RoleEstimate = { role: string; slices: number; waves: number };
+
+/** Who owns one slice in the plan, and how deep it is read: what the plan key is computed over. */
+export type SlicePlanEntry = { id: string; roles: string[]; depth?: string | undefined };
 
 export type RoundEstimate = {
   depth: RoundDepth | "unrecorded";
@@ -35,32 +51,179 @@ export type RoundEstimate = {
   assumptions: string;
   /** The slice manifest the estimate read, relative to the project root; undefined when the package is not sliced. */
   manifest?: string | undefined;
+  /** Per original slice: the roles that own it and its depth. Empty when the package is not sliced. */
+  slicePlan: SlicePlanEntry[];
+  /** Routed slices by depth; zero when the manifest carries no routing. */
+  routing: { deep: number; light: number; audit: number };
+  /** Roles slice routing gave no slice: they need no dispatch. */
+  routedOut: string[];
+  /** The thresholds the plan was held to. */
+  thresholds: { maxDispatches: number; maxMinutes: number };
+  /** True when the plan needs the operator's confirmation before it runs. */
+  overThreshold: boolean;
+  /** Why the plan is over the threshold; empty when it is not. */
+  overReasons: string[];
+  /** {@link planKeyOf} of this estimate: a confirmation binds to it. */
+  planKey: string;
 };
 
-export function estimateRound(roles: readonly string[], manifest: SliceManifest | undefined, depth: RoundEstimate["depth"] = "unrecorded"): RoundEstimate {
+/**
+ * Stable identity of a plan: the round's roles and, per original slice, its id, owning roles and depth. A confirmation
+ * recorded for one plan does not carry over to a re-sliced or re-routed one.
+ */
+export function planKeyOf(estimate: Pick<RoundEstimate, "perRole" | "slicePlan">): string {
+  const roles = estimate.perRole.map((entry) => entry.role).sort();
+  const slices = [...estimate.slicePlan].sort((a, b) => a.id.localeCompare(b.id)).map((entry) => ({ id: entry.id, roles: [...entry.roles].sort(), depth: entry.depth ?? null }));
+  return createHash("sha256").update(JSON.stringify({ roles, slices })).digest("hex").slice(0, 16);
+}
+
+export function estimateRound(
+  roles: readonly string[],
+  manifest: SliceManifest | undefined,
+  depth: RoundEstimate["depth"] = "unrecorded",
+  thresholds: Pick<PlanThresholds, "maxDispatches" | "maxMinutes"> = { maxDispatches: DEFAULT_MAX_DISPATCHES, maxMinutes: DEFAULT_MAX_MINUTES },
+): RoundEstimate {
+  const problem = manifest === undefined ? undefined : manifestSizeProblem(manifest);
+  if (problem !== undefined) throw new Error(problem);
+  const routed = manifest !== undefined && isRoutedManifest(manifest);
+  const routedOut: string[] = [];
+  const owners = new Map<string, string[]>();
   const perRole: RoleEstimate[] = roles.map((role) => {
     if (manifest === undefined) return { role, slices: 0, waves: 1 };
     const ids = requiredSlices(manifest, role);
+    for (const id of ids) owners.set(id, [...(owners.get(id) ?? []), role]);
+    if (routed && ids.length === 0 && ROUTABLE_ROLES.has(role) && !ROLES_RUN_WITHOUT_SLICES.has(role)) {
+      routedOut.push(role);
+      return { role, slices: 0, waves: 0 };
+    }
     const open = sliceGraph(manifest, role).open(ids, new Set());
     return { role, slices: ids.length, waves: Math.max(1, packWaves(open, waveBytesOf(manifest)).length) };
   });
+  const originals = manifest?.slices.filter((s) => s.retryOf === undefined) ?? [];
+  const slicePlan: SlicePlanEntry[] = originals.map((s) => ({ id: s.id, roles: owners.get(s.id) ?? [], ...(s.depth === undefined ? {} : { depth: s.depth }) }));
   const dispatches = perRole.reduce((total, r) => total + r.waves, 0);
   const longest = perRole.reduce((m, r) => Math.max(m, r.waves), 0);
   const sequentialBatches = Math.max(longest, Math.ceil(dispatches / ASSUMED_PARALLEL_DISPATCHES));
   const assignments = manifest === undefined ? roles.length : perRole.reduce((total, r) => total + r.slices, 0);
+  const minutes = { min: sequentialBatches * TYPICAL_DISPATCH_MINUTES, max: sequentialBatches * CHILD_DEADLINE_MINUTES };
+  const overReasons = [
+    ...(dispatches > thresholds.maxDispatches ? [`${dispatches} dispatches > ${thresholds.maxDispatches}`] : []),
+    ...(minutes.max > thresholds.maxMinutes ? [`up to ${minutes.max} min > ${thresholds.maxMinutes}`] : []),
+  ];
   return {
     depth,
     sliced: manifest !== undefined,
     roles: roles.length,
-    slices: manifest?.slices.filter((s) => s.retryOf === undefined).length ?? 0,
+    slices: originals.length,
     assignments,
     waveBytes: manifest === undefined ? undefined : waveBytesOf(manifest),
     dispatches,
     sequentialBatches,
-    minutes: { min: sequentialBatches * TYPICAL_DISPATCH_MINUTES, max: sequentialBatches * CHILD_DEADLINE_MINUTES },
+    minutes,
     perRole,
     assumptions: `${TYPICAL_DISPATCH_MINUTES}-${CHILD_DEADLINE_MINUTES} min per dispatch (a child is killed at ${CHILD_DEADLINE_MINUTES} min), ${ASSUMED_PARALLEL_DISPATCHES} dispatches in parallel; excludes the verifier, retries and the mutation pass`,
+    slicePlan,
+    routing: {
+      deep: originals.filter((s) => s.depth === "deep").length,
+      light: originals.filter((s) => s.depth === "light").length,
+      audit: originals.filter((s) => s.audit === true).length,
+    },
+    routedOut,
+    thresholds: { maxDispatches: thresholds.maxDispatches, maxMinutes: thresholds.maxMinutes },
+    overThreshold: overReasons.length > 0,
+    overReasons,
+    planKey: planKeyOf({ perRole, slicePlan }),
   };
+}
+
+const positive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
+
+/** `reviewPlan` in the project's `routing.config.json`; a field it leaves out, or that is not a positive number, keeps its default. */
+export async function readPlanThresholds(projectRoot: string): Promise<PlanThresholds> {
+  const defaults: PlanThresholds = { maxDispatches: DEFAULT_MAX_DISPATCHES, maxMinutes: DEFAULT_MAX_MINUTES, source: "default" };
+  const file = path.join(projectRoot, "routing.config.json");
+  if (!(await pathExists(file))) return defaults;
+  const read = await readJsonObjectFile(file);
+  if (read.state !== "object") return { ...defaults, warning: `${file} could not be read as a JSON object (${read.state}); the default plan thresholds apply` };
+  const own = read.value.reviewPlan;
+  if (own === null || typeof own !== "object" || Array.isArray(own)) return defaults;
+  const fields = own as Record<string, unknown>;
+  return {
+    maxDispatches: positive(fields.maxDispatches) ? Math.floor(fields.maxDispatches) : DEFAULT_MAX_DISPATCHES,
+    maxMinutes: positive(fields.maxMinutes) ? fields.maxMinutes : DEFAULT_MAX_MINUTES,
+    source: "routing.config.json",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Plan confirmation: `<package>/plan-confirmation.json`, written by the `review_confirm_plan` card (keryx shell) or by
+// `keryx review estimate --confirm --quote` at a terminal. Nothing else may write it.
+// ---------------------------------------------------------------------------
+
+export type PlanConfirmedVia = "tui-card" | "remote-card" | "terminal";
+const CONFIRMED_VIA: readonly PlanConfirmedVia[] = ["tui-card", "remote-card", "terminal"];
+
+export type PlanConfirmation = {
+  planKey: string;
+  dispatches: number;
+  minutes: [number, number];
+  quote: string;
+  confirmedVia: PlanConfirmedVia;
+  at: string;
+};
+
+function isPlanConfirmation(value: unknown): value is PlanConfirmation {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.planKey === "string" && v.planKey !== ""
+    && typeof v.dispatches === "number" && Number.isFinite(v.dispatches)
+    && Array.isArray(v.minutes) && v.minutes.length === 2 && v.minutes.every((m) => typeof m === "number" && Number.isFinite(m))
+    && typeof v.quote === "string" && v.quote.trim() !== ""
+    && typeof v.confirmedVia === "string" && (CONFIRMED_VIA as readonly string[]).includes(v.confirmedVia)
+    && typeof v.at === "string" && v.at !== "";
+}
+
+/** The recorded plan confirmation, or undefined when there is none or it is not a well-formed one. */
+export function readPlanConfirmation(packageDir: string): PlanConfirmation | undefined {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path.join(packageDir, PLAN_CONFIRMATION_FILE), "utf8"));
+    return isPlanConfirmation(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** True when the package holds a confirmation recorded for exactly this plan. */
+export function planConfirmed(packageDir: string, estimate: Pick<RoundEstimate, "perRole" | "slicePlan">): boolean {
+  return readPlanConfirmation(packageDir)?.planKey === planKeyOf(estimate);
+}
+
+export function planConfirmationFor(estimate: RoundEstimate, quote: string, confirmedVia: PlanConfirmedVia, now: Date = new Date()): PlanConfirmation {
+  if (quote.trim() === "") throw new Error("A plan confirmation needs the operator's own words (--quote).");
+  return { planKey: planKeyOf(estimate), dispatches: estimate.dispatches, minutes: [estimate.minutes.min, estimate.minutes.max], quote: quote.trim(), confirmedVia, at: now.toISOString() };
+}
+
+export async function writePlanConfirmation(packageDir: string, confirmation: PlanConfirmation): Promise<string> {
+  const file = path.join(packageDir, PLAN_CONFIRMATION_FILE);
+  await writeFileAtomic(file, `${JSON.stringify(confirmation, null, 2)}\n`);
+  return file;
+}
+
+/** The terminal command that records a confirmation for a package. */
+export function confirmPlanCommand(packageDir: string): string {
+  return `keryx review estimate --package ${packageDir} --confirm --quote "<the operator's words>"`;
+}
+
+/** Why a dispatch of this plan is refused, or undefined when it is under the threshold or confirmed. */
+export function planGateRefusal(estimate: RoundEstimate, confirmed: boolean, packageDir: string): string | undefined {
+  if (!estimate.overThreshold || confirmed) return undefined;
+  return `the review plan is over the operator threshold (${estimate.overReasons.join("; ")}; ${estimate.dispatches} dispatches, ${estimate.minutes.min}-${estimate.minutes.max} min) and no confirmation is recorded for it (plan ${estimate.planKey}). Inside keryx shell, call the ${CONFIRM_PLAN_TOOL} tool: the operator answers it as a card. Outside keryx shell, the operator runs \`${confirmPlanCommand(packageDir)}\` in a terminal`;
+}
+
+/** The estimate of a package's plan and, when it is over the threshold without a confirmation, the refusal. */
+export async function packagePlanGate(packageDir: string, options: { manifest?: string | undefined } = {}): Promise<{ estimate: RoundEstimate; refusal: string | undefined }> {
+  const estimate = await estimatePackage(packageDir, options);
+  return { estimate, refusal: planGateRefusal(estimate, planConfirmed(packageDir, estimate), packageDir) };
 }
 
 /** Where a round's slice manifest lives when `--manifest` is not given: the package's own, then the shell host's shared one. */
@@ -92,7 +255,10 @@ export async function estimatePackage(packageDir: string, options: { manifest?: 
   });
   const found = await readManifest(options.manifest === undefined ? manifestCandidates(packageDir, root) : [options.manifest]);
   if (options.manifest !== undefined && found === undefined) throw new Error(`${options.manifest} is not a slice manifest (no readable JSON with a slices array); run \`keryx review slice\` first`);
-  return { ...estimateRound(set.required, found?.manifest, recorded?.depth ?? "unrecorded"), manifest: found === undefined ? undefined : path.relative(root, found.file) };
+  const problem = found === undefined ? undefined : manifestSizeProblem(found.manifest);
+  if (problem !== undefined) throw new Error(`${path.relative(root, found!.file)}: ${problem}`);
+  const thresholds = await readPlanThresholds(root);
+  return { ...estimateRound(set.required, found?.manifest, recorded?.depth ?? "unrecorded", thresholds), manifest: found === undefined ? undefined : path.relative(root, found.file) };
 }
 
 export function renderEstimate(estimate: RoundEstimate): string {
@@ -106,6 +272,12 @@ export function renderEstimate(estimate: RoundEstimate): string {
     `expected duration: ${estimate.minutes.min}-${estimate.minutes.max} min`,
     `assumption: ${estimate.assumptions}`,
   ];
+  if (estimate.routing.deep + estimate.routing.light > 0) {
+    lines.push(`routing: ${estimate.routing.deep} deep (${estimate.routing.audit} audit), ${estimate.routing.light} light${estimate.routedOut.length === 0 ? "" : `; no slice routed to ${estimate.routedOut.join(", ")}`}`);
+  }
+  lines.push(estimate.overThreshold
+    ? `over threshold: ${estimate.overReasons.join("; ")} — the operator confirms this plan before it runs (plan ${estimate.planKey})`
+    : `threshold: within ${estimate.thresholds.maxDispatches} dispatches and ${estimate.thresholds.maxMinutes} min (plan ${estimate.planKey})`);
   for (const r of estimate.perRole) lines.push(`  ${r.role}: ${r.slices} slice(s), ${r.waves} wave(s)`);
   return lines.join("\n");
 }

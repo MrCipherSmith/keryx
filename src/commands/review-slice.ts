@@ -9,9 +9,11 @@ import { hasStatus, parseReviewResult } from "../review/ledger";
 import { layersSummaryLine } from "../review/layers-view";
 import { ensurePackageLayers, resolvePackageDir } from "./review-layers";
 import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
-import { MAX_RETRY_ROUNDS, type RetryState, type ReviewerResult, emptyRetryState, planRetry, readSliceIds, scopeFingerprint } from "../review/retry-plan";
-import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceEntry, type SliceManifest, buildSlices, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
+import { MAX_RETRY_ROUNDS, type RetryState, type ReviewerResult, applyEscalations, emptyRetryState, planRetry, readSliceIds, scopeFingerprint } from "../review/retry-plan";
+import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceEntry, type SliceManifest, buildSlices, manifestSizeProblem, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
+import { packagePlanGate } from "../review/estimate";
 import { commentRuleScopeConfig } from "../review/comment-rule";
+import { renderRoutingSummary, routeSlices, summarizeRouting } from "../review/slice-routing";
 
 /** The diff-fetching and flag helpers `review.ts` owns, passed in so this file does not import its caller. */
 export type SliceDeps = {
@@ -21,7 +23,7 @@ export type SliceDeps = {
   rejectUnknownFlags: (args: readonly string[], allowed: readonly string[], usage: string) => void;
 };
 
-export const SLICE_FLAGS = ["--ref", "--base", "--diff", "--context", "--max-bytes", "--wave-bytes", "--out", "--json", "--help", "-h"] as const;
+export const SLICE_FLAGS = ["--ref", "--base", "--diff", "--context", "--max-bytes", "--wave-bytes", "--out", "--head", "--reach", "--jev-scores", "--json", "--help", "-h"] as const;
 export const DISPATCH_CHECK_FLAGS = ["--payload", "--manifest", "--max-bytes", "--pr-context", "--package", "--json", "--help", "-h"] as const;
 export const RETRY_PLAN_FLAGS = ["--manifest", "--result", "--reviewer", "--slices", "--covered", "--next-wave", "--package", "--state", "--dry-run", "--json", "--help", "-h"] as const;
 
@@ -60,7 +62,8 @@ export function printSliceHelp(): void {
   console.log(`keryx review slice — usage:
 
   keryx review slice [--ref <base>] [--diff <file|->] [--context <n>]
-                     [--max-bytes <n>] [--wave-bytes <n>] [--out <dir>] [--json]
+                     [--max-bytes <n>] [--wave-bytes <n>] [--out <dir>]
+                     [--head <sha>] [--reach <file.json>] [--jev-scores <file.json>] [--json]
 
 Cuts the scoped diff into reviewer-sized slices, no model call. Each slice is a
 file of at most --max-bytes (default ${DEFAULT_SLICE_MAX_BYTES}) holding whole domains where they fit; a domain over the
@@ -69,6 +72,13 @@ limit is cut by file, a file over it by hunk. --wave-bytes (default ${DEFAULT_WA
 is dispatched in waves, so each dispatch fits the reviewer's child deadline. Data ledgers (csv, tsv, jsonl,
 parquet), lockfiles, snapshots, generated and oversize json are never sliced:
 they are listed under omissions with their reason and size.
+
+Each slice is routed: \`roles\` are the reviewers its content needs (review-logic on
+every slice), \`depth\` is deep (the full core set reads it) when a risk class hits
+(auth, crypto, migrations, schema), a file's reach in --reach ({file: count}) is
+high, or a score in --jev-scores ({slice id or file: 0..1}) is >= 0.7; otherwise
+light. A deterministic ~12% of light slices (hash of --head, default HEAD, and the
+slice id) run deep as an audit sample (\`audit: true\`).
 
 Accepts a git diff or the output of \`keryx review scope --scoped-diff\`.
 Writes slice-NN.diff and ${MANIFEST_NAME} into --out (default ${DEFAULT_SLICE_DIR}).
@@ -96,9 +106,16 @@ reviewer-input.schema.json; a scope_mode "diff" payload must name its \`slices\`
 must total at most --max-bytes (default: the manifest's wave budget, else
 ${DEFAULT_SLICE_MAX_BYTES}); more than that is dispatched in waves (\`retry-plan --next-wave\`).
 
+With --package, the round's plan is estimated (\`keryx review estimate\`); a plan over the
+operator threshold (routing.config.json reviewPlan.maxDispatches, default 40 dispatches,
+or reviewPlan.maxMinutes, default 90 min) is refused until the operator confirms it: the
+review_confirm_plan card inside keryx shell, or \`keryx review estimate --package <dir>
+--confirm --quote "<words>"\` at a terminal. A manifest with neither waveBytes nor maxBytes
+is refused.
+
 Codes: REVIEWER_INPUT_INVALID, REVIEWER_INPUT_NO_SLICE,
 REVIEWER_INPUT_SLICE_UNKNOWN, REVIEWER_INPUT_TOO_LARGE, REVIEWER_INPUT_NO_PR_CONTEXT,
-REVIEWER_INPUT_PATH_MISSING.
+REVIEWER_INPUT_PATH_MISSING, REVIEWER_INPUT_MANIFEST_UNSIZED, REVIEWER_INPUT_PLAN_UNCONFIRMED.
 Exit 0 ok, 1 payload refused, 2 payload or manifest unreadable.
 `);
 }
@@ -135,6 +152,9 @@ with no open needs_context covers the slices its driver handed out, so they are 
 dispatched again; the output reports "collected late: N" (\`collectedLate\` in --json).
 A malformed or INCOMPLETE file covers nothing.
 Progress is remembered in ${RETRY_STATE_NAME} beside the manifest (--state to move it).
+A result whose findings include a major, blocker or critical one on a light (routed) slice
+re-opens that slice deep: every core role now owns it (\`escalations\` in --json, the
+manifest records \`escalated\`), and \`ledger build\` holds those roles to it.
 --dry-run plans without writing. Exit 0 for every decision.
 `);
 }
@@ -162,7 +182,17 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const diff = diffFile !== undefined ? await deps.readDiffSource(diffFile) : await deps.gitDiff(ref, contextLines);
   const rawWave = optionValue(args, "--wave-bytes");
   const waveBytes = rawWave === undefined ? undefined : validateWaveBytes(Number(rawWave), maxBytes);
-  const { manifest, slices } = buildSlices(sliceSourceFromDiff(diff, { contextLines, ...(await commentRuleScopeConfig(process.cwd())) }), { maxBytes, ...(waveBytes === undefined ? {} : { waveBytes }) });
+  const built = buildSlices(sliceSourceFromDiff(diff, { contextLines, ...(await commentRuleScopeConfig(process.cwd())) }), { maxBytes, ...(waveBytes === undefined ? {} : { waveBytes }) });
+  // Routing: each slice gets the roles its content needs and a depth by risk; the manifest carries both.
+  const head = optionValue(args, "--head") ?? (await currentHead()) ?? "no-head";
+  const reachFile = placed("--reach");
+  const jevFile = placed("--jev-scores");
+  const slices = routeSlices(built.slices, {
+    head,
+    ...(reachFile === undefined ? {} : { reach: await readNumberMap(reachFile, "--reach") }),
+    ...(jevFile === undefined ? {} : { jevScores: await readNumberMap(jevFile, "--jev-scores") }),
+  });
+  const manifest = { ...built.manifest, slices: slices.map(({ text: _text, ...entry }) => entry) };
 
   // Placed after the diff is fetched, which can take long: the directory is judged where it is now, right before it is written.
   const outDir = placed("--out", DEFAULT_SLICE_DIR) as string;
@@ -181,7 +211,35 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
     return;
   }
   console.log(renderSliceSummary(manifest));
+  console.log(renderRoutingSummary(summarizeRouting(manifest.slices)));
   console.log(`\nmanifest: ${manifestPath}`);
+}
+
+/** The commit the working tree is at; seeds the audit sample. Undefined outside a git checkout. */
+async function currentHead(): Promise<string | undefined> {
+  try {
+    const proc = Bun.spawn(["git", "rev-parse", "--verify", "HEAD"], { stdout: "pipe", stderr: "pipe", timeout: 10_000 });
+    const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    return code === 0 && out.trim() !== "" ? out.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A JSON object of `key -> number` (file -> reach count, slice id or file -> Jev score); anything else is refused. */
+async function readNumberMap(file: string, flag: string): Promise<Record<string, number>> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(file, "utf8"));
+  } catch (error) {
+    throw new Error(`${flag} ${file} is not readable JSON (${error instanceof Error ? error.message : String(error)})`, { cause: error });
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(`${flag} ${file} must be a JSON object of key -> number`);
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (typeof value === "number" && Number.isFinite(value)) out[key] = value;
+  }
+  return out;
 }
 
 async function readJsonSource<T>(source: string, label: string): Promise<T> {
@@ -298,9 +356,10 @@ export async function runDispatchCheck(args: string[], deps: Pick<SliceDeps, "re
   const manifestSource = placed("--manifest");
   const rawMax = optionValue(args, "--max-bytes");
 
-  if (optionValue(args, "--package") !== undefined) {
+  const packageDir = optionValue(args, "--package") === undefined ? undefined : resolvePackageDir(args);
+  if (packageDir !== undefined) {
     // A dispatch starts from fresh layers: refresh them when the package has none for this head.
-    const layers = await ensurePackageLayers(resolvePackageDir(args));
+    const layers = await ensurePackageLayers(packageDir);
     console.error(`layers: ${layersSummaryLine(layers)}`);
   }
 
@@ -308,7 +367,11 @@ export async function runDispatchCheck(args: string[], deps: Pick<SliceDeps, "re
     const payloads = asPayloads(await readJsonSource<unknown>(payloadSource, "payload"));
     const manifest = manifestSource === undefined ? undefined : await readJsonSource<SliceManifest>(manifestSource, "manifest");
     const base = manifestSource === undefined ? process.cwd() : path.dirname(manifestSource);
+    // An expensive plan runs only once the operator confirmed it; the estimate reads the same manifest this check does.
+    const unsized = manifest === undefined ? undefined : manifestSizeProblem(manifest);
+    const plan = packageDir === undefined || unsized !== undefined ? undefined : await packagePlanGate(packageDir, { manifest: manifestSource });
     const result = await checkDispatch(payloads, {
+      ...(plan === undefined ? {} : { plan: { refusal: plan.refusal } }),
       ...(manifest === undefined ? {} : { manifest }),
       ...(rawMax === undefined ? {} : { maxBytes: validateSliceMaxBytes(Number(rawMax)) }),
       ...(args.includes("--pr-context") ? { prContext: { exists: (contextPath: string) => existsSync(path.resolve(contextPath)) } } : {}),
@@ -378,10 +441,11 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
     });
 
     if (!args.includes("--dry-run")) {
-      if (plan.newSlices.length > 0) {
+      if (plan.newSlices.length > 0 || plan.escalations.length > 0) {
         await writeSliceFiles(manifestDir, plan.newSlices);
         const added = plan.newSlices.map(({ text: _text, ...entry }) => entry);
-        await writeFileAtomic(manifestSource, `${JSON.stringify({ ...manifest, slices: [...manifest.slices, ...added] }, null, 2)}\n`);
+        const escalated = applyEscalations(manifest, plan.escalations);
+        await writeFileAtomic(manifestSource, `${JSON.stringify({ ...escalated, slices: [...escalated.slices, ...added] }, null, 2)}\n`);
       }
       await writeFileAtomic(statePath, `${JSON.stringify(plan.state, null, 2)}\n`);
     }
@@ -403,6 +467,7 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
             progress: plan.progress,
             stalls: plan.stalls,
             needsContext: plan.needsContext ?? null,
+            escalations: plan.escalations,
             ...(packageSource === undefined ? {} : { collectedLate: late.collected }),
             dryRun: args.includes("--dry-run"),
           },
@@ -424,6 +489,9 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
     }
     for (const question of plan.needsContext ?? []) {
       console.log(`- context ${reviewer}: ${question}`);
+    }
+    for (const item of plan.escalations) {
+      console.log(`- escalate ${item.slice}: ${item.severity} finding ${item.finding} from ${item.by} on a light slice; it is re-opened deep and every core role now owns it`);
     }
     if (plan.reportLine !== undefined) {
       console.log(plan.reportLine);

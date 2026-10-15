@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import { runLedger } from "../commands/review-ledger";
 import { checkDispatch, loadReviewerInputSchema } from "./dispatch-check";
+import { CONFIRM_PLAN_TOOL, packagePlanGate, planConfirmationFor, writePlanConfirmation } from "./estimate";
+import type { SliceManifest } from "./slice";
 
 function payload(model: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -88,5 +93,80 @@ describe("checkDispatch path fields", () => {
     const result = await checkDispatch([withPaths({ skill_path: "/skills/review-logic/SKILL.md", context_doc: "/pkg/context.md", diff: "/not/a/file", file_contents: "/also/not" })], { pathExists });
     expect(result.errors).toEqual([]);
     expect(result.ok).toBe(true);
+  });
+});
+
+function manifestOf(count: number, waveBytes: number | undefined, maxBytes: number | undefined): SliceManifest {
+  return {
+    schemaVersion: 1,
+    ...(maxBytes === undefined ? {} : { maxBytes }),
+    ...(waveBytes === undefined ? {} : { waveBytes }),
+    source: "diff",
+    slices: Array.from({ length: count }, (_, i) => ({ id: `s${i}`, path: `s${i}.diff`, bytes: 100, contentHash: `h${i}`, files: [`src/f${i}.ts`], domain: "src", split: "domain" as const })),
+    omissions: [],
+    totals: { slices: count, bytes: 100 * count, files: count, omittedFiles: 0, omittedBytes: 0, droppedBlocks: 0 },
+  } as SliceManifest;
+}
+
+const diffPayload = (slices: string[]): Record<string, unknown> => ({ ...payload(ROUTED_MODEL), scope_mode: "diff", slices });
+
+describe("a manifest without sizes is refused", () => {
+  test("neither waveBytes nor maxBytes: the check fails with a message instead of comparing against NaN", async () => {
+    const result = await checkDispatch([diffPayload(["s0"])], { manifest: manifestOf(1, undefined, undefined) });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual([expect.objectContaining({ code: "REVIEWER_INPUT_MANIFEST_UNSIZED" })]);
+    expect(result.errors[0]!.message).toContain("neither waveBytes nor maxBytes");
+  });
+
+  test("an over-budget assignment against a sized manifest is still caught", async () => {
+    const result = await checkDispatch([diffPayload(["s0", "s1", "s2"])], { manifest: manifestOf(3, 250, 200) });
+    expect(result.errors.map((error) => error.code)).toEqual(["REVIEWER_INPUT_TOO_LARGE"]);
+  });
+});
+
+describe("an over-threshold plan is refused until the operator confirms it", () => {
+  test("the plan refusal fails the check and names the card tool", async () => {
+    const result = await checkDispatch([payload(ROUTED_MODEL)], { plan: { refusal: `over; call the ${CONFIRM_PLAN_TOOL} tool` } });
+    expect(result.ok).toBe(false);
+    expect(result.errors[0]).toMatchObject({ code: "REVIEWER_INPUT_PLAN_UNCONFIRMED", reviewer: "plan" });
+    expect((await checkDispatch([payload(ROUTED_MODEL)], { plan: { refusal: undefined } })).ok).toBe(true);
+  });
+
+  test("package plan gate and ledger build: refused over the threshold, accepted once confirmed", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-plan-gate-"));
+    const log = console.log;
+    try {
+      for (const name of ["review-orchestrator", "review-logic", "review-style", "review-clean-code", "review-architecture", "review-performance"]) {
+        const dir = path.join(root, ".metaproject", "skills", "gdskills", "review", name);
+        await mkdir(dir, { recursive: true });
+        await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: Use when testing ${name}.\n---\n`);
+      }
+      await writeFile(path.join(root, ".metaproject", "metaproject.json"), JSON.stringify({ modules: { gdskills: {} } }));
+      const pkg = path.join(root, ".metaproject", "reviews", "r1");
+      await mkdir(path.join(pkg, "slices"), { recursive: true });
+      await mkdir(path.join(pkg, "raw"), { recursive: true });
+      await writeFile(path.join(pkg, "scope-files.json"), JSON.stringify({ version: 1, files: [], changedLines: 10 }));
+      const manifestPath = path.join(pkg, "slices", "manifest.json");
+      await writeFile(manifestPath, JSON.stringify(manifestOf(10, 100, 100)));
+
+      const gate = await packagePlanGate(pkg, { manifest: manifestPath });
+      expect(gate.estimate.dispatches).toBe(50);
+      expect(gate.refusal).toContain(CONFIRM_PLAN_TOOL);
+      expect(gate.refusal).toContain("--confirm --quote");
+      await expect(runLedger(["build", pkg, "--package", pkg, "--dry-run"], { rejectUnknownFlags: () => {} })).rejects.toThrow(`ledger build refused: the review plan is over the operator threshold`);
+
+      await writePlanConfirmation(pkg, planConfirmationFor(gate.estimate, "fifty is fine", "tui-card"));
+      expect((await packagePlanGate(pkg, { manifest: manifestPath })).refusal).toBeUndefined();
+      console.log = () => {};
+      await runLedger(["build", pkg, "--package", pkg, "--dry-run"], { rejectUnknownFlags: () => {} });
+      process.exitCode = 0;
+
+      await writeFile(manifestPath, JSON.stringify(manifestOf(2, undefined, undefined)));
+      await expect(runLedger(["build", pkg, "--package", pkg, "--dry-run"], { rejectUnknownFlags: () => {} })).rejects.toThrow("neither waveBytes nor maxBytes");
+    } finally {
+      console.log = log;
+      process.exitCode = 0;
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
