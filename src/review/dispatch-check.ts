@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type JsonSchema, validateJson } from "../gdskills/contracts";
 import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, byteLength, waveBytesOf } from "./slice";
@@ -9,7 +10,8 @@ export type DispatchCheckCode =
   | "REVIEWER_INPUT_NO_SLICE"
   | "REVIEWER_INPUT_SLICE_UNKNOWN"
   | "REVIEWER_INPUT_TOO_LARGE"
-  | "REVIEWER_INPUT_NO_PR_CONTEXT";
+  | "REVIEWER_INPUT_NO_PR_CONTEXT"
+  | "REVIEWER_INPUT_PATH_MISSING";
 
 export type DispatchCheckError = {
   code: DispatchCheckCode;
@@ -47,7 +49,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Payload fields that name a file the reviewer is told to read; inline text fields (diff, file_contents) are not paths. */
+const PATH_FIELDS = ["skill_path", "context_doc"] as const;
+
 export type CheckDispatchOptions = {
+  /** Whether a path named by a payload field exists. Defaults to the filesystem, relative paths resolved against the cwd as the pr_context check does. */
+  pathExists?: (filePath: string) => boolean;
   /** Ceiling for what one dispatch carries in total. Defaults to the manifest's wave budget. */
   maxBytes?: number;
   manifest?: SliceManifest;
@@ -71,11 +78,25 @@ export async function checkDispatch(payloads: readonly unknown[], options: Check
   const maxBytes = options.maxBytes ?? (options.manifest === undefined ? DEFAULT_SLICE_MAX_BYTES : waveBytesOf(options.manifest));
   const schema = await loadReviewerInputSchema();
   const errors: DispatchCheckError[] = [];
+  const pathExists = options.pathExists ?? ((filePath: string) => existsSync(path.resolve(filePath)));
 
   for (const [index, payload] of payloads.entries()) {
     const reviewer = isRecord(payload) && typeof payload.reviewer === "string" && payload.reviewer !== "" ? payload.reviewer : `payload[${index}]`;
     for (const problem of await validateJson(payload, schema)) {
       errors.push({ code: "REVIEWER_INPUT_INVALID", reviewer, path: problem.path, message: problem.message });
+    }
+    if (isRecord(payload)) {
+      for (const field of PATH_FIELDS) {
+        const value = payload[field];
+        if (typeof value === "string" && value !== "" && !pathExists(value)) {
+          errors.push({
+            code: "REVIEWER_INPUT_PATH_MISSING",
+            reviewer,
+            path: `$.${field}`,
+            message: `${field} ${value} does not exist; the reviewer would be rejected at dispatch. Fix the path or omit the field`,
+          });
+        }
+      }
     }
     if (options.prContext !== undefined) {
       const contextPath = isRecord(payload) && typeof payload.pr_context === "string" ? payload.pr_context : "";
