@@ -6,7 +6,7 @@
 // flags the parsers accept.
 
 import { afterEach, expect, test } from "bun:test";
-import { COMMENTS_COLLECT_FLAGS, COMMENTS_REPLY_FLAGS, CREATE_FLAGS, VERDICT_FLAGS, printReviewHelpFor } from "./review";
+import { DEFAULT_GRAPH_TIMEOUT_SECONDS, COMMENTS_COLLECT_FLAGS, COMMENTS_REPLY_FLAGS, CREATE_FLAGS, VERDICT_FLAGS, printReviewHelpFor } from "./review";
 
 const realLog = console.log;
 
@@ -98,4 +98,35 @@ test("required and estimate list every flag their parsers accept, in both helps"
   expect(own).toContain("--package");
   expect(own).toContain("--json");
   expect(GROUP()).toContain("keryx review estimate --package");
+});
+
+const SUBCOMMAND_FLAGS: Record<string, readonly string[]> = {
+  start: CREATE_FLAGS,
+  ingest: CREATE_FLAGS,
+  required: ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--package", "--json"],
+  mutate: ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--scratch", "--json"],
+  "blast-radius": ["--ref", "--base", "--changed", "--depth", "--max-files", "--no-related-tests", "--final", "--previous", "--json", "--brief", "--out", "--package"],
+  complete: ["--finding", "--disposition", "--evidence", "--waive-coverage", "--head", "--waive"],
+  status: [],
+};
+
+test("each of start, ingest, required, mutate, blast-radius, complete and status prints only its own help, with every flag its parser accepts", () => {
+  for (const [command, flags] of Object.entries(SUBCOMMAND_FLAGS)) {
+    const help = helpFor([command, "--help"]);
+    expect(help).toContain(`keryx review ${command}`);
+    for (const flag of flags) expect(help).toContain(flag);
+    // Not the group help: no other subcommand's usage line is in it.
+    expect(help).not.toContain("keryx review slice");
+    expect(help).not.toContain("keryx review budget");
+  }
+});
+
+test("start and ingest document --graph-timeout and its default", () => {
+  for (const command of ["start", "ingest"]) {
+    const help = helpFor([command]);
+    expect(help).toContain("--graph-timeout");
+    expect(help).toContain(`default ${DEFAULT_GRAPH_TIMEOUT_SECONDS}`);
+    expect(help).toContain("keryx review layers refresh");
+  }
+  expect(GROUP()).toContain("--graph-timeout");
 });

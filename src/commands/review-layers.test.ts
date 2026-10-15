@@ -6,7 +6,7 @@ import path from "node:path";
 import { createLayersFixture, git, type LayersFixture } from "../review/layers.test-helpers";
 import { defaultLayerDeps, layersLockPath, layersRefreshInFlight, loadPackageGraph, readLayers, refreshLayers } from "../review/layers";
 import { ensurePackageLayers } from "./review-layers";
-import { reviewCommand } from "./review";
+import { reviewCommand, refreshCreatedPackageLayers } from "./review";
 
 let fixture: LayersFixture;
 let previousCwd: string;
@@ -273,5 +273,60 @@ describe("a graph that keeps failing is not rebuilt on every call", () => {
     await writeFile(file, JSON.stringify(record));
     builds.mockRestore();
     expect((await ensure()).graph.status).toBe("ok");
+  });
+});
+
+describe("review start --graph-timeout", () => {
+  function fakeSpawner(exitsAfterMs?: number, exitCode = 0) {
+    const calls: { command: string; args: string[]; logFile: string }[] = [];
+    const state = { unrefed: false };
+    const spawner = (command: string, args: string[], options: { cwd: string; logFile: string }) => {
+      calls.push({ command, args, logFile: options.logFile });
+      return {
+        onExit(callback: (code: number | null) => void) {
+          if (exitsAfterMs !== undefined) setTimeout(() => callback(exitCode), exitsAfterMs);
+        },
+        unref() {
+          state.unrefed = true;
+        },
+      };
+    };
+    return { spawner, calls, state };
+  }
+
+  test("a slow child is left running: returns after the bound, unref'd, and names its log", async () => {
+    const fake = fakeSpawner();
+    const started = Date.now();
+    await refreshCreatedPackageLayers(fixture.packageDir, fixture.second, fixture.root, { timeoutSeconds: 0.2, spawner: fake.spawner });
+    expect(Date.now() - started).toBeLessThan(3000);
+    expect(fake.state.unrefed).toBe(true);
+    const logFile = path.join(fixture.packageDir, "layers-refresh.log");
+    expect(fake.calls[0]?.logFile).toBe(logFile);
+    expect(fake.calls[0]?.args).toEqual(expect.arrayContaining(["review", "layers", "refresh", "--package", fixture.packageDir, "--head", fixture.second]));
+    const output = logs.join("\n");
+    expect(output).toContain("layers: deferred");
+    expect(output).toContain(`log: ${logFile}`);
+  });
+
+  test("a child that exits in time is reported from layers.json and not unref'd", async () => {
+    await reviewCommand(["layers", "refresh", "--package", fixture.packageDir]);
+    logs.length = 0;
+    const fake = fakeSpawner(10);
+    await refreshCreatedPackageLayers(fixture.packageDir, fixture.second, fixture.root, { timeoutSeconds: 5, spawner: fake.spawner });
+    expect(fake.state.unrefed).toBe(false);
+    expect(logs.join("\n")).toContain("layers: graph@");
+  });
+
+  test("a child that fails in time is reported as not refreshed", async () => {
+    const fake = fakeSpawner(10, 1);
+    await refreshCreatedPackageLayers(fixture.packageDir, fixture.second, fixture.root, { timeoutSeconds: 5, spawner: fake.spawner });
+    expect(errors.join("\n")).toContain("layers: not refreshed");
+  });
+
+  test("0 means no bound: the refresh is awaited in process", async () => {
+    const fake = fakeSpawner();
+    await refreshCreatedPackageLayers(fixture.packageDir, fixture.second, fixture.root, { timeoutSeconds: 0, spawner: fake.spawner });
+    expect(fake.calls.length).toBe(0);
+    expect(logs.join("\n")).toContain("layers: graph@");
   });
 });
