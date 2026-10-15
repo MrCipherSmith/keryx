@@ -9,17 +9,17 @@
   "id": "451",
   "slug": "review-readiness-gate-no-completed-statu",
   "title": "Review readiness gate: no completed status and no GitHub publish until a checklist passes",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-15T05:37:42.143Z",
-  "updatedAt": "2026-10-15T05:39:57.939Z",
+  "updatedAt": "2026-10-15T07:19:56.223Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:6a8356b4703c977f69f7241a2c7f5565073262311049e2e0fc357d1d712ee22d",
+  "acChecksum": "sha256:ab54d914301a7f580389cd3f39a4c331505b57373e7e9292385fcd2e2360dfe2",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1019"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -106,6 +106,16 @@
     {
       "at": "2026-10-15T05:39:57.939Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-15T07:19:54.084Z",
+      "event": "ac-updated",
+      "detail": "AC5 verify path corrected after the guard moved from src/hooks to src/review (publish-guard.test.ts); wording of criteria unchanged, zero confirmations existed"
+    },
+    {
+      "at": "2026-10-15T07:19:56.223Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1019 (warning: PR is not a draft) (base: main)"
     }
   ],
   "acKinds": {
@@ -149,5 +159,6 @@
       "kind": "exec",
       "check": "bun run check"
     }
-  }
+  },
+  "baseBranch": "main"
 }
