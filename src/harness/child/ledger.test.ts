@@ -76,6 +76,46 @@ describe("RemainingBudgetLedger — child count cap (AC2)", () => {
   });
 });
 
+describe("RemainingBudgetLedger — scoped child counts (flow 453)", () => {
+  const limits = { maxRuntimeMs: 1_000_000 };
+
+  test("each scope counts its own children and leaves the unscoped count alone", () => {
+    const ledger = new RemainingBudgetLedger(limits, { maxChildren: 1, maxScopeChildren: 2, maxScopes: 5 });
+    expect(ledger.admit(res("a1", 1_000), "A").ok).toBe(true);
+    expect(ledger.admit(res("a2", 1_000), "A").ok).toBe(true);
+    const over = ledger.admit(res("a3", 1_000), "A");
+    expect(over.ok).toBe(false);
+    if (!over.ok) expect(over.reason).toContain("scope child count cap 2 reached");
+    expect(ledger.admit(res("b1", 1_000), "B").ok).toBe(true);
+    expect(ledger.scopeChildCount("A")).toBe(2);
+    expect(ledger.scopeChildCount("B")).toBe(1);
+    expect(ledger.childCount).toBe(0);
+    expect(ledger.admit(res("u1", 1_000)).ok).toBe(true);
+    expect(ledger.admit(res("u2", 1_000)).ok).toBe(false);
+  });
+
+  test("a new scope past maxScopes is denied; an open scope keeps its room", () => {
+    const ledger = new RemainingBudgetLedger(limits, { maxScopeChildren: 3, maxScopes: 2 });
+    expect(ledger.admit(res("a", 1_000), "A").ok).toBe(true);
+    expect(ledger.admit(res("b", 1_000), "B").ok).toBe(true);
+    const third = ledger.admit(res("c", 1_000), "C");
+    expect(third.ok).toBe(false);
+    if (!third.ok) expect(third.reason).toContain("scope count cap 2 reached");
+    expect(ledger.scopeCount).toBe(2);
+    expect(ledger.admit(res("a2", 1_000), "A").ok).toBe(true);
+  });
+
+  test("a denied scoped admit changes nothing, and scoped children share the runtime pool", () => {
+    const ledger = new RemainingBudgetLedger({ maxRuntimeMs: 2_000 }, { maxScopeChildren: 5, maxScopes: 5 });
+    expect(ledger.admit(res("a", 1_500), "A").ok).toBe(true);
+    const before = ledger.remaining;
+    expect(ledger.admit(res("b", 1_500), "B").ok).toBe(false);
+    expect(ledger.remaining).toEqual(before);
+    expect(ledger.scopeChildCount("B")).toBe(0);
+    expect(ledger.scopeCount).toBe(1);
+  });
+});
+
 // --- flow 101: optional cost dimension --------------------------------------
 
 function costRes(id: string, runtime: number, cost: number): BudgetReservation {
