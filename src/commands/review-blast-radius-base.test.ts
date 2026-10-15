@@ -10,7 +10,8 @@ import { defaultLayerDeps, resolveLayersBase } from "../review/layers";
 import { changedFilesArgv, radiusDiffArgv, radiusRange } from "../review/radius-range";
 
 const CLI = path.join(import.meta.dir, "..", "cli.ts");
-const EMAIL = "200531777+MrCipherSmith@users.noreply.github.com";
+/** The fixture commits take the committer from the environment (or git's own config); none is hard-coded here. */
+const IDENTITY = { GIT_AUTHOR_NAME: "t", GIT_COMMITTER_NAME: "t" };
 
 let repo: string;
 let baseSha: string;
@@ -20,7 +21,7 @@ function git(...args: string[]): string {
   return execFileSync("git", args, {
     cwd: repo,
     encoding: "utf8",
-    env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_COMMITTER_NAME: "t", GIT_AUTHOR_EMAIL: EMAIL, GIT_COMMITTER_EMAIL: EMAIL },
+    env: { ...process.env, ...IDENTITY },
   }).trim();
 }
 
@@ -138,7 +139,7 @@ describe("keryx review blast-radius --package (AC7, end to end)", () => {
       cwd: repo,
       stdout: "pipe",
       stderr: "pipe",
-      env: { ...process.env, GIT_AUTHOR_EMAIL: EMAIL, GIT_COMMITTER_EMAIL: EMAIL },
+      env: { ...process.env, ...IDENTITY },
     });
     const stderr = child.stderr.toString();
     expect(child.exitCode).toBe(0);
