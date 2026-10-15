@@ -38,8 +38,8 @@ export const CONFIRMATION_TOKEN_TTL_MS = 10 * 60_000;
  * text all repeat it (flow 299, AC8).
  */
 export const CONFIRMATION_CAVEAT =
-  "The token proves an interactive confirmation step (a terminal challenge, or a yes on a keryx shell card) ran, " +
-  "within its TTL, for this criteria checksum — not that a human ran it, and not who.";
+  "The token proves an interactive confirmation step ran outside the agent's tool roster, within its TTL, " +
+  "for this criteria checksum — not that a human ran it, and not who.";
 
 /** File name of the token store inside a flow directory. Named by the unattended floor. */
 export const CONFIRM_TOKEN_FILE = "confirm-token.json";

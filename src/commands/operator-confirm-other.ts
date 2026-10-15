@@ -24,7 +24,7 @@
 import { createHash } from "node:crypto";
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { completionTarget } from "../flow/confirm-token";
+import { completionTarget } from "../flow/service";
 import { triggerDataDir } from "../trigger/record";
 import { listPendingWriteRuns, landWriteRun, viewWriteRun, writeRunLandBlock, type WriteLandDeps } from "../harness/external/write-land";
 import type { FlowService } from "../flow/types";

@@ -17,7 +17,7 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { cardSafe } from "../trigger/schedules";
-import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/tracker/github";
+import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/service";
 import { placeReviewPath } from "../lib/review-path-flags";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
 import { readChunkPlan } from "../review/chunks";

@@ -33,7 +33,6 @@
 import { parsePatchTargets } from "../lib/patch-risk";
 import { commandWord, splitSegments, stripAssignments } from "../lib/shell-syntax";
 import { isPublishCommand, touchesChunkEstimateAnswer, touchesCoverageWaiver } from "../lib/command-risk";
-import { operatorConfirmToolNames } from "../commands/operator-confirm-tools";
 
 /**
  * Tools an unattended run is never offered in this version (AC5). The web and
@@ -54,12 +53,29 @@ export const UNATTENDED_EXCLUDED_TOOLS: readonly string[] = [
 ];
 
 /**
- * Flow 456 (AC1): whether an unattended run may never be offered `toolName` — the fixed list above, plus
- * every operator-confirmed gate (`../commands/operator-confirm-tools.ts`), derived from its registry so a
- * new gate is excluded the moment it is registered. Read at call time, never captured at module load.
+ * Flow 456 (AC1): the operator-confirmed gates (`../commands/operator-confirm-tools.ts`). Listed here, not
+ * imported, because a core owner must not import a command module; `operator-confirm-rosters.test.ts` fails
+ * when this list and the registry differ, so a new gate is excluded the moment it is registered.
  */
+export const OPERATOR_CONFIRM_TOOL_NAMES: readonly string[] = [
+  "review_chunks_answer",
+  "review_publish",
+  "review_waive_coverage",
+  "review_waive_readiness",
+  "flow_confirm",
+  "external_apply",
+  "learn_accept",
+  "learn_promote",
+  "learn_graduate",
+  "schedule_resume",
+  "schedule_run",
+  "schedule_pause",
+  "schedule_remove",
+];
+
+/** Whether an unattended run may never be offered `toolName`: the fixed list above plus every operator-confirmed gate. */
 export function isUnattendedExcludedTool(toolName: string): boolean {
-  return UNATTENDED_EXCLUDED_TOOLS.includes(toolName) || operatorConfirmToolNames().includes(toolName);
+  return UNATTENDED_EXCLUDED_TOOLS.includes(toolName) || OPERATOR_CONFIRM_TOOL_NAMES.includes(toolName);
 }
 
 /** `keryx flow` verbs only an operator (or the dispatcher itself) may run. */

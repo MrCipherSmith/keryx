@@ -8,12 +8,17 @@ import { buildAcpSessionTools } from "../acp/roster";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import type { NormalizedEvent, NormalizedRequest, ProviderDescription, ProviderPort } from "../harness/provider/types";
 import { buildToolRegistry } from "../mcp/tools";
+import { OPERATOR_CONFIRM_TOOL_NAMES } from "../trigger/unattended";
 import { operatorConfirmToolNames } from "./operator-confirm-tools";
 
 const NAMES = operatorConfirmToolNames();
 
 test("there are 13 operator card tools to keep out of the other rosters", () => {
   expect(NAMES).toHaveLength(13);
+});
+
+test("the unattended exclusion list names exactly the registered operator card tools", () => {
+  expect([...OPERATOR_CONFIRM_TOOL_NAMES].sort()).toEqual([...NAMES].sort());
 });
 
 test("the MCP tool registry offers none of them", () => {

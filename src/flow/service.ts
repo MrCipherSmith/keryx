@@ -56,7 +56,9 @@ import {
 } from "./confirm-token";
 // Re-exported so a client (the CLI) reads the caveat through this facade,
 // not from the zone's internals (import policy, rule 2).
-export { CONFIRMATION_CAVEAT } from "./confirm-token";
+export { CONFIRMATION_CAVEAT, completionTarget } from "./confirm-token";
+// Flow 456: the shell's operator card tools reach the GitHub adapter through this facade, not the zone's internals.
+export { githubAdapter, githubPostReview, githubPrFiles } from "./tracker/github";
 // Flow 328: re-exported so `keryx flow check-ac`'s adapter
 // (`src/commands/flow-check-ac.ts`), the AC5/AC6 callers
 // (`src/commands/flow.ts`/`src/commands/review.ts`) and the AC7 TUI reader
