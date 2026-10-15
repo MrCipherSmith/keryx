@@ -1,17 +1,17 @@
 # Текущее состояние / Live status
 
-Запуск (run, UTC): 2026-10-15 06:39 UTC
+Запуск (run, UTC): 2026-10-15 07:32 UTC
 
 Состояние (status): ok
-HEAD: 2423af168016e585a9f4af34dfebb8685bb2fa15
+HEAD: 12fc4732cb4a0d4a260a65b5b107fa3532ee9cfd
 Строк в contribution-log.md (rows): 48
 
 ## Счётчики: снимок 04809f4f / сейчас (counts: snapshot / now)
 
 | Ключ (key) | снимок 04809f4f | сейчас |
 | --- | --- | --- |
-| commit | 04809f4f | 2423af16 |
-| generated_at | 2026-10-04T13:17Z | 2026-10-15T06:33Z |
+| commit | 04809f4f | 12fc4732 |
+| generated_at | 2026-10-04T13:17Z | 2026-10-15T07:33Z |
 | flows | 383 | 422 |
 | flows_by_status | done: 339, blocked: 2, in-progress: 25, ready: 3, initializing: 3, implemented: 11 | done: 347, blocked: 3, in-progress: 41, ready: 5, initializing: 7, implemented: 19 |
 | acceptance_criteria | 3175 | 3576 |
@@ -30,16 +30,16 @@ HEAD: 2423af168016e585a9f4af34dfebb8685bb2fa15
 
 ## Журнал решений (decisions journal)
 
-- Решений (decisions): 50; с рекомендацией (with a recommendation): 44
-- Совпадения, обычный режим (matches, normal): 34 из 35 (matched of answered)
+- Решений (decisions): 53; с рекомендацией (with a recommendation): 45
+- Совпадения, обычный режим (matches, normal): 35 из 36 (matched of answered)
 - Совпадения, частично слепой режим (matches, partial): 5 из 5 (matched of answered)
 - Совпадения, слепой режим (matches, blind): 3 из 4 (matched of answered)
 - Отклонения (deviations): 2; с причиной (with a reason): 2; без причины (without a reason): 0
-- Исключено как необратимые (excluded-irreversible): 32
-- Прогресс к порогу P7 (150 обратимых вопросов на плечо, reversible questions per arm): A 5/150, B 3/150, C 2/150, D 4/150; порог достигнут (met): нет (no)
-- Прогресс к AC11 флоу 392 (progress to AC11 of flow 392): решений 50/20, слепых 4/5; числа не достигнуты (numeric targets not met)
-- Машин в журнале (machines in the journal): 5; записей по машинам (records per machine): 142cd74e 50, 1932608c 135, a90ce006 1, f2ede59b 34, fa7c0ca1 119
-- Решений во всех машинах (decisions, all machines): 339; с рекомендацией (with a recommendation): 283; живых, не backfilled (live, not backfilled): 266
+- Исключено как необратимые (excluded-irreversible): 34
+- Прогресс к порогу P7 (150 обратимых вопросов на плечо, reversible questions per arm): A 6/150, B 3/150, C 2/150, D 4/150; порог достигнут (met): нет (no)
+- Прогресс к AC11 флоу 392 (progress to AC11 of flow 392): решений 53/20, слепых 4/5; числа не достигнуты (numeric targets not met)
+- Машин в журнале (machines in the journal): 12; записей по машинам (records per machine): 0155ba5b 7, 03f624d1 11, 142cd74e 53, 1932608c 135, 88997f59 47, 8ff58fff 18, a90ce006 1, ce88bc99 68, d6347c29 1, f2aff11d 5, f2ede59b 34, fa7c0ca1 119
+- Решений во всех машинах (decisions, all machines): 499; с рекомендацией (with a recommendation): 425; живых, не backfilled (live, not backfilled): 426
 
 ## Виды проверки (verification kinds)
 
