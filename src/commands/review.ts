@@ -60,6 +60,9 @@ import { startOrchestratorLog } from "../review/orchestrator-log";
 import { printChunksHelp, printCoverageHelp, runChunks, runCoverage } from "./review-chunks";
 import { ensurePackageLayers, printLayersHelp, resolvePackageDir, runLayers } from "./review-layers";
 import { PackageGraphError, loadPackageGraph, readLayers } from "../review/layers";
+import { changedFilesArgv, radiusDiffArgv, radiusRange } from "../review/radius-range";
+import { findTextLinks, gitGrepSearcher, ripgrepSearcher } from "../review/text-links";
+import { gitSourceReader, parseDiffHunks, workingTreeSourceReader } from "../gdgraph/symbol-reach";
 import { keryxSelfCommand } from "../harness/tool/builtin/metaproject-tools";
 import { shellWord } from "../lib/shell-quote";
 import { layersSummaryLine } from "../review/layers-view";
@@ -512,6 +515,8 @@ const BLAST_RADIUS_FLAGS = [
   "--brief",
   "--out",
   "--package",
+  "--reach",
+  "--no-text-links",
 ] as const;
 
 const TIER_FLAGS = [
@@ -3688,10 +3693,21 @@ async function runBlastRadius(args: string[]): Promise<void> {
 
   const explicit = optionValue(args, "--changed");
   const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
+  const reachMode = optionValue(args, "--reach") ?? "symbol";
+  if (reachMode !== "symbol" && reachMode !== "file") throw new Error(`--reach ${reachMode}: expected symbol or file.`);
+  // Flow 457 AC7: with --package the changed files are `git diff base...head` at the package's pinned head, never the
+  // working tree, and the base is --ref/--base, else the PR base the layers resolved (a `<head>~1` fallback is announced).
+  const radiusPackage = optionValue(args, "--package");
+  const range =
+    radiusPackage === undefined || explicit !== undefined
+      ? undefined
+      : radiusRange({ ref, layers: await ensurePackageLayers(resolvePackageDir(args, cwd)) });
+  if (range?.warning !== undefined) console.error(range.warning);
+  if (range !== undefined) console.error(`range: ${range.base.slice(0, 12)}...${range.head.slice(0, 12)} (base from ${range.baseSource})`);
   const changedFiles =
     explicit !== undefined
       ? explicit.split(",").map((item) => item.trim()).filter(Boolean)
-      : await gitChangedFiles(ref);
+      : (await gitLines(changedFilesArgv(range, ref))).filter(Boolean);
 
   // Flow 451 AC7: a recount against a base that changes the file count past RECOUNT_RATIO x the package's own scope
   // (`--ref develop` turned 25 files into 1547) is refused, with both numbers, before anything is written.
@@ -3751,14 +3767,41 @@ async function runBlastRadius(args: string[]): Promise<void> {
     );
   }
   const testFiles = includeRelatedTests ? await gitTestFiles() : [];
+  // Symbol reach and text links read the zero-context patch of the same range the changed files came from. With
+  // --changed and no range there is no patch: every seed then falls back to its file edge, which is the old walk.
+  const projectRoot = resolveProjectRoot(cwd);
+  const patch = explicit !== undefined && range === undefined ? "" : await gitText(radiusDiffArgv(range, ref));
+  const symbols =
+    reachMode === "file"
+      ? undefined
+      : {
+          read: range === undefined ? workingTreeSourceReader(projectRoot, ref ?? "HEAD") : gitSourceReader(projectRoot, range.head, range.base),
+          diff: parseDiffHunks(patch),
+        };
+  const textLinks =
+    args.includes("--no-text-links") || patch === ""
+      ? undefined
+      : await findTextLinks({
+          diff: patch,
+          changedFiles,
+          search: range === undefined ? ripgrepSearcher(projectRoot) : gitGrepSearcher(projectRoot, range.head),
+        });
   const radius = computeBlastRadius({
     graph,
     changedFiles,
     testFiles,
     config: { depth, maxFiles, includeRelatedTests },
+    symbols,
+    textLinks,
   });
   await emitBlastRadius(radius, args);
-
+  const reasoned = (radius.counts.droppedUnrelatedSymbol ?? 0) + (radius.counts.droppedHubDamped ?? 0) + (radius.counts.droppedTextHub ?? 0);
+  if (reasoned > 0) {
+    console.error(
+      `omitted with a reason: ${radius.counts.droppedUnrelatedSymbol ?? 0} unrelated-symbol, ${radius.counts.droppedHubDamped ?? 0} hub-damped, ${radius.counts.droppedTextHub ?? 0} text-hub. ` +
+        "They are context, not owed a chunk pass.",
+    );
+  }
   if (radius.counts.droppedByCap > 0) {
     console.error(
       `cap: ${radius.counts.droppedByCap} of ${radius.counts.candidates} candidate files were NOT reviewed (blast_radius_max_files=${radius.maxFiles}). They are listed in the record. ` +
@@ -3807,10 +3850,12 @@ async function readPreviousRadius(source: string): Promise<BlastRadius> {
   return parsed as BlastRadius;
 }
 
-/** The changed-file list scope B is seeded from. Deleted paths are excluded. */
-async function gitChangedFiles(ref: string | undefined): Promise<string[]> {
-  const command = ["git", "diff", "--name-only", "--diff-filter=d", ...(ref === undefined ? [] : revisionOperand(ref))];
-  return (await gitLines(command)).filter(Boolean);
+/** Raw stdout of a git command (the radius patch); throws on a non-zero exit like {@link gitLines}. */
+async function gitText(command: readonly string[]): Promise<string> {
+  const proc = Bun.spawn([...command], { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+  if (exitCode !== 0) throw new Error(`${command.join(" ")} failed (exit ${exitCode}): ${stderr.trim()}`);
+  return stdout;
 }
 
 async function gitTestFiles(): Promise<string[]> {
@@ -4550,9 +4595,13 @@ Writes mutation-<n>.json and .md to research-evidence/.`);
 function printBlastRadiusHelp(): void {
   console.log(`keryx review blast-radius [--ref <base> | --changed a,b] [--base <ref>] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                          [--package <review-dir>] [--json | --brief] [--out <file>]
+                          [--package <review-dir>] [--reach symbol|file] [--no-text-links] [--json | --brief] [--out <file>]
 
 The files a change can reach: dependants of the changed files, up to --depth, capped at --max-files, with related tests.
+--reach symbol (default) follows the changed exported names: importers that use none of them, and files behind a
+high fan-in hub, are omitted with a reason instead of reviewed; --reach file walks every reverse import edge.
+Files that mention a string key the diff changed (i18n key, event, CSS class, config key) are added unless
+--no-text-links. With --package the changed files are base...head at the package's pinned head.
 --package stores the record in the package; --previous/--final carry the dropped files across rounds.`);
 }
 
