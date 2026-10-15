@@ -110,3 +110,25 @@ Expiry requests cooperative cancellation and prevents further adapter calls;
 subsequent observations stay cancelled/missing. It cannot terminate arbitrary
 in-process code or CPU loops; untrusted adapters need process isolation.
 Query splits are restricted to dev/held-out; distractor is source-only.
+
+
+### Production lexical smoke adapter (B only)
+
+`bun scripts/benchmark/run-evidence-evaluation.ts docs/requirements/keryx-evidence-retrieval/paired-evaluation-starter.json --lexical`
+
+This opt-in command builds isolated temporary projects from active synthetic files,
+partitioned by project and split. It uses the production scanner, lifecycle-backed
+index build, and validated lexical search; no embedding, API or model is loaded.
+Source identifiers are mapped through generated ordinal filenames, not used as paths.
+Temporary projects and runtime handles are removed in `finally`.
+
+Only static answerable, unanswerable, conflicting, paraphrased and instruction-shaped
+queries are eligible. Revocation, rewrite, current-visible and compacted-out scenarios
+remain unsupported: selecting active files is **not** proof of a lifecycle transition.
+A/C/D/E remain missing. Scanner-modified envelopes fail closed rather than receiving
+credit for every original byte. Unsupported/failing observations are not quality zeros.
+
+Timing includes search validation and scanning but excludes corpus creation/build;
+the three sequential repetitions have no explicit warmup and are not independent pairs.
+The execution metadata labels these limitations. This remains exploratory smoke
+execution, not a frozen holdout, full A–E evaluation, or rollout approval.

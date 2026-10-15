@@ -1,4 +1,4 @@
-// Offline orchestration: no model, network or runtime is loaded here.
+// Offline orchestration; production runtime is loaded only with explicit --lexical.
 import { prepareEvidenceEvaluation } from "./prepare-evidence-evaluation";
 import { latencyPercentiles, pairedBootstrap, scoreEvidenceRanking } from "./evidence-evaluation-metrics";
 import type { EvaluationSpan } from "./evidence-evaluation-metrics";
@@ -66,11 +66,13 @@ export async function runEvidenceEvaluation(raw: string, adapters: Partial<Recor
           }))]);
         } catch {
           // In-process cancellation is cooperative: do not start more work after expiry.
+          row.elapsedMs = performance.now() - start;
           row.status = expired ? "timed-out" : "failed";
           if (expired) cancelled = true;
           continue;
         } finally { clearTimeout(timer); }
         const elapsed = performance.now() - start;
+        row.elapsedMs = elapsed;
         try {
           if (result.status === "unsupported" || result.status === "failed") {
             row.status = result.status; continue;
@@ -110,6 +112,10 @@ export async function runEvidenceEvaluation(raw: string, adapters: Partial<Recor
     version: 1, status: "offline-orchestration-only", datasetHash: prepared.datasetHash,
     repetitions: 3, observations, comparisons,
     arms: arms.map(arm => ({ arm, revision: adapters[arm]?.revision ?? null,
+      latencyPopulation: "successful-observations-only",
+      counts: Object.fromEntries(["ok", "failed", "timed-out", "invalid-observation", "unsupported", "missing-adapter", "cancelled"]
+        .map(status => [status, observations.filter(row => row.arm === arm && row.status === status).length])),
+      attempted: observations.filter(row => row.arm === arm && row.elapsedMs !== null).length,
       latency: latencyPercentiles(observations.filter(row => row.arm === arm && row.status === "ok")
         .map(row => row.elapsedMs!)),
     })),
@@ -124,9 +130,20 @@ export async function runEvidenceEvaluation(raw: string, adapters: Partial<Recor
 if (import.meta.main) {
   try {
     const args = process.argv.slice(2);
-    if (args.length !== 1) throw Error("expected dataset path");
-    // No adapters means missing observations, never fabricated measurements.
-    console.log(JSON.stringify(await runEvidenceEvaluation(await Bun.file(args[0]!).text(), {}), null, 2));
+    if (args.length < 1 || args.length > 2 || (args.length === 2 && args[1] !== "--lexical"))
+      throw Error("expected dataset path and optional --lexical");
+    const raw = await Bun.file(args[0]!).text();
+    if (args[1] === "--lexical") {
+      const { createLexicalEvaluationAdapter } = await import("./evidence-lexical-adapter");
+      const owner = await createLexicalEvaluationAdapter(raw);
+      try {
+        const report = await runEvidenceEvaluation(raw, { B: owner.adapter });
+        console.log(JSON.stringify({ ...report, execution: owner.preparation }, null, 2));
+      } finally { await owner.close(); }
+    } else {
+      // No adapters means missing observations, never fabricated measurements.
+      console.log(JSON.stringify(await runEvidenceEvaluation(raw, {}), null, 2));
+    }
   } catch {
     console.error("Evidence evaluation refused: invalid dataset or invocation");
     process.exitCode = 1;
