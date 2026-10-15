@@ -145,6 +145,7 @@ import {
 import { createTierRankHost, type TierRankHost } from "../harness/routing/tier-rank-agent";
 import { TEST_FILE_RE } from "../testing/selection";
 import { isVerificationMode, verificationClaims } from "../review/verification";
+import { writeVerdict } from "../review/verdict";
 import {
   buildReplyPass,
   collectPrComments,
@@ -380,6 +381,8 @@ const LOOP_FLAGS = ["--flow", "--task"] as const;
  * with a labelled-case manifest; `--live` (only meaningful with `--eval`)
  * replays it against the real `gh`/Jev instead of each case's fixtures.
  */
+export const VERDICT_FLAGS = ["--json"] as const;
+
 const CI_TRIAGE_FLAGS = ["--run", "--job", "--test", "--repo", "--model", "--fixtures", "--json", "--eval", "--live"] as const;
 
 /**
@@ -801,6 +804,10 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     }
     if (command === "report-parity") {
       await runReportParity(args.slice(1));
+      return;
+    }
+    if (command === "verdict") {
+      await runVerdict(args.slice(1));
       return;
     }
     if (command === "complete") {
@@ -3842,6 +3849,35 @@ async function runReportParity(args: string[]): Promise<void> {
   console.log(markdown === "" ? "Nothing to carry into the report: no Not run candidates, held severity notes or open follow-ups." : markdown.trimEnd());
 }
 
+/** `keryx review verdict <review> [--json]`: the verdict of a round as it stands, before ingest, ledger, mutation or `complete`. Writes `verdict-interim.md` into the package. */
+async function runVerdict(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, VERDICT_FLAGS, "verdict <review-id-or-path> [--json]");
+  const ref = args.find((argument) => !argument.startsWith("--"));
+  if (!ref) throw new Error("Usage: keryx review verdict <review-id-or-path> [--json]");
+  const packageDir = await resolveReviewPackagePath(process.cwd(), ref);
+  const { verdict, markdown, file } = await writeVerdict(packageDir, path.basename(packageDir));
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ ...verdict, file: path.relative(process.cwd(), file) }, null, 2));
+    return;
+  }
+  console.log(markdown.trimEnd());
+  console.log(`written: ${path.relative(process.cwd(), file)}`);
+}
+
+function printVerdictHelp(): void {
+  console.log(`keryx review verdict
+
+Usage:
+  keryx review verdict <review-id-or-path> [--json]
+
+The verdict of a review round as it stands: finding counts by severity, verified vs
+unverified (refuted excluded), open blockers and majors, and the reviewers that have
+not reported. Reads the ingested round (findings.json) when there is one, else the raw
+reviewer results in raw/. Works before ledger, mutation and complete. Writes
+verdict-interim.md into the package. A package with no findings says so and exits 0.
+`);
+}
+
 async function runStatus(args: string[]): Promise<void> {
   rejectUnknownFlags(args, [], "status <review-id-or-path>");
   const ref = args[0];
@@ -4314,6 +4350,7 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["dispatch-check", printDispatchCheckHelp],
   ["retry-plan", printRetryPlanHelp],
   ["ledger", printLedgerHelp],
+  ["verdict", printVerdictHelp],
   ["layers", printLayersHelp],
   ["chunks", printChunksHelp],
   ["coverage", printCoverageHelp],
@@ -4548,6 +4585,7 @@ ${COMMENTS_USAGE}
   keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--json]
   keryx review status <review-id-or-path>
   keryx review report-parity <review-id-or-path>
+  keryx review verdict <review-id-or-path> [--json]
   keryx review readiness <review-id-or-path> [--json]
                         One checklist (10 items) that a review passes before it is
                         completed or published; each failing item names its repair.

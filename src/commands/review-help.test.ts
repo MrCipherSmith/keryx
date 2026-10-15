@@ -6,7 +6,7 @@
 // flags the parsers accept.
 
 import { afterEach, expect, test } from "bun:test";
-import { COMMENTS_COLLECT_FLAGS, COMMENTS_REPLY_FLAGS, CREATE_FLAGS, printReviewHelpFor } from "./review";
+import { COMMENTS_COLLECT_FLAGS, COMMENTS_REPLY_FLAGS, CREATE_FLAGS, VERDICT_FLAGS, printReviewHelpFor } from "./review";
 
 const realLog = console.log;
 
@@ -70,6 +70,17 @@ test("flow 420: the group help lists every flag attach, start and ingest accept"
     expect(help).toContain(flag);
   }
   expect(help).toContain("--research <ledger.json>");
+});
+
+test("verdict lists every flag its parser accepts, in both helps", () => {
+  const entry = (help: string): string => {
+    const line = help.split("\n").find((l) => l.trim().startsWith("keryx review verdict "));
+    expect(line).toBeDefined();
+    return line ?? "";
+  };
+  for (const help of [GROUP(), helpFor(["verdict"])]) {
+    for (const flag of VERDICT_FLAGS) expect(entry(help)).toContain(flag);
+  }
 });
 
 test("--outcomes is shown as required for reply, as the parser requires it", () => {
