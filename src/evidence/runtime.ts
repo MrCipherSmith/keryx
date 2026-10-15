@@ -158,7 +158,7 @@ export async function createEvidenceRuntime(options: EvidenceServiceOptions & { 
         for (const ref of refs) {
           if (!operation.active()) return { code: "timeout" };
           reader.checkpoint();
-          const source = ref.scope.kind === "file" ? await facade.service.readFile(ref.scope.id, operation.signal) :
+          const source = ref.scope.kind === "file" ? await facade.service.readSourceFile(ref.scope.id, operation.signal) :
             await facade.service.readArchive(ref.scope.id, operation.signal,
               forceFull ? undefined : { cursor: archiveCursor, checkpoint: () => reader!.checkpoint() });
           if (!operation.active()) return { code: "timeout" };

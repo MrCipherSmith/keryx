@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { projectSessionsDir, projectKeyFromPath, keryxDataDir } from "../session/paths";
 import { ArchiveCursor, type ArchiveCursorAccess } from "./archive-cursor";
 import { safeRelativePath } from "./config";
-import { buildHarnessScanner } from "../security/harness-scan";
+import { buildHarnessScanner } from "../security/service";
 import { Worker } from "node:worker_threads";
 import { existsSync, lstatSync } from "node:fs";
 import { fileURLToPath } from "node:url";

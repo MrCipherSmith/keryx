@@ -13,7 +13,7 @@ test("facade pins original project identity", async () => {
     if (!result.ok) throw Error("construction");
     await rename(root, path.join(parent, "old")); await mkdir(path.join(root, "docs"), { recursive: true });
     await writeFile(path.join(root, "docs/note"), "foreign");
-    expect((await result.service.readFile("docs/note")).code).toBe("source-unavailable");
+    expect((await result.service.readSourceFile("docs/note")).code).toBe("source-unavailable");
   } finally { await rm(parent, { recursive: true, force: true }); }
 });
 for (const mutation of ["rewrite", "delete", "replace-parent"]) test(`file revalidates after scan: ${mutation}`, async () => {
@@ -30,14 +30,14 @@ for (const mutation of ["rewrite", "delete", "replace-parent"]) test(`file reval
 });
 test("hanging scanner initialization is bounded", async () => {
   const result = await createEvidenceService({ projectRoot: tmpdir(), config: { schemaVersion: 1, enabled: true, timeoutMs: 20 }, scannerFactory: () => new Promise(() => {}) });
-  if (!result.ok) throw Error("construction"); expect((await Promise.race([result.service.readFile("docs/note"), new Promise<{ code: string }>(resolve => setTimeout(() => resolve({ code: "hung" }), 200))])).code).toBe("timeout");
+  if (!result.ok) throw Error("construction"); expect((await Promise.race([result.service.readSourceFile("docs/note"), new Promise<{ code: string }>(resolve => setTimeout(() => resolve({ code: "hung" }), 200))])).code).toBe("timeout");
 });
 test("pre-cancelled facade performs no scanner initialization", async () => {
   let calls = 0;
   const result = await createEvidenceService({ projectRoot: tmpdir(), config: { schemaVersion: 1, enabled: true }, scannerFactory: async () => { calls++; return clean; } });
   if (!result.ok) throw Error("construction");
   const controller = new AbortController(); controller.abort();
-  const answer = await result.service.readFile("docs/note", controller.signal);
+  const answer = await result.service.readSourceFile("docs/note", controller.signal);
   expect(answer.code).toBe("timeout"); expect("text" in answer).toBe(false); expect(calls).toBe(0);
 });
 test("cancellation aborts pending factory and withholds its late success", async () => {
@@ -50,7 +50,7 @@ test("cancellation aborts pending factory and withholds its late success", async
   } });
   if (!result.ok) throw Error("construction");
   const controller = new AbortController();
-  const pending = result.service.readFile("docs/note", controller.signal);
+  const pending = result.service.readSourceFile("docs/note", controller.signal);
   await ready; controller.abort();
   const answer = await pending;
   expect(answer.code).toBe("timeout"); expect("text" in answer).toBe(false); expect(factorySignal?.aborted).toBe(true);
@@ -70,7 +70,7 @@ test("cancellation aborts pending scanner and never returns late text", async ()
     } });
     if (!result.ok) throw Error("construction");
     const controller = new AbortController();
-    const pending = result.service.readFile("docs/note", controller.signal);
+    const pending = result.service.readSourceFile("docs/note", controller.signal);
     await ready; controller.abort();
     const answer = await pending;
     expect(answer.code).toBe("timeout"); expect("text" in answer).toBe(false); expect(scannerSignal?.aborted).toBe(true);

@@ -19,7 +19,6 @@ metadata:
 license: "MIT"
 ---
 # Review Orchestrator
-
 **You are the orchestrator. Run the round yourself, inline, in the main session that loaded this skill; never hand the whole round to one subagent.** This skill routes: it detects scope, dispatches specialized reviewers, and consolidates their findings into one report sorted by severity. The reviewers do the reviewing.
 
 ## Preflight — before Step 0, in this order

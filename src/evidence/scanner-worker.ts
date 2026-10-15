@@ -1,5 +1,5 @@
 import { parentPort, workerData } from "node:worker_threads";
-import { buildHarnessScanner } from "../security/harness-scan";
+import { buildHarnessScanner } from "../security/service";
 import { redactForPersistence } from "../harness/evidence/redaction";
 // Deterministic scanner floor only: no model calls or persistence.
 try {

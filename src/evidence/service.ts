@@ -57,7 +57,7 @@ export async function createEvidenceService(options: EvidenceServiceOptions) {
     finally { if (timer) clearTimeout(timer); if (onAbort) signal?.removeEventListener("abort", onAbort); controller.abort(); }
   }
   const service = Object.freeze({
-    readFile: (relativePath: string, signal?: AbortSignal) => operate("file", relativePath, signal),
+    readSourceFile: (relativePath: string, signal?: AbortSignal) => operate("file", relativePath, signal),
     readArchive: (sessionId: string, signal?: AbortSignal, cursorAccess?: ArchiveCursorAccess) => operate("archive", sessionId, signal, cursorAccess),
   });
   return { ok: true as const, service };
