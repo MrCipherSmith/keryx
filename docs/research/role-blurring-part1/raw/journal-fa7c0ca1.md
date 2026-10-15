@@ -1,90 +1,9 @@
-# Machine journal fa7c0ca1
+# Источник `fa7c0ca1`
 
-- host: fa7c0ca1 (first 8 hex characters of seed-file SHA-256; no hostname).
-- seedHash: fa7c0ca1378fb500bc9b5fccb9e1cd42543d09b93057ca3b43a14a2bba6ed634
-- Exported decisions: 28; raw journal records: 56.
-- First openedAt: 2026-10-05T05:59:32.787Z; last openedAt: 2026-10-05T22:19:01.824Z.
-- Backfilled decisions: 0 (retained, outside confirmatory sample).
-- Exporter version: 0.3.77. Historical source HEAD omitted under the final-collection privacy rules.
-- Writer versions recorded in journal: not recorded; cannot reliably attribute git history to this machine.
-- Export summary: 28 rows, 0 skipped, 0 invalid fields blanked.
-- Entire local journal exported without a since filter; original open seq and arm retained. Numeric seed field removed to satisfy AC2; seed file only hashed, never exported.
-- Privacy verification: export allow-list checked; seed, question/option/reason text fields absent; local username and paths absent.
-- This machine is not the final collector. No merged/latest/snapshot/status files changed.
-- Collection agent: Keryx agent (openai-codex/gpt-6.1-sol). This identifies the export agent, not the writers of the recorded decisions.
+Один из источников единого набора данных части 2. Источник — это журнал решений одной папки со своим seed; `host` — первые 8 символов SHA-256 seed-файла, непрозрачный код без сведений о машине, папке или проекте. Набор анализируется целиком, без различения источников; `host` нужен только как ключ `(host, seq)` и для проверки детерминированности плеча.
 
-## Export command
-
-Run from the repository root with Bun. The command used readJournal + readQuality + buildExportWithSummary with no date filter, joined each row to its original open by exportRef(id), removed seed, and added seq, host and SHA-256 of the existing saltFile. No salt was generated or migrated.
-
-Equivalent reproducible export command (the local journal may grow after this capture):
-
-```sh
-bun --eval '
-import {createHash} from "node:crypto";
-import {readFile,writeFile,mkdir} from "node:fs/promises";
-import {saltFile} from "./src/decisions/arms.ts";
-import {readJournal} from "./src/decisions/store.ts";
-import {readQuality} from "./src/decisions/quality.ts";
-import {buildExportWithSummary,exportRef} from "./src/decisions/export.ts";
-const cwd=process.cwd();
-const seedHash=createHash("sha256").update(await readFile(await saltFile(cwd))).digest("hex");
-const host=seedHash.slice(0,8);
-const journal=await readJournal(cwd);
-const {rows,summary}=buildExportWithSummary(journal.records,await readQuality(cwd));
-if(journal.skipped||summary.skipped) throw Error("Skipped records; stop");
-const opens=new Map(journal.records.filter(r=>r.kind==="open").map(r=>[exportRef(r.id),r]));
-const out=rows.map(({seed,...row})=>({...row,seq:opens.get(row.ref).seq,host,seedHash}));
-if(out.some(r=>!Number.isSafeInteger(r.seq))||new Set(out.map(r=>r.seq)).size!==out.length) throw Error("Invalid or duplicate seq");
-const dir="docs/research/role-blurring-part1/raw";
-await mkdir(dir,{recursive:true});
-await writeFile(`${dir}/decisions-${host}.jsonl`,out.map(r=>JSON.stringify(r)).join("\n")+"\n");
-'
-```
-
-Writer-version attribution remains unknown: journal records do not contain it, and git history alone does not identify which machine wrote a decision. The exporter version above is not a claim about writer versions.
-
-## Verification
-
-- `bun test src/decisions/export.test.ts`: 24 passed, 0 failed.
-- Both new files checked for local username, home/repository paths and email-shaped strings: no matches. JSONL checked for prohibited text keys and seed, required host/seedHash, and unique `(host, seq)`: passed (28 decisions).
-- Preservation checks covered 37 pre-existing uncommitted files. All original bytes remain intact; the security audit log received appended events only. No pre-existing changes are included in the export commit.
-
-## Выгрузка 2026-10-13 11:51 UTC
-
-- Машина: `fa7c0ca1`.
-- Строк: 98; предыдущая выгрузка: 28; добавлено: 70.
-- Первая `openedAt`: `2026-10-05T05:59:32.787Z`; последняя: `2026-10-13T11:44:17.266Z`.
-- Версия экспортера keryx: `0.3.112`. Исторический HEAD источника исключён по правилам финального сбора. Версия записи отдельных решений неизвестна.
-- Команда: `bun run keryx research sync`; весь локальный журнал, без фильтра по дате.
-- Приватность: запрещённые текстовые поля и seed отсутствуют; проверка локальных идентификаторов, путей и email пройдена. Экспорт другой машины не изменён.
-- Независимая проверка: latest равен объединению raw, 232 строки; дубли `(host, seq)` отсутствуют.
-- Тесты: `bun test --timeout 30000 src/decisions/machine-export.test.ts src/commands/research-sync.test.ts` — 41 passed, 0 failed. При первом запуске два теста расписания превысили стандартный таймаут 5 секунд; повтор с 30 секундами прошёл без изменения кода.
-- Flow вне main: локальный untracked экземпляр 387, статус `in-progress`. Коммиты веток `chore/flow-387-complete`, `fix/387-review-r1`, `fix/387-review-r3` уже опубликованы и входят в `origin/main`; дополнительная публикация не нужна, новая ветка не создана.
-- Flow 415 и 416 уже присутствуют в main. Старый untracked экземпляр 415 сохранён отдельно до слияния main в исследовательскую ветку.
-- Исторические снимки не изменены. Единственная tracked-разница файлов flow с main — ранее существовавшие локальные добавления в журнал 406; они сохранены и не включены в исследовательский коммит.
-
-## Финальная выгрузка 2026-10-15 06:08 UTC
-
-- Машина 2; роль копии: основная.
-- Строк: 116; предыдущая выгрузка: 98; добавлено: 18.
-- Первая `openedAt`: `2026-10-05T05:59:32.787Z`; последняя: `2026-10-14T21:59:57.213Z`.
-- Живых решений после 2026-10-04 15:26 UTC: 116; eligible: 44; forced: 72; плечи A–D у eligible: {"A": 19, "B": 9, "C": 6, "D": 10}.
-- Версия экспортера keryx: `0.3.117`; HEAD исследовательской ветки: `c578a312096860a420f9eda2fafb2acde2809d8f`.
-- Проверки шага 4: 41 тест пройден, 0 ошибок (таймаут 30000 мс); объединение 330 строк равно всем raw; дубли `(host, seq)` и `(ref, openedAt)` отсутствуют; запрещённые текстовые поля, seed, пути, email и локальное имя пользователя отсутствуют. Исторические снимки и flow этим сбором не изменены.
-- Flow 352: локально implemented, в main in-progress; отдельная ветка по номеру не найдена. По решению оператора расхождение только зафиксировано, ветка не создаётся.
-- Flow 387: локально in-progress, в main ready; ветки `chore/flow-387-complete`, `fix/387-review-r1`, `fix/387-review-r3` входят в main. Первая опубликована, две remote-ветки удалены после слияния; по решению оператора не восстанавливаются.
-- Это не последний запуск: PR не открывается. Семь источников других репозиториев исключены по решению оператора.
-
-## Финальная выгрузка 2026-10-15 06:35 UTC
-
-- Машина 2; роль копии: основная. Весь журнал, без фильтра по дате.
-- Строк: 119; предыдущая опубликованная выгрузка: 116; добавлено: 3. С исходного сбора 2026-10-13 (98 строк) добавлена 21 строка.
-- Первая `openedAt`: `2026-10-05T05:59:32.787Z`; последняя: `2026-10-15T06:16:23.857Z`.
-- Живых решений после 2026-10-04 15:26 UTC: 119; eligible: 45; forced: 74; плечи A–D у eligible: A=19, B=10, C=6, D=10.
-- Версия keryx: `0.3.117`; HEAD исследовательской копии: `2423af168016e585a9f4af34dfebb8685bb2fa15`.
-- Проверки: 41 тест пройден, 0 ошибок; latest точно равен объединению raw (339 строк); дубли `(host, seq)` и межисточниковые дубли `(ref, openedAt)` отсутствуют; запрещённые текстовые поля, seed, пути, email и локальное имя пользователя отсутствуют в JSONL. `git diff --check` пройден; исторические снимки и файлы flow не изменены.
-- Flow 352: локально implemented, в main in-progress; отдельной ветки нет. По ранее принятому решению оператора новая ветка не создаётся.
-- Flow 387: локально in-progress, в main ready. Ветки `chore/flow-387-complete`, `fix/387-review-r1`, `fix/387-review-r3` уже входят в main; первая существует на remote, две другие удалены после слияния и по ранее принятому решению оператора не восстанавливаются.
-- Последний запуск; подготовка одного PR без слияния. Чужие источники не перезаписывались; семь источников других репозиториев остаются исключены по решению оператора.
-- 2026-10-15: 7 источников рабочих проектов включены обезличенно по решению оператора (см. `raw/journal-0155ba5b.md`, `raw/journal-03f624d1.md`, `raw/journal-88997f59.md`, `raw/journal-8ff58fff.md`, `raw/journal-ce88bc99.md`, `raw/journal-d6347c29.md`, `raw/journal-f2aff11d.md`); исключены: 0. Прежняя запись об исключении описывает предыдущий сбор.
+- Последняя выгрузка: 2026-10-15 06:35 UTC; весь журнал, без фильтра по дате.
+- Строк: 119; первая `openedAt`: `2026-10-05T05:59:32.787Z`; последняя: `2026-10-15T06:16:23.857Z`.
+- Живых решений после 2026-10-04 15:26 UTC: 119; eligible: 45; forced: 74; плечи у eligible: A=19, B=10, C=6, D=10.
+- Приватность: в строках нет текста вопросов, вариантов и причин, нет seed; проверено тестами `src/decisions/machine-export.test.ts` и `src/commands/research-sync.test.ts`.
+- Метки происхождения (машина, роль папки) сняты 2026-10-15 по решению оператора; прежние записи остаются в истории git.
