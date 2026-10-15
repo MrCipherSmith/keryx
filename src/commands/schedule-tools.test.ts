@@ -105,11 +105,13 @@ function host(): ScheduleHost {
   };
 }
 
-async function turn(mode: "ask" | "trust" | "auto", answer: boolean): Promise<{ asked: { tool: string; meta: ApprovalMeta | undefined }[]; autoApproved: string[]; toolOutput: string }> {
+async function turn(mode: "ask" | "trust" | "auto", answer: boolean, env: NodeJS.ProcessEnv = {}): Promise<{ asked: { tool: string; meta: ApprovalMeta | undefined }[]; autoApproved: string[]; toolOutput: string }> {
   const tools = scheduleTools({
     projectRoot: root,
     defaults: () => ({ provider: "anthropic", model: "claude-x" }),
     host: host(),
+    // Isolate only the fake caller; never modify the runner's agent marker.
+    env,
     now: () => new Date(2026, 8, 23, 5, 7, 0),
     resolveProgram: (p) => fakeProgram(p),
     accountOf: async () => "MrCipherSmith",
@@ -167,6 +169,18 @@ afterEach(async () => {
 
 describe("AC7: schedule_create always asks and shows the card", () => {
   for (const mode of ["auto", "trust", "ask"] as const) {
+    test(`under "${mode}", an agent-origin caller is refused before approval or installation`, async () => {
+      const result = await turn(mode, true, { KERYX_TOOL_CALL: "1" });
+      expect(result.asked).toEqual([]);
+      expect(result.autoApproved).toEqual([]);
+      expect(result.toolOutput).toContain("KERYX_TOOL_CALL=1");
+      expect(existsSync(scheduleStorePath(root))).toBe(false);
+      expect(await readdir(unitDir)).toEqual([]);
+      expect(hostCalls).toEqual([]);
+    });
+  }
+
+  for (const mode of ["auto", "trust", "ask"] as const) {
     test(`under "${mode}", a declined card writes nothing and installs nothing`, async () => {
       const result = await turn(mode, false);
       expect(result.autoApproved).toEqual([]);
@@ -214,6 +228,7 @@ describe("flow 302: schedule_create refuses an unpriceable provider or a missing
       projectRoot: root,
       defaults: () => ({ provider: "some-unpriced-gateway", model: "m" }),
       host: host(),
+      env: {},
       providerReportsUsage: () => false,
       checkCredential: async () => ({ ok: true }),
     });
@@ -228,6 +243,7 @@ describe("flow 302: schedule_create refuses an unpriceable provider or a missing
       projectRoot: root,
       defaults: () => ({ provider: "anthropic", model: "m" }),
       host: host(),
+      env: {},
       providerReportsUsage: () => true,
       checkCredential: async () => ({ ok: false, reason: 'provider "anthropic" has no usable credential in this environment' }),
     });
@@ -242,6 +258,7 @@ describe("flow 302: schedule_create refuses an unpriceable provider or a missing
       projectRoot: root,
       defaults: () => ({ provider: "anthropic", model: "m" }),
       host: host(),
+      env: {},
       providerReportsUsage: () => true,
       checkCredential: async () => ({ ok: true }),
     });
