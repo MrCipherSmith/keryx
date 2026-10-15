@@ -1,3 +1,4 @@
+import { startShellStartupTrace } from "../lib/shell-startup-trace";
 import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
 import { createShellFinalizer, preservationProgress, type ShellFinalizationResult } from "../session/shell-finalizer";
 import { fetchOpenAiCodexModels } from "../commands/subscription-models";
@@ -4121,10 +4122,12 @@ export async function launchTuiAgentShell(opts: {
       debugEvent("provider-catalog.refresh-failed", { error: error instanceof Error ? error.message : String(error) });
       return { fetchedAt: new Date().toISOString(), providers: {} } satisfies ProviderCatalog;
     });
+    const startupTrace = startShellStartupTrace("tui.loading");
     try {
       startupIndicator.setStep("checking providers…");
       startupIndicator.setStep("Loading agent tools and MCP servers…");
       deps = await opts.makeAgentDeps(sel, liveSlateSession, busClientRef);
+      startupTrace.mark("agent-deps");
       liveDeps = deps; // F-002: onDestroy reads this ref (TDZ-safe, see above)
       // Flow 306 (W6 T14): `SessionStart` fires once the session's agent deps
       // (and its `HookRuntime`, via `commands/shell.ts`'s own `getShellHooks()`
@@ -4152,6 +4155,7 @@ export async function launchTuiAgentShell(opts: {
       // The mode-agnostic chrome (flow 112, S1): layout, header, transcript,
       // choice dock, `/`-menu, composer, footer/spinner, toast, overlay guard
       // and copy-on-select. Everything below is agent-specific and mounts ON it.
+      startupTrace.mark("session-start-dispatch");
       chrome = await createShellChrome(otui, r, {
         title: `keryx · agent · ${sel.provider}/${sel.model}`,
         status: `${sel.provider}/${sel.model}`,
@@ -4174,6 +4178,8 @@ export async function launchTuiAgentShell(opts: {
       // Flow 303 (AC14): the chrome (header, transcript, focused composer) is
       // now on screen, or the startup failed outright — either way the gap
       // the indicator was covering is over.
+      startupTrace.mark("chrome");
+      startupTrace.finish();
       startupIndicator.remove();
     }
     mountedChrome = chrome;

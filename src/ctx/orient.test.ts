@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rename, rm, utimes, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rename, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
@@ -369,3 +369,57 @@ test("buildOrientation still emits for a manifest-less project that has a built 
     expect(await buildOrientation(root)).toContain("keryx orientation");
   });
 });
+
+
+test("orientation shares one status per invocation, without branch or cross-call cache", async () => {
+  await gitProject(async (root) => {
+    const dir = await mkdtemp(path.join(tmpdir(), "keryx-git-probe-"));
+    const oldPath = process.env.PATH;
+    const realGit = Bun.which("git");
+    expect(realGit).not.toBeNull();
+    const log = path.join(dir, "calls");
+    const wrapper = path.join(dir, "git");
+    const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
+    await writeFile(wrapper, `#!/bin/sh
+printf '%s\\n' "$*" >> ${quote(log)}
+exec ${quote(realGit!)} "$@"
+`);
+    await chmod(wrapper, 0o755);
+    try {
+      process.env.PATH = `${dir}${path.delimiter}${oldPath ?? ""}`;
+      expect(await graphContext(root)).toContain("working tree clean");
+      const calls = (await readFile(log, "utf8")).trim().split("\n");
+      expect(calls.filter((line) => line.startsWith("status "))).toEqual(["status --porcelain=v1 -z"]);
+      expect(calls.some((line) => /branch|abbrev-ref/.test(line))).toBe(false);
+      const odd = path.join(root, "src", "café\n -> odd.ts");
+      await writeFile(odd, "export const b = 1;\n");
+      const changed = await graphContext(root);
+      expect(changed).toContain("1 uncommitted code file(s)");
+      expect(changed).toContain("café\n -> odd.ts");
+      const again = (await readFile(log, "utf8")).trim().split("\n");
+      expect(again.filter((line) => line.startsWith("status "))).toHaveLength(2);
+      await rm(odd);
+      expect(await graphContext(root)).toContain("working tree clean");
+    } finally {
+      if (oldPath === undefined) delete process.env.PATH;
+      else process.env.PATH = oldPath;
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+}, 30_000);
+
+test("code count consumes rename original-path fields and counts code-to-text once", async () => {
+  await gitProject(async (root) => {
+    expect(await git(root, ["mv", "src/a.ts", "src/café\n -> notes.txt"])).toBe(0);
+    expect(await uncommittedCodeCount(root)).toEqual({ status: "counted", count: 1 });
+    expect(await graphContext(root)).toContain("renamed (staged)");
+  });
+}, 30_000);
+
+test("code count does not count a code-to-code rename original path twice", async () => {
+  await gitProject(async (root) => {
+    expect(await git(root, ["mv", "src/a.ts", "src/renamed.ts"])).toBe(0);
+    expect(await uncommittedCodeCount(root)).toEqual({ status: "counted", count: 1 });
+    expect(await graphContext(root)).toContain("1 uncommitted code file(s)");
+  });
+}, 30_000);

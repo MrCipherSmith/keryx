@@ -12,7 +12,7 @@
 // itself) and assert against `checkGraphStaleness`'s structured result.
 
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "bun:test";
@@ -131,6 +131,32 @@ test("AFC-10 group 3 — a git failure is reported as unknown, never as fresh", 
   expect(result.status).not.toBe("fresh");
   expect(result.status).not.toBe("stale");
 });
+
+test("a selective show-prefix failure is unknown and recovery is fresh", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "keryx-prefix-probe-"));
+  const oldPath = process.env.PATH;
+  const realGit = Bun.which("git");
+  expect(realGit).not.toBeNull();
+  try {
+    const wrapper = path.join(dir, "git");
+    await writeFile(wrapper, `#!/bin/sh
+if [ "$1" = "rev-parse" ] && [ "$2" = "--show-prefix" ]; then exit 1; fi
+exec "${realGit}" "$@"
+`);
+    await chmod(wrapper, 0o755);
+    process.env.PATH = `${dir}${path.delimiter}${oldPath ?? ""}`;
+    const result = await checkGraphStaleness(root);
+    expect(result.status).toBe("unknown");
+    expect(result.reasons).toContain("git rev-parse --show-prefix failed");
+    if (oldPath === undefined) delete process.env.PATH;
+    else process.env.PATH = oldPath;
+    expect((await checkGraphStaleness(root)).status).toBe("fresh");
+  } finally {
+    if (oldPath === undefined) delete process.env.PATH;
+    else process.env.PATH = oldPath;
+    await rm(dir, { recursive: true, force: true });
+  }
+}, 30_000);
 
 test("AFC-10 — graph never built at all is reported as stale (not fresh), not a git failure", async () => {
   await rm(path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"));
