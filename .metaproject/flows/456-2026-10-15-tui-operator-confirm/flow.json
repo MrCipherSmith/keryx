@@ -11,12 +11,12 @@
   "title": "Operator confirmations answered in the TUI instead of a separate terminal",
   "status": "in-progress",
   "createdAt": "2026-10-15T18:08:38.862Z",
-  "updatedAt": "2026-10-15T18:12:55.595Z",
+  "updatedAt": "2026-10-15T18:52:51.797Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:32cecf855036e29b7b4fb27393b5019c0ff568fd10946e849dc4506a584e12e8",
+  "acChecksum": "sha256:5ca600c227905bf738921615e5d7867ac0d02cf76b4fa5ac2779d629ea7a5185",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -104,7 +104,7 @@
       "id": "T5",
       "title": "Framework: operator-confirm helper, registration, unattended list, TUI card",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -112,13 +112,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Review gate tools: chunks answer, publish, waive coverage, waive readiness",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -128,13 +129,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Other gate tools: flow confirm, external apply, learn, schedule actions",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -144,7 +146,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -280,6 +283,26 @@
     {
       "at": "2026-10-15T18:12:55.595Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-15T18:25:38.854Z",
+      "event": "task-done",
+      "detail": "T5: Framework: operator-confirm helper, registration, unattended list, TUI card"
+    },
+    {
+      "at": "2026-10-15T18:31:55.525Z",
+      "event": "task-done",
+      "detail": "T6: Review gate tools: chunks answer, publish, waive coverage, waive readiness"
+    },
+    {
+      "at": "2026-10-15T18:37:53.273Z",
+      "event": "task-done",
+      "detail": "T7: Other gate tools: flow confirm, external apply, learn, schedule actions"
+    },
+    {
+      "at": "2026-10-15T18:52:51.797Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"In a real terminal the existing TTY paths of all eight commands behave exactly as before; without a TTY, and under `KERYX_TOOL_CALL=1`, each refusal names the tool to use instead. Existing command tests stay green and new tests assert the refusal text. · sensitive: revert [verify: exec `bun test src/commands/review-chunks.test.ts src/commands/flow.test.ts src/commands/agents-external-write.test.ts src/commands/learn src/commands/schedule src/commands/review-tty-refusal.test.ts`]\" -> \"In a real terminal the existing TTY paths of all eight commands behave exactly as before; without a TTY, and under KERYX_TOOL_CALL=1, each refusal names the tool to use instead. Existing command tests stay green and new tests assert the refusal text. · sensitive: revert [verify: exec `bun test src/commands/review-chunks.test.ts src/flow/confirm-token.test.ts src/commands/agents-external-write.test.ts src/commands/learn src/commands/schedule src/commands/review-tty-refusal.test.ts`]\" (cited test file src/commands/flow.test.ts does not exist; flow confirm is tested in src/flow/confirm-token.test.ts)"
     }
   ],
   "acKinds": {
@@ -301,7 +324,7 @@
     },
     "AC5": {
       "kind": "exec",
-      "check": "bun test src/commands/review-chunks.test.ts src/commands/flow.test.ts src/commands/agents-external-write.test.ts src/commands/learn src/commands/schedule src/commands/review-tty-refusal.test.ts"
+      "check": "bun test src/commands/review-chunks.test.ts src/flow/confirm-token.test.ts src/commands/agents-external-write.test.ts src/commands/learn src/commands/schedule src/commands/review-tty-refusal.test.ts"
     },
     "AC6": {
       "kind": "invariant",

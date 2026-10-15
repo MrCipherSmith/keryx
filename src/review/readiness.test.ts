@@ -332,6 +332,7 @@ describe("keryx review complete goes through the checklist (AC3)", () => {
     await reviewCommand(["complete", pkg, "--waive", "verifier", "the operator said ship it"], seams(false));
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("needs a terminal");
+    expect(errors.join("\n")).toContain("review_waive_readiness");
     expect(JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8")).readiness_waivers).toBeUndefined();
     expect(readFileSync(path.join(pkg, "report.md"), "utf8")).not.toContain("Partial review:");
   });

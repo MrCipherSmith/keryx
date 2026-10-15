@@ -107,7 +107,7 @@ export async function runChunks(args: string[], deps: ChunksDeps, seams?: Chunks
   // The command-risk floor is a text match; this is the check behind it. The answer lifts the pass ceiling on the operator's word.
   const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
   if (sub === "estimate" && optionValue(rest, "--answer") !== undefined && !isTerminal()) {
-    throw new Error("--answer needs a terminal: the answer is the operator's own statement and is refused when stdin or stdout is not a TTY. Run the command yourself in a terminal.");
+    throw new Error("--answer needs a terminal: the answer is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_chunks_answer tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.");
   }
   const packageDir = resolvePackageDir(rest, process.cwd(), "chunks");
   const projectRoot = resolveProjectRoot(process.cwd());

@@ -205,7 +205,7 @@ export async function acceptPattern(root: string, id: string, opts: AcceptOption
   if (!opts.isTerminal) {
     throw new LearningAcceptError(
       "accept-requires-terminal",
-      "keryx learn accept needs an interactive terminal; there is no bypass flag or environment variable.",
+      "keryx learn accept needs an interactive terminal; there is no bypass flag or environment variable. Inside keryx shell, call the learn_accept tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.",
     );
   }
   const scope: LearningScope = opts.scope ?? "project";

@@ -2759,7 +2759,9 @@ store or the reports. **No grant lifts any of it.**
 - **A terminal is required.** `keryx schedule add`, `resume` and `run` need an
   interactive terminal on stdin and stdout, `--yes` included. `remove` and `pause` do
   not, because they only reduce what runs. The shell's `/schedule` card and the
-  `schedule_create` tool are the in-shell paths.
+  `schedule_create` tool are the in-shell paths. In `keryx shell` the agent also has
+  `schedule_resume`, `schedule_run`, `schedule_pause` and `schedule_remove`: each shows
+  a card and the operator answers it, so nobody opens a terminal (TM-04).
 - **Granted programs run from an empty directory.** Granted programs, `gh auth token`
   and the account lookup on the card all run from an empty keryx-owned directory, never
   from the project, so a committed `.tool-versions`/`.mise.toml`/`.envrc` cannot steer
@@ -3195,7 +3197,10 @@ The self-learning loop's consent CLI (flow 312, W3): passive observation
 `--non-interactive` flag: this mirrors `keryx schedule add`/`keryx flow
 confirm`'s own rule that an action a human must consciously approve gets no
 unattended path. None of the three is reachable through MCP — `src/mcp/
-tools.ts` is a hand-curated allowlist and carries no entry for `learn`.
+tools.ts` is a hand-curated allowlist and carries no entry for `learn`. Inside
+`keryx shell` the agent calls `learn_accept`, `learn_promote` or `learn_graduate`
+instead: the operator answers a card, and the record is stored with
+`confirmedVia: tui-card` (TM-04).
 
 ---
 
@@ -4263,6 +4268,11 @@ kind (which `flow check` reports as a schema problem and every reader reads as
 
 ### The confirmation token
 
+Inside `keryx shell` the `flow_confirm` tool mints the token after the operator
+presses yes on a card, with no terminal. The agent sees the token that tool returns,
+which is delegation, not proof of who pressed yes. See TM-04
+(`docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md`).
+
 A flow can require a **confirmation token** before it completes. It opts in when
 it is created, with `flow init --require-confirmation`, or with
 `completion.require_confirmation: true` in `.metaproject/tasks.config.json`.
@@ -4595,6 +4605,8 @@ keryx agents external apply <run-id> [--allow-flagged]
 keryx agents external discard <run-id>
 ```
 
+Inside `keryx shell` the agent lands a stored write run with the `external_apply` tool: the card shows the run, the branch and the patch hash, and the operator answers it. Outside the shell, `apply` needs a terminal as before.
+
 Wherever an agent `<id>` is taken (and in `/delegate`, and in a `spawn_subagent` `runtime.agent`), the short names `claude`, `codex` and `agy` (also `antigravity`, any case) work for `claude-cli`, `codex-cli` and `antigravity-cli`. A short name never weakens a per-agent setting: `externalAgents.agents["claude-cli"].enabled = false` refuses `claude` too.
 
 | Subcommand | Flags / args | Description |
@@ -4799,6 +4811,8 @@ keryx review complete ... [--waive-coverage "<operator quote>"] [--head <sha>] [
 keryx review readiness <review-id-or-path> [--json]
 keryx review publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE] [--partial] [--yes]
 ```
+
+The operator-only steps here (`chunks estimate --answer`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal. Inside `keryx shell` the agent calls `review_chunks_answer`, `review_waive_coverage`, `review_waive_readiness` or `review_publish` instead: the operator answers a card, and the record carries `confirmedVia: tui-card`. The two waiver tools only record the waiver; `keryx review complete` then closes the review without the flags (TM-04).
 
 **An unrecognised option is refused, not ignored**, and the command exits 1. A
 flag that is silently dropped writes nothing and still reports success.

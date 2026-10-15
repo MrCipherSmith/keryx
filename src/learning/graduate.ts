@@ -902,7 +902,7 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
   if (!opts.isTerminal) {
     throw new LearningGraduateError(
       "graduate-apply-requires-terminal",
-      "keryx learn graduate apply needs an interactive terminal; there is no bypass flag or environment variable.",
+      "keryx learn graduate apply needs an interactive terminal; there is no bypass flag or environment variable. Inside keryx shell, call the learn_graduate tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.",
     );
   }
 

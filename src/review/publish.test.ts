@@ -162,6 +162,7 @@ describe("keryx review publish", () => {
     const { io, output } = await publish([]);
     expect(output).toContain("Request changes.");
     expect(output).toContain("Not posted");
+    expect(output).toContain("review_publish");
     expect(io.posts).toEqual([]);
     expect(process.exitCode).toBe(1);
   });

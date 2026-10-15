@@ -1,0 +1,79 @@
+# TM-04: Operator Confirmation Cards
+
+## Decisions Only the Operator May Take, Asked as a Card in `keryx shell`, and What a Card Does Not Prove
+
+**Status**: Implemented
+**Frozen**: 2026-10-15
+**Task**: flow 456
+**Depends on**: TM-03 (terminal confirmation token). This record changes where the operator answers, not what the answer is worth. Flow 295 (`schedule_create`) is the pattern it generalises.
+**Reviewer Track**: architecture
+
+---
+
+## 1. Purpose
+
+Thirteen keryx decisions are the operator's alone: lifting a review pass ceiling, posting a review to GitHub, waiving unreviewed files or a readiness item, minting a flow completion token, landing an external agent's patch, accepting, promoting or graduating a learned pattern, and changing or running a schedule. Each CLI path refuses unless stdin and stdout are terminals. Inside `keryx shell` the agent runs commands through `shell_exec`, which has no terminal, so it stopped and told the operator to open another terminal and type a long command.
+
+This record replaces that hand-off. In `keryx shell` each decision is a native tool. The tool shows the operator a card (what is decided, the exact effect, the subject) and takes a yes or no. The terminal paths stay exactly as they were.
+
+## 2. The tools
+
+| Tool | Same effect as |
+|---|---|
+| `review_chunks_answer` | `keryx review chunks estimate --answer yes\|no` |
+| `review_publish` | `keryx review publish` |
+| `review_waive_coverage` | `keryx review complete --waive-coverage` (records the waiver only) |
+| `review_waive_readiness` | `keryx review complete --waive <item>` (records the waiver only) |
+| `flow_confirm` | `keryx flow confirm <id> [--merged]` |
+| `external_apply` | `keryx agents external apply <run-id>` |
+| `learn_accept`, `learn_promote`, `learn_graduate` | `keryx learn accept`, `promote`, `graduate apply` |
+| `schedule_create`, `schedule_resume`, `schedule_run`, `schedule_pause`, `schedule_remove` | `keryx schedule add`, `resume`, `run`, `pause`, `remove` |
+
+The framework is `src/commands/operator-confirm-tools.ts`. The specs are in `operator-confirm-review.ts` and `operator-confirm-other.ts`.
+
+**How a call runs.**
+1. `buildCard` reads the real state on disk and builds the card. A card is never built from the model's input alone. A refusal (nothing to confirm) ends the call without asking.
+2. The tool declares a confirmation, so the approval gate treats it as a hard floor: every permission mode asks (`auto` included), review-auto never grants it, no saved pattern or MCP trust grant applies, and an unattended run is denied.
+3. The card's single-use token lives in the shell process's memory. It reaches `invoke` only after the operator's yes. A declined or denied card drops it; a replay finds nothing.
+4. On yes, `apply` calls the same library function the CLI calls, in process, and re-checks that the state did not move between the card and the yes.
+5. The decision is stored with `confirmedVia`: `tui-card` when the operator answered in this shell, `remote-card` when they answered in the session's remote topic. The quote is the card title plus `: yes`.
+
+## 3. What a card proves
+
+A person pressed yes, in this keryx shell session or in its remote topic, on a card whose text was built from the state that the decision then changed. For the remote topic, "a person" means an account on the remote allowlist (`src/remote/config.ts`) answering in the session's own topic, the same rule that governs every other remote approval. A card is never weaker than an existing `alwaysAsk` approval.
+
+## 4. What a card does not prove
+
+- **Who.** Nothing identifies the person. The shell session belongs to whoever sits at it, and a remote answer belongs to whichever allowlisted account pressed the button.
+- **That they read it.** The card shows the decision; keryx cannot tell that anyone looked.
+- **That a same-user process cannot forge the stores.** The stores are plain files in the project and under `~/.keryx`. An agent with an unrestricted shell as the same user can still write a waiver, a learning record or a token hash directly. TM-03 §5 applies unchanged. The card closes the honest path, not the dishonest one.
+- **That `flow_confirm`'s token stays private.** The tool returns the minted token to the agent so it can run `flow complete --confirm-token`. The token is therefore visible to the agent. That is delegation (TM-03 §4): the operator pressed yes on a card that said what the token completes.
+
+## 5. Why child-process proofs were rejected
+
+The first idea was to let the CLI accept an environment variable, a file or a socket that proves "the shell's operator said yes", so the existing commands could stay the only implementation. It was rejected. `shell_exec` runs whatever command line the model writes, in an environment the model controls (`sh -c`), as a user who can read and write everything the operator can. Anything handed to that child can be read, copied or replayed by the model, so the proof would prove only that the model ran the command.
+
+The in-process tool has no such surface. The decision never leaves the shell process: no argument, environment variable, file or socket carries it. `ask_user` was rejected for a different reason: it can be answered by review-auto, the arbiter or an answers file, and its answer returns through the model.
+
+## 6. Remote answering
+
+A card raised while the remote topic is active is mirrored to the topic like any other approval. The first answer wins: a press in the topic closes the dock, an answer in the dock removes the buttons in the topic. When the topic answers, the gate records `confirmedVia: "remote-card"`, so a record always says where the yes came from. Silence in the topic never ends the dock.
+
+## 7. Unattended runs
+
+An unattended run has no approver, so the answer to a card is no. `src/trigger/unattended.ts` also lists every card tool as interactive-only and refuses it by name. The skills that used to say "ask the operator to run this in a terminal" now say: in `keryx shell` call the tool and let the operator answer it; never send the operator to a terminal; when the run is unattended, record the item as Not run, as before.
+
+## 8. The CLI paths and the approval floor
+
+In a real terminal every command behaves as it did. Without a terminal each refusal now says: inside `keryx shell`, call the `<tool>` tool, the operator answers it as a card; outside `keryx shell`, run this command in a terminal.
+
+`touchesHumanConfirmation` (`src/lib/command-risk.ts`) already forced `ask` for `flow confirm`, `schedule add|remove|pause|resume|run`, `review chunks estimate --answer`, `review complete --waive-coverage` and `--waive`, and `review publish`. It now also covers `keryx learn accept|promote|graduate` and `keryx agents external apply` (`touchesOperatorDecision`), so a `shell_exec` attempt of any of them asks in every mode. Like the rest of that floor it is a text match and has the limits TM-03 §5 states.
+
+## 9. References
+
+- `src/commands/operator-confirm-tools.ts`, `operator-confirm-review.ts`, `operator-confirm-other.ts`, `schedule-tools.ts`.
+- `src/commands/agent.ts`, `src/tui/tui-shell.ts`: the approval driver, the dock and the topic mirror.
+- `src/lib/command-risk.ts`: `touchesHumanConfirmation`, `touchesOperatorDecision`.
+- `src/trigger/unattended.ts`: interactive-only tool names.
+- `src/flow/confirm-token.ts`: the token and its caveat.
+- TM-03 (`TM-03-terminal-confirmation-token.md`): the token this record's `flow_confirm` mints, and the bypasses that still apply.

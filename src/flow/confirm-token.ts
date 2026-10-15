@@ -1,10 +1,14 @@
-// Flow 299 (AC1-AC3): a completion confirmation token that no agent TOOL can
-// mint.
+// Flow 299 (AC1-AC3): a completion confirmation token that no unconfirmed agent
+// action can mint.
 //
 // The mechanism is SAC's `review-confirm-token.ts` pattern, applied to
 // `flow complete`:
 // - `keryx flow confirm <id>` mints the token. It is a separate CLI verb that
 //   requires a terminal and a challenge typed back via `/dev/tty`.
+// - Flow 456 (TM-04): inside `keryx shell` the `flow_confirm` tool mints it in
+//   process after the operator presses yes on a card (`confirmedVia: tui-card`,
+//   or `remote-card` from the session's topic). The tool returns the token to
+//   the agent, so the agent can see it; that is delegation, as in TM-03 section 4.
 // - Only the token's sha256 reaches disk, bound to the flow, the completion
 //   kind and the AC checksum in force. It lives in `confirm-token.json` in the
 //   flow's own directory, where `isManagedFlowFile` already refuses
@@ -34,8 +38,8 @@ export const CONFIRMATION_TOKEN_TTL_MS = 10 * 60_000;
  * text all repeat it (flow 299, AC8).
  */
 export const CONFIRMATION_CAVEAT =
-  "The token proves an interactive confirmation step ran outside the agent's tool roster, within its TTL, " +
-  "for this criteria checksum — not that a human ran it, and not who.";
+  "The token proves an interactive confirmation step (a terminal challenge, or a yes on a keryx shell card) ran, " +
+  "within its TTL, for this criteria checksum — not that a human ran it, and not who.";
 
 /** File name of the token store inside a flow directory. Named by the unattended floor. */
 export const CONFIRM_TOKEN_FILE = "confirm-token.json";

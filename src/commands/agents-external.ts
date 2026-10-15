@@ -777,7 +777,7 @@ async function applyCommand(runId: string, allowFlagged: boolean, deps: AgentsEx
   const seams = deps.run ?? {};
   const interactive = (seams.isTTY ?? process.stdin.isTTY === true) && (seams.stdoutIsTTY ?? process.stdout.isTTY === true);
   if (!interactive) {
-    console.error("apply needs a terminal: nobody can answer for you");
+    console.error("apply needs a terminal: nobody can answer for you. Inside keryx shell, call the external_apply tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.");
     process.exitCode = 1;
     return;
   }

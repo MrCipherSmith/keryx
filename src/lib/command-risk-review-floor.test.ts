@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { touchesChunkEstimateAnswer, touchesCoverageWaiver, touchesHumanConfirmation, touchesReviewPublish } from "./command-risk";
+import { touchesChunkEstimateAnswer, touchesCoverageWaiver, touchesHumanConfirmation, touchesOperatorDecision, touchesReviewPublish } from "./command-risk";
 
 function deepBashC(command: string, levels: number): string {
   let out = command;
@@ -168,6 +168,30 @@ describe("readiness waiver and review publish floors (flow 451)", () => {
   test("other review commands and prose that mentions publishing do not ask", () => {
     for (const command of ["keryx review readiness pr7932-r1", "keryx review status", "keryx ctx rg review publish src", "echo keryx review publish"]) {
       expect(touchesReviewPublish(command)).toBe(false);
+    }
+  });
+});
+
+describe("learn and external-apply floors (flow 456)", () => {
+  test("`learn accept|promote|graduate` and `agents external apply` ask in every mode, in any spelling the shell resolves", () => {
+    for (const command of [
+      "keryx learn accept pat-1",
+      "keryx learn promote pat-1",
+      "keryx learn graduate apply prop-1",
+      "keryx agents external apply run-1",
+      "keryx agents ext''ernal ap''ply run-1",
+      "env X=1 keryx learn accept pat-1 --scope user",
+      "bash -c 'keryx learn promote pat-1'",
+      "keryx learn $VERB pat-1",
+    ]) {
+      expect(touchesOperatorDecision(command)).toBe(true);
+      expect(touchesHumanConfirmation(command)).toBe(true);
+    }
+  });
+
+  test("read-only learn and external commands and prose do not ask", () => {
+    for (const command of ["keryx learn list", "keryx learn review pat-1", "keryx agents external review run-1", "keryx ctx rg learn accept src", "echo keryx learn accept"]) {
+      expect(touchesOperatorDecision(command)).toBe(false);
     }
   });
 });

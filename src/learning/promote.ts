@@ -111,7 +111,7 @@ export async function promotePattern(root: string, id: string, opts: PromotePatt
   if (!opts.isTerminal) {
     throw new LearningPromoteError(
       "promote-requires-terminal",
-      "keryx learn promote needs an interactive terminal; there is no bypass flag or environment variable.",
+      "keryx learn promote needs an interactive terminal; there is no bypass flag or environment variable. Inside keryx shell, call the learn_promote tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.",
     );
   }
 
