@@ -12,6 +12,7 @@ import { builtinMetaprojectTools, makeKeryxRunner } from "../harness/tool/builti
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { offersIndexTools } from "../lib/metaproject-state";
+import { CALLER_ORCHESTRATOR, withOrchestratorLog } from "../review/orchestrator-log";
 
 /**
  * The metaproject tools that work in a project with no USABLE metaproject.
@@ -51,7 +52,9 @@ export interface ProjectTools {
  * the defect this filter exists to close.
  */
 export function buildProjectTools(cwd: string, metaprojectPort: MetaprojectPort): ProjectTools {
-  const all = builtinMetaprojectTools(cwd, makeKeryxRunner(cwd), metaprojectPort);
+  const all = builtinMetaprojectTools(cwd, makeKeryxRunner(cwd), metaprojectPort).map((tool) =>
+    withOrchestratorLog(tool, { cwd, caller: CALLER_ORCHESTRATOR }),
+  );
   const offered = offersIndexTools(cwd) ? all : all.filter((tool) => METAPROJECT_FREE_TOOLS.has(tool.definition.name));
   return { all, offered };
 }

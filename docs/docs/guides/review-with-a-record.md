@@ -728,9 +728,17 @@ you (once, interactively), or ends an unattended run with
 guess.
 
 `keryx review start --memory-query "<query>"` writes a `cleanContext` block into
-the manifest: the start time and the query of the memory stage. The orchestrator
-appends each of its tool calls to `<package>/tool-calls/orchestrator.jsonl`, and
-the tenth readiness item, `memory-outside-stage`, reads that log. A memory call
+the manifest: the start time and the query of the memory stage. keryx writes the
+orchestrator log, `<package>/tool-calls/orchestrator.jsonl`, itself: the agent
+does not append to it and must not edit it. `keryx review start` and
+`keryx review attach` mark the package as the active one (a small pointer in the
+project's data directory, `.metaproject/data/review-active/`, which is not
+committed), and from then on every `keryx memory` command, every MCP memory tool
+(`memory_search`, `memory_handoff`, `memory_propose`) and every memory call the
+keryx agent makes adds one line: the tool, its query, the time, the source (`cli`,
+`mcp` or `shell`) and who called. closing the package (`keryx review complete`) removes the pointer, and a
+pointer to a package that is missing or closed is ignored, so a finished review is
+never written to. The tenth readiness item, `memory-outside-stage`, reads that log. A memory call
 with another query, without `--status accepted`, any other memory command, or a
 stage call stamped before the round started, fails the item; the same query
 repeated does not. It blocks `review complete` and `review publish` like the
@@ -748,10 +756,31 @@ Three paths bring earlier work into a review on purpose, and they are kept:
 3. A reviewer's own `memory_search`, a lookup in the project's recorded lessons.
    The item never judges a reviewer's log.
 
-**Named limit.** keryx cannot prevent an agent runtime that loads its memory
+Who called is one of three things. In a `keryx shell` session the parent's own
+calls are `orchestrator`, and a call by a `spawn_subagent` child is recorded under
+the child's reviewer id (keryx puts `KERYX_REVIEW_CALLER` into the child's command
+environment only), so a reviewer's own lookup is never counted against the
+orchestrator. A call that reaches keryx from a host that names no caller, such as
+`keryx memory search` typed in another terminal or an MCP memory tool called by
+Claude Code or Codex directly, is `unattributed`. It does not block: it adds
+`warning: N unattributed memory call(s)` to the item's detail, and `review
+readiness`, `review status`, the Review depth tab and the sidebar show
+`orchestrator log: recorded, N unattributed`. A log that holds only its first line
+passes with "no memory call recorded"; no file at all passes with "no orchestrator
+tool log", as before, and those surfaces say `orchestrator log: none`.
+
+**Named limits.** keryx cannot prevent an agent runtime that loads its memory
 before the skill starts. The guarantee is instruction plus detection, not
 isolation, and reads of the agent's personal memory outside `keryx memory` are not
-visible to the log. With no orchestrator log the item passes and says so.
+visible to the log. Four things the automatic log does not do:
+
+- Only calls through keryx are visible. A memory read through a tool keryx does not
+  wrap is not in the log.
+- Unmarked calls outside the keryx shell are `unattributed`: keryx records them but
+  cannot say whether the orchestrator or a reviewer made them.
+- The log is not a sandbox. It records the calls; it does not stop them.
+- The log is a plain editable file. Anyone with write access to the package can
+  change it, so it is evidence of what keryx saw, not proof against tampering.
 
 ### Five gates that keep a report honest
 

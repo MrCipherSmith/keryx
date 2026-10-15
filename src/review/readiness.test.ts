@@ -9,7 +9,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
 import { CHUNK_REVIEWER, ensureChunkPlan, recordChunk } from "./chunks";
-import { computeReadiness, failingItems, partialHeader, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
+import { CALLER_UNATTRIBUTED, recordLogStart, recordOrchestratorCall } from "./orchestrator-log";
+import { computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
 
 let root: string;
 let pkg: string;
@@ -368,5 +369,35 @@ describe("a recount against the wrong base is refused (flow 451 AC7)", () => {
     expect(recountRefusal(75, recorded, "pr7932-r1")).toBeUndefined();
     expect(recountRefusal(76, recorded, "pr7932-r1")).toBeDefined();
     expect(recountRefusal(1547, [], "pr7932-r1")).toBeUndefined();
+  });
+});
+
+// Flow 454 AC7: the log's state, recorded or absent, and the count of calls keryx could not attribute, in the same words
+// on the checklist and on the compact status lines.
+describe("the orchestrator log note (flow 454 AC7)", () => {
+  const memoryLines = (lines: string[]): string[] => lines.filter((line) => line.includes("orchestrator log:"));
+
+  test("with no log file the checklist and the status lines say none", async () => {
+    const report = await computeReadiness(pkg);
+    expect(memoryLogNote(report)).toBe("orchestrator log: none");
+    expect(memoryLines(renderReadiness(report)).map((line) => line.trim())).toEqual(["orchestrator log: none"]);
+    expect(readinessDepthLines(report).join("\n")).toContain("memory-outside-stage: orchestrator log: none");
+  });
+
+  test("with a log keryx started both say recorded", async () => {
+    await recordLogStart(pkg);
+    const report = await computeReadiness(pkg);
+    expect(memoryLogNote(report)).toBe("orchestrator log: recorded");
+    expect(memoryLines(renderReadiness(report)).map((line) => line.trim())).toEqual(["orchestrator log: recorded"]);
+    expect(readinessDepthLines(report).join("\n")).toContain("memory-outside-stage: orchestrator log: recorded");
+  });
+
+  test("the count of unattributed calls is the same on every projection", async () => {
+    await recordLogStart(pkg);
+    for (const query of ["a", "b"]) await recordOrchestratorCall(pkg, { source: "mcp", caller: CALLER_UNATTRIBUTED, tool: "memory_search", input: { query } });
+    const report = await computeReadiness(pkg);
+    expect(memoryLogNote(report)).toBe("orchestrator log: recorded, 2 unattributed");
+    expect(memoryLines(renderReadiness(report)).map((line) => line.trim())).toEqual(["orchestrator log: recorded, 2 unattributed"]);
+    expect(readinessDepthLines(report).join("\n")).toContain("memory-outside-stage: orchestrator log: recorded, 2 unattributed");
   });
 });
