@@ -1,5 +1,5 @@
 import { expect, test, spyOn } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { startShellStartupTrace } from "./shell-startup-trace";
@@ -104,6 +104,43 @@ test("hook runtime emits startup stages, including the hooks-off early return", 
     ]);
     expect(records[1].stages[0].stage).toBe("hooks-disabled");
   } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("hook runtime finalizes startup trace when its config error callback throws", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "keryx-startup-error-"));
+  const intervals = spyOn(globalThis, "setInterval");
+  const clears = spyOn(globalThis, "clearInterval");
+  try {
+    const file = path.join(dir, "trace.jsonl");
+    await mkdir(path.join(dir, ".metaproject"));
+    await writeFile(path.join(dir, ".metaproject", "hooks.json"), "{ not json");
+    const failure = new Error("config callback failed");
+    let caught: unknown;
+    try {
+      buildShellHookRuntime({
+        projectRoot: dir, homeDir: dir, configDir: dir, sessionId: "s", runId: "r",
+        interactive: true, profileId: "monitored-trusted-local",
+        env: { KERYX_SHELL_STARTUP_TRACE: file },
+        onConfigError: () => { throw failure; },
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBe(failure);
+    const records = (await readFile(file, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    expect(records).toHaveLength(1);
+    expect(records[0].scope).toBe("hooks.build");
+    expect(intervals).toHaveBeenCalledTimes(1);
+    expect(clears).toHaveBeenCalledTimes(1);
+    expect(clears).toHaveBeenCalledWith(intervals.mock.results[0]!.value);
+  } finally {
+    for (const result of intervals.mock.results) {
+      if (result.type === "return") clearInterval(result.value);
+    }
+    intervals.mockRestore();
+    clears.mockRestore();
     await rm(dir, { recursive: true, force: true });
   }
 });

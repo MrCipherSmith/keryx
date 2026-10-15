@@ -42,6 +42,20 @@ test("filesystem scan retains a real private-file publication", async () => {
   expect(result.decision.gate).toBe("fail");
 });
 
+test("filesystem scan retains findings and reports conservative fallback for invalid syntax", async () => {
+  await writeFile(path.join(root, "example.ts"), "fetch(url, process.env); const = ;");
+  const result = await runScanPath(root, {
+    ownerRoot: root, targetPath: path.join(root, "example.ts"), source: "trusted-project",
+  });
+  expect(result.report.coverage?.status).toBe("complete");
+  expect(result.report.files).toEqual([{ path: "example.ts", status: "scanned" }]);
+  expect(result.decision.findings.some((finding) =>
+    finding.policyId === "egress.private-file-publish")).toBe(true);
+  expect(result.decision.gate).toBe("fail");
+  expect(result.warnings.some((warning) =>
+    warning.includes("source syntax unverified; conservative security matches retained"))).toBe(true);
+});
+
 test("shell and TUI source scans are clean with complete coverage", async () => {
   for (const [name, relative] of [
     ["shell.ts", "../commands/shell.ts"],
