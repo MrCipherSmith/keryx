@@ -49,8 +49,8 @@ describe("AC9: the automatic orchestrator log is documented", () => {
   });
 
   test("the changelog entry carries the four limits and the unattributed rule", () => {
-    const unreleased = CHANGELOG.slice(0, CHANGELOG.indexOf("\n## [0."));
-    const entry = unreleased.split("\n").find((line) => line.startsWith("- **keryx writes the review orchestrator's call log"));
+    // Any section: a release moves the entry out of [Unreleased].
+    const entry = CHANGELOG.split("\n").find((line) => line.startsWith("- **keryx writes the review orchestrator's call log"));
     expect(entry).toBeDefined();
     for (const limit of LIMITS) expect(flat(entry!)).toContain(limit);
     expect(entry).toContain("warns in the item's detail and never blocks");

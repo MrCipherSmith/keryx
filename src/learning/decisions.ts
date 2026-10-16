@@ -21,6 +21,14 @@ export interface Decision {
   /** Whether the action ran in an interactive terminal (accept/promote require it — see `paths.ts`/`store.ts` callers). */
   tty: boolean;
   at: string;
+  /** Flow 456: set when the operator answered a yes/no card in the shell instead of a terminal prompt. */
+  confirmation?: DecisionConfirmation;
+}
+
+/** How a card-confirmed decision was answered: the channel and the card text plus the answer. */
+export interface DecisionConfirmation {
+  confirmedVia: string;
+  quote: string;
 }
 
 export interface AppendDecisionInput {
@@ -30,6 +38,7 @@ export interface AppendDecisionInput {
   tty: boolean;
   /** Defaults to `new Date().toISOString()`. */
   at?: string;
+  confirmation?: DecisionConfirmation;
 }
 
 export interface DecisionLogOptions {
@@ -60,6 +69,7 @@ export async function appendDecision(root: string, decision: AppendDecisionInput
     actor: decision.actor,
     tty: decision.tty,
     at: decision.at ?? new Date().toISOString(),
+    ...(decision.confirmation !== undefined ? { confirmation: decision.confirmation } : {}),
   };
   const logPath = logPathFor(root, options);
   const lockPath = lockPathFor(root, options);

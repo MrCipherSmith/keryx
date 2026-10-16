@@ -83,8 +83,8 @@ async function ttyConfirm(question: string): Promise<boolean> {
 
 const NO_TERMINAL_REASON =
   "needs an interactive terminal on both stdin and stdout, and refuses to run from a pipe, an agent's shell, " +
-  "an MCP or ACP client, or an unattended run (--yes included). Run it yourself in a terminal, or confirm the card " +
-  "that /schedule or the schedule_create tool shows in `keryx shell`.";
+  "an MCP or ACP client, or an unattended run (--yes included). Inside keryx shell, call the " +
+  "schedule_create / schedule_resume / schedule_run tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.";
 
 function flagValues(args: readonly string[], flag: string): string[] {
   const out: string[] = [];
@@ -173,7 +173,7 @@ export async function scheduleCommand(args: string[], deps: ScheduleCommandDeps 
   if (sub !== undefined && OPERATOR_ONLY.has(sub) && (deps.env ?? process.env)["KERYX_TOOL_CALL"] === "1") {
     console.error(
       `keryx schedule ${sub}: refused inside an agent's shell (KERYX_TOOL_CALL=1). A schedule is created or changed only by ` +
-        "the operator: run this in your own terminal, or confirm the card that /schedule or the schedule_create tool shows.",
+        "the operator. Inside keryx shell, call the schedule_create / schedule_resume / schedule_run / schedule_pause / schedule_remove tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.",
     );
     process.exitCode = 1;
     return;

@@ -107,7 +107,13 @@ export async function runChunks(args: string[], deps: ChunksDeps, seams?: Chunks
   // The command-risk floor is a text match; this is the check behind it. The answer lifts the pass ceiling on the operator's word.
   const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
   if (sub === "estimate" && optionValue(rest, "--answer") !== undefined && !isTerminal()) {
-    throw new Error("--answer needs a terminal: the answer is the operator's own statement and is refused when stdin or stdout is not a TTY. Run the command yourself in a terminal.");
+    throw new Error("--answer needs a terminal: the answer is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_chunks_answer tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.");
+  }
+  // Flow 457 (T7, audit row 7; security review M2): automatic mode is a person's at a terminal to choose; an agent's
+  // shell that names it would turn "wait for the operator's yes" into "ask once" on its own say. The autonomous
+  // runner's environment variable is no exemption (any process can set it); an autonomous run omits --mode.
+  if (sub === "estimate" && optionValue(rest, "--mode") === "automatic" && !isTerminal()) {
+    throw new Error("--mode automatic needs a terminal: it changes how an over-ceiling chunk run is decided, and is refused when stdin or stdout is not a TTY (an unattended or autonomous run included: run `keryx review chunks estimate` without --mode and, when the run is over the ceiling, record it as needing the operator). Inside keryx shell, run `keryx review chunks estimate` without --mode and call the review_chunks_answer tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.");
   }
   const packageDir = resolvePackageDir(rest, process.cwd(), "chunks");
   const projectRoot = resolveProjectRoot(process.cwd());

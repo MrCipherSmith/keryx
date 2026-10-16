@@ -143,3 +143,101 @@ test("scopeFingerprint changes when a slice file changes without changing its si
   await writeFile(slicePath, edited, "utf8");
   expect(await fingerprint()).not.toBe(before);
 });
+
+async function plantLate(ids: string[], raw: string): Promise<void> {
+  await mkdir(path.join(root, "pkg", "raw"), { recursive: true });
+  await mkdir(path.join(root, "pkg", "drivers"), { recursive: true });
+  await writeFile(path.join(root, "pkg", "raw", "review-logic.txt"), raw, "utf8");
+  await writeFile(path.join(root, "pkg", "drivers", "review-logic-1.json"), JSON.stringify({ reviewer: "review-logic", slices: ids, result: "raw/review-logic.txt" }), "utf8");
+}
+
+async function nextWave(extra: string[] = ["--json"]): Promise<string> {
+  logs = [];
+  await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--reviewer", "review-logic", "--next-wave", "--package", "pkg", "--dry-run", ...extra]);
+  expect(process.exitCode).toBe(0);
+  return logs.join("\n");
+}
+
+test("retry-plan --package: a finished result written after the deadline covers its slices and is reported as collected late", async () => {
+  const { ids } = await sliceOnce();
+  await plantLate(ids, `Done.\n\nREVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE_WITH_CONCERNS", slices: ids })}\n`);
+  const plan = JSON.parse(await nextWave());
+  expect(plan.dispatch).toEqual([]);
+  expect(plan.collectedLate).toBe(1);
+  expect(await nextWave([])).toContain("collected late: 1");
+});
+
+test("retry-plan --package: a malformed or INCOMPLETE result covers nothing, the slice is handed out again", async () => {
+  const { ids } = await sliceOnce();
+  await plantLate(ids, "REVIEW_RESULT: {\"reviewer\": \"review-logic\", \"status\": \"DO");
+  let plan = JSON.parse(await nextWave());
+  expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
+  expect(plan.collectedLate).toBe(0);
+  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "INCOMPLETE", slices: ids })}\n`);
+  plan = JSON.parse(await nextWave());
+  expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
+  expect(plan.collectedLate).toBe(0);
+});
+
+test("retry-plan --package: a late result counts the slices it reported, not the whole assignment (same rule as the ledger)", async () => {
+  await writeFile(path.join(root, "change.diff"), ["a", "b", "c"].map((n) => gitFile(`src/m/${n}.ts`, 40)).join(""), "utf8");
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "1500", "--out", "out"]);
+  expect(process.exitCode).toBe(0);
+  const ids = (JSON.parse(await readFile(path.join(root, "out", "manifest.json"), "utf8")) as { slices: Array<{ id: string }> }).slices.map((slice) => slice.id);
+  logs = [];
+  expect(ids.length).toBeGreaterThanOrEqual(3);
+  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", slices: [ids[0]] })}\n`);
+  const plan = JSON.parse(await nextWave());
+  expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids.slice(1));
+  expect(plan.collectedLate).toBe(1);
+});
+
+test("retry-plan --package: a late result for a different scope fingerprint covers nothing", async () => {
+  const { ids } = await sliceOnce();
+  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", scopeFingerprint: "stale", slices: ids })}\n`);
+  const plan = JSON.parse(await nextWave());
+  expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
+  expect(plan.collectedLate).toBe(0);
+});
+
+test("retry-plan --package: two drivers naming the same raw file are collected once", async () => {
+  const { ids } = await sliceOnce();
+  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", slices: ids })}\n`);
+  await writeFile(path.join(root, "pkg", "drivers", "review-logic-2.json"), JSON.stringify({ reviewer: "review-logic", slices: ids, result: "raw/review-logic.txt" }), "utf8");
+  const plan = JSON.parse(await nextWave());
+  expect(plan.dispatch).toEqual([]);
+  expect(plan.collectedLate).toBe(1);
+});
+
+test("slice writes the routing into the manifest: roles from content, review-logic on every slice, a depth", async () => {
+  await sliceOnce();
+  const manifest = JSON.parse(await readFile(path.join(root, "out", "manifest.json"), "utf8")) as { slices: Array<{ roles?: string[]; depth?: string; risk?: { score: number } }> };
+  for (const slice of manifest.slices) {
+    expect(slice.roles).toContain("review-logic");
+    expect(slice.roles).toContain("review-architecture");
+    expect(["deep", "light"].includes(slice.depth ?? "")).toBe(true);
+    expect(typeof slice.risk?.score).toBe("number");
+  }
+});
+
+test("retry-plan re-opens a light slice deep when a result reports a major finding on it", async () => {
+  // Source code is always read deep, so the light slice here is a docs slice (security review B3).
+  const doc = "docs/guide.md";
+  const lines = Array.from({ length: 30 }, (_, n) => `+Step ${n}: read the guide.`);
+  await writeFile(path.join(root, "change.diff"), `diff --git a/${doc} b/${doc}\n--- a/${doc}\n+++ b/${doc}\n@@ -1,0 +1,30 @@\n${lines.join("\n")}\n`, "utf8");
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "30000", "--out", "out"]);
+  expect(process.exitCode).toBe(0);
+  const sliced = JSON.parse(await readFile(path.join(root, "out", "manifest.json"), "utf8")) as { slices: Array<{ id: string; depth?: string }> };
+  const ids = sliced.slices.map((entry) => entry.id);
+  expect(sliced.slices[0]!.depth).toBe("light");
+  logs = [];
+  await writeFile(path.join(root, "major.json"), JSON.stringify({ reviewer: "review-logic", status: "DONE", slices: ids, findings: [{ id: "F-1", severity: "major", file: doc }] }), "utf8");
+  await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--result", "major.json", "--json"]);
+  expect(process.exitCode).toBe(0);
+  expect(JSON.parse(logs.join("\n")).escalations).toEqual([{ slice: ids[0]!, finding: "F-1", severity: "major", by: "review-logic" }]);
+  const manifest = JSON.parse(await readFile(path.join(root, "out", "manifest.json"), "utf8")) as { slices: Array<{ id: string; depth?: string; roles?: string[]; escalated?: unknown }> };
+  const slice = manifest.slices.find((entry) => entry.id === ids[0]!)!;
+  expect(slice.depth).toBe("deep");
+  expect(slice.roles).toContain("review-security-code");
+  expect(slice.escalated).toEqual({ by: "review-logic", finding: "F-1" });
+});

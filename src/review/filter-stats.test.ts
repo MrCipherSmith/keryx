@@ -138,6 +138,7 @@ test("AC1: the counts come from the stages, not from re-parsing scope.md", async
   // results can get all three right.
   const many: StructuredReviewFinding[] = Array.from({ length: 5 }, (_, index) => ({
     ...FINDING,
+    severity: "info",
     id: `F-${String(index + 1).padStart(3, "0")}`,
   }));
 

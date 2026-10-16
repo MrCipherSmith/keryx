@@ -76,7 +76,10 @@ export type ReviewCoverageEntry = {
 };
 
 /** A readiness item the operator waived in their own words (`keryx review complete --waive <item> "<quote>"`). */
-export type ReadinessWaiver = { item: string; operator_quote: string; time: string };
+/** How an operator decision was taken: the shell's yes/no card, or the remote topic's mirror of it. Absent on a terminal answer and on older records. */
+export type ConfirmedVia = "tui-card" | "remote-card";
+
+export type ReadinessWaiver = { item: string; operator_quote: string; time: string; confirmedVia?: ConfirmedVia | undefined };
 
 export type ManagedReviewManifest = {
   schemaVersion: 1;
@@ -116,6 +119,11 @@ export type ManagedReviewManifest = {
   filter_stats?: ReviewFilterStats | undefined;
   /** Readiness items waived by the operator; each also heads report.md as a "Partial review" line. */
   readiness_waivers?: ReadinessWaiver[] | undefined;
+  /**
+   * Flow 457: the operator-gate version `review start|attach` created the package with (see review/run-profile.ts).
+   * Absent on ingest packages and on packages that predate the gate.
+   */
+  operatorGate?: number | undefined;
   /**
    * Fields the ingest supplied rather than the reviewer authoring them.
    * Written only when something was repaired — see

@@ -221,7 +221,7 @@ describe("agents external apply", () => {
       expect(process.exitCode).toBe(1);
       expect(asked).toBe(false);
     }
-    expect(errors.filter((line) => line === "apply needs a terminal: nobody can answer for you")).toHaveLength(3);
+    expect(errors.filter((line) => line.startsWith("apply needs a terminal: nobody can answer for you") && line.includes("external_apply"))).toHaveLength(3);
     expect(branches()).toEqual(["main"]);
   });
 

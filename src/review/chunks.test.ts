@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { CHUNKS_FILE, CHUNK_PASS_FILE, CHUNK_LOCK_WAIT_MS, ensureChunkPlan, mergeChunkPass, mergeFindings, nextChunk, planChunks, readChunkPlan, readChunkState, recordChunk, withChunkStateLock } from "./chunks";
+import { CHUNKS_FILE, CHUNK_PASS_FILE, CHUNK_LOCK_WAIT_MS, ensureChunkPlan, legacyDroppedKeyOf, mergeChunkPass, mergeFindings, nextChunk, planChunks, readChunkPlan, readChunkState, recordChunk, withChunkStateLock } from "./chunks";
 import { recordRadiusAndPlan } from "./chunks";
 import { answerChunkEstimate, estimateChunkRun, recordChunkEstimate } from "./chunks-estimate";
 
@@ -95,6 +95,22 @@ describe("the chunk plan over the dropped blast-radius files (AC8a)", () => {
     expect(onDisk.droppedKey).not.toBe(first?.droppedKey as string);
   });
 
+  test("an in-flight plan keyed by the pre-457 dropped set (every reason, not only the cap) is kept with its passes", async () => {
+    const files = names(3);
+    await sizedFiles(files);
+    const prefiltered = { ...drop("dist/bundle.js"), reason: "pre-filter" as const };
+    await writeFile(
+      path.join(packageDir, "blast-radius.json"),
+      JSON.stringify({ schemaVersion: 1, scope: "blast-radius", depth: 2, maxFiles: 40, changedFiles: ["src/a.ts"], files: [], dropped: [...files.map((file) => drop(file)), prefiltered], unresolved: [], counts: {}, graph: { nodes: 1, edges: 0 } }),
+    );
+    const current = (await ensureChunkPlan(packageDir, root))!;
+    const legacy = { ...current, droppedKey: legacyDroppedKeyOf({ dropped: [...files.map((file) => drop(file)), prefiltered] }) };
+    expect(legacy.droppedKey).not.toBe(current.droppedKey);
+    await writeFile(path.join(packageDir, CHUNKS_FILE), JSON.stringify(legacy));
+    await recordChunk(packageDir, "chunk-001", { status: "DONE" });
+    expect(await ensureChunkPlan(packageDir, root)).toEqual(legacy);
+  });
+
   test("a plan written before droppedKey existed is kept with its recorded passes, even when the dropped set differs (R2-30)", async () => {
     const files = names(3);
     await sizedFiles([...files, "src/extra.ts"]);
@@ -151,6 +167,45 @@ describe("running the chunks one at a time through the retry plan (AC8b, AC8c)",
     const pass = await mergeChunkPass(packageDir);
     expect(pass?.chunks[0]?.state).toBe("done");
     expect(pass?.uncoveredFiles).toEqual([]);
+  });
+
+  test("flow 457 AC7: the halves of a failed chunk carry the real sizes of their own files", async () => {
+    const files = names(4);
+    const sizes = [100, 2000, 30, 7];
+    for (const [index, file] of files.entries()) await sizedFiles([file], sizes[index]);
+    await writeRadius(files.map((file) => drop(file)));
+    const plan = await ensureChunkPlan(packageDir, root, { maxFiles: 4 });
+    expect(plan?.fileBytes).toEqual(Object.fromEntries(files.map((file, index) => [file, sizes[index] as number])));
+    await recordChunk(packageDir, "chunk-001", { status: "INCOMPLETE" });
+    const derived = (await readChunkState(packageDir)).derived;
+    expect(derived.map((chunk) => [chunk.files, chunk.bytes])).toEqual([
+      [files.slice(0, 2), 2100],
+      [files.slice(2), 37],
+    ]);
+  });
+
+  test("flow 457 AC7: a plan cut before fileBytes existed reads the halves' sizes from disk", async () => {
+    const files = names(2);
+    await sizedFiles([files[0] as string], 900);
+    await sizedFiles([files[1] as string], 10);
+    await writeRadius(files.map((file) => drop(file)));
+    const plan = (await ensureChunkPlan(packageDir, root, { maxFiles: 2 }))!;
+    const { fileBytes: _dropped, ...legacy } = plan;
+    await writeFile(path.join(packageDir, CHUNKS_FILE), JSON.stringify(legacy));
+    await recordChunk(packageDir, "chunk-001", { status: "INCOMPLETE" }, { projectRoot: root });
+    expect((await readChunkState(packageDir)).derived.map((chunk) => chunk.bytes)).toEqual([900, 10]);
+  });
+
+  test("flow 457 AC2: only cap drops are planned; reasoned omissions owe no chunk", async () => {
+    const files = names(3);
+    await sizedFiles(files, 10);
+    await writeRadius([drop(files[0] as string), { ...drop(files[1] as string), reason: "unrelated-symbol" as never }, { ...drop(files[2] as string), reason: "hub-damped" as never }]);
+    const plan = await ensureChunkPlan(packageDir, root);
+    expect(plan?.chunks.flatMap((chunk) => chunk.files)).toEqual([files[0] as string]);
+    expect(plan?.dropped).toBe(1);
+    await writeRadius([{ ...drop(files[1] as string), reason: "text-hub" as never }]);
+    await rm(path.join(packageDir, CHUNKS_FILE));
+    expect(await ensureChunkPlan(packageDir, root)).toBeNull();
   });
 
   test("DONE_WITH_CONCERNS finishes the chunk and keeps its findings (round 1)", async () => {

@@ -269,6 +269,20 @@ export function describeApprovalForTopic(
   return lines.join("\n");
 }
 
+/**
+ * Whether an operator card (`alwaysAsk` + `card`) would be cut by {@link composeApprovalPrompt}. A cut card must
+ * never get remote Yes/No buttons: the operator would be answering a decision they could not read in full.
+ * Exported for the shell and the tests.
+ */
+export function operatorCardTooLongForTopic(
+  tool: string,
+  inputJson: string,
+  meta?: { alwaysAsk?: boolean; card?: readonly string[]; destructive?: boolean; credentials?: boolean; untrustedOrigin?: boolean; cause?: ApprovalCause },
+): boolean {
+  if (meta?.alwaysAsk !== true || meta.card === undefined || meta.card.length === 0) return false;
+  return redactSensitiveText(describeApprovalForTopic(tool, inputJson, meta)).trim().length > MAX_APPROVAL_PROMPT_CHARS;
+}
+
 export class RemoteBridge {
   private client: RemoteClientLike | undefined;
   private readonly events: RemoteEvent[] = [];
@@ -958,6 +972,19 @@ export class RemoteBridge {
       answer.decision === "allow" ? `${answer.always ? "allowed (always)" : "allowed"} in the topic${by}` : `denied${by === "" ? " (or no answer)" : by}`,
     );
     return answer;
+  }
+
+  /**
+   * Tell the topic that an operator card is too long to answer there: no buttons, the card is answered in the
+   * shell. Best effort; the shell's dialog is unaffected.
+   */
+  async noticeCardTooLong(tool: string): Promise<void> {
+    const client = this.client;
+    if (client === undefined || !client.connected) return;
+    this.push("approval", "operator card too long for the topic; answer it in the shell");
+    await client
+      .reply(composeReply(`The operator card for ${tool} is too long to answer here. Answer it in the shell.`))
+      .catch(() => false);
   }
 
   /**

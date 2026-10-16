@@ -3,12 +3,29 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { extractStackRequiresField, parseStackRequires, scopeReviewerByStack, detectProjectStack } from "./stack";
 import { collectReviewers } from "./reviewers";
-import { ENV_AUTONOMOUS_ANSWERS_FILE } from "./autonomous-answers";
+import { isAttendedRun, operatorGateApplies, runProfileRefusal } from "./run-profile";
+import { confirmedDecision, decisionWriters, type OperatorDecisionKind, type OperatorDecisionSubject } from "./operator-decisions";
+import { pendingMutants } from "./mutate";
+import { buildReviewScope } from "./scope";
+import { assertGitRevision } from "../lib/git-revision";
 
 export type ReviewMode = "all" | "diff";
+export type RoundDepth = "light" | "full";
+export type DepthRequest = "auto" | "light" | "full";
+export const DEPTH_REQUESTS: readonly DepthRequest[] = ["auto", "light", "full"];
+
+/** A diff at or under both limits, outside the risk class, gets a light round under `--depth auto`. */
+export const LIGHT_MAX_FILES = 5;
+export const LIGHT_MAX_CHANGED_LINES = 300;
+/** The light round's logic and testing reviewers; the conventions reviewer is picked from {@link LIGHT_CONVENTIONS_PREFERENCE}. */
+export const LIGHT_FIXED_REVIEWERS: readonly string[] = ["review-logic", "review-testing-practices"];
+/** Stack-aware choice, first one the stack filter kept wins: React/MobX stacks keep frontend-conventions, a backend stack keeps review-backend, anything else falls to clean-code. */
+export const LIGHT_CONVENTIONS_PREFERENCE: readonly string[] = ["review-frontend-conventions", "review-backend", "review-clean-code"];
 
 export type RequiredSet = {
   mode: ReviewMode;
+  /** The depth the set was computed for; `full` unless a light round was asked for. */
+  depth: RoundDepth;
   required: string[];
   excluded: { reviewer: string; reason: string }[];
   /** False when no scope-A file list was recorded, so path-gated reviewers could not be ruled out. */
@@ -40,6 +57,110 @@ export const BUNDLED_PATH_GATES: Record<string, (file: string) => boolean> = {
   "review-frontend-conventions": (f) => FRONTEND_EXT.test(f) || /\.stories\.tsx$/.test(f) || CODE_FILE.test(f),
   "review-layout": (f) => /\.(tsx|jsx|css|scss)$/.test(f),
 };
+
+/**
+ * The path gates that mark the risk class. `review-testing-practices` (any test file) and `review-frontend-conventions`
+ * (any .ts/.js/.tsx file) are in BUNDLED_PATH_GATES but fire on almost every diff, so counting them would make a light
+ * round unreachable; they are left out here. A data/migration file, a project-declared reviewer path gate, and the
+ * remaining bundled gates (core/shared, flow graph, layout) do count.
+ */
+export const RISK_PATH_GATES: Record<string, (file: string) => boolean> = Object.fromEntries(
+  Object.entries(BUNDLED_PATH_GATES).filter(([name]) => name !== "review-testing-practices" && name !== "review-frontend-conventions"),
+);
+
+export type DepthDecision = {
+  requested: DepthRequest;
+  depth: RoundDepth;
+  reason: string;
+  /** Set by {@link packageRoundDepth} when the recorded decision no longer matches the package and was dropped. */
+  stale?: string | undefined;
+};
+
+export type DepthInput = {
+  files?: readonly string[] | undefined;
+  changedLines?: number | undefined;
+  /** `--all` / `--gating`: a forced round is always full. */
+  forceFull?: string | undefined;
+};
+
+/**
+ * Light is never taken on the operator's word: `--depth light` runs the same checks as `auto` and resolves to full,
+ * with the reason, when any of them fails. `--depth full`, `--all` and `--gating` are always full.
+ */
+export async function decideRoundDepth(root: string, request: DepthRequest, input: DepthInput): Promise<DepthDecision> {
+  if (request === "full") return { requested: request, depth: "full", reason: "--depth full" };
+  const checked = await autoDepth(root, input);
+  if (request === "auto") return { requested: request, ...checked };
+  return checked.depth === "light"
+    ? { requested: request, depth: "light", reason: `--depth light: ${checked.reason}` }
+    : { requested: request, depth: "full", reason: `--depth light not honoured: ${checked.reason.replace(/^auto: /, "")}` };
+}
+
+async function autoDepth(root: string, input: DepthInput): Promise<{ depth: RoundDepth; reason: string }> {
+  const full = (reason: string): { depth: RoundDepth; reason: string } => ({ depth: "full", reason });
+  if (input.forceFull !== undefined) return full(`auto: ${input.forceFull} forces the full set`);
+  const files = input.files;
+  if (files === undefined) return full("auto: no scope file list, so the diff size and risk class are unknown");
+  if (input.changedLines === undefined) return full("auto: no line count (changed-line count unknown; pass --scope <scope.json> or --diff-lines <n>)");
+  if (files.length > LIGHT_MAX_FILES) return full(`auto: ${files.length} files exceeds ${LIGHT_MAX_FILES}`);
+  if (input.changedLines > LIGHT_MAX_CHANGED_LINES) return full(`auto: ${input.changedLines} changed lines exceeds ${LIGHT_MAX_CHANGED_LINES}`);
+  const hit = Object.entries(RISK_PATH_GATES).find(([, gate]) => files.some(gate));
+  if (hit) return full(`auto: a file hits the ${hit[0]} path gate (risk class)`);
+  if (files.some((f) => DATA_FILE.test(f))) return full("auto: a data/migration file is in the diff (risk class)");
+  const inventory = await collectReviewers(root);
+  for (const reviewer of inventory.project) {
+    if (reviewer.pathsSource === "none" || !reviewer.paths.length) continue;
+    const patterns = reviewer.paths.map(globToRegExp);
+    if (files.some((f) => patterns.some((p) => p.test(f)))) return full(`auto: a file hits the project reviewer ${reviewer.name} path gate (risk class)`);
+  }
+  return { depth: "light", reason: `auto: ${files.length} file(s), ${input.changedLines} changed line(s), no risk-class path gate` };
+}
+
+/** `round-depth.json` in the package: what `required --package` decided, read back by `ledger build`. */
+export const ROUND_DEPTH_FILE = "round-depth.json";
+
+/** The package's scope facts a recorded depth is tied to: head, the sorted scope-A file list and the changed-line count. */
+export type DepthBasis = { head?: string | undefined; files?: string[] | undefined; changedLines?: number | undefined };
+
+export async function packageDepthBasis(packageDir: string): Promise<DepthBasis> {
+  const manifest = await readFile(path.join(packageDir, "manifest.json"), "utf8").then((t) => JSON.parse(t)).catch(() => undefined);
+  const head = manifest?.target?.head;
+  const files = await packageScopeFiles(packageDir);
+  return { head: typeof head === "string" ? head : undefined, files: files === undefined ? undefined : [...files].sort(), changedLines: await packageChangedLines(packageDir) };
+}
+
+/** The changed-line count `keryx review start|ingest --scope` stored next to the file list, when it did. */
+export async function packageChangedLines(packageDir: string): Promise<number | undefined> {
+  try {
+    const parsed = JSON.parse(await readFile(path.join(packageDir, "scope-files.json"), "utf8"));
+    return typeof parsed?.changedLines === "number" && Number.isFinite(parsed.changedLines) && parsed.changedLines >= 0 ? parsed.changedLines : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * What `required --package` decided for this package, or a full decision marked `stale` when the recorded one was made
+ * for another head, file list or line count. Undefined when nothing was recorded.
+ */
+export async function packageRoundDepth(packageDir: string): Promise<DepthDecision | undefined> {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(await readFile(path.join(packageDir, ROUND_DEPTH_FILE), "utf8"));
+  } catch {
+    return undefined;
+  }
+  if (!((parsed?.depth === "light" || parsed?.depth === "full") && typeof parsed.reason === "string")) return undefined;
+  const decision: DepthDecision = { requested: (parsed.requested as DepthRequest | undefined) ?? "auto", depth: parsed.depth, reason: parsed.reason };
+  if (decision.depth === "full") return decision;
+  const now = await packageDepthBasis(packageDir);
+  const recorded = Array.isArray(parsed.files) && parsed.files.every((f) => typeof f === "string") ? [...(parsed.files as string[])].sort() : undefined;
+  const stale = (why: string): DepthDecision => ({ requested: decision.requested, depth: "full", reason: `${ROUND_DEPTH_FILE} ignored: ${why}`, stale: why });
+  if (recorded === undefined || now.files === undefined || recorded.join("\n") !== now.files.join("\n")) return stale("it was decided for a different scope file list");
+  if (typeof parsed.changedLines !== "number" || parsed.changedLines !== now.changedLines) return stale("it was decided for a different changed-line count");
+  if (parsed.head !== undefined && now.head !== undefined && parsed.head !== now.head) return stale("it was decided for a different head");
+  return decision;
+}
 
 export function globToRegExp(glob: string): RegExp {
   const body = glob
@@ -80,6 +201,8 @@ export type RequiredOptions = {
   blastRadius?: boolean | undefined;
   /** Whether the package holds `pr-context.md`: there is a PR body checklist for `review-pr-contract` to compare with the diff. */
   prContext?: boolean | undefined;
+  /** `light` narrows the set to logic, testing and one conventions reviewer; default `full`. */
+  depth?: RoundDepth | undefined;
 };
 
 const REGRESSION = "review-regression";
@@ -134,6 +257,14 @@ export async function requiredReviewers(root: string, mode: ReviewMode, files: r
     if (reviewer.pathsSource !== "none" && reviewer.paths.length) projectGates.set(reviewer.name, reviewer.paths.map(globToRegExp));
   }
   const filesKnown = files !== undefined;
+  if (options.depth === "light") {
+    const conventions = LIGHT_CONVENTIONS_PREFERENCE.find((name) => roster.includes(name));
+    const keep = new Set([...LIGHT_FIXED_REVIEWERS, ...(conventions === undefined ? [] : [conventions])]);
+    const light = roster.filter((name) => keep.has(name));
+    for (const name of roster) if (!keep.has(name)) excluded.push({ reviewer: name, reason: "light round: only logic, testing and the stack's conventions reviewer run" });
+    for (const name of [REGRESSION, PR_CONTRACT]) if (inventory.bundled.some((r) => r.name === name)) excluded.push({ reviewer: name, reason: "light round: not part of the light set" });
+    return { mode, depth: "light", required: light.sort(), excluded, filesKnown };
+  }
   const gated = (name: string): boolean | undefined => {
     if (!filesKnown) return undefined;
     const bundled = BUNDLED_PATH_GATES[name];
@@ -162,7 +293,7 @@ export async function requiredReviewers(root: string, mode: ReviewMode, files: r
     if (options.prContext === true) required.push(PR_CONTRACT);
     else excluded.push({ reviewer: PR_CONTRACT, reason: "no pr-context.md in the package: there is no PR body checklist to compare with the diff" });
   }
-  return { mode, required: required.sort(), excluded, filesKnown };
+  return { mode, depth: "full", required: required.sort(), excluded, filesKnown };
 }
 
 export type CoverageOptions = {
@@ -173,20 +304,131 @@ export type CoverageOptions = {
   blastRadius?: boolean | undefined;
   /** Whether the package holds `pr-context.md`. */
   prContext?: boolean | undefined;
+  /** Changed lines of the scope, from `scope-files.json`; unknown keeps a light dispatch from being accepted. */
+  changedLines?: number | undefined;
   /** Proposed mutants no recorded mutation pass has run (`pendingMutants`). */
   pendingMutants?: number | undefined;
   /** False for `keryx review run --autonomous`; defaults to the environment the process runs in. */
   attended?: boolean | undefined;
+  /**
+   * The package directory. When set, a dispatch that says `light` is checked against the diff the package's target names
+   * (recomputed from git), not against the recorded `scope-files.json`, and a recorded full round-depth binds.
+   */
+  packageDir?: string | undefined;
+  /** Recomputes the scope's files and changed lines for the light check; undefined when the diff cannot be resolved. Defaults to git, from the package manifest's target. */
+  diffStats?: (() => Promise<{ files: string[]; changedLines: number } | undefined>) | undefined;
 };
 
-/** An attended run is every run except the autonomous runner's child shell. */
-export function isAttendedRun(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env[ENV_AUTONOMOUS_ANSWERS_FILE] === undefined;
+/** The files and retained changed lines of `ref...head`, from one `git diff`; undefined when git cannot answer. */
+export async function gitDiffStats(root: string, target: { ref: string; head: string }): Promise<{ files: string[]; changedLines: number } | undefined> {
+  try {
+    assertGitRevision(target.ref);
+    assertGitRevision(target.head);
+    const proc = Bun.spawn(["git", "diff", "--no-color", "-U20", "--end-of-options", `${target.ref}...${target.head}`], { cwd: root, stdout: "pipe", stderr: "pipe", timeout: 15_000, killSignal: "SIGKILL", maxBuffer: 8 * 1024 * 1024 });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    if (exitCode !== 0 || proc.signalCode !== null) return undefined;
+    const scope = buildReviewScope(stdout);
+    return { files: scope.files, changedLines: scope.counts.changedLinesRetained };
+  } catch {
+    return undefined;
+  }
 }
 
-function mutationErrors(record: Record<string, unknown>, options: CoverageOptions): string[] {
+async function packageDiffStats(options: CoverageOptions): Promise<{ files: string[]; changedLines: number } | undefined> {
+  if (options.diffStats !== undefined) return options.diffStats();
+  if (options.packageDir === undefined) return undefined;
+  const manifest = await readFile(path.join(options.packageDir, "manifest.json"), "utf8").then((t) => JSON.parse(t)).catch(() => undefined);
+  const { ref, head } = manifest?.target ?? {};
+  return typeof ref === "string" && typeof head === "string" ? gitDiffStats(options.root, { ref, head }) : undefined;
+}
+
+/**
+ * An attended run is every run except the autonomous runner's child shell and a round whose package records an
+ * unattended start (`review start --unattended`, ./run-profile.ts). Re-exported for the callers that read it here.
+ */
+export { isAttendedRun };
+
+/**
+ * The depth the gate holds a dispatch to. A dispatch that says `light` is trusted only while the current scope still
+ * qualifies for a light round (small, outside the risk class); otherwise the full-round rules apply.
+ */
+async function effectiveDepth(record: Record<string, unknown>, options: CoverageOptions): Promise<{ depth: RoundDepth; refused?: string }> {
+  if (record.depth !== "light") return { depth: "full" };
+  if (options.packageDir !== undefined) {
+    const recorded = await packageRoundDepth(options.packageDir);
+    if (recorded?.depth === "full" && recorded.stale === undefined) return { depth: "full", refused: `${ROUND_DEPTH_FILE} records a full round (${recorded.reason}), which binds` };
+  }
+  let input: DepthInput = { files: options.files, changedLines: options.changedLines };
+  if (options.packageDir !== undefined || options.diffStats !== undefined) {
+    const stats = await packageDiffStats(options);
+    if (stats === undefined) return { depth: "full", refused: "the diff could not be resolved from git to confirm the size" };
+    input = { files: stats.files, changedLines: stats.changedLines };
+  }
+  const decision = await decideRoundDepth(options.root, "auto", input);
+  return decision.depth === "light" ? { depth: "light" } : { depth: "full", refused: decision.reason.replace(/^auto: /, "") };
+}
+
+/** The head the package records (`manifest.target.head`), or undefined. */
+async function packageHead(packageDir: string): Promise<string | undefined> {
+  try {
+    const manifest = JSON.parse(await readFile(path.join(packageDir, "manifest.json"), "utf8")) as { target?: { head?: unknown } };
+    return typeof manifest.target?.head === "string" && manifest.target.head.trim() !== "" ? manifest.target.head.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The required reviewers (mode all) of a package that `selected` leaves out; all of them when `selected` is undefined. */
+export async function reviewersLeftOut(packageDir: string, selected: readonly string[] | undefined): Promise<{ required: string[]; missing: string[] }> {
+  const need = await requiredReviewers(projectRootOfPackage(packageDir), "all", await packageScopeFiles(packageDir), {
+    blastRadius: await packageHasBlastRadius(packageDir),
+    prContext: packageHasPrContext(packageDir),
+  });
+  return { required: need.required, missing: selected === undefined ? need.required : need.required.filter((role) => !selected.includes(role)) };
+}
+
+/**
+ * What a decision of `kind` waives on this package right now (security review M4): the package head, and the unrun
+ * mutant ids (mutation waiver) or the required reviewers `selected` leaves out (override). The card, the terminal
+ * command and the gate all compute it here, so the record binds to what the operator was shown.
+ */
+export async function operatorDecisionSubject(packageDir: string, kind: OperatorDecisionKind, selected?: readonly string[]): Promise<OperatorDecisionSubject> {
+  const head = await packageHead(packageDir);
+  const items = kind === "mutation-waiver" ? (await pendingMutants(packageDir)).map((mutant) => mutant.id) : (await reviewersLeftOut(packageDir, selected)).missing;
+  return { ...(head === undefined ? {} : { head }), items: [...new Set(items)].sort() };
+}
+
+/**
+ * On a package stamped with the operator gate (./run-profile.ts), a quote in the dispatch is not the operator's word
+ * unless a card or a terminal recorded the decision (./operator-decisions.ts), bound to the head and to at least what
+ * is waived now. Undefined: nothing is missing.
+ */
+async function unconfirmedDecision(options: CoverageOptions, kind: OperatorDecisionKind, selected?: readonly string[]): Promise<string | undefined> {
+  const dir = options.packageDir;
+  if (dir === undefined || !operatorGateApplies(dir)) return undefined;
+  const now = await operatorDecisionSubject(dir, kind, selected);
+  if ((await confirmedDecision(dir, kind, now)) !== undefined) return undefined;
+  const recorded = await confirmedDecision(dir, kind);
+  const stale =
+    recorded === undefined
+      ? ""
+      : `the recorded decision (${recorded.at}) does not cover this: it was ${recorded.subject === undefined ? "not bound to a head or to what it waived" : `shown head ${recorded.subject.head ?? "unknown"} and ${recorded.subject.items.length} item(s)`}, and now the head is ${now.head ?? "unknown"} with ${now.items.length === 0 ? "nothing" : now.items.join(", ")} to waive. `;
+  return `${stale}${decisionWriters(kind, path.relative(process.cwd(), dir) || ".")}`;
+}
+
+async function mutationErrors(record: Record<string, unknown>, options: CoverageOptions, depth: RoundDepth): Promise<string[]> {
   const pending = options.pendingMutants ?? 0;
-  if (pending === 0 || (options.attended ?? isAttendedRun()) === false) return [];
+  if (depth === "light") return [];
+  if (pending === 0 || (options.attended ?? isAttendedRun(process.env, options.packageDir)) === false) return [];
+  const missing = await unconfirmedDecision(options, "mutation-waiver");
+  if (operatorGateApplies(options.packageDir)) {
+    if (missing === undefined) return [];
+    return [
+      `${pending} proposed mutant(s) in research-evidence/mutants.json were never run, so \`Not run: mutation pass\` is not allowed on an attended review. ` +
+        `Run \`keryx review mutate --test "<command>" --package <review-dir>\`, or have the operator waive it: ${missing}. ` +
+        "A mutationWaiver quote written into the dispatch is not the operator's word. A run with nobody present declares it at the start: `keryx review start --unattended`",
+    ];
+  }
   const w = record.mutationWaiver;
   const waiver = w && typeof w === "object" && !Array.isArray(w) ? (w as Record<string, unknown>) : {};
   const text = (v: unknown): boolean => typeof v === "string" && v.trim().length > 0;
@@ -214,10 +456,12 @@ export function packageHasPrContext(packageDir: string, name = "pr-context.md"):
 
 export async function coverageErrors(dispatch: unknown, options: CoverageOptions): Promise<string[]> {
   const record = dispatch && typeof dispatch === "object" && !Array.isArray(dispatch) ? (dispatch as Record<string, unknown>) : undefined;
-  return [...(await reviewerSetErrors(dispatch, options)), ...(record === undefined ? [] : mutationErrors(record, options))];
+  const effective = record === undefined ? undefined : await effectiveDepth(record, options);
+  const profileMissing = runProfileRefusal(options.packageDir);
+  return [...(profileMissing === undefined ? [] : [profileMissing]), ...(await reviewerSetErrors(dispatch, options, effective)), ...(record === undefined || effective === undefined ? [] : await mutationErrors(record, options, effective.depth))];
 }
 
-async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions): Promise<string[]> {
+async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions, effective: { depth: RoundDepth; refused?: string } | undefined): Promise<string[]> {
   if (!dispatch || typeof dispatch !== "object" || Array.isArray(dispatch)) return [];
   const record = dispatch as Record<string, unknown>;
   const text = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
@@ -226,6 +470,12 @@ async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions): P
   if (record.mode === "diff" && !text(record.operatorQuote))
     return ['dispatch mode "diff" narrows the reviewer set and needs operatorQuote (the operator\'s own words naming a narrower review); a pull request defaults to mode "all"'];
   const override = record.override;
+  // A narrowed set (mode diff, or an override) is the operator's decision; on a gated package only a card or a terminal records it.
+  const selectedNow = Array.isArray(record.selected) ? record.selected.filter(text) : [];
+  const unconfirmed = record.mode === "diff" || override !== undefined ? await unconfirmedDecision(options, "reviewer-override", selectedNow) : undefined;
+  if (unconfirmed !== undefined) {
+    return [`dispatch ${override !== undefined ? "override" : 'mode "diff"'} narrows the reviewer set, and an operatorQuote written into the dispatch is not the operator's word on this package: ${unconfirmed}`];
+  }
   if (override !== undefined) {
     const o = override && typeof override === "object" && !Array.isArray(override) ? (override as Record<string, unknown>) : {};
     return text(o.operatorQuote) && text(o.reason)
@@ -237,13 +487,15 @@ async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions): P
   const need = await requiredReviewers(options.root, record.mode, options.files, {
     blastRadius: options.blastRadius,
     prContext: options.prContext === true && dispatchKnowsRole(record, PR_CONTRACT),
+    depth: effective?.depth ?? "full",
   });
   const selected = new Set(Array.isArray(record.selected) ? record.selected.filter(text) : []);
   const missing = need.required.filter((name) => !selected.has(name));
   if (!missing.length) return [];
   return [
     `dispatch covers ${need.required.length - missing.length} of ${need.required.length} reviewers that mode ${record.mode} requires; missing: ${missing.join(", ")}. ` +
-      "Dispatch them, or record an operator override {operatorQuote, reason}; `keryx review required` prints the set",
+      "Dispatch them, or record an operator override {operatorQuote, reason}; `keryx review required` prints the set" +
+      (effective?.refused === undefined ? "" : `. The dispatch says depth light, but the full set applies: ${effective.refused}`),
   ];
 }
 

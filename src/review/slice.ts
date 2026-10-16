@@ -26,7 +26,19 @@ export type SliceEntry = {
   retryOf?: string[];
   attempt?: number;
   reviewer?: string;
+  /** Roles that own this slice, chosen from its content by `slice-routing.ts`. Absent: every role owns it unless its path gate rules it out. */
+  roles?: string[];
+  /** `deep` slices are read by the full core set; `light` ones by their content roles only. */
+  depth?: SliceDepth;
+  /** Why the slice got its depth: a 0-1 score and the facts behind it. */
+  risk?: { score: number; why: string[] };
+  /** A light slice sampled to run deep, so the light routing is measured against a deep read. */
+  audit?: boolean;
+  /** Set when a major-or-worse finding on this light slice re-opened it deep. */
+  escalated?: { by: string; finding: string };
 };
+
+export type SliceDepth = "deep" | "light";
 
 export type SliceOmission = {
   path: string;
@@ -62,9 +74,23 @@ export function byteLength(text: string): number {
   return encoder.encode(text).length;
 }
 
-/** The total a dispatch may carry: the manifest's own, else the default, never below one slice. */
-export function waveBytesOf(manifest: Pick<SliceManifest, "maxBytes" | "waveBytes">): number {
-  return manifest.waveBytes ?? Math.max(manifest.maxBytes, DEFAULT_WAVE_BYTES);
+const positiveNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
+
+/** Why a manifest gives no usable wave budget (neither a positive `waveBytes` nor a positive `maxBytes`), or undefined when it does. */
+export function manifestSizeProblem(manifest: Partial<Pick<SliceManifest, "maxBytes" | "waveBytes">>): string | undefined {
+  if (positiveNumber(manifest.waveBytes) || positiveNumber(manifest.maxBytes)) return undefined;
+  return "the slice manifest records neither waveBytes nor maxBytes, so no wave budget can be checked; re-run `keryx review slice` to write a manifest with its sizes";
+}
+
+/**
+ * The total a dispatch may carry: the manifest's own, else the default, never below one slice. Never NaN: a manifest with
+ * neither size is refused here instead of turning every byte comparison against it into a silent pass.
+ */
+export function waveBytesOf(manifest: Partial<Pick<SliceManifest, "maxBytes" | "waveBytes">>): number {
+  if (positiveNumber(manifest.waveBytes)) return manifest.waveBytes;
+  const problem = manifestSizeProblem(manifest);
+  if (problem !== undefined) throw new Error(problem);
+  return Math.max(manifest.maxBytes as number, DEFAULT_WAVE_BYTES);
 }
 
 /** Cut an ordered list of slices into dispatches of at most `budget` bytes; a slice over the budget travels alone. */

@@ -1,15 +1,19 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type JsonSchema, validateJson } from "../gdskills/contracts";
-import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, byteLength, waveBytesOf } from "./slice";
+import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, byteLength, manifestSizeProblem, waveBytesOf } from "./slice";
 
 export type DispatchCheckCode =
   | "REVIEWER_INPUT_INVALID"
   | "REVIEWER_INPUT_NO_SLICE"
   | "REVIEWER_INPUT_SLICE_UNKNOWN"
   | "REVIEWER_INPUT_TOO_LARGE"
-  | "REVIEWER_INPUT_NO_PR_CONTEXT";
+  | "REVIEWER_INPUT_NO_PR_CONTEXT"
+  | "REVIEWER_INPUT_PATH_MISSING"
+  | "REVIEWER_INPUT_MANIFEST_UNSIZED"
+  | "REVIEWER_INPUT_PLAN_UNCONFIRMED";
 
 export type DispatchCheckError = {
   code: DispatchCheckCode;
@@ -47,7 +51,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Payload fields that name a file the reviewer is told to read; inline text fields (diff, file_contents) are not paths. */
+const PATH_FIELDS = ["skill_path", "context_doc"] as const;
+
 export type CheckDispatchOptions = {
+  /** Whether a path named by a payload field exists. Defaults to the filesystem, relative paths resolved against the cwd as the pr_context check does. */
+  pathExists?: (filePath: string) => boolean;
   /** Ceiling for what one dispatch carries in total. Defaults to the manifest's wave budget. */
   maxBytes?: number;
   manifest?: SliceManifest;
@@ -55,6 +64,11 @@ export type CheckDispatchOptions = {
   pathBytes?: (slicePath: string) => number | undefined;
   /** Set for a pull-request review: every payload must name the collected `pr-context.md`, and it must be readable. */
   prContext?: { exists: (contextPath: string) => boolean };
+  /**
+   * The round's plan: when it is over the operator threshold and no plan confirmation is recorded, every payload is
+   * refused (`planGateRefusal` in estimate.ts says what to do).
+   */
+  plan?: { refusal: string | undefined };
 };
 
 /**
@@ -68,14 +82,36 @@ export type CheckDispatchOptions = {
  * wave has to fit what a reviewer can finish before its child deadline.
  */
 export async function checkDispatch(payloads: readonly unknown[], options: CheckDispatchOptions = {}): Promise<DispatchCheckResult> {
+  const unsized = options.maxBytes === undefined && options.manifest !== undefined ? manifestSizeProblem(options.manifest) : undefined;
+  if (unsized !== undefined) {
+    // Without a size every byte comparison below would be against NaN and pass; refuse the whole check instead.
+    return { ok: false, checked: payloads.length, maxBytes: 0, errors: [{ code: "REVIEWER_INPUT_MANIFEST_UNSIZED", reviewer: "manifest", message: unsized }] };
+  }
   const maxBytes = options.maxBytes ?? (options.manifest === undefined ? DEFAULT_SLICE_MAX_BYTES : waveBytesOf(options.manifest));
   const schema = await loadReviewerInputSchema();
   const errors: DispatchCheckError[] = [];
+  if (options.plan?.refusal !== undefined) {
+    errors.push({ code: "REVIEWER_INPUT_PLAN_UNCONFIRMED", reviewer: "plan", message: options.plan.refusal });
+  }
+  const pathExists = options.pathExists ?? ((filePath: string) => existsSync(path.resolve(filePath)));
 
   for (const [index, payload] of payloads.entries()) {
     const reviewer = isRecord(payload) && typeof payload.reviewer === "string" && payload.reviewer !== "" ? payload.reviewer : `payload[${index}]`;
     for (const problem of await validateJson(payload, schema)) {
       errors.push({ code: "REVIEWER_INPUT_INVALID", reviewer, path: problem.path, message: problem.message });
+    }
+    if (isRecord(payload)) {
+      for (const field of PATH_FIELDS) {
+        const value = payload[field];
+        if (typeof value === "string" && value !== "" && !pathExists(value)) {
+          errors.push({
+            code: "REVIEWER_INPUT_PATH_MISSING",
+            reviewer,
+            path: `$.${field}`,
+            message: `${field} ${value} does not exist; the reviewer would be rejected at dispatch. Fix the path or omit the field`,
+          });
+        }
+      }
     }
     if (options.prContext !== undefined) {
       const contextPath = isRecord(payload) && typeof payload.pr_context === "string" ? payload.pr_context : "";

@@ -1203,7 +1203,7 @@ test("disposition is declared in the strict contract and DELIBERATELY not in the
 function findingsFrom(
   reviewer: string,
   count: number,
-  severity: StructuredReviewFinding["severity"] = "minor",
+  severity: StructuredReviewFinding["severity"] = "info",
 ): StructuredReviewFinding[] {
   return Array.from({ length: count }, (_, index) => ({
     ...FULL_FINDING,
@@ -1243,7 +1243,16 @@ test("AC10: the ingest names every truncated finding in scope.md, with a count",
   }
 });
 
-test("AC5: blockers survive an ingest that truncates the same reviewer's minors", async () => {
+test("AC5 (owner decision 2026-10-16): an ingest keeps every minor and major finding; only info notes are capped", async () => {
+  await fresh();
+  const { findings } = await ingestFindings("2026-10-16-cap-minors", {
+    findings: [...findingsFrom("review-logic", 14, "minor"), ...findingsFrom("review-style", 12, "info")],
+  });
+  expect(findings.filter((finding) => finding.severity === "minor")).toHaveLength(14);
+  expect(findings.filter((finding) => finding.severity === "info")).toHaveLength(10);
+});
+
+test("AC5: blockers survive an ingest that truncates the same reviewer's info notes", async () => {
   await fresh();
   const { findings } = await ingestFindings("2026-08-30-cap-blockers", {
     findings: [
@@ -1258,7 +1267,7 @@ test("AC5: blockers survive an ingest that truncates the same reviewer's minors"
 
   expect(findings.filter((finding) => finding.severity === "blocker")).toHaveLength(2);
   // Ten ordinary findings survive ALONGSIDE the blockers, not instead of two of them.
-  expect(findings.filter((finding) => finding.severity === "minor")).toHaveLength(10);
+  expect(findings.filter((finding) => finding.severity === "info")).toHaveLength(10);
 });
 
 test("AC5: the cap never touches the dismissal records", async () => {
@@ -1784,6 +1793,7 @@ test("R2-05: without a terminal the waiver is refused and nothing is written", a
     await reviewCommand(["complete", pkg, "--waive-coverage", "skip the far files, generated"], { isTerminal: () => false });
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("needs a terminal");
+    expect(errors.join("\n")).toContain("review_waive_coverage");
   } finally {
     console.error = logError;
     process.exitCode = 0;

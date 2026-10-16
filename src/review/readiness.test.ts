@@ -332,6 +332,7 @@ describe("keryx review complete goes through the checklist (AC3)", () => {
     await reviewCommand(["complete", pkg, "--waive", "verifier", "the operator said ship it"], seams(false));
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("needs a terminal");
+    expect(errors.join("\n")).toContain("review_waive_readiness");
     expect(JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8")).readiness_waivers).toBeUndefined();
     expect(readFileSync(path.join(pkg, "report.md"), "utf8")).not.toContain("Partial review:");
   });
@@ -399,5 +400,55 @@ describe("the orchestrator log note (flow 454 AC7)", () => {
     expect(memoryLogNote(report)).toBe("orchestrator log: recorded, 2 unattributed");
     expect(memoryLines(renderReadiness(report)).map((line) => line.trim())).toEqual(["orchestrator log: recorded, 2 unattributed"]);
     expect(readinessDepthLines(report).join("\n")).toContain("memory-outside-stage: orchestrator log: recorded, 2 unattributed");
+  });
+});
+
+describe("item 2 counts only cap drops (flow 457 AC2)", () => {
+  const reasoned = (file: string, reason: string) => ({ file, hop: 1, fanIn: 1, via: CHANGED[0], source: "graph", reason, detail: `${reason} fixture` });
+
+  test("graph-related files omitted with a reason neither fail item 2 nor get a chunk plan", async () => {
+    writeJson("blast-radius.json", {
+      schemaVersion: 1,
+      scope: "blast-radius",
+      depth: 2,
+      maxFiles: 40,
+      changedFiles: CHANGED,
+      files: [],
+      dropped: [
+        reasoned(CUT[0] as string, "unrelated-symbol"),
+        reasoned(CUT[1] as string, "hub-damped"),
+        reasoned(CUT[2] as string, "text-hub"),
+        reasoned("src/cut.test.ts", "test-consumer"),
+      ],
+      unresolved: [],
+      counts: {},
+      graph: { nodes: 1, edges: 0 },
+    });
+    expect(await ensureChunkPlan(pkg, root)).toBeNull();
+    // A slice manifest makes coverage tracked, so item 2 reads the radius rather than saying there is nothing to track.
+    writeJson("slice-manifest.json", { schemaVersion: 1, maxBytes: 1000, waveBytes: 1000, source: "diff", slices: [{ id: "s1", path: "slices/s1", bytes: 10, contentHash: "s1", files: CHANGED, domain: "d", split: "file" }], omissions: [], totals: { slices: 1, bytes: 10, files: CHANGED.length, omittedFiles: 0, omittedBytes: 0, droppedBlocks: 0 } });
+    const item = (await computeReadiness(pkg)).items.find((entry) => entry.id === "blast-radius");
+    expect(item?.status).toBe("pass");
+    expect(item?.evidence).toContain("4 graph-related file(s) omitted with a reason");
+  });
+
+  test("a cap drop beside reasoned omissions still fails item 2 until its chunk is read", async () => {
+    writeJson("blast-radius.json", {
+      schemaVersion: 1,
+      scope: "blast-radius",
+      depth: 2,
+      maxFiles: 40,
+      changedFiles: CHANGED,
+      files: [],
+      dropped: [{ ...reasoned(CUT[0] as string, "cap"), detail: "over the cap" }, reasoned(CUT[1] as string, "unrelated-symbol")],
+      unresolved: [],
+      counts: {},
+      graph: { nodes: 1, edges: 0 },
+    });
+    const item = (await computeReadiness(pkg)).items.find((entry) => entry.id === "blast-radius");
+    expect(item?.status).toBe("fail");
+    expect(item?.evidence).toContain("1 of 1 file(s) cut by the cap");
+    const plan = await ensureChunkPlan(pkg, root);
+    expect(plan?.chunks.flatMap((chunk) => chunk.files)).toEqual([CUT[0] as string]);
   });
 });

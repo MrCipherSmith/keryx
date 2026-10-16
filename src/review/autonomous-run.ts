@@ -13,6 +13,7 @@ import { ARBITER_LOG_NAME, ENV_ARBITER_LOG, copyArbiterLogToPackage } from "./ar
 import { ENV_AUTONOMOUS_ANSWERS_FILE, readAutoAnswers } from "./autonomous-answers";
 import {
   AUTONOMOUS_PROFILE,
+  autonomousScopeFile,
   buildAutonomousPrompt,
   buildAutonomousShellArgv,
   exitCodeFor,
@@ -48,6 +49,8 @@ export type SpawnChild = (spec: ChildSpec) => ChildHandle;
 export interface AutonomousRunOptions {
   readonly cwd: string;
   readonly ref: string;
+  /** Flow 457: an already parsed target (a local range); default: `ref` parsed as a pull request URL. */
+  readonly target?: AutonomousTarget | undefined;
   readonly budgetMinutes?: number | undefined;
   readonly budgetTokens?: number | undefined;
   /** Where the run's own files go. Default: `.metaproject/data/review-autonomous/<owner>-<repo>-pr<N>`. */
@@ -110,7 +113,7 @@ interface RunState {
 }
 
 export function autonomousRunDir(cwd: string, target: AutonomousTarget): string {
-  const slug = `${target.repository.replace("/", "-")}-pr${target.number}`;
+  const slug = target.kind === "pr" ? `${target.repository.replace("/", "-")}-pr${target.number}` : `range-${target.base.replace(/[^\w.-]/g, "-")}`;
   return path.join(cwd, ".metaproject", "data", "review-autonomous", slug);
 }
 
@@ -163,6 +166,7 @@ function sameTarget(manifest: ManagedReviewManifest, target: AutonomousTarget): 
   const ref = manifest.target?.ref;
   if (typeof ref !== "string") return false;
   if (ref === target.ref) return true;
+  if (target.kind === "range") return false;
   try {
     const other = parseAutonomousTarget(ref);
     return other.repository === target.repository && other.number === target.number;
@@ -188,7 +192,9 @@ function listPackages(cwd: string, target: AutonomousTarget): FoundPackage[] {
 
 export async function resolveHeadWithGh(target: AutonomousTarget, cwd: string): Promise<string | null> {
   return new Promise((resolve) => {
-    execFile("gh", ["pr", "view", target.ref, "--json", "headRefOid", "--jq", ".headRefOid"], { cwd, timeout: 30_000 }, (error, stdout) => {
+    // A local range has no pull request: its head is the commit `head` (or HEAD) names in this clone.
+    const [command, args] = target.kind === "range" ? ["git", ["rev-parse", "--verify", "--end-of-options", `${target.head ?? "HEAD"}^{commit}`]] : ["gh", ["pr", "view", target.ref, "--json", "headRefOid", "--jq", ".headRefOid"]];
+    execFile(command as string, args as string[], { cwd, timeout: 30_000 }, (error, stdout) => {
       const head = error === null ? stdout.trim() : "";
       resolve(/^[0-9a-f]{7,64}$/i.test(head) ? head : null);
     });
@@ -218,7 +224,7 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 const fileSize = (file: string): number => (existsSync(file) ? statSync(file).size : 0);
 
 export async function runAutonomousReview(options: AutonomousRunOptions): Promise<AutonomousRunResult> {
-  const target = parseAutonomousTarget(options.ref);
+  const target = options.target ?? parseAutonomousTarget(options.ref);
   const runDir = options.out === undefined ? autonomousRunDir(options.cwd, target) : path.resolve(options.cwd, options.out);
   mkdirSync(runDir, { recursive: true });
   const release = acquireLock(runDir);
@@ -271,7 +277,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
 
   const spec: ChildSpec = {
     argv: buildAutonomousShellArgv({
-      prompt: buildAutonomousPrompt({ ref: target.ref, resumePackage, head }),
+      prompt: buildAutonomousPrompt({ ref: target.ref, resumePackage, head, scopeFile: autonomousScopeFile(runDir, cwd), ...(target.kind === "range" ? { base: target.base } : {}) }),
       eventsFile,
       provider: options.provider,
       model: options.model,
@@ -430,7 +436,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
   const summary: AutonomousSummary = {
     schemaVersion: 1,
     profile: "review-autonomous",
-    target: { kind: "pr", ref: target.ref, repository: target.repository, number: target.number, head },
+    target: { kind: target.kind, ref: target.ref, repository: target.repository, number: target.number, head },
     status,
     exitCode: exitCodeFor(status),
     reason,

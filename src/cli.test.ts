@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { OPERATOR_COMMANDS } from "./commands/review-operator";
 import {
   CLI_ROUTES,
   exitCodeForError,
@@ -742,7 +743,10 @@ describe("flow 360 AC11: --help reaches a review/skills subcommand's own usage, 
 
   /** Every `command === "x"` the `reviewCommand` router compares against — read from SOURCE, not a second list. */
   function reviewRouterSubcommands(): string[] {
-    return routerSubcommands("commands/review.ts", "reviewCommand");
+    // The router also dispatches the operator commands through one `OPERATOR_COMMANDS.includes(command)` branch.
+    const source = readFileSync(path.join(import.meta.dir, "commands/review.ts"), "utf8");
+    const operator = source.includes("(OPERATOR_COMMANDS as readonly string[]).includes(command)") ? [...OPERATOR_COMMANDS] : [];
+    return [...new Set([...routerSubcommands("commands/review.ts", "reviewCommand"), ...operator])].sort();
   }
 
   /** The same, for any group router written as a chain of `command === "x"` comparisons. */

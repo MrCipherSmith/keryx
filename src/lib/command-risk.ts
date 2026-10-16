@@ -626,7 +626,7 @@ export function touchesHumanConfirmation(command: string): boolean {
   // ERL index/clear mutate derived state. Conservatively include quoted/wrapped
   // forms: an extra prompt is preferable to an inherited corpus-write grant.
   const evidenceMutation = /(?:^|\s)evidence\s+(?:index|clear|maintenance)(?=$|[\s;&|])/i.test(command.replace(/["'`\\]/g, ""));
-  return touchesSacConfirmReview(command) || touchesFlowConfirm(command) || touchesSchedulerControl(command) || evidenceMutation || touchesCoverageWaiver(command) || touchesChunkEstimateAnswer(command) || touchesReviewPublish(command);
+  return touchesSacConfirmReview(command) || touchesFlowConfirm(command) || touchesSchedulerControl(command) || evidenceMutation || touchesCoverageWaiver(command) || touchesChunkEstimateAnswer(command) || touchesReviewPublish(command) || touchesOperatorDecision(command);
 }
 
 const COVERAGE_WAIVER_FLAG = "--waive";
@@ -793,5 +793,31 @@ export function touchesReviewPublish(raw: string): boolean {
     if (review < 0) return false;
     const rest = args.slice(review + 1);
     return lower.slice(review + 1).includes("publish") || (rest[0] !== undefined && wordIsOpaque(rest[0]));
+  });
+}
+
+/**
+ * Flow 456: `keryx learn accept|promote|graduate` and `keryx agents external apply` are decisions only the operator takes
+ * (their CLI needs a terminal; inside keryx shell the operator answers a card instead). A `shell_exec` of one of them always
+ * asks, in every permission mode, and no answer is remembered. Parsed words like {@link touchesReviewPublish}, so a split or
+ * escaped spelling and a verb the shell assembles (`learn $V`) are seen too. Pure.
+ */
+export function touchesOperatorDecision(raw: string): boolean {
+  return anySimpleCommand(joinContinuations(raw), (words) => {
+    const args = keryxArgs(words);
+    if (args === undefined) return false;
+    const lower = args.map((w) => w.toLowerCase());
+    if (lower[0] === "ctx" && lower[1] === "rg") return false;
+    const learn = lower.indexOf("learn");
+    if (learn >= 0) {
+      const rest = args.slice(learn + 1);
+      if (lower.slice(learn + 1).some((w) => w === "accept" || w === "promote" || w === "graduate") || (rest[0] !== undefined && wordIsOpaque(rest[0]))) return true;
+    }
+    const external = lower.indexOf("external");
+    if (external >= 0) {
+      const rest = args.slice(external + 1);
+      if (lower.slice(external + 1).includes("apply") || (rest[0] !== undefined && wordIsOpaque(rest[0]))) return true;
+    }
+    return false;
   });
 }

@@ -3,6 +3,7 @@ import { createEvidenceSearchTool } from "../evidence/tool";
 // Adding a tool here is the only way either surface gets it.
 
 import { scheduleTools, type ScheduleToolBinding } from "./schedule-tools";
+import { operatorConfirmTools, type OperatorConfirmBinding } from "./operator-confirm-tools";
 import { randomUUID } from "node:crypto";
 import { buildBusTools } from "../bus/agent-tools";
 import type { BusClient } from "../bus/client";
@@ -138,6 +139,12 @@ export type InteractiveAgentToolsInput = {
    * card. Omitted → no schedule tools, the same way `bus` is scoped.
    */
   schedules?: ScheduleToolBinding;
+  /**
+   * Flow 456 (AC1): the operator-confirmed gates (`./operator-confirm-tools.ts`), each a yes/no card the
+   * operator answers in the shell. Like `schedules`, only the interactive shell passes it; subagents,
+   * side workers and unattended runs never get these tools.
+   */
+  operatorConfirm?: OperatorConfirmBinding;
 };
 
 /**
@@ -254,6 +261,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     historySearchTool(getSessionDir),
     ...executionPlanTools(getSessionDir),
     ...(input.schedules === undefined ? [] : scheduleTools(input.schedules)),
+    ...(input.operatorConfirm === undefined ? [] : operatorConfirmTools(input.operatorConfirm)),
     // Flow 274 T6: main-agent-only bus tools (specification §7.1). Never
     // reached by a subagent or external child — neither tool-build path calls
     // this factory (see `spawn-subagent-tool.ts`, which builds its own child

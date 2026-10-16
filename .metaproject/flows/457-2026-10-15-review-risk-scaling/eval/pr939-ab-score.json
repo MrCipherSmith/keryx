@@ -1,0 +1,122 @@
+{
+ "pr": 939,
+ "head": "ede409d5a9d9a5403f51b3f12edc6ac4704d805c",
+ "truth_defects": 6,
+ "truth_entries": 8,
+ "slicing": {
+  "slices": 14,
+  "bytes": 206547,
+  "omissions": 0,
+  "note": "slice refused paths outside the tree; diff copied into <tree>/.abtmp then slices moved to ab/slices"
+ },
+ "arms": {
+  "old": {
+   "dispatches": 45,
+   "findings": 77,
+   "major_or_blocker": 5,
+   "approx_tokens": 4436486,
+   "wall_s_sum_batch_max": 1073,
+   "longest_single_s": 269,
+   "truth_matches": {
+    "D1-a": {
+     "sev": "minor",
+     "by": [
+      "logic-5:0",
+      "security-code-5:0",
+      "security-code-5:1",
+      "style-5:2"
+     ]
+    },
+    "D1-b": {
+     "sev": "major",
+     "by": [
+      "logic-2:0"
+     ]
+    },
+    "D2-a": {
+     "sev": "minor",
+     "by": [
+      "clean-code-3:2"
+     ]
+    },
+    "D2-b": {
+     "sev": "major",
+     "by": [
+      "architecture-1:0",
+      "logic-3:0"
+     ]
+    }
+   },
+   "recall_any_defects": "2/6",
+   "recall_major_defects": "2/6",
+   "recall_any_entries": "4/8",
+   "recall_major_entries": "2/8",
+   "missed": [
+    "D3",
+    "D4",
+    "D5",
+    "D6"
+   ],
+   "extras": {
+    "architecture-3:0": "confirmed major: review-pr-feedback still hands flow-orchestrator to a subagent, which the new preflight blocks",
+    "regression-5:0": "confirmed but minor: budget --full vs ingest record different waves only with --parallel>10"
+   },
+   "confirmed_major_extras": 1
+  },
+  "new": {
+   "dispatches": 27,
+   "findings": 44,
+   "major_or_blocker": 5,
+   "approx_tokens": 2740170,
+   "wall_s_sum_batch_max": 1427,
+   "longest_single_s": 802,
+   "truth_matches": {
+    "D1-a": {
+     "sev": "minor",
+     "by": [
+      "logic-5:0",
+      "security-code-4:0"
+     ]
+    },
+    "D1-b": {
+     "sev": "major",
+     "by": [
+      "security-code-1:0"
+     ]
+    },
+    "D2-a": {
+     "sev": "minor",
+     "by": [
+      "clean-code-1:2",
+      "architecture-2:1(info)"
+     ]
+    }
+   },
+   "recall_any_defects": "2/6",
+   "recall_major_defects": "1/6",
+   "recall_any_entries": "3/8",
+   "recall_major_entries": "1/8",
+   "missed": [
+    "D2-b",
+    "D3",
+    "D4",
+    "D5",
+    "D6"
+   ],
+   "extras": {
+    "logic-4:0": "confirmed major: new 'reply must start with STATUS:' rule classifies reviewers that return REVIEW_RESULT as BLOCKED and drops their findings",
+    "highload-4:0": "confirmed but minor: no default backoff when retry-after absent (uncalled helper)",
+    "logic-1:0": "confirmed but minor: job-orchestrator Purpose still lists review-orchestrator as a sub-agent",
+    "regression-1:0": "refuted: Wave C was already conditional at base"
+   },
+   "confirmed_major_extras": 1
+  }
+ },
+ "near_misses": "D4: both arms flagged nextAfterRateLimit (old highload-5:1 minor, new highload-4:0 major) but for the missing-retry-after case, not the unbounded retry-after the truth names; not counted.",
+ "verification": {
+  "verifiers": 2,
+  "items": 6,
+  "approx_tokens": 173766
+ },
+ "verdict": "NEW matched OLD on defect-level recall-any (2/6 each) at 62% of the dispatches and ~62% of the tokens, but lost D2-b (spawn-tool naming in flow/job/autodoc preflights), so recall-major fell 2/6 -> 1/6. Confirmed major extras tie 1-1. Wall time is not comparable: concurrency was throttled by a shared 20-subagent limit and NEW had one 802s testing-practices outlier."
+}

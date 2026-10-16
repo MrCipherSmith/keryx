@@ -850,6 +850,9 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "apply_patch",
     "ask_user",
     "evidence_search",
+    // Flow 456: operator-confirmed cards. The operator answers; nothing else can.
+    "external_apply",
+    "flow_confirm",
     "flow_status",
     "get_cwd",
     "graph_affected",
@@ -861,6 +864,9 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "health_status",
     // Flow 393: working-memory recall (read-only) and the Notes writer.
     "history_search",
+    "learn_accept",
+    "learn_graduate",
+    "learn_promote",
     "list_dir",
     "memory_search",
     "plan_get",
@@ -870,10 +876,22 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "read_wiki",
     "recall_step",
     "repomap",
+    "review_chunks_answer",
+    "review_comments_reply",
+    "review_confirm_plan",
+    "review_override_reviewers",
+    "review_publish",
+    "review_waive_coverage",
+    "review_waive_mutation",
+    "review_waive_readiness",
     // Flow 295: operator-confirmed scheduling — schedule_create always asks and shows
     // the card; schedule_list is read-only. TUI roster only.
     "schedule_create",
     "schedule_list",
+    "schedule_pause",
+    "schedule_remove",
+    "schedule_resume",
+    "schedule_run",
     "search_code",
     // The MCP consumer pair (keryx-mcp-servers P0). TWO entries however many
     // servers the operator has connected — if a qualified name like

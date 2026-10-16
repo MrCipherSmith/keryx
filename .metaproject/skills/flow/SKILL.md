@@ -50,8 +50,9 @@ the work.
 - `flow init --require-confirmation` (or `completion.require_confirmation:
   true`) makes `flow complete` also need `--confirm-token <token>` from
   `keryx flow confirm <id>` — a short-lived, single-use token minted by a
-  typed challenge in a terminal. It proves an interactive step ran outside the
-  agent's tool roster, not that a human ran it. A flow stuck in `completing`
+  typed challenge in a terminal. In keryx shell call the `flow_confirm` tool
+  instead: the operator answers it as a card; never send the operator to a
+  terminal. It proves an interactive step ran, not that a human ran it. A flow stuck in `completing`
   (never a normal gate failure) moves back with `flow recover <id> --reason
   "<why>"`.
 

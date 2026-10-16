@@ -5,18 +5,21 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { shellWord } from "../lib/shell-quote";
+import { testsNotRunWarning } from "./tests-to-run";
 import { writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
+import { isCapDrop, isReasonedDrop } from "./blast-radius";
 import { computeCoverage } from "./coverage-complete";
 import { hasChunkPlan } from "./chunks";
 import { packageScopeFiles } from "./coverage";
 import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
 import { dispatchErrors } from "./dispatch";
 import { ORCHESTRATOR_LOG, memoryCalls, readToolLog } from "./layers-usage";
-import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED } from "./orchestrator-log";
+import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED, ENV_REVIEW_CALLER_TOKEN } from "./orchestrator-log";
+import { readRunProfile } from "./run-profile";
 import { packageParityWarnings } from "./parity";
 import { researchErrors } from "./research";
-import type { ManagedReviewManifest, ReadinessWaiver } from "./types";
+import type { ConfirmedVia, ManagedReviewManifest, ReadinessWaiver } from "./types";
 
 export const READINESS_ITEMS = [
   { number: 1, id: "files-covered", title: "every changed file is covered by a wave or a recorded waiver" },
@@ -51,6 +54,8 @@ export type ReadinessReport = {
   review: string;
   verdict: "READY" | "NOT READY";
   items: ReadinessItem[];
+  /** Non-blocking notes, e.g. "N tests listed to run; none recorded as run". Absent when there is none. */
+  warnings?: string[];
 };
 
 export type ReadinessOptions = {
@@ -113,7 +118,7 @@ async function filesChecks(ctx: Context): Promise<{ files: Verdict; radius: Verd
     return { files: note, radius: note };
   }
   const blast = await readJson<{ dropped?: Array<{ file?: unknown; reason?: unknown }> }>(path.join(ctx.dir, "blast-radius.json"));
-  const cut = new Set((blast?.dropped ?? []).filter((entry) => text(entry.file) && entry.reason !== "pre-filter").map((entry) => entry.file as string));
+  const cut = new Set((blast?.dropped ?? []).filter((entry) => text(entry.file) && isCapDrop(entry.reason)).map((entry) => entry.file as string));
   const uncovered = coverage.files.filter((entry) => entry.status === "uncovered");
   const uncoveredCut = uncovered.filter((entry) => cut.has(entry.file)).map((entry) => entry.file);
   const uncoveredRest = uncovered.filter((entry) => !cut.has(entry.file)).map((entry) => entry.file);
@@ -124,8 +129,10 @@ async function filesChecks(ctx: Context): Promise<{ files: Verdict; radius: Verd
     ? ok(`${counts}${waived}`)
     : bad(`${uncoveredRest.length} file(s) uncovered: ${some(uncoveredRest)}; ${counts}`, sliceRepair);
   const waveRepair = hasChunkPlan(ctx.dir) ? `keryx review chunks next --package ${ctx.arg}` : `keryx review chunks plan --package ${ctx.arg}`;
+  const reasoned = (blast?.dropped ?? []).filter((entry) => text(entry.file) && isReasonedDrop(entry.reason)).length;
+  const omittedNote = reasoned === 0 ? "" : `; ${reasoned} graph-related file(s) omitted with a reason (not consumers of the changed contract)`;
   const radius: Verdict = uncoveredCut.length === 0 || coverage.waived
-    ? ok(cut.size === 0 ? "the blast radius cut nothing" : `${cut.size} file(s) cut by the cap, all covered by a chunk pass${waived}`)
+    ? ok(`${cut.size === 0 ? "the blast radius cut nothing" : `${cut.size} file(s) cut by the cap, all covered by a chunk pass${waived}`}${omittedNote}`)
     : bad(`${uncoveredCut.length} of ${cut.size} file(s) cut by the cap were never reviewed: ${some(uncoveredCut)}`, waveRepair);
   return { files, radius };
 }
@@ -242,7 +249,16 @@ const sameQuery = (a: string, b: string): boolean => a.trim().replace(/\s+/g, " 
  */
 async function memoryStageCheck(ctx: Context): Promise<Verdict> {
   const log = await readToolLog(ctx.dir, ORCHESTRATOR_LOG);
-  if (log === undefined) return ok(`no orchestrator tool log (tool-calls/${ORCHESTRATOR_LOG}.jsonl): this check could not see the orchestrator's own memory reads`);
+  // Flow 457: outside keryx shell no layer can tell the orchestrator's calls from a reviewer's unless the host passes
+  // the caller token; the item then says so instead of passing on a log it could not read.
+  const host = readRunProfile(ctx.dir)?.host;
+  const blind = host !== undefined && host !== "keryx-shell";
+  const notObservable = (why: string): Verdict => ok(`not observable on this host (${host}): ${why}`);
+  if (log === undefined) {
+    return blind
+      ? notObservable(`no orchestrator tool log (tool-calls/${ORCHESTRATOR_LOG}.jsonl) to read`)
+      : ok(`no orchestrator tool log (tool-calls/${ORCHESTRATOR_LOG}.jsonl): this check could not see the orchestrator's own memory reads`);
+  }
   const clean = ctx.manifest.cleanContext;
   const started = clean === undefined ? Number.NaN : Date.parse(clean.startedAt);
   let stage = clean?.memoryQuery;
@@ -263,6 +279,11 @@ async function memoryStageCheck(ctx: Context): Promise<Verdict> {
     }
   }
   const warning = unattributed.length === 0 ? "" : `; warning: ${unattributed.length} unattributed memory call(s) (CLI or MCP from a host that names no caller, not counted against the orchestrator): ${some(unattributed)}`;
+  if (outside.length === 0 && inStage === 0 && blind) {
+    return notObservable(
+      `no memory call in the log is attributable to the orchestrator; export ${ENV_REVIEW_CALLER_TOKEN} from the token \`keryx review start\` printed so the host's own keryx calls are attributed${warning}`,
+    );
+  }
   if (outside.length === 0) {
     const recorded = log.split("\n").some((line) => line.includes('"log-start"') || line.includes('"source"'));
     const none = recorded ? "no memory call recorded by the orchestrator (log written by keryx)" : "the orchestrator made no memory call";
@@ -270,7 +291,7 @@ async function memoryStageCheck(ctx: Context): Promise<Verdict> {
   }
   return bad(
     `${outside.length} memory call(s) by the orchestrator outside its memory stage: ${some(outside)}${warning}`,
-    `run the review from a session whose only memory read is the stage query (keryx memory search "<query>" --status accepted, once), or record the operator's decision: keryx review complete ${ctx.arg} --waive memory-outside-stage "<operator quote>"`,
+    `run the review from a session whose only memory read is the stage query (keryx memory search "<query>" --status accepted, once), or record the operator's decision: in keryx shell call the review_waive_readiness tool with item memory-outside-stage (the operator answers a card); in a terminal run keryx review complete ${ctx.arg} --waive memory-outside-stage "<operator quote>"`,
   );
 }
 
@@ -310,7 +331,8 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     if (waiver !== undefined) return { ...spec, status: "waived", evidence: verdict.evidence, repair: verdict.repair, waiver: { operatorQuote: waiver.operator_quote, time: waiver.time } };
     return { ...spec, status: "fail", evidence: verdict.evidence, repair: verdict.repair };
   });
-  return { schemaVersion: 1, review: manifest.reviewId, verdict: items.every((item) => item.status !== "fail") ? "READY" : "NOT READY", items };
+  const testsNotRun = testsNotRunWarning(packageDir);
+  return { schemaVersion: 1, review: manifest.reviewId, verdict: items.every((item) => item.status !== "fail") ? "READY" : "NOT READY", items, ...(testsNotRun === undefined ? {} : { warnings: [testsNotRun] }) };
 }
 
 export const failingItems = (report: ReadinessReport): ReadinessItem[] => report.items.filter((item) => item.status === "fail");
@@ -326,6 +348,7 @@ export function renderReadiness(report: ReadinessReport): string[] {
     if (item.status === "waived" && item.waiver !== undefined) lines.push(`       waived by the operator: ${item.waiver.operatorQuote}`);
     if (item.status === "fail" && item.repair !== undefined) lines.push(`       repair: ${item.repair}`);
   }
+  for (const warning of report.warnings ?? []) lines.push(`  warning (not blocking): ${warning}`);
   return lines;
 }
 
@@ -391,7 +414,7 @@ async function writePartialHeader(packageDir: string, waivers: readonly Readines
  * Waives the named failing items in the operator's own words: written into the manifest and into the first lines of
  * report.md. A quote that is a flag name, a one-word "ok" or too short is refused, as the coverage waiver does.
  */
-export async function waiveReadiness(packageDir: string, selectors: readonly string[], operatorQuote: string, options: ReadinessOptions & { now?: Date } = {}): Promise<ReadinessWaiver[]> {
+export async function waiveReadiness(packageDir: string, selectors: readonly string[], operatorQuote: string, options: ReadinessOptions & { now?: Date; confirmedVia?: ConfirmedVia } = {}): Promise<ReadinessWaiver[]> {
   const quote = operatorQuote.replace(/-{0,2}waive/gi, "").trim();
   if (quote.length < MIN_WAIVER_QUOTE_CHARS || !/[\p{L}\p{N}]/u.test(quote)) {
     throw new Error(`--waive needs the operator's own words as its value: at least ${MIN_WAIVER_QUOTE_CHARS} characters, with letters or digits in them.`);
@@ -408,7 +431,7 @@ export async function waiveReadiness(packageDir: string, selectors: readonly str
   const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
   const time = (options.now ?? new Date()).toISOString();
   const kept = (manifest.readiness_waivers ?? []).filter((waiver) => !(ids as string[]).includes(waiver.item));
-  const added: ReadinessWaiver[] = ids.map((item) => ({ item, operator_quote: quote, time }));
+  const added: ReadinessWaiver[] = ids.map((item) => ({ item, operator_quote: quote, time, ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }) }));
   const all = [...kept, ...added].sort((a, b) => READINESS_ITEMS.findIndex((i) => (i.id as string) === a.item) - READINESS_ITEMS.findIndex((i) => (i.id as string) === b.item));
   await writeFileAtomic(manifestPath, `${JSON.stringify({ ...manifest, readiness_waivers: all }, null, 2)}\n`);
   await writePartialHeader(packageDir, all);

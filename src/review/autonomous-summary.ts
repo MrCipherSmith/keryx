@@ -15,7 +15,8 @@ export interface FindingCounts {
 export interface AutonomousSummary {
   readonly schemaVersion: 1;
   readonly profile: typeof AUTONOMOUS_PROFILE_ID;
-  readonly target: { readonly kind: "pr"; readonly ref: string; readonly repository: string; readonly number: number; readonly head: string | null };
+  /** `range` is a local `base...head` review (flow 457), with repository "local" and number 0. */
+  readonly target: { readonly kind: "pr" | "range"; readonly ref: string; readonly repository: string; readonly number: number; readonly head: string | null };
   readonly status: AutonomousStatus;
   readonly exitCode: number;
   readonly reason: string;
@@ -69,7 +70,7 @@ export function validateSummary(value: unknown): string[] {
   for (const key of ["reason", "phase", "startedAt", "finishedAt"]) if (!isText(value[key])) problems.push(`${key}: must be a non-empty string`);
   for (const key of ["durationSeconds", "attempts", "rounds", "tokens", "floorRefusals"]) if (!isCount(value[key])) problems.push(`${key}: must be a non-negative integer`);
   const target = value["target"];
-  if (!isRecord(target) || target["kind"] !== "pr" || !isText(target["ref"]) || !isText(target["repository"]) || !isCount(target["number"])) {
+  if (!isRecord(target) || (target["kind"] !== "pr" && target["kind"] !== "range") || !isText(target["ref"]) || !isText(target["repository"]) || !isCount(target["number"])) {
     problems.push("target: must be { kind: pr, ref, repository, number, head }");
   } else if (target["head"] !== null && typeof target["head"] !== "string") {
     problems.push("target.head: must be a string or null");

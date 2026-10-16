@@ -1,0 +1,186 @@
+{
+  "pr": 1005,
+  "round": 1,
+  "diff": "input.round1-c75f0091.diff",
+  "head": "c75f0091da095a2d90ce0f03ffbf8c29fdb7abd6",
+  "truth": [
+    "F-057",
+    "F-058",
+    "F-061"
+  ],
+  "slices": {
+    "slice-01": {
+      "bytes": 15999,
+      "roles": 7,
+      "depth": "deep"
+    },
+    "slice-02": {
+      "bytes": 2132,
+      "roles": [
+        "review-logic",
+        "review-testing-practices"
+      ],
+      "depth": "light"
+    }
+  },
+  "waves": 1,
+  "old": {
+    "dispatches": 9,
+    "approxTokens": 780855,
+    "wallTimeMsParallel": 75528,
+    "agentTimeMsSum": 417366,
+    "perRole": {
+      "review-architecture": {
+        "tokens": 89967,
+        "ms": 55716
+      },
+      "review-clean-code": {
+        "tokens": 84300,
+        "ms": 35046
+      },
+      "review-highload": {
+        "tokens": 81173,
+        "ms": 14513
+      },
+      "review-logic": {
+        "tokens": 98041,
+        "ms": 75528
+      },
+      "review-performance": {
+        "tokens": 79268,
+        "ms": 20000
+      },
+      "review-security-code": {
+        "tokens": 94713,
+        "ms": 72065
+      },
+      "review-style": {
+        "tokens": 80574,
+        "ms": 30989
+      },
+      "review-testing-practices": {
+        "tokens": 82261,
+        "ms": 50551
+      },
+      "review-regression": {
+        "tokens": 90558,
+        "ms": 62958
+      }
+    },
+    "truthFoundAny": [
+      "F-057",
+      "F-061"
+    ],
+    "truthFoundMajor": [
+      "F-057"
+    ],
+    "missed": [
+      "F-058"
+    ],
+    "matches": {
+      "F-057": [
+        "review-logic F-001 major",
+        "review-security-code F-001 major",
+        "review-architecture F-001 major"
+      ],
+      "F-061": [
+        "review-logic F-003 minor",
+        "review-testing-practices F-001 minor",
+        "review-testing-practices F-002 minor"
+      ]
+    },
+    "confirmedExtras": []
+  },
+  "new": {
+    "dispatches": 7,
+    "approxTokens": 631459,
+    "wallTimeMsParallel": 181067,
+    "agentTimeMsSum": 504513,
+    "perRole": {
+      "review-architecture": {
+        "tokens": 84318,
+        "ms": 41684
+      },
+      "review-clean-code": {
+        "tokens": 80620,
+        "ms": 21830
+      },
+      "review-highload": {
+        "tokens": 80022,
+        "ms": 15762
+      },
+      "review-logic": {
+        "tokens": 97156,
+        "ms": 78538
+      },
+      "review-regression": {
+        "tokens": 92783,
+        "ms": 78873
+      },
+      "review-security-code": {
+        "tokens": 104088,
+        "ms": 86759
+      },
+      "review-testing-practices": {
+        "tokens": 92472,
+        "ms": 181067
+      }
+    },
+    "truthFoundAny": [
+      "F-057",
+      "F-061"
+    ],
+    "truthFoundMajor": [
+      "F-057"
+    ],
+    "missed": [
+      "F-058"
+    ],
+    "matches": {
+      "F-057": [
+        "review-logic F-001 major",
+        "review-security-code SEC-001 major"
+      ],
+      "F-061": [
+        "review-logic F-002 minor",
+        "review-testing-practices TP-1 minor",
+        "review-clean-code CC-3 info"
+      ]
+    },
+    "confirmedExtras": []
+  },
+  "nonTruthMajorPool": {
+    "count": 0,
+    "note": "Every blocker/major from both arms is the F-057 class (sibling git revision sites unguarded); no verifier dispatched because the pool was empty."
+  },
+  "notes": [
+    "Shared subagent concurrency cap (20, other sessions active) forced batches of 2-4, so wallTimeMsParallel = max per-dispatch duration (ideal fully parallel), not observed elapsed.",
+    "NEW dropped review-performance and review-style (both produced only minor/info in OLD) and gave slice-02 only to logic+testing.",
+    "F-058 (shell-spelling evasion of EXEC_FLAGS in trust-routine-command.ts) missed by both arms; closest were minor/info notes on hasDashValue being review-only."
+  ],
+  "verdict": {
+    "recallAny": {
+      "old": "2/3",
+      "new": "2/3"
+    },
+    "recallMajor": {
+      "old": "1/3",
+      "new": "1/3"
+    },
+    "confirmedExtras": {
+      "old": 0,
+      "new": 0
+    },
+    "cost": {
+      "old": {
+        "dispatches": 9,
+        "tokens": 780855
+      },
+      "new": {
+        "dispatches": 7,
+        "tokens": 631459
+      }
+    },
+    "summary": "Parity on quality; NEW is ~22% fewer dispatches and ~16% fewer tokens, but NEW's slowest reviewer (testing-practices, 181s) made its ideal wall time longer on this run."
+  }
+}

@@ -55,7 +55,7 @@ operator reads in the shell's Schedules section.
 Call `schedule_create`. The operator then sees a confirmation card: cadence and
 next runs, prompt, runner, budget, network, every granted tool with its binary
 and account, and exactly what gets installed. You do not confirm it. Only the
-operator can, and every permission mode asks, `auto` included.
+operator can, and every permission mode asks, `auto` included. Changing an existing schedule works the same way (`schedule_pause`, `schedule_resume`, `schedule_run`, `schedule_remove`): the operator answers a card; never send them to a terminal.
 
 ### Step 4: Report back
 After the operator's answer, say what was scheduled and when it next runs, or
@@ -72,7 +72,7 @@ that nothing was written. Point to `/schedules` for the list and the reports.
 - NEVER read or copy the schedule signing key (`schedule-hmac.key`), and never try to
   reach the scheduler another way (quoting, `env -u`, a script). The text floor can be
   worked around, and that is exactly why it is not the gate. `keryx schedule add|resume|run`
-  need the operator's own terminal, and a schedule without this machine's signature never runs.
+  need the operator's own terminal (inside keryx shell the operator answers the card instead), and a schedule without this machine's signature never runs.
 - NEVER run `loginctl enable-linger`. If linger is off, tell the operator the
   timer runs only while they are logged in and that the command is theirs to run.
 - State the limits when they matter: the machine must be on; systemd and launchd

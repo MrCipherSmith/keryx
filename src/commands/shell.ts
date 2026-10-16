@@ -2004,6 +2004,21 @@ export async function runAgentRepl(
         out(`\n${GUTTER}${style.red("⚠ this call follows untrusted external content in this turn")}\n`);
         out(`${GUTTER}${style.dim("that content cannot authorize it — only your answer can")}\n`);
       }
+      // Flow 456 (AC1): an operator-confirmed card (schedule_create, the operator-confirm gates). The card
+      // is printed verbatim and the answer is yes or no for this call only — never remembered.
+      if (meta?.alwaysAsk === true && meta.card !== undefined && tool !== "user_prompt") {
+        out(`\n${GUTTER}${style.yellow(meta.cardTitle ?? `Confirm ${tool}?`)}\n`);
+        out(`${indentBlock(meta.card.join("\n"), GUTTER)}\n`);
+        out(`${GUTTER}${style.dim(approvalCauseLine(causeOfMeta(tool, meta)))}\n`);
+        out(`\n${GUTTER}${style.dim("[y/N] ")}`);
+        const answer = ((await readLine()) ?? "").trim();
+        const approved = /^y(es)?$/i.test(answer);
+        out(approved ? style.green("confirmed\n") : style.red("declined — nothing changed\n"));
+        if (!approved) {
+          return false;
+        }
+        return meta.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;
+      }
       if (tool === "apply_patch") {
         // ADR-0010/P2: render the actual diff (full, never truncated — the
         // 120-char preview below is fine for a shell command, not for a
@@ -4197,6 +4212,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           ...(bus !== undefined ? { bus } : {}),
           // Flow 295 (AC7): the TUI's approver renders schedule_create's card.
           schedules: { projectRoot: cwd, defaults: () => ({ provider: sel.provider, model: sel.model }) },
+          // Flow 456 (AC1): the operator's decisions as yes/no cards instead of a terminal.
+          operatorConfirm: { projectRoot: cwd },
         }),
         // The EXISTING runtime, never a new one. `/mcp` is a read-only
         // view; opening it must not be the thing that spawns every

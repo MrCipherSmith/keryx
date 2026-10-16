@@ -1,0 +1,67 @@
+{
+  "pr": 940,
+  "reviewedHead": "489d410fa0a01c78ed42e6c96580245c65486d8a",
+  "reviewerModel": "opus",
+  "verifierModel": "opus",
+  "plan": {
+    "slices": 15,
+    "maxBytes": 18000,
+    "waveBytes": 54000,
+    "host": "claude-code",
+    "deep": 5,
+    "light": 10,
+    "audit": 2,
+    "dispatchesActual": 23,
+    "dispatchesPlanEval": 21,
+    "dispatchesNote": "manifest roles include review-regression (2 dispatches) which plan-eval does not count",
+    "oldPlanDispatches": 37,
+    "reductionVsOld": 0.378,
+    "planEvalReduction": 0.432,
+    "verifierDispatches": 3,
+    "wallMinutes": 14,
+    "wallNote": "07:45:32-07:59:48 incl. ~4 min waiting on a shared 20-subagent concurrency cap",
+    "roughTokens": {"reviewers": 2400000, "verifiers": 234000}
+  },
+  "recall": {
+    "truthMajorTotal": 3,
+    "truthMajorFound": ["F-001", "F-007", "F-008"],
+    "truthMajorMissed": [],
+    "severityUncertainTotal": 1,
+    "severityUncertainFound": ["R-SEC-bc02c45d"],
+    "matches": {
+      "F-001": ["review-logic-5:F-002 (tui-shell.ts:8372, same mechanism: queued slash command that starts no turn stalls items behind it; names drain sites 9434/9743/9839)"],
+      "F-007": ["review-security-code-1:SEC-002 (trust-routine-command.ts:70, bun test any args)"],
+      "F-008": ["review-security-code-1:SEC-002 (review-slice.ts:212 --state / --out writes)", "review-security-code-2:SEC-1 (trust-routine-command.ts:40, --out/--state/--append not in EXEC_FLAGS)"],
+      "R-SEC-bc02c45d": ["review-security-code-1:SEC-001 blocker (agent.ts:5470 / isTrustRoutineCommand ignores $( ) and backticks inside double quotes)"]
+    },
+    "recall": 1.0,
+    "recallInclUncertain": 1.0
+  },
+  "rawCounts": {"reviewerFiles": 23, "blocker": 1, "major": 21, "majorOrBlockerTotal": 22, "matchedTruth": 4, "extraFindings": 18, "extraClusters": 13},
+  "extra": {
+    "confirmed": [
+      {"cluster": "E1", "file": "src/commands/agent.ts:2452", "summary": "isIrreversibleAsk duplicates and weakens the canonical decisions/blind.ts isIrreversible (no text/config match) so untagged irreversible-sounding asks are replayed", "by": ["review-architecture-2"]},
+      {"cluster": "E2", "file": "src/review/dispatch-check.ts:27", "summary": "schema candidate paths never resolve in the published bundle; dispatch-check throws for npm installs", "by": ["review-architecture-3", "review-logic-4"]},
+      {"cluster": "E3", "file": "src/tui/busy-dispatch.ts:191", "summary": "BUSY_REFUSED_COMMANDS misses /sessions (and /rewind); session swap now queued while busy", "by": ["review-architecture-3", "review-logic-5"]},
+      {"cluster": "E5", "file": "src/commands/agent.ts:1024", "summary": "subagent concurrency default 3->10 for all providers while child runs have no 429/overload recovery", "by": ["review-highload-1"]},
+      {"cluster": "E7", "file": "src/review/retry-plan.ts:67", "summary": "retry state keyed by role only and never reset; second dispatch of a role / later review gets not-run without its retry", "by": ["review-logic-3", "review-logic-4"]},
+      {"cluster": "E8", "file": "src/session/ask-answer-notes.ts:13 / agent.ts:2458", "summary": "ask_user replay keyed by question text only, ignoring options/decision; old answer replayed without prompt", "by": ["review-logic-3", "review-regression-1"]},
+      {"cluster": "E10", "file": "src/commands/trigger-dispatch.ts:848", "summary": "unattended trust-mode triggers silently get 200 rounds + plan follow-through nudges", "by": ["review-regression-1"]},
+      {"cluster": "E12", "file": "src/session/ask-answer-notes.ts:28", "summary": "model-writable slate_note can forge answer.<hash> operator answers (no reserved prefix)", "by": ["review-security-code-1", "review-security-code-3"]}
+    ],
+    "refuted": [
+      {"cluster": "E4", "file": "src/review/slice.ts:137", "why": "real drift but minor: dropped generated paths are recorded in manifest omissions"},
+      {"cluster": "E6", "file": "src/commands/review-slice.ts:213", "why": "lost update needs concurrent retry-plan processes; documented flow runs them sequentially"},
+      {"cluster": "E9", "file": "src/session/ask-answer-notes.ts:16", "why": "punctuation collapse is a narrow subcase of E8; minor alone"},
+      {"cluster": "E11", "file": "src/harness/tool/builtin/slate-memory-tools.ts:118", "why": "shared notes budget real but needs dozens of answers; recoverable"},
+      {"cluster": "E13", "file": "src/commands/shell.ts:4013", "why": "orphaned comment; no behavioural impact"}
+    ],
+    "unverifiable": [],
+    "precision": 0.615
+  },
+  "verdict": {
+    "knownDefects": "equal (4/4 incl. severity-uncertain, same as old round which also landed all 4) with 23 vs 37 dispatches",
+    "confirmedExtras": "better: 8 confirmed new major defects not in the historical canonical set",
+    "overall": "better"
+  }
+}

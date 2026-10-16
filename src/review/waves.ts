@@ -1,10 +1,18 @@
 import { BUNDLED_PATH_GATES } from "./coverage";
 import type { SliceEntry, SliceManifest } from "./slice";
+import { ROUTABLE_ROLES } from "./slice-routing";
 
-/** Slices a reviewer must have seen: the manifest's original slices, narrowed to the files its path gate matches. */
-export function requiredSlices(manifest: SliceManifest, reviewer: string): string[] {
+/**
+ * Slices a reviewer must have seen: the manifest's original slices it owns. A slice that carries `roles` (slice routing)
+ * is owned by those roles; a reviewer routing does not decide for (a project reviewer, `review-pr-contract`) and a slice
+ * without `roles` keep the old rule: every slice whose files its path gate matches.
+ */
+export function requiredSlices(manifest: Pick<SliceManifest, "slices">, reviewer: string): string[] {
   const gate = BUNDLED_PATH_GATES[reviewer];
-  return manifest.slices.filter((s) => s.retryOf === undefined && (gate === undefined || s.files.some(gate))).map((s) => s.id);
+  const routable = ROUTABLE_ROLES.has(reviewer);
+  return manifest.slices
+    .filter((s) => s.retryOf === undefined && (routable && Array.isArray(s.roles) ? s.roles.includes(reviewer) : gate === undefined || s.files.some(gate)))
+    .map((s) => s.id);
 }
 
 type Cut = { attempt: number; parents: string[]; members: SliceEntry[] };

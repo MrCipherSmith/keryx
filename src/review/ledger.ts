@@ -5,6 +5,7 @@ import { layersUsedFrom } from "./layers-usage";
 import { researchErrors } from "./research";
 import { readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } from "./retry-plan";
 import { type SliceManifest, packWaves, waveBytesOf } from "./slice";
+import { ALWAYS_ROLE, DEEP_ROLES, ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 
 /** Statuses of `reviewer-finding.schema.json` that mean the reviewer finished what it was given. */
@@ -51,6 +52,8 @@ export type LedgerGap = { reviewer?: string; detail: string; next: string; waves
 
 export type LedgerInputs = {
   mode: ReviewMode;
+  /** The round depth `required --package` recorded; absent means a full round. */
+  depth?: "light" | "full" | undefined;
   selected: string[];
   /** Absent for a run that was never sliced. */
   manifest?: SliceManifest | undefined;
@@ -83,6 +86,8 @@ export type LedgerResult = {
     dispatch: Record<string, unknown>;
     /** Files in raw/ that were set aside as not reviewer replies; written by `ledger build`, not read by the gate. */
     setAside?: string[];
+    /** The audit sample of a routed round and what it caught; not read by the gate. */
+    audit?: AuditRecord;
   };
   gaps: LedgerGap[];
 };
@@ -383,6 +388,12 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       gaps.push({ reviewer, detail: `${reviewer}: not run (${known.status} after the allowed retry)`, next: "no retry is left; the report carries the Not run line, and only the operator can accept a smaller set (dispatch override with their own quote)" });
       continue;
     }
+    if (latest === undefined && manifest !== undefined && routedOut(manifest, reviewer)) {
+      // Slice routing gave this role no slice: there is nothing for it to read, and the manifest's routing is the evidence.
+      const anchor = `${input.manifestPath ?? "slices/manifest.json"}#roles`;
+      runs.push({ reviewer, executionId: `${reviewer}:routed-out:${routingHash(manifest)}`, status: "complete", scopeComplete: true, routedOut: true, coveredSlices: [], rawEvidence: anchor, ruleEvidence: [input.ruleFiles[reviewer] ?? anchor], executionRequired: false, executionReason: "slice routing gave this role no slice: no changed line's content or path needs it, so there was nothing to dispatch", layersUsed: layersUsedFrom(undefined) });
+      continue;
+    }
     if (latest === undefined) {
       runs.push({ reviewer, executionId: `${reviewer}:not-run`, status: "not-run", notRunReason: "no reviewer result recorded", scopeComplete: false });
       const left = manifest === undefined ? undefined : wavesLeft(manifest, reviewer, accountedFor(manifest, reviewer, known?.covered ?? []));
@@ -448,7 +459,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   }
 
   const unresolvedRules = input.selected.filter((r) => input.ruleFiles[r] === undefined);
-  const dispatch = { version: 1, mode: input.mode, selected: input.selected, ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
+  const dispatch = { version: 1, mode: input.mode, ...(input.depth === "light" ? { depth: "light", notRun: ["Not run: mutation (light round)"] } : input.depth === "full" ? { depth: "full" } : {}), selected: input.selected, ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
 
   const obligations: Array<Record<string, unknown>> = [];
   const derived = new Set<string>();
@@ -502,7 +513,49 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       gaps.push({ detail: `${uncovered.length} slice(s) are covered by no finished reviewer: ${uncovered.slice(0, 8).join(", ")}`, next: "dispatch a reviewer whose path gate matches those slices" });
     }
   }
-  return { ledger: { version: 1, scopeReviewed, rawReconciled: reconciled, obligations, dispatch }, gaps };
+  const audit = manifest === undefined ? undefined : auditRecord(manifest, attributed);
+  return { ledger: { version: 1, scopeReviewed, rawReconciled: reconciled, obligations, dispatch, ...(audit === undefined ? {} : { audit }) }, gaps };
+}
+
+/** A routable role that slice routing gave no slice, in a routed manifest; the regression reviewer always runs (scope B). */
+function routedOut(manifest: SliceManifest, reviewer: string): boolean {
+  return isRoutedManifest(manifest) && ROUTABLE_ROLES.has(reviewer) && !ROLES_RUN_WITHOUT_SLICES.has(reviewer) && requiredSlices(manifest, reviewer).length === 0;
+}
+
+function routingHash(manifest: SliceManifest): string {
+  return sha(JSON.stringify(manifest.slices.filter((s) => s.retryOf === undefined).map((s) => [s.id, s.roles ?? null, s.depth ?? null])));
+}
+
+export type AuditRecord = {
+  /** Light slices sampled to run deep. */
+  slices: string[];
+  /** Per audit slice, the findings the core roles the audit added (all but review-logic) reported on it. */
+  caught: Array<{ slice: string; findings: string[] }>;
+  /** Share of audit slices on which the audit roles found something the light routing would not have dispatched. */
+  catchRate: number;
+};
+
+const AUDIT_ROLES = new Set(DEEP_ROLES.filter((role) => role !== ALWAYS_ROLE));
+
+/** Which audit slices the audit's extra roles found something on: how often light routing would have missed a finding. */
+export function auditRecord(manifest: SliceManifest, raws: readonly RawFile[]): AuditRecord | undefined {
+  const audited = manifest.slices.filter((s) => s.retryOf === undefined && s.audit === true);
+  if (audited.length === 0) return undefined;
+  const caught = audited.map((slice) => {
+    const found: string[] = [];
+    for (const raw of raws) {
+      const reviewer = raw.result?.reviewer;
+      if (reviewer === undefined || !AUDIT_ROLES.has(reviewer)) continue;
+      for (const finding of Array.isArray(raw.result!.findings) ? raw.result!.findings! : []) {
+        const named = finding.slice === slice.id || (Array.isArray(finding.slices) && finding.slices.includes(slice.id));
+        const file = typeof finding.file === "string" ? finding.file : typeof finding.location === "string" ? finding.location.replace(/:\d+(?:[-:]\d+)*$/, "") : undefined;
+        if (named || (file !== undefined && slice.files.includes(file))) found.push(`${reviewer}:${typeof finding.id === "string" ? finding.id : "?"}`);
+      }
+    }
+    return { slice: slice.id, findings: [...new Set(found)] };
+  });
+  const hits = caught.filter((entry) => entry.findings.length > 0).length;
+  return { slices: audited.map((s) => s.id), caught: caught.filter((entry) => entry.findings.length > 0), catchRate: Number((hits / audited.length).toFixed(3)) };
 }
 
 function closeWith(given: Disposition | undefined, canonical: Array<Record<string, unknown>>): Record<string, unknown> | undefined {
@@ -513,7 +566,7 @@ function closeWith(given: Disposition | undefined, canonical: Array<Record<strin
 }
 
 /** The gate's own validators over the built ledger, so "ready" cannot disagree with `keryx review complete`. */
-export async function ledgerBlockers(ledger: LedgerResult["ledger"], canonical: unknown, options: { root: string; files: readonly string[] | undefined; blastRadius?: boolean | undefined; pendingMutants?: number | undefined }): Promise<string[]> {
+export async function ledgerBlockers(ledger: LedgerResult["ledger"], canonical: unknown, options: { root: string; packageDir?: string | undefined; files: readonly string[] | undefined; changedLines?: number | undefined; blastRadius?: boolean | undefined; pendingMutants?: number | undefined }): Promise<string[]> {
   const dispatch = dispatchErrors(ledger.dispatch);
   const coverage = dispatch.length === 0 ? await coverageErrors(ledger.dispatch, options) : [];
   return [...researchErrors(ledger, canonical), ...dispatch, ...coverage];

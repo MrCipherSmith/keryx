@@ -615,6 +615,8 @@ test("AC7: a declared outstanding count is the only thing that reaches the nesti
 test("AC5/AC10: an ingest over the cap truncates and says so on the terminal", async () => {
   const many = Array.from({ length: 14 }, (_, index) => ({
     ...FINDING,
+    // Only info notes are capped (owner decision 2026-10-16: minor findings are never dropped).
+    severity: "info",
     id: `F-${String(index + 1).padStart(3, "0")}`,
   }));
   await writeFile(path.join(ROOT, "report.md"), reportWith(many), "utf8");
@@ -826,16 +828,19 @@ test("`review blast-radius` prints the set AND every file the cap removed", asyn
 
   expect(process.exitCode).toBe(0);
   const out = logs.join("\n");
-  // Three graph dependents plus the co-named test the repository really has.
+  // Three graph dependents plus the co-named test the repository really has. Flow 457: the test is run, not read, so
+  // it is a test-consumer omission on the run list and only the third dependent is cut by the cap.
   expect(out).toContain("candidates: 4");
   expect(out).toContain("retained: 2");
-  expect(out).toContain("dropped_by_cap: 2");
+  expect(out).toContain("dropped_by_cap: 1");
+  expect(out).toContain("omitted_test_consumer: 1");
   expect(out).toContain("### Dropped — NOT reviewed");
   expect(out).toContain("src/c.ts");
+  expect(out).toContain("1 tests exercise the changed code — run them:");
   // AC: the truncation is on the terminal too. A silent one reads afterwards as
   // "we checked everything".
   expect(errors.join("\n")).toContain("recompute: yes");
-  expect(errors.join("\n")).toContain("2 of 4 candidate files were NOT reviewed");
+  expect(errors.join("\n")).toContain("1 of 4 candidate files were NOT reviewed");
 });
 
 test("`review blast-radius` takes the changed files from git and writes the record to --out", async () => {
@@ -852,13 +857,10 @@ test("`review blast-radius` takes the changed files from git and writes the reco
     counts: { droppedByCap: number };
   };
   expect(record.changedFiles).toEqual(["src/core.ts"]);
-  expect(record.files.map((entry) => entry.file).sort()).toEqual([
-    "src/a.ts",
-    "src/b.ts",
-    "src/c.ts",
-    "src/core.test.ts",
-  ]);
+  expect(record.files.map((entry) => entry.file).sort()).toEqual(["src/a.ts", "src/b.ts", "src/c.ts"]);
   expect(record.counts.droppedByCap).toBe(0);
+  // Flow 457: the co-named test is on the run list, not in the reviewed set.
+  expect((record as { testsToRun?: Array<{ file: string }> }).testsToRun?.map((test) => test.file)).toEqual(["src/core.test.ts"]);
 });
 
 test("`review blast-radius` refuses an absent graph rather than reporting an empty radius", async () => {

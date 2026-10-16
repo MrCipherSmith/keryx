@@ -45,7 +45,7 @@ test("malformed inventory and absent provenance fail closed", () => {
   for (const v of [null, [], {}, { ...valid(), selected: [] }, { ...valid(), selected: ["x", "x"] }, { ...valid(), runs: null }, { ...valid(), runs: [{ ...valid().runs[0], ruleEvidence: [] }] }, { ...valid(), runs: [{ ...valid().runs[0], executionReason: "" }] }])
     expect(dispatchErrors(v).length).toBeGreaterThan(0);
 });
-test("package gate rereads dispatch; legacy absence is compatible only", async () => {
+test("package gate rereads dispatch; a dispatch the manifest does not declare is a mismatch, not legacy", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "keryx-dispatch-"));
   try {
     const ledger = { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: valid() };
@@ -55,7 +55,7 @@ test("package gate rereads dispatch; legacy absence is compatible only", async (
     expect(await packageResearchErrors(dir, artifacts, [])).toEqual([]);
     await writeFile(file, JSON.stringify({ ...ledger, dispatch: { ...valid(), unresolvedRules: ["missing"] } }));
     expect((await packageResearchErrors(dir, artifacts, [])).join(" ")).toContain("unresolved rule");
-    expect(await packageResearchErrors(dir, { research: "research.json" }, [])).toEqual([]);
+    expect((await packageResearchErrors(dir, { research: "research.json" }, [])).join(" ")).toContain("does not declare it");
     expect((await packageResearchErrors(dir, { reviewerDispatch: "research.json" }, [])).length).toBeGreaterThan(0);
     expect((await packageResearchErrors(dir, { ...artifacts, reviewerDispatch: "../x" }, [])).join(" ")).toContain("locator");
   } finally { await rm(dir, { recursive: true, force: true }); }

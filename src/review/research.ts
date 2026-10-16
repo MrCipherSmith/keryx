@@ -1,6 +1,6 @@
 import { dispatchErrors } from "./dispatch";
 import { pendingMutants } from "./mutate";
-import { coverageErrors, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage } from "./coverage";
+import { coverageErrors, packageChangedLines, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage } from "./coverage";
 import { coverageGateErrors } from "./coverage-complete";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -44,18 +44,26 @@ export async function packageResearchErrors(packageDir: string, artifacts: unkno
   if (a.research !== "research.json") return ["invalid research artifact locator"];
   try {
     const ledger = JSON.parse(await readFile(path.join(packageDir, "research.json"), "utf8"));
-    const dispatch = a.reviewerDispatch === undefined ? [] : dispatchErrors(ledger?.dispatch);
-    const coverage = a.reviewerDispatch === undefined || options.coverage === false || dispatch.length
+    // A dispatch block in research.json is checked whatever the manifest says: dropping the manifest's locator must not skip the gate.
+    const recorded = ledger?.dispatch !== undefined;
+    const checked = a.reviewerDispatch !== undefined || recorded;
+    const mismatch = recorded && a.reviewerDispatch === undefined
+      ? ['research.json records a reviewer dispatch but manifest.json does not declare it: restore artifacts.reviewerDispatch "research.json"']
+      : [];
+    const dispatch = checked ? dispatchErrors(ledger?.dispatch) : [];
+    const coverage = !checked || options.coverage === false || dispatch.length
       ? []
       : await coverageErrors(ledger?.dispatch, {
           root: projectRootOfPackage(packageDir),
+          packageDir,
           files: await packageScopeFiles(packageDir),
+          changedLines: await packageChangedLines(packageDir),
           blastRadius: await packageHasBlastRadius(packageDir),
           prContext: packageHasPrContext(packageDir),
           pendingMutants: (await pendingMutants(packageDir)).length,
         });
-    const completeness = a.reviewerDispatch === undefined || options.coverage === false || options.completeness === false || dispatch.length ? [] : await coverageGateErrors(packageDir, ledger);
-    return [...researchErrors(ledger, findings), ...dispatch, ...coverage, ...completeness];
+    const completeness = !checked || options.coverage === false || options.completeness === false || dispatch.length ? [] : await coverageGateErrors(packageDir, ledger);
+    return [...researchErrors(ledger, findings), ...mismatch, ...dispatch, ...coverage, ...completeness];
   }
   catch { return ["research ledger unreadable or invalid JSON"]; }
 }

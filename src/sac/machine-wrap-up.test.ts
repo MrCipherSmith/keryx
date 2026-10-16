@@ -74,7 +74,7 @@ import { resolveMachineWrapUp, runWrapUp } from "./machine-wrap-up";
 import type { MachineWrapUpResolution, WrapUpOutcome } from "./machine-wrap-up";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
 import type { Slate, SlateSeed } from "../session/slate";
-import { readSlate } from "../session/slate";
+import { readSlate, writeSlate } from "../session/slate";
 import type { ModelTurnPort } from "./model-turn-port";
 
 const time = "2026-08-16T00:00:00.000Z";
@@ -408,6 +408,34 @@ test("flow 200 (lazy binding): with no workspaceId and a SUCCESSFUL resolve, run
   // The slate was bound so future wrap-ups reuse the same workspace.
   const slateAfter = await readSlateForTest(dir);
   expect(slateAfter?.workspaceId).toBe("workspace-seed-resolved");
+});
+
+test("binding the resolved workspace to the live slate keeps its Notes, Trail and answers", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+  await createWorkspace(cwd, "workspace-keep-memory");
+  await writeFlowFixture(cwd, "043-keep-memory");
+  const slate = baseSlate({
+    seeds: [seed("s1", "keep the working memory", "decision")],
+    notes: { plan: { text: "keep me", ts: time } },
+    trail: [{ step: 1, tool: "read_file", digest: "a.ts", outcome: "ok", ts: time }],
+    answers: { "answer.0123456789ab": { text: "Q: q\nA: a", ts: time, source: "operator" } },
+  });
+  await writeSlate(dir, () => slate);
+  await runWrapUp({
+    cwd,
+    dir,
+    slate,
+    trigger: "flow-complete",
+    now: () => new Date(time),
+    modelTurn: stubModelTurn("summary"),
+    resolveWorkspace: async () => ({ ok: true, workspaceId: "workspace-keep-memory", action: "bound-existing" }),
+  });
+  const after = await readSlateForTest(dir);
+  expect(after?.workspaceId).toBe("workspace-keep-memory");
+  expect(after?.notes?.plan?.text).toBe("keep me");
+  expect(after?.trail).toHaveLength(1);
+  expect(Object.keys(after?.answers ?? {})).toEqual(["answer.0123456789ab"]);
 });
 
 // --- AC4: two near-simultaneous wrap-up triggers for the SAME flow

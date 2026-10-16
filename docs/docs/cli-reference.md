@@ -2759,7 +2759,9 @@ store or the reports. **No grant lifts any of it.**
 - **A terminal is required.** `keryx schedule add`, `resume` and `run` need an
   interactive terminal on stdin and stdout, `--yes` included. `remove` and `pause` do
   not, because they only reduce what runs. The shell's `/schedule` card and the
-  `schedule_create` tool are the in-shell paths.
+  `schedule_create` tool are the in-shell paths. In `keryx shell` the agent also has
+  `schedule_resume`, `schedule_run`, `schedule_pause` and `schedule_remove`: each shows
+  a card and the operator answers it, so nobody opens a terminal (TM-04).
 - **Granted programs run from an empty directory.** Granted programs, `gh auth token`
   and the account lookup on the card all run from an empty keryx-owned directory, never
   from the project, so a committed `.tool-versions`/`.mise.toml`/`.envrc` cannot steer
@@ -3195,7 +3197,10 @@ The self-learning loop's consent CLI (flow 312, W3): passive observation
 `--non-interactive` flag: this mirrors `keryx schedule add`/`keryx flow
 confirm`'s own rule that an action a human must consciously approve gets no
 unattended path. None of the three is reachable through MCP — `src/mcp/
-tools.ts` is a hand-curated allowlist and carries no entry for `learn`.
+tools.ts` is a hand-curated allowlist and carries no entry for `learn`. Inside
+`keryx shell` the agent calls `learn_accept`, `learn_promote` or `learn_graduate`
+instead: the operator answers a card, and the record is stored with
+`confirmedVia: tui-card` (TM-04).
 
 ---
 
@@ -4263,6 +4268,11 @@ kind (which `flow check` reports as a schema problem and every reader reads as
 
 ### The confirmation token
 
+Inside `keryx shell` the `flow_confirm` tool mints the token after the operator
+presses yes on a card, with no terminal. The agent sees the token that tool returns,
+which is delegation, not proof of who pressed yes. See TM-04
+(`docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md`).
+
 A flow can require a **confirmation token** before it completes. It opts in when
 it is created, with `flow init --require-confirmation`, or with
 `completion.require_confirmation: true` in `.metaproject/tasks.config.json`.
@@ -4595,6 +4605,8 @@ keryx agents external apply <run-id> [--allow-flagged]
 keryx agents external discard <run-id>
 ```
 
+Inside `keryx shell` the agent lands a stored write run with the `external_apply` tool: the card shows the run, the branch and the patch hash, and the operator answers it. Outside the shell, `apply` needs a terminal as before.
+
 Wherever an agent `<id>` is taken (and in `/delegate`, and in a `spawn_subagent` `runtime.agent`), the short names `claude`, `codex` and `agy` (also `antigravity`, any case) work for `claude-cli`, `codex-cli` and `antigravity-cli`. A short name never weakens a per-agent setting: `externalAgents.agents["claude-cli"].enabled = false` refuses `claude` too.
 
 | Subcommand | Flags / args | Description |
@@ -4775,10 +4787,17 @@ keryx review complete <review-id-or-path>
 keryx review lightweight
 keryx review reviewers [--json]
 keryx review required [--mode all|diff] [--scope <scope.json>] [--operator-quote "<words>"] [--blast-radius <blast-radius.json>] [--pr-context <pr-context.md>] [--json]
-keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>] [--spec <mutants.json>] [--timeout-ms <n>] [--cap <n>] [--json]
+keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>] [--spec <mutants.json>] [--timeout-ms <n>] [--cap <n>] [--scratch repo|tmp] [--json]
 keryx review severity-audit --package <review-dir> [--dry-run] [--json]
 keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir> [--self <login>] [--checks <gh-checks.json>] [--json]
 keryx review compare-reference --reference <report.md> --package <review-dir> [--input <dir>] [--json]
+keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--confirm --quote "<words>"] [--json]
+keryx review plan-eval --diff <file|base..head> [--findings <file>] [--roles a,b] [--json]
+keryx review verdict <review-id-or-path> [--raw <dir>] [--json]
+keryx review confirm-plan --package <review-dir>                                     (terminal; card review_confirm_plan)
+keryx review waive-mutation --package <review-dir> --reason "<why>"                  (terminal; card review_waive_mutation)
+keryx review override-reviewers --package <review-dir> --reason "<why>"              (terminal; card review_override_reviewers)
+keryx review verify-run --package <review-dir> --finding <id> [--timeout <s>] -- <command…>
 keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]
 keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>] [--json|--scoped-diff] [--append <file>]
 keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--report-only]
@@ -4799,6 +4818,8 @@ keryx review complete ... [--waive-coverage "<operator quote>"] [--head <sha>] [
 keryx review readiness <review-id-or-path> [--json]
 keryx review publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE] [--partial] [--yes]
 ```
+
+The operator-only steps here (`chunks estimate --answer`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal. Inside `keryx shell` the agent calls `review_chunks_answer`, `review_waive_coverage`, `review_waive_readiness` or `review_publish` instead: the operator answers a card, and the record carries `confirmedVia: tui-card`. The two waiver tools only record the waiver; `keryx review complete` then closes the review without the flags (TM-04).
 
 **An unrecognised option is refused, not ignored**, and the command exits 1. A
 flag that is silently dropped writes nothing and still reports success.
@@ -4858,6 +4879,11 @@ A package is bound to a pull request when it targets one or when its `--ref` is 
 | `mutate` | Run the reviewers' proposed mutants against the tests (`keryx review mutate --test "<command>" --package <review-dir>`). Each mutant is one exact-text replacement in a scratch copy of the worktree; the worktree is never written, and the baseline must pass first or no mutant runs. A mutant is `killed` (the tests failed), `survived` (they passed: no assertion pins that behaviour), `invalid` (the anchor is missing or not unique) or `timeout`. A mutant may carry `"kind": "behavior"` (the default; it changes what the code does) or `"presentation"` (it changes only how something looks or reads: copy, class names, the order of display rows); any other `kind` is refused when the spec is read. `--cap <n>` runs the first `<n>` candidates only: the record gets `cap` and `not_reached` (the candidates it was given but did not run), the table prints `Not run: <n> candidates (cap <c>)`, and those candidates stay pending, so they still block `review complete` for an attended run exactly as a candidate nobody ran does. Without `--cap` the pass runs every candidate and the record has neither field. The testing reviewers propose a `mutant_candidates` entry for every changed branch, and on a shell host, where a reviewer cannot write, the main session writes them to `mutants.json` unchanged. The default spec is `<review-dir>/research-evidence/mutants.json`; results go to `research-evidence/mutation-<n>.json` and `.md`. For an attended run, `review complete` refuses a package with proposed mutants no pass has run, unless `dispatch.mutationWaiver` carries `operatorQuote` and `reason`; a spec with `"runnable": false` says the tests cannot be run here. |
 | `severity-audit` | Check the severity of findings against what the mutation pass proved (`keryx review severity-audit --package <review-dir> [--dry-run] [--json]`). A finding that cites `mutant:<id>` in its `evidence` is raised to `major` when that mutant survived a recorded run on a file the review changed, no mutant in that file was `killed` or `timeout` in any recorded pass, and the finding was rated `minor`, `nit`, `info` or `low`; the change is recorded as `severity_audit`. A survivor in a file where another mutant was killed is a gap in covered code, and a survivor of kind `presentation` changes no behaviour: in both cases the severity is held, the finding gets `severity_audit.held` (`mutant`, `kind` `covered` or `presentation`, `evidence`, `reason`; a covered note names the kill count), and the command prints `[held]` and counts it apart (`<n> held (survivor does not show wrong behaviour)`); a mutant with no `kind`, and a record written before the field existed, reads as `behavior`. A cited mutant no run executed leaves the finding as it is, labelled `unproven`. It never deletes a finding, and it is separate from the verifier. |
 | `context-collect` | Collect what a reviewer cannot get from the diff (`keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir>`): every review comment in full, the round-1 intent, the CI status and the backend pins the pull request names, written to `pr-context.json` and `pr-context.md`. Comments by `--self` are left out. A pull-request review dispatches with `pr_context` set to the `.md`, and `dispatch-check --pr-context` refuses a payload without it. |
+| `estimate` | Print the plan's reviewer dispatches and minutes from the slice manifest and roles, and flag a plan over the threshold: `dispatch-check` and `ledger` refuse such a plan until the operator confirms it (`confirm-plan` or `estimate --confirm --quote` at a terminal, or the `review_confirm_plan` card in keryx shell). Limits: `routing.config.json` `reviewPlan.maxDispatches` (default 40) and `reviewPlan.maxMinutes` (default 90). |
+| `plan-eval` | Compare the old and the new slicing plan offline for a diff (`--diff <file\|base..head>`): dispatches, chunks, and, with `--findings`, whether every ground-truth blocker/major lands in a slice its reviewer or a deep pass reads. Writes nothing. |
+| `verdict` | Print the round's verdict as it stands: finding counts by severity, verified vs unverified (refuted excluded), open blockers and majors, and reviewers that have not reported. Reads the ingested `findings.json`, else the raw replies in `--raw <dir>` (default `<package>/raw`); writes `verdict-interim.md` into the package. |
+| `confirm-plan`, `waive-mutation`, `override-reviewers` | Record the operator's own decision (plan confirmation, mutation-pass waiver, smaller reviewer set) in the package. Asks at the terminal and is refused without a TTY; inside keryx shell the agent calls the `review_confirm_plan`, `review_waive_mutation` or `review_override_reviewers` card instead. |
+| `verify-run` | Run a verification command in the parent session and save its stdout, stderr and exit status to `<review-dir>/research-evidence/verify-<id>-<n>.txt`, for the verifier to cite as executed evidence. |
 | `compare-reference` | Compare a reference report's items with a package (`keryx review compare-reference --reference <report.md> --package <review-dir> [--input <dir>] [--json]`), per item: **A** the role that would find it was not run, **B** the role ran and nothing matches, **C** it was seen and lost after the answer (`--input` supplies the raw reviewer replies), **D** it was kept, with its severity, **E** the reference ran a mutant and this package has no mutation pass. |
 | `import` | The review-shaped spelling of `keryx skills import --module review`: same importer, same rules, module implied (`keryx review import --from <package-dir\|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]`). A tree of several packages is refused, with the candidate list, until `--only <glob>` (repeatable, matched against the package directory name as it is on disk; an empty value is an error) says which ones: every package in module `review` is dispatched as a reviewer. The package is written under the slug of its directory name, and two selected directories that slug to one destination are refused. A `deprecated: true` package is skipped in a tree import, a bundled name is skipped unless `--force`, and a reviewer with no path trigger — no `metadata.paths` and no glob in its description; a lone literal file path is not one — is imported with a `paths: none` warning. More warnings can follow a row: a `metadata.flags` entry dropped as not a flag; a flag that exactly one existing project reviewer carries, which becomes a family flag for both; and, on a `--force` overwrite, a family flag the new version drops that leaves one other reviewer its only carrier. A package directory with no letter or digit is refused, and so is any destination behind a symlink that resolves outside the project — before anything is written, `--dry-run` included. Also copies the `<dir>/<name>.mdc` rules the skills cite from the overlay's `rules/`: a rule the project lacks goes to `.metaproject/rules/<dir>/<name>.mdc`; one whose reference is already answered by a file with other content, or a `core/` rule keryx ships under the same name, goes to the reference's project slot `.metaproject/rules/project/<dir>/<name>.mdc` (statuses `differs`, `imported-project`; `core/x.mdc` → `rules/project/core/x.mdc`), which a reviewer's reference resolves to first. `rules/core` is rewritten by `keryx init`, `keryx update` and the legacy-profile `keryx skills install` (the manifest form with `--target keryx-shell` skips an existing file it did not record unless `--force`); `rules/project` is written by none of them. A file lying directly in `rules/project/` answers only a literal `project/<name>.mdc` citation. Re-run it over an existing import to fetch only the rules. The security gate runs on every `SKILL.md` and rule while the import is planned, `--dry-run` included: a secret is redacted and the row says so, and a file with a prompt-injection finding is `refused` (`would-refuse` on a dry run), writes nothing and leaves the rest of the import going, unless `--allow-flagged` is passed after you have read it (see [`skills import`](#skills)). That holds with the security module disabled too (the import runs the injection detector itself). A rule cited only by refused packages is not written (`skipped — cited only by a refused package`). A real run with any `refused` row prints every row and exits `1`; a dry run exits `0`. Undo with `keryx skills remove review/<name>`. |
 

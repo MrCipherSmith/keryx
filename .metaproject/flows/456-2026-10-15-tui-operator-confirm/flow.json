@@ -1,0 +1,376 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "456",
+  "slug": "tui-operator-confirm",
+  "title": "Operator confirmations answered in the TUI instead of a separate terminal",
+  "status": "implemented",
+  "createdAt": "2026-10-15T18:08:38.862Z",
+  "updatedAt": "2026-10-15T21:37:03.108Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:5ca600c227905bf738921615e5d7867ac0d02cf76b4fa5ac2779d629ea7a5185",
+  "acConfirmed": {},
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1034"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Мне не нравится такое поведение что он просит идти в терминал, такие команды должны в  TUI реализовываться через вопросы пользователю, и я нашму да или нет",
+    "source": "claude-code session 2026-10-15, after a keryx shell review asked the operator to run chunks estimate --answer in a terminal"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "split into T5-T8"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests ship with each task"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T9"
+    },
+    {
+      "id": "T5",
+      "title": "Framework: operator-confirm helper, registration, unattended list, TUI card",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Review gate tools: chunks answer, publish, waive coverage, waive readiness",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Other gate tools: flow confirm, external apply, learn, schedule actions",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Redirect refusals, skills and decision record",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Verify + review round + PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-15T19:00:19.298Z",
+            "outcome": "started",
+            "detail": "review round 1: 0 blocker, 2 major; fix lanes A/B/C"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Patch release after merge",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Owner live check in keryx shell",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-15T18:08:38.862Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-15T18:12:53.829Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-15T18:12:53.976Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-15T18:12:54.120Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-15T18:12:54.262Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-15T18:12:54.406Z",
+      "event": "task-added",
+      "detail": "T5: Framework: operator-confirm helper, registration, unattended list, TUI card"
+    },
+    {
+      "at": "2026-10-15T18:12:54.550Z",
+      "event": "task-added",
+      "detail": "T6: Review gate tools: chunks answer, publish, waive coverage, waive readiness"
+    },
+    {
+      "at": "2026-10-15T18:12:54.694Z",
+      "event": "task-added",
+      "detail": "T7: Other gate tools: flow confirm, external apply, learn, schedule actions"
+    },
+    {
+      "at": "2026-10-15T18:12:54.841Z",
+      "event": "task-added",
+      "detail": "T8: Redirect refusals, skills and decision record"
+    },
+    {
+      "at": "2026-10-15T18:12:54.991Z",
+      "event": "task-added",
+      "detail": "T9: Verify + review round + PR"
+    },
+    {
+      "at": "2026-10-15T18:12:55.133Z",
+      "event": "task-added",
+      "detail": "T10: Patch release after merge"
+    },
+    {
+      "at": "2026-10-15T18:12:55.288Z",
+      "event": "task-added",
+      "detail": "T11: Owner live check in keryx shell"
+    },
+    {
+      "at": "2026-10-15T18:12:55.450Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-15T18:12:55.595Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-15T18:25:38.854Z",
+      "event": "task-done",
+      "detail": "T5: Framework: operator-confirm helper, registration, unattended list, TUI card"
+    },
+    {
+      "at": "2026-10-15T18:31:55.525Z",
+      "event": "task-done",
+      "detail": "T6: Review gate tools: chunks answer, publish, waive coverage, waive readiness"
+    },
+    {
+      "at": "2026-10-15T18:37:53.273Z",
+      "event": "task-done",
+      "detail": "T7: Other gate tools: flow confirm, external apply, learn, schedule actions"
+    },
+    {
+      "at": "2026-10-15T18:52:51.797Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"In a real terminal the existing TTY paths of all eight commands behave exactly as before; without a TTY, and under `KERYX_TOOL_CALL=1`, each refusal names the tool to use instead. Existing command tests stay green and new tests assert the refusal text. · sensitive: revert [verify: exec `bun test src/commands/review-chunks.test.ts src/commands/flow.test.ts src/commands/agents-external-write.test.ts src/commands/learn src/commands/schedule src/commands/review-tty-refusal.test.ts`]\" -> \"In a real terminal the existing TTY paths of all eight commands behave exactly as before; without a TTY, and under KERYX_TOOL_CALL=1, each refusal names the tool to use instead. Existing command tests stay green and new tests assert the refusal text. · sensitive: revert [verify: exec `bun test src/commands/review-chunks.test.ts src/flow/confirm-token.test.ts src/commands/agents-external-write.test.ts src/commands/learn src/commands/schedule src/commands/review-tty-refusal.test.ts`]\" (cited test file src/commands/flow.test.ts does not exist; flow confirm is tested in src/flow/confirm-token.test.ts)"
+    },
+    {
+      "at": "2026-10-15T18:53:05.105Z",
+      "event": "task-done",
+      "detail": "T8: Redirect refusals, skills and decision record"
+    },
+    {
+      "at": "2026-10-15T19:00:19.298Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — review round 1: 0 blocker, 2 major; fix lanes A/B/C"
+    },
+    {
+      "at": "2026-10-15T19:08:25.752Z",
+      "event": "task-done",
+      "detail": "T9: Verify + review round + PR"
+    },
+    {
+      "at": "2026-10-15T21:37:03.108Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1034 (warning: PR is not a draft)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/commands/operator-confirm-tools.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/commands/operator-confirm-review-tools.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/commands/operator-confirm-other-tools.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/commands/operator-confirm-review-tools.test.ts src/commands/operator-confirm-other-tools.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/commands/review-chunks.test.ts src/flow/confirm-token.test.ts src/commands/agents-external-write.test.ts src/commands/learn src/commands/schedule src/commands/review-tty-refusal.test.ts"
+    },
+    "AC6": {
+      "kind": "invariant",
+      "check": "bun test src/trigger/ src/gdskills/"
+    },
+    "AC7": {
+      "kind": "judged"
+    },
+    "AC8": {
+      "kind": "invariant",
+      "check": "bun run typecheck && bun run lint && bun run test:core"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "npm view @mrciphersmith/keryx version"
+    },
+    "AC10": {
+      "kind": "judged"
+    }
+  }
+}
