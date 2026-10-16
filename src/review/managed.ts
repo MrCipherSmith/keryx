@@ -5,6 +5,7 @@ import { REPORT_FIELD_EVIDENCE_LEVEL, parseEvidenceLevel } from "./evidence-leve
 import { packageCoverageWarnings } from "./coverage";
 import { packageParityWarnings } from "./parity";
 import { roundRecordTampered } from "./round-record";
+import { recordFinishedRound } from "./round-registry";
 import { PENDING_RESEARCH, packageResearchErrors } from "./research";
 import { computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
 import { lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
@@ -966,6 +967,10 @@ export async function completeManagedReview(
     throw error;
   }
   await clearActiveReview(resolveProjectRoot(cwd), updated.reviewId);
+  // Flow 458: keryx's own record that it finished this round, outside the repository, so a later round on this machine
+  // can trust the package even after it is committed on the branch under review (./round-registry.ts).
+  const registered = recordFinishedRound(packageDir, "complete", { cwd });
+  if (registered.error !== undefined) warnings.push(`round not recorded in the local round registry (${registered.error}): a later round on this machine trusts this package only while no commit of the branch changes it`);
 
   // Flow 207 AC5, the second of the two places a `dismissed-incorrect` becomes
   // durable. This one is the attended path by construction: somebody ran

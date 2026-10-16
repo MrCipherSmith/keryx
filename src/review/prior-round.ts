@@ -29,11 +29,15 @@ import path from "node:path";
 import { readReviewRounds, type ReviewRoundRecord } from "../flow/review-gate";
 import { collectPrComments, createGhPort, type CollectedComment, type CollectedRoundBlock } from "./pr-comments";
 import { mentionsFindingId } from "./publish";
+import { readRoundRegistry, registryVouches, repoIdentity, type RoundRegistryEntry } from "./round-registry";
 import {
   findingStatus,
   isOpenStatus,
+  packageFacts,
+  packageHashesOf,
   quoteSha256,
   roundStampOf,
+  type PackageHashes,
   SEARCH_ORDER,
   type FixHunk,
   type PriorFinding,
@@ -70,6 +74,8 @@ export type PriorRoundDeps = {
   historyLimit?: number | undefined;
   /** `--prior <package|reviewId>`: use this round, wherever it is found, instead of searching. It is held to the same trust rules. */
   forced?: string | undefined;
+  /** The machine-local registry of rounds keryx finished (./round-registry.ts). Default: this repository's file. */
+  registry?: readonly RoundRegistryEntry[] | undefined;
 };
 
 /** Whether a package candidate may be cut from: `ok` false keeps it as context only, with why. */
@@ -93,6 +99,8 @@ export type RoundCandidate = {
   match?: "same" | "branch-line" | undefined;
   /** The base the recorded round named (its stamp's targetBase, or target.base), when it named one. */
   recordedBase?: string | undefined;
+  /** sha256 of the package's manifest/findings/round files as this source holds them (package sources only). */
+  hashes?: PackageHashes | undefined;
   /** Set by the trust check. */
   trust?: CandidateTrust | undefined;
 };
@@ -324,7 +332,7 @@ async function mergeBaseOf(git: GitRunner, ref: string, head: string): Promise<s
  * The trust half of the rule for a package candidate: it must show completion evidence, and no commit of
  * merge-base..head may have added or changed its directory (with no merge-base known, no commit reachable from head).
  */
-export async function packageTrust(git: GitRunner, candidate: RoundCandidate, head: string | null, mergeBase: string | null): Promise<CandidateTrust> {
+export async function packageTrust(git: GitRunner, candidate: RoundCandidate, head: string | null, mergeBase: string | null, registry: readonly RoundRegistryEntry[] = []): Promise<CandidateTrust> {
   if (candidate.completed?.ok !== true) return { ok: false, why: candidate.completed?.why ?? "no completion evidence" };
   if (candidate.packageDir === undefined) return { ok: false, why: "no package directory to check" };
   if (head === null) return { ok: true, why: `${candidate.completed.why}; no head, so the branch's own commits were not checked` };
@@ -332,8 +340,15 @@ export async function packageTrust(git: GitRunner, candidate: RoundCandidate, he
   const log = await git(["log", "-n1", "--format=%H", "--end-of-options", range, "--", candidate.packageDir]);
   if (log.exitCode !== 0) return { ok: false, why: `the branch's history of ${candidate.packageDir} could not be read` };
   const commit = log.stdout.trim();
-  if (commit !== "") return { ok: false, why: `${candidate.packageDir} was added or changed by ${commit.slice(0, 12)}, a commit of ${mergeBase === null ? "this head's history" : "merge-base..head"}: the branch under review cannot record its own previous round` };
-  return { ok: true, why: candidate.completed.why };
+  if (commit === "") return { ok: true, why: candidate.completed.why };
+  // Committed by the branch — a flow package keryx commits on the PR branch, or a forgery. The machine-local registry
+  // of rounds keryx finished tells them apart here: a package whose files hash to an entry is one keryx finished.
+  const vouched = registryVouches(registry, candidate.reviewId, candidate.hashes);
+  if (vouched !== undefined) return { ok: true, why: `trusted: local registry (${vouched.event} at ${vouched.completedAt}; the files match what keryx recorded), though ${candidate.packageDir} was committed by ${commit.slice(0, 12)}` };
+  return {
+    ok: false,
+    why: `${candidate.packageDir} was added or changed by ${commit.slice(0, 12)}, a commit of ${mergeBase === null ? "this head's history" : "merge-base..head"}, and the local round registry has no entry matching its files: the branch under review cannot record its own previous round`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -372,6 +387,7 @@ function diskCandidate(dir: string, cwd: string, source: "local-package" | "flow
     findings: priorFindingsOf(findings, source),
     completed,
     recordedBase: recordedBaseOf(manifest),
+    hashes: packageFacts(dir)?.hashes,
     eligible,
     manifest,
   };
@@ -466,6 +482,7 @@ export async function gitHistoryCandidates(
       completed,
       match,
       recordedBase: recordedBaseOf(manifest),
+      hashes: packageHashesOf({ manifest: manifests.get(`${entry.commit}:${entry.manifestPath}`), findings: extras.get(at("findings.json")), round: extras.get(at("round.json")) }),
     });
   }
   return found;
@@ -529,6 +546,7 @@ export function flowCandidates(rounds: readonly ReviewRoundRecord[], cwd: string
       packageDir: toPosix(round.dir),
       match: "same" as const,
       completed: disk?.completed ?? { ok: false, why: `no package on disk at ${round.dir}` },
+      hashes: disk?.hashes,
       findings: priorFindingsOf(round.findings, "flow"),
     }];
   });
@@ -797,9 +815,15 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
     }
   }
 
-  // Trust: a package is cut from only when the pipeline finished it and this branch did not write it.
+  // Trust: a package is cut from only when the pipeline finished it and this branch did not write it — or, when the
+  // branch did commit it, the machine-local registry holds keryx's own record of exactly these files.
+  const registry = deps.registry ?? readRoundRegistry(repoIdentity(deps.cwd));
   for (const candidate of candidates) {
-    if (candidate.trust === undefined) candidate.trust = await packageTrust(git, candidate, head, base?.sha ?? null);
+    if (candidate.trust === undefined) candidate.trust = await packageTrust(git, candidate, head, base?.sha ?? null, registry);
+    if (candidate.trust.ok && candidate.trust.why.startsWith("trusted: local registry")) {
+      const at = tried.find((attempt) => attempt.source === candidate.source);
+      if (at !== undefined) at.detail = `${at.detail}; ${candidate.reviewId} ${candidate.trust.why}`;
+    }
     if (candidate.trust.ok) continue;
     const at = tried.find((attempt) => attempt.source === candidate.source);
     if (at !== undefined) at.detail = `${at.detail}; not trusted ${candidate.reviewId}: ${candidate.trust.why}`;

@@ -76,6 +76,18 @@ They do not stop a hostile agent running as the same user. Such an agent can fak
 
 The package manifest carries the operator-gate stamp that `review start|attach` writes, so deleting `run-profile.json` does not make a package read as pre-457: a stamped package without its run profile is refused. The autonomous runner's exemption from the mutation gate (`src/review/coverage.ts`, `mutationErrors`) predates flow 457 and is kept on purpose: nobody is at the keyboard there to waive anything.
 
+## 4d. Which previous round a delta round may trust (flow 458)
+
+A delta round reviews only prevHead..head, so a forged previous round would make a round review nothing. A pull request author can commit any file to the branch, including a review package under `.metaproject/reviews/` that claims this pull request was reviewed at its base. So `review start` cuts a delta only from a round it can attribute to this pipeline:
+
+- a `keryx:round` block on the pull request authored by our own `gh` login (a pull request author cannot post as us); or
+- a package with completion evidence (published.json, a ledger with `scopeReviewed`, or a closed status) that no commit of merge-base..head added or changed; or
+- a package the branch did commit (keryx commits flow review packages on the PR branch by design) whose manifest.json, findings.json and round.json hash to an entry of the machine-local round registry. `review complete` and `review publish` append that entry under the user's keryx directory (`keryxConfigDir()/review-rounds/<repo>.jsonl`), outside the repository. `sourcesTried` says "trusted: local registry".
+
+Anything else is a full round (`fallback-first`) with the candidate's findings attached as context only, and `sourcesTried` says why it was not trusted. On another machine the registry has no entry, so a committed package is trusted only through our own round block.
+
+The registry moves the boundary to the user, as everywhere else in this document: it stops a pull request author, who cannot write the reviewer's home directory, from committing a fake previous round. It does not stop a hostile agent running as the same user, which can append an entry exactly as it can write any other user-owned file, or the operator-decision records of §4c. The round record itself (`round.json`, `prior_findings.json`) is hashed into the manifest at start and refused by slice, ledger build and complete when edited, which catches a cooperating agent's careless edit, not a determined one.
+
 ## 5. Why child-process proofs were rejected
 
 The first idea was to let the CLI accept an environment variable, a file or a socket that proves "the shell's operator said yes", so the existing commands could stay the only implementation. It was rejected. `shell_exec` runs whatever command line the model writes, in an environment the model controls (`sh -c`), as a user who can read and write everything the operator can. Anything handed to that child can be read, copied or replayed by the model, so the proof would prove only that the model ran the command.

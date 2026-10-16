@@ -23,7 +23,8 @@ import {
   type PriorRoundDeps,
   type RoundCandidate,
 } from "./prior-round";
-import { readRoundRecord, renderRoundLine, roundRecordTampered } from "./round-record";
+import { packageFacts, readRoundRecord, renderRoundLine, roundRecordTampered } from "./round-record";
+import { readRoundRegistry, recordFinishedRound, registryVouches, repoIdentity, type RoundRegistryEntry } from "./round-registry";
 import { computeVerdict, renderVerdict } from "./verdict";
 
 const PR = "https://github.com/acme/app/pull/7";
@@ -315,6 +316,66 @@ describe("trust: a round is cut only from a previous round this pipeline ran (B1
     const local = round.sourcesTried.find((t) => t.source === "local-package")!;
     expect(local.detail).toContain(`not trusted fake: .metaproject/reviews/fake was added or changed by ${forged.slice(0, 12)}`);
     expect(renderRoundLine(round)).toContain("fallback-first");
+  });
+
+  describe("the local round registry (owner decision: local registry + PR block)", () => {
+    const flowDir = ".metaproject/flows/001-x/reviews/flow-r1";
+    const entryFor = (over: Partial<RoundRegistryEntry> = {}): RoundRegistryEntry => {
+      const hashes = packageFacts(path.join(root, flowDir))!.hashes;
+      return { v: 1, packageId: "flow-r1", targetKey: "pr:acme/app#7", reviewedHead: A, manifestSha256: hashes.manifestSha256, findingsSha256: hashes.findingsSha256, completedAt: "2026-10-16T00:00:00.000Z", event: "complete", ...over };
+    };
+    const commitFlowPackage = (): string => {
+      // keryx commits the flow's review package on the PR branch by design: it is in merge-base..head.
+      commit("flow: review round 1", packageFiles(flowDir, { reviewId: "flow-r1", head: A, findings: [finding("F-1")] }));
+      return commit("fix F-1", { "src/a.ts": lines(20).replace("line 5\n", "line 5 fixed\n") });
+    };
+    const flowDeps = (registry: RoundRegistryEntry[]): PriorRoundDeps => ({ cwd: root, github: offline, registry, flowDir: "001-x", flowRounds: async () => [] });
+
+    test("a flow package committed on the PR branch with a matching registry entry is trusted: a delta round", async () => {
+      const head = commitFlowPackage();
+      const { round } = await findPreviousRound(TARGET, head, flowDeps([entryFor()]));
+      expect(round).toMatchObject({ mode: "delta", previous: { reviewId: "flow-r1", reviewedHead: A }, range: { base: A, head } });
+      expect(round.sourcesTried.find((t) => t.source === "local-package")?.detail).toContain("flow-r1 trusted: local registry (complete at 2026-10-16T00:00:00.000Z");
+    });
+
+    test("the same package with no registry entry (another machine) is not trusted: fallback-first, findings as context", async () => {
+      const head = commitFlowPackage();
+      const { round, priorFindings } = await findPreviousRound(TARGET, head, flowDeps([]));
+      expect(round).toMatchObject({ mode: "fallback-first", previous: { reviewId: "flow-r1" }, fixHunks: [] });
+      expect(priorFindings.map((f) => f.id)).toEqual(["F-1"]);
+      expect(round.sourcesTried.find((t) => t.source === "local-package")?.detail).toContain("the local round registry has no entry matching its files");
+    });
+
+    test("an entry whose hashes do not match the package's files vouches for nothing", async () => {
+      const head = commitFlowPackage();
+      for (const stale of [entryFor({ manifestSha256: "0".repeat(64) }), entryFor({ findingsSha256: "1".repeat(64) }), entryFor({ roundRecordSha256: "2".repeat(64) }), entryFor({ packageId: "other" })]) {
+        expect((await findPreviousRound(TARGET, head, flowDeps([stale]))).round.mode).toBe("fallback-first");
+      }
+      // Our own login's round block on the PR is still trusted on a machine with no registry.
+      const blocked = await findPreviousRound(TARGET, head, { ...flowDeps([]), github: consulted([block(A, "2026-10-20T00:00:00Z", 1)]) });
+      expect(blocked.round).toMatchObject({ mode: "delta", source: "github-block" });
+    });
+
+    test("the registry file lives outside the repository, one per repository identity, and round-trips", () => {
+      const dataDir = mkdtempSync(path.join(tmpdir(), "keryx-round-registry-"));
+      try {
+        writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, findings: [finding("F-1")] });
+        git("remote", "add", "origin", "https://token@github.com/Acme/App.git");
+        expect(repoIdentity(root)).toBe("remote:https://github.com/acme/app");
+        const recorded = recordFinishedRound(path.join(root, ".metaproject/reviews/r1"), "publish", { cwd: root, dir: dataDir });
+        expect(recorded.error).toBeUndefined();
+        expect(recorded.file!.startsWith(dataDir)).toBe(true);
+        expect(recorded.file!.startsWith(root)).toBe(false);
+        const entries = readRoundRegistry(repoIdentity(root), dataDir);
+        expect(entries).toEqual([expect.objectContaining({ v: 1, packageId: "r1", reviewedHead: A, event: "publish" })]);
+        expect(registryVouches(entries, "r1", packageFacts(path.join(root, ".metaproject/reviews/r1"))!.hashes)).toBeDefined();
+        write(".metaproject/reviews/r1/findings.json", "[]");
+        expect(registryVouches(entries, "r1", packageFacts(path.join(root, ".metaproject/reviews/r1"))!.hashes)).toBeUndefined();
+        expect(readRoundRegistry("remote:another", dataDir)).toEqual([]);
+      } finally {
+        rmSync(dataDir, { recursive: true, force: true });
+      }
+    });
   });
 
   test("a forced --prior package is held to the same rule", async () => {
