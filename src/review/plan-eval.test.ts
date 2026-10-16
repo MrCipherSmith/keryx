@@ -25,13 +25,24 @@ describe("review-418 (PR #940): old plan vs new plan", () => {
     expect(result.serious).toEqual({ total: 3, landed: 3, oldLanded: 3 });
   });
 
-  test("the new plan needs fewer dispatches for the same slices", () => {
+  // A deep slice gets every roster role its gates allow (owner decision 2026-10-16), so on this mostly-source PR the new
+  // plan dispatches as many waves as the old one (22 = 22); only the light slices drop roles (assignments 81 -> 65).
+  test("the new plan needs no more dispatches and fewer assignments for the same slices", () => {
     expect(result.new.slices).toBe(result.old.slices);
-    expect(result.new.dispatches).toBeLessThan(result.old.dispatches);
+    expect(result.new.dispatches).toBeLessThanOrEqual(result.old.dispatches);
     expect(result.new.assignments).toBeLessThan(result.old.assignments);
     expect(result.old.deep + result.old.light).toBe(0);
     expect(result.new.deep + result.new.light).toBe(result.new.slices);
     expect(renderPlanEval(result)).toContain("blocker/major landed: new 3/3, old 3/3");
+  });
+
+  test("findings of every severity land, minors included", () => {
+    expect(result.bySeverity).toEqual({
+      major: { total: 3, landed: 3, oldLanded: 3 },
+      minor: { total: 10, landed: 10, oldLanded: 10 },
+      info: { total: 2, landed: 2, oldLanded: 2 },
+    });
+    expect(renderPlanEval(result)).toContain("landed by severity: major new 3/3, old 3/3; minor new 10/10, old 10/10; info new 2/2, old 2/2");
   });
 });
 
@@ -62,13 +73,14 @@ describe("a large diff", () => {
   ];
   const result = evaluatePlans({ diff: largeDiff(), roles: ROLES_418, findings, maxBytes: 2_000, waveBytes: 4_000, head: "large", oldChunks: 12, newChunks: 0 });
 
-  // Every module has source code, so almost every slice is deep; the saving is the narrower role set per slice plus the
-  // blast-radius chunks the old plan ran (old 93 dispatches + 12 chunks = 105 runs, new 52 dispatches + 0 chunks = 52 runs, 50.5%).
-  test("the new plan needs at least 50% fewer runs (dispatches plus chunks)", () => {
-    expect(result.old.slices).toBeGreaterThan(20);
+  // Every module has source code, so almost every slice is deep, and a deep slice gets every roster role its gates allow
+  // (owner decision 2026-10-16). The saving is the light slices' narrower role set plus the blast-radius chunks the old
+  // plan ran: old 93 dispatches + 12 chunks = 105 runs, new 78 dispatches + 0 chunks = 78 runs, 25.7% fewer. The 50%
+  // target held only while deep slices got the core set alone (52 runs).
+  test("the new plan needs fewer runs (dispatches plus radius chunks): 105 -> 78, 25.7%", () => {
+    expect(result.old.slices).toBe(23);
     expect(result.old.runs).toBe(result.old.dispatches + 12);
-    expect(result.reduction).toBeGreaterThanOrEqual(0.5);
-    expect(result.new.runs * 2).toBeLessThanOrEqual(result.old.runs);
+    expect({ old: result.old.runs, new: result.new.runs, reduction: result.reduction }).toEqual({ old: 105, new: 78, reduction: 0.257 });
     expect(result.new.dispatches).toBeLessThan(result.old.dispatches);
   });
 

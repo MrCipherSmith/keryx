@@ -54,7 +54,7 @@ license: "MIT"
 4. `keryx review slice --ref <base> --package <package> --host <host>`: each slice carries `roles`, `depth` (deep or light) and `audit`.
 5. `keryx review required --mode all --scope .metaproject/data/review/scope.json --depth auto --package <package>`.
 6. `keryx review estimate --package <package>`. Over threshold, the operator confirms (card `review_confirm_plan`, or `keryx review confirm-plan --package <package>` in their terminal); `dispatch-check` and `ledger build` refuse an unconfirmed plan, so never dispatch one. Unattended: report the estimate and stop with `STATUS: BLOCKED plan_over_threshold`.
-7. Dispatch by slice roles: each role gets the slices that name it; a deep slice (an `audit` one included) goes to the whole core set. A major or worse on a light slice comes back from `retry-plan` as an escalation: dispatch the core roles on it.
+7. Dispatch by slice roles: each role gets the slices that name it; a deep slice names every roster role its path gates allow, an `audit` one the whole core set. A major or worse on a light slice comes back from `retry-plan` as an escalation: dispatch the core roles on it.
 8. Verifier on the first blocker or major (Step 10). It runs no command itself: run `keryx review verify-run --package <package> --finding <id> -- <command>` and hand it the saved `research-evidence/verify-<id>-<n>.txt` as context.
 9. `keryx review verdict <package>` to the operator, then the tail: mutation pass, `ledger build`, `ingest`, `readiness`, `complete`.
 

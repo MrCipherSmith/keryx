@@ -13,7 +13,9 @@
 // after `-e` and every operand after `--`, so a key from a diff can never be
 // read as an option (pattern: src/harness/tool/builtin/spill-search.ts).
 
-export const TEXT_LINK_KINDS = ["i18n-key", "event", "css-class", "config-key"] as const;
+import { HunkBodyTracker } from "../gdgraph/symbol-reach";
+
+export const TEXT_LINK_KINDS =["i18n-key", "event", "css-class", "config-key"] as const;
 export type TextLinkKind = (typeof TEXT_LINK_KINDS)[number];
 
 /** A key mentioned by more files than this is a hub: recorded, not followed. */
@@ -139,22 +141,77 @@ export function keysFromLine(text: string, file: string): TextKey[] {
 export function extractTextKeys(diff: string): TextKey[] {
   const seen = new Map<string, TextKey>();
   let file: string | undefined;
+  // Headers are parsed only outside a hunk body, so a removed `-- comment` or an added `++ x` line is content.
+  const body = new HunkBodyTracker();
+  const locale = new LocaleKeyPath();
   for (const line of diff.split("\n")) {
+    if (body.consume(line)) {
+      if (file === undefined || (!line.startsWith("+") && !line.startsWith("-"))) {
+        if (file !== undefined && line.startsWith(" ")) locale.observe(line.slice(1));
+        continue;
+      }
+      const text = line.slice(1);
+      const localeKey = locale.observe(text);
+      for (const key of keysFromLine(text, file)) if (!seen.has(key.key)) seen.set(key.key, key);
+      if (localeKey !== undefined && !seen.has(localeKey)) seen.set(localeKey, { key: localeKey, kind: "i18n-key", file });
+      continue;
+    }
+    if (line.startsWith("diff --git ")) {
+      file = undefined;
+      continue;
+    }
     if (line.startsWith("+++ ")) {
       const value = line.slice(4).trim();
       file = value === "/dev/null" ? file : value.replace(/^b\//, "");
+      locale.reset(file);
       continue;
     }
     if (line.startsWith("--- ")) {
       const value = line.slice(4).trim();
       if (value !== "/dev/null") file = value.replace(/^a\//, "");
+      locale.reset(file);
       continue;
     }
-    if (file === undefined || line.startsWith("+++") || line.startsWith("---")) continue;
-    if (!line.startsWith("+") && !line.startsWith("-")) continue;
-    for (const key of keysFromLine(line.slice(1), file)) if (!seen.has(key.key)) seen.set(key.key, key);
+    if (body.open(line) !== undefined) locale.reset(file);
   }
   return [...seen.values()];
+}
+
+/** A structured locale file (`locales/en.json`, `i18n/fr.yaml`, `messages.de.yml`, `en-US.json`…). */
+const LOCALE_FILE = /(?:^|\/)(?:locales?|i18n|lang|langs|translations?|messages)(?:\/|\.)[^]*\.(?:json|ya?ml)$|(?:^|\/)[a-z]{2}(?:[-_][A-Za-z]{2})?\.(?:json|ya?ml)$/i;
+
+/**
+ * The key a changed line of a structured locale file names. A nested key is joined with dots (`{"a": {"b": "x"}}`
+ * → `a.b`) as far as the hunk shows its parents; with zero context the parent is unknown and the leaf key is used.
+ * Only leaves (a key with a scalar value) are keys: a parent object line opens a scope.
+ */
+class LocaleKeyPath {
+  private stack: Array<{ indent: number; key: string }> = [];
+  private active = false;
+  private yaml = false;
+
+  reset(file: string | undefined): void {
+    this.stack = [];
+    this.active = file !== undefined && LOCALE_FILE.test(file) && !CONFIG_FILE.test(file);
+    this.yaml = file !== undefined && /\.ya?ml$/i.test(file);
+  }
+
+  observe(text: string): string | undefined {
+    if (!this.active) return undefined;
+    const match = this.yaml ? /^(\s*)(?:"([^"]+)"|'([^']+)'|([A-Za-z_][\w.-]*))\s*:\s*(.*)$/.exec(text) : /^(\s*)"([^"]+)"\s*:\s*(.*)$/.exec(text);
+    if (match === null) return undefined;
+    const indent = (match[1] as string).length;
+    const key = (match[2] ?? match[3] ?? match[4]) as string;
+    const value = ((this.yaml ? match[5] : match[3]) ?? "").trim();
+    while (this.stack.length > 0 && (this.stack[this.stack.length - 1] as { indent: number }).indent >= indent) this.stack.pop();
+    const opensScope = this.yaml ? value === "" || value.startsWith("#") : value.startsWith("{") && !value.includes("}");
+    if (opensScope) {
+      this.stack.push({ indent, key });
+      return undefined;
+    }
+    const full = [...this.stack.map((entry) => entry.key), key].join(".");
+    return full.length >= 3 ? full : undefined;
+  }
 }
 
 /**

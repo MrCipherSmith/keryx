@@ -13,7 +13,7 @@ import { buildReviewConfirmSpecs } from "../commands/operator-confirm-review";
 import { operatorConfirmTool } from "../commands/operator-confirm-tools";
 import { isReviewTask, reviewTaskCommand, reviewTaskRange } from "../trigger/review-task";
 import { OPERATOR_CONFIRM_TOOL_NAMES, isUnattendedExcludedTool } from "../trigger/unattended";
-import { AUTONOMOUS_PROFILE, AUTONOMOUS_SCOPE_FILE, REVIEW_WAVE_SIZE, buildAutonomousPrompt, describeAutonomousTarget, parseAutonomousRangeTarget } from "./autonomous-profile";
+import { AUTONOMOUS_PROFILE, AUTONOMOUS_SCOPE_FILE, REVIEW_WAVE_SIZE, autonomousScopeFile, buildAutonomousPrompt, describeAutonomousTarget, parseAutonomousRangeTarget } from "./autonomous-profile";
 import { runAutonomousReview, type ChildSpec } from "./autonomous-run";
 import { validateSummary } from "./autonomous-summary";
 import { coverageErrors, requiredReviewers } from "./coverage";
@@ -23,7 +23,7 @@ import { recordProcessCall, startOrchestratorLog } from "./orchestrator-log";
 import { planConfirmed, recordPlanConfirmation, type PlanNumbers } from "./plan-confirmation";
 import { computeReadiness } from "./readiness";
 import { RUN_PROFILE_FILE, buildRunProfile, isAttendedRun, writeRunProfile } from "./run-profile";
-import { compareVersions, renderSkillDrift, reviewSkillDrift, skillVersion } from "./skill-drift";
+import { compareVersions, defaultBundledReviewRoot, renderSkillDrift, reviewSkillDrift, shellQuote, skillVersion } from "./skill-drift";
 import { computeVerdict } from "./verdict";
 import { promoteParentExecutions, verifyRun } from "./verify-run";
 
@@ -146,6 +146,19 @@ describe("rows 5, 15, 3: the autonomous run", () => {
     expect(text).toContain("Open one more round only if the head moved");
     expect(AUTONOMOUS_PROFILE.waveSize).toBe(REVIEW_WAVE_SIZE);
     expect(text).toContain(`at most ${REVIEW_WAVE_SIZE} reviewers per wave`);
+  });
+
+  test("each autonomous run writes its own scope file, never the shared one (review minor)", () => {
+    const cwd = "/repo";
+    const a = autonomousScopeFile("/repo/.metaproject/data/review/autonomous/o-r-7", cwd);
+    const b = autonomousScopeFile("/repo/.metaproject/data/review/autonomous/o-r-8", cwd);
+    expect(a).toBe(".metaproject/data/review/autonomous/o-r-7/scope.json");
+    expect(a).not.toBe(b);
+    expect(autonomousScopeFile("/elsewhere/run", cwd)).toBe("/elsewhere/run/scope.json");
+    const text = buildAutonomousPrompt({ ref: "https://github.com/o/r/pull/7", scopeFile: a });
+    expect(text).toContain(`keryx review scope --json > ${a}`);
+    expect(text).toContain(`--scope ${a} --package`);
+    expect(text).not.toContain(AUTONOMOUS_SCOPE_FILE);
   });
 
   test("a local range is a target: base...head, head defaulting to HEAD", () => {
@@ -397,5 +410,24 @@ describe("row 2: installed host skill copies older than the bundled ones", () =>
     expect(skillVersion('---\nversion: "2.0.1"\n---\n')).toBe("2.0.1");
     expect(compareVersions("1.6.0", "1.11.0")).toBe(-1);
     expect(existsSync(path.join(home, ".claude", "skills", "review-orchestrator", "SKILL.md"))).toBe(true);
+  });
+
+  test("the refresh hint quotes its paths, and the bundled root resolves the npm layout too (review M8)", () => {
+    const bundled = path.join(root, "bund led");
+    const home = path.join(root, "ho'me");
+    const write = (dir: string, version: string): void => {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, "SKILL.md"), `---\nversion: "${version}"\n---\n`);
+    };
+    write(path.join(bundled, "review-logic"), "2.0.0");
+    write(path.join(home, ".codex", "skills", "review-logic"), "1.0.0");
+    const [drift] = reviewSkillDrift({ projectRoot: root, bundledRoot: bundled, home });
+    const target = path.join(home, ".codex", "skills", "review-logic");
+    expect(drift?.refresh).toBe(`rm -rf ${shellQuote(target)} && cp -R ${shellQuote(path.join(bundled, "review-logic"))} ${shellQuote(target)}`);
+    expect(shellQuote("a b'c")).toBe(`'a b'\\''c'`);
+    // npm install: the module is bundled into dist/cli.js; the catalog's lookup finds dist/../src/gdskills/bundled.
+    const npm = "/pkg/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md";
+    expect(defaultBundledReviewRoot(() => npm)).toBe("/pkg/src/gdskills/bundled/skills/review");
+    expect(existsSync(path.join(defaultBundledReviewRoot(), "review-orchestrator", "SKILL.md"))).toBe(true);
   });
 });

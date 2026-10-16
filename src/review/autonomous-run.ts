@@ -13,6 +13,7 @@ import { ARBITER_LOG_NAME, ENV_ARBITER_LOG, copyArbiterLogToPackage } from "./ar
 import { ENV_AUTONOMOUS_ANSWERS_FILE, readAutoAnswers } from "./autonomous-answers";
 import {
   AUTONOMOUS_PROFILE,
+  autonomousScopeFile,
   buildAutonomousPrompt,
   buildAutonomousShellArgv,
   exitCodeFor,
@@ -276,7 +277,7 @@ async function runLocked(options: AutonomousRunOptions, target: AutonomousTarget
 
   const spec: ChildSpec = {
     argv: buildAutonomousShellArgv({
-      prompt: buildAutonomousPrompt({ ref: target.ref, resumePackage, head, ...(target.kind === "range" ? { base: target.base } : {}) }),
+      prompt: buildAutonomousPrompt({ ref: target.ref, resumePackage, head, scopeFile: autonomousScopeFile(runDir, cwd), ...(target.kind === "range" ? { base: target.base } : {}) }),
       eventsFile,
       provider: options.provider,
       model: options.model,

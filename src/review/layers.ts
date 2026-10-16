@@ -284,8 +284,14 @@ export async function resolveLayersBase(
     if (usable(commit)) return { base: commit, source: "manifest" };
   }
   if (target.ref !== null) {
-    const commit = await resolveCommit(input.projectRoot, target.ref, deps);
-    if (usable(commit)) return { base: commit, source: "target-ref" };
+    // A branch target's ref IS the reviewed branch: its tip is the head or a descendant, never a base. Any other ref is
+    // a base only when it is an ancestor of the head; otherwise the diff would run backwards over later commits.
+    const commit = target.kind === "branch" ? null : await resolveCommit(input.projectRoot, target.ref, deps);
+    if (usable(commit)) {
+      const ancestor = await deps.git(input.projectRoot, ["merge-base", "--is-ancestor", "--end-of-options", commit, prHead]);
+      if (ancestor !== null) return { base: commit, source: "target-ref" };
+      deps.warn(`layers: target ref ${target.ref} (${commit.slice(0, 12)}) is not an ancestor of the head ${prHead.slice(0, 12)}; not used as the base.`);
+    }
     if (target.kind === "pr") {
       const remote = await deps.prBase(input.projectRoot, target.ref);
       const local = remote === null ? null : await resolveCommit(input.projectRoot, remote, deps);

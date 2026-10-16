@@ -8,6 +8,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { bundledSkillMarkdownPath } from "../gdskills/catalog";
 
 export type SkillDrift = {
   skill: string;
@@ -57,7 +58,8 @@ export function bundledReviewSkills(bundledRoot: string): Map<string, string> {
 
 /** The directories a host reads skills from, with the command that refreshes a copy there. */
 export function hostSkillDirs(projectRoot: string, home: string = homedir()): Array<{ dir: string; refresh: (skill: string, source: string) => string }> {
-  const copy = (target: string) => (skill: string, source: string) => `rm -rf ${path.join(target, skill)} && cp -R ${source} ${path.join(target, skill)}`;
+  const copy = (target: string) => (skill: string, source: string) =>
+    `rm -rf ${shellQuote(path.join(target, skill))} && cp -R ${shellQuote(source)} ${shellQuote(path.join(target, skill))}`;
   return [
     { dir: path.join(projectRoot, ".claude", "skills"), refresh: () => "keryx skills install --target claude" },
     { dir: path.join(home, ".claude", "skills"), refresh: copy(path.join(home, ".claude", "skills")) },
@@ -86,8 +88,19 @@ export function reviewSkillDrift(input: { projectRoot: string; bundledRoot: stri
   return drift;
 }
 
-/** The bundled review skills shipped with this keryx. */
-export function defaultBundledReviewRoot(): string {
+/** A POSIX single-quoted shell word, so a path with a space or `$` in the refresh hint stays one argument. */
+export function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
+/**
+ * The bundled review skills shipped with this keryx. Resolved through the catalog's two-candidate lookup
+ * (`bundledSkillMarkdownPath`): next to the module when running from source, and `dist/../src/gdskills/bundled` in an
+ * npm install, where this module is bundled into `dist/cli.js` and its own directory is `dist/`.
+ */
+export function defaultBundledReviewRoot(lookup: (category: string, name: string) => string | undefined = bundledSkillMarkdownPath): string {
+  const orchestrator = lookup("review", "review-orchestrator");
+  if (orchestrator !== undefined) return path.dirname(path.dirname(orchestrator));
   return path.resolve(import.meta.dir, "..", "gdskills", "bundled", "skills", "review");
 }
 

@@ -117,6 +117,9 @@ const readJson = <T>(file: string): Promise<T | undefined> => readJsonFileOr<T |
 
 const droppedKeyOf = (files: readonly string[]): string => createHash("sha256").update([...new Set(files)].sort().join("\n")).digest("hex").slice(0, 16);
 
+/** The key a plan written before flow 457 carries: every dropped file of the radius, whatever its reason. */
+export const legacyDroppedKeyOf = (radius: Pick<BlastRadius, "dropped">): string => droppedKeyOf(radius.dropped.map((entry) => entry.file));
+
 export async function readBlastRadius(packageDir: string): Promise<BlastRadius | undefined> {
   const radius = await readJson<BlastRadius>(path.join(packageDir, "blast-radius.json"));
   return radius !== undefined && Array.isArray(radius.dropped) && Array.isArray(radius.files) ? radius : undefined;
@@ -149,6 +152,9 @@ async function cutChunkPlan(packageDir: string, projectRoot: string, radius: Bla
   const existing = await readChunkPlan(packageDir);
   if (existing !== undefined) {
     if (existing.droppedKey === undefined || existing.droppedKey === droppedKey) return existing;
+    // A plan cut before chunks were planned for cap drops only keyed EVERY dropped file (cap and pre-filter): the same
+    // radius still matches it, so an in-flight plan is kept rather than refused.
+    if (existing.droppedKey === legacyDroppedKeyOf(radius)) return existing;
     // The dropped set moved. With no pass recorded the plan is replaced; with one, it may not move under the pass.
     if (Object.keys((await readChunkState(packageDir)).outcomes).length > 0) {
       throw new Error(

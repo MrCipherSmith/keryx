@@ -139,17 +139,34 @@ describe("symbol reach (AC1)", () => {
     expect(files(bodyOnly)).toEqual(["src/x.ts"]);
   });
 
-  test("a high fan-in hub damps its importers instead of walking them", () => {
+  test("a high fan-in hub keeps its direct consumers and damps only the walk beyond them", () => {
     const hub: Fixture = { "src/hub.ts": "export function t(key: string): string {\n  return key;\n}\n" };
     for (let index = 0; index < 400; index += 1) hub[`src/c${index}.ts`] = `import { t } from "./hub";\nexport const v${index} = t("k");\n`;
+    hub["src/d0.ts"] = 'import { v0 } from "./c0";\nexport const d0 = v0;\n';
     const result = reach(hub, edit("src/hub.ts", 2));
-    expect(result.reached).toEqual([]);
-    expect(result.omitted).toHaveLength(400);
-    expect(new Set(result.omitted.map((entry) => entry.reason))).toEqual(new Set(["hub-damped"]));
-    expect(result.omitted[0]?.detail).toContain("fan-in 400");
-    // The same hub under the free fan-in is walked.
-    const small: Fixture = { "src/hub.ts": hub["src/hub.ts"] as string, "src/c0.ts": hub["src/c0.ts"] as string };
-    expect(files(reach(small, edit("src/hub.ts", 2)))).toEqual(["src/c0.ts"]);
+    // Every direct caller of the changed function is reached at hop 1, never damped.
+    expect(result.reached.filter((entry) => entry.hop === 1)).toHaveLength(400);
+    expect(result.reached.every((entry) => entry.hop === 1)).toBe(true);
+    // Beyond the hub the walk is damped: c0's importer is a reasoned omission.
+    const beyond = result.omitted.find((entry) => entry.file === "src/d0.ts");
+    expect(beyond?.reason).toBe("hub-damped");
+    expect(beyond?.detail).toContain("reached through src/c0.ts");
+    // The same chain under the free fan-in is walked.
+    const small: Fixture = { "src/hub.ts": hub["src/hub.ts"] as string, "src/c0.ts": hub["src/c0.ts"] as string, "src/d0.ts": hub["src/d0.ts"] as string };
+    expect(files(reach(small, edit("src/hub.ts", 2)))).toEqual(["src/c0.ts", "src/d0.ts"]);
+  });
+
+  test("an i18n-like hub: the changed function's direct callers stay in, importers of other exports are unrelated", () => {
+    const i18n: Fixture = {
+      "src/i18n.ts": "export function t(key: string): string {\n  return key;\n}\n\nexport function locale(): string {\n  return \"en\";\n}\n",
+    };
+    for (let index = 0; index < 400; index += 1) i18n[`src/page${index}.ts`] = `import { locale } from "./i18n";\nexport const l${index} = locale();\n`;
+    for (const name of ["a", "b", "c"]) i18n[`src/caller-${name}.ts`] = `import { t } from "./i18n";\nexport const ${name} = t("k");\n`;
+    const result = reach(i18n, edit("src/i18n.ts", 2));
+    expect(result.seeds[0]?.names).toEqual(["t"]);
+    expect(files(result)).toEqual(["src/caller-a.ts", "src/caller-b.ts", "src/caller-c.ts"]);
+    expect(result.omitted.filter((entry) => entry.reason === "unrelated-symbol")).toHaveLength(400);
+    expect(result.omitted.filter((entry) => entry.reason === "hub-damped")).toHaveLength(0);
   });
 
   test("damping multiplies along the path: a mid fan-in node behind another is cut at hop 2", () => {
@@ -302,5 +319,24 @@ describe("the module outline", () => {
         { oldStart: 10, oldLines: 1, newStart: 8, newLines: 3 },
       ],
     });
+  });
+
+  test("a content line starting with `-- ` or `++ ` is never read as a file header", () => {
+    const diff = [
+      "diff --git a/db/schema.sql b/db/schema.sql",
+      "--- a/db/schema.sql",
+      "+++ b/db/schema.sql",
+      "@@ -1,2 +1,2 @@",
+      "--- old comment",
+      "+++ counter",
+      " select 1;",
+      "@@ -9 +9 @@",
+      "-a",
+      "+b",
+    ].join("\n");
+    const parsed = parseDiffHunks(diff);
+    expect([...parsed.keys()]).toEqual(["db/schema.sql"]);
+    expect(parsed.get("db/schema.sql")?.oldPath).toBe("db/schema.sql");
+    expect(parsed.get("db/schema.sql")?.hunks).toHaveLength(2);
   });
 });
