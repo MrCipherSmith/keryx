@@ -34,3 +34,7 @@ Round 1 of PR #1043: 39 reviewer dispatches, 168 findings (18 major, 92 minor, 5
 - clean-code-w5 F-001, style-w4 STY-003, regression-skills RG-003, style-skills F-006, style-w8 F-009: dismiss, the judge's reasons stand.
 - core-boundaries-w1 F-003 (owner-decision): the AC7 owner decision is now journaled and premise-eval.json carries the rerun.
 Skills fix lane merged (0d38ea4d2): 33 upheld findings fixed or merged into their cluster.
+
+## 2026-10-16 — round 2 (delta c144874..f47ebb0)
+
+13 reviewer dispatches over the fix delta. Prior: 111 closed, 10 partial, 4 open (testing-practices findings that missed the round-1 fix), 0 regressed. New: 3 major (SEC2-001 operator-only guard case/nesting; RG2-001 decide-premise rewrite broke registry trust; LG2-001 read-only keryx-shell child has no git), 31 minor, 19 info. Premise judge: 33 upheld, 1 challenged (cardSafe import) — owner: uphold, moved to src/lib in this PR. Fix lane 3cb8ded48 closed all upheld and every partial/open prior except R2-002 (job-orchestrator rewrap vs ceiling) — owner: move reference text to a SKILL.detail.md.
