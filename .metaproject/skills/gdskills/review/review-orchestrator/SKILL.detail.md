@@ -699,6 +699,8 @@ on lines no test could reach.
 
 A fix hunk still has a radius: enumerate what names the thing it changed (`review_context.scope.files`), as in any fix round. The attached findings are the contract: each leaves the round with a disposition, below.
 
+A reviewer on a FIX slice reports those dispositions itself: its `REVIEW_RESULT` carries `prior_dispositions: [{id, disposition}]` with one entry for every attached finding id (`disposition` is `closed`, `open`, `partial`, `regressed` or `withdrawn`), judged against the code. `keryx review ingest` reads the array into the ledger; an attached id with no entry stays undisposed.
+
 ### A fix is a change, and changes get reviewed
 
 The most expensive class in a multi-round review is **the defect the fix

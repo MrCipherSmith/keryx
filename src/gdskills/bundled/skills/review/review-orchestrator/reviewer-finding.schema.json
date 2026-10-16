@@ -193,6 +193,19 @@
         "minLength": 1
       }
     },
+    "prior_dispositions": {
+      "title": "Dispositions of prior findings (FIX slices)",
+      "description": "Returned by a reviewer on a FIX slice: one entry for every attached prior finding id, giving its disposition checked against the code. The ledger reads it.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "disposition"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "disposition": {"type": "string", "enum": ["closed", "open", "partial", "regressed", "withdrawn"]}
+        }
+      }
+    },
     "slices": {
       "title": "Slices this result covered",
       "description": "The ids of the dispatched slices the reviewer read. An entry is an id string, or an object with an `id`, an optional `coverage` note and an optional `status`. `keryx review retry-plan` and `ledger build` read both. An object counts as covered only when its `status` is absent or one of DONE, COMPLETE, COMPLETED, COVERED, OK (any case); any other status (NOT_READ, INCOMPLETE, SKIPPED, PARTIAL, …) leaves the slice uncovered and is named in the plan reason or the ledger gap. An entry with no id counts for nothing.",

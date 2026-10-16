@@ -164,7 +164,7 @@ rejected anyway, so in practice every finding you report carries one.
 ```
 
 Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`; no table here. When dispatched, follow the `reviewer-input.schema.json` payload and return a `REVIEW_RESULT` object compatible with
-`.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a short summary; `NEEDS_CONTEXT` rather than a guess.
+`.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a short summary; `NEEDS_CONTEXT` rather than a guess. On a FIX slice, also return `prior_dispositions: [{id, disposition}]` for every attached finding id.
 
 ### Shared laws (every reviewer)
 
