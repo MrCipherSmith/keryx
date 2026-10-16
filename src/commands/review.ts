@@ -33,7 +33,6 @@ import {
   type ManagedReviewIngestInput,
 } from "../review/managed";
 import { parityLines, readReviewParity, renderParityReport } from "../review/parity";
-import { packageDirById } from "../review/package-location";
 import type { PrLookup, PrSnapshot } from "../review/complete-head-gate";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
@@ -67,7 +66,6 @@ import { ENV_REVIEW_CALLER_TOKEN, startOrchestratorLog } from "../review/orchest
 import { parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
 import { defaultBundledReviewRoot, renderSkillDrift, reviewSkillDrift } from "../review/skill-drift";
 import { buildRunProfile, runProfileRefusal, unattendedStartRefusal, writeRunProfile } from "../review/run-profile";
-import { promoteParentExecutions } from "../review/verify-run";
 import { packageRoutingRefusal } from "../review/routing-check";
 import { OPERATOR_COMMANDS, printOperatorCommandHelp, runOperatorCommand, type OperatorCommand } from "./review-operator";
 import { printChunksHelp, printCoverageHelp, runChunks, runCoverage } from "./review-chunks";
@@ -1052,7 +1050,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     reviewers,
     reportPath: optionValue(args, "--report"),
     refuted: await readRefuted(optionValue(args, "--refuted")),
-    verifications: await readVerifications(optionValue(args, "--verifications"), optionValue(args, "--review-id")),
+    verifications: await readVerifications(optionValue(args, "--verifications")),
     premises: await readPremises(optionValue(args, "--premises")),
     research: optionValue(args, "--research") ? JSON.parse(await readFile(path.resolve(cwd, optionValue(args, "--research")!), "utf8")) : undefined,
     verificationMode: parseVerificationMode(optionValue(args, "--verification-mode")),
@@ -3597,7 +3595,7 @@ async function readRefuted(source: string | undefined): Promise<ReviewFindingsSo
  * payload loses fields, and the loss is what made the recorded corpus
  * unmeasurable.
  */
-async function readVerifications(source: string | undefined, reviewId: string | undefined): Promise<ManagedReviewInput["verifications"]> {
+async function readVerifications(source: string | undefined): Promise<ManagedReviewInput["verifications"]> {
   if (source === undefined) {
     return undefined;
   }
@@ -3611,11 +3609,10 @@ async function readVerifications(source: string | undefined, reviewId: string | 
       `--verifications ${source} is not JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`,
     );
   }
-  // Flow 457 (T7): a claim citing a `keryx review verify-run` record of its own finding, in the package this ingest
-  // writes (`--review-id`, under the reviews root or a flow's), ran in the parent: execution. Without a review id no
-  // record can be bound to a package.
-  const packageDir = reviewId === undefined || !/^[\w.-]+$/.test(reviewId) ? undefined : packageDirById(resolveProjectRoot(process.cwd()), reviewId);
-  return promoteParentExecutions(verificationClaims(parsed as VerificationSource), packageDir);
+  // Flow 457 (T7): a claim citing a `keryx review verify-run` record of its own finding ran in the parent and is
+  // recorded as execution. That promotion happens in the ingest, against the package directory it allocates, so the
+  // records come only from the package this ingest writes (review LG6-002, SEC6-001).
+  return verificationClaims(parsed as VerificationSource);
 }
 
 /**

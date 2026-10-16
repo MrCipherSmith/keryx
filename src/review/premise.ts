@@ -667,7 +667,15 @@ export type PremiseRenderInput = {
   rejections: readonly PremiseRejection[];
   /** The round's findings, after the merge: the held ones are listed. */
   findings: readonly StructuredReviewFinding[];
+  /**
+   * Set when an ingest without `--premises` carried the previous ingest's holds ({@link carriedPremiseHolds}): the
+   * block then names where the holds came from instead of a judge "not named" and zero claims (review RG6-001).
+   */
+  carried?: { holds: number; judges: readonly string[] } | undefined;
 };
+
+/** Where carried holds come from, as scope.md names it. */
+const CARRIED_FROM = "the previous ingest's findings.json";
 
 /**
  * The `## Premise check` block of scope.md. Empty when no premise judge ran and no finding carries one: a
@@ -680,7 +688,9 @@ export function renderPremiseMarkdown(input: PremiseRenderInput): string {
     return "";
   }
   const lines: string[] = ["", "## Premise check", ""];
-  lines.push(`premise_judge: ${counts.judge ?? "not named"}`);
+  const carried = input.carried;
+  lines.push(`premise_judge: ${carried === undefined ? (counts.judge ?? "not named") : `carried from ${CARRIED_FROM} (${carried.judges.join(", ")})`}`);
+  if (carried !== undefined) lines.push(`premise_claims_carried: ${carried.holds}`);
   lines.push(`premise_claims_received: ${counts.claims}`);
   lines.push(`premise_claims_applied: ${counts.applied}`);
   lines.push(`premise_claims_rejected: ${counts.rejected}`);
@@ -689,6 +699,12 @@ export function renderPremiseMarkdown(input: PremiseRenderInput): string {
   lines.push(`premise_challenged: ${counts.challenged}`);
   lines.push(`premise_owner_decision: ${counts.ownerDecision}`);
   lines.push(`premise_held: ${counts.held}`);
+  if (carried !== undefined) {
+    lines.push("");
+    lines.push(
+      `No --premises was given, so the ${carried.holds} hold(s) recorded in ${CARRIED_FROM} were re-applied as claims to the unchanged findings. Only holds carry: an upheld or downgraded judgement of that ingest is not re-applied, and a finding it downgraded stands at its reported severity.`,
+    );
+  }
   lines.push("");
   lines.push("### Held for the operator (premise)");
   lines.push("");
@@ -726,46 +742,104 @@ export function renderPremiseMarkdown(input: PremiseRenderInput): string {
 }
 
 /** What an ingest without `--premises` does about the holds a package already has (see {@link carriedPremiseHolds}). */
-export type CarriedPremiseHolds<T> = { ok: true; findings: T[] } | { ok: false; refusal: string };
+export type CarriedPremiseHolds<T> =
+  | {
+      ok: true;
+      findings: T[];
+      /** How many holds of the previous findings.json were re-applied as claims. */
+      carried: number;
+      /** The judges those holds name, sorted. */
+      judges: string[];
+    }
+  | { ok: false; refusal: string };
+
+/**
+ * The premise fields a carried hold does not bring back as claim fields: the judge and model are the claims file's,
+ * and an operator answer counts only from the decisions store.
+ */
+const CARRIED_PREMISE_CONTEXT: ReadonlySet<string> = new Set(["judge", "model", "operator"]);
 
 /**
  * An ingest without `--premises` over a package whose findings the judge held (review RG2-004): ingesting without the
  * holds would silently return every held finding to the fix loop as an ordinary open finding, and readiness would pass
  * it as "no finding is held".
  *
- * The rule: each held record of the previous ingest's findings.json (`previousFindings`) carries its `premise`, which
- * that ingest's merge already validated, to the same finding of this round when the finding's subject (severity,
- * verdict, problem digest; {@link premiseSubjectOf}) is unchanged, and a held finding that is gone or whose subject
- * changed refuses the ingest, naming it, so the caller passes `--premises`.
+ * The rule: each held record of the previous ingest's findings.json (`previousFindings`) is turned back into the claim
+ * it stands for (judge, verdict, intent signals, practice sources, reasoning, question, options) and merged over this
+ * round by {@link mergePremises}, under the rules a fresh claim meets. findings.json is a file an agent can write, so
+ * what the previous merge validated is not taken on trust (review CC6-001, LG6-003): a self-judged hold, a hold
+ * without a question, an `owner-decision` without options or a malformed field refuses the ingest with its reason. A
+ * held finding that is gone, or whose subject (severity, verdict, problem digest; {@link premiseSubjectOf}) changed,
+ * refuses the ingest too, naming it, so the caller passes `--premises`.
  *
  * {@link PREMISES_FILE} is never read for this: it stays the record of what the judge sent, rejected claims included,
  * and an agent can write it (review SEC4-001, SEC5-001). So a claim the merge rejected never holds anything (RG4-001),
  * and a hold carried in from an earlier round needs no claims file (LG5-003). Only holds carry; an upheld or downgraded
- * judgement does not. Undefined when the previous ingest held nothing, a first ingest (no findings.json) included.
+ * judgement does not, and scope.md says so (LG6-004). Undefined when the previous ingest held nothing, a first ingest
+ * (no findings.json) included; a findings.json that is not an array refuses (review LG6-001).
  */
 export function carriedPremiseHolds<T extends StructuredReviewFinding>(findings: readonly T[], previousFindings: unknown): CarriedPremiseHolds<T> | undefined {
+  if (previousFindings === undefined) return undefined;
+  if (!Array.isArray(previousFindings)) return { ok: false, refusal: previousFindingsUnreadable("it is not an array of findings") };
   const previousHeld = heldRecords(previousFindings);
   if (previousHeld.length === 0) return undefined;
-  const carried = [...findings];
   const changed: string[] = [];
+  const claimsByJudge = new Map<string, ParsedPremiseClaims>();
   for (const record of previousHeld) {
     const key = keysOf(record)[0] ?? UNNAMED_CLAIM;
-    const index = carried.findIndex((finding) => keysOf(finding).includes(key));
-    const current = carried[index];
-    // A finding that arrived already judged (carried into a delta round) keeps its own premise, as the merge does.
-    const candidate = current === undefined || current.premise !== undefined ? current : { ...current, premise: record.premise as ReviewFindingPremise };
+    const current = findings.find((finding) => keysOf(finding).includes(key));
     const subject = premiseSubjectOf(record);
-    if (candidate === undefined || subject === undefined || !sameSubject(subject, premiseSubjectOf(candidate))) changed.push(key);
-    else carried[index] = candidate;
+    // A finding that arrived already judged (carried into a delta round) keeps its own premise, as the merge does.
+    if (current === undefined || subject === undefined || !sameSubject(subject, premiseSubjectOf({ ...current, premise: current.premise ?? record.premise }))) {
+      changed.push(key);
+      continue;
+    }
+    if (current.premise !== undefined) continue;
+    const premise = record.premise as Loose;
+    const judge = present(premise.judge) ? premise.judge.trim() : undefined;
+    const model = present(premise.model) ? premise.model.trim() : undefined;
+    const group = JSON.stringify([judge ?? null, model ?? null]);
+    const parsed = claimsByJudge.get(group) ?? { ...(judge === undefined ? {} : { judge }), ...(model === undefined ? {} : { model }), claims: [] };
+    parsed.claims.push(carriedClaim(premise, current.global_id ?? current.id));
+    claimsByJudge.set(group, parsed);
   }
   if (changed.length > 0) return refuseInheritance(`the held findings ${changed.join(", ")} are gone from this round, or their severity, verdict or problem changed`);
-  return { ok: true, findings: carried };
+
+  let carried = [...findings];
+  const invalid: string[] = [];
+  for (const parsed of claimsByJudge.values()) {
+    const merged = mergePremises(carried, parsed);
+    invalid.push(...merged.rejections.map((rejection) => `${rejection.finding} (${rejection.reason}: ${rejection.detail})`));
+    carried = merged.findings;
+  }
+  if (invalid.length > 0) return refuseInheritance(`held findings of the previous findings.json fail the rules a fresh claim meets: ${invalid.join("; ")}`);
+  const groups = [...claimsByJudge.values()];
+  return {
+    ok: true,
+    findings: carried,
+    carried: groups.reduce((sum, parsed) => sum + parsed.claims.length, 0),
+    judges: [...new Set(groups.map((parsed) => parsed.judge ?? "not named"))].sort(),
+  };
 }
 
-/** The records of a previous findings.json whose premise held them; none when there was no previous ingest. */
-function heldRecords(previousFindings: unknown): Loose[] {
-  if (!Array.isArray(previousFindings)) return [];
+/** The claim a carried premise stands for: every field but its context, so a field no claim may carry is refused as one. */
+function carriedClaim(premise: Loose, findingId: string): PremiseClaimInput {
+  const fields = Object.fromEntries(Object.entries(premise).filter(([key]) => !CARRIED_PREMISE_CONTEXT.has(key)));
+  return { ...fields, finding_id: findingId } as PremiseClaimInput;
+}
+
+/** The records of a previous findings.json whose premise held them. */
+function heldRecords(previousFindings: readonly unknown[]): Loose[] {
   return previousFindings.filter(isRecord).filter((record) => isRecord(record.premise) && isHeldVerdict(record.premise.verdict));
+}
+
+/**
+ * The refusal of an ingest without `--premises` over a package whose findings.json exists but cannot be read, or is
+ * not an array (review LG6-001): what it held cannot be known, and reading it as "nothing held" would drop every hold
+ * silently. A missing findings.json is a first ingest, which holds nothing.
+ */
+export function previousFindingsUnreadable(why: string): string {
+  return `This package's previous findings.json cannot be read: ${why}; pass --premises <file> with the judge's claims for this round, so no hold it recorded is dropped silently. Nothing was written.`;
 }
 
 function refuseInheritance<T>(why: string): CarriedPremiseHolds<T> {
