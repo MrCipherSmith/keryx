@@ -69,7 +69,7 @@ import { PackageGraphError, loadPackageGraph, readLayers } from "../review/layer
 import { changedFilesArgv, radiusDiffArgv, radiusRange } from "../review/radius-range";
 import { findTextLinks, gitGrepSearcher, ripgrepSearcher } from "../review/text-links";
 import { detectTestCommand, writeTestsToRun } from "../review/tests-to-run";
-import { gitSourceReader, parseDiffHunks, workingTreeSourceReader } from "../gdgraph/symbol-reach";
+import { gitSourceReader, parseDiffHunks, workingTreeSourceReader } from "../gdgraph/service";
 import { keryxSelfCommand } from "../harness/tool/builtin/metaproject-tools";
 import { shellWord } from "../lib/shell-quote";
 import { layersSummaryLine } from "../review/layers-view";
