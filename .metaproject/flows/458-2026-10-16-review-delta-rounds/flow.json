@@ -11,12 +11,12 @@
   "title": "Fix rounds review the delta, flows plan states up front, review lines dedupe",
   "status": "in-progress",
   "createdAt": "2026-10-16T06:30:13.529Z",
-  "updatedAt": "2026-10-16T08:40:48.951Z",
+  "updatedAt": "2026-10-16T09:07:35.483Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:ac33dd089b5d53d70210fbd8bdddc96d853adb67b26c9df6f918f27334280bf2",
+  "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -217,6 +217,20 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "L4: review next, lenient result parse, drivers, disposition schema, path check, model record",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -322,6 +336,16 @@
       "at": "2026-10-16T08:40:48.951Z",
       "event": "task-done",
       "detail": "T10: Review round + PR + merge"
+    },
+    {
+      "at": "2026-10-16T09:07:35.340Z",
+      "event": "ac-updated",
+      "detail": "AC12: \"(new)\" -> \"Claude Code run lessons (vantage-frontend #7956, 0.3.118): one command `keryx review next --package <dir>` returns the next dispatches for the whole package (all reviewers, missing slices, waves) so no per-reviewer retry-plan polling is needed; reviewer results are parsed leniently (fenced JSON, a list of results, trailing prose) with a precise error when unusable; `review slice --package` writes one driver per reviewer x wave with absolute slice paths; dispositions have one schema (wrapper keys normalised, `remains` required for narrowed) validated at ledger build; a finding whose file does not exist at the reviewed head is flagged at ingest; drivers and raw results record the reviewer model. Tests per item. [verify: exec `bun test src/review/review-next.test.ts src/review/result-parse.test.ts`]\" (owner: include the #7956 Claude Code run lessons in flow 458 before the release)"
+    },
+    {
+      "at": "2026-10-16T09:07:35.483Z",
+      "event": "task-added",
+      "detail": "T13: L4: review next, lenient result parse, drivers, disposition schema, path check, model record"
     }
   ],
   "acKinds": {
@@ -367,6 +391,10 @@
     "AC11": {
       "kind": "exec",
       "check": "npm view @mrciphersmith/keryx version"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "bun test src/review/review-next.test.ts src/review/result-parse.test.ts"
     }
   }
 }
