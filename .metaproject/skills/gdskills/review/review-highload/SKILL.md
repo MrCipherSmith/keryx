@@ -28,7 +28,7 @@ license: "MIT"
 
 Specialized reviewer for **code that will run under significant concurrent load**.
 Focuses on correctness under concurrency, resource contention, back-pressure, failure
-modes at scale, and distributed systems invariants — not general performance profiling. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
+modes at scale, and distributed systems invariants — not general performance profiling. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
 
 Reviews only changes introduced in the current branch (merge-base to HEAD).
 

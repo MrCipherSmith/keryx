@@ -17,7 +17,7 @@ license: "MIT"
 
 ## Purpose
 
-Validates frontend-specific patterns in the changed code of the current branch. Covers React component correctness (observer wrapping, MVVM boundary, useEffect misuse, accessibility basics, key props), full MobX store patterns (structure, member ordering, accessibility modifiers, observable collections, reactions, async actions, bidirectional sync, lifecycle, API placement), and TypeScript safety. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
+Validates frontend-specific patterns in the changed code of the current branch. Covers React component correctness (observer wrapping, MVVM boundary, useEffect misuse, accessibility basics, key props), full MobX store patterns (structure, member ordering, accessibility modifiers, observable collections, reactions, async actions, bidirectional sync, lifecycle, API placement), and TypeScript safety. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
 
 This skill consolidates what was previously split between `code-style-review` (frontend parts) and `code-mobx-store-review`. It supersedes both for frontend changes.
 

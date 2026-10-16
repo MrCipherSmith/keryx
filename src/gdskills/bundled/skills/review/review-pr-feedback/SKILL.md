@@ -524,7 +524,7 @@ branch on purpose.
   "operator_confirmed": { "confirmed_by": "<who>", "confirmed_at": "<iso8601>", "plan_digest": "<digest of the plan shown>" },
   "constraints": [
     "pr: open it as a draft, titled 'fix(review): address feedback on #<n>', body linking #<n> and listing which plan item answers which comment.",
-    "review: run review-orchestrator with --all on every round. The loop's exit threshold is the one your own PR review/fix loop defines; do not take it from this string.",
+    "review: run review-orchestrator on every round, starting each round with `keryx review start` (or `keryx review plan`) on the new head: the round, its range and the prior findings come from `round.json`. No own range, no `--all` per round, no whole-branch re-review. The loop's exit threshold is the one your own PR review/fix loop defines; do not take it from this string.",
     "review: the fix PR is its own conversation — collect and reply on IT as normal. The round MUST NOT run a reply pass against #<n>: a reply there writes the durable record, so the post-merge answer citing the merge SHA is skipped as already-handled and the reviewer is left holding a mid-loop answer that has since stopped being true.",
     "attempt budget: at most <max_fix_rounds> review/fix attempts. This LOWERS your bound and never raises it; absent the value, your own bound stands. The `keryx review loop` repetition check applies either way. Do not raise anything to reach a clean round; escalate instead.",
     "scope: the plan items only. A finding outside them is recorded as follow-up, not fixed in this flow."

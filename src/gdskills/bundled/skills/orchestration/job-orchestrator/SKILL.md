@@ -1125,12 +1125,12 @@ runs on the session model. That is a correct answer, not a failure.
 
 ```
 flags:             <selected flags, e.g. --backend --security --testing-practices>
-commit_range:      <BASE_SHA>..HEAD
+commit_range:      <BASE_SHA>..HEAD   # round 1 only; a later round takes its range from round.json
 issue_url:         <issue URL, when the job has one — enables the Stage 1 spec gate>
 context_doc:       <JOBS_ROOT>/<job-name>/ai/context.md
 verification_mode: annotate
 managed_review:    { mode: "review-flow", target: "branch", target_ref: "<feature-branch>" }
-is_fix_round:      <true on any round after the first>
+is_fix_round:      <true on any round after the first; the round, its range and prior_findings come from `review start`/`review plan`, never from your own range>
 pr_comments:       { enabled: <true when a PR exists> }
 ```
 
@@ -1298,11 +1298,11 @@ FOR iteration in [1, 2, 3]:
   4. Run the sanity check (step 2.5.2 logic) — verify commits were made
   5. Run the next managed round — the FULL 2.6.1 sequence, not a bare re-dispatch:
        keryx review budget  --spent <usd> --outstanding <n>
-       keryx review start   --target branch --ref <feature-branch> --head <new-head>
+       keryx review plan    --target branch --ref <feature-branch> --head <new-head>
+                            # start + scope + blast-radius + slice + required + estimate on the new head;
+                            # round.json names the delta, scope.json and blast-radius.json land in the package
        keryx review comments collect --repo <r> --pr <n> --sha <new-head> --round <N+1> --out <file>
-       keryx review scope        --ref "$BASE_SHA" --json > scope.json
-       keryx review blast-radius --ref "$BASE_SHA" --previous blast-radius.json --json > blast-radius.json
-       <run review-orchestrator inline, in this session, with is_fix_round: true>
+       <run review-orchestrator inline, in this session; it takes the round from round.json>
        keryx review ingest  --report <new-report> --ref <feature-branch> --head <new-head> \
                             --scope scope.json --blast-radius blast-radius.json \
                             --verifications <file> --refuted <file> --outstanding <n>
