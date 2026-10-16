@@ -11,13 +11,18 @@
   "title": "Large-PR reviews scale by risk, not by graph reach, and find more",
   "status": "implemented",
   "createdAt": "2026-10-15T21:34:19.482Z",
-  "updatedAt": "2026-10-16T05:30:45.697Z",
+  "updatedAt": "2026-10-16T06:05:46.719Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:8fbb41760247430945fc2f0ca059394dca62e87859943ececb4780be040af8cd",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC13": {
+      "at": "2026-10-16T06:05:46.719Z",
+      "note": "npm latest 0.3.119 (tag v0.3.119, PR #1039)"
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/1038"
   },
@@ -379,6 +384,11 @@
       "at": "2026-10-16T05:30:45.697Z",
       "event": "task-done",
       "detail": "T12: Release 0.3.119"
+    },
+    {
+      "at": "2026-10-16T06:05:46.719Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: npm latest 0.3.119 (tag v0.3.119, PR #1039) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     }
   ],
   "acKinds": {
@@ -436,5 +446,18 @@
     "AC14": {
       "kind": "judged"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-16T06:05:46.719Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:8fbb41760247430945fc2f0ca059394dca62e87859943ececb4780be040af8cd"
+    }
+  ]
 }

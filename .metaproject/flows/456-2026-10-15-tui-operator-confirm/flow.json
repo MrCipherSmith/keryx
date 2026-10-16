@@ -11,13 +11,18 @@
   "title": "Operator confirmations answered in the TUI instead of a separate terminal",
   "status": "implemented",
   "createdAt": "2026-10-15T18:08:38.862Z",
-  "updatedAt": "2026-10-15T21:37:03.108Z",
+  "updatedAt": "2026-10-16T06:05:46.562Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:5ca600c227905bf738921615e5d7867ac0d02cf76b4fa5ac2779d629ea7a5185",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC9": {
+      "at": "2026-10-16T06:05:46.562Z",
+      "note": "npm latest 0.3.119 (tag v0.3.119, PR #1039)"
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/1034"
   },
@@ -194,7 +199,7 @@
       "id": "T10",
       "title": "Patch release after merge",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9"
       ],
@@ -204,7 +209,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -331,6 +337,16 @@
       "at": "2026-10-15T21:37:03.108Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1034 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-16T06:05:46.408Z",
+      "event": "task-done",
+      "detail": "T10: Patch release after merge"
+    },
+    {
+      "at": "2026-10-16T06:05:46.562Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: npm latest 0.3.119 (tag v0.3.119, PR #1039) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     }
   ],
   "acKinds": {
@@ -372,5 +388,18 @@
     "AC10": {
       "kind": "judged"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-16T06:05:46.562Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:5ca600c227905bf738921615e5d7867ac0d02cf76b4fa5ac2779d629ea7a5185"
+    }
+  ]
 }
