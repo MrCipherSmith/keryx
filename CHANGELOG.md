@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.119] - 2026-10-16
+
 ### Added
 - **Operator decisions are answered in keryx shell, not in a separate terminal.** Thirteen card tools (`review_chunks_answer`, `review_publish`, `review_waive_coverage`, `review_waive_readiness`, `flow_confirm`, `external_apply`, `learn_accept`, `learn_promote`, `learn_graduate`, `schedule_resume`, `schedule_run`, `schedule_pause`, `schedule_remove`) show the real decision built from state; the operator presses yes or no, the decision applies in process only if that state has not moved, and the record carries `confirmedVia: tui-card | remote-card`. No mode, saved approval, review-auto or ask_user answerer can answer a card; unattended runs are denied; No is the default; long cards are not answerable remotely. In a real terminal the CLI paths are unchanged. Decision record: TM-04.
 - **Large-PR reviews scale by risk, not by graph reach.** The blast radius follows changed exported symbols through barrels, damps only beyond direct consumers, finds string-key / event / CSS-class / locale-key consumers by text, and records unrelated graph neighbours as reasoned omissions; tests that exercise the change go to `<package>/tests-to-run.json` to be run, not read. Mandatory graph chunks on keryx PR #940 / #1005: 55 → 0 and 48 → 3.
