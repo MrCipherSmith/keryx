@@ -10,6 +10,33 @@
 import type { PremiseQuestionDecision } from "./operator-decisions";
 import { premiseSubjectOf } from "./premise";
 
+/**
+ * The premise a judge's `challenged` claim leaves on a finding, with the evidence `mergePremises` requires of it (a
+ * cited intent signal and a named practice source): a shape the producer can emit, never one ingest would refuse.
+ */
+export function heldPremise(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    verdict: "challenged",
+    judge: "review-premise",
+    intent_signals: [{ ref: "src/player/Timeline.tsx:12", says: "dir=\"ltr\" pinned on purpose, with a comment" }],
+    practice_sources: [{ name: "Material Design bidirectionality", says: "media controls and timelines do not mirror" }],
+    question: "mirror it?",
+    ...over,
+  };
+}
+
+/** A `downgraded` premise from `original` to `severity`, with the evidence a downgrade needs. */
+export function downgradedPremise(original: string, severity: string, over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    verdict: "downgraded",
+    judge: "review-premise",
+    severity,
+    original_severity: original,
+    practice_sources: [{ name: "WCAG 2.2 note", says: "the reported impact applies only to a deprecated path" }],
+    ...over,
+  };
+}
+
 /** A finding the premise judge held (`challenged`), in the shape findings.json stores. */
 export function heldFinding(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -22,7 +49,7 @@ export function heldFinding(over: Record<string, unknown> = {}): Record<string, 
     suggested_fix: "f",
     evidence: "e",
     confidence: "high",
-    premise: { verdict: "challenged", judge: "review-premise", question: "mirror it?" },
+    premise: heldPremise(),
     ...over,
   };
 }

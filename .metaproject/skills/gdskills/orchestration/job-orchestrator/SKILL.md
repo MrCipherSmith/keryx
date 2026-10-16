@@ -1171,7 +1171,7 @@ OPEN      = blocker + major findings not in HELD
 NEEDS_FIX = count(OPEN) > 0
 ```
 
-A HELD finding is neither fixable nor clean: it never enters a fix prompt, and it blocks the job until answered. Ask the operator about each one as `review-orchestrator` "Wave D" says; an upheld one rejoins OPEN at its severity (set `premise_verdict` on each `fix_context.review_feedback` item the judge ruled on, and `premise_answer: "uphold"` on a held one the operator upheld), a dismissed one carries `dismissed-incorrect` from the operator's decision. Unattended: stop and report the HELD list; never let the loop end reading clean while HELD is non-empty.
+A HELD finding is neither fixable nor clean: it never enters a fix prompt, and it blocks the job until answered. Ask the operator about each one as `review-orchestrator` "Wave D" says; an upheld one rejoins OPEN at its severity (carrying `premise_verdict` and `premise_answer` as task-implementer's `FIX_CONTEXT` defines them), a dismissed one carries `dismissed-incorrect` from the operator's decision. Unattended: stop and report the HELD list; never let the loop end reading clean while HELD is non-empty.
 
 **Document:** record the report in the job package too, so the job and the review
 record point at each other:

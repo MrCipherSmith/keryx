@@ -103,8 +103,10 @@ test("the job bridge uses the CLI's own step ids rather than a second naming sch
 test("the review bridge uses its own numbered checklist ids, and keeps findings out of plan items", () => {
   for (const root of ROOTS) {
     const review = read(skillPath(root, "review/review-orchestrator"));
-    expect(review).toContain("`step-0`…`step-14`");
+    expect(review).toContain("`step-0`…`step-14` and `step-10b`");
     expect(review).toContain("move each item with `plan_update` as its step completes");
+    // The rule owns the id contract: every id the skill publishes, step-10b (Wave D) included, is named there too.
+    expect(read(rulePath(root))).toContain("`step-0` … `step-14` and `step-10b`");
   }
 });
 

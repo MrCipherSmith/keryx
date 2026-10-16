@@ -3,12 +3,14 @@
 // facts and write the same records.
 
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { readPremiseDecisions, recordPremiseDecision, type OperatorDecisionVia, type PremiseDecisionSubject, type PremiseQuestionDecision } from "./operator-decisions";
 import { applyPremiseDecision, isHeldVerdict, latestPremiseDecision, premiseHoldState, premiseSubjectOf } from "./premise";
+import { recordFinishedRound, registryVouchesPackage } from "./round-registry";
 
 export type HeldFinding = {
   /** The key the decision is recorded under: the finding's `global_id`, else its `id`. */
@@ -72,24 +74,61 @@ export async function findHeldFinding(packageDir: string, ref: string): Promise<
 }
 
 /**
+ * Whether `dir` is a real review package of the checkout at `projectRoot` (review SEC2-001): a directory holding a
+ * manifest.json whose real path sits directly under `.metaproject/reviews/` or `.metaproject/flows/<flow>/reviews/`.
+ * A directory nested inside a package, or a symlink into one, is not: an agent can write such a directory (apply_patch
+ * into the bound package is approved), and `--prior` accepts any directory with a manifest.
+ */
+export function isReviewPackageDir(dir: string, projectRoot: string): boolean {
+  let real: string;
+  let root: string;
+  try {
+    real = realpathSync(dir);
+    root = realpathSync(projectRoot);
+  } catch {
+    return false;
+  }
+  if (!existsSync(path.join(real, "manifest.json"))) return false;
+  const parent = path.relative(path.join(root, ".metaproject"), path.dirname(real)).split(path.sep);
+  return (parent.length === 1 && parent[0] === "reviews") || (parent.length === 3 && parent[0] === "flows" && parent[1] !== ".." && parent[2] === "reviews");
+}
+
+/**
  * Carry the operator's premise answers into a delta round's package (flow 459). Each finding the round carries from
  * `previousDir` keeps the answer the operator gave there, recorded as carried from that package, so an upheld finding is
- * not asked again. The answer travels only while the finding is still what it was shown: the previous record's subject
- * (severity, verdict, problem digest) must match the decision's, and the new round's own finding is matched against that
- * subject again when the decision is read, so a finding whose problem changed asks the operator afresh.
+ * not asked again.
+ *
+ * What is carried is re-validated, never trusted as found (review SEC2-001):
+ * - `previousDir` must be a real review package of `projectRoot` ({@link isReviewPackageDir}), and not this package or
+ *   one that contains it;
+ * - only its top-level operator-decisions.json is read, and only complete records count (`readPremiseDecisions`): one
+ *   without how it was confirmed, the operator's words or the subject it was shown is not carried;
+ * - the previous record must still be held by the premise judge, and the decision's subject (severity, verdict,
+ *   problem digest) must match it; the new round's own finding is matched against that subject again when the decision
+ *   is read, so a finding whose problem changed asks the operator afresh.
  * Returns the finding keys whose answers were carried.
  */
-export async function carryPremiseDecisions(packageDir: string, previousDir: string, carriedIds: readonly string[], carriedFrom: string): Promise<string[]> {
-  if (carriedIds.length === 0 || !existsSync(previousDir)) return [];
-  const previous = await readPremiseDecisions(previousDir);
+export async function carryPremiseDecisions(
+  packageDir: string,
+  previousDir: string,
+  carriedIds: readonly string[],
+  carriedFrom: string,
+  options: { projectRoot: string },
+): Promise<string[]> {
+  if (carriedIds.length === 0 || !isReviewPackageDir(previousDir, options.projectRoot)) return [];
+  const realPrevious = realpathSync(previousDir);
+  const realPackage = existsSync(packageDir) ? realpathSync(packageDir) : path.resolve(packageDir);
+  if (realPrevious === realPackage || realPackage.startsWith(`${realPrevious}${path.sep}`)) return [];
+  const previous = await readPremiseDecisions(realPrevious);
   if (previous.length === 0) return [];
-  const findings = await readJsonFileOr<unknown>(path.join(previousDir, FINDINGS_FILE), undefined);
+  const findings = await readJsonFileOr<unknown>(path.join(realPrevious, FINDINGS_FILE), undefined);
   const records = Array.isArray(findings) ? findings.map(obj).filter((entry): entry is Record<string, unknown> => entry !== undefined) : [];
   const have = await readPremiseDecisions(packageDir);
   const carried: string[] = [];
   for (const record of records) {
     const keys = [str(record["global_id"]), str(record["id"])].filter((key): key is string => key !== undefined);
     if (!keys.some((key) => carriedIds.includes(key))) continue;
+    if (!isHeldVerdict(obj(record["premise"])?.["verdict"])) continue;
     const decision = latestPremiseDecision(record, previous);
     if (decision === undefined) continue;
     if (have.some((entry) => entry.finding === decision.finding && entry.at === decision.at && entry.carriedFrom === carriedFrom)) continue;
@@ -111,29 +150,66 @@ export type PremiseAnswer = {
 };
 
 /**
- * Record the operator's answer and apply it to the finding record, under one lock: the decision goes to
- * operator-decisions.json (what the verdict, readiness and the flow gate trust), and the answered record goes to
- * findings.json (`premise.operator`, and `dismissed-incorrect` for a dismiss), which is what the readers that know
- * nothing of premises read: the round-to-round carry (prior-round.ts) and the published round block (publish.ts). Without
- * the second write a dismissed finding is carried into the next round as open.
+ * Where the local round registry is read and written (the checkout, for its repository identity, and the config dir),
+ * and where a registry that could not be updated is reported: the answer itself is recorded either way.
  */
-export async function answerPremiseQuestion(packageDir: string, input: PremiseAnswer): Promise<PremiseQuestionDecision> {
-  return recordPremiseDecision(
+export type RegistryOptions = { cwd?: string; dir?: string; warn?: (message: string) => void };
+
+const registryPlace = (registry: RegistryOptions): { cwd?: string; dir?: string } => ({
+  ...(registry.cwd === undefined ? {} : { cwd: registry.cwd }),
+  ...(registry.dir === undefined ? {} : { dir: registry.dir }),
+});
+
+/**
+ * Record the operator's answer and apply it to the finding record, under one lock. The answered record goes to
+ * findings.json first (`premise.operator`, and `dismissed-incorrect` for a dismiss): that is what the readers that know
+ * nothing of premises read, the round-to-round carry (prior-round.ts) and the published round block (publish.ts), and
+ * without it a dismissed finding is carried into the next round as open. Then the decision goes to
+ * operator-decisions.json (what the verdict, readiness and the flow gate trust). The two land together: a failed
+ * decision write restores findings.json as it was.
+ *
+ * findings.json is one of the files the local round registry hashes (review RG2-001). When the registry vouched for the
+ * package before the answer, the round is recorded again after it, so the next round still cuts a delta from it; an
+ * answer never makes the registry vouch for a package it did not vouch for already.
+ */
+export async function answerPremiseQuestion(packageDir: string, input: PremiseAnswer, registry: RegistryOptions = {}): Promise<PremiseQuestionDecision> {
+  const file = path.join(packageDir, FINDINGS_FILE);
+  let rerecord = false;
+  const decision = await recordPremiseDecision(
     packageDir,
     { finding: input.finding.key, answer: input.answer, reason: input.reason, quote: input.quote, at: input.at, confirmedVia: input.confirmedVia, subject: input.finding.subject },
-    async (decision) => {
-      const file = path.join(packageDir, FINDINGS_FILE);
-      const findings = await readJsonFileOr<unknown>(file, undefined);
-      if (!Array.isArray(findings)) return;
+    async (kept) => {
+      const before = await readFile(file, "utf8").catch(() => undefined);
+      let findings: unknown;
+      try {
+        findings = before === undefined ? undefined : JSON.parse(before);
+      } catch {
+        findings = undefined;
+      }
+      if (before === undefined || !Array.isArray(findings)) return undefined;
       let changed = false;
       const next = findings.map((entry) => {
         const record = obj(entry);
-        if (record === undefined || latestPremiseDecision(record, [decision]) === undefined) return entry;
-        const applied = applyPremiseDecision(record, decision);
+        if (record === undefined || latestPremiseDecision(record, [kept]) === undefined) return entry;
+        const applied = applyPremiseDecision(record, kept);
         changed ||= applied !== record;
         return applied;
       });
-      if (changed) await writeFileAtomic(file, `${JSON.stringify(next, null, 2)}\n`);
+      if (!changed) return undefined;
+      const vouched = registryVouchesPackage(packageDir, registryPlace(registry));
+      await writeFileAtomic(file, `${JSON.stringify(next, null, 2)}\n`);
+      rerecord = vouched;
+      return async () => {
+        rerecord = false;
+        await writeFileAtomic(file, before);
+      };
     },
   );
+  if (rerecord) {
+    const recorded = recordFinishedRound(packageDir, "decide-premise", registryPlace(registry));
+    const problem = recorded.error ?? recorded.skipped;
+    if (problem !== undefined) registry.warn?.(`the answer is recorded, but the local round registry was not updated (${problem}): the next round of this package runs full`);
+    if (recorded.warning !== undefined) registry.warn?.(recorded.warning);
+  }
+  return decision;
 }

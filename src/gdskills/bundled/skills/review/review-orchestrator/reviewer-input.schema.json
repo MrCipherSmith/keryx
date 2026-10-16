@@ -185,7 +185,7 @@
       "type": "string",
       "enum": ["read-only", "run-tests"],
       "default": "read-only",
-      "description": "What the reviewer may do beyond reading. `read-only` (the default): read the diff and files, and run no command but the read-only history commands `git log`, `git blame` and `git show` (shared law 4; the premise judge too). `run-tests`: at most one testing reviewer per round may run the tests, inside `exec_budget_s`. Verification commands go through the parent's `keryx review verify-run --timeout`."
+      "description": "What the reviewer may do beyond reading. `read-only` (the default): read the diff and files, and run no command, except the read-only history commands `git log`, `git blame` and `git show` (shared law 4; the premise judge too) where the host gives a read-only child git. On keryx shell a read-only child has no shell and no git tool: the parent passes `git log -L`/`git blame` output in `context_files`. `run-tests`: at most one testing reviewer per round may run the tests, inside `exec_budget_s`. Verification commands go through the parent's `keryx review verify-run --timeout`."
     },
     "exec_budget_s": {
       "type": "integer",

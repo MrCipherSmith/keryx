@@ -115,7 +115,7 @@ type Context = {
    * The records the premise check reads, exactly as the verdict reads them (findings.json once ingested, raw results with
    * premises.json before), and the operator's answers to held findings (`premise-question` decisions).
    */
-  premise: { records: Array<Record<string, unknown>>; decisions: PremiseQuestionDecision[] };
+  premise: { records: Array<Record<string, unknown>>; decisions: PremiseQuestionDecision[]; ingested: boolean };
   /** True when the package carries the dispatch record (a package cut before it existed is not held to it). */
   dispatched: boolean;
 };
@@ -200,11 +200,21 @@ function premiseDecisionsCheck(ctx: Context): Verdict {
   if (held.length === 0) return ok("no finding is held by the premise judge");
   const awaiting = awaitingOperator(records, decisions);
   if (awaiting.length === 0) return ok(`${held.length} held finding(s), every one with an operator decision`);
+  const evidence = `${awaiting.length} of ${held.length} held finding(s) have no operator decision: ${some(awaiting)}`;
+  // Before an ingest the held records come from raw results and premises.json, and the answer commands read
+  // findings.json only (review F-002): the first repair is the ingest.
+  if (!ctx.premise.ingested) {
+    return bad(`${evidence} (not ingested yet)`, `ingest the round with its premise results first (\`keryx review ingest ... --premises ${ctx.arg}/research-evidence/premises.json\`), then ask the operator to answer each held finding`);
+  }
   return bad(
-    `${awaiting.length} of ${held.length} held finding(s) have no operator decision: ${some(awaiting)}`,
+    evidence,
     `ask the operator: in keryx shell call the review_decide_premise tool (a card); in a terminal run keryx review decide-premise --package ${ctx.arg} --finding <id> --answer uphold|dismiss --reason "<why>"`,
   );
 }
+
+/** Why `premise-decisions` is never waived (shared by `waiveReadiness` and the `review_waive_readiness` card). */
+export const PREMISE_DECISIONS_NOT_WAIVABLE =
+  "premise-decisions cannot be waived in the operator's own words. A held finding needs its own answer: run `keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason \"<why>\"`, or in keryx shell call the review_decide_premise tool (the operator answers a card).";
 
 function ledgerCheck(ctx: Context): Verdict {
   if (!ctx.dispatched) return ok("this package predates the research ledger");
@@ -456,9 +466,7 @@ export async function waiveReadiness(packageDir: string, selectors: readonly str
     return id;
   });
   if (ids.includes("premise-decisions")) {
-    throw new Error(
-      "--waive: premise-decisions cannot be waived in the operator's own words. A held finding needs its own answer: run `keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason \"<why>\"`, or in keryx shell call the review_decide_premise tool (the operator answers a card).",
-    );
+    throw new Error(`--waive: ${PREMISE_DECISIONS_NOT_WAIVABLE}`);
   }
   const report = await computeReadiness(packageDir, options);
   const notFailing = ids.filter((id) => report.items.find((item) => item.id === id)?.status === "pass");

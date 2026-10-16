@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { isTrustRoutineCommand } from "../lib/trust-routine-command";
 import { readPremiseDecisions } from "../review/operator-decisions";
+import { heldFinding } from "../review/premise-fixtures";
 import { computeReadiness } from "../review/readiness";
 import { computeVerdict } from "../review/verdict";
 import { OPERATOR_COMMANDS, runOperatorCommand } from "./review-operator";
@@ -61,20 +62,9 @@ test("verify-run runs the command and saves its output", () => {
 // Flow 459 (AC3): `keryx review decide-premise`, the operator's answer to a finding the premise judge held.
 
 describe("decide-premise at a terminal", () => {
-  const heldFinding = {
-    id: "LY-003",
-    global_id: "r1#LY-003",
-    reviewer: "review-layout",
-    severity: "major",
-    problem: "timeline pinned LTR",
-    impact: "i",
-    suggested_fix: "f",
-    evidence: "e",
-    confidence: "high",
-    premise: { verdict: "challenged", judge: "review-premise", question: "mirror it?" },
-  };
+  const held = heldFinding();
 
-  function heldPackage(findings: unknown[] = [heldFinding]): string {
+  function heldPackage(findings: unknown[] = [held]): string {
     const dir = mkdtempSync(path.join(repo, "held-"));
     mkdirSync(path.join(dir, "raw"), { recursive: true });
     writeFileSync(
@@ -119,7 +109,7 @@ describe("decide-premise at a terminal", () => {
   });
 
   test("the prompt cleans the model-written problem and question as the card does, and ends with the effect", async () => {
-    const dir = heldPackage([{ ...heldFinding, problem: "timeline\u001b[2K\rFAKE: dismissed already\npinned", premise: { ...heldFinding.premise, question: "mirror\u001b]0;title\u0007 it?" } }]);
+    const dir = heldPackage([{ ...held, problem: "timeline\u001b[2K\rFAKE: dismissed already\npinned", premise: { ...(held.premise as object), question: "mirror\u001b]0;title\u0007 it?" } }]);
     const asked: string[] = [];
     const seam = { isTerminal: () => true, ask: async (question: string) => { asked.push(question); return "dismiss it"; }, cwd: repo, log: () => undefined };
     expect(await runOperatorCommand("decide-premise", argv(dir), seam)).toBe(0);
@@ -130,15 +120,17 @@ describe("decide-premise at a terminal", () => {
     expect(prompt).toMatch(/Answer: dismiss it as incorrect\? Type your own words/);
   });
 
-  test("declining records nothing", async () => {
-    const dir = heldPackage();
-    expect(await runOperatorCommand("decide-premise", argv(dir), seams(""))).toBe(1);
-    expect(await readPremiseDecisions(dir)).toEqual([]);
-    expect((await readiness(dir))?.status).toBe("fail");
+  test("declining records nothing: an empty answer, a no, an n", async () => {
+    for (const declined of ["", "no", "N"]) {
+      const dir = heldPackage();
+      expect(await runOperatorCommand("decide-premise", argv(dir), seams(declined))).toBe(1);
+      expect(await readPremiseDecisions(dir)).toEqual([]);
+      expect((await readiness(dir))?.status).toBe("fail");
+    }
   });
 
   test("refuses an unknown finding, a finding that is not held, a missing reason and a bad answer", async () => {
-    const dir = heldPackage([heldFinding, { ...heldFinding, id: "LY-004", global_id: "r1#LY-004", premise: { verdict: "upheld", judge: "review-premise" } }]);
+    const dir = heldPackage([held, { ...held, id: "LY-004", global_id: "r1#LY-004", premise: { verdict: "upheld", judge: "review-premise" } }]);
     await expect(runOperatorCommand("decide-premise", argv(dir, { "--finding": "LY-999" }), seams("yes"))).rejects.toThrow("No finding");
     await expect(runOperatorCommand("decide-premise", argv(dir, { "--finding": "LY-004" }), seams("yes"))).rejects.toThrow("not held");
     await expect(runOperatorCommand("decide-premise", argv(dir, { "--reason": "  " }), seams("yes"))).rejects.toThrow("--reason");

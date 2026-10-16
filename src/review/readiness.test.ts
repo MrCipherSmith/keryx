@@ -10,8 +10,8 @@ import path from "node:path";
 import { reviewCommand } from "../commands/review";
 import { CHUNK_REVIEWER, ensureChunkPlan, recordChunk } from "./chunks";
 import { CALLER_UNATTRIBUTED, recordLogStart, recordOrchestratorCall } from "./orchestrator-log";
-import { premiseAnswer } from "./premise-fixtures";
-import { computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
+import { downgradedPremise, heldFinding, premiseAnswer } from "./premise-fixtures";
+import { READINESS_ITEMS, computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
 
 let root: string;
 let pkg: string;
@@ -158,7 +158,7 @@ describe("the checklist on a package shaped like pr7932-r1 (AC1, AC2)", () => {
 });
 
 describe("premise-decisions: every held finding has an operator decision (flow 459, AC2)", () => {
-  const held = { id: "f-9", global_id: "pr7932-r1#f-9", severity: "major", title: "timeline pinned LTR", premise: { verdict: "challenged", judge: "review-premise", question: "mirror it?" } };
+  const held = heldFinding({ id: "f-9", global_id: "pr7932-r1#f-9" });
   const item = async () => (await computeReadiness(pkg)).items.find((entry) => entry.id === "premise-decisions");
 
   test("passes when nothing is held", async () => {
@@ -174,7 +174,7 @@ describe("premise-decisions: every held finding has an operator decision (flow 4
   });
 
   test("an owner-decision hold fails the same way, at any severity", async () => {
-    writeJson("findings.json", [{ ...held, severity: "minor", premise: { ...held.premise, verdict: "owner-decision", options: ["a", "b"] } }]);
+    writeJson("findings.json", [{ ...held, severity: "minor", premise: { ...(held.premise as object), verdict: "owner-decision", options: ["a", "b"] } }]);
     expect((await item())?.status).toBe("fail");
   });
 
@@ -191,9 +191,11 @@ describe("premise-decisions: every held finding has an operator decision (flow 4
     expect((await item())?.status).toBe("fail");
   });
 
-  test("a held finding that already has another outcome is not waiting for the operator", async () => {
-    writeJson("findings.json", [{ ...held, disposition: { state: "dismissed-out-of-scope", evidence: "not in this PR" } }]);
+  test("a held finding acted on is not waiting for the operator; one an agent marked dismissed still is (review SEC2-002)", async () => {
+    writeJson("findings.json", [{ ...held, disposition: { state: "acted-on", evidence: "fixed in abc1234" } }]);
     expect((await item())?.status).toBe("pass");
+    writeJson("findings.json", [{ ...held, disposition: { state: "dismissed-out-of-scope", evidence: "not in this PR" } }]);
+    expect((await item())?.status).toBe("fail");
   });
 
   test("the item cannot be waived in the operator's words; the refusal names the repair and nothing is written", async () => {
@@ -201,12 +203,12 @@ describe("premise-decisions: every held finding has an operator decision (flow 4
     const before = readFileSync(path.join(pkg, "manifest.json"), "utf8");
     const attempt = waiveReadiness(pkg, ["premise-decisions"], "the operator said it is fine to ship these");
     await expect(attempt).rejects.toThrow(/decide-premise/);
-    await expect(waiveReadiness(pkg, ["11"], "the operator said it is fine to ship these")).rejects.toThrow(/review_decide_premise/);
+    await expect(waiveReadiness(pkg, [String(READINESS_ITEMS.find((entry) => entry.id === "premise-decisions")?.number)], "the operator said it is fine to ship these")).rejects.toThrow(/review_decide_premise/);
     expect(readFileSync(path.join(pkg, "manifest.json"), "utf8")).toBe(before);
   });
 
   test("a downgraded finding is not held", async () => {
-    writeJson("findings.json", [{ ...held, premise: { verdict: "downgraded", judge: "review-premise", severity: "minor", original_severity: "major" } }]);
+    writeJson("findings.json", [{ ...held, severity: "minor", premise: downgradedPremise("major", "minor") }]);
     expect((await item())?.status).toBe("pass");
   });
 });

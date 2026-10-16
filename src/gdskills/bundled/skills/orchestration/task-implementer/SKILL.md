@@ -98,7 +98,7 @@ For a description-based task, omit `issue_number` and issue references in commit
 
 ```
 FIX_CONTEXT:
-  review_feedback:      structured findings from reviewer (id, file, line, severity, message, suggested_fix); never a finding review-premise holds for the operator: an item with a held `premise_verdict` (challenged, owner-decision) and no `premise_answer: "uphold"` is refused, not fixed
+  review_feedback:      structured findings from reviewer (id, file, line, severity, message, suggested_fix); the one statement of the premise fields (flow 459): `premise_verdict` on each item review-premise judged, and `premise_answer: "uphold"` on a held one (challenged, owner-decision) the operator upheld; an item with a held `premise_verdict` and no `premise_answer: "uphold"` is refused, not fixed
   original_task_ids:    the tasks that introduced the findings (array)
   iteration:            fix iteration number, 1..3 — the same repair bound as 5.4
 ```

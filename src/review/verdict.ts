@@ -65,7 +65,7 @@ export type InterimVerdict = {
    */
   held: VerdictFinding[];
   /** Findings that carry a premise judgement when the package holds {@link PREMISES_FILE}, or `undefined` when it holds none. */
-  premiseClaims: number | undefined;
+  premisedFindings: number | undefined;
   reportedReviewers: string[];
   /** Reviewers the package expects that have produced no result. `undefined` when the package does not say who was expected. */
   pendingReviewers: string[] | undefined;
@@ -134,11 +134,12 @@ function classify(loose: Loose, decisions: readonly PremiseQuestionDecision[]): 
     verification: verification === "confirmed" ? "confirmed" : verification === "unverifiable" ? "unverifiable" : "none",
   };
   if (verification === "refuted") return { finding, state: "refuted" };
-  if (disposition !== undefined && disposition.startsWith("dismissed")) return { finding, state: "dismissed" };
   if (disposition !== undefined && RESOLVED_DISPOSITIONS.has(disposition)) return { finding, state: "resolved" };
-  // A dismiss answer is already on the record by now (`computeVerdict` applies the package's decisions), so a hold that
-  // is still `awaiting` has no answer: not an open blocker or major, listed for the operator instead.
+  // Before a dismissal (review SEC2-002): a `dismissed*` disposition is text an agent can write, so it does not lift a
+  // hold. An operator dismiss is in `decisions`, and then the hold state is `dismissed`, not `awaiting`. A hold still
+  // `awaiting` has no answer: not an open blocker or major, listed for the operator instead.
   if (premiseHoldState(record, decisions) === "awaiting") return { finding, state: "held" };
+  if (disposition !== undefined && disposition.startsWith("dismissed")) return { finding, state: "dismissed" };
   return { finding, state: "kept" };
 }
 
@@ -206,26 +207,39 @@ async function applyVerifierClaims(packageDir: string, entries: Loose[]): Promis
   return merged.counts.applied;
 }
 
+/** The package's premise claims file, parsed; `undefined` when it holds none or an unreadable one. */
+async function readPremiseClaimsFile(packageDir: string): Promise<ReturnType<typeof parsePremiseClaims>> {
+  const source = await readJson(path.join(packageDir, PREMISES_FILE));
+  if (source === undefined) return undefined;
+  try {
+    return parsePremiseClaims(source);
+  } catch {
+    return undefined;
+  }
+}
+
 /**
- * Premise claims the package holds (flow 459), applied to RAW reviewer results only: a package with no findings.json yet.
- * Once a round is ingested, findings.json is the one record of every finding's premise: ingest wrote it from the claims
- * the merge accepted, and premises.json also keeps the ones it rejected. Re-applying the file to an ingested round would
- * let a rejected claim, or a file left from an earlier ingest, hold a finding the flow gate and readiness see as open.
+ * An ingested round's count of findings that carry a premise judgement, or `undefined` when the package holds no claims
+ * file. Once a round is ingested, findings.json is the one record of every finding's premise: ingest wrote it from the
+ * claims the merge accepted, and premises.json also keeps the ones it rejected. Re-applying the file to an ingested
+ * round would let a rejected claim, or a file left from an earlier ingest, hold a finding the flow gate and readiness
+ * see as open, so nothing is applied here.
+ */
+async function countPremisedFindings(packageDir: string, entries: readonly Loose[]): Promise<number | undefined> {
+  if ((await readPremiseClaimsFile(packageDir)) === undefined) return undefined;
+  return entries.filter((entry) => object(entry.record.premise) !== undefined).length;
+}
+
+/**
+ * Premise claims the package holds (flow 459), applied to RAW reviewer results: a package with no findings.json yet.
  *
  * Returns the number of findings that carry a premise afterwards, or `undefined` when the package holds no claims.
  * A downgrade lowers the severity the counts use; a held verdict takes the finding out of the open lists. Nothing is
  * removed here either.
  */
-async function applyPremiseClaims(packageDir: string, entries: Loose[], ingested: boolean): Promise<number | undefined> {
-  const source = await readJson(path.join(packageDir, PREMISES_FILE));
-  if (source === undefined) return undefined;
-  let parsed;
-  try {
-    parsed = parsePremiseClaims(source);
-  } catch {
-    return undefined;
-  }
-  if (ingested) return entries.filter((entry) => object(entry.record.premise) !== undefined).length;
+async function applyPremiseClaims(packageDir: string, entries: Loose[]): Promise<number | undefined> {
+  const parsed = await readPremiseClaimsFile(packageDir);
+  if (parsed === undefined) return undefined;
   const merged = mergePremises(asSubjects(entries), parsed);
   merged.findings.forEach((finding, position) => {
     const entry = entries[position];
@@ -235,7 +249,7 @@ async function applyPremiseClaims(packageDir: string, entries: Loose[], ingested
 }
 
 /** The package's records as the verdict reads them, and the operator's premise answers that apply to them. */
-type VerdictRecords = { loose: Loose[]; raws: Awaited<ReturnType<typeof rawResults>>; useRound: boolean; verifierClaims: number | undefined; premiseClaims: number | undefined; decisions: PremiseQuestionDecision[] };
+type VerdictRecords = { loose: Loose[]; raws: Awaited<ReturnType<typeof rawResults>>; useRound: boolean; verifierClaims: number | undefined; premisedFindings: number | undefined; decisions: PremiseQuestionDecision[] };
 
 async function verdictRecords(packageDir: string, rawDir: string): Promise<VerdictRecords> {
   const ingested = await readJson(path.join(packageDir, "findings.json"));
@@ -253,7 +267,7 @@ async function verdictRecords(packageDir: string, rawDir: string): Promise<Verdi
   }
 
   const verifierClaims = await applyVerifierClaims(packageDir, loose);
-  const premiseClaims = await applyPremiseClaims(packageDir, loose, useRound);
+  const premisedFindings = useRound ? await countPremisedFindings(packageDir, loose) : await applyPremiseClaims(packageDir, loose);
   // The operator's answers (`premise-question` decisions) land on the records before anything is classified: an
   // upheld finding is an ordinary open one again, a dismissed one is out with the operator's reason as its evidence.
   const decisions = await readPremiseDecisions(packageDir);
@@ -261,21 +275,22 @@ async function verdictRecords(packageDir: string, rawDir: string): Promise<Verdi
     const applied = applyPremiseDecisions(loose.map((entry) => entry.record), decisions);
     loose.forEach((entry, position) => { entry.record = applied[position] as Record<string, unknown>; });
   }
-  return { loose, raws, useRound, verifierClaims, premiseClaims, decisions };
+  return { loose, raws, useRound, verifierClaims, premisedFindings, decisions };
 }
 
 /**
  * The records readiness item 11 (`premise-decisions`) checks, read exactly as the verdict reads them: findings.json once
  * ingested, raw results with premises.json before that. One view, so the two never disagree on what is held.
+ * `ingested` says which: before an ingest no answer can be recorded yet (the answer commands read findings.json).
  */
-export async function premiseRecords(packageDir: string, options: VerdictOptions = {}): Promise<{ records: Array<Record<string, unknown>>; decisions: PremiseQuestionDecision[] }> {
-  const { loose, decisions } = await verdictRecords(packageDir, options.rawDir ?? path.join(packageDir, "raw"));
-  return { records: loose.map((entry) => entry.record), decisions };
+export async function premiseRecords(packageDir: string, options: VerdictOptions = {}): Promise<{ records: Array<Record<string, unknown>>; decisions: PremiseQuestionDecision[]; ingested: boolean }> {
+  const { loose, decisions, useRound } = await verdictRecords(packageDir, options.rawDir ?? path.join(packageDir, "raw"));
+  return { records: loose.map((entry) => entry.record), decisions, ingested: useRound };
 }
 
 export async function computeVerdict(packageDir: string, options: VerdictOptions = {}): Promise<InterimVerdict> {
   const rawDir = options.rawDir ?? path.join(packageDir, "raw");
-  const { loose, raws, useRound, verifierClaims, premiseClaims, decisions } = await verdictRecords(packageDir, rawDir);
+  const { loose, raws, useRound, verifierClaims, premisedFindings, decisions } = await verdictRecords(packageDir, rawDir);
   const counts: Record<Severity, number> = { blocker: 0, major: 0, minor: 0, info: 0 };
   const open: VerdictFinding[] = [];
   const minors: VerdictFinding[] = [];
@@ -337,7 +352,7 @@ export async function computeVerdict(packageDir: string, options: VerdictOptions
     return reviewer === undefined || reason === undefined ? [] : [`excluded: ${reviewer} — ${reason}`];
   });
   const notRun = [...dispatchSkips(dispatchRecord).map(skipLine), ...superseded];
-  return { source, counts, total, verified, unverified, refuted, dismissed, resolved, verifierClaims, rawDir, open, minors, held, premiseClaims, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline, ...(runMode === undefined ? {} : { runMode }), ...(testsNotRun === undefined ? {} : { testsNotRun }), ...(round === undefined ? {} : { round }), ...(notRun.length === 0 ? {} : { notRun }) };
+  return { source, counts, total, verified, unverified, refuted, dismissed, resolved, verifierClaims, rawDir, open, minors, held, premisedFindings, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline, ...(runMode === undefined ? {} : { runMode }), ...(testsNotRun === undefined ? {} : { testsNotRun }), ...(round === undefined ? {} : { round }), ...(notRun.length === 0 ? {} : { notRun }) };
 }
 
 function findingLine(finding: VerdictFinding): string {
@@ -354,7 +369,7 @@ export function renderVerdict(verdict: InterimVerdict, reviewId: string): string
   lines.push(`verified: ${verdict.verified}, unverified: ${verdict.unverified}`);
   lines.push(`excluded: ${verdict.refuted} refuted, ${verdict.dismissed} dismissed, ${verdict.resolved} acted on (fixed)`);
   if (verdict.verifierClaims !== undefined) lines.push(`verifier results applied: ${verdict.verifierClaims} claim(s) from ${VERIFICATIONS_FILE}`);
-  if (verdict.premiseClaims !== undefined) lines.push(`premise results: ${verdict.premiseClaims} finding(s) carry a premise judgement (${PREMISES_FILE})`);
+  if (verdict.premisedFindings !== undefined) lines.push(`premise results: ${verdict.premisedFindings} finding(s) carry a premise judgement (${PREMISES_FILE})`);
   if (verdict.held.length > 0) lines.push(`awaiting operator: ${verdict.held.map((finding) => finding.id).join(", ")}`);
   if (verdict.source === "raw reviewer results" || verdict.pendingAmbiguous) lines.push(`raw results read from: ${verdict.rawDir}`);
   lines.push(`reviewers reported: ${verdict.reportedReviewers.length === 0 ? "none" : verdict.reportedReviewers.join(", ")}`);

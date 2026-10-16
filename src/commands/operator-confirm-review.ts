@@ -35,7 +35,7 @@ import { answerChunkEstimate, chunkModeOf, estimateChunkRun, recordChunkEstimate
 import { computeCoverage, recordCoverageWaiver } from "../review/coverage-complete";
 import { resolveReviewPackagePath } from "../review/managed";
 import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
-import { computeReadiness, readinessItemId, waiveReadiness, type ReadinessOptions } from "../review/readiness";
+import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, readinessItemId, waiveReadiness, type ReadinessOptions } from "../review/readiness";
 import type { PrLookup } from "../review/complete-head-gate";
 import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmSpec } from "./operator-confirm-tools";
 import { operatorDecisionSubject, reviewersLeftOut } from "../review/coverage";
@@ -303,7 +303,7 @@ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<Read
       "Same effect as `keryx review complete --waive <item>`: records the waiver (the operator's yes, the time) in the manifest and the report header; run `keryx review complete` afterwards to close the review.",
     inputSchema: {
       type: "object",
-      properties: { package: packageSchema, item: { type: "string", description: "The readiness item: its number (1-10) or id, e.g. head or pr-files." } },
+      properties: { package: packageSchema, item: { type: "string", description: "The readiness item: its number (1-11) or id, e.g. head or pr-files. Item 11 (premise-decisions) is never waived: each held finding is answered with review_decide_premise." } },
       required: ["package", "item"],
       additionalProperties: false,
     },
@@ -315,6 +315,8 @@ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<Read
       try {
         const id = readinessItemId(selector);
         if (id === undefined) return { refusal: `"${selector}" is not a readiness item.` };
+        // Refused before the card is drawn (review RG2-003): waiveReadiness refuses it anyway, after the operator's yes.
+        if (id === "premise-decisions") return { refusal: PREMISE_DECISIONS_NOT_WAIVABLE };
         const dir = await resolvePackage(ref, ctx.projectRoot);
         const report = await computeReadiness(dir, readiness());
         const item = report.items.find((entry) => entry.id === id);
@@ -614,7 +616,7 @@ function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
         return failed(error);
       }
     },
-    async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+    async apply(_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> {
       if (prepared === undefined) return { output: "review_decide_premise: nothing prepared for this card", isError: true };
       // Everything the card showed (the problem, the judge's question, an earlier answer, the severity and the verdict),
       // compared as one digest: a change to any of them after the card was drawn needs the operator again.
@@ -622,8 +624,13 @@ function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
       if (!again.ok || again.finding.digest !== prepared.digest) {
         return { output: "The finding changed after the card was shown; nothing was recorded. Ask again.", isError: true };
       }
-      await answerPremiseQuestion(prepared.dir, { finding: again.finding, answer: prepared.answer, reason: prepared.reason, quote: confirmation.quote, at: confirmation.at, confirmedVia: confirmation.confirmedVia });
-      return { output: `premise question on ${prepared.finding} answered ${prepared.answer} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json and findings.json` };
+      const warnings: string[] = [];
+      await answerPremiseQuestion(
+        prepared.dir,
+        { finding: again.finding, answer: prepared.answer, reason: prepared.reason, quote: confirmation.quote, at: confirmation.at, confirmedVia: confirmation.confirmedVia },
+        { cwd: ctx.projectRoot, warn: (line) => warnings.push(`warning: ${line}`) },
+      );
+      return { output: [`premise question on ${prepared.finding} answered ${prepared.answer} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json and findings.json`, ...warnings].join("\n") };
     },
   };
 }

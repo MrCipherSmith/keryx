@@ -1100,7 +1100,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     await writeRoundRecord(result.path, detected.round, detected.priorFindings, detected.identity);
     const previousPackage = detected.round.previous?.packagePath;
     if (detected.round.mode === "delta" && previousPackage !== undefined && detected.round.carried.length > 0) {
-      const carriedAnswers = await carryPremiseDecisions(result.path, path.resolve(cwd, previousPackage), detected.round.carried.map((entry) => entry.findingId), previousPackage);
+      const carriedAnswers = await carryPremiseDecisions(result.path, path.resolve(cwd, previousPackage), detected.round.carried.map((entry) => entry.findingId), previousPackage, { projectRoot: cwd });
       if (carriedAnswers.length > 0) console.log(`premise answers carried from ${previousPackage}: ${carriedAnswers.join(", ")}`);
     }
     console.log(renderRoundLine(detected.round));
@@ -3623,7 +3623,13 @@ async function readPremises(source: string | undefined): Promise<ManagedReviewIn
   if (source === undefined) {
     return undefined;
   }
-  const raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
+  let raw: string;
+  try {
+    raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
+  } catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- the public message names the file and the reason, not the raw caught value.
+    throw new Error(`--premises ${source}: the file could not be read (${error instanceof Error && "code" in error ? String((error as NodeJS.ErrnoException).code) : "unreadable"}). Nothing was ingested.`);
+  }
   // The bare object, or a report / judge reply holding one fenced `keryx:premises` block.
   const parsed = parseEmbeddedPremises(raw, `--premises ${source}`);
   parsePremiseClaims(parsed);

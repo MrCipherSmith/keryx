@@ -352,8 +352,11 @@ function mergeCluster<T extends StructuredReviewFinding>(members: readonly T[]):
     ...(mergedProblems.length === 0 ? {} : { merged_problems: mergedProblems }),
   };
   // A carried premise survives the merge (review LG8-003): the canonical record is chosen by severity, and a premise
-  // on an absorbed member would otherwise vanish, so the finding would read as unjudged and be judged again.
-  const carriedPremise = canonical.premise ?? others.find((member) => member.premise !== undefined)?.premise;
+  // on an absorbed member would otherwise vanish, so the finding would read as unjudged and be judged again. It moves
+  // only onto a canonical at the severity it was judged at (review RG2-002): a judgement of a `major` says nothing about
+  // a `blocker` re-statement, and a premised record is skipped by the delta judge, so the blocker would never be judged.
+  // A `downgraded` premise is already the canonical's own (severityRuleOf), so this reaches only the other verdicts.
+  const carriedPremise = canonical.premise ?? others.find((member) => member.premise !== undefined && member.severity === canonical.severity)?.premise;
   if (carriedPremise !== undefined) {
     finding.premise = carriedPremise;
   }

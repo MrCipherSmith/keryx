@@ -2,8 +2,24 @@
 // ```json keryx:premises block (what the review-premise skill prints).
 
 import { describe, expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { parseEmbeddedPremises } from "./managed";
-import { parsePremiseClaims } from "./premise";
+import { mergePremises, parsePremiseClaims } from "./premise";
+import type { StructuredReviewFinding } from "./types";
+
+describe("the shipped review-premise skill's example (review testing F-006)", () => {
+  for (const root of ["src/gdskills/bundled/skills", ".metaproject/skills/gdskills"]) {
+    test(`${root}: the documented keryx:premises block parses and merges with no rejection`, async () => {
+      const file = path.join(import.meta.dir, "..", "..", root, "review", "review-premise", "SKILL.md");
+      const parsed = parsePremiseClaims(parseEmbeddedPremises(await readFile(file, "utf8"), file));
+      const finding = (id: string): StructuredReviewFinding => ({ id, reviewer: "review-logic", severity: "major", problem: `problem ${id}`, impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" });
+      const merged = mergePremises([finding("LY-003"), finding("LG-002"), finding("LG-004")], parsed);
+      expect(merged.rejections).toEqual([]);
+      expect(merged.counts).toMatchObject({ claims: 3, applied: 3, challenged: 1, downgraded: 1, upheld: 1 });
+    });
+  }
+});
 
 const claims = { judge: "review-premise", model: "m", premises: [{ finding_id: "LY-003", verdict: "challenged", question: "mirror it?", practice_sources: [{ name: "Material", says: "media controls do not mirror" }] }] };
 const FENCE = "```";
