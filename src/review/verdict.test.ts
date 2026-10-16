@@ -6,6 +6,7 @@ import path from "node:path";
 import { VERDICT_FILE, computeVerdict, renderVerdict, writeVerdict } from "./verdict";
 import { recordPremiseDecision } from "./operator-decisions";
 import { PREMISES_FILE } from "./premise";
+import { premiseAnswerInput } from "./premise-fixtures";
 
 const dirs: string[] = [];
 
@@ -29,7 +30,7 @@ function reply(reviewer: string, findings: unknown[]): string {
 describe("held findings (flow 459, AC2)", () => {
   const held = (id: string, severity: string, verdict = "challenged") =>
     finding(id, severity, `${id} timeline pinned LTR`, { reviewer: "review-layout", premise: { verdict, judge: "review-premise", question: "mirror it?", ...(verdict === "owner-decision" ? { options: ["a", "b"] } : {}) } });
-  const decision = (finding: string, answer: "uphold" | "dismiss") => ({ kind: "premise-question" as const, finding, answer, reason: "platforms do not mirror it", at: "2026-10-16T12:00:00Z", actor: "owner" });
+  const decision = (record: Record<string, unknown>, answer: "uphold" | "dismiss") => premiseAnswerInput(record, { answer, reason: "platforms do not mirror it" });
 
   test("a held blocker or major is not an open blocker or major: it is listed as awaiting the operator", async () => {
     const dir = await pkg();
@@ -55,7 +56,7 @@ describe("held findings (flow 459, AC2)", () => {
   test("a premise-question uphold returns the finding to an open one at its original severity", async () => {
     const dir = await pkg();
     await writeFile(path.join(dir, "findings.json"), JSON.stringify([held("LY-1", "major")]));
-    await recordPremiseDecision(dir, decision("LY-1", "uphold"));
+    await recordPremiseDecision(dir, decision(held("LY-1", "major"), "uphold"));
     const verdict = await computeVerdict(dir);
     expect(verdict.held).toEqual([]);
     expect(verdict.open.map((f) => [f.id, f.severity])).toEqual([["LY-1", "major"]]);
@@ -64,7 +65,7 @@ describe("held findings (flow 459, AC2)", () => {
   test("a premise-question dismiss takes it out of the counts as dismissed", async () => {
     const dir = await pkg();
     await writeFile(path.join(dir, "findings.json"), JSON.stringify([held("LY-1", "major")]));
-    await recordPremiseDecision(dir, decision("LY-1", "dismiss"));
+    await recordPremiseDecision(dir, decision(held("LY-1", "major"), "dismiss"));
     const verdict = await computeVerdict(dir);
     expect(verdict.held).toEqual([]);
     expect(verdict.open).toEqual([]);
@@ -101,7 +102,35 @@ describe("held findings (flow 459, AC2)", () => {
     expect(verdict.counts).toEqual({ blocker: 0, major: 1, minor: 0, info: 0 });
     expect(verdict.held.map((f) => f.id)).toEqual(["LY-2"]);
     expect(verdict.premiseClaims).toBe(1);
-    expect(renderVerdict(verdict, "r1")).toContain(`premise results applied: 1 claim(s) from ${PREMISES_FILE}`);
+    expect(renderVerdict(verdict, "r1")).toContain(`premise results: 1 finding(s) carry a premise judgement (${PREMISES_FILE})`);
+  });
+
+  test("on an ingested round findings.json is the record: premises.json is not re-applied, and the count is the records' own", async () => {
+    const dir = await pkg();
+    // LY-1 carries the premise ingest applied; LY-2 carries none because ingest REJECTED its claim (self-judgement),
+    // which premises.json keeps as received. Re-applying the file must not hold LY-2 now.
+    await writeFile(
+      path.join(dir, "findings.json"),
+      JSON.stringify([
+        finding("LY-1", "minor", "timeline", { reviewer: "review-layout", premise: { verdict: "downgraded", judge: "review-premise", severity: "minor", original_severity: "major" } }),
+        finding("LY-2", "major", "label pinned LTR", { reviewer: "review-layout" }),
+      ]),
+    );
+    await mkdir(path.join(dir, "research-evidence"), { recursive: true });
+    await writeFile(
+      path.join(dir, PREMISES_FILE),
+      JSON.stringify({
+        judge: "review-premise",
+        premises: [
+          { finding_id: "LY-1", verdict: "downgraded", severity: "minor", intent_signals: [{ ref: "src/t.tsx:1", says: "legacy" }] },
+          { finding_id: "LY-2", verdict: "challenged", practice_sources: [{ name: "Material", says: "x" }], question: "q" },
+        ],
+      }),
+    );
+    const verdict = await computeVerdict(dir);
+    expect(verdict.held).toEqual([]);
+    expect(verdict.open.map((f) => f.id)).toEqual(["LY-2"]);
+    expect(verdict.premiseClaims).toBe(1);
   });
 
   test("a premise file the shape check refuses is not applied", async () => {

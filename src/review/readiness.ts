@@ -17,8 +17,9 @@ import { dispatchErrors } from "./dispatch";
 import { ORCHESTRATOR_LOG, memoryCalls, readToolLog } from "./layers-usage";
 import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED, ENV_REVIEW_CALLER_TOKEN } from "./orchestrator-log";
 import { readRunProfile } from "./run-profile";
-import { readPremiseDecisions, type PremiseQuestionDecision } from "./operator-decisions";
+import type { PremiseQuestionDecision } from "./operator-decisions";
 import { awaitingOperator, premiseHoldState } from "./premise";
+import { premiseRecords } from "./verdict";
 import { packageParityWarnings } from "./parity";
 import { researchErrors } from "./research";
 import type { ConfirmedVia, ManagedReviewManifest, ReadinessWaiver } from "./types";
@@ -110,8 +111,11 @@ type Context = {
   report: string;
   research: Record<string, unknown> | undefined;
   findings: Array<Record<string, unknown>>;
-  /** The operator's answers to held findings (`premise-question` decisions). */
-  premiseDecisions: PremiseQuestionDecision[];
+  /**
+   * The records the premise check reads, exactly as the verdict reads them (findings.json once ingested, raw results with
+   * premises.json before), and the operator's answers to held findings (`premise-question` decisions).
+   */
+  premise: { records: Array<Record<string, unknown>>; decisions: PremiseQuestionDecision[] };
   /** True when the package carries the dispatch record (a package cut before it existed is not held to it). */
   dispatched: boolean;
 };
@@ -191,9 +195,10 @@ function verifierCheck(ctx: Context): Verdict {
  * waiver of the question.
  */
 function premiseDecisionsCheck(ctx: Context): Verdict {
-  const held = ctx.findings.filter((finding) => premiseHoldState(finding, ctx.premiseDecisions) !== "none");
+  const { records, decisions } = ctx.premise;
+  const held = records.filter((finding) => premiseHoldState(finding, decisions) !== "none");
   if (held.length === 0) return ok("no finding is held by the premise judge");
-  const awaiting = awaitingOperator(ctx.findings, ctx.premiseDecisions);
+  const awaiting = awaitingOperator(records, decisions);
   if (awaiting.length === 0) return ok(`${held.length} held finding(s), every one with an operator decision`);
   return bad(
     `${awaiting.length} of ${held.length} held finding(s) have no operator decision: ${some(awaiting)}`,
@@ -329,7 +334,7 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     report: (await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => "")) as string,
     research,
     findings: Array.isArray(findingsRaw) ? findingsRaw.map(record).filter((entry): entry is Record<string, unknown> => entry !== undefined) : [],
-    premiseDecisions: await readPremiseDecisions(packageDir),
+    premise: await premiseRecords(packageDir),
     dispatched: manifest.artifacts.reviewerDispatch !== undefined || manifest.artifacts.research !== undefined,
   };
   const { files, radius } = await filesChecks(ctx);

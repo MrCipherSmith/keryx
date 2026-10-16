@@ -3,13 +3,13 @@
 //
 // WHAT "PRESENT" MEANS HERE, AND WHY IT WILL NOT ROT
 //
-// The obvious test is a literal string match against the three laws. It rots on
+// The obvious test is a literal string match against the shared laws. It rots on
 // the first edit: the day someone improves a word, fourteen files and one test
 // have to move together, and the cheapest way to make a red test green is to
 // weaken the test. A test that rots is worse than no test, because it is still
 // counted as coverage while it is being routed around.
 //
-// So this test hardcodes none of the law text. It derives the three laws from
+// So this test hardcodes none of the law text. It derives the shared laws from
 // the canonical block in `review-orchestrator/SKILL.md` and asserts every
 // reviewer carries them, whitespace-normalised. Consequences:
 //
@@ -22,7 +22,7 @@
 //     construction as `review-skills-class-scope.test.ts` next door.
 //
 // The derived check has one hole: it cannot tell whether the canonical block
-// still says the three things AC3 named, only that everyone agrees with it.
+// still says what each law must say (AC3 for laws 1-3, flow 459 AC5 for law 4), only that everyone agrees with it.
 // Delete law 2 and duplicate law 1 and the derived check stays green. So there is
 // a second, deliberately small layer — a semantic floor applied to the CANONICAL
 // TEXT ONLY, one file, matching each law by the concept it cannot lose without
@@ -285,7 +285,7 @@ describe("one condition, one severity, across the reviewer set (AC2)", () => {
   });
 
   test("no reviewer exempts itself from a law it also carries", () => {
-    // The presence check is `includes(law)`, so a reviewer can carry all three
+    // The presence check is `includes(law)`, so a reviewer can carry all the shared
     // laws verbatim and then negate one in the next paragraph. A review proved
     // it: appending "Exception for this reviewer: law 1 does not apply to style
     // findings" to `review-style` left the whole suite green. That reintroduces

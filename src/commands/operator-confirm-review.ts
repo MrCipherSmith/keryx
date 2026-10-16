@@ -39,8 +39,8 @@ import { computeReadiness, readinessItemId, waiveReadiness, type ReadinessOption
 import type { PrLookup } from "../review/complete-head-gate";
 import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmSpec } from "./operator-confirm-tools";
 import { operatorDecisionSubject, reviewersLeftOut } from "../review/coverage";
-import { recordOperatorDecision, recordPremiseDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
-import { findHeldFinding } from "../review/premise-question";
+import { recordOperatorDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
+import { answerPremiseQuestion, findHeldFinding } from "../review/premise-question";
 import { estimatePlan, planKeyOf, planOverThreshold, recordPlanConfirmation } from "../review/plan-confirmation";
 
 /** What the specs read outside the package: the PR tracker. Tests replace these; the defaults are the CLI's. */
@@ -561,7 +561,8 @@ function confirmPlanSpec(): OperatorConfirmSpec<PlanPrepared> {
 // ---------------------------------------------------------------------------------------------------------------------
 // 9. review_decide_premise (flow 459)
 
-type PremisePrepared = { dir: string; finding: string; answer: "uphold" | "dismiss"; reason: string; severity: string; verdict: string };
+/** `digest` is the shown finding's (see `HeldFinding.digest`): apply records only while the finding still reads the same. */
+type PremisePrepared = { dir: string; finding: string; answer: "uphold" | "dismiss"; reason: string; digest: string };
 
 function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
   return {
@@ -607,7 +608,7 @@ function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
               : "yes: the finding is recorded dismissed-incorrect with your reason as the evidence",
           ],
           subject: `package ${name}, finding ${cardSafe(found.key)}`,
-          prepared: { dir, finding: found.key, answer, reason, severity: found.severity, verdict: found.verdict },
+          prepared: { dir, finding: found.key, answer, reason, digest: found.digest },
         };
       } catch (error) {
         return failed(error);
@@ -615,12 +616,14 @@ function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
     },
     async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
       if (prepared === undefined) return { output: "review_decide_premise: nothing prepared for this card", isError: true };
+      // Everything the card showed (the problem, the judge's question, an earlier answer, the severity and the verdict),
+      // compared as one digest: a change to any of them after the card was drawn needs the operator again.
       const again = await findHeldFinding(prepared.dir, prepared.finding);
-      if (!again.ok || again.finding.severity !== prepared.severity || again.finding.verdict !== prepared.verdict) {
+      if (!again.ok || again.finding.digest !== prepared.digest) {
         return { output: "The finding changed after the card was shown; nothing was recorded. Ask again.", isError: true };
       }
-      await recordPremiseDecision(prepared.dir, { kind: "premise-question", finding: prepared.finding, answer: prepared.answer, reason: prepared.reason, at: confirmation.at, actor: "operator", confirmedVia: confirmation.confirmedVia });
-      return { output: `premise question on ${prepared.finding} answered ${prepared.answer} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json` };
+      await answerPremiseQuestion(prepared.dir, { finding: again.finding, answer: prepared.answer, reason: prepared.reason, quote: confirmation.quote, at: confirmation.at, confirmedVia: confirmation.confirmedVia });
+      return { output: `premise question on ${prepared.finding} answered ${prepared.answer} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json and findings.json` };
     },
   };
 }

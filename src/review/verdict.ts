@@ -7,7 +7,7 @@ import { isEmptyOutput, isReviewerResult, parseReviewResult } from "./ledger";
 import { dispatchSkips, skipLine } from "./coverage";
 import { mergeVerifications, verificationClaims } from "./verification";
 import { PREMISES_FILE, applyPremiseDecisions, mergePremises, parsePremiseClaims, premiseHoldState } from "./premise";
-import { readPremiseDecisions } from "./operator-decisions";
+import { readPremiseDecisions, type PremiseQuestionDecision } from "./operator-decisions";
 import { readRunProfile } from "./run-profile";
 import { testsNotRunWarning } from "./tests-to-run";
 import { promoteParentExecutions } from "./verify-run";
@@ -64,7 +64,7 @@ export type InterimVerdict = {
    * are in no count above and in no open list: an unanswered question is neither a blocker nor a fixed finding.
    */
   held: VerdictFinding[];
-  /** Premise claims read from {@link PREMISES_FILE} and applied, or `undefined` when the package holds none. */
+  /** Findings that carry a premise judgement when the package holds {@link PREMISES_FILE}, or `undefined` when it holds none. */
   premiseClaims: number | undefined;
   reportedReviewers: string[];
   /** Reviewers the package expects that have produced no result. `undefined` when the package does not say who was expected. */
@@ -121,7 +121,7 @@ function severityOf(value: unknown): Severity {
 type Loose = { record: Record<string, unknown>; fallbackReviewer: string; index: number };
 
 /** Findings of one record, as the verdict counts them. `kept` is false for a refuted or dismissed finding. */
-function classify(loose: Loose): { finding: VerdictFinding; state: "kept" | "refuted" | "dismissed" | "resolved" | "held" } {
+function classify(loose: Loose, decisions: readonly PremiseQuestionDecision[]): { finding: VerdictFinding; state: "kept" | "refuted" | "dismissed" | "resolved" | "held" } {
   const { record, fallbackReviewer, index } = loose;
   const verification = text(object(record.verification)?.verdict);
   const disposition = text(object(record.disposition)?.state);
@@ -136,9 +136,9 @@ function classify(loose: Loose): { finding: VerdictFinding; state: "kept" | "ref
   if (verification === "refuted") return { finding, state: "refuted" };
   if (disposition !== undefined && disposition.startsWith("dismissed")) return { finding, state: "dismissed" };
   if (disposition !== undefined && RESOLVED_DISPOSITIONS.has(disposition)) return { finding, state: "resolved" };
-  // The operator's answer is already on the record by now (`computeVerdict` applies the package's decisions), so a hold
-  // that is still `awaiting` here has no answer: not an open blocker or major, listed for the operator instead.
-  if (premiseHoldState(record) === "awaiting") return { finding, state: "held" };
+  // A dismiss answer is already on the record by now (`computeVerdict` applies the package's decisions), so a hold that
+  // is still `awaiting` has no answer: not an open blocker or major, listed for the operator instead.
+  if (premiseHoldState(record, decisions) === "awaiting") return { finding, state: "held" };
   return { finding, state: "kept" };
 }
 
@@ -181,6 +181,11 @@ export type VerdictOptions = {
   rawDir?: string | undefined;
 };
 
+/** The records as a merge reads them: each with an id and a reviewer, falling back to where the record came from. */
+function asSubjects(entries: readonly Loose[]): StructuredReviewFinding[] {
+  return entries.map((entry) => ({ ...entry.record, id: text(entry.record.id) ?? `${entry.fallbackReviewer}#${entry.index + 1}`, reviewer: text(entry.record.reviewer) ?? entry.fallbackReviewer }) as unknown as StructuredReviewFinding);
+}
+
 /** Verifier results the package holds, applied as annotations: a `refuted` claim excludes the finding from the counts. */
 async function applyVerifierClaims(packageDir: string, entries: Loose[]): Promise<number | undefined> {
   const source = await readJson(path.join(packageDir, VERIFICATIONS_FILE));
@@ -193,8 +198,7 @@ async function applyVerifierClaims(packageDir: string, entries: Loose[]): Promis
     return undefined;
   }
   const pending = entries.filter((entry) => object(entry.record.verification) === undefined);
-  const subjects = pending.map((entry) => ({ ...entry.record, id: text(entry.record.id) ?? `${entry.fallbackReviewer}#${entry.index + 1}`, reviewer: text(entry.record.reviewer) ?? entry.fallbackReviewer }) as unknown as StructuredReviewFinding);
-  const merged = mergeVerifications(subjects, claims, { mode: "annotate" });
+  const merged = mergeVerifications(asSubjects(pending), claims, { mode: "annotate" });
   merged.retained.forEach((finding, position) => {
     const entry = pending[position];
     if (entry !== undefined && finding.verification !== undefined) entry.record = { ...entry.record, verification: finding.verification };
@@ -203,10 +207,16 @@ async function applyVerifierClaims(packageDir: string, entries: Loose[]): Promis
 }
 
 /**
- * Premise claims the package holds, applied to the records that carry no premise yet (flow 459). A downgrade lowers the
- * severity the counts use; a held verdict takes the finding out of the open lists. Nothing is removed here either.
+ * Premise claims the package holds (flow 459), applied to RAW reviewer results only: a package with no findings.json yet.
+ * Once a round is ingested, findings.json is the one record of every finding's premise: ingest wrote it from the claims
+ * the merge accepted, and premises.json also keeps the ones it rejected. Re-applying the file to an ingested round would
+ * let a rejected claim, or a file left from an earlier ingest, hold a finding the flow gate and readiness see as open.
+ *
+ * Returns the number of findings that carry a premise afterwards, or `undefined` when the package holds no claims.
+ * A downgrade lowers the severity the counts use; a held verdict takes the finding out of the open lists. Nothing is
+ * removed here either.
  */
-async function applyPremiseClaims(packageDir: string, entries: Loose[]): Promise<number | undefined> {
+async function applyPremiseClaims(packageDir: string, entries: Loose[], ingested: boolean): Promise<number | undefined> {
   const source = await readJson(path.join(packageDir, PREMISES_FILE));
   if (source === undefined) return undefined;
   let parsed;
@@ -215,18 +225,19 @@ async function applyPremiseClaims(packageDir: string, entries: Loose[]): Promise
   } catch {
     return undefined;
   }
-  const pending = entries.filter((entry) => object(entry.record.premise) === undefined);
-  const subjects = pending.map((entry) => ({ ...entry.record, id: text(entry.record.id) ?? `${entry.fallbackReviewer}#${entry.index + 1}`, reviewer: text(entry.record.reviewer) ?? entry.fallbackReviewer }) as unknown as StructuredReviewFinding);
-  const merged = mergePremises(subjects, parsed);
+  if (ingested) return entries.filter((entry) => object(entry.record.premise) !== undefined).length;
+  const merged = mergePremises(asSubjects(entries), parsed);
   merged.findings.forEach((finding, position) => {
-    const entry = pending[position];
+    const entry = entries[position];
     if (entry !== undefined && finding.premise !== undefined) entry.record = { ...entry.record, severity: finding.severity, premise: finding.premise };
   });
-  return merged.counts.applied;
+  return merged.counts.upheld + merged.counts.downgraded + merged.counts.held;
 }
 
-export async function computeVerdict(packageDir: string, options: VerdictOptions = {}): Promise<InterimVerdict> {
-  const rawDir = options.rawDir ?? path.join(packageDir, "raw");
+/** The package's records as the verdict reads them, and the operator's premise answers that apply to them. */
+type VerdictRecords = { loose: Loose[]; raws: Awaited<ReturnType<typeof rawResults>>; useRound: boolean; verifierClaims: number | undefined; premiseClaims: number | undefined; decisions: PremiseQuestionDecision[] };
+
+async function verdictRecords(packageDir: string, rawDir: string): Promise<VerdictRecords> {
   const ingested = await readJson(path.join(packageDir, "findings.json"));
   const raws = await rawResults(rawDir);
   const useRound = Array.isArray(ingested);
@@ -242,7 +253,7 @@ export async function computeVerdict(packageDir: string, options: VerdictOptions
   }
 
   const verifierClaims = await applyVerifierClaims(packageDir, loose);
-  const premiseClaims = await applyPremiseClaims(packageDir, loose);
+  const premiseClaims = await applyPremiseClaims(packageDir, loose, useRound);
   // The operator's answers (`premise-question` decisions) land on the records before anything is classified: an
   // upheld finding is an ordinary open one again, a dismissed one is out with the operator's reason as its evidence.
   const decisions = await readPremiseDecisions(packageDir);
@@ -250,6 +261,21 @@ export async function computeVerdict(packageDir: string, options: VerdictOptions
     const applied = applyPremiseDecisions(loose.map((entry) => entry.record), decisions);
     loose.forEach((entry, position) => { entry.record = applied[position] as Record<string, unknown>; });
   }
+  return { loose, raws, useRound, verifierClaims, premiseClaims, decisions };
+}
+
+/**
+ * The records readiness item 11 (`premise-decisions`) checks, read exactly as the verdict reads them: findings.json once
+ * ingested, raw results with premises.json before that. One view, so the two never disagree on what is held.
+ */
+export async function premiseRecords(packageDir: string, options: VerdictOptions = {}): Promise<{ records: Array<Record<string, unknown>>; decisions: PremiseQuestionDecision[] }> {
+  const { loose, decisions } = await verdictRecords(packageDir, options.rawDir ?? path.join(packageDir, "raw"));
+  return { records: loose.map((entry) => entry.record), decisions };
+}
+
+export async function computeVerdict(packageDir: string, options: VerdictOptions = {}): Promise<InterimVerdict> {
+  const rawDir = options.rawDir ?? path.join(packageDir, "raw");
+  const { loose, raws, useRound, verifierClaims, premiseClaims, decisions } = await verdictRecords(packageDir, rawDir);
   const counts: Record<Severity, number> = { blocker: 0, major: 0, minor: 0, info: 0 };
   const open: VerdictFinding[] = [];
   const minors: VerdictFinding[] = [];
@@ -260,7 +286,7 @@ export async function computeVerdict(packageDir: string, options: VerdictOptions
   let dismissed = 0;
   let resolved = 0;
   for (const entry of loose) {
-    const { finding, state } = classify(entry);
+    const { finding, state } = classify(entry, decisions);
     if (state === "refuted") { refuted += 1; continue; }
     if (state === "dismissed") { dismissed += 1; continue; }
     if (state === "resolved") { resolved += 1; continue; }
@@ -328,7 +354,7 @@ export function renderVerdict(verdict: InterimVerdict, reviewId: string): string
   lines.push(`verified: ${verdict.verified}, unverified: ${verdict.unverified}`);
   lines.push(`excluded: ${verdict.refuted} refuted, ${verdict.dismissed} dismissed, ${verdict.resolved} acted on (fixed)`);
   if (verdict.verifierClaims !== undefined) lines.push(`verifier results applied: ${verdict.verifierClaims} claim(s) from ${VERIFICATIONS_FILE}`);
-  if (verdict.premiseClaims !== undefined) lines.push(`premise results applied: ${verdict.premiseClaims} claim(s) from ${PREMISES_FILE}`);
+  if (verdict.premiseClaims !== undefined) lines.push(`premise results: ${verdict.premiseClaims} finding(s) carry a premise judgement (${PREMISES_FILE})`);
   if (verdict.held.length > 0) lines.push(`awaiting operator: ${verdict.held.map((finding) => finding.id).join(", ")}`);
   if (verdict.source === "raw reviewer results" || verdict.pendingAmbiguous) lines.push(`raw results read from: ${verdict.rawDir}`);
   lines.push(`reviewers reported: ${verdict.reportedReviewers.length === 0 ? "none" : verdict.reportedReviewers.join(", ")}`);

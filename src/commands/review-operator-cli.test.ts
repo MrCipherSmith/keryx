@@ -4,7 +4,7 @@
 
 import { afterAll, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { isTrustRoutineCommand } from "../lib/trust-routine-command";
@@ -98,8 +98,12 @@ describe("decide-premise at a terminal", () => {
     expect(await runOperatorCommand("decide-premise", argv(dir), seams("agreed, keep it LTR", lines))).toBe(0);
     expect(lines.join("\n")).toContain("premise-question dismiss recorded for r1#LY-003");
     const [decision] = await readPremiseDecisions(dir);
-    expect(decision).toMatchObject({ kind: "premise-question", finding: "r1#LY-003", answer: "dismiss", reason: "platforms do not mirror media controls", confirmedVia: "terminal" });
+    expect(decision).toMatchObject({ kind: "premise-question", finding: "r1#LY-003", answer: "dismiss", reason: "platforms do not mirror media controls", quote: "agreed, keep it LTR", actor: "operator", confirmedVia: "terminal" });
+    expect(decision?.subject).toMatchObject({ severity: "major", verdict: "challenged" });
     expect((await readiness(dir))?.status).toBe("pass");
+    // The answer is on the finding record too, so the next round does not carry it as open.
+    const [record] = JSON.parse(readFileSync(path.join(dir, "findings.json"), "utf8")) as Array<{ disposition?: { state: string } }>;
+    expect(record?.disposition?.state).toBe("dismissed-incorrect");
     const verdict = await computeVerdict(dir);
     expect(verdict.held).toEqual([]);
     expect(verdict.dismissed).toBe(1);
@@ -112,6 +116,18 @@ describe("decide-premise at a terminal", () => {
     const verdict = await computeVerdict(dir);
     expect(verdict.held).toEqual([]);
     expect(verdict.open.map((entry) => [entry.id, entry.severity])).toEqual([["LY-003", "major"]]);
+  });
+
+  test("the prompt cleans the model-written problem and question as the card does, and ends with the effect", async () => {
+    const dir = heldPackage([{ ...heldFinding, problem: "timeline\u001b[2K\rFAKE: dismissed already\npinned", premise: { ...heldFinding.premise, question: "mirror\u001b]0;title\u0007 it?" } }]);
+    const asked: string[] = [];
+    const seam = { isTerminal: () => true, ask: async (question: string) => { asked.push(question); return "dismiss it"; }, cwd: repo, log: () => undefined };
+    expect(await runOperatorCommand("decide-premise", argv(dir), seam)).toBe(0);
+    const prompt = asked[0] ?? "";
+    // eslint-disable-next-line no-control-regex -- the point is that no control character reaches the terminal
+    expect(prompt).not.toMatch(/[\u0000-\u0008\u000b-\u001f\u007f]/);
+    expect(prompt).toContain("⏎");
+    expect(prompt).toMatch(/Answer: dismiss it as incorrect\? Type your own words/);
   });
 
   test("declining records nothing", async () => {

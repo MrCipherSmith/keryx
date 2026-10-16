@@ -396,9 +396,13 @@ describe("review_decide_premise", () => {
     expect(text).toContain("premise judge: challenged: Should the timeline mirror?");
     expect(text).toContain("reason: platforms do not mirror media controls");
     expect(result.isError).toBe(false);
-    expect(readJson("operator-decisions.json").decisions).toEqual([
-      { kind: "premise-question", finding: "pr7932-r1#LY-003", answer: "dismiss", reason: "platforms do not mirror media controls", at: NOW.toISOString(), actor: "operator", confirmedVia: "tui-card" },
-    ]);
+    const decisions = readJson("operator-decisions.json").decisions;
+    expect(decisions).toHaveLength(1);
+    expect(decisions[0]).toMatchObject({ kind: "premise-question", finding: "pr7932-r1#LY-003", answer: "dismiss", reason: "platforms do not mirror media controls", at: NOW.toISOString(), actor: "operator", confirmedVia: "tui-card" });
+    // The operator's words are the card they said yes to, as for the sibling decisions.
+    expect(decisions[0].quote).toContain(result.card[0]);
+    expect(decisions[0].subject).toMatchObject({ severity: "major", verdict: "challenged" });
+    expect(readJson("findings.json")[0].disposition.state).toBe("dismissed-incorrect");
     expect((await readiness())?.status).toBe("pass");
   });
 
@@ -437,5 +441,18 @@ describe("review_decide_premise", () => {
     const result = await t.invoke(input, { confirmationToken: card.token } as never);
     expect(result.isError).toBe(true);
     expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
+  });
+
+  test("a change to the problem or the judge's question after the card was shown also refuses", async () => {
+    for (const changed of [{ ...held, problem: "a different defect" }, { ...held, premise: { ...held.premise, question: "a different question?" } }]) {
+      makePackage();
+      const t = tool("review_decide_premise");
+      const input = { package: pkg, finding: "LY-003", answer: "dismiss", reason: "r" };
+      const card = asked(await ask(t, input));
+      put("findings.json", [changed]);
+      const result = await t.invoke(input, { confirmationToken: card.token } as never);
+      expect(result.isError).toBe(true);
+      expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
+    }
   });
 });

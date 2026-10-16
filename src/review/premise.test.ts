@@ -20,10 +20,14 @@ afterEach(async () => {
   while (roots.length > 0) await rm(roots.pop() as string, { recursive: true, force: true });
 });
 
+/** The global id of the finding every claim names by default, and of its sibling. */
+const GID = "2026-10-16-round#LY-003";
+const GID_4 = "2026-10-16-round#LY-004";
+
 function finding(over: Partial<StructuredReviewFinding> = {}): StructuredReviewFinding {
   return {
     id: "LY-003",
-    global_id: "2026-10-16-round#LY-003",
+    global_id: GID,
     reviewer: "review-layout",
     severity: "major",
     problem: "Playback slider pinned LTR: dir=\"ltr\" is hard-coded, so the timeline does not mirror in RTL",
@@ -41,7 +45,7 @@ const SIGNAL = { ref: "src/MediaPlaybackControls.tsx:81", says: "a sibling media
 const SOURCE = { name: "Material Design - Bidirectionality", says: "media playback controls and progress do not mirror" };
 
 function claim(over: Partial<PremiseClaimInput> = {}): PremiseClaimInput {
-  return { finding_id: "2026-10-16-round#LY-003", verdict: "upheld", ...over };
+  return { finding_id: GID, verdict: "upheld", ...over };
 }
 
 /** `judge: null` is a file that names no judge. */
@@ -50,13 +54,14 @@ function parsed(claims: PremiseClaimInput[], judge: string | null = "review-prem
 }
 
 const reasons = (result: { rejections: readonly { reason: PremiseRejectionReason }[] }): string[] => result.rejections.map((rejection) => rejection.reason);
+const first = (result: { findings: readonly unknown[] }): StructuredReviewFinding => result.findings[0] as StructuredReviewFinding;
 
 describe("verdicts", () => {
   test("upheld changes nothing about the finding but records the judgement", () => {
     const original = finding();
     const result = mergePremises([original], parsed([claim({ reasoning: "the request stands" })]));
     expect(result.rejections).toEqual([]);
-    const merged = result.findings[0] as StructuredReviewFinding;
+    const merged = first(result);
     expect({ ...merged, premise: undefined }).toEqual({ ...original, premise: undefined });
     expect(merged.premise).toEqual({ verdict: "upheld", judge: "review-premise", reasoning: "the request stands" });
     expect(result.counts).toMatchObject({ claims: 1, applied: 1, rejected: 0, upheld: 1, held: 0 });
@@ -65,7 +70,7 @@ describe("verdicts", () => {
   test("downgraded lowers the severity, keeps what the reviewer reported, and edits no text", () => {
     const original = finding();
     const result = mergePremises([original], parsed([claim({ verdict: "downgraded", severity: "minor", practice_sources: [SOURCE] })]));
-    const merged = result.findings[0] as StructuredReviewFinding;
+    const merged = first(result);
     expect(merged.severity).toBe("minor");
     expect(merged.premise).toMatchObject({ verdict: "downgraded", severity: "minor", practice_sources: [SOURCE], original_severity: "major" });
     expect({ ...merged, severity: original.severity, premise: undefined }).toEqual({ ...original, premise: undefined });
@@ -77,7 +82,7 @@ describe("verdicts", () => {
       [finding()],
       parsed([claim({ verdict: "challenged", intent_signals: [SIGNAL], practice_sources: [SOURCE], question: "Should the timeline mirror?" })]),
     );
-    const merged = result.findings[0] as StructuredReviewFinding;
+    const merged = first(result);
     expect(merged.severity).toBe("major");
     expect(merged.premise).toMatchObject({ verdict: "challenged", intent_signals: [SIGNAL], practice_sources: [SOURCE], question: "Should the timeline mirror?" });
     expect(result.counts).toMatchObject({ challenged: 1, held: 1 });
@@ -86,13 +91,13 @@ describe("verdicts", () => {
   test("owner-decision holds the finding with its options", () => {
     const options = ["uphold - mirror the timeline", "dismiss - keep LTR, as platforms do"];
     const result = mergePremises([finding()], parsed([claim({ verdict: "owner-decision", question: "Which?", options })]));
-    expect((result.findings[0] as StructuredReviewFinding).premise).toMatchObject({ verdict: "owner-decision", options });
+    expect(first(result).premise).toMatchObject({ verdict: "owner-decision", options });
     expect(result.counts).toMatchObject({ ownerDecision: 1, held: 1 });
   });
 
   test("a finding with no claim is returned untouched, and nothing is added or removed", () => {
     const first = finding();
-    const second = finding({ id: "LY-004", global_id: "2026-10-16-round#LY-004" });
+    const second = finding({ id: "LY-004", global_id: GID_4 });
     const result = mergePremises([first, second], parsed([claim({ verdict: "downgraded", severity: "minor", practice_sources: [SOURCE] })]));
     expect(result.findings).toHaveLength(2);
     expect(result.findings[1]).toBe(second);
@@ -159,7 +164,7 @@ describe("rejections, each of which leaves the finding as it was", () => {
   test("raise-severity: a downgrade that names a higher severity is rejected, and the severity stays", () => {
     const result = rejectedAlone([claim({ verdict: "downgraded", severity: "blocker" })]);
     expect(reasons(result)).toEqual(["raise-severity"]);
-    expect((result.findings[0] as StructuredReviewFinding).severity).toBe("major");
+    expect(first(result).severity).toBe("major");
   });
 
   test("not-a-downgrade: an equal severity, or none, is not a downgrade", () => {
@@ -173,13 +178,13 @@ describe("rejections, each of which leaves the finding as it was", () => {
     // the severity rubric alone; that is the reviewer's call, not the premise judge's.
     const result = rejectedAlone([claim({ verdict: "downgraded", severity: "minor", reasoning: "names no input that produces a wrong result today" })]);
     expect(reasons(result)).toEqual(["downgrade-without-evidence"]);
-    expect((result.findings[0] as StructuredReviewFinding).severity).toBe("major");
+    expect(first(result).severity).toBe("major");
   });
 
   test("downgrade-below-threshold: a downgrade stops at minor, so it never takes a finding out of the fix loop", () => {
     const result = rejectedAlone([claim({ verdict: "downgraded", severity: "info", practice_sources: [SOURCE] })]);
     expect(reasons(result)).toEqual(["downgrade-below-threshold"]);
-    expect((result.findings[0] as StructuredReviewFinding).severity).toBe("major");
+    expect(first(result).severity).toBe("major");
   });
 
   test("severity-without-downgrade: a severity next to any other verdict is a way to smuggle one in", () => {
@@ -250,15 +255,45 @@ describe("rejections, each of which leaves the finding as it was", () => {
   test("external findings: a challenge becomes a question and is never a dismissal; a machine does not re-grade a comment", () => {
     const external = finding({ source: "external", reviewer: "some-human", external_ref: { id: "review-comment:1", author: "some-human", url: "u", submitted_at: "t" } });
     const challenged = mergePremises([external], parsed([claim({ verdict: "challenged", question: "q", practice_sources: [SOURCE] })]));
-    expect((challenged.findings[0] as StructuredReviewFinding).premise?.verdict).toBe("challenged");
-    expect((challenged.findings[0] as StructuredReviewFinding).disposition).toBeUndefined();
+    expect(first(challenged).premise?.verdict).toBe("challenged");
+    expect(first(challenged).disposition).toBeUndefined();
     expect(reasons(rejectedAlone([claim({ verdict: "downgraded", severity: "minor", practice_sources: [SOURCE] })], { source: "external" }))).toEqual(["external-downgrade"]);
   });
 
-  test("a claim that is not an object is rejected by name, not thrown on", () => {
-    const file = parsePremiseClaims({ judge: "review-premise", premises: ["LY-003"] });
+  test("malformed-claim: an entry that is not an object is rejected by its position, not thrown on", () => {
+    const file = parsePremiseClaims({ judge: "review-premise", premises: [claim(), "LY-003"] });
     const result = mergePremises([finding()], file);
-    expect(reasons(result)).toEqual(["unknown-property"]);
+    expect(reasons(result)).toEqual(["malformed-claim"]);
+    expect(result.rejections[0]?.finding).toBe("premises[1]");
+    expect(result.rejections[0]?.detail).toContain("not an object");
+    expect(result.counts).toMatchObject({ claims: 2, applied: 1, rejected: 1 });
+  });
+
+  test("security-downgrade: a review-security-code finding may be held, never downgraded", () => {
+    const security = { reviewer: "review-security-code" };
+    expect(reasons(rejectedAlone([claim({ verdict: "downgraded", severity: "minor", intent_signals: [SIGNAL] })], security))).toEqual(["security-downgrade"]);
+    expect(reasons(rejectedAlone([claim({ verdict: "downgraded", severity: "minor", intent_signals: [SIGNAL] })], { reported_by: ["review-logic", "review-security-code"] }))).toEqual(["security-downgrade"]);
+    const held = mergePremises([finding(security)], parsed([claim({ verdict: "challenged", question: "q", intent_signals: [SIGNAL] })]));
+    expect(first(held).premise?.verdict).toBe("challenged");
+  });
+
+  test("a claim naming a key the duplicate merge absorbed targets the finding that survived it", () => {
+    const canonical = finding({ merged_from: ["2026-10-16-round#FE-001"] });
+    const result = mergePremises([canonical], parsed([claim({ finding_id: "2026-10-16-round#FE-001", verdict: "challenged", question: "q", practice_sources: [SOURCE] })]));
+    expect(result.rejections).toEqual([]);
+    expect(first(result).premise?.verdict).toBe("challenged");
+    // Two claims landing on the survivor (one by its own key, one by an absorbed key) cancel, as any duplicate does.
+    const both = mergePremises([canonical], parsed([claim(), claim({ finding_id: "2026-10-16-round#FE-001" })]));
+    expect(reasons(both)).toEqual(["duplicate-claim", "duplicate-claim"]);
+  });
+
+  test("a carried premise keeps the judgement but never an operator answer, and the finding's severity wins", () => {
+    const carried = finding({
+      severity: "minor",
+      premise: { verdict: "challenged", judge: "review-premise", question: "q", severity: "major", operator: { answer: "dismiss", reason: "r", quote: "q", at: "t", actor: "a", confirmedVia: "terminal" } },
+    });
+    const result = mergePremises([carried], undefined);
+    expect(first(result).premise).toEqual({ verdict: "challenged", judge: "review-premise", question: "q", severity: "minor" });
   });
 
   test("the claims the judge made are counted, applied plus rejected", () => {
@@ -291,17 +326,17 @@ describe("the claims file", () => {
 
   test("the model is recorded on each premise", () => {
     const result = mergePremises([finding()], { ...parsed([claim()]), model: "claude-opus" });
-    expect((result.findings[0] as StructuredReviewFinding).premise?.model).toBe("claude-opus");
+    expect(first(result).premise?.model).toBe("claude-opus");
   });
 });
 
 describe("scope.md block", () => {
   test("lists the held findings, the discarded claims and the counts", () => {
     const result = mergePremises(
-      [finding(), finding({ id: "LY-004", global_id: "2026-10-16-round#LY-004" })],
+      [finding(), finding({ id: "LY-004", global_id: GID_4 })],
       parsed([
         claim({ verdict: "challenged", intent_signals: [SIGNAL], question: "Should the timeline mirror?" }),
-        claim({ finding_id: "2026-10-16-round#LY-004", verdict: "downgraded", severity: "blocker" }),
+        claim({ finding_id: GID_4, verdict: "downgraded", severity: "blocker" }),
       ]),
     );
     const block = renderPremiseMarkdown({ counts: result.counts, rejections: result.rejections, findings: result.findings });
@@ -311,7 +346,7 @@ describe("scope.md block", () => {
     expect(block).toContain("premise_claims_rejected: 1");
     expect(block).toContain("premise_held: 1");
     expect(block).toContain("### Held for the operator (premise)");
-    expect(block).toContain("2026-10-16-round#LY-003");
+    expect(block).toContain(GID);
     expect(block).toContain("Should the timeline mirror?");
     expect(block).toContain("### Premise claims discarded");
     expect(block).toContain("raise-severity");
@@ -390,6 +425,18 @@ describe("the claims reach the review record", () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]?.premise?.verdict).toBe("challenged");
     expect(result.premise.held).toBe(1);
+  });
+
+  test("an operator answer arriving on an input finding is stripped: only the package's decisions store answers", async () => {
+    const carried = {
+      ...finding(),
+      global_id: ID,
+      class_scope: { sites: ["a"], enumeration_method: "grep" },
+      premise: { verdict: "challenged" as const, judge: "review-premise", question: "kept?", operator: { answer: "dismiss" as const, reason: "agent says so", quote: "q", at: "t", actor: "operator", confirmedVia: "terminal" as const } },
+    };
+    const { findings } = await ingest({ findings: [carried] });
+    expect(findings[0]?.premise).toMatchObject({ verdict: "challenged", question: "kept?" });
+    expect(findings[0]?.premise).not.toHaveProperty("operator");
   });
 
   test("a finding carried into a delta round keeps the premise it had", async () => {

@@ -1,28 +1,42 @@
-// Operator decisions that relax a review gate (flow 457, T7): `<package>/operator-decisions.json`.
+// Operator decisions in `<package>/operator-decisions.json`. Two record families share the file.
 //
-// A mutation waiver ("Not run: mutation pass" on an attended review) and a reviewer-set override (a smaller set than
-// `keryx review required` names, or mode diff) used to be accepted from any `operatorQuote` in the dispatch JSON —
-// which the agent writes. On a package stamped by `review start` (./run-profile.ts) the gate now accepts them only
-// when one of these records exists, and only two writers produce one: the `review_waive_mutation` /
-// `review_override_reviewers` cards in keryx shell (confirmedVia tui-card|remote-card), and `keryx review
-// waive-mutation|override-reviewers` at a terminal (confirmedVia terminal).
+// - Gate decisions (flow 457, T7) relax a review gate. A mutation waiver ("Not run: mutation pass" on an attended
+//   review) and a reviewer-set override (a smaller set than `keryx review required` names, or mode diff) used to be
+//   accepted from any `operatorQuote` in the dispatch JSON — which the agent writes. On a package stamped by `review
+//   start` (./run-profile.ts) the gate now accepts them only when one of these records exists, and only two writers
+//   produce one: the `review_waive_mutation` / `review_override_reviewers` cards in keryx shell (confirmedVia
+//   tui-card|remote-card), and `keryx review waive-mutation|override-reviewers` at a terminal (confirmedVia terminal).
+// - Premise answers (flow 459, kind `premise-question`) answer a finding the premise judge held. They relax nothing:
+//   `uphold` returns the finding to the fix, `dismiss` ends it. The same provenance applies: the two writers are the
+//   `review_decide_premise` card and `keryx review decide-premise`, each records how it was confirmed and the
+//   operator's own words, and the record is bound to the finding it was shown (`subject`).
+//
+// Every write is a read-modify-write of the whole file. An atomic rename stops a torn file, not a lost update, so the
+// read and the write run under one lock beside the file: two writers that overlap both land.
 
 import path from "node:path";
-import { writeFileAtomic } from "../lib/fs";
+import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import type { ConfirmedVia } from "./types";
 
 export const OPERATOR_DECISIONS_FILE = "operator-decisions.json";
+/** The lock directory serialising writes to {@link OPERATOR_DECISIONS_FILE} (and, for a premise answer, findings.json). */
+export const OPERATOR_DECISIONS_LOCK = ".operator-decisions.lock";
 
-export const OPERATOR_DECISION_KINDS = ["mutation-waiver", "reviewer-override", "premise-question"] as const;
-/** Every kind the file may hold. `premise-question` (flow 459) is a different record: see {@link PremiseQuestionDecision}. */
-export type AnyOperatorDecisionKind = (typeof OPERATOR_DECISION_KINDS)[number];
-/** The kinds that relax a gate and carry the quote/subject shape. */
-export type OperatorDecisionKind = Exclude<AnyOperatorDecisionKind, "premise-question">;
+/** The gate decisions: the kinds that relax a gate and carry the quote/subject shape of {@link OperatorDecision}. */
+export const OPERATOR_DECISION_KINDS = ["mutation-waiver", "reviewer-override"] as const;
+export type OperatorDecisionKind = (typeof OPERATOR_DECISION_KINDS)[number];
+/** The premise answer (flow 459): a different record, see {@link PremiseQuestionDecision}. */
+export const PREMISE_DECISION_KIND = "premise-question";
+/** Every kind the file may hold. */
+export type AnyOperatorDecisionKind = OperatorDecisionKind | typeof PREMISE_DECISION_KIND;
 
 /** How the operator's words reached the package: a shell card, its remote mirror, or a terminal prompt. */
 export type OperatorDecisionVia = ConfirmedVia | "terminal";
 const VIAS: readonly OperatorDecisionVia[] = ["tui-card", "remote-card", "terminal"];
+
+/** Who answers a premise question. Both writers record this one label; how it was confirmed is `confirmedVia`. */
+export const PREMISE_DECISION_ACTOR = "operator";
 
 /**
  * What the card or the terminal showed the operator (security review M4): the head the package was at, and the
@@ -42,44 +56,64 @@ export type OperatorDecision = {
 };
 
 /**
+ * What the operator was shown when answering a premise question: the finding's severity, the judge's verdict, and a
+ * hash of the finding's problem text. A decision counts only while the finding still matches it, so a re-ingest that
+ * reuses the id for a different finding (or changes its severity or verdict) needs the operator again.
+ */
+export type PremiseDecisionSubject = { severity: string; verdict: string; problemSha256: string };
+
+/**
  * The operator's answer to a held finding (flow 459): `keryx review decide-premise` / the `review_decide_premise` card.
  * `uphold` returns the finding to kept at its original severity; `dismiss` records `dismissed-incorrect` with `reason`
- * as the evidence. `finding` is the finding's `global_id` or `id`; `actor` is who answered.
+ * as the evidence. `finding` is the finding's `global_id` or `id`; `quote` is what the operator typed or confirmed.
  */
 export type PremiseQuestionDecision = {
-  kind: "premise-question";
+  kind: typeof PREMISE_DECISION_KIND;
   finding: string;
   answer: "uphold" | "dismiss";
   reason: string;
+  quote: string;
   at: string;
+  /** Always {@link PREMISE_DECISION_ACTOR}: a label, not an identity. */
   actor: string;
-  confirmedVia?: OperatorDecisionVia | undefined;
+  confirmedVia: OperatorDecisionVia;
+  subject: PremiseDecisionSubject;
 };
+
+/** What a writer passes: the store fills in the kind and the actor, so both writers record the same convention. */
+export type PremiseDecisionInput = Omit<PremiseQuestionDecision, "kind" | "actor">;
 
 export type OperatorDecisionsFile = { schemaVersion: 1; decisions: Array<OperatorDecision | PremiseQuestionDecision> };
 
 const text = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
 
+function validPremiseSubject(value: unknown): value is PremiseDecisionSubject {
+  if (value === null || typeof value !== "object") return false;
+  const subject = value as Record<string, unknown>;
+  return text(subject.severity) && text(subject.verdict) && text(subject.problemSha256);
+}
+
 function validPremise(entry: unknown): entry is PremiseQuestionDecision {
   if (entry === null || typeof entry !== "object") return false;
   const d = entry as Record<string, unknown>;
   return (
-    d.kind === "premise-question" &&
+    d.kind === PREMISE_DECISION_KIND &&
     text(d.finding) &&
     (d.answer === "uphold" || d.answer === "dismiss") &&
     text(d.reason) &&
+    text(d.quote) &&
     text(d.at) &&
     text(d.actor) &&
-    (d.confirmedVia === undefined || VIAS.includes(d.confirmedVia as OperatorDecisionVia))
+    VIAS.includes(d.confirmedVia as OperatorDecisionVia) &&
+    validPremiseSubject(d.subject)
   );
 }
 
-function valid(entry: unknown): entry is OperatorDecision {
+function validGateDecision(entry: unknown): entry is OperatorDecision {
   if (entry === null || typeof entry !== "object") return false;
   const d = entry as Record<string, unknown>;
   return (
     (OPERATOR_DECISION_KINDS as readonly unknown[]).includes(d.kind) &&
-    d.kind !== "premise-question" &&
     text(d.quote) &&
     text(d.reason) &&
     VIAS.includes(d.confirmedVia as OperatorDecisionVia) &&
@@ -88,39 +122,71 @@ function valid(entry: unknown): entry is OperatorDecision {
   );
 }
 
+function validDecision(entry: unknown): entry is OperatorDecision | PremiseQuestionDecision {
+  return validGateDecision(entry) || validPremise(entry);
+}
+
 async function readEntries(packageDir: string): Promise<unknown[]> {
   const file = await readJsonFileOr<unknown>(path.join(packageDir, OPERATOR_DECISIONS_FILE), undefined);
   return file !== null && typeof file === "object" && Array.isArray((file as { decisions?: unknown }).decisions) ? (file as { decisions: unknown[] }).decisions : [];
 }
 
-/** The gate-relaxing decisions (mutation waiver, reviewer override). A `premise-question` record is read by {@link readPremiseDecisions}. */
-export async function readOperatorDecisions(packageDir: string): Promise<OperatorDecision[]> {
-  return (await readEntries(packageDir)).filter(valid);
+/**
+ * Run `fn` holding the package's decisions lock. Not re-entrant: `fn` must not call a recorder in this module, which
+ * takes the lock itself.
+ */
+export async function withOperatorDecisionsLock<T>(packageDir: string, fn: () => Promise<T>): Promise<T> {
+  return withFileLock(path.join(packageDir, OPERATOR_DECISIONS_LOCK), fn);
 }
 
-/** The premise-question decisions the package holds, oldest first. */
+/** Append one entry, keeping every valid entry the file holds. The caller holds the lock. */
+async function appendDecision(packageDir: string, entry: OperatorDecision | PremiseQuestionDecision): Promise<void> {
+  // The whole valid file, both families: writing back only one kind would drop the other's entries.
+  const decisions = (await readEntries(packageDir)).filter(validDecision);
+  const body: OperatorDecisionsFile = { schemaVersion: 1, decisions: [...decisions, entry] };
+  await writeFileAtomic(path.join(packageDir, OPERATOR_DECISIONS_FILE), `${JSON.stringify(body, null, 2)}\n`);
+}
+
+/** The gate-relaxing decisions (mutation waiver, reviewer override). A `premise-question` record is read by {@link readPremiseDecisions}. */
+export async function readOperatorDecisions(packageDir: string): Promise<OperatorDecision[]> {
+  return (await readEntries(packageDir)).filter(validGateDecision);
+}
+
+/**
+ * The premise-question decisions the package holds, oldest first. Only a complete record counts: one without how it was
+ * confirmed, the operator's words or the subject it was shown is not an operator decision.
+ */
 export async function readPremiseDecisions(packageDir: string): Promise<PremiseQuestionDecision[]> {
   return (await readEntries(packageDir)).filter(validPremise);
 }
 
-/** The latest decision naming `finding` (its `global_id` or `id`), or undefined while the operator has not answered. */
-export function premiseDecisionFor(decisions: readonly PremiseQuestionDecision[], ...findingKeys: ReadonlyArray<string | undefined>): PremiseQuestionDecision | undefined {
-  const keys = new Set(findingKeys.filter((key): key is string => key !== undefined && key !== ""));
-  return decisions.filter((decision) => keys.has(decision.finding)).at(-1);
-}
-
-/** Whether the operator has answered the premise question of `finding`. */
-export async function hasPremiseDecision(packageDir: string, finding: string): Promise<boolean> {
-  return premiseDecisionFor(await readPremiseDecisions(packageDir), finding) !== undefined;
-}
-
-/** Appends a premise-question decision, keeping every other entry the file holds. The CLI command and the card (flow 459 lane L2) call this. */
-export async function recordPremiseDecision(packageDir: string, decision: PremiseQuestionDecision): Promise<PremiseQuestionDecision> {
-  if (!validPremise(decision)) throw new Error("a premise decision needs the finding, an answer of uphold or dismiss, a reason, the time and who answered");
-  const entries = (await readEntries(packageDir)).filter((entry) => valid(entry) || validPremise(entry));
-  const kept: PremiseQuestionDecision = { ...decision, finding: decision.finding.trim(), reason: decision.reason.trim() };
-  const body: OperatorDecisionsFile = { schemaVersion: 1, decisions: [...(entries as Array<OperatorDecision | PremiseQuestionDecision>), kept] };
-  await writeFileAtomic(path.join(packageDir, OPERATOR_DECISIONS_FILE), `${JSON.stringify(body, null, 2)}\n`);
+/**
+ * Appends a premise-question decision. `onRecorded` runs inside the same lock, after the decision is on disk: the answer
+ * command uses it to apply the answer to findings.json, so no other writer interleaves between the two files.
+ */
+export async function recordPremiseDecision(
+  packageDir: string,
+  input: PremiseDecisionInput,
+  onRecorded?: (decision: PremiseQuestionDecision) => Promise<void>,
+): Promise<PremiseQuestionDecision> {
+  const kept: PremiseQuestionDecision = {
+    kind: PREMISE_DECISION_KIND,
+    finding: typeof input.finding === "string" ? input.finding.trim() : input.finding,
+    answer: input.answer,
+    reason: typeof input.reason === "string" ? input.reason.trim() : input.reason,
+    quote: typeof input.quote === "string" ? input.quote.trim() : input.quote,
+    at: input.at,
+    actor: PREMISE_DECISION_ACTOR,
+    confirmedVia: input.confirmedVia,
+    subject: input.subject,
+  };
+  if (!validPremise(kept)) {
+    throw new Error("a premise decision needs the finding, an answer of uphold or dismiss, a reason, the operator's words, the time, how it was confirmed and the finding it was shown");
+  }
+  await withOperatorDecisionsLock(packageDir, async () => {
+    await appendDecision(packageDir, kept);
+    await onRecorded?.(kept);
+  });
   return kept;
 }
 
@@ -147,18 +213,16 @@ export async function confirmedDecision(packageDir: string, kind: OperatorDecisi
 }
 
 export async function recordOperatorDecision(packageDir: string, decision: OperatorDecision): Promise<OperatorDecision> {
-  if (!valid(decision)) throw new Error("an operator decision needs a kind, the operator's words, a reason, how it was confirmed and the time");
-  // The whole valid file, premise answers included: writing back only the gate decisions would drop an operator's answer.
-  const decisions = (await readEntries(packageDir)).filter((entry) => valid(entry) || validPremise(entry)) as Array<OperatorDecision | PremiseQuestionDecision>;
+  if (!validGateDecision(decision)) throw new Error("an operator decision needs a kind, the operator's words, a reason, how it was confirmed and the time");
   const subject = decision.subject === undefined ? undefined : { ...(decision.subject.head === undefined ? {} : { head: decision.subject.head }), items: [...new Set(decision.subject.items)].sort() };
-  const body: OperatorDecisionsFile = { schemaVersion: 1, decisions: [...decisions, { ...decision, quote: decision.quote.trim(), reason: decision.reason.trim(), ...(subject === undefined ? {} : { subject }) }] };
-  await writeFileAtomic(path.join(packageDir, OPERATOR_DECISIONS_FILE), `${JSON.stringify(body, null, 2)}\n`);
+  const entry: OperatorDecision = { ...decision, quote: decision.quote.trim(), reason: decision.reason.trim(), ...(subject === undefined ? {} : { subject }) };
+  await withOperatorDecisionsLock(packageDir, () => appendDecision(packageDir, entry));
   return decision;
 }
 
 /** The card or command that records `kind`, for a refusal to name. */
 export function decisionWriters(kind: AnyOperatorDecisionKind, packageArg = "<review-dir>"): string {
-  if (kind === "premise-question") {
+  if (kind === PREMISE_DECISION_KIND) {
     return `in keryx shell, call the review_decide_premise tool (the operator answers a card); in a terminal, run \`keryx review decide-premise --package ${packageArg} --finding <id> --answer uphold|dismiss --reason "<why>"\``;
   }
   return kind === "mutation-waiver"
