@@ -6,7 +6,7 @@
 // readiness, the round-to-round carry).
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -404,10 +404,9 @@ describe("findHeldFinding: the hold is the finding record's, never a raw claim",
     if (!lookup.ok) throw new Error(lookup.refusal);
     // A directory where the decisions file should be: the append fails after findings.json was rewritten.
     await mkdir(path.join(dir, OPERATOR_DECISIONS_FILE));
-    const inodeBefore = (await stat(path.join(dir, "findings.json"))).ino;
     await expect(answerPremiseQuestion(dir, { finding: lookup.finding, answer: "dismiss", reason: "r", quote: "dismiss it", at: "2026-10-16T12:00:00Z", confirmedVia: "terminal" })).rejects.toThrow();
-    // The rewrite did happen (an atomic write replaces the file, so the inode is new) and was then undone.
-    expect((await stat(path.join(dir, "findings.json"))).ino).not.toBe(inodeBefore);
+    // findings.json is back byte for byte. That the rewrite ran and was undone is the next test's: an inode check
+    // depends on the filesystem not reusing inodes, and Linux CI reuses them.
     expect(await readFile(path.join(dir, "findings.json"), "utf8")).toBe(original);
     // And the decision itself was not recorded: the store still holds no answer, so the finding is still awaiting.
     await rm(path.join(dir, OPERATOR_DECISIONS_FILE), { recursive: true });
