@@ -30,6 +30,10 @@ export { checkGraphStaleness, type StalenessCheck, type StalenessStatus } from "
 // `gdgraph/repomap.ts`.
 export { estimateTokens } from "./repomap";
 
+// Flow 457: the symbol-reach source readers and diff-hunk parser, re-exported so
+// `commands/review.ts`'s blast radius reaches them through this facade.
+export { gitSourceReader, parseDiffHunks, workingTreeSourceReader } from "./symbol-reach";
+
 export interface GdgraphService {
   build(cwd: string): Promise<{ nodes: number; edges: number; summaryPath: string }>;
   loadGraph(cwd: string): Promise<GraphData>;

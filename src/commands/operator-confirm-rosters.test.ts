@@ -13,8 +13,8 @@ import { operatorConfirmToolNames } from "./operator-confirm-tools";
 
 const NAMES = operatorConfirmToolNames();
 
-test("there are 13 operator card tools to keep out of the other rosters", () => {
-  expect(NAMES).toHaveLength(13);
+test("there are 17 operator card tools to keep out of the other rosters", () => {
+  expect(NAMES).toHaveLength(17);
 });
 
 test("the unattended exclusion list names exactly the registered operator card tools", () => {

@@ -1,0 +1,49 @@
+{
+  "pr": 424,
+  "round": 1,
+  "diff": "input.round1-be825deab.diff",
+  "reviewedHead": "be825deabcac4d1c71efcf5deb172300a2cb4072",
+  "reviewerModel": "opus",
+  "rawDir": "run/raw-opus",
+  "plan": {
+    "slices": 6, "deep": 2, "light": 4, "audit": 1, "auditSlice": "slice-03",
+    "waveBytes": 54000, "host": "claude-code",
+    "dispatchesPlanEval": 9, "dispatchesActual": 10,
+    "dispatchNote": "manifest deep slices also route review-regression, which plan-eval perRole omits (+1 dispatch)",
+    "oldPlanDispatches": 15, "reductionActual": 0.33, "reductionPlanEval": 0.4,
+    "verifierDispatches": 1,
+    "wallMinutes": { "reviewers": 5.2, "verification": 0.8, "total": 6.3 },
+    "wallNote": "reviewer wall time stretched by a shared 20-subagent concurrency cap (only 3 of 10 started at once)",
+    "tokensApprox": { "reviewers": 895000, "verifier": 81000 }
+  },
+  "recall": {
+    "truthPresent": ["R1-SEC-001","R1-SEC-002","R1-SEC-003","R1-ARCH-001","R1-ARCH-002","R1-LOGIC-001","R1-LOGIC-002","R1-LOGIC-003"],
+    "foundAnySeverity": {
+      "R1-SEC-001": "review-security-code SEC-2 (minor)",
+      "R1-ARCH-001": "review-logic-w1 LOGIC-4 (minor)",
+      "R1-ARCH-002": "partial: review-architecture-w1 ARCH-2 / review-logic-w1 LOGIC-7 / review-style-w1 STYLE-2 (minor), covering the untyped constraints carrier; base_branch and the CONTRACTS registry are not raised",
+      "R1-LOGIC-002": "review-architecture-w1 ARCH-1, review-logic-w1 LOGIC-3, review-logic-w2 LOGIC-2, review-style-w2 STYLE-2 (all minor)"
+    },
+    "foundAtMajorOrAbove": [],
+    "missed": {
+      "R1-SEC-002": "routing: the fix:true confirmation text is in light slice-04 (and slice-02), which carry no review-security-code role; security ran only on deep slices 03 and 05",
+      "R1-SEC-003": "reviewer miss: the check-input text is in deep slice-03, read by security and regression; they flagged the --source flag and the batch screen but not pass/warn/exit-0 or the Step 3 vs Step 9 contradiction",
+      "R1-LOGIC-001": "reviewer miss: slice-06 read by review-logic-w2 and review-testing-practices; TEST-1 flagged presence-only guards, an adjacent but different mechanism from Red Flags-row matching",
+      "R1-LOGIC-003": "reviewer miss: the needs-clarification text is in slices 03/04/05, all read by review-logic; not raised"
+    },
+    "recallAnySeverity": "4/8 (3 full + 1 partial)",
+    "recallAtMajor": "0/8"
+  },
+  "extras": [
+    { "id": "E1", "severity": "major", "sources": ["review-architecture-w2 ARCH-1", "review-logic-w1 LOGIC-2", "review-style-w1 STYLE-1"], "summary": "fix.flow_status enum (initialized|in_progress|...|failed) does not match FlowStatus (src/flow/types.ts); the skill's own in-progress stop fails it", "verdict": "confirmed" },
+    { "id": "E2", "severity": "major", "sources": ["review-logic-w1 LOGIC-1"], "summary": "comment_ids subset leaves excluded comments without a disposition; buildReplyPass throws on them, so --fix runs with comment_ids fail at Step 10", "verdict": "confirmed" },
+    { "id": "E3", "severity": "major", "sources": ["review-regression-w1 REG-1"], "summary": "new Step 2 BLOCKS any closed or merged PR unconditionally, including in analyze mode", "verdict": "confirmed" },
+    { "id": "E4", "severity": "major", "sources": ["review-regression-w1 REG-2"], "summary": "collector severity makes nits minor and holds the fix loop", "verdict": "refuted", "why": "plan membership comes from the Step 6 verdict; the minor-or-above exit applies to fix-PR review findings, not collected comment severity" }
+  ],
+  "extrasConfirmed": 3, "extrasRefuted": 1, "extrasUnverifiable": 0, "precision": 0.75,
+  "verdict": {
+    "knownDefects": "worse: the historical round raised all 8 R1 findings at major; the new plan surfaces 4/8 (one partial), all at minor, 0/8 at major",
+    "confirmedExtras": "better: 3 confirmed new major findings not in truth",
+    "overall": "worse on known defects, better on confirmed extras, at 10 dispatches vs 15"
+  }
+}

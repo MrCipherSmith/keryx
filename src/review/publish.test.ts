@@ -6,8 +6,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
-import { partialPublishHeader, publishReview, reviewEvent, type PostResult, type ReviewEvent } from "./publish";
+import { mentionsFindingId, minorSection, partialPublishHeader, PUBLISHED_BODY_LIMIT, publishReview, reviewEvent, type PostResult, type ReviewEvent } from "./publish";
 import { computeReadiness } from "./readiness";
+import type { VerdictFinding } from "./verdict";
+
+const minor = (id: string, problem = "a small thing"): VerdictFinding => ({ id, reviewer: "review-style", severity: "minor", problem, location: "src/a.ts:1", verification: "none" });
 
 const PR = "https://github.com/Presight-AI/vantage-frontend/pull/7932";
 
@@ -126,6 +129,30 @@ describe("publishReview", () => {
     await expect(publishReview(pkg, { post: io.post, confirm: io.confirm })).rejects.toThrow(/not bound to a pull request/);
   });
 
+  test("round-2 m4: a report names a minor by its whole id, so F-12 does not hide F-1", () => {
+    expect(mentionsFindingId("see F-12 and XF-1", "F-1")).toBe(false);
+    expect(mentionsFindingId("fixed F-1.", "F-1")).toBe(true);
+    expect(mentionsFindingId("(review-logic#F-1)", "review-logic#F-1")).toBe(true);
+    const section = minorSection([minor("F-1"), minor("F-12")], "We addressed F-12.");
+    expect(section).toContain("- F-1 ");
+    expect(section).not.toContain("- F-12 ");
+  });
+
+  test("round-2 m2: the minor section fits its budget and counts what it cut", () => {
+    const minors = Array.from({ length: 2000 }, (_, i) => minor(`F-${i}`, "x".repeat(80)));
+    const section = minorSection(minors, "report");
+    expect(section.length).toBeLessThanOrEqual(PUBLISHED_BODY_LIMIT);
+    expect(section).toMatch(/- … \d+ more minor finding\(s\) — see verdict-interim\.md \/ `keryx review verdict`\n$/);
+    const listed = section.split("\n").filter((line) => line.startsWith("- F-")).length;
+    expect(section).toContain(`${2000 - listed} more minor finding(s)`);
+    expect(minorSection(minors.slice(0, 2), "report")).not.toContain("more minor finding");
+    const tight = minorSection(minors, "report", 300);
+    expect(tight.length).toBeLessThanOrEqual(300);
+    expect(tight).toContain("more minor finding(s)");
+    expect(minorSection(minors, "report", 10)).toBe("");
+    expect(minorSection([], "report")).toBe("");
+  });
+
   test("the event is one of the three GitHub knows", () => {
     expect(reviewEvent(undefined)).toBe("COMMENT");
     expect(reviewEvent("request_changes")).toBe("REQUEST_CHANGES");
@@ -150,11 +177,29 @@ describe("keryx review publish", () => {
 
   test("prints the body before it posts, and posts it once the operator's --yes is on the command", async () => {
     makePackage({ ready: true });
-    const { io, output } = await publish(["--yes", "--event", "COMMENT"]);
+    const { io, output } = await publish(["--yes", "--event", "COMMENT"], { isTerminal: () => true });
     expect(output.indexOf("--- review body")).toBeGreaterThanOrEqual(0);
     expect(output.indexOf("Request changes.")).toBeLessThan(output.indexOf("published: COMMENT"));
     expect(io.posts).toHaveLength(1);
     expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  test("flow 457: --yes without a terminal (and outside the autonomous runner) is refused, naming the card", async () => {
+    makePackage({ ready: true });
+    process.chdir(root);
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (...parts: unknown[]) => void errors.push(parts.join(" "));
+    try {
+      const io = seams();
+      await reviewCommand(["publish", "pr7932-r1", "--yes"], { isTerminal: () => false, postReview: io.post, prLookup: async () => null, prFiles: async () => null });
+      expect(io.posts).toEqual([]);
+    } finally {
+      console.error = original;
+    }
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("review_publish");
+    process.exitCode = 0;
   });
 
   test("without a terminal and without --yes it shows the body and does not post", async () => {
@@ -175,7 +220,7 @@ describe("keryx review publish", () => {
     console.error = (...parts: unknown[]) => void errors.push(parts.join(" "));
     try {
       const io = seams();
-      await reviewCommand(["publish", "pr7932-r1", "--yes"], { isTerminal: () => false, postReview: io.post, prLookup: async () => null, prFiles: async () => null });
+      await reviewCommand(["publish", "pr7932-r1", "--yes"], { isTerminal: () => true, postReview: io.post, prLookup: async () => null, prFiles: async () => null });
       expect(io.posts).toEqual([]);
     } finally {
       console.error = original;
@@ -183,7 +228,7 @@ describe("keryx review publish", () => {
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("verifier");
     process.exitCode = 0;
-    const { io } = await publish(["--partial", "--yes"]);
+    const { io } = await publish(["--partial", "--yes"], { isTerminal: () => true });
     expect(io.posts).toHaveLength(1);
     expect(io.posts[0]!.body.startsWith("**Partial review.**")).toBe(true);
   });

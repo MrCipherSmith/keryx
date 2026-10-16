@@ -168,6 +168,7 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "reviewers",
       "required",
       "estimate",
+      "plan-eval",
       "compare-reference",
       "mutate",
       "severity-audit",
@@ -180,6 +181,11 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "publish",
       "complete",
       "lightweight",
+      // commands/review-operator.ts OPERATOR_COMMANDS (flow 457)
+      "waive-mutation",
+      "override-reviewers",
+      "confirm-plan",
+      "verify-run",
     ],
   ],
   // commands/rules.ts:49 (`sync` | `distill`), :106

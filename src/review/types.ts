@@ -120,6 +120,11 @@ export type ManagedReviewManifest = {
   /** Readiness items waived by the operator; each also heads report.md as a "Partial review" line. */
   readiness_waivers?: ReadinessWaiver[] | undefined;
   /**
+   * Flow 457: the operator-gate version `review start|attach` created the package with (see review/run-profile.ts).
+   * Absent on ingest packages and on packages that predate the gate.
+   */
+  operatorGate?: number | undefined;
+  /**
    * Fields the ingest supplied rather than the reviewer authoring them.
    * Written only when something was repaired — see
    * {@link module:review/repair}.

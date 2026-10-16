@@ -19,6 +19,11 @@ import { classifyToolCall, ORCHESTRATOR_LOG, TOOL_LOG_DIR } from "./layers-usage
 export const ENV_REVIEW_CALLER = "KERYX_REVIEW_CALLER";
 /** Set where a keryx layer has already recorded the call it is about to run, so the CLI or MCP process does not record it again. */
 export const ENV_REVIEW_RECORDED = "KERYX_REVIEW_RECORDED";
+/**
+ * Flow 457: the caller token `review start` wrote into the active-review pointer. A host that can set env on the
+ * orchestrator's commands exports it; a CLI or MCP call that carries the pointer's token is the orchestrator's.
+ */
+export const ENV_REVIEW_CALLER_TOKEN = "KERYX_REVIEW_CALLER_TOKEN";
 
 export const CALLER_ORCHESTRATOR = "orchestrator";
 export const CALLER_UNATTRIBUTED = "unattributed";
@@ -129,12 +134,12 @@ export async function recordLogStart(packageDir: string, options: { now?: Date; 
  * `review start|attach`: writes the log's first line and points the project at the package, so every keryx layer
  * that sees a memory call from now until `review complete` knows where to put it. Never throws.
  */
-export async function startOrchestratorLog(cwd: string, reviewId: string, packagePath: string): Promise<boolean> {
+export async function startOrchestratorLog(cwd: string, reviewId: string, packagePath: string, callerToken?: string): Promise<boolean> {
   try {
     const root = resolveProjectRoot(cwd);
     const dir = path.resolve(cwd, packagePath);
     await recordLogStart(dir);
-    return await writeActiveReview(root, { id: reviewId, dir });
+    return await writeActiveReview(root, { id: reviewId, dir, callerToken });
   } catch {
     return false;
   }
@@ -144,12 +149,17 @@ export async function startOrchestratorLog(cwd: string, reviewId: string, packag
 export async function recordActiveCall(
   startDir: string,
   entry: OrchestratorLogEntry,
-  options: { warn?: (line: string) => void } = {},
+  options: { warn?: (line: string) => void; callerToken?: string | undefined } = {},
 ): Promise<boolean> {
   try {
     const active = await resolveActiveReview(resolveProjectRoot(startDir));
     if (active === undefined) return false;
-    return await recordOrchestratorCall(active.dir, entry, options);
+    // A call that carries the review's own token is the orchestrator's, whatever caller the process could name.
+    const attributed =
+      entry.caller === CALLER_UNATTRIBUTED && options.callerToken !== undefined && active.callerToken !== undefined && options.callerToken === active.callerToken
+        ? { ...entry, caller: CALLER_ORCHESTRATOR }
+        : entry;
+    return await recordOrchestratorCall(active.dir, attributed, options);
   } catch {
     return false;
   }
@@ -171,7 +181,8 @@ export async function recordProcessCall(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<boolean> {
   if (env[ENV_REVIEW_RECORDED] === "1") return false;
-  return recordActiveCall(startDir, { ...entry, caller: callerFromEnv(env) });
+  const token = env[ENV_REVIEW_CALLER_TOKEN]?.trim();
+  return recordActiveCall(startDir, { ...entry, caller: callerFromEnv(env) }, token === undefined || token === "" ? {} : { callerToken: token });
 }
 
 /** The id a review child is recorded under: its label, or its worker id when the label is empty or collides with a reserved caller. */

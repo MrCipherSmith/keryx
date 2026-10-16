@@ -68,6 +68,14 @@ Every other bypass in TM-03 §5 still applies.
 - **A long card is not answered remotely.** A card the topic would cut gets no remote buttons. The topic is told the card is too long and must be answered in the shell, where the dialog still answers it.
 - **A nested shell refuses every card.** A keryx started from an agent's `shell_exec` carries `KERYX_TOOL_CALL=1`; an agent can type into it through a pseudo-terminal. Such a shell refuses every operator card tool, not only schedules.
 
+## 4c. Threat model of the review operator gates (flow 457)
+
+The review gates flow 457 added (the review cards, the terminal-only CLI paths, the plan confirmation and the operator-decision records) are aimed at a cooperating agent. They stop it from cutting corners on its own say (waiving the mutation pass, narrowing the reviewer set, running an over-threshold plan) and make every such decision visible in the package and attributable to a card or a terminal.
+
+They do not stop a hostile agent running as the same user. Such an agent can fake a terminal with a pseudo-terminal, or write the JSON records (operator decisions, plan confirmation, run profile) directly. That is the same boundary TM-03 §5 and §4 above state, not a new one.
+
+The package manifest carries the operator-gate stamp that `review start|attach` writes, so deleting `run-profile.json` does not make a package read as pre-457: a stamped package without its run profile is refused. The autonomous runner's exemption from the mutation gate (`src/review/coverage.ts`, `mutationErrors`) predates flow 457 and is kept on purpose: nobody is at the keyboard there to waive anything.
+
 ## 5. Why child-process proofs were rejected
 
 The first idea was to let the CLI accept an environment variable, a file or a socket that proves "the shell's operator said yes", so the existing commands could stay the only implementation. It was rejected. `shell_exec` runs whatever command line the model writes, in an environment the model controls (`sh -c`), as a user who can read and write everything the operator can. Anything handed to that child can be read, copied or replayed by the model, so the proof would prove only that the model ran the command.

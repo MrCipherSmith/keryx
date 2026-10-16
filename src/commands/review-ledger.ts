@@ -9,8 +9,10 @@ import { SLICE_MANIFEST_COPY } from "../review/coverage-complete";
 import { readToolLog } from "../review/layers-usage";
 import { pendingMutants } from "../review/mutate";
 import { type Disposition, type LedgerGap, type RawFile, buildLedger, followUpsOf, isEmptyOutput, isReviewerResult, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
-import { type RetryState, emptyRetryState, readSliceIds, scopeFingerprint } from "../review/retry-plan";
-import type { SliceManifest } from "../review/slice";
+import { type RetryState, applyEscalations, emptyRetryState, escalationsFor, readSliceIds, scopeFingerprint } from "../review/retry-plan";
+import { narrowedSlices, packageRoutingRefusal, routingRefusal, sliceTextReader } from "../review/routing-check";
+import { type SliceManifest, manifestSizeProblem } from "../review/slice";
+import { packagePlanGate } from "../review/estimate";
 
 export const LEDGER_FLAGS = ["--package", "--mode", "--findings", "--dispositions", "--out", "--dry-run", "--json", "--help", "-h"] as const;
 const VALUE_FLAGS = new Set(["--package", "--mode", "--findings", "--dispositions", "--out"]);
@@ -18,13 +20,14 @@ const VALUE_FLAGS = new Set(["--package", "--mode", "--findings", "--disposition
 export function printLedgerHelp(): void {
   console.log(`keryx review ledger build — usage:
 
-  keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff]
+  keryx review ledger build [<input-dir>] [--package <review-dir>] [--mode all|diff]
                             [--findings <findings.json>] [--dispositions <file>]
                             [--out <research.json>] [--dry-run] [--json]
 
 Builds the research ledger \`keryx review ingest --research\` and \`complete\` demand, from
 files only. <input-dir> holds raw/*.txt (reviewer replies), drivers/*.json and
-slices/manifest.json; --package (default: <input-dir> when it holds scope-files.json) holds
+slices/manifest.json, and defaults to --package (each review keeps its own raw/ and drivers/; the
+shared .metaproject/data/review is read only when named); --package (default: <input-dir> when it holds scope-files.json) holds
 scope-files.json, findings.json and retry-state.json. Writes research.json there (--out).
 
 Per required reviewer: the latest raw result decides. DONE / DONE_WITH_CONCERNS with no open
@@ -213,8 +216,10 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   if (args[0] !== "build") throw new Error(`Unknown ledger subcommand "${args[0]}". See \`keryx review ledger --help\`.`);
   const rest = args.slice(1);
   deps.rejectUnknownFlags(rest, LEDGER_FLAGS, "ledger build");
-  const target = positional(rest);
-  if (target === undefined) throw new Error("Missing <input-dir>. See `keryx review ledger --help`.");
+  // Flow 457 (T7, audit row 11): the input directory defaults to the package itself (<package>/raw, drivers, slices),
+  // so one review never reads another's replies; the shared .metaproject/data/review is used only when named.
+  const target = positional(rest) ?? optionValue(rest, "--package");
+  if (target === undefined) throw new Error("Missing <input-dir> (or --package <review-dir>, whose raw/ is then the input). See `keryx review ledger --help`.");
   const inputDir = path.resolve(target);
   if (!existsSync(path.join(inputDir, "raw"))) throw new Error(`${inputDir} has no raw/ directory; pass the review input directory.`);
   const packageArg = optionValue(rest, "--package");
@@ -226,7 +231,21 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   const root = projectRootOfPackage(packageDir);
   const files = await packageScopeFiles(packageDir);
   const manifestPath = path.join(inputDir, "slices", "manifest.json");
-  const manifest = await readJson<SliceManifest>(manifestPath);
+  let manifest = await readJson<SliceManifest>(manifestPath);
+  const manifestLabel = path.relative(process.cwd(), manifestPath) || manifestPath;
+  if (manifest !== undefined) {
+    const unsized = manifestSizeProblem(manifest);
+    if (unsized !== undefined) throw new Error(`${manifestLabel}: ${unsized}`);
+    // Security review M3: the recorded routing may only be wider than what each slice's own text needs.
+    const routing = narrowedSlices(manifest, sliceTextReader(path.dirname(manifestPath)));
+    const narrowed = routingRefusal(manifestLabel, routing.narrowed);
+    if (narrowed !== undefined) throw new Error(`ledger build refused: ${narrowed}`);
+  }
+  // Round-2 m3: the package's own slice manifest is checked too, not only the input directory's.
+  if (inputDir !== packageDir || manifest === undefined) {
+    const ownRouting = packageRoutingRefusal(packageDir, root);
+    if (ownRouting !== undefined) throw new Error(`ledger build refused: ${ownRouting}`);
+  }
   if (manifest !== undefined) for (const entry of manifest.slices) {
     const hash = await readFile(path.resolve(path.dirname(manifestPath), entry.path))
       .then((body) => createHash("sha256").update(body).digest("hex")).catch(() => undefined);
@@ -248,6 +267,21 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   const { raws, ignored, setAside } = await loadRaws(inputDir, { files: replies.files, reviewers: [...new Set([...replies.reviewers, ...required.required])] });
 
   assignRawDispatch(raws, assignments);
+  // Security review M5: a major-or-worse finding on a light slice re-opens it deep here too, not only through
+  // `retry-plan --result`: a result collected late, or never handed to retry-plan, still escalates its slice.
+  if (manifest !== undefined) {
+    const escalations = raws.flatMap((raw) => (raw.result?.reviewer === undefined ? [] : escalationsFor(manifest!, raw.result.reviewer, raw.result.findings, raw.assignedSlices ?? [])));
+    const unique = [...new Map(escalations.map((entry) => [entry.slice, entry])).values()];
+    if (unique.length > 0) {
+      manifest = applyEscalations(manifest, unique);
+      for (const item of unique) console.error(`escalate ${item.slice}: ${item.severity} finding ${item.finding} from ${item.by} on a light slice; it is re-opened deep and every core role now owns it`);
+      if (!rest.includes("--dry-run")) await writeFileAtomic(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    }
+  }
+  // The plan the round ran: over the operator threshold it needs a recorded confirmation before it can be closed. With
+  // no manifest in the input directory the package's own (or the shared one it was sliced into) is estimated.
+  const plan = await packagePlanGate(packageDir, manifest === undefined ? {} : { manifest: manifestPath, manifestValue: manifest });
+  if (plan.refusal !== undefined) throw new Error(`ledger build refused: ${plan.refusal}`);
   const toolLogs: Record<string, string | undefined> = {};
   for (const reviewer of required.required) toolLogs[reviewer] = await readToolLog(inputDir, reviewer, toolLogPaths[reviewer]);
   const { ledger, gaps } = buildLedger({

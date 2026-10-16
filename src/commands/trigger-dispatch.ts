@@ -633,6 +633,11 @@ async function dispatchLocked(
     );
   }
 
+  // Flow 457 (security review B1): a review task takes the same path as every other task below: containment,
+  // spend reservation and attempt record first. It is NOT handed to the autonomous review runner, which would run
+  // in the real project root, with no budget and no attempt. An unattended agent cannot dispatch reviewers, so a
+  // review task ends blocked here, as before flow 457.
+
   // --- 3. containment (AC13, and flow 301 AC12) — decided before anything is written --
   // Flow 301 (AC12): every run's worktree lives under one 0700 parent, and that parent
   // is hidden inside the sandbox below — the same protection `agentTaskScratchParent`/

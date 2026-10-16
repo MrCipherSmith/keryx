@@ -40,7 +40,8 @@ import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/co
 import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR, BaselineError, SCRATCH_MODES, type ScratchMode } from "../review/mutate";
 import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
 import { DEPTH_REQUESTS, ROUND_DEPTH_FILE, decideRoundDepth, packageChangedLines, packageDepthBasis, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, type DepthRequest } from "../review/coverage";
-import { estimatePackage, renderEstimate } from "../review/estimate";
+import { CONFIRM_PLAN_TOOL, estimatePackage, planConfirmationFor, planConfirmed, renderEstimate, writePlanConfirmation } from "../review/estimate";
+import { printPlanEvalHelp, runPlanEval } from "./review-plan-eval";
 import { FIRST_FILES } from "../review/coverage-complete";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
@@ -56,10 +57,20 @@ import { runJevRisk } from "./review-jev-risk";
 import { printLedgerHelp, runLedger } from "./review-ledger";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { guardReviewPaths } from "../lib/review-path-flags";
-import { startOrchestratorLog } from "../review/orchestrator-log";
+import { ENV_REVIEW_CALLER_TOKEN, startOrchestratorLog } from "../review/orchestrator-log";
+import { parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
+import { defaultBundledReviewRoot, renderSkillDrift, reviewSkillDrift } from "../review/skill-drift";
+import { buildRunProfile, runProfileRefusal, unattendedStartRefusal, writeRunProfile } from "../review/run-profile";
+import { promoteParentExecutions } from "../review/verify-run";
+import { packageRoutingRefusal } from "../review/routing-check";
+import { OPERATOR_COMMANDS, printOperatorCommandHelp, runOperatorCommand, type OperatorCommand } from "./review-operator";
 import { printChunksHelp, printCoverageHelp, runChunks, runCoverage } from "./review-chunks";
 import { ensurePackageLayers, printLayersHelp, resolvePackageDir, runLayers } from "./review-layers";
 import { PackageGraphError, loadPackageGraph, readLayers } from "../review/layers";
+import { changedFilesArgv, radiusDiffArgv, radiusRange } from "../review/radius-range";
+import { findTextLinks, gitGrepSearcher, ripgrepSearcher } from "../review/text-links";
+import { detectTestCommand, writeTestsToRun } from "../review/tests-to-run";
+import { gitSourceReader, parseDiffHunks, workingTreeSourceReader } from "../gdgraph/service";
 import { keryxSelfCommand } from "../harness/tool/builtin/metaproject-tools";
 import { shellWord } from "../lib/shell-quote";
 import { layersSummaryLine } from "../review/layers-view";
@@ -126,6 +137,7 @@ import { EXTERNAL_DEFAULT_NOTICE_TEXT, shouldShowExternalDefaultNotice } from ".
 import {
   blastRadiusRecomputeDecision,
   computeBlastRadius,
+  testsToRunLine,
   DEFAULT_BLAST_RADIUS_DEPTH,
   DEFAULT_BLAST_RADIUS_MAX_FILES,
   renderBlastRadiusDispatchBrief,
@@ -329,6 +341,11 @@ export const CREATE_FLAGS = [
   "--memory-query",
   "--graph-timeout",
   AUTOMATIC_REVIEW_FLAG,
+  // Flow 457 (T7): `start|attach` record how the round runs in <package>/run-profile.json. --unattended: nobody is at
+  // the keyboard, so an unrun mutation pass is recorded as not run instead of refused. --host: the agent host
+  // (keryx-shell, claude-code, codex, other); default detected from the environment.
+  "--unattended",
+  "--host",
 ] as const;
 
 const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers", "--full"] as const;
@@ -512,6 +529,8 @@ const BLAST_RADIUS_FLAGS = [
   "--brief",
   "--out",
   "--package",
+  "--reach",
+  "--no-text-links",
 ] as const;
 
 const TIER_FLAGS = [
@@ -540,7 +559,7 @@ const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-
 const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
 const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
 export const REQUIRED_FLAGS = ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--package", "--json"] as const;
-export const ESTIMATE_FLAGS = ["--package", "--manifest", "--json"] as const;
+export const ESTIMATE_FLAGS = ["--package", "--manifest", "--confirm", "--quote", "--json"] as const;
 const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
 /**
@@ -613,11 +632,11 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
 
   try {
     if (command === "attach") {
-      await runCreate("attach-review", args.slice(1));
+      await runCreate("attach-review", args.slice(1), seams);
       return;
     }
     if (command === "start") {
-      await runCreate("review-flow", args.slice(1));
+      await runCreate("review-flow", args.slice(1), seams);
       return;
     }
     if (command === "ingest") {
@@ -681,7 +700,7 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       return;
     }
     if (command === "comments") {
-      await runComments(args.slice(1));
+      await runComments(args.slice(1), seams);
       return;
     }
     if (command === "ci-triage") {
@@ -786,7 +805,11 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       return;
     }
     if (command === "estimate") {
-      await runEstimate(args.slice(1));
+      await runEstimate(args.slice(1), seams);
+      return;
+    }
+    if (command === "plan-eval") {
+      await runPlanEval(args.slice(1), { rejectUnknownFlags });
       return;
     }
     if (command === "mutate") {
@@ -824,6 +847,11 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     }
     if (command === "complete") {
       await runComplete(args.slice(1), seams);
+      return;
+    }
+    if ((OPERATOR_COMMANDS as readonly string[]).includes(command)) {
+      const code = await runOperatorCommand(command as OperatorCommand, args.slice(1), seams?.isTerminal === undefined ? {} : { isTerminal: seams.isTerminal });
+      if (code !== 0) process.exitCode = code;
       return;
     }
     if (command === "lightweight") {
@@ -929,7 +957,7 @@ export async function refreshCreatedPackageLayers(
   }
 }
 
-async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void> {
+async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: ReviewCommandSeams = {}): Promise<void> {
   rejectUnknownFlags(args, CREATE_FLAGS, mode === "ingest" ? "ingest" : mode === "review-flow" ? "start" : "attach");
   const targetKind = targetKindFromArgs(mode, args);
   const targetRef = optionValue(args, "--ref") ?? optionValue(args, "--target-ref");
@@ -938,6 +966,13 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   }
   const reviewers = optionValue(args, "--reviewers")?.split(",").map((item) => item.trim()).filter(Boolean);
   const graphTimeout = parseGraphTimeout(optionValue(args, "--graph-timeout"));
+  const hostArg = optionValue(args, "--host");
+  if (hostArg !== undefined && parseReviewHost(hostArg) === undefined) throw new Error(`--host must be one of ${REVIEW_HOSTS.join(", ")}, got "${hostArg}"`);
+  const unattendedRefusal = unattendedStartRefusal({
+    unattended: mode !== "ingest" && args.includes("--unattended"),
+    isTerminal: createSeams.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true),
+  });
+  if (unattendedRefusal !== undefined) throw new Error(unattendedRefusal);
   const cwd = process.cwd();
   const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
   const input: ManagedReviewIngestInput = {
@@ -951,7 +986,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     reviewers,
     reportPath: optionValue(args, "--report"),
     refuted: await readRefuted(optionValue(args, "--refuted")),
-    verifications: await readVerifications(optionValue(args, "--verifications")),
+    verifications: await readVerifications(optionValue(args, "--verifications"), optionValue(args, "--review-id")),
     research: optionValue(args, "--research") ? JSON.parse(await readFile(path.resolve(cwd, optionValue(args, "--research")!), "utf8")) : undefined,
     verificationMode: parseVerificationMode(optionValue(args, "--verification-mode")),
     scope: await readScope(optionValue(args, "--scope")),
@@ -978,7 +1013,14 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   console.log(`status: ${result.manifest.status}`);
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
-  if (mode !== "ingest") await startOrchestratorLog(cwd, result.reviewId, result.path);
+  if (mode !== "ingest") {
+    const profile = buildRunProfile({ unattended: args.includes("--unattended"), host: hostArg });
+    await writeRunProfile(result.path, profile, { stampManifest: true });
+    await startOrchestratorLog(cwd, result.reviewId, result.path, profile.callerToken);
+    console.log(`run mode: ${profile.mode} (${profile.declaredVia}), host ${profile.host}`);
+    console.log(`caller token: export ${ENV_REVIEW_CALLER_TOKEN}=${profile.callerToken} on this session's keryx calls so the readiness check can attribute them`);
+    for (const line of renderSkillDrift(reviewSkillDrift({ projectRoot: resolveProjectRoot(cwd), bundledRoot: defaultBundledReviewRoot() }))) console.error(line);
+  }
   await refreshCreatedPackageLayers(result.path, result.manifest.target.head, cwd, { timeoutSeconds: graphTimeout });
   const startRadius = input.blastRadius as { dropped?: unknown } | undefined;
   if (mode === "review-flow" && Array.isArray(startRadius?.dropped) && startRadius.dropped.length > 0) {
@@ -1664,7 +1706,7 @@ export function dispatchModelBlock(decision: DispatchModelDecision): Record<stri
  * network and no pull request. It is not a test-only affordance — it is the
  * supported way to see what a reply pass would say before it says it.
  */
-async function runComments(args: string[]): Promise<void> {
+async function runComments(args: string[], seams?: ReviewCommandSeams): Promise<void> {
   // Before the dispatch: `reply` posts, and must never be reached by a question.
   if (asksForHelp(args)) {
     printCommentsHelp();
@@ -1676,7 +1718,7 @@ async function runComments(args: string[]): Promise<void> {
     return;
   }
   if (sub === "reply") {
-    await runCommentsReply(args.slice(1));
+    await runCommentsReply(args.slice(1), seams);
     return;
   }
   throw new Error("Usage: keryx review comments <collect|reply> --repo <owner/repo> --pr <n> ...");
@@ -1740,13 +1782,34 @@ async function runCommentsCollect(args: string[]): Promise<void> {
   );
 }
 
-async function runCommentsReply(args: string[]): Promise<void> {
-  rejectUnknownFlags(args, COMMENTS_REPLY_FLAGS, "comments reply");
+/**
+ * Flow 457 (T7, audit row 9): a final reply pass posts the operator's answers on the pull request, so outside a
+ * dry run and an offline `--fixtures` rehearsal it needs a person at a terminal, or the `review_comments_reply`
+ * card in keryx shell (which runs {@link commentsReplyPass} itself after the operator's yes).
+ */
+export function commentsReplyGate(args: readonly string[], isTerminal: () => boolean): string | undefined {
+  if (!args.includes("--final") || args.includes("--dry-run") || optionValue([...args], "--fixtures") !== undefined) return undefined;
+  if (isTerminal()) return undefined;
+  return "comments reply --final posts on the pull request and needs a terminal: refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_comments_reply tool: the operator reads the replies and answers a card. Outside keryx shell, run this command in a terminal; `--dry-run` shows the replies without posting.";
+}
+
+/** What one reply pass did (or, dry, would do): the result and where it ran. */
+export type CommentsReplyRun = {
+  result: Awaited<ReturnType<typeof postReplyPass>>;
+  cwd: string;
+  repo: string;
+  number: number;
+  state: Awaited<ReturnType<typeof readPrCommentState>>;
+  dryRun: boolean;
+};
+
+/** One reply pass from `comments reply` arguments; `dryRun` overrides `--dry-run`. Prints nothing. */
+export async function commentsReplyPass(args: string[], dryRunOverride?: boolean): Promise<CommentsReplyRun> {
   const repo = requiredOption(args, "--repo", "comments reply");
   const number = requiredInteger(args, "--pr");
   const round = parseNonNegativeInteger(optionValue(args, "--round"), "--round") ?? 1;
   const isFinal = args.includes("--final");
-  const dryRun = args.includes("--dry-run");
+  const dryRun = dryRunOverride ?? args.includes("--dry-run");
 
   // Before any network call, not merely before the post. A self-contradictory
   // result is refusable from the file alone, and making the caller wait on a
@@ -1796,6 +1859,14 @@ async function runCommentsReply(args: string[]): Promise<void> {
     state,
     dryRun,
   });
+  return { result, cwd, repo, number, state, dryRun };
+}
+
+async function runCommentsReply(args: string[], seams?: ReviewCommandSeams): Promise<void> {
+  rejectUnknownFlags(args, COMMENTS_REPLY_FLAGS, "comments reply");
+  const refused = commentsReplyGate(args, seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true));
+  if (refused !== undefined) throw new Error(refused);
+  const { result, cwd, repo, number, state, dryRun } = await commentsReplyPass(args);
 
   console.log(`# review comments reply (${dryRun ? "dry run" : "posted"})`);
   console.log("");
@@ -3183,13 +3254,27 @@ async function runRequired(args: string[]): Promise<void> {
   for (const item of set.excluded) console.log(`excluded: ${item.reviewer} - ${item.reason}`);
 }
 
-async function runEstimate(args: string[]): Promise<void> {
+async function runEstimate(args: string[], seams?: ReviewCommandSeams): Promise<void> {
   rejectUnknownFlags(args, ESTIMATE_FLAGS, "estimate");
   const placed = guardReviewPaths("estimate", args);
   const packageDir = placed("--package");
   if (packageDir === undefined) throw new Error("estimate needs --package <review-dir>");
+  const confirm = args.includes("--confirm");
+  const quote = optionValue(args, "--quote");
+  if (quote !== undefined && !confirm) throw new Error("--quote is the operator's answer to --confirm; pass both.");
+  // A plan confirmation is the operator's own statement, so a person has to be at the terminal that records it.
+  const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+  if (confirm && !isTerminal()) {
+    throw new Error(`--confirm needs a terminal: a plan confirmation is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the ${CONFIRM_PLAN_TOOL} tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.`);
+  }
+  if (confirm && (quote === undefined || quote.trim() === "")) throw new Error("--confirm needs the operator's own words: --quote \"<words>\".");
   const estimate = await estimatePackage(packageDir, { manifest: placed("--manifest") });
-  console.log(args.includes("--json") ? JSON.stringify(estimate, null, 2) : renderEstimate(estimate));
+  if (confirm) {
+    const file = await writePlanConfirmation(packageDir, planConfirmationFor(estimate, quote!, "terminal"));
+    console.log(args.includes("--json") ? JSON.stringify({ ...estimate, confirmation: file }, null, 2) : `${renderEstimate(estimate)}\nconfirmed: plan ${estimate.planKey} recorded in ${file}`);
+    return;
+  }
+  console.log(args.includes("--json") ? JSON.stringify({ ...estimate, confirmed: planConfirmed(packageDir, estimate) }, null, 2) : renderEstimate(estimate));
 }
 
 async function runCompareReference(args: string[]): Promise<void> {
@@ -3409,7 +3494,7 @@ async function readRefuted(source: string | undefined): Promise<ReviewFindingsSo
  * payload loses fields, and the loss is what made the recorded corpus
  * unmeasurable.
  */
-async function readVerifications(source: string | undefined): Promise<ManagedReviewInput["verifications"]> {
+async function readVerifications(source: string | undefined, reviewId: string | undefined): Promise<ManagedReviewInput["verifications"]> {
   if (source === undefined) {
     return undefined;
   }
@@ -3423,7 +3508,10 @@ async function readVerifications(source: string | undefined): Promise<ManagedRev
       `--verifications ${source} is not JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`,
     );
   }
-  return verificationClaims(parsed as VerificationSource);
+  // Flow 457 (T7): a claim citing a `keryx review verify-run` record of its own finding, in the package this ingest
+  // writes (`--review-id`), ran in the parent: execution. Without a review id no record can be bound to a package.
+  const packageDir = reviewId === undefined || !/^[\w.-]+$/.test(reviewId) ? undefined : path.join(resolveProjectRoot(process.cwd()), ".metaproject", "reviews", reviewId);
+  return promoteParentExecutions(verificationClaims(parsed as VerificationSource), packageDir);
 }
 
 /**
@@ -3688,10 +3776,21 @@ async function runBlastRadius(args: string[]): Promise<void> {
 
   const explicit = optionValue(args, "--changed");
   const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
+  const reachMode = optionValue(args, "--reach") ?? "symbol";
+  if (reachMode !== "symbol" && reachMode !== "file") throw new Error(`--reach ${reachMode}: expected symbol or file.`);
+  // Flow 457 AC7: with --package the changed files are `git diff base...head` at the package's pinned head, never the
+  // working tree, and the base is --ref/--base, else the PR base the layers resolved (a `<head>~1` fallback is announced).
+  const radiusPackage = optionValue(args, "--package");
+  const range =
+    radiusPackage === undefined || explicit !== undefined
+      ? undefined
+      : radiusRange({ ref, layers: await ensurePackageLayers(resolvePackageDir(args, cwd)) });
+  if (range?.warning !== undefined) console.error(range.warning);
+  if (range !== undefined) console.error(`range: ${range.base.slice(0, 12)}...${range.head.slice(0, 12)} (base from ${range.baseSource})`);
   const changedFiles =
     explicit !== undefined
       ? explicit.split(",").map((item) => item.trim()).filter(Boolean)
-      : await gitChangedFiles(ref);
+      : (await gitLines(changedFilesArgv(range, ref))).filter(Boolean);
 
   // Flow 451 AC7: a recount against a base that changes the file count past RECOUNT_RATIO x the package's own scope
   // (`--ref develop` turned 25 files into 1547) is refused, with both numbers, before anything is written.
@@ -3751,14 +3850,48 @@ async function runBlastRadius(args: string[]): Promise<void> {
     );
   }
   const testFiles = includeRelatedTests ? await gitTestFiles() : [];
+  // Symbol reach and text links read the zero-context patch of the same range the changed files came from. With
+  // --changed and no range there is no patch: every seed then falls back to its file edge, which is the old walk.
+  const projectRoot = resolveProjectRoot(cwd);
+  const patch = explicit !== undefined && range === undefined ? "" : await gitText(radiusDiffArgv(range, ref));
+  const symbols =
+    reachMode === "file"
+      ? undefined
+      : {
+          read: range === undefined ? workingTreeSourceReader(projectRoot, ref ?? "HEAD") : gitSourceReader(projectRoot, range.head, range.base),
+          diff: parseDiffHunks(patch),
+        };
+  const textLinks =
+    args.includes("--no-text-links") || patch === ""
+      ? undefined
+      : await findTextLinks({
+          diff: patch,
+          changedFiles,
+          search: range === undefined ? ripgrepSearcher(projectRoot) : gitGrepSearcher(projectRoot, range.head),
+        });
   const radius = computeBlastRadius({
     graph,
     changedFiles,
     testFiles,
     config: { depth, maxFiles, includeRelatedTests },
+    symbols,
+    textLinks,
+    testCommand: detectTestCommand(projectRoot),
   });
   await emitBlastRadius(radius, args);
-
+  const reasoned =
+    (radius.counts.droppedUnrelatedSymbol ?? 0) + (radius.counts.droppedHubDamped ?? 0) + (radius.counts.droppedTextHub ?? 0) + (radius.counts.droppedTestConsumer ?? 0);
+  if (reasoned > 0) {
+    console.error(
+      `omitted with a reason: ${radius.counts.droppedUnrelatedSymbol ?? 0} unrelated-symbol, ${radius.counts.droppedHubDamped ?? 0} hub-damped, ${radius.counts.droppedTextHub ?? 0} text-hub, ${radius.counts.droppedTestConsumer ?? 0} test-consumer. ` +
+        "They are context, not owed a chunk pass.",
+    );
+  }
+  if (radius.testsToRun !== undefined) {
+    const runLine = testsToRunLine(radius);
+    if (runLine !== undefined) console.error(runLine);
+    if (packageOption !== undefined) console.error(`tests to run: ${await writeTestsToRun(resolvePackageDir(args, cwd), radius)}`);
+  }
   if (radius.counts.droppedByCap > 0) {
     console.error(
       `cap: ${radius.counts.droppedByCap} of ${radius.counts.candidates} candidate files were NOT reviewed (blast_radius_max_files=${radius.maxFiles}). They are listed in the record. ` +
@@ -3807,10 +3940,12 @@ async function readPreviousRadius(source: string): Promise<BlastRadius> {
   return parsed as BlastRadius;
 }
 
-/** The changed-file list scope B is seeded from. Deleted paths are excluded. */
-async function gitChangedFiles(ref: string | undefined): Promise<string[]> {
-  const command = ["git", "diff", "--name-only", "--diff-filter=d", ...(ref === undefined ? [] : revisionOperand(ref))];
-  return (await gitLines(command)).filter(Boolean);
+/** Raw stdout of a git command (the radius patch); throws on a non-zero exit like {@link gitLines}. */
+async function gitText(command: readonly string[]): Promise<string> {
+  const proc = Bun.spawn([...command], { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+  if (exitCode !== 0) throw new Error(`${command.join(" ")} failed (exit ${exitCode}): ${stderr.trim()}`);
+  return stdout;
 }
 
 async function gitTestFiles(): Promise<string[]> {
@@ -4002,8 +4137,8 @@ Usage:
 The verdict of a review round as it stands: finding counts by severity, verified vs
 unverified (refuted excluded), open blockers and majors, and the reviewers that have
 not reported. Reads the ingested round (findings.json) when there is one, else the raw
-reviewer results in --raw <dir> (default <package>/raw; a shell host keeps them in
-.metaproject/data/review/raw). Verifier results in research-evidence/verifications.json are applied
+reviewer results in --raw <dir> (default <package>/raw, where every host keeps them; the shared
+.metaproject/data/review/raw is read only when passed explicitly, since it holds other rounds' replies). Verifier results in research-evidence/verifications.json are applied
 first, so a refuted finding is excluded; a finding whose disposition is acted-on is not open. Works before ledger, mutation and complete. Writes
 verdict-interim.md into the package. A package with no findings says so and exits 0.
 `);
@@ -4180,6 +4315,12 @@ async function runPublish(args: string[], seams?: ReviewCommandSeams): Promise<v
   const yes = tokens.some((token) => token.name === "--yes");
   const packageDir = await resolveReviewPackagePath(process.cwd(), ref);
   const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+  // Flow 457 (T7, audit row 7; security review M2): `--yes` skips the operator's reading of the body, so only a person
+  // at a terminal may pass it. The autonomous runner's environment variable is no exemption: any process can set it.
+  // An unattended run that reaches this step records the publish as needing the operator (Not run).
+  if (yes && !isTerminal()) {
+    throw new Error("publish --yes needs a terminal: it posts without the operator reading the body, and is refused when stdin or stdout is not a TTY (an unattended or autonomous run included: record the publish as Not run, needs operator). Inside keryx shell, call the review_publish tool: the operator reads the body and answers a card. Outside keryx shell, run this command in a terminal.");
+  }
   let shown = false;
   const confirm = seams?.confirmPublish ?? (async (body: string, target: string, kind: ReviewEvent): Promise<boolean> => {
     console.log(`--- review body (${kind}) for ${target} ---`);
@@ -4235,6 +4376,12 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
   if (readinessWaivers.length > 0 && !isTerminal()) {
     throw new Error("--waive needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_readiness tool: the operator answers it as a card, then run `keryx review complete`. Outside keryx shell, run this command in a terminal.");
   }
+  // Security review M3: slice routing recorded in the manifest may not be narrower than each slice's content needs.
+  const completeDir = await resolveReviewPackagePath(process.cwd(), ref);
+  const profileMissing = runProfileRefusal(completeDir);
+  if (profileMissing !== undefined) throw new Error(`review complete refused: ${profileMissing}`);
+  const narrowedRouting = packageRoutingRefusal(completeDir, resolveProjectRoot(process.cwd()), { refuseUnreadable: true });
+  if (narrowedRouting !== undefined) throw new Error(`review complete refused: ${narrowedRouting}`);
   const {
     manifest,
     reviewNotes,
@@ -4483,6 +4630,7 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["complete", printCompleteHelp],
   ["status", printStatusHelp],
   ["estimate", printEstimateHelp],
+  ["plan-eval", printPlanEvalHelp],
   ["required", printRequiredHelp],
   ["scope", printScopeHelp],
   ["slice", printSliceHelp],
@@ -4498,6 +4646,7 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["learn", printLearnHelp],
   ["import", printImportHelp],
   ["run", () => console.log(RUN_HELP)],
+  ...OPERATOR_COMMANDS.map((name): [string, () => void] => [name, () => printOperatorCommandHelp(name)]),
 ]);
 
 /** Print the named subcommand's own help, or the whole group's when `rest` names none that has one. Never runs anything. */
@@ -4508,7 +4657,7 @@ export function printReviewHelpFor(rest: readonly string[] = []): void {
 }
 
 function printEstimateHelp(): void {
-  console.log("keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--json]\n\nThe manifest is --manifest, else <review-dir>/slices/manifest.json, else .metaproject/data/review/slices/manifest.json; the output names the one used.\nRoles x slices = assignments, dispatches (waves) at the slice manifest's wave budget, and an expected duration range.\nNot sliced: assignments = roles. Reads only; the per-dispatch minutes assumption is printed with the result.");
+  console.log("keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--confirm --quote \"<words>\"] [--json]\n\nThe manifest is --manifest, else <review-dir>/slices/manifest.json, else .metaproject/data/review/slices/manifest.json; the output names the one used.\nRoles x slices = assignments (a routed slice is owned by its roles), dispatches (waves) at the slice manifest's wave budget, and an expected duration range.\nNot sliced: assignments = roles. Reads only; the per-dispatch minutes assumption is printed with the result.\nA plan over routing.config.json reviewPlan.maxDispatches (default 40) or reviewPlan.maxMinutes (default 90) is flagged `over threshold`;\ndispatch-check and ledger build refuse it until the operator confirms it: the review_confirm_plan card inside keryx shell, or\n--confirm --quote \"<the operator's words>\" at a terminal (refused without a TTY), which writes <review-dir>/plan-confirmation.json.");
 }
 
 const GRAPH_TIMEOUT_HELP = `--graph-timeout <seconds> bounds the wait for the graph, wiki and memory refresh of the new package
@@ -4519,7 +4668,11 @@ process; past the bound the package is still created, the command returns, and t
 function printStartHelp(): void {
   console.log(`keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                    [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
-                   [--graph-timeout <seconds>]
+                   [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
+
+--unattended: nobody is at the keyboard, so an unrun mutation pass is recorded as \`Not run\` instead of refused
+(default: attended). --host: the agent host (default: detected). Both go to <package>/run-profile.json, with the
+caller token \`start\` prints; a package created before run-profile.json keeps the earlier operator-quote rules.
 
 Starts a managed review package for a flow. Also accepted: ${CREATE_FLAGS.join(" ")} (--target-ref is an alias of --ref).
 ${GRAPH_TIMEOUT_HELP}`);
@@ -4550,9 +4703,13 @@ Writes mutation-<n>.json and .md to research-evidence/.`);
 function printBlastRadiusHelp(): void {
   console.log(`keryx review blast-radius [--ref <base> | --changed a,b] [--base <ref>] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                          [--package <review-dir>] [--json | --brief] [--out <file>]
+                          [--package <review-dir>] [--reach symbol|file] [--no-text-links] [--json | --brief] [--out <file>]
 
 The files a change can reach: dependants of the changed files, up to --depth, capped at --max-files, with related tests.
+--reach symbol (default) follows the changed exported names: importers that use none of them, and files behind a
+high fan-in hub, are omitted with a reason instead of reviewed; --reach file walks every reverse import edge.
+Files that mention a string key the diff changed (i18n key, event, CSS class, config key) are added unless
+--no-text-links. With --package the changed files are base...head at the package's pinned head.
 --package stores the record in the package; --previous/--final carry the dropped files across rounds.`);
 }
 
@@ -4596,7 +4753,11 @@ Usage:
                       [--automatic]
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                      [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
-                     [--graph-timeout <seconds>]
+                     [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
+  keryx review waive-mutation --package <dir> --reason "<why>"       (terminal; card review_waive_mutation)
+  keryx review override-reviewers --package <dir> --reason "<why>"   (terminal; card review_override_reviewers)
+  keryx review confirm-plan --package <dir>                          (terminal; card review_confirm_plan)
+  keryx review verify-run --package <dir> --finding <id> -- <command…>
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--research <ledger.json>] [--review-id <id>] [--automatic]
                       [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
@@ -4666,7 +4827,12 @@ Usage:
   keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--json]
                         Roles x slices = assignments, waves at the manifest's wave
                         budget, and an expected duration range (2-5 min per dispatch,
-                        4 in parallel); not sliced: assignments = roles.
+                        4 in parallel); not sliced: assignments = roles. Over the
+                        plan threshold it says so; --confirm --quote at a terminal
+                        records the operator's confirmation.
+  keryx review plan-eval --diff <file|base..head> [--findings <file>] [--roles a,b] [--json]
+                        Old plan vs new (routed, depth by risk) plan for the same
+                        diff, and where each ground-truth finding lands. Offline.
                         --blast-radius adds review-regression to the set; without a
                         computed blast radius it is excluded with that reason.
                         The reviewer set a round must dispatch: every available

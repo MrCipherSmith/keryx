@@ -11,7 +11,7 @@ import { optionValue } from "./args";
 import { type PlacedPathResult, placePathWithinSync, resolveProjectRoot } from "./contained-path";
 
 export const REVIEW_CONFINED_PATH_FLAGS: Readonly<Record<string, readonly string[]>> = {
-  slice: ["--diff", "--out"],
+  slice: ["--diff", "--out", "--reach", "--jev-scores", "--package"],
   "retry-plan": ["--manifest", "--result", "--state", "--package"],
   "dispatch-check": ["--manifest", "--payload", "--package"],
   layers: ["--package"],
@@ -24,7 +24,7 @@ export const REVIEW_CONFINED_PATH_FLAGS: Readonly<Record<string, readonly string
 
 /** The flags of the same commands that name no path (ids, numbers, switches). Not confined by design. */
 export const REVIEW_NON_PATH_FLAGS: Readonly<Record<string, readonly string[]>> = {
-  slice: ["--ref", "--base", "--context", "--max-bytes", "--wave-bytes", "--json", "--help", "-h"],
+  slice: ["--ref", "--base", "--context", "--max-bytes", "--wave-bytes", "--head", "--host", "--json", "--help", "-h"],
   "retry-plan": ["--reviewer", "--slices", "--covered", "--next-wave", "--dry-run", "--json", "--help", "-h"],
   "dispatch-check": ["--max-bytes", "--pr-context", "--json", "--help", "-h"],
   layers: ["--head", "--base", "--write-wiki", "--files", "--max-bytes", "--force", "--json", "--help", "-h"],
@@ -32,7 +32,7 @@ export const REVIEW_NON_PATH_FLAGS: Readonly<Record<string, readonly string[]>> 
   coverage: ["--json", "--help", "-h"],
   // `required` also reads --scope, --blast-radius and --pr-context; those are read-only inputs that were never confined and stay as they were.
   required: ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--json"],
-  estimate: ["--json"],
+  estimate: ["--json", "--confirm", "--quote"],
   verdict: ["--json"],
 };
 

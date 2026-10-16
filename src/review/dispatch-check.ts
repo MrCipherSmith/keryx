@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type JsonSchema, validateJson } from "../gdskills/contracts";
-import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, byteLength, waveBytesOf } from "./slice";
+import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, byteLength, manifestSizeProblem, waveBytesOf } from "./slice";
 
 export type DispatchCheckCode =
   | "REVIEWER_INPUT_INVALID"
@@ -11,7 +11,9 @@ export type DispatchCheckCode =
   | "REVIEWER_INPUT_SLICE_UNKNOWN"
   | "REVIEWER_INPUT_TOO_LARGE"
   | "REVIEWER_INPUT_NO_PR_CONTEXT"
-  | "REVIEWER_INPUT_PATH_MISSING";
+  | "REVIEWER_INPUT_PATH_MISSING"
+  | "REVIEWER_INPUT_MANIFEST_UNSIZED"
+  | "REVIEWER_INPUT_PLAN_UNCONFIRMED";
 
 export type DispatchCheckError = {
   code: DispatchCheckCode;
@@ -62,6 +64,11 @@ export type CheckDispatchOptions = {
   pathBytes?: (slicePath: string) => number | undefined;
   /** Set for a pull-request review: every payload must name the collected `pr-context.md`, and it must be readable. */
   prContext?: { exists: (contextPath: string) => boolean };
+  /**
+   * The round's plan: when it is over the operator threshold and no plan confirmation is recorded, every payload is
+   * refused (`planGateRefusal` in estimate.ts says what to do).
+   */
+  plan?: { refusal: string | undefined };
 };
 
 /**
@@ -75,9 +82,17 @@ export type CheckDispatchOptions = {
  * wave has to fit what a reviewer can finish before its child deadline.
  */
 export async function checkDispatch(payloads: readonly unknown[], options: CheckDispatchOptions = {}): Promise<DispatchCheckResult> {
+  const unsized = options.maxBytes === undefined && options.manifest !== undefined ? manifestSizeProblem(options.manifest) : undefined;
+  if (unsized !== undefined) {
+    // Without a size every byte comparison below would be against NaN and pass; refuse the whole check instead.
+    return { ok: false, checked: payloads.length, maxBytes: 0, errors: [{ code: "REVIEWER_INPUT_MANIFEST_UNSIZED", reviewer: "manifest", message: unsized }] };
+  }
   const maxBytes = options.maxBytes ?? (options.manifest === undefined ? DEFAULT_SLICE_MAX_BYTES : waveBytesOf(options.manifest));
   const schema = await loadReviewerInputSchema();
   const errors: DispatchCheckError[] = [];
+  if (options.plan?.refusal !== undefined) {
+    errors.push({ code: "REVIEWER_INPUT_PLAN_UNCONFIRMED", reviewer: "plan", message: options.plan.refusal });
+  }
   const pathExists = options.pathExists ?? ((filePath: string) => existsSync(path.resolve(filePath)));
 
   for (const [index, payload] of payloads.entries()) {

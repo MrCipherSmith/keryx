@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { type RetryState, emptyRetryState, noEngineReason, planRetry } from "./retry-plan";
-import { buildSlices, sliceSourceFromDiff } from "./slice";
+import { type RetryState, applyEscalations, emptyRetryState, noEngineReason, planRetry, scopeFingerprint } from "./retry-plan";
+import { type SliceManifest, buildSlices, sliceSourceFromDiff } from "./slice";
+import { DEEP_ROLES } from "./slice-routing";
+import { requiredSlices } from "./waves";
 
 function gitFile(filePath: string, count: number): string {
   const lines = Array.from({ length: count }, (_, n) => `+const v${n} = ${n};`);
@@ -101,5 +103,47 @@ describe("NEEDS_CONTEXT is one refill", () => {
       readSliceText: (entry) => textOf(entry.id),
     });
     expect(done.decision).toBe("accepted");
+  });
+});
+
+describe("a major-or-worse finding on a light slice re-opens it deep", () => {
+  const files = ["src/admin/a.ts", "src/data/b.ts"].map((file) => gitFile(file, 20)).join("");
+  const routed = buildSlices(sliceSourceFromDiff(files), { maxBytes: 600 });
+  const texts = new Map(routed.slices.map((slice) => [slice.id, slice.text]));
+  const light: SliceManifest = { ...routed.manifest, slices: routed.manifest.slices.map((slice) => ({ ...slice, roles: ["review-logic"], depth: "light" as const })) };
+  const target = light.slices.find((slice) => slice.files.includes("src/data/b.ts"))!;
+  const run = (findings: unknown[], manifest: SliceManifest = light) => planRetry({
+    manifest,
+    reviewer: "review-logic",
+    result: { reviewer: "review-logic", status: "DONE", slices: [target.id], findings },
+    state: emptyRetryState(),
+    readSliceText: (entry) => texts.get(entry.id)!,
+  });
+
+  test("a major finding on a file of a light slice escalates that slice; a minor one does not", () => {
+    const plan = run([{ id: "F-1", severity: "major", file: "src/data/b.ts" }, { id: "F-2", severity: "minor", file: "src/admin/a.ts" }]);
+    expect(plan.escalations).toEqual([{ slice: target.id, finding: "F-1", severity: "major", by: "review-logic" }]);
+    expect(run([{ id: "F-2", severity: "minor", file: "src/data/b.ts" }]).escalations).toEqual([]);
+  });
+
+  test("a blocker located as file:line, or naming its slice, escalates too", () => {
+    expect(run([{ id: "B", severity: "blocker", location: "src/data/b.ts:7" }]).escalations.map((e) => e.slice)).toEqual([target.id]);
+    expect(run([{ id: "B", severity: "major", slice: target.id }]).escalations.map((e) => e.slice)).toEqual([target.id]);
+  });
+
+  test("applying it makes every core role own the slice, and the scope fingerprint does not move", () => {
+    const plan = run([{ id: "F-1", severity: "major", file: "src/data/b.ts" }]);
+    const after = applyEscalations(light, plan.escalations);
+    const slice = after.slices.find((entry) => entry.id === target.id)!;
+    expect(slice.depth).toBe("deep");
+    expect(slice.escalated).toEqual({ by: "review-logic", finding: "F-1" });
+    for (const role of DEEP_ROLES) expect(requiredSlices(after, role)).toContain(target.id);
+    expect(requiredSlices(light, "review-security-code")).not.toContain(target.id);
+    expect(scopeFingerprint(after)).toBe(scopeFingerprint(light));
+  });
+
+  test("a deep slice never escalates: it is read by the core set already", () => {
+    const deep: SliceManifest = { ...light, slices: light.slices.map((slice) => ({ ...slice, depth: "deep" as const })) };
+    expect(run([{ id: "F-1", severity: "major", file: "src/data/b.ts" }], deep).escalations).toEqual([]);
   });
 });

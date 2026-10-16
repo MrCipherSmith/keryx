@@ -315,6 +315,18 @@ async function saveChildResult(abs: string, text: string): Promise<string | unde
 }
 
 /**
+ * Write a timed-out child's partial text. A file already at the target with content (a complete result from an earlier
+ * dispatch of the same slice) is never overwritten by a partial one (security review minor): the partial goes next to
+ * it as `<target>.partial`, which no raw-result reader picks up. Returns where it went, or the error.
+ */
+export async function saveTimedOutPartial(abs: string, text: string): Promise<{ saved: string } | { error: string }> {
+  const existing = await readFile(abs, "utf8").catch(() => "");
+  const target = existing.trim() === "" ? abs : `${abs}.partial`;
+  const error = await saveChildResult(target, text);
+  return error === undefined ? { saved: target } : { error };
+}
+
+/**
  * Total wall-clock pool (ms) shared across every child spawned from one
  * parent turn. Was 15 minutes for the whole shell session; at 5 min/child
  * (the per-spawn reservation below) that admitted only 3 concurrent-ish
@@ -2213,12 +2225,24 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             // pass those paths already use, not a raw pass-through.
             const partial = assistant.trim();
             const foldedPartial = partial.length > 0 ? foldChildSummary(partial).text : "";
+            // Flow 457 (T7, audit row 14): the parent parses the saved file, never the bounded tool output, so a
+            // child that ran out of time still leaves everything it wrote in `save_result_to`.
+            const partialSaved = saveTarget.abs === undefined || partial.length === 0 ? undefined : await saveTimedOutPartial(saveTarget.abs, partial);
+            const partialSaveNote =
+              partialSaved === undefined
+                ? ""
+                : "error" in partialSaved
+                  ? `\n[partial result could NOT be saved to ${String(input.save_result_to)}]`
+                  : partialSaved.saved === saveTarget.abs
+                    ? `\n[partial result saved to ${String(input.save_result_to)}]`
+                    : `\n[partial result saved to ${String(input.save_result_to)}.partial; the complete result already at ${String(input.save_result_to)} was kept]`;
             return {
               status: "Timeout",
               output:
                 `subagent ${label} (${workerId}) timed out after ${deadlineMs}ms and was abandoned ` +
                 `(tighten or disable with ${ENV_SUBAGENT_TIMEOUT_MS})` +
-                (foldedPartial.length > 0 ? `\n--- partial output ---\n${boundSummary(foldedPartial)}` : ""),
+                (foldedPartial.length > 0 ? `\n--- partial output ---\n${boundSummary(foldedPartial)}` : "") +
+                partialSaveNote,
               isError: true,
               ...(foldedPartial.length > 0 ? { partial: boundSummary(foldedPartial) } : {}),
             };

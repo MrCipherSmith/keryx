@@ -599,6 +599,39 @@ describe("AC13: trust never runs uncontained; ask is read-only", () => {
     expect(git(root, ["worktree", "list"]).split("\n")).toHaveLength(1);
   });
 
+  test("flow 457 B1: a review task takes the same containment path — trust with no sandbox refuses it before any reservation or attempt", async () => {
+    const flow = await flowJson();
+    (flow["tasks"] as { id: string; kind: string }[]).find((t) => t.id === "T1")!.kind = "review";
+    await writeFile(path.join(root, flowDir, "flow.json"), `${JSON.stringify(flow, null, 2)}\n`, "utf8");
+    await writeTriggers([dispatchEntry({ permissionMode: "trust" })]);
+    const provider = scripted([]);
+    await run(provider, { planSandbox: () => NO_SANDBOX });
+    const record = await lastRecord();
+    expect(record.outcome).toBe("dispatch-refused");
+    expect(record.dispatch?.refusal).toBe("sandbox-unavailable");
+    expect((await records()).some((r) => r.outcome === "reserved")).toBe(false);
+    expect(record.detail).not.toContain("review run --autonomous");
+  });
+
+  test("flow 457 B1: a contained review task reserves spend and records its attempt before the model, like any task", async () => {
+    const flow = await flowJson();
+    (flow["tasks"] as { id: string; kind: string }[]).find((t) => t.id === "T1")!.kind = "review";
+    await writeFile(path.join(root, flowDir, "flow.json"), `${JSON.stringify(flow, null, 2)}\n`, "utf8");
+    await writeTriggers([dispatchEntry({ permissionMode: "trust" })]);
+    let attemptsWhenModelCalled = -1;
+    const provider = scripted([
+      async () => {
+        const tasks = (await flowJson())["tasks"] as { id: string; attempts?: { count: number } }[];
+        attemptsWhenModelCalled = tasks.find((t) => t.id === "T1")?.attempts?.count ?? 0;
+        return [USAGE_NONE, { kind: "text_delta", text: "cannot dispatch reviewers" }, { kind: "model_end" }];
+      },
+    ]);
+    await run(provider);
+    expect(provider.calls()).toBeGreaterThan(0);
+    expect(attemptsWhenModelCalled).toBe(1);
+    expect((await records()).some((r) => r.outcome === "reserved")).toBe(true);
+  });
+
   test("ask with no sandbox runs, but every command and patch is refused — nothing lands", async () => {
     await writeTriggers([dispatchEntry({ permissionMode: "ask" })]);
     const provider = scripted([

@@ -4,6 +4,9 @@ import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 import { isEmptyOutput, isReviewerResult, parseReviewResult } from "./ledger";
 import { mergeVerifications, verificationClaims } from "./verification";
+import { readRunProfile } from "./run-profile";
+import { testsNotRunWarning } from "./tests-to-run";
+import { promoteParentExecutions } from "./verify-run";
 import type { StructuredReviewFinding, VerificationSource } from "./types";
 
 /**
@@ -27,6 +30,8 @@ export type VerdictFinding = {
   reviewer: string;
   severity: Severity;
   problem: string;
+  /** `file:line` (or the finding's own location text) when the finding names one. */
+  location?: string | undefined;
   /** `confirmed`, `unverifiable`, or `none` when nobody checked it. */
   verification: "confirmed" | "unverifiable" | "none";
 };
@@ -48,6 +53,8 @@ export type InterimVerdict = {
   /** Where the raw reviewer results were read from. */
   rawDir: string;
   open: VerdictFinding[];
+  /** Open minor findings, listed one by one (owner decision 2026-10-16: minors are to be addressed, not only counted). */
+  minors: VerdictFinding[];
   reportedReviewers: string[];
   /** Reviewers the package expects that have produced no result. `undefined` when the package does not say who was expected. */
   pendingReviewers: string[] | undefined;
@@ -56,6 +63,10 @@ export type InterimVerdict = {
   /** Raw files that held no parsable reviewer result. */
   unreadable: string[];
   headline: string;
+  /** How the round runs (`<package>/run-profile.json`): `attended (default)`, `unattended (--unattended)`, ...; undefined for a package without one. */
+  runMode?: string | undefined;
+  /** A warning when `tests-to-run.json` lists tests and no `keryx review verify-run` record exists: "N tests listed to run; none recorded as run". */
+  testsNotRun?: string | undefined;
 };
 
 const object = (value: unknown): Record<string, unknown> | undefined =>
@@ -77,6 +88,16 @@ function oneLine(value: string): string {
   return first.length > 160 ? `${first.slice(0, 157)}...` : first;
 }
 
+/** `file:line` from the finding's own fields: `location`, else `file` (or `path`) with `line` (or `start_line`). */
+function locationOf(record: Record<string, unknown>): string | undefined {
+  const given = text(record.location);
+  if (given !== undefined) return oneLine(given);
+  const file = text(record.file) ?? text(record.path);
+  if (file === undefined) return undefined;
+  const line = typeof record.line === "number" ? record.line : typeof record.start_line === "number" ? record.start_line : text(record.line);
+  return line === undefined ? file : `${file}:${line}`;
+}
+
 function severityOf(value: unknown): Severity {
   const normalised = typeof value === "string" ? value.toLowerCase() : "";
   return (SEVERITIES as readonly string[]).includes(normalised) ? (normalised as Severity) : "info";
@@ -94,6 +115,7 @@ function classify(loose: Loose): { finding: VerdictFinding; state: "kept" | "ref
     reviewer: text(record.reviewer) ?? fallbackReviewer,
     severity: severityOf(record.severity),
     problem: oneLine(text(record.problem) ?? text(record.summary) ?? text(record.title) ?? "(no problem statement)"),
+    ...(locationOf(record) === undefined ? {} : { location: locationOf(record) }),
     verification: verification === "confirmed" ? "confirmed" : verification === "unverifiable" ? "unverifiable" : "none",
   };
   if (verification === "refuted") return { finding, state: "refuted" };
@@ -147,7 +169,8 @@ async function applyVerifierClaims(packageDir: string, entries: Loose[]): Promis
   if (source === undefined) return undefined;
   let claims;
   try {
-    claims = verificationClaims(source as VerificationSource);
+    // A claim citing a `keryx review verify-run` record of its finding in this package ran in the parent (flow 457).
+    claims = promoteParentExecutions(verificationClaims(source as VerificationSource), packageDir);
   } catch {
     return undefined;
   }
@@ -180,6 +203,7 @@ export async function computeVerdict(packageDir: string, options: VerdictOptions
   const verifierClaims = await applyVerifierClaims(packageDir, loose);
   const counts: Record<Severity, number> = { blocker: 0, major: 0, minor: 0, info: 0 };
   const open: VerdictFinding[] = [];
+  const minors: VerdictFinding[] = [];
   let verified = 0;
   let unverified = 0;
   let refuted = 0;
@@ -194,7 +218,9 @@ export async function computeVerdict(packageDir: string, options: VerdictOptions
     if (finding.verification === "confirmed") verified += 1;
     else unverified += 1;
     if (finding.severity === "blocker" || finding.severity === "major") open.push(finding);
+    else if (finding.severity === "minor") minors.push(finding);
   }
+  minors.sort((a, b) => a.id.localeCompare(b.id));
   open.sort((a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity) || a.id.localeCompare(b.id));
 
   const reported = new Set<string>(raws.results.map((result) => result.reviewer));
@@ -207,16 +233,25 @@ export async function computeVerdict(packageDir: string, options: VerdictOptions
   const headline =
     source === "none" ? "no reviewer results in the package yet"
     : total === 0 ? "no findings"
-    : counts.blocker > 0 ? `${counts.blocker} open blocker(s): do not merge`
-    : counts.major > 0 ? `${counts.major} open major(s): resolve or justify before merge`
-    : "no open blockers or majors";
+    : `${counts.blocker > 0 ? `${counts.blocker} open blocker(s): do not merge`
+      : counts.major > 0 ? `${counts.major} open major(s): resolve or justify before merge`
+      : "no open blockers or majors"}${counts.minor > 0 ? `; ${counts.minor} minor to address` : ""}`;
   // An ingested round lists only reviewers that raised a finding; one that ran clean is indistinguishable from one that never ran.
   const pendingAmbiguous = useRound && raws.results.length === 0;
-  return { source, counts, total, verified, unverified, refuted, dismissed, resolved, verifierClaims, rawDir, open, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline };
+  const profile = readRunProfile(packageDir);
+  const runMode = profile === undefined ? undefined : `${profile.mode} (${profile.declaredVia})`;
+  const testsNotRun = testsNotRunWarning(packageDir);
+  return { source, counts, total, verified, unverified, refuted, dismissed, resolved, verifierClaims, rawDir, open, minors, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline, ...(runMode === undefined ? {} : { runMode }), ...(testsNotRun === undefined ? {} : { testsNotRun }) };
+}
+
+function findingLine(finding: VerdictFinding): string {
+  return `- ${finding.id} [${finding.severity}]${finding.location === undefined ? "" : ` ${finding.location}`} (${finding.reviewer}, ${finding.verification === "confirmed" ? "verified" : "unverified"}): ${finding.problem}`;
 }
 
 export function renderVerdict(verdict: InterimVerdict, reviewId: string): string {
   const lines = [`# Interim verdict: ${reviewId}`, "", `verdict: ${verdict.headline}`, `source: ${verdict.source}`];
+  if (verdict.runMode !== undefined) lines.push(`run mode: ${verdict.runMode}`);
+  if (verdict.testsNotRun !== undefined) lines.push(`warning: ${verdict.testsNotRun}`);
   if (verdict.total === 0 && verdict.source !== "none") lines.push("findings: none");
   else lines.push(`findings: ${verdict.total} (${SEVERITIES.map((severity) => `${verdict.counts[severity]} ${severity}`).join(", ")})`);
   lines.push(`verified: ${verdict.verified}, unverified: ${verdict.unverified}`);
@@ -230,7 +265,11 @@ export function renderVerdict(verdict: InterimVerdict, reviewId: string): string
   for (const file of verdict.unreadable) lines.push(`unreadable result: ${file}`);
   if (verdict.open.length > 0) {
     lines.push("", "## Open blockers and majors", "");
-    for (const finding of verdict.open) lines.push(`- ${finding.id} [${finding.severity}] (${finding.reviewer}, ${finding.verification === "confirmed" ? "verified" : "unverified"}): ${finding.problem}`);
+    for (const finding of verdict.open) lines.push(findingLine(finding));
+  }
+  if (verdict.minors.length > 0) {
+    lines.push("", "## Minor findings to address", "");
+    for (const finding of verdict.minors) lines.push(findingLine(finding));
   }
   lines.push("", "Interim: written before ledger, mutation pass and `complete`; it does not replace the completion gate.");
   return `${lines.join("\n")}\n`;

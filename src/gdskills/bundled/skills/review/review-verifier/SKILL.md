@@ -101,9 +101,9 @@ available, not the strongest one you can describe.**
 
 ### 1. `execution` — run something that fails if the finding is real
 
-This is the method that works, and in this repository it is nearly always
-available: keryx is a Bun project, so `bun test <file>`, `bun run typecheck`, or a
-three-line script is cheap and immediate.
+This is the method that works: the project's own test command on one file (`bun test <file>` where the project runs Bun, its `test` script otherwise), its type check, or a three-line script.
+With no shell (a keryx shell child has none), the orchestrator runs it for you — `keryx review verify-run --package <review-dir> --finding <id> -- <command>` — and hands you the saved
+`research-evidence/verify-<id>-<n>.txt`; cite that file as the evidence and the claim is recorded as executed. Without either, the method is not available.
 
 The test is not "does the suite pass". It is: **construct the situation the
 finding claims is broken, and see whether it breaks.**

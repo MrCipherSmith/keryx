@@ -209,9 +209,14 @@ export function applyFindingsCap<T extends CappableFinding>(
   };
 }
 
-/** Merge-blocking, and therefore never truncated. */
+/**
+ * Never truncated: merge-blocking findings, and every finding with something to address. Owner decision
+ * (2026-10-16, flow 457): minor findings are important and must not be neglected, so the reading cap drops only `info`
+ * notes. Before this, a reviewer's majors and minors beyond the cap left findings.json (named only in scope.md), so
+ * the verdict, the report and the published review never listed them.
+ */
 function isExemptFromFindingsCap(finding: CappableFinding): boolean {
-  return finding.severity === "blocker" || finding.blocking_merge === true;
+  return finding.severity !== "info" || finding.blocking_merge === true;
 }
 
 // ---------------------------------------------------------------------------
