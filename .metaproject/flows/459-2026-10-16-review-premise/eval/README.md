@@ -23,3 +23,15 @@ All three claims files parse and merge with `parsePremiseClaims` + `mergePremise
 
 Files: `judge-*.raw.md` (raw outputs), `premise-eval.json`, `validate-*.json`, `inputs/` (findings, validate.ts, fixture.bundle: `git clone` it to reproduce the repo).
 Caveats: the truth findings carry no `title`; the #1005/#992 checkouts contain round-1 review packages (as any real repo would); fixture findings were authored by the evaluator.
+
+## Rerun on #992 after the fix (commit f41a21612)
+
+Fix: a `downgraded` claim needs a cited intent signal or practice source (`downgrade-without-evidence` otherwise); the skill forbids rubric re-grades and its worked example no longer teaches one. Same prompt shape, fresh Opus judge (86,933 subagent tokens), raw output `judge-pr992-rerun.raw.md`.
+
+| Finding | Verdict | Reading |
+|---|---|---|
+| F-007, F-008, F-011 | upheld | pass (F-011 was a rubric downgrade before; fixed) |
+| F-009 | downgraded major -> minor, 2 intent signals (commit d9ccfb6ce, `test-preload-hooks.ts:4`) + 2 practice sources (Bun preload hooks, xUnit fresh fixture) | stays at the fix-loop threshold (minor); the judge argues the reset is deliberate standard isolation and does not hide F-007 "by construction" |
+| F-012 | challenged, held for the operator | the judge argues M10 is an equivalent mutant (every read checks the spelled key, which equals the exact hash for non-shell calls) and that the suggested test cannot kill it; the finding itself said "may be partly equivalent", confidence medium |
+
+Net on 10 controls: 8 upheld, 1 downgraded with cited evidence (still minor, still fixed), 1 held as an operator question (not dismissed). Strict AC7 ("challenges none of the truth findings") is not met for F-012; whether this hold is a defect or the intended behaviour is the owner's judgement (AC7 is `judged`).
