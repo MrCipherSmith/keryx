@@ -5,9 +5,10 @@
 // gets the testing reviewer, a stylesheet the layout and style reviewers, a slice that spawns processes the security
 // reviewer, ...), `review-logic` on every slice, and a depth:
 //
-// - deep: the full core set reads it, when a deterministic risk class hits (auth, crypto, migrations, schema), the
-//   slice's symbol reach is high, or an injected Jev risk score is >= 0.7;
-// - light: only its content roles read it.
+// - deep: the full core set reads it, when it holds any non-test source code, agent instructions (skills, rules,
+//   AGENTS/CLAUDE files, prompts) or a contract/schema; also on a deterministic risk class, a high symbol reach, or an
+//   injected Jev risk score >= 0.7. Live evaluation showed that a risk-score gate left every defect in a light slice;
+// - light: only when every file is docs, tests, config/data or generated; only its content roles read it.
 //
 // A deterministic 10-15% sample of light slices (hash of head SHA + slice id) runs deep anyway, marked `audit`, so the
 // light routing is measured against a deep read of the same text. Nothing here calls a model: the facts come from the
@@ -70,6 +71,22 @@ const SECURITY_PRINCIPLE = new RegExp([
   String.raw`process\.env|\bBun\.env\b|\benv\[`,
   String.raw`\bfetch\(|\bhttps?\.(get|request)|\bnet\.|\bWebSocket\b|\bsocket\b|new URL\(`,
 ].join("|"));
+
+/** Programming-language source (including shell and SQL), not data or markup. */
+const SOURCE_CODE_FILE = /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts|py|go|rs|java|kt|kts|swift|rb|php|cs|c|cc|cpp|cxx|h|hh|hpp|m|mm|scala|lua|dart|ex|exs|sh|bash|zsh|sql|vue|svelte)$/i;
+/** Fixtures and snapshots count as tests: they are test data, not product code. */
+const FIXTURE_FILE = /((^|\/)(__tests__|__snapshots__|__fixtures__|fixtures?|testdata|test-data)\/|\.snap$)/i;
+/** Generated or vendored output. */
+const GENERATED_FILE = /((^|\/)(dist|build|out|vendor|node_modules|generated|__generated__)\/|\.(min\.(js|css)|generated\.\w+|lock|lockb)$|(^|\/)(package-lock\.json|bun\.lockb?|yarn\.lock|pnpm-lock\.yaml)$)/i;
+
+/** What makes a file force a deep read, or undefined when it is docs, tests, config/data or generated. */
+export function deepReasonOfFile(file: string): string | undefined {
+  if (isTestFilePath(file) || FIXTURE_FILE.test(file) || GENERATED_FILE.test(file)) return undefined;
+  if (AGENT_INSTRUCTION_FILE.test(file)) return "agent instructions";
+  if (CONTRACT_FILE.test(file)) return "schema";
+  if (SOURCE_CODE_FILE.test(file)) return "source code";
+  return undefined;
+}
 
 const ENTRY_FILE =/(^|\/)(index|mod|main)\.[cm]?[jt]sx?$/;
 
@@ -168,6 +185,18 @@ export function routeSliceRegions(id: string, regions: readonly ScopedRegion[], 
     } else if (facts.pathClasses.length > 0) {
       score = Math.max(score, Math.min(0.5, 0.15 * facts.pathClasses.length));
     }
+  }
+  const kinds = new Map<string, string[]>();
+  for (const file of new Set(regions.map((region) => region.path))) {
+    const reason = deepReasonOfFile(file);
+    if (reason !== undefined) kinds.set(reason, [...(kinds.get(reason) ?? []), file]);
+  }
+  if (kinds.size > 0) {
+    deep = true;
+    score = Math.max(score, 0.5);
+    for (const [reason, kindFiles] of kinds) why.push(`${reason}: ${kindFiles.slice(0, 3).join(", ")}${kindFiles.length > 3 ? ` (+${kindFiles.length - 3})` : ""}`);
+  } else if (regions.length > 0 && !deep) {
+    why.push("docs, tests, config or generated files only");
   }
   const threshold = options.reachThreshold ?? DEFAULT_REACH_THRESHOLD;
   const files = [...new Set(regions.map((region) => region.path))];

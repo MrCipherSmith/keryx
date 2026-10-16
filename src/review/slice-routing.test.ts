@@ -50,9 +50,9 @@ describe("roles come from the slice's content", () => {
     expect(rolesOf(slices, "app/Panel.tsx")).toEqual(expect.arrayContaining(["review-frontend", "review-layout", "review-architecture"]));
   });
 
-  test("a process spawn routes the security reviewer; a plain constant gets review-logic alone", () => {
+  test("a process spawn routes the security reviewer; a plain constant gets no content role beyond the deep core set", () => {
     expect(rolesOf(slices, "svc/runner.ts")).toEqual(expect.arrayContaining(["review-security-code", "review-architecture", "review-clean-code"]));
-    expect(rolesOf(slices, "lib/math.ts")).toEqual(["review-logic"]);
+    expect(rolesOf(slices, "lib/math.ts")).toEqual([...new Set([ALWAYS_ROLE, ...DEEP_ROLES])].sort());
   });
 
   test("content roles carry the reason they were chosen", () => {
@@ -69,22 +69,58 @@ describe("depth follows risk", () => {
     expect(slice!.risk!.score).toBeGreaterThanOrEqual(0.9);
   });
 
-  test("a light slice gets only its content roles", () => {
-    const [slice] = routeSlices(sliced([["lib/math.ts", ["const x = 1;"]]]), { head: "h", auditRate: 0 });
+  test("a light slice (config, data) gets only its content roles", () => {
+    const [slice] = routeSlices(sliced([["data/table.csv", ["a,b"]]]), { head: "h", auditRate: 0 });
     expect(slice!.depth).toBe("light");
     expect(slice!.roles).toEqual(["review-logic"]);
     expect(slice!.audit).toBeUndefined();
+    expect(slice!.risk!.why.join(" ")).toContain("docs, tests, config or generated");
+  });
+
+  test("any non-test source code goes deep, whatever the risk score", () => {
+    for (const file of ["lib/math.ts", "tools/run.py", "cmd/main.go", "scripts/build.sh", "db/q.sql", "src/lib/trust-routine-command.ts"]) {
+      const [slice] = routeSlices(sliced([[file, ["const x = 1;"]]]), { head: "h", auditRate: 0 });
+      expect(slice!.depth).toBe("deep");
+      expect(slice!.roles).toEqual(expect.arrayContaining([...DEEP_ROLES]));
+      expect(slice!.risk!.why.join(" ")).toContain("source code");
+    }
+  });
+
+  test("agent instructions and contracts go deep, with the reason", () => {
+    for (const file of ["skills/review/SKILL.md", "skills/review/SKILL.detail.md", ".metaproject/rules/core/x.mdc", "AGENTS.md", "CLAUDE.md", "prompts/plan.md"]) {
+      const [slice] = routeSlices(sliced([[file, ["Do the thing."]]]), { head: "h", auditRate: 0 });
+      expect(slice!.depth).toBe("deep");
+      expect(slice!.risk!.why.join(" ")).toContain("agent instructions");
+    }
+    const [schema] = routeSlices(sliced([["schemas/plan.schema.json", ["{}"]]]), { head: "h", auditRate: 0 });
+    expect(schema!.depth).toBe("deep");
+    expect(schema!.risk!.why.join(" ")).toContain("schema");
+  });
+
+  test("docs, tests, fixtures, config, lock and generated files stay light", () => {
+    for (const file of ["docs/guide.md", "README.md", "notes.txt", "src/a.test.ts", "src/__tests__/helper.ts", "test/fixtures/sample.ts", "src/__snapshots__/a.snap", "package.json", "ci.yaml", "bun.lock", "dist/bundle.js", "src/api.generated.ts"]) {
+      const [slice] = routeSlices(sliced([[file, ["x"]]]), { head: "h", auditRate: 0 });
+      expect(`${file}:${slice!.depth}`).toBe(`${file}:light`);
+    }
+  });
+
+  test("a mixed slice with one code file is deep", () => {
+    const [slice] = routeSlices(sliced([["docs/a.md", ["x"]]]).map((s) => ({ ...s, text: `${s.text}\n--- lib/b.ts
+@@ 1,1 @@
++const y = 1;
+`, files: ["docs/a.md", "lib/b.ts"] })), { head: "h", auditRate: 0 });
+    expect(slice!.depth).toBe("deep");
   });
 
   test("reach over the threshold sends a slice deep; at the threshold it stays light", () => {
-    const files = sliced([["lib/hub.ts", ["const x = 1;"]]]);
-    expect(routeSlices(files, { head: "h", auditRate: 0, reach: { "lib/hub.ts": 26 }, reachThreshold: 25 })[0]!.depth).toBe("deep");
-    expect(routeSlices(files, { head: "h", auditRate: 0, reach: { "lib/hub.ts": 25 }, reachThreshold: 25 })[0]!.depth).toBe("light");
+    const files = sliced([["data/hub.csv", ["a,b"]]]);
+    expect(routeSlices(files, { head: "h", auditRate: 0, reach: { "data/hub.csv": 26 }, reachThreshold: 25 })[0]!.depth).toBe("deep");
+    expect(routeSlices(files, { head: "h", auditRate: 0, reach: { "data/hub.csv": 25 }, reachThreshold: 25 })[0]!.depth).toBe("light");
   });
 
   test("a Jev score >= 0.7 for the slice or its file sends it deep", () => {
-    const files = sliced([["lib/hub.ts", ["const x = 1;"]]]);
-    expect(routeSlices(files, { head: "h", auditRate: 0, jevScores: { "lib/hub.ts": 0.7 } })[0]!.depth).toBe("deep");
+    const files = sliced([["data/hub.csv", ["a,b"]]]);
+    expect(routeSlices(files, { head: "h", auditRate: 0, jevScores: { "data/hub.csv": 0.7 } })[0]!.depth).toBe("deep");
     expect(routeSlices(files, { head: "h", auditRate: 0, jevScores: { [files[0]!.id]: 0.69 } })[0]!.depth).toBe("light");
   });
 });
@@ -102,7 +138,7 @@ describe("audit sample", () => {
   });
 
   test("audited slices run deep, marked audit, and the summary counts them", () => {
-    const files = Array.from({ length: 16 }, (_, i) => [`m${i}/plain.ts`, [`const v${i} = ${i};`]] as const);
+    const files = Array.from({ length: 16 }, (_, i) => [`m${i}/plain.csv`, [`v${i},${i}`]] as const);
     const slices = routeSlices(sliced(files), { head: "seed" });
     const audited = slices.filter((slice) => slice.audit === true);
     expect(audited.length).toBe(Math.round(16 * AUDIT_RATE));
