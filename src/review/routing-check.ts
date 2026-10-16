@@ -8,11 +8,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseScopedDiff, type SliceEntry, type SliceManifest } from "./slice";
 import { routeSliceRegions } from "./slice-routing";
+import { expectedFixRoles, fixClaimBacked, fixContextOf, type FixContext } from "./round-split";
 
 export type NarrowedSlice = { id: string; missingRoles: string[]; depth?: { recorded: string; needed: "deep" } };
 
 /** Slices whose recorded routing is narrower than their content needs. `readText` returns undefined when unreadable. */
-export function narrowedSlices(manifest: Pick<SliceManifest, "slices">, readText: (entry: SliceEntry) => string | undefined): { narrowed: NarrowedSlice[]; unreadable: string[] } {
+export function narrowedSlices(manifest: Pick<SliceManifest, "slices">, readText: (entry: SliceEntry) => string | undefined, fix?: FixContext): { narrowed: NarrowedSlice[]; unreadable: string[] } {
   const originals = manifest.slices.filter((entry) => entry.retryOf === undefined && Array.isArray(entry.roles));
   const changedFiles = [...new Set(manifest.slices.filter((entry) => entry.retryOf === undefined).flatMap((entry) => entry.files))];
   const narrowed: NarrowedSlice[] = [];
@@ -21,6 +22,14 @@ export function narrowedSlices(manifest: Pick<SliceManifest, "slices">, readText
     const text = readText(entry);
     if (text === undefined) {
       unreadable.push(entry.id);
+      continue;
+    }
+    // A fix slice of a delta round (flow 458) has its own roster, computed with the function `review slice` routes with. The
+    // round must back the claim; one it does not back is routed, and so judged, as a new slice.
+    if (fixClaimBacked(entry, fix)) {
+      const recordedFix = new Set(entry.roles ?? []);
+      const missingFix = expectedFixRoles(entry, fix!).filter((role) => !recordedFix.has(role));
+      if (missingFix.length > 0) narrowed.push({ id: entry.id, missingRoles: missingFix });
       continue;
     }
     // Slice files are always written in the scoped format (like `routeSlices` reads them). Sniffing the format would let
@@ -66,7 +75,7 @@ export function packageRoutingRefusal(packageDir: string, projectRoot: string, o
     }
     if (manifest === undefined) continue;
     const readers = dirs.map((dir) => sliceTextReader(dir));
-    const { narrowed, unreadable } = narrowedSlices(manifest, (entry) => readers.map((read) => read(entry)).find((text) => text !== undefined));
+    const { narrowed, unreadable } = narrowedSlices(manifest, (entry) => readers.map((read) => read(entry)).find((text) => text !== undefined), fixContextOf(packageDir));
     const label = path.relative(projectRoot, file) || file;
     const refusal = routingRefusal(label, narrowed);
     if (refusal !== undefined || options.refuseUnreadable !== true || unreadable.length === 0) return refusal;

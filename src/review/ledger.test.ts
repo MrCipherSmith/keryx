@@ -936,3 +936,37 @@ describe("flow 458: merged duplicates and deliberate skips", () => {
     expect((await blockersOf(unskipped)).join("\n")).toContain(`missing: ${skippedReviewer}`);
   });
 });
+
+describe("a delta round's fix slices (flow 458 AC4)", () => {
+  const split = (): SliceManifest => ({
+    ...MANIFEST,
+    slices: [
+      slice("slice-01", ["src/a.ts"], { roles: ["review-logic", "review-architecture"], depth: "deep", kind: "fix", findingIds: ["F1"] }),
+      slice("slice-02", ["src/b.test.ts"], { roles: ["review-logic", "review-testing-practices"], depth: "light", kind: "new" }),
+    ],
+  });
+
+  test("each kind is held to its own roster: the testing reviewer owes the new slice, not the fix slice", async () => {
+    const base = await inputs({ manifest: split() });
+    const result = buildLedger({
+      ...base,
+      raws: base.selected.map((reviewer) => ({ ...raw(reviewer, "DONE", { slices: reviewer === "review-testing-practices" ? ["slice-02"] : reviewer === "review-architecture" ? ["slice-01"] : ["slice-01", "slice-02"] }), assignedSlices: reviewer === "review-testing-practices" ? ["slice-02"] : reviewer === "review-architecture" ? ["slice-01"] : ["slice-01", "slice-02"] })),
+    });
+    expect(result.gaps.filter((gap) => gap.detail.includes("not covered"))).toEqual([]);
+    expect(result.ledger.scopeReviewed).toBe(true);
+  });
+
+  test("the fix slice is covered by its finding's disposition, and carried findings count as dispositions", async () => {
+    const base = await inputs({ manifest: split() });
+    const assigned = (reviewer: string): string[] => (reviewer === "review-testing-practices" ? ["slice-02"] : ["slice-02"]);
+    const result = buildLedger({
+      ...base,
+      carried: [{ findingId: "F1", disposition: "closed" }],
+      raws: base.selected.map((reviewer) => ({ ...raw(reviewer, "DONE", { slices: assigned(reviewer) }), assignedSlices: assigned(reviewer) })),
+    });
+    expect(result.ledger.dispatch.fixSlicesCovered).toEqual(["slice-01"]);
+    expect(result.ledger.scopeReviewed).toBe(true);
+    const bare = buildLedger({ ...base, raws: base.selected.map((reviewer) => ({ ...raw(reviewer, "DONE", { slices: assigned(reviewer) }), assignedSlices: assigned(reviewer) })) });
+    expect(bare.ledger.scopeReviewed).toBe(false);
+  });
+});

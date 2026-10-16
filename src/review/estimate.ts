@@ -12,6 +12,7 @@ import { operatorGateApplies, runProfileRefusal } from "./run-profile";
 import { manifestSizeProblem, packWaves, waveBytesOf, type SliceManifest } from "./slice";
 import { ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph } from "./waves";
+import { fixSliceRoles, splitCounts } from "./round-split";
 
 /** A spawned reviewer child is killed after 5 minutes (src/harness/tool/builtin/spawn-subagent-tool.ts), so one dispatch never runs longer than this. */
 export const CHILD_DEADLINE_MINUTES = 5;
@@ -68,6 +69,8 @@ export type RoundEstimate = {
   planKey: string;
   /** Original slices a major-or-worse finding re-opened deep (`escalated` in the manifest). */
   escalated: string[];
+  /** Delta round (flow 458): the fix and new slices and the dispatches each kind needs. Absent in a round without kinds. */
+  split?: { fix: { slices: number; dispatches: number }; new: { slices: number; dispatches: number } } | undefined;
 };
 
 /**
@@ -92,6 +95,9 @@ export function estimateRound(
   const routed = manifest !== undefined && isRoutedManifest(manifest);
   const routedOut: string[] = [];
   const owners = new Map<string, string[]>();
+  const counts = manifest === undefined ? undefined : splitCounts(manifest);
+  const kindOf = new Map((manifest?.slices ?? []).map((s) => [s.id, s.kind === "fix" ? "fix" : "new"] as const));
+  const kindDispatches = { fix: 0, new: 0 };
   const perRole: RoleEstimate[] = roles.map((role) => {
     if (manifest === undefined) return { role, slices: 0, waves: 1 };
     const ids = requiredSlices(manifest, role);
@@ -100,7 +106,20 @@ export function estimateRound(
       routedOut.push(role);
       return { role, slices: 0, waves: 0 };
     }
-    const open = sliceGraph(manifest, role).open(ids, new Set());
+    const graph = sliceGraph(manifest, role);
+    if (counts !== undefined) {
+      // A dispatch carries one kind: fix slices come with the prior findings they answer, new slices as in round 1.
+      let waves = 0;
+      for (const kind of ["fix", "new"] as const) {
+        const ofKind = ids.filter((id) => kindOf.get(id) === kind);
+        if (ofKind.length === 0) continue;
+        const count = packWaves(graph.open(ofKind, new Set()), waveBytesOf(manifest)).length;
+        kindDispatches[kind] += count;
+        waves += count;
+      }
+      return { role, slices: ids.length, waves: Math.max(1, waves) };
+    }
+    const open = graph.open(ids, new Set());
     return { role, slices: ids.length, waves: Math.max(1, packWaves(open, waveBytesOf(manifest)).length) };
   });
   const originals = manifest?.slices.filter((s) => s.retryOf === undefined) ?? [];
@@ -139,6 +158,7 @@ export function estimateRound(
     overReasons,
     planKey: planKeyOf({ perRole, slicePlan, waveBytes }),
     escalated: originals.filter((s) => s.escalated !== undefined).map((s) => s.id),
+    ...(counts === undefined ? {} : { split: { fix: { slices: counts.fix, dispatches: kindDispatches.fix }, new: { slices: counts.new, dispatches: kindDispatches.new } } }),
   };
 }
 
@@ -278,7 +298,9 @@ export async function estimatePackage(packageDir: string, options: { manifest?: 
   const problem = found === undefined ? undefined : manifestSizeProblem(found.manifest);
   if (problem !== undefined) throw new Error(`${path.relative(root, found!.file)}: ${problem}`);
   const thresholds = await readPlanThresholds(root);
-  return { ...estimateRound(set.required, found?.manifest, recorded?.depth ?? "unrecorded", thresholds), manifest: found === undefined ? undefined : path.relative(root, found.file) };
+  // A delta round's fix slices add the roles that authored the findings they answer to the round's reviewers (flow 458).
+  const roles = [...new Set([...set.required, ...(found === undefined ? [] : fixSliceRoles(found.manifest))])].sort();
+  return { ...estimateRound(roles, found?.manifest, recorded?.depth ?? "unrecorded", thresholds), manifest: found === undefined ? undefined : path.relative(root, found.file) };
 }
 
 export function renderEstimate(estimate: RoundEstimate): string {
@@ -295,6 +317,7 @@ export function renderEstimate(estimate: RoundEstimate): string {
   if (estimate.routing.deep + estimate.routing.light > 0) {
     lines.push(`routing: ${estimate.routing.deep} deep (${estimate.routing.audit} audit), ${estimate.routing.light} light${estimate.routedOut.length === 0 ? "" : `; no slice routed to ${estimate.routedOut.join(", ")}`}`);
   }
+  if (estimate.split !== undefined) lines.push(`split round: fix: ${estimate.split.fix.slices} slices / ${estimate.split.fix.dispatches} dispatches, new: ${estimate.split.new.slices} slices / ${estimate.split.new.dispatches} dispatches`);
   lines.push(estimate.overThreshold
     ? `over threshold: ${estimate.overReasons.join("; ")} — the operator confirms this plan before it runs (plan ${estimate.planKey})`
     : `threshold: within ${estimate.thresholds.maxDispatches} dispatches and ${estimate.thresholds.maxMinutes} min (plan ${estimate.planKey})`);

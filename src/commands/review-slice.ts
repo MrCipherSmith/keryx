@@ -16,6 +16,9 @@ import { resolveActiveReview } from "../review/active-review";
 import { operatorGateApplies } from "../review/run-profile";
 import { commentRuleScopeConfig } from "../review/comment-rule";
 import { renderRoutingSummary, routeSlices, summarizeRouting } from "../review/slice-routing";
+import { NOT_REVIEW_PACKAGES } from "../review/prior-round";
+import { readPriorFindings, readRoundRecord } from "../review/round-record";
+import { classifyDeltaSlices, isDeltaRound, splitCounts } from "../review/round-split";
 import { defaultWaveBytes, detectReviewHost, HOST_WAVE_BYTES, parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
 
 /** The diff-fetching and flag helpers `review.ts` owns, passed in so this file does not import its caller. */
@@ -88,6 +91,12 @@ class hits (auth, crypto, migrations, schema), a file's reach in --reach
 >= 0.7; light (logic + content roles) only when every file is docs, tests, config or
 generated. A deterministic 10-15% of light slices (hash of --head, default HEAD, and
 the slice id; none below 4 light slices) run deep as an audit sample (\`audit: true\`).
+
+In a delta round (the package's round.json, written by \`review start\`, names a previous
+round at an ancestor head) only the round's range prevHead..head is cut. A slice holding a
+fix hunk is \`kind: "fix"\` with its \`findingIds\`: read by review-logic, review-regression
+and the reviewers that authored those findings; every other slice is \`kind: "new"\` and routed
+as above. First and fallback-first rounds are cut over --ref as before.
 
 Accepts a git diff or the output of \`keryx review scope --scoped-diff\`.
 Writes slice-NN.diff and ${MANIFEST_NAME} into --out, else <review-dir>/slices with --package (where
@@ -190,7 +199,13 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const diffFile = placed("--diff");
   const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
 
-  const diff = diffFile !== undefined ? await deps.readDiffSource(diffFile) : await deps.gitDiff(ref, contextLines);
+  // Flow 458: a package whose `review start` found a previous round of this target at an ancestor head slices only the
+  // round's range (prevHead..head), then tags each slice fix or new. A first or fallback-first round is cut as before.
+  const packageFlag = optionValue(args, "--out") === undefined ? placed("--package") : undefined;
+  const round = packageFlag === undefined ? undefined : readRoundRecord(packageFlag);
+  const delta = isDeltaRound(round) && diffFile === undefined ? round : undefined;
+  if (delta !== undefined && ref !== undefined) console.error(`--ref ${ref} ignored: the package's round ${delta.round} is a delta round, sliced over ${delta.range.base}..${delta.range.head}`);
+  const diff = diffFile !== undefined ? await deps.readDiffSource(diffFile) : delta !== undefined ? await gitRangeDiff(delta.range.base!, delta.range.head!, contextLines) : await deps.gitDiff(ref, contextLines);
   const hostArg = optionValue(args, "--host");
   const host = hostArg === undefined ? detectReviewHost() : parseReviewHost(hostArg);
   if (host === undefined) throw new Error(`--host must be one of ${REVIEW_HOSTS.join(", ")}, got "${hostArg}"`);
@@ -198,14 +213,15 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const waveBytes = validateWaveBytes(rawWave === undefined ? defaultWaveBytes(host, maxBytes) : Number(rawWave), maxBytes);
   const built = buildSlices(sliceSourceFromDiff(diff, { contextLines, ...(await commentRuleScopeConfig(process.cwd())) }), { maxBytes, waveBytes });
   // Routing: each slice gets the roles its content needs and a depth by risk; the manifest carries both.
-  const head = optionValue(args, "--head") ?? (await currentHead()) ?? "no-head";
+  const head = optionValue(args, "--head") ?? delta?.range.head ?? (await currentHead()) ?? "no-head";
   const reachFile = placed("--reach");
   const jevFile = placed("--jev-scores");
-  const slices = routeSlices(built.slices, {
+  const routed = routeSlices(built.slices, {
     head,
     ...(reachFile === undefined ? {} : { reach: await readNumberMap(reachFile, "--reach") }),
     ...(jevFile === undefined ? {} : { jevScores: await readNumberMap(jevFile, "--jev-scores") }),
   });
+  const slices = delta === undefined ? routed : classifyDeltaSlices(routed, delta, readPriorFindings(packageFlag!));
   const manifest = { ...built.manifest, host, waveBytes, slices: slices.map(({ text: _text, ...entry }) => entry) };
 
   // Placed after the diff is fetched, which can take long: the directory is judged where it is now, right before it is written.
@@ -228,7 +244,18 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   }
   console.log(renderSliceSummary(manifest));
   console.log(renderRoutingSummary(summarizeRouting(manifest.slices)));
+  const split = delta === undefined ? undefined : splitCounts(manifest);
+  if (delta !== undefined && split !== undefined) console.log(`round ${delta.round} delta ${delta.range.base!.slice(0, 12)}..${delta.range.head!.slice(0, 12)}: ${split.fix} fix slice(s) (logic, regression, finding authors), ${split.new} new slice(s)`);
   console.log(`\nmanifest: ${manifestPath}`);
+}
+
+/** `git diff <base> <head>` of a delta round, without committed review packages (the same pathspec the round's hunks were cut with). */
+async function gitRangeDiff(base: string, head: string, contextLines: number): Promise<string> {
+  for (const sha of [base, head]) if (!/^[0-9a-f]{7,64}$/i.test(sha)) throw new Error(`round.json range ${base}..${head} is not a pair of commit SHAs; re-run \`keryx review start\``);
+  const proc = Bun.spawn(["git", "diff", "--no-color", `-U${contextLines}`, "--no-ext-diff", "--end-of-options", base, head, "--", ...NOT_REVIEW_PACKAGES], { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+  if (exitCode !== 0) throw new Error(`git diff ${base.slice(0, 12)}..${head.slice(0, 12)} failed (exit ${exitCode}): ${stderr.trim()}`);
+  return stdout;
 }
 
 /** The commit the working tree is at; seeds the audit sample. Undefined outside a git checkout. */

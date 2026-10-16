@@ -66,6 +66,8 @@ function coveredSliceIds(dispatch: Record<string, unknown> | undefined, retry: u
     if (run === undefined || run.status === "not-run" || !Array.isArray(run.coveredSlices)) continue;
     for (const id of run.coveredSlices) if (typeof id === "string") ids.add(id);
   }
+  // Delta round (flow 458): fix slices whose attached findings all have a disposition.
+  if (Array.isArray(dispatch?.fixSlicesCovered)) for (const id of dispatch.fixSlicesCovered) if (typeof id === "string") ids.add(id);
   const reviewers = record(record(retry)?.reviewers);
   for (const entry of Object.values(reviewers ?? {})) {
     const covered = record(entry)?.covered;

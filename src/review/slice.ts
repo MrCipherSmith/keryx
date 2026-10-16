@@ -36,6 +36,10 @@ export type SliceEntry = {
   audit?: boolean;
   /** Set when a major-or-worse finding on this light slice re-opened it deep. */
   escalated?: { by: string; finding: string };
+  /** Delta round (flow 458): `fix` answers prior findings (`findingIds`), `new` is code no prior finding touched. Absent in a first round. */
+  kind?: "fix" | "new";
+  /** The prior findings a fix slice answers. */
+  findingIds?: string[];
 };
 
 export type SliceDepth = "deep" | "light";

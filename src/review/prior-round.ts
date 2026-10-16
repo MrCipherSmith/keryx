@@ -444,7 +444,7 @@ export function parseDiffHunks(diff: string): RoundHunk[] {
 }
 
 /** The round's code: everything but committed review packages, which record a review rather than being reviewed. */
-const NOT_REVIEW_PACKAGES = [".", ":(exclude).metaproject/reviews", ":(exclude,glob).metaproject/flows/*/reviews/**"];
+export const NOT_REVIEW_PACKAGES = [".", ":(exclude).metaproject/reviews", ":(exclude,glob).metaproject/flows/*/reviews/**"];
 
 /** Lines of slack either side when a hunk is matched to a finding's location. */
 export const FIX_TOLERANCE = 2;
