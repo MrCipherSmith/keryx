@@ -9,9 +9,9 @@
   "id": "457",
   "slug": "review-risk-scaling",
   "title": "Large-PR reviews scale by risk, not by graph reach, and find more",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-15T21:34:19.482Z",
-  "updatedAt": "2026-10-16T05:12:56.916Z",
+  "updatedAt": "2026-10-16T05:30:45.697Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:8fbb41760247430945fc2f0ca059394dca62e87859943ececb4780be040af8cd",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1038"
   },
   "baseBranch": "main",
   "owner": {
@@ -221,7 +221,7 @@
       "id": "T12",
       "title": "Release 0.3.119",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T11"
       ],
@@ -231,7 +231,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
@@ -368,6 +369,16 @@
       "at": "2026-10-16T05:12:56.916Z",
       "event": "task-done",
       "detail": "T11: Review round + PR + merge"
+    },
+    {
+      "at": "2026-10-16T05:30:45.526Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1038 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-16T05:30:45.697Z",
+      "event": "task-done",
+      "detail": "T12: Release 0.3.119"
     }
   ],
   "acKinds": {

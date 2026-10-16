@@ -44,3 +44,5 @@ First routing pass missed 3 architecture/security findings (#424 ×2, #939 D2-b,
 - Eval artifacts: eval/README.md + per-PR reports.
 - 2026-10-16T04:51:10.086Z - task-done: T10: E2: live eval rounds on #424 #939 #940 #1005
 - 2026-10-16T05:12:56.916Z - task-done: T11: Review round + PR + merge
+- 2026-10-16T05:30:45.526Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1038 (warning: PR is not a draft)
+- 2026-10-16T05:30:45.697Z - task-done: T12: Release 0.3.119
