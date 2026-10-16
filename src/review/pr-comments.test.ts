@@ -606,7 +606,7 @@ test("AC9: the per-reviewer findings cap does not truncate external comments", a
   const internal = Array.from({ length: 6 }, (_, index) => ({
     id: `F-${index}`,
     reviewer: "review-logic",
-    severity: "minor" as const,
+    severity: "info" as const,
     problem: `internal ${index}`,
     impact: "x",
     suggested_fix: "y",

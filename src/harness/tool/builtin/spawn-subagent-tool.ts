@@ -319,12 +319,7 @@ async function saveChildResult(abs: string, text: string): Promise<string | unde
  * it as `<target>.partial`, which no raw-result reader picks up. Returns where it went, or the error.
  */
 export async function saveTimedOutPartial(abs: string, text: string): Promise<{ saved: string } | { error: string }> {
-  let existing = "";
-  try {
-    existing = await readFile(abs, "utf8");
-  } catch {
-    existing = "";
-  }
+  const existing = await readFile(abs, "utf8").catch(() => "");
   const target = existing.trim() === "" ? abs : `${abs}.partial`;
   const error = await saveChildResult(target, text);
   return error === undefined ? { saved: target } : { error };

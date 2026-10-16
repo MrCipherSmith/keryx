@@ -43,7 +43,7 @@ export async function writeTestsToRun(packageDir: string, radius: Pick<BlastRadi
  * `keryx review verify-run` record, so nothing says any of them ran. Undefined when nothing is listed or a run is recorded.
  */
 export function testsNotRunWarning(packageDir: string): string | undefined {
-  let listed = 0;
+  let listed: number;
   try {
     const parsed = JSON.parse(readFileSync(path.join(packageDir, TESTS_TO_RUN_FILE), "utf8")) as unknown;
     listed = Array.isArray(parsed) ? parsed.length : 0;
