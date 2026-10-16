@@ -24,7 +24,8 @@ import { computeReadiness, renderReadiness } from "./readiness";
 import { publishReview } from "./publish";
 import { RUN_PROFILE_FILE, buildRunProfile, isAttendedRun, unattendedStartRefusal, writeRunProfile } from "./run-profile";
 import { compareVersions, renderSkillDrift, reviewSkillDrift, skillVersion } from "./skill-drift";
-import { computeVerdict, renderVerdict } from "./verdict";
+import { computeVerdict, renderVerdict, writeVerdict } from "./verdict";
+import { saveTimedOutPartial } from "../harness/tool/builtin/spawn-subagent-tool";
 import { defaultRunner, promoteParentExecutions, verifyRun } from "./verify-run";
 
 const NOW = new Date("2026-10-16T08:00:00.000Z");
@@ -97,6 +98,35 @@ describe("row 11: results and drivers live per package", () => {
     const verdict = await computeVerdict(pkg);
     expect(verdict.rawDir).toBe(path.join(pkg, "raw"));
     expect(verdict.total).toBe(0);
+    // And the package's own raw results are what it counts: reverting the default to the shared directory fails here.
+    mkdirSync(path.join(pkg, "raw"), { recursive: true });
+    writeFileSync(path.join(pkg, "raw", "review-security-code.txt"), '```REVIEW_RESULT\n{"status":"DONE","reviewer":"review-security-code","findings":[{"id":"S-1","severity":"blocker","problem":"this round"}]}\n```\n');
+    const own = await computeVerdict(pkg);
+    expect(own.source).toBe("raw reviewer results");
+    expect(own.open.map((finding) => finding.id)).toEqual(["S-1"]);
+    expect(own.reportedReviewers).toEqual(["review-security-code"]);
+  });
+});
+
+describe("owner decision 2026-10-16: minor findings are listed one by one", () => {
+  test("a minor finding appears by id, file:line and problem in the verdict text and in verdict-interim.md; the headline adds the count", async () => {
+    manifest();
+    put("findings.json", [
+      { id: "R-1", reviewer: "review-logic", severity: "major", problem: "wrong branch", file: "src/a.ts", line: 3 },
+      { id: "R-2", reviewer: "review-style", severity: "minor", problem: "name says list, holds a set", file: "src/b.ts", line: 12 },
+      { id: "R-3", reviewer: "review-style", severity: "minor", problem: "unused import", location: "src/c.ts:1" },
+    ]);
+    const { verdict, markdown, file } = await writeVerdict(pkg, "r1");
+    expect(verdict.headline).toBe("1 open major(s): resolve or justify before merge; 2 minor to address");
+    expect(verdict.minors.map((finding) => finding.id)).toEqual(["R-2", "R-3"]);
+    expect(markdown).toContain("## Minor findings to address");
+    expect(markdown).toContain("- R-2 [minor] src/b.ts:12 (review-style, unverified): name says list, holds a set");
+    expect(markdown.indexOf("## Open blockers and majors")).toBeLessThan(markdown.indexOf("## Minor findings to address"));
+    expect(readFileSync(file, "utf8")).toContain("R-3 [minor] src/c.ts:1");
+    let shown = "";
+    await publishReview(pkg, { partial: true, post: async () => ({ ok: true, detail: "" }), confirm: async (body) => ((shown = body), false) });
+    expect(shown).toContain("## Minor findings to address");
+    expect(shown).toContain("R-2 `src/b.ts:12` (review-style): name says list, holds a set");
   });
 });
 
@@ -408,9 +438,15 @@ describe("row 10: item 10 outside keryx shell", () => {
     expect(lines.filter((line) => line.caller !== undefined).map((line) => line.caller)).toEqual(["orchestrator", "unattributed"]);
   });
 
-  test("the item's repair names the keryx shell card", async () => {
-    const source = readFileSync(path.join(import.meta.dir, "readiness.ts"), "utf8");
-    expect(source).toContain("review_waive_readiness tool with item memory-outside-stage");
+  test("a memory call by the orchestrator outside its stage fails item 10, and the repair names the keryx shell card", async () => {
+    manifest();
+    await writeRunProfile(pkg, buildRunProfile({ host: "keryx-shell", env: {}, now: NOW }));
+    expect(await startOrchestratorLog(root, "r1", pkg, "tok456")).toBe(true);
+    await recordProcessCall(root, { source: "cli", command: 'keryx memory search "anything else"' }, { KERYX_REVIEW_CALLER_TOKEN: "tok456" });
+    const item = (await computeReadiness(pkg)).items.find((entry) => entry.id === "memory-outside-stage")!;
+    expect(item.status).toBe("fail");
+    expect(item.evidence).toContain("outside its memory stage");
+    expect(item.repair).toContain("review_waive_readiness tool with item memory-outside-stage");
   });
 });
 
@@ -467,6 +503,19 @@ describe("row 4: verification commands run in the parent", () => {
   test("verify-run through the CLI needs a command and a finding", async () => {
     await expect(runOperatorCommand("verify-run", ["--package", pkg, "--finding", "f-1"], { cwd: root })).rejects.toThrow("needs a command");
     await expect(runOperatorCommand("verify-run", ["--package", pkg, "--", "true"], { cwd: root })).rejects.toThrow("--finding");
+  });
+});
+
+describe("row 14: a timed-out child's partial result", () => {
+  test("never overwrites a complete result at the same save_result_to; an empty target takes it", async () => {
+    const target = path.join(pkg, "raw", "review-logic.txt");
+    mkdirSync(path.dirname(target), { recursive: true });
+    expect(await saveTimedOutPartial(target, "partial one")).toEqual({ saved: target });
+    expect(readFileSync(target, "utf8")).toBe("partial one\n");
+    writeFileSync(target, "COMPLETE RESULT\n");
+    expect(await saveTimedOutPartial(target, "partial two")).toEqual({ saved: `${target}.partial` });
+    expect(readFileSync(target, "utf8")).toBe("COMPLETE RESULT\n");
+    expect(readFileSync(`${target}.partial`, "utf8")).toBe("partial two\n");
   });
 });
 

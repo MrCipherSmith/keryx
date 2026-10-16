@@ -615,6 +615,8 @@ test("AC7: a declared outstanding count is the only thing that reaches the nesti
 test("AC5/AC10: an ingest over the cap truncates and says so on the terminal", async () => {
   const many = Array.from({ length: 14 }, (_, index) => ({
     ...FINDING,
+    // Only info notes are capped (owner decision 2026-10-16: minor findings are never dropped).
+    severity: "info",
     id: `F-${String(index + 1).padStart(3, "0")}`,
   }));
   await writeFile(path.join(ROOT, "report.md"), reportWith(many), "utf8");

@@ -7,6 +7,7 @@ import { writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { isPrBound } from "./complete-head-gate";
 import { readRunProfile } from "./run-profile";
+import { computeVerdict } from "./verdict";
 import { computeReadiness, failingItems, readinessRefusal, type ReadinessOptions, type ReadinessReport } from "./readiness";
 import type { ConfirmedVia, ManagedReviewManifest } from "./types";
 
@@ -54,6 +55,18 @@ function runModeHeader(packageDir: string): string {
   return `**Unattended review** (${profile.declaredVia}): nobody was at the keyboard; a mutation pass may be recorded as Not run.\n\n`;
 }
 
+/**
+ * Owner decision (2026-10-16): minor findings are listed one by one in what is posted, not only counted. Each open minor
+ * the report does not already name by id is appended under "Minor findings to address" (id, file:line, problem).
+ */
+async function minorSection(packageDir: string, report: string): Promise<string> {
+  const { minors } = await computeVerdict(packageDir);
+  const missing = minors.filter((finding) => !report.includes(finding.id));
+  if (missing.length === 0) return "";
+  const lines = missing.map((finding) => `- ${finding.id}${finding.location === undefined ? "" : ` \`${finding.location}\``} (${finding.reviewer}): ${finding.problem}`);
+  return `\n## Minor findings to address\n\n${lines.join("\n")}\n`;
+}
+
 /** Every package with a run profile names its run mode at the foot of the posted body. */
 function runModeFooter(packageDir: string): string {
   const profile = readRunProfile(packageDir);
@@ -76,7 +89,8 @@ export async function publishReview(packageDir: string, options: PublishOptions)
   }
   const report = (await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => "")).trim();
   if (report === "") throw new Error(`Review ${manifest.reviewId} has no report.md body to publish.`);
-  const body = `${partial ? `${partialPublishHeader(readiness).join("\n")}\n` : ""}${runModeHeader(packageDir)}${report}\n${runModeFooter(packageDir)}`;
+  const minors = await minorSection(packageDir, report);
+  const body = `${partial ? `${partialPublishHeader(readiness).join("\n")}\n` : ""}${runModeHeader(packageDir)}${report}\n${minors}${runModeFooter(packageDir)}`;
   if (!(await options.confirm(body, manifest.target.ref, event))) return { readiness, body, event, partial, posted: false };
   const result = await options.post(manifest.target.ref, event, body);
   if (!result.ok) throw new Error(`GitHub refused the review: ${result.detail}`);
