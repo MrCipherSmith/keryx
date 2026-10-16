@@ -586,7 +586,7 @@ export interface AgentDeps {
    * message and force another round when the model stops early with work still
    * open (capped at MAX_PLAN_FOLLOW_THROUGHS per turn; a blocked item or a
    * nudge that moved nothing stops it). Flow 418: left unset it defaults ON in
-   * `trust` mode; an explicit `false` keeps it off. `/goal`'s own `--auto`
+   * `trust` mode, except for a subagent or an `unattended` run; an explicit `false` keeps it off. `/goal`'s own `--auto`
    * continuation loop (`goal-command.ts`) is independent of this flag and is
    * unaffected either way.
    */
@@ -4161,8 +4161,11 @@ async function runAgentTurnCore(
       // model's own text reply, with nothing injected into `history`.
       // Flow 418: in `trust` it defaults on, bounded by MAX_PLAN_FOLLOW_THROUGHS
       // per turn; it also stops on a blocked item or a nudge that moved nothing.
+      // An unattended run (a trigger dispatch) never gets it by default, whatever its entry's mode:
+      // like the larger round limits, it is for an operator at the keyboard.
       const followThroughOn =
-        deps.planFollowThrough ?? (subagentBudget === undefined && io.permissionMode?.() === "trust");
+        deps.planFollowThrough ??
+        (subagentBudget === undefined && deps.unattended !== true && io.permissionMode?.() === "trust");
       const planHasBlocker = currentPlan?.items.some((item) => item.status === "blocked") ?? false;
       if (
         followThroughOn &&

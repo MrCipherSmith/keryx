@@ -596,6 +596,21 @@ test("AC3: an explicit planFollowThrough false keeps follow-through off in trust
   expect(onRun.requests.length).toBeGreaterThan(1);
 });
 
+test("AC3 (E10): an unattended trust-mode run (a trigger dispatch) gets no plan follow-through by default", async () => {
+  const { dir, slateSession } = await planFixture(FOUR_ITEMS);
+  const calls = { n: 0 };
+  const { provider, requests } = scriptedProvider(proseThenAdvance(4), { exhausted: "empty" });
+  await runAgentTurn(
+    ioWith("trust"),
+    makeDeps(provider, { tools: [advancePlanTool(dir, calls)], unattended: true }),
+    [],
+    "go",
+    { slateSession },
+  );
+  expect(requests).toHaveLength(1);
+  expect(calls.n).toBe(0);
+});
+
 // AC4
 
 function askRound(id: string, question: string, extra: Record<string, unknown> = {}): Script {
