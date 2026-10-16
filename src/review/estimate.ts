@@ -8,6 +8,7 @@ import path from "node:path";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr, readJsonObjectFile } from "../lib/json";
 import { packageHasBlastRadius, packageHasPrContext, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers, type RoundDepth } from "./coverage";
+import { operatorGateApplies } from "./run-profile";
 import { manifestSizeProblem, packWaves, waveBytesOf, type SliceManifest } from "./slice";
 import { ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph } from "./waves";
@@ -65,16 +66,19 @@ export type RoundEstimate = {
   overReasons: string[];
   /** {@link planKeyOf} of this estimate: a confirmation binds to it. */
   planKey: string;
+  /** Original slices a major-or-worse finding re-opened deep (`escalated` in the manifest). */
+  escalated: string[];
 };
 
 /**
- * Stable identity of a plan: the round's roles and, per original slice, its id, owning roles and depth. A confirmation
- * recorded for one plan does not carry over to a re-sliced or re-routed one.
+ * Stable identity of a plan: the round's roles with their waves, the wave budget, and, per original slice, its id,
+ * owning roles and depth. A confirmation recorded for one plan does not carry over to a re-sliced, re-routed or
+ * re-budgeted one (another `--host` or `--max-bytes` changes the waves, and so the cost; security review M4).
  */
-export function planKeyOf(estimate: Pick<RoundEstimate, "perRole" | "slicePlan">): string {
-  const roles = estimate.perRole.map((entry) => entry.role).sort();
+export function planKeyOf(estimate: Pick<RoundEstimate, "perRole" | "slicePlan"> & { waveBytes?: number | undefined }): string {
+  const roles = [...estimate.perRole].sort((a, b) => a.role.localeCompare(b.role)).map((entry) => ({ role: entry.role, waves: entry.waves }));
   const slices = [...estimate.slicePlan].sort((a, b) => a.id.localeCompare(b.id)).map((entry) => ({ id: entry.id, roles: [...entry.roles].sort(), depth: entry.depth ?? null }));
-  return createHash("sha256").update(JSON.stringify({ roles, slices })).digest("hex").slice(0, 16);
+  return createHash("sha256").update(JSON.stringify({ roles, slices, waveBytes: estimate.waveBytes ?? null })).digest("hex").slice(0, 16);
 }
 
 export function estimateRound(
@@ -106,6 +110,7 @@ export function estimateRound(
   const sequentialBatches = Math.max(longest, Math.ceil(dispatches / ASSUMED_PARALLEL_DISPATCHES));
   const assignments = manifest === undefined ? roles.length : perRole.reduce((total, r) => total + r.slices, 0);
   const minutes = { min: sequentialBatches * TYPICAL_DISPATCH_MINUTES, max: sequentialBatches * CHILD_DEADLINE_MINUTES };
+  const waveBytes = manifest === undefined ? undefined : waveBytesOf(manifest);
   const overReasons = [
     ...(dispatches > thresholds.maxDispatches ? [`${dispatches} dispatches > ${thresholds.maxDispatches}`] : []),
     ...(minutes.max > thresholds.maxMinutes ? [`up to ${minutes.max} min > ${thresholds.maxMinutes}`] : []),
@@ -116,7 +121,7 @@ export function estimateRound(
     roles: roles.length,
     slices: originals.length,
     assignments,
-    waveBytes: manifest === undefined ? undefined : waveBytesOf(manifest),
+    waveBytes,
     dispatches,
     sequentialBatches,
     minutes,
@@ -132,7 +137,8 @@ export function estimateRound(
     thresholds: { maxDispatches: thresholds.maxDispatches, maxMinutes: thresholds.maxMinutes },
     overThreshold: overReasons.length > 0,
     overReasons,
-    planKey: planKeyOf({ perRole, slicePlan }),
+    planKey: planKeyOf({ perRole, slicePlan, waveBytes }),
+    escalated: originals.filter((s) => s.escalated !== undefined).map((s) => s.id),
   };
 }
 
@@ -194,7 +200,7 @@ export function readPlanConfirmation(packageDir: string): PlanConfirmation | und
 }
 
 /** True when the package holds a confirmation recorded for exactly this plan. */
-export function planConfirmed(packageDir: string, estimate: Pick<RoundEstimate, "perRole" | "slicePlan">): boolean {
+export function planConfirmed(packageDir: string, estimate: Pick<RoundEstimate, "perRole" | "slicePlan"> & { waveBytes?: number | undefined }): boolean {
   return readPlanConfirmation(packageDir)?.planKey === planKeyOf(estimate);
 }
 
@@ -215,15 +221,25 @@ export function confirmPlanCommand(packageDir: string): string {
 }
 
 /** Why a dispatch of this plan is refused, or undefined when it is under the threshold or confirmed. */
-export function planGateRefusal(estimate: RoundEstimate, confirmed: boolean, packageDir: string): string | undefined {
+export function planGateRefusal(estimate: RoundEstimate, confirmed: boolean, packageDir: string, previous?: PlanConfirmation | undefined): string | undefined {
   if (!estimate.overThreshold || confirmed) return undefined;
-  return `the review plan is over the operator threshold (${estimate.overReasons.join("; ")}; ${estimate.dispatches} dispatches, ${estimate.minutes.min}-${estimate.minutes.max} min) and no confirmation is recorded for it (plan ${estimate.planKey}). Inside keryx shell, call the ${CONFIRM_PLAN_TOOL} tool: the operator answers it as a card. Outside keryx shell, the operator runs \`${confirmPlanCommand(packageDir)}\` in a terminal`;
+  // Security review M5: a plan an escalation grew is a different plan; say why the confirmation no longer holds.
+  const grew =
+    estimate.escalated.length > 0 && previous !== undefined
+      ? `the plan grew because ${estimate.escalated.length} light slice(s) (${estimate.escalated.slice(0, 6).join(", ")}${estimate.escalated.length > 6 ? ", …" : ""}) were re-opened deep after a major-or-worse finding, so the confirmation recorded for plan ${previous.planKey} (${previous.dispatches} dispatches) no longer covers it; the operator confirms the grown plan. `
+      : "";
+  return `${grew}the review plan is over the operator threshold (${estimate.overReasons.join("; ")}; ${estimate.dispatches} dispatches, ${estimate.minutes.min}-${estimate.minutes.max} min) and no confirmation is recorded for it (plan ${estimate.planKey}). Inside keryx shell, call the ${CONFIRM_PLAN_TOOL} tool: the operator answers it as a card. Outside keryx shell, the operator runs \`${confirmPlanCommand(packageDir)}\` in a terminal`;
 }
 
-/** The estimate of a package's plan and, when it is over the threshold without a confirmation, the refusal. */
-export async function packagePlanGate(packageDir: string, options: { manifest?: string | undefined } = {}): Promise<{ estimate: RoundEstimate; refusal: string | undefined }> {
+/**
+ * The estimate of a package's plan and, when it is over the threshold without a confirmation, the refusal. A package
+ * started before flow 457 (no operator-gate stamp, ./run-profile.ts) is not held to the gate: it never had a way to
+ * record a confirmation (security review M9).
+ */
+export async function packagePlanGate(packageDir: string, options: { manifest?: string | undefined; manifestValue?: SliceManifest | undefined } = {}): Promise<{ estimate: RoundEstimate; refusal: string | undefined }> {
   const estimate = await estimatePackage(packageDir, options);
-  return { estimate, refusal: planGateRefusal(estimate, planConfirmed(packageDir, estimate), packageDir) };
+  if (!operatorGateApplies(packageDir)) return { estimate, refusal: undefined };
+  return { estimate, refusal: planGateRefusal(estimate, planConfirmed(packageDir, estimate), packageDir, readPlanConfirmation(packageDir)) };
 }
 
 /** Where a round's slice manifest lives when `--manifest` is not given: the package's own, then the shell host's shared one. */
@@ -243,7 +259,7 @@ async function readManifest(candidates: readonly string[]): Promise<{ manifest: 
   return undefined;
 }
 
-export async function estimatePackage(packageDir: string, options: { manifest?: string | undefined } = {}): Promise<RoundEstimate> {
+export async function estimatePackage(packageDir: string, options: { manifest?: string | undefined; manifestValue?: SliceManifest | undefined } = {}): Promise<RoundEstimate> {
   if (!existsSync(packageDir)) throw new Error(`${packageDir} does not exist; pass --package <review-dir>`);
   const root = projectRootOfPackage(packageDir);
   const recorded = await packageRoundDepth(packageDir);
@@ -253,7 +269,9 @@ export async function estimatePackage(packageDir: string, options: { manifest?: 
     prContext: packageHasPrContext(packageDir),
     depth: recorded?.depth,
   });
-  const found = await readManifest(options.manifest === undefined ? manifestCandidates(packageDir, root) : [options.manifest]);
+  const read = await readManifest(options.manifest === undefined ? manifestCandidates(packageDir, root) : [options.manifest]);
+  // A caller that already holds the manifest (the ledger, after applying escalations in a dry run) estimates that one.
+  const found = options.manifestValue === undefined ? read : { manifest: options.manifestValue, file: read?.file ?? options.manifest ?? path.join(packageDir, "slices", "manifest.json") };
   if (options.manifest !== undefined && found === undefined) throw new Error(`${options.manifest} is not a slice manifest (no readable JSON with a slices array); run \`keryx review slice\` first`);
   const problem = found === undefined ? undefined : manifestSizeProblem(found.manifest);
   if (problem !== undefined) throw new Error(`${path.relative(root, found!.file)}: ${problem}`);

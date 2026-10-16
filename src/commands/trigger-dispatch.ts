@@ -77,9 +77,6 @@ import type {
 import { NETWORK_ON_WARNING } from "../trigger/describe";
 import { reserveTriggerSpend } from "../trigger/run";
 import { isUnattendedExcludedTool, unattendedRefusal } from "../trigger/unattended";
-import { isReviewTask, reviewTaskCommand, reviewTaskRange } from "../trigger/review-task";
-import { parseAutonomousRangeTarget } from "../review/autonomous-profile";
-import { runAutonomousReview, type AutonomousRunOptions, type AutonomousRunResult } from "../review/autonomous-run";
 
 const execFileAsync = promisify(execFile);
 
@@ -123,47 +120,6 @@ export interface DispatchDeps {
    * throws in practice.
    */
   readonly extraTools?: readonly InteractiveTool[];
-  /**
-   * Flow 457 (T7): runs a review task through the autonomous review runner. Default: `runAutonomousReview`. A test
-   * replaces it; the range comes from `reviewRange` (default: the origin's default branch to HEAD).
-   */
-  readonly reviewRun?: (options: AutonomousRunOptions) => Promise<AutonomousRunResult>;
-  readonly reviewRange?: (projectRoot: string) => Promise<{ base: string; head?: string }>;
-}
-
-/** The default branch (origin/HEAD) to the commit checked out, for a review task's autonomous run. */
-async function defaultReviewRange(projectRoot: string): Promise<{ base: string; head?: string }> {
-  const origin = await git(projectRoot, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]).catch(() => "");
-  const head = await git(projectRoot, ["rev-parse", "--verify", "HEAD"]).catch(() => "");
-  return reviewTaskRange({ defaultBranch: origin === "" ? undefined : origin, head: head === "" ? undefined : head });
-}
-
-/**
- * A review task needs reviewer subagents, which an unattended agent is never offered, so it would end BLOCKED.
- * It goes to the autonomous review runner instead; the outcome is the runner's verdict.
- */
-async function dispatchReviewTask(projectRoot: string, flow: string, task: FlowTask, deps: DispatchDeps, runId: string): Promise<DispatchResult> {
-  const range = await (deps.reviewRange ?? defaultReviewRange)(projectRoot);
-  const command = reviewTaskCommand(range);
-  try {
-    const result = await (deps.reviewRun ?? runAutonomousReview)({ cwd: projectRoot, ref: range.base, target: parseAutonomousRangeTarget(range.base, range.head) });
-    const complete = result.exitCode === 0;
-    return {
-      outcome: complete ? "ok" : "failed",
-      detail: `review task ${task.id} ran as \`${command}\`: ${result.reused ? "reused" : result.status} (exit ${result.exitCode}): ${result.summary.reason}; report: ${path.join(result.runDir, "report.md")}`,
-      cost: { recorded: false, reason: `an autonomous review reports its tokens but no price (${result.summary.tokens} tokens)` },
-      dispatch: { runId, flow, task: task.id },
-      exitCode: complete ? 0 : 1,
-    };
-  } catch (error) {
-    return {
-      outcome: "failed",
-      detail: `review task ${task.id} could not run as \`${command}\`: ${error instanceof Error ? error.message : String(error)}`,
-      cost: { recorded: false, reason: "the autonomous review failed before its cost could be measured" },
-      dispatch: { runId, flow, task: task.id },
-      exitCode: 1,
-    };
-  }
 }
 
 // Flow 300 T5: the two posture strings moved to `../trigger/describe.ts`, where
@@ -677,8 +633,10 @@ async function dispatchLocked(
     );
   }
 
-  // Flow 457 (T7, audit row 16): a review task goes to the autonomous review runner, which can dispatch reviewers.
-  if (isReviewTask(task)) return dispatchReviewTask(projectRoot, flow, task, deps, runId);
+  // Flow 457 (security review B1): a review task takes the same path as every other task below: containment,
+  // spend reservation and attempt record first. It is NOT handed to the autonomous review runner, which would run
+  // in the real project root, with no budget and no attempt. An unattended agent cannot dispatch reviewers, so a
+  // review task ends blocked here, as before flow 457.
 
   // --- 3. containment (AC13, and flow 301 AC12) — decided before anything is written --
   // Flow 301 (AC12): every run's worktree lives under one 0700 parent, and that parent

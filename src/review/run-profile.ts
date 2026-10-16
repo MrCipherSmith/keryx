@@ -41,6 +41,25 @@ export function isAutonomousEnv(env: Readonly<Record<string, string | undefined>
   return env[ENV_AUTONOMOUS_ANSWERS_FILE] !== undefined;
 }
 
+/**
+ * Security review M1: `review start --unattended` turns the mutation gate off, so the agent cannot declare it on its
+ * own say. It needs a person at a terminal, or the autonomous runner (whose child is unattended whatever the flag
+ * says, as before flow 457). Returns the refusal, or undefined when the start may proceed.
+ */
+export function unattendedStartRefusal(input: {
+  unattended: boolean;
+  isTerminal: () => boolean;
+  env?: Readonly<Record<string, string | undefined>> | undefined;
+}): string | undefined {
+  if (!input.unattended || input.isTerminal() || isAutonomousEnv(input.env ?? process.env)) return undefined;
+  return (
+    "--unattended needs a terminal: it records that nobody is at the keyboard, which lets the round close with the mutation pass Not run, " +
+    "and an agent cannot declare that on its own say (stdin or stdout is not a TTY). Run `keryx review start ... --unattended` in a terminal, " +
+    "or run the whole review unattended with `keryx review run --autonomous`. Inside keryx shell, start the round without --unattended: " +
+    "a skipped mutation pass is then waived by the operator on the review_waive_mutation card."
+  );
+}
+
 export function buildRunProfile(input: {
   unattended?: boolean | undefined;
   host?: string | undefined;

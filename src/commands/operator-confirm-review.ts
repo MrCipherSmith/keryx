@@ -35,10 +35,9 @@ import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from ".
 import { computeReadiness, readinessItemId, waiveReadiness, type ReadinessOptions } from "../review/readiness";
 import type { PrLookup } from "../review/complete-head-gate";
 import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmSpec } from "./operator-confirm-tools";
-import { pendingMutants } from "../review/mutate";
-import { packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "../review/coverage";
-import { recordOperatorDecision, type OperatorDecisionKind } from "../review/operator-decisions";
-import { estimatePlan, planKeyOf, planOverThreshold, DEFAULT_PLAN_THRESHOLD, recordPlanConfirmation } from "../review/plan-confirmation";
+import { operatorDecisionSubject, reviewersLeftOut } from "../review/coverage";
+import { recordOperatorDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
+import { estimatePlan, planKeyOf, planOverThreshold, recordPlanConfirmation } from "../review/plan-confirmation";
 
 /** What the specs read outside the package: the PR tracker. Tests replace these; the defaults are the CLI's. */
 export interface ReviewConfirmSeams {
@@ -349,7 +348,7 @@ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<Read
 // ---------------------------------------------------------------------------------------------------------------------
 // 5-6. review_waive_mutation, review_override_reviewers (flow 457)
 
-type DecisionPrepared = { dir: string; reason: string; detail: string };
+type DecisionPrepared = { dir: string; reason: string; detail: string; subject: OperatorDecisionSubject };
 
 const reasonOf = (input: Record<string, unknown>): string | undefined => {
   const value = input["reason"];
@@ -384,38 +383,50 @@ function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionP
         const dir = await resolvePackage(ref, ctx.projectRoot);
         const name = label(dir, ctx.projectRoot);
         if (mutation) {
-          const pending = (await pendingMutants(dir)).length;
+          const subject = await operatorDecisionSubject(dir, kind);
+          const pending = subject.items.length;
           if (pending === 0) return { refusal: "No proposed mutant is unrun: there is no mutation pass to waive." };
           return {
             title: `Waive the mutation pass for ${name}: ${pending} proposed mutant(s) stay unrun?`,
-            lines: [`unrun mutants: ${pending} (research-evidence/mutants.json)`, `reason: ${cardSafe(reason)}`, "yes: the review records `Not run: mutation pass` with your words, and the gate accepts it"],
+            lines: [
+              `unrun mutants: ${pending} (research-evidence/mutants.json): ${cardSafe(subject.items.slice(0, LISTED_FILES).join(", "))}${pending > LISTED_FILES ? ` … and ${pending - LISTED_FILES} more` : ""}`,
+              `head: ${cardSafe(subject.head ?? "not recorded")}`,
+              `reason: ${cardSafe(reason)}`,
+              "yes: the review records `Not run: mutation pass` with your words for these mutants at this head; a new head or a new mutant asks again",
+            ],
             subject: `package ${name}`,
-            prepared: { dir, reason, detail: `${pending} mutant(s)` },
+            prepared: { dir, reason, detail: `${pending} mutant(s)`, subject },
           };
         }
-        const files = await packageScopeFiles(dir);
-        const need = await requiredReviewers(projectRootOfPackage(dir), "all", files, { blastRadius: await packageHasBlastRadius(dir), prContext: packageHasPrContext(dir) });
         const selected = Array.isArray(input["selected"]) ? (input["selected"] as unknown[]).filter((v): v is string => typeof v === "string") : undefined;
-        const missing = selected === undefined ? need.required : need.required.filter((role) => !selected.includes(role));
+        const { required } = await reviewersLeftOut(dir, selected);
+        const subject = await operatorDecisionSubject(dir, kind, selected);
+        const missing = subject.items;
         return {
           title: `Run a smaller reviewer set than required for ${name}?`,
           lines: [
-            `required (mode all): ${need.required.length} reviewer(s)`,
+            `required (mode all): ${required.length} reviewer(s)`,
+            `head: ${cardSafe(subject.head ?? "not recorded")}`,
             selected === undefined ? "selected: not named" : `selected: ${cardSafe(selected.join(", "))}`,
             `not run: ${cardSafe(missing.slice(0, LISTED_FILES).join(", ") || "none")}${missing.length > LISTED_FILES ? ` … and ${missing.length - LISTED_FILES} more` : ""}`,
             `reason: ${cardSafe(reason)}`,
-            "yes: the gate accepts the narrower set for this package",
+            "yes: the gate accepts leaving out exactly these reviewers at this head; dropping another one or a new head asks again",
           ],
           subject: `package ${name}`,
-          prepared: { dir, reason, detail: missing.join(",") },
+          prepared: { dir, reason, detail: missing.join(","), subject },
         };
       } catch (error) {
         return failed(error);
       }
     },
-    async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+    async apply(input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
       if (prepared === undefined) return { output: `${mutation ? "review_waive_mutation" : "review_override_reviewers"}: nothing prepared for this card`, isError: true };
-      await recordOperatorDecision(prepared.dir, { kind, quote: confirmation.quote, reason: prepared.reason, confirmedVia: confirmation.confirmedVia, at: confirmation.at });
+      const selected = Array.isArray(input["selected"]) ? (input["selected"] as unknown[]).filter((v): v is string => typeof v === "string") : undefined;
+      const again = await operatorDecisionSubject(prepared.dir, kind, mutation ? undefined : selected);
+      if (JSON.stringify(again) !== JSON.stringify(prepared.subject)) {
+        return { output: "The head, the unrun mutants or the reviewer set changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+      }
+      await recordOperatorDecision(prepared.dir, { kind, quote: confirmation.quote, reason: prepared.reason, confirmedVia: confirmation.confirmedVia, at: confirmation.at, subject: prepared.subject });
       return { output: `${mutation ? "mutation pass waived" : "reviewer-set override recorded"} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json` };
     },
   };
@@ -514,7 +525,7 @@ function confirmPlanSpec(): OperatorConfirmSpec<PlanPrepared> {
         const dir = await resolvePackage(ref, ctx.projectRoot);
         const estimate = await estimatePlan(dir);
         if (!planOverThreshold(estimate)) {
-          return { refusal: `The plan needs ${estimate.dispatches} dispatch(es), ${estimate.minutes.min}-${estimate.minutes.max} min: within the threshold (${DEFAULT_PLAN_THRESHOLD.dispatches} dispatches, ${DEFAULT_PLAN_THRESHOLD.minutes} min), so it runs without a confirmation.` };
+          return { refusal: `The plan needs ${estimate.dispatches} dispatch(es), ${estimate.minutes.min}-${estimate.minutes.max} min: within the threshold (${estimate.thresholds.maxDispatches} dispatches, ${estimate.thresholds.maxMinutes} min), so it runs without a confirmation.` };
         }
         const name = label(dir, ctx.projectRoot);
         return {
@@ -522,7 +533,7 @@ function confirmPlanSpec(): OperatorConfirmSpec<PlanPrepared> {
           lines: [
             `dispatches: ${estimate.dispatches} (${estimate.roles} roles, ${estimate.slices} slices, ${estimate.sequentialBatches} batch(es) one after another)`,
             `expected duration: ${estimate.minutes.min}-${estimate.minutes.max} min`,
-            `threshold: ${DEFAULT_PLAN_THRESHOLD.dispatches} dispatches or ${DEFAULT_PLAN_THRESHOLD.minutes} min`,
+            `threshold: ${estimate.thresholds.maxDispatches} dispatches or ${estimate.thresholds.maxMinutes} min (${estimate.overReasons.join("; ")})`,
             ...estimate.perRole.slice(0, LISTED_FILES).map((role) => `  ${cardSafe(role.role)}: ${role.slices} slice(s), ${role.waves} wave(s)`),
             "yes: this plan may run; a re-cut plan asks again",
           ],

@@ -21,12 +21,21 @@ export type OperatorDecisionKind = (typeof OPERATOR_DECISION_KINDS)[number];
 export type OperatorDecisionVia = ConfirmedVia | "terminal";
 const VIAS: readonly OperatorDecisionVia[] = ["tui-card", "remote-card", "terminal"];
 
+/**
+ * What the card or the terminal showed the operator (security review M4): the head the package was at, and the
+ * mutant ids left unrun (mutation waiver) or the required reviewers left out (override). The gate accepts a decision
+ * only for that head and only while what is waived now is a subset of what was shown: a new head, a new mutant or
+ * another dropped reviewer needs the operator again.
+ */
+export type OperatorDecisionSubject = { head?: string | undefined; items: string[] };
+
 export type OperatorDecision = {
   kind: OperatorDecisionKind;
   quote: string;
   reason: string;
   confirmedVia: OperatorDecisionVia;
   at: string;
+  subject?: OperatorDecisionSubject | undefined;
 };
 
 export type OperatorDecisionsFile = { schemaVersion: 1; decisions: OperatorDecision[] };
@@ -41,7 +50,8 @@ function valid(entry: unknown): entry is OperatorDecision {
     text(d.quote) &&
     text(d.reason) &&
     VIAS.includes(d.confirmedVia as OperatorDecisionVia) &&
-    text(d.at)
+    text(d.at) &&
+    (d.subject === undefined || validSubject(d.subject))
   );
 }
 
@@ -51,15 +61,33 @@ export async function readOperatorDecisions(packageDir: string): Promise<Operato
   return list.filter(valid);
 }
 
-/** The latest valid decision of `kind`, or undefined. */
-export async function confirmedDecision(packageDir: string, kind: OperatorDecisionKind): Promise<OperatorDecision | undefined> {
-  return (await readOperatorDecisions(packageDir)).filter((decision) => decision.kind === kind).at(-1);
+function validSubject(value: unknown): value is OperatorDecisionSubject {
+  if (value === null || typeof value !== "object") return false;
+  const subject = value as Record<string, unknown>;
+  return Array.isArray(subject.items) && subject.items.every((item) => typeof item === "string") && (subject.head === undefined || typeof subject.head === "string");
+}
+
+/** Whether `decision` was shown at least what `now` waives, at the same head. A decision without a subject covers nothing. */
+export function decisionCovers(decision: OperatorDecision, now: OperatorDecisionSubject): boolean {
+  if (!validSubject(decision.subject)) return false;
+  if ((decision.subject.head ?? "") !== (now.head ?? "")) return false;
+  const shown = new Set(decision.subject.items);
+  return now.items.every((item) => shown.has(item));
+}
+
+/**
+ * The latest valid decision of `kind`, or undefined. With `now`, only a decision bound to that head whose shown items
+ * include every item waived now (`decisionCovers`).
+ */
+export async function confirmedDecision(packageDir: string, kind: OperatorDecisionKind, now?: OperatorDecisionSubject): Promise<OperatorDecision | undefined> {
+  return (await readOperatorDecisions(packageDir)).filter((decision) => decision.kind === kind && (now === undefined || decisionCovers(decision, now))).at(-1);
 }
 
 export async function recordOperatorDecision(packageDir: string, decision: OperatorDecision): Promise<OperatorDecision> {
   if (!valid(decision)) throw new Error("an operator decision needs a kind, the operator's words, a reason, how it was confirmed and the time");
   const decisions = await readOperatorDecisions(packageDir);
-  const body: OperatorDecisionsFile = { schemaVersion: 1, decisions: [...decisions, { ...decision, quote: decision.quote.trim(), reason: decision.reason.trim() }] };
+  const subject = decision.subject === undefined ? undefined : { ...(decision.subject.head === undefined ? {} : { head: decision.subject.head }), items: [...new Set(decision.subject.items)].sort() };
+  const body: OperatorDecisionsFile = { schemaVersion: 1, decisions: [...decisions, { ...decision, quote: decision.quote.trim(), reason: decision.reason.trim(), ...(subject === undefined ? {} : { subject }) }] };
   await writeFileAtomic(path.join(packageDir, OPERATOR_DECISIONS_FILE), `${JSON.stringify(body, null, 2)}\n`);
   return decision;
 }

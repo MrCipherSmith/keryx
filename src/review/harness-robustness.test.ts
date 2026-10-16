@@ -11,7 +11,6 @@ import { runOperatorCommand } from "../commands/review-operator";
 import { packageOfManifest, runSlice } from "../commands/review-slice";
 import { buildReviewConfirmSpecs } from "../commands/operator-confirm-review";
 import { operatorConfirmTool } from "../commands/operator-confirm-tools";
-import { isReviewTask, reviewTaskCommand, reviewTaskRange } from "../trigger/review-task";
 import { OPERATOR_CONFIRM_TOOL_NAMES, isUnattendedExcludedTool } from "../trigger/unattended";
 import { AUTONOMOUS_PROFILE, AUTONOMOUS_SCOPE_FILE, REVIEW_WAVE_SIZE, autonomousScopeFile, buildAutonomousPrompt, describeAutonomousTarget, parseAutonomousRangeTarget } from "./autonomous-profile";
 import { runAutonomousReview, type ChildSpec } from "./autonomous-run";
@@ -21,11 +20,13 @@ import { HOST_WAVE_BYTES, defaultWaveBytes, detectReviewHost } from "./host-prof
 import { confirmedDecision, recordOperatorDecision } from "./operator-decisions";
 import { recordProcessCall, startOrchestratorLog } from "./orchestrator-log";
 import { planConfirmed, recordPlanConfirmation, type PlanNumbers } from "./plan-confirmation";
-import { computeReadiness } from "./readiness";
-import { RUN_PROFILE_FILE, buildRunProfile, isAttendedRun, writeRunProfile } from "./run-profile";
+import { computeReadiness, renderReadiness } from "./readiness";
+import { publishReview } from "./publish";
+import { RUN_PROFILE_FILE, buildRunProfile, isAttendedRun, unattendedStartRefusal, writeRunProfile } from "./run-profile";
 import { compareVersions, defaultBundledReviewRoot, renderSkillDrift, reviewSkillDrift, shellQuote, skillVersion } from "./skill-drift";
-import { computeVerdict } from "./verdict";
-import { promoteParentExecutions, verifyRun } from "./verify-run";
+import { computeVerdict, renderVerdict, writeVerdict } from "./verdict";
+import { saveTimedOutPartial } from "../harness/tool/builtin/spawn-subagent-tool";
+import { defaultRunner, promoteParentExecutions, verifyRun } from "./verify-run";
 
 const NOW = new Date("2026-10-16T08:00:00.000Z");
 let root: string;
@@ -97,6 +98,35 @@ describe("row 11: results and drivers live per package", () => {
     const verdict = await computeVerdict(pkg);
     expect(verdict.rawDir).toBe(path.join(pkg, "raw"));
     expect(verdict.total).toBe(0);
+    // And the package's own raw results are what it counts: reverting the default to the shared directory fails here.
+    mkdirSync(path.join(pkg, "raw"), { recursive: true });
+    writeFileSync(path.join(pkg, "raw", "review-security-code.txt"), '```REVIEW_RESULT\n{"status":"DONE","reviewer":"review-security-code","findings":[{"id":"S-1","severity":"blocker","problem":"this round"}]}\n```\n');
+    const own = await computeVerdict(pkg);
+    expect(own.source).toBe("raw reviewer results");
+    expect(own.open.map((finding) => finding.id)).toEqual(["S-1"]);
+    expect(own.reportedReviewers).toEqual(["review-security-code"]);
+  });
+});
+
+describe("owner decision 2026-10-16: minor findings are listed one by one", () => {
+  test("a minor finding appears by id, file:line and problem in the verdict text and in verdict-interim.md; the headline adds the count", async () => {
+    manifest();
+    put("findings.json", [
+      { id: "R-1", reviewer: "review-logic", severity: "major", problem: "wrong branch", file: "src/a.ts", line: 3 },
+      { id: "R-2", reviewer: "review-style", severity: "minor", problem: "name says list, holds a set", file: "src/b.ts", line: 12 },
+      { id: "R-3", reviewer: "review-style", severity: "minor", problem: "unused import", location: "src/c.ts:1" },
+    ]);
+    const { verdict, markdown, file } = await writeVerdict(pkg, "r1");
+    expect(verdict.headline).toBe("1 open major(s): resolve or justify before merge; 2 minor to address");
+    expect(verdict.minors.map((finding) => finding.id)).toEqual(["R-2", "R-3"]);
+    expect(markdown).toContain("## Minor findings to address");
+    expect(markdown).toContain("- R-2 [minor] src/b.ts:12 (review-style, unverified): name says list, holds a set");
+    expect(markdown.indexOf("## Open blockers and majors")).toBeLessThan(markdown.indexOf("## Minor findings to address"));
+    expect(readFileSync(file, "utf8")).toContain("R-3 [minor] src/c.ts:1");
+    let shown = "";
+    await publishReview(pkg, { partial: true, post: async () => ({ ok: true, detail: "" }), confirm: async (body) => ((shown = body), false) });
+    expect(shown).toContain("## Minor findings to address");
+    expect(shown).toContain("R-2 `src/b.ts:12` (review-style): name says list, holds a set");
   });
 });
 
@@ -214,17 +244,65 @@ describe("row 6: attended is derived from the mode", () => {
 });
 
 describe("row 7: chunks estimate --mode automatic cannot bypass the operator", () => {
-  test("refused without a terminal outside the autonomous runner, naming the card", async () => {
+  test("refused without a terminal, naming the card; the autonomous runner's env is no exemption (security review M2)", async () => {
     const deps = { rejectUnknownFlags: () => undefined };
-    await expect(runChunks(["estimate", "--package", pkg, "--mode", "automatic"], deps, { isTerminal: () => false, env: {} })).rejects.toThrow("review_chunks_answer");
+    await expect(runChunks(["estimate", "--package", pkg, "--mode", "automatic"], deps, { isTerminal: () => false })).rejects.toThrow("review_chunks_answer");
+    const saved = process.env["KERYX_AUTONOMOUS_ANSWERS_FILE"];
+    process.env["KERYX_AUTONOMOUS_ANSWERS_FILE"] = "x";
+    try {
+      await expect(runChunks(["estimate", "--package", pkg, "--mode", "automatic"], deps, { isTerminal: () => false })).rejects.toThrow("needs a terminal");
+    } finally {
+      if (saved === undefined) delete process.env["KERYX_AUTONOMOUS_ANSWERS_FILE"];
+      else process.env["KERYX_AUTONOMOUS_ANSWERS_FILE"] = saved;
+    }
     const log = console.log;
     console.log = () => undefined;
     try {
-      await runChunks(["estimate", "--package", pkg, "--mode", "automatic"], deps, { isTerminal: () => false, env: { KERYX_AUTONOMOUS_ANSWERS_FILE: "/x" } });
-      await runChunks(["estimate", "--package", pkg, "--mode", "automatic"], deps, { isTerminal: () => true, env: {} });
+      await runChunks(["estimate", "--package", pkg, "--mode", "automatic"], deps, { isTerminal: () => true });
     } finally {
       console.log = log;
     }
+  });
+
+  test("the autonomous prompt never names --mode automatic and reports an over-ceiling chunk run as needing the operator", () => {
+    const text = buildAutonomousPrompt({ ref: "https://github.com/o/r/pull/7" });
+    expect(text).not.toContain("--mode automatic");
+    expect(text).toContain("needing the operator");
+  });
+});
+
+describe("security review M1: review start --unattended needs a terminal or the autonomous runner", () => {
+  test("refused without a terminal, naming the command and the card; allowed at a terminal or under the runner", () => {
+    const refusal = unattendedStartRefusal({ unattended: true, isTerminal: () => false, env: {} });
+    expect(refusal).toContain("needs a terminal");
+    expect(refusal).toContain("keryx review run --autonomous");
+    expect(refusal).toContain("review_waive_mutation");
+    expect(unattendedStartRefusal({ unattended: true, isTerminal: () => true, env: {} })).toBeUndefined();
+    expect(unattendedStartRefusal({ unattended: true, isTerminal: () => false, env: { KERYX_AUTONOMOUS_ANSWERS_FILE: "/x" } })).toBeUndefined();
+    expect(unattendedStartRefusal({ unattended: false, isTerminal: () => false, env: {} })).toBeUndefined();
+  });
+
+  test("the verdict and the publish body show the run mode", async () => {
+    manifest();
+    await writeRunProfile(pkg, buildRunProfile({ unattended: true, env: {}, now: NOW }));
+    const verdict = await computeVerdict(pkg);
+    expect(verdict.runMode).toBe("unattended (--unattended)");
+    expect(renderVerdict(verdict, "r1")).toContain("run mode: unattended (--unattended)");
+    let shown = "";
+    await publishReview(pkg, { partial: true, post: async () => ({ ok: true, detail: "" }), confirm: async (body) => ((shown = body), false) });
+    expect(shown).toContain("**Unattended review** (--unattended)");
+    expect(shown).toContain("_run mode: unattended (--unattended)_");
+  });
+
+  test("tests listed to run with no verify-run record is a non-blocking warning in the verdict and the readiness", async () => {
+    manifest();
+    put("tests-to-run.json", [{ file: "src/a.test.ts", reason: "test-consumer", symbols: ["a"] }, { file: "src/b.test.ts", reason: "test-consumer", symbols: ["b"] }]);
+    expect((await computeVerdict(pkg)).testsNotRun).toBe("2 tests listed to run; none recorded as run");
+    const readiness = await computeReadiness(pkg);
+    expect(readiness.warnings).toEqual(["2 tests listed to run; none recorded as run"]);
+    expect(renderReadiness(readiness).join("\n")).toContain("warning (not blocking): 2 tests listed to run; none recorded as run");
+    await verifyRun({ packageDir: pkg, finding: "f-1", argv: ["true"], cwd: root, runner: async () => ({ exitCode: 0, stdout: "", stderr: "", timedOut: false }) });
+    expect((await computeVerdict(pkg)).testsNotRun).toBeUndefined();
   });
 });
 
@@ -263,6 +341,39 @@ describe("row 8: mutation waiver and reviewer-set override need a card or a term
     const result = await yes("review_override_reviewers", { package: pkg, reason: "docs-only change", selected: ["review-logic"] });
     expect(result.isError).toBe(false);
     expect((await confirmedDecision(pkg, "reviewer-override"))?.quote).toContain(": yes");
+  });
+
+  test("security review M4: a mutation waiver binds to the mutants and the head the card showed", async () => {
+    manifest();
+    put("manifest.json", { ...JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8")), target: { kind: "pr", ref: "https://github.com/o/r/pull/7", head: "aaaaaaa" } });
+    const selected = await gated();
+    put("research-evidence/mutants.json", { mutants: [{ id: "m1", file: "src/a.ts", anchor: "a", replacement: "b" }] });
+    const dispatch = { mode: "all", selected };
+    expect((await yes("review_waive_mutation", { package: pkg, reason: "slow suite" })).isError).toBe(false);
+    expect((await confirmedDecision(pkg, "mutation-waiver"))?.subject).toEqual({ head: "aaaaaaa", items: ["m1"] });
+    expect(await coverageErrors(dispatch, { root, packageDir: pkg, pendingMutants: 1, attended: true })).toEqual([]);
+    // A new mutant is not covered by the waiver the operator saw.
+    put("research-evidence/mutants.json", { mutants: [{ id: "m1", file: "src/a.ts", anchor: "a", replacement: "b" }, { id: "m2", file: "src/a.ts", anchor: "a", replacement: "c" }] });
+    const more = (await coverageErrors(dispatch, { root, packageDir: pkg, pendingMutants: 2, attended: true })).join(" ");
+    expect(more).toContain("does not cover this");
+    expect(more).toContain("m1, m2");
+    // Nor does a new head.
+    put("research-evidence/mutants.json", { mutants: [{ id: "m1", file: "src/a.ts", anchor: "a", replacement: "b" }] });
+    put("manifest.json", { ...JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8")), target: { kind: "pr", ref: "https://github.com/o/r/pull/7", head: "bbbbbbb" } });
+    expect((await coverageErrors(dispatch, { root, packageDir: pkg, pendingMutants: 1, attended: true })).join(" ")).toContain("now the head is bbbbbbb");
+  });
+
+  test("security review M4: an override binds to the reviewers the card showed as left out; a hand-written unbound record covers nothing", async () => {
+    const required = await gated();
+    expect(required.length).toBeGreaterThan(2);
+    const keep = required.slice(0, required.length - 1);
+    expect((await yes("review_override_reviewers", { package: pkg, reason: "docs-only", selected: keep })).isError).toBe(false);
+    expect(await coverageErrors({ mode: "all", selected: keep, override: { operatorQuote: "q", reason: "r" } }, { root, packageDir: pkg })).toEqual([]);
+    const fewer = (await coverageErrors({ mode: "all", selected: keep.slice(0, 1), override: { operatorQuote: "q", reason: "r" } }, { root, packageDir: pkg })).join(" ");
+    expect(fewer).toContain("review_override_reviewers");
+    rmSync(path.join(pkg, "operator-decisions.json"));
+    await recordOperatorDecision(pkg, { kind: "reviewer-override", quote: "x: yes", reason: "y", confirmedVia: "tui-card", at: NOW.toISOString() });
+    expect((await coverageErrors({ mode: "all", selected: keep, override: { operatorQuote: "q", reason: "r" } }, { root, packageDir: pkg })).join(" ")).toContain("not bound to a head");
   });
 
   test("a package created before the gate keeps the old rule: the dispatch quote stands", async () => {
@@ -340,20 +451,15 @@ describe("row 10: item 10 outside keryx shell", () => {
     expect(lines.filter((line) => line.caller !== undefined).map((line) => line.caller)).toEqual(["orchestrator", "unattributed"]);
   });
 
-  test("the item's repair names the keryx shell card", async () => {
-    const source = readFileSync(path.join(import.meta.dir, "readiness.ts"), "utf8");
-    expect(source).toContain("review_waive_readiness tool with item memory-outside-stage");
-  });
-});
-
-describe("row 16: trigger review tasks go to the autonomous runner", () => {
-  test("a review task is recognised and routed to review run --autonomous over the flow's range", () => {
-    expect(isReviewTask({ id: "T7", kind: "review", title: "review" })).toBe(true);
-    expect(isReviewTask({ id: "T1", kind: "implement", title: "review the code" })).toBe(false);
-    const range = reviewTaskRange({ defaultBranch: "origin/main", head: "abc1234" });
-    expect(range).toEqual({ base: "origin/main", head: "abc1234" });
-    expect(reviewTaskCommand(range)).toBe("keryx review run --autonomous --target branch --ref origin/main --head abc1234");
-    expect(reviewTaskRange({ defaultBranch: undefined, head: undefined })).toEqual({ base: "main" });
+  test("a memory call by the orchestrator outside its stage fails item 10, and the repair names the keryx shell card", async () => {
+    manifest();
+    await writeRunProfile(pkg, buildRunProfile({ host: "keryx-shell", env: {}, now: NOW }));
+    expect(await startOrchestratorLog(root, "r1", pkg, "tok456")).toBe(true);
+    await recordProcessCall(root, { source: "cli", command: 'keryx memory search "anything else"' }, { KERYX_REVIEW_CALLER_TOKEN: "tok456" });
+    const item = (await computeReadiness(pkg)).items.find((entry) => entry.id === "memory-outside-stage")!;
+    expect(item.status).toBe("fail");
+    expect(item.evidence).toContain("outside its memory stage");
+    expect(item.repair).toContain("review_waive_readiness tool with item memory-outside-stage");
   });
 });
 
@@ -378,7 +484,7 @@ describe("row 4: verification commands run in the parent", () => {
         { finding: "f-1", verdict: "confirmed", method: "reasoning", evidence: `the test fails: ${cited}`, verifier: "review-verifier" },
         { finding: "f-2", verdict: "confirmed", method: "reasoning", evidence: `see ${cited}`, verifier: "review-verifier" },
       ],
-      root,
+      pkg,
     );
     expect(own!.method).toBe("execution");
     expect(other!.method).toBe("reasoning");
@@ -386,9 +492,43 @@ describe("row 4: verification commands run in the parent", () => {
     expect(path.basename(second.file)).toBe("verify-f-1-2.txt");
   });
 
+  test("a record of the same finding id in another package is not execution (security review minor)", async () => {
+    const other = path.join(root, ".metaproject", "reviews", "r0");
+    mkdirSync(other, { recursive: true });
+    await verifyRun({ packageDir: other, finding: "f-1", argv: ["true"], cwd: root, runner: async () => ({ exitCode: 0, stdout: "", stderr: "", timedOut: false }) });
+    const claims = [{ finding: "f-1", verdict: "confirmed" as const, method: "reasoning" as const, evidence: "see .metaproject/reviews/r0/research-evidence/verify-f-1-1.txt", verifier: "review-verifier" }];
+    expect(promoteParentExecutions(claims, pkg)[0]!.method).toBe("reasoning");
+    expect(promoteParentExecutions([{ ...claims[0]!, evidence: "see research-evidence/verify-f-1-1.txt" }], pkg)[0]!.method).toBe("reasoning");
+    expect(promoteParentExecutions(claims, other)[0]!.method).toBe("execution");
+    expect(promoteParentExecutions(claims, undefined)[0]!.method).toBe("reasoning");
+  });
+
+  test("a timed-out command is killed with its whole process group (security review M7)", async () => {
+    const marker = path.join(root, "grandchild-survived");
+    const started = Date.now();
+    const result = await defaultRunner(["sh", "-c", `(sleep 6; touch ${marker}) & sleep 6`], { cwd: root, timeoutMs: 1000 });
+    expect(result.timedOut).toBe(true);
+    expect(Date.now() - started).toBeLessThan(5000);
+    await new Promise((resolve) => setTimeout(resolve, 6500));
+    expect(existsSync(marker)).toBe(false);
+  }, 15_000);
+
   test("verify-run through the CLI needs a command and a finding", async () => {
     await expect(runOperatorCommand("verify-run", ["--package", pkg, "--finding", "f-1"], { cwd: root })).rejects.toThrow("needs a command");
     await expect(runOperatorCommand("verify-run", ["--package", pkg, "--", "true"], { cwd: root })).rejects.toThrow("--finding");
+  });
+});
+
+describe("row 14: a timed-out child's partial result", () => {
+  test("never overwrites a complete result at the same save_result_to; an empty target takes it", async () => {
+    const target = path.join(pkg, "raw", "review-logic.txt");
+    mkdirSync(path.dirname(target), { recursive: true });
+    expect(await saveTimedOutPartial(target, "partial one")).toEqual({ saved: target });
+    expect(readFileSync(target, "utf8")).toBe("partial one\n");
+    writeFileSync(target, "COMPLETE RESULT\n");
+    expect(await saveTimedOutPartial(target, "partial two")).toEqual({ saved: `${target}.partial` });
+    expect(readFileSync(target, "utf8")).toBe("COMPLETE RESULT\n");
+    expect(readFileSync(`${target}.partial`, "utf8")).toBe("partial two\n");
   });
 });
 

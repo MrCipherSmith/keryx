@@ -4,7 +4,8 @@ import path from "node:path";
 import { extractStackRequiresField, parseStackRequires, scopeReviewerByStack, detectProjectStack } from "./stack";
 import { collectReviewers } from "./reviewers";
 import { isAttendedRun, operatorGateApplies } from "./run-profile";
-import { confirmedDecision, decisionWriters, type OperatorDecisionKind } from "./operator-decisions";
+import { confirmedDecision, decisionWriters, type OperatorDecisionKind, type OperatorDecisionSubject } from "./operator-decisions";
+import { pendingMutants } from "./mutate";
 import { buildReviewScope } from "./scope";
 import { assertGitRevision } from "../lib/git-revision";
 
@@ -367,15 +368,52 @@ async function effectiveDepth(record: Record<string, unknown>, options: Coverage
   return decision.depth === "light" ? { depth: "light" } : { depth: "full", refused: decision.reason.replace(/^auto: /, "") };
 }
 
+/** The head the package records (`manifest.target.head`), or undefined. */
+async function packageHead(packageDir: string): Promise<string | undefined> {
+  try {
+    const manifest = JSON.parse(await readFile(path.join(packageDir, "manifest.json"), "utf8")) as { target?: { head?: unknown } };
+    return typeof manifest.target?.head === "string" && manifest.target.head.trim() !== "" ? manifest.target.head.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The required reviewers (mode all) of a package that `selected` leaves out; all of them when `selected` is undefined. */
+export async function reviewersLeftOut(packageDir: string, selected: readonly string[] | undefined): Promise<{ required: string[]; missing: string[] }> {
+  const need = await requiredReviewers(projectRootOfPackage(packageDir), "all", await packageScopeFiles(packageDir), {
+    blastRadius: await packageHasBlastRadius(packageDir),
+    prContext: packageHasPrContext(packageDir),
+  });
+  return { required: need.required, missing: selected === undefined ? need.required : need.required.filter((role) => !selected.includes(role)) };
+}
+
+/**
+ * What a decision of `kind` waives on this package right now (security review M4): the package head, and the unrun
+ * mutant ids (mutation waiver) or the required reviewers `selected` leaves out (override). The card, the terminal
+ * command and the gate all compute it here, so the record binds to what the operator was shown.
+ */
+export async function operatorDecisionSubject(packageDir: string, kind: OperatorDecisionKind, selected?: readonly string[]): Promise<OperatorDecisionSubject> {
+  const head = await packageHead(packageDir);
+  const items = kind === "mutation-waiver" ? (await pendingMutants(packageDir)).map((mutant) => mutant.id) : (await reviewersLeftOut(packageDir, selected)).missing;
+  return { ...(head === undefined ? {} : { head }), items: [...new Set(items)].sort() };
+}
+
 /**
  * On a package stamped with the operator gate (./run-profile.ts), a quote in the dispatch is not the operator's word
- * unless a card or a terminal recorded the decision (./operator-decisions.ts). Undefined: nothing is missing.
+ * unless a card or a terminal recorded the decision (./operator-decisions.ts), bound to the head and to at least what
+ * is waived now. Undefined: nothing is missing.
  */
-async function unconfirmedDecision(options: CoverageOptions, kind: OperatorDecisionKind): Promise<string | undefined> {
+async function unconfirmedDecision(options: CoverageOptions, kind: OperatorDecisionKind, selected?: readonly string[]): Promise<string | undefined> {
   const dir = options.packageDir;
   if (dir === undefined || !operatorGateApplies(dir)) return undefined;
-  if ((await confirmedDecision(dir, kind)) !== undefined) return undefined;
-  return decisionWriters(kind, path.relative(process.cwd(), dir) || ".");
+  const now = await operatorDecisionSubject(dir, kind, selected);
+  if ((await confirmedDecision(dir, kind, now)) !== undefined) return undefined;
+  const recorded = await confirmedDecision(dir, kind);
+  const stale =
+    recorded === undefined
+      ? ""
+      : `the recorded decision (${recorded.at}) does not cover this: it was ${recorded.subject === undefined ? "not bound to a head or to what it waived" : `shown head ${recorded.subject.head ?? "unknown"} and ${recorded.subject.items.length} item(s)`}, and now the head is ${now.head ?? "unknown"} with ${now.items.length === 0 ? "nothing" : now.items.join(", ")} to waive. `;
+  return `${stale}${decisionWriters(kind, path.relative(process.cwd(), dir) || ".")}`;
 }
 
 async function mutationErrors(record: Record<string, unknown>, options: CoverageOptions, depth: RoundDepth): Promise<string[]> {
@@ -432,7 +470,8 @@ async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions, ef
     return ['dispatch mode "diff" narrows the reviewer set and needs operatorQuote (the operator\'s own words naming a narrower review); a pull request defaults to mode "all"'];
   const override = record.override;
   // A narrowed set (mode diff, or an override) is the operator's decision; on a gated package only a card or a terminal records it.
-  const unconfirmed = record.mode === "diff" || override !== undefined ? await unconfirmedDecision(options, "reviewer-override") : undefined;
+  const selectedNow = Array.isArray(record.selected) ? record.selected.filter(text) : [];
+  const unconfirmed = record.mode === "diff" || override !== undefined ? await unconfirmedDecision(options, "reviewer-override", selectedNow) : undefined;
   if (unconfirmed !== undefined) {
     return [`dispatch ${override !== undefined ? "override" : 'mode "diff"'} narrows the reviewer set, and an operatorQuote written into the dispatch is not the operator's word on this package: ${unconfirmed}`];
   }

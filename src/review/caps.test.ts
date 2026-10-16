@@ -19,14 +19,14 @@ import type { ReviewFindingSeverity } from "./types";
 
 function finding(
   id: string,
-  severity: ReviewFindingSeverity = "minor",
+  severity: ReviewFindingSeverity = "info",
   reviewer = "review-logic",
   blocking?: boolean,
 ): CappableFinding {
   return { id, reviewer, severity, ...(blocking === undefined ? {} : { blocking_merge: blocking }) };
 }
 
-function many(count: number, severity: ReviewFindingSeverity = "minor", reviewer = "review-logic"): CappableFinding[] {
+function many(count: number, severity: ReviewFindingSeverity = "info", reviewer = "review-logic"): CappableFinding[] {
   return Array.from({ length: count }, (_, index) => finding(`${reviewer}-${index + 1}`, severity, reviewer));
 }
 
@@ -51,7 +51,7 @@ test("AC5: the findings default is 10 per reviewer and lives in code", () => {
 });
 
 test("AC5: the cap is PER reviewer, so a verbose reviewer cannot silence a terse one", () => {
-  const result = applyFindingsCap([...many(14, "minor", "review-style"), ...many(3, "minor", "review-logic")]);
+  const result = applyFindingsCap([...many(14, "info", "review-style"), ...many(3, "info", "review-logic")]);
 
   const retainedByReviewer = (name: string) => result.retained.filter((item) => item.reviewer === name).length;
   expect(retainedByReviewer("review-style")).toBe(10);
@@ -61,11 +61,11 @@ test("AC5: the cap is PER reviewer, so a verbose reviewer cannot silence a terse
 });
 
 test("AC5: blockers are exempt and do not consume the budget", () => {
-  const result = applyFindingsCap([...many(3, "blocker"), ...many(12, "minor")]);
+  const result = applyFindingsCap([...many(3, "blocker"), ...many(12, "info")]);
 
   expect(result.retained.filter((item) => item.severity === "blocker")).toHaveLength(3);
   // 10 ordinary findings survive ALONGSIDE the three blockers, not instead of two of them.
-  expect(result.retained.filter((item) => item.severity === "minor")).toHaveLength(10);
+  expect(result.retained.filter((item) => item.severity === "info")).toHaveLength(10);
   expect(result.counts.exempt).toBe(3);
 });
 
@@ -77,10 +77,12 @@ test("AC5: a finding the reviewer flagged blocking_merge is exempt too", () => {
   expect(result.truncated).not.toContain(flagged);
 });
 
-test("AC5: truncation takes the least severe first", () => {
-  const result = applyFindingsCap([...many(6, "info"), ...many(6, "major")], { limit: 6 });
+test("AC5 (owner decision 2026-10-16): majors and minors are never truncated; only info notes are capped", () => {
+  const result = applyFindingsCap([...many(6, "info"), ...many(15, "minor"), ...many(12, "major")], { limit: 3 });
 
-  expect(result.retained.every((item) => item.severity === "major")).toBe(true);
+  expect(result.retained.filter((item) => item.severity === "minor")).toHaveLength(15);
+  expect(result.retained.filter((item) => item.severity === "major")).toHaveLength(12);
+  expect(result.truncated).toHaveLength(3);
   expect(result.truncated.every((item) => item.severity === "info")).toBe(true);
 });
 
@@ -102,7 +104,7 @@ test("AC5: a reviewer at or under the limit is not touched and produces no drop 
  * programme exists to end.
  */
 test("AC10: the findings cap records the reviewer, the count and every truncated id", () => {
-  const result = applyFindingsCap(many(13, "minor", "review-style"), { limit: 10 });
+  const result = applyFindingsCap(many(13, "info", "review-style"), { limit: 10 });
 
   expect(result.drops).toHaveLength(1);
   const drop = result.drops[0] as (typeof result.drops)[number];
@@ -111,13 +113,13 @@ test("AC10: the findings cap records the reviewer, the count and every truncated
   expect(drop.retained).toBe(10);
   expect(drop.truncated).toBe(3);
   expect(drop.truncatedIds).toHaveLength(3);
-  expect(drop.truncatedBySeverity.minor).toBe(3);
+  expect(drop.truncatedBySeverity.info).toBe(3);
   // Every truncated finding is named, not just counted.
   expect(new Set(drop.truncatedIds)).toEqual(new Set(result.truncated.map((item) => item.id)));
 });
 
 test("AC10: the rendered record names the truncated ids and the counts", () => {
-  const result = applyFindingsCap(many(12, "minor", "review-style"), { limit: 10 });
+  const result = applyFindingsCap(many(12, "info", "review-style"), { limit: 10 });
   const markdown = renderCapsMarkdown({ findings: { counts: result.counts, drops: result.drops } });
 
   expect(markdown).toContain("### Findings cap");
