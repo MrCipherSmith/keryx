@@ -9,6 +9,7 @@ import { isPrBound } from "./complete-head-gate";
 import { readRunProfile } from "./run-profile";
 import { renderRoundBlock, ROUND_BLOCK_VERSION, type RoundBlock, type RoundBlockFinding } from "./pr-comments";
 import { findingStatus, quoteSha256, readRoundNumber } from "./round-record";
+import { recordFinishedRound } from "./round-registry";
 import { computeVerdict, type VerdictFinding } from "./verdict";
 import { computeReadiness, failingItems, readinessRefusal, type ReadinessOptions, type ReadinessReport } from "./readiness";
 import type { ConfirmedVia, ManagedReviewManifest } from "./types";
@@ -31,7 +32,7 @@ export type PublishOptions = {
   confirmedVia?: ConfirmedVia | undefined;
 };
 
-export type PublishResult = { readiness: ReadinessReport; body: string; event: ReviewEvent; partial: boolean; posted: boolean };
+export type PublishResult = { readiness: ReadinessReport; body: string; event: ReviewEvent; partial: boolean; posted: boolean; registryWarning?: string | undefined };
 
 export function reviewEvent(value: string | undefined): ReviewEvent {
   const wanted = (value ?? "COMMENT").trim().toUpperCase();
@@ -173,5 +174,7 @@ export async function publishReview(packageDir: string, options: PublishOptions)
     path.join(packageDir, "published.json"),
     `${JSON.stringify({ pr: manifest.target.ref, reviewId: manifest.reviewId, head: reviewedHead, round: roundBlock.round, event, partial, failing: failing.map((item) => item.id), time: (options.now?.() ?? new Date()).toISOString(), ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }) }, null, 2)}\n`,
   );
-  return { readiness, body, event, partial, posted: true };
+  // Flow 458: keryx's own record that it finished (and posted) this round, outside the repository (./round-registry.ts).
+  const registered = recordFinishedRound(packageDir, "publish");
+  return { readiness, body, event, partial, posted: true, ...(registered.error === undefined ? {} : { registryWarning: `round not recorded in the local round registry: ${registered.error}` }) };
 }

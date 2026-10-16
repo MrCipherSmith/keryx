@@ -119,6 +119,40 @@ export async function writeRoundRecord(
   await writeFileAtomic(manifestFile, `${JSON.stringify({ ...manifest, roundRecord: stamp }, null, 2)}\n`);
 }
 
+/** sha256 of the files that identify a finished round: what the local round registry records and compares. */
+export type PackageHashes = { manifestSha256: string; findingsSha256: string | null; roundRecordSha256: string | null };
+
+/** The hashes of three package files given as text (from disk or from a commit); a missing manifest gives undefined. */
+export function packageHashesOf(files: { manifest: string | undefined; findings: string | undefined; round: string | undefined }): PackageHashes | undefined {
+  if (files.manifest === undefined) return undefined;
+  return {
+    manifestSha256: sha256Of(files.manifest),
+    findingsSha256: files.findings === undefined ? null : sha256Of(files.findings),
+    roundRecordSha256: files.round === undefined ? null : sha256Of(files.round),
+  };
+}
+
+const readText = (file: string): string | undefined => {
+  try {
+    return readFileSync(file, "utf8");
+  } catch {
+    return undefined;
+  }
+};
+
+/** The hashes of a package directory on disk, and its parsed manifest; undefined without a readable manifest. */
+export function packageFacts(packageDir: string): { hashes: PackageHashes; manifest: Record<string, unknown> } | undefined {
+  const manifestText = readText(path.join(packageDir, "manifest.json"));
+  let manifest: Record<string, unknown> | undefined;
+  try {
+    manifest = manifestText === undefined ? undefined : record(JSON.parse(manifestText));
+  } catch {
+    manifest = undefined;
+  }
+  const hashes = packageHashesOf({ manifest: manifestText, findings: readText(path.join(packageDir, "findings.json")), round: readText(path.join(packageDir, ROUND_FILE)) });
+  return manifest === undefined || hashes === undefined ? undefined : { hashes, manifest };
+}
+
 /** The stamp `review start` left in manifest.json, or undefined (a package cut before it, or an ingest). */
 export function readRoundStamp(packageDir: string): RoundStamp | undefined {
   try {
