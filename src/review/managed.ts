@@ -12,6 +12,7 @@ import { validateAgainstSchemaObject } from "../contracts/validator";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { resolveProjectRoot } from "../lib/contained-path";
+import { revisionOperand } from "../lib/git-revision";
 import { clearActiveReview } from "./active-review";
 import { flowsRoot, listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
 import type { FlowState } from "../flow/types";
@@ -47,6 +48,7 @@ import {
   type ReviewFilterStats,
 } from "./filter-stats";
 import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
+import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
 import { repairMechanicalOmissions, type FindingRepair } from "./repair";
 import { writeReviewNotes, type ReviewNoteResult } from "./review-notes";
 import {
@@ -133,15 +135,51 @@ export async function resolveGitHead(cwd: string): Promise<string | null> {
  * Keeping the network call out of here is what lets this function run in every
  * test without one.
  */
-export async function resolveTargetHead(input: ManagedReviewInput): Promise<string | null> {
+export async function resolveTargetHead(input: ManagedReviewInput, packageDir?: string): Promise<string | null> {
   const declared = input.target.head;
   if (typeof declared === "string" && declared.trim() !== "") {
     return declared.trim();
+  }
+  // Flow 458 AC7. Ingest into a package that already exists (`review ingest --review-id <id>` after `review start`)
+  // records the round against the head that package was opened for, not whatever the checkout moved to since: the
+  // reviewers read that commit. A head this checkout does not have is refused rather than replaced, because every
+  // quote is located at it and the completion gate compares it with the PR.
+  if (packageDir !== undefined) {
+    const recorded = await recordedPackageHead(packageDir);
+    if (recorded !== undefined) {
+      if (!(await commitExists(input.cwd, recorded))) {
+        throw new Error(
+          `Cannot ingest into ${path.relative(input.cwd, packageDir) || packageDir}: its manifest records head ${recorded.slice(0, 12)}, and that commit is not in this checkout (\`git cat-file -e ${recorded.slice(0, 12)}^{commit}\` fails). Fetch it (\`git fetch origin ${recorded}\` or the PR branch) and ingest again, or pass --head <sha> to name the commit this round really ran against.`,
+        );
+      }
+      return recorded;
+    }
   }
   return (input.resolveHead ?? ((args) => resolveGitHead(args.cwd)))({
     cwd: input.cwd,
     target: input.target,
   });
+}
+
+/** `manifest.target.head` of an existing package, or undefined when there is no package or it records none. */
+async function recordedPackageHead(packageDir: string): Promise<string | undefined> {
+  try {
+    const manifest = JSON.parse(await readFile(path.join(packageDir, "manifest.json"), "utf8")) as { target?: { head?: unknown } };
+    const head = manifest.target?.head;
+    return typeof head === "string" && /^[0-9a-f]{7,40}$/i.test(head.trim()) ? head.trim().toLowerCase() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether `sha` names a commit in the repository at `cwd`. */
+async function commitExists(cwd: string, sha: string): Promise<boolean> {
+  try {
+    const proc = Bun.spawn(["git", "cat-file", "-e", ...revisionOperand(`${sha}^{commit}`)], { cwd, stdout: "ignore", stderr: "ignore", stdin: "ignore" });
+    return (await proc.exited) === 0;
+  } catch {
+    return false;
+  }
 }
 
 /** {@link ManagedReviewTarget} with the resolved head folded in. */
@@ -219,7 +257,7 @@ const BLAST_RADIUS_ARTIFACT = "blast-radius.json";
 
 export async function createManagedReviewPackage(
   input: ManagedReviewIngestInput,
-): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord }> {
+): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord; duplicates: DuplicateMerge[] }> {
   const at = (input.now ?? new Date()).toISOString();
   const flowMatch = await resolvePackageFlow(input);
   const { reviewId, packageDir } = await allocatePackage(input, flowMatch, at);
@@ -243,7 +281,7 @@ export async function createManagedReviewPackage(
   // Resolved HERE rather than beside `buildManifest`, because the locator needs
   // it: a round is a claim about a commit, and its findings are located at that
   // commit rather than against whatever the tree currently holds.
-  const head = await resolveTargetHead(input);
+  const head = await resolveTargetHead(input, packageDir);
 
   // The line becomes a derived fact here, BEFORE anything downstream reads it:
   // the verifier cites a finding, the cap reports one by site, `scope.md` lists
@@ -304,7 +342,15 @@ export async function createManagedReviewPackage(
   // budget on its way out.
   const scopeB = await screenScopeBFindings(input, packageDir, scoped.internal);
 
-  const findingsCap = applyFindingsCap(scopeB.retained, {
+  // Flow 458 AC5. One defect reported by several reviewers becomes ONE finding
+  // with the highest severity (the verifier's, when it confirmed one) and every
+  // reporter in `reported_by`. After the verifier so each claim still resolved
+  // against the id it named, after the scope-B screen so a scope-B claim cannot
+  // escape it by merging into a scope-A one, and before the cap so a duplicate
+  // does not spend a reviewer's reading budget. See {@link mergeDuplicates}.
+  const deduped = mergeDuplicates(scopeB.retained);
+
+  const findingsCap = applyFindingsCap(deduped.findings, {
     limit: input.maxFindingsPerReviewer,
   });
 
@@ -441,7 +487,8 @@ export async function createManagedReviewPackage(
   }
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
-    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats),
+    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats) +
+      renderDuplicatesMarkdown(deduped.merges),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
@@ -487,6 +534,7 @@ export async function createManagedReviewPackage(
     // record follows: a removal an operator has to open a file to discover reads,
     // on the terminal they were already looking at, as "there was nothing more".
     scopeBScreen: scopeB.record,
+    duplicates: deduped.merges,
   };
 }
 
@@ -1451,6 +1499,13 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   }
   if (finding.external_ref !== undefined) {
     record.external_ref = finding.external_ref;
+  }
+  // Written by the duplicate merge only, as a pair.
+  if (finding.reported_by !== undefined && finding.reported_by.length > 1) {
+    record.reported_by = finding.reported_by;
+  }
+  if (finding.merged_from !== undefined && finding.merged_from.length > 0) {
+    record.merged_from = finding.merged_from;
   }
   return record;
 }

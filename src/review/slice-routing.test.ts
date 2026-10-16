@@ -1,11 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import type { BuiltSlice } from "./slice";
+import { overlapGroupsOf, collectReviewers } from "./reviewers";
+import { tmpdir } from "node:os";
+import { mkdtemp, rm } from "node:fs/promises";
+import path from "node:path";
 import {
   ALWAYS_ROLE,
   AUDIT_RATE,
   DEEP_ROLES,
   auditCount,
   auditSample,
+  BUNDLED_OVERLAP_GROUPS,
+  collapseOverlapGroups,
   contentRolesOf,
   deepRosterRoles,
   escalateSlice,
@@ -57,7 +63,8 @@ describe("roles come from the slice's content", () => {
     // Owner decision 2026-10-16: deep = the old plan's full set for the slice (style, clean-code, performance, highload, ...)
     // minus the roles whose path gate rules the file out (testing-practices, layout, core-boundaries, flow-graph here).
     const math = rolesOf(slices, "lib/math.ts");
-    expect(math).toEqual([...new Set([ALWAYS_ROLE, ...DEEP_ROLES, ...deepRosterRoles(["lib/math.ts"])])].sort());
+    // Flow 458 AC6: the frontend overlap group collapses to one member per slice.
+    expect(math).toEqual(collapseOverlapGroups(new Set([ALWAYS_ROLE, ...DEEP_ROLES, ...deepRosterRoles(["lib/math.ts"])])).sort());
     expect(math).toEqual(expect.arrayContaining(["review-style", "review-clean-code", "review-performance", "review-highload"]));
     for (const gated of ["review-testing-practices", "review-layout", "review-core-boundaries", "review-flow-graph"]) expect(math).not.toContain(gated);
     expect(deepRosterRoles(["src/core/a.test.ts"])).toEqual(expect.arrayContaining(["review-testing-practices", "review-core-boundaries"]));
@@ -185,4 +192,39 @@ test("escalation re-opens a light slice deep with every core role, and leaves a 
   expect(up.roles).toEqual(expect.arrayContaining([...DEEP_ROLES]));
   expect(up.escalated).toEqual({ by: "review-logic", finding: "F-1" });
   expect(escalateSlice(up, "x", "y")).toBe(up);
+});
+
+describe("overlap groups (flow 458 AC6)", () => {
+  test("each overlap group gets one role per slice: the first-ranked member the slice routes", () => {
+    const slices = routeSlices(
+      sliced([
+        ["app/Panel.tsx", ["export function Panel() { return <div className=\"p\" />; }"]],
+        ["lib/math.ts", ["const x = 1;"]],
+      ]),
+      { head: "abc", auditRate: 0 },
+    );
+    for (const slice of slices) {
+      const members = (slice.roles ?? []).filter((role) => BUNDLED_OVERLAP_GROUPS.frontend!.includes(role));
+      expect(members).toEqual(["review-frontend"]);
+    }
+  });
+
+  test("a caller's groups replace the bundled default; an empty set collapses nothing", () => {
+    const [slice] = routeSlices(sliced([["app/Panel.tsx", ["const a = 1;"]]]), { head: "h", auditRate: 0, overlapGroups: {} });
+    expect(slice!.roles).toEqual(expect.arrayContaining(["review-frontend", "review-frontend-conventions"]));
+    expect(collapseOverlapGroups(["a", "b", "c"], { g: ["b", "a"] }).sort()).toEqual(["b", "c"]);
+    expect(collapseOverlapGroups(["c"], { g: ["b", "a"] })).toEqual(["c"]);
+  });
+
+  test("the bundled default is the one the reviewers' frontmatter declares", async () => {
+    // An empty project: the inventory falls back to the package's own bundled review skills.
+    const root = await mkdtemp(path.join(tmpdir(), "gd-overlap-"));
+    try {
+      const inventory = await collectReviewers(root);
+      expect(inventory.bundledSource).toBe("package");
+      expect(overlapGroupsOf(inventory)).toEqual(Object.fromEntries(Object.entries(BUNDLED_OVERLAP_GROUPS).map(([k, v]) => [k, [...v]])));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

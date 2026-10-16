@@ -11,16 +11,14 @@ description: |
   NOT for: generic React and MobX correctness with no local rule behind it
   (review-frontend), what the CSS actually renders (review-layout), or naming and
   readability as a matter of taste (review-style).
-triggers:
-  - "frontend conventions"
-  - "local frontend rules"
-  - "CLAUDE frontend"
-  - "review frontend conventions"
+triggers: ["frontend conventions", "local frontend rules", "CLAUDE frontend", "review frontend conventions"]
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "review"
   stack_requires: "react,mobx"
+  overlap_group: "frontend"
+  overlap_rank: "generic"
 license: "MIT"
 ---
 

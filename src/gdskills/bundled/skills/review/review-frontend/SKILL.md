@@ -2,18 +2,14 @@
 name: review-frontend
 model_tier: standard
 description: "Use when a frontend review is requested, checking React component patterns, MobX state management (observer, actions, computed, reactions, lifecycle), View-Store boundaries, and TypeScript safety in changed frontend code. NOT for backend patterns, security vulnerabilities, performance bottlenecks, or cross-layer architecture."
-triggers:
-  - "frontend review"
-  - "component review"
-  - "ui review"
-  - "review React"
-  - "review components"
+triggers: ["frontend review", "component review", "ui review", "review React", "review components"]
 metadata:
   author: "MrCipherSmith"
   version: "1.1.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
   stack_requires: "react,mobx"
+  overlap_group: "frontend"
 license: "MIT"
 ---
 

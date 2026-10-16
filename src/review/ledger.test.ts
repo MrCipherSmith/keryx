@@ -903,3 +903,36 @@ describe("layersUsed on a reviewer run (AC7)", () => {
     expect(await blockersOf(withoutLogs)).toEqual(await blockersOf(withLogs));
   });
 });
+
+describe("flow 458: merged duplicates and deliberate skips", () => {
+  test("a raw finding the ingest merged into another reviewer's record closes against that record", async () => {
+    const base = await inputs();
+    const [first, second] = base.selected as [string, string];
+    const canonical = [{ id: "F-002", global_id: "r#F-002", reviewer: second, reported_by: [second, first], merged_from: ["r#F-001"] }];
+    const result = buildLedger({
+      ...base,
+      canonical,
+      raws: base.selected.map((reviewer) =>
+        raw(reviewer, "DONE", reviewer === first ? { findings: [{ id: "F-001", problem: "p" }] } : reviewer === second ? { findings: [{ id: "F-002", problem: "p" }] } : {}),
+      ),
+    });
+    const obligations = result.ledger.obligations as Array<Record<string, unknown>>;
+    expect(obligations.find((o) => String(o.id).endsWith(":F-001"))).toMatchObject({ status: "finding", finding: "r#F-002" });
+    expect(obligations.every((o) => o.status === "finding")).toBe(true);
+    expect(result.ledger.rawReconciled).toBe(true);
+  });
+
+  test("a skipped reviewer leaves the selection with its Not run line, and the gate accepts the rest", async () => {
+    const base = await inputs();
+    const skippedReviewer = base.selected.find((name) => name !== "review-logic")!;
+    const result = buildLedger({ ...base, raws: base.raws.filter((r) => r.result?.reviewer !== skippedReviewer), skipped: [{ reviewer: skippedReviewer, reason: "operator: covered by the pairing session" }] });
+    expect(result.ledger.dispatch.selected).not.toContain(skippedReviewer);
+    expect(result.ledger.dispatch.skipped).toEqual([{ reviewer: skippedReviewer, reason: "operator: covered by the pairing session" }]);
+    expect(result.ledger.dispatch.notRun).toEqual([`Not run: ${skippedReviewer} — operator: covered by the pairing session`]);
+    expect(result.gaps.filter((gap) => gap.reviewer === skippedReviewer)).toEqual([]);
+    expect((await blockersOf(result)).join("\n")).not.toContain(skippedReviewer);
+    // Without the skip the same set is refused for the missing reviewer.
+    const unskipped = buildLedger({ ...base, selected: base.selected.filter((name) => name !== skippedReviewer), raws: base.raws.filter((r) => r.result?.reviewer !== skippedReviewer) });
+    expect((await blockersOf(unskipped)).join("\n")).toContain(`missing: ${skippedReviewer}`);
+  });
+});

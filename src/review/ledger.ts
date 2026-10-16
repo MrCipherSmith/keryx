@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { coverageErrors, type ReviewMode } from "./coverage";
+import { coverageErrors, skipLine, type ReviewMode, type ReviewerSkip } from "./coverage";
 import { dispatchErrors } from "./dispatch";
 import { layersUsedFrom } from "./layers-usage";
 import { researchErrors } from "./research";
@@ -75,6 +75,11 @@ export type LedgerInputs = {
    * says that of, so a rebuild never turns an in-flight package into one that must have run a role it predates.
    */
   dispatchRoles?: readonly string[] | undefined;
+  /**
+   * Required reviewers the operator deliberately did not run (`ledger build --skip <reviewer> --reason`). They leave
+   * `selected`, and are written to `dispatch.skipped` and as `Not run: <reviewer> — <reason>` lines to `dispatch.notRun`.
+   */
+  skipped?: readonly ReviewerSkip[] | undefined;
 };
 
 export type LedgerResult = {
@@ -368,6 +373,9 @@ function waveNext(reviewer: string, manifestPath: string | undefined, processed:
  */
 export function buildLedger(input: LedgerInputs): LedgerResult {
   const gaps: LedgerGap[] = [];
+  const skipped = input.skipped ?? [];
+  const skippedNames = new Set(skipped.map((skip) => skip.reviewer));
+  const selected = input.selected.filter((reviewer) => !skippedNames.has(reviewer));
   const { manifest, raws } = input;
   const attributed = raws.filter((r) => r.result?.reviewer !== undefined && text(r.result.reviewer));
   for (const raw of raws) {
@@ -378,7 +386,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
 
   const runs: Array<Record<string, unknown>> = [];
   const complete = new Map<string, Set<string>>();
-  for (const reviewer of input.selected) {
+  for (const reviewer of selected) {
     const mine = attributed.filter((r) => r.result!.reviewer === reviewer).sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name));
     const latest = mine[mine.length - 1];
     const fingerprint = manifest === undefined ? undefined : scopeFingerprint(manifest);
@@ -458,12 +466,19 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     runs.push(run);
   }
 
-  const unresolvedRules = input.selected.filter((r) => input.ruleFiles[r] === undefined);
-  const dispatch = { version: 1, mode: input.mode, ...(input.depth === "light" ? { depth: "light", notRun: ["Not run: mutation (light round)"] } : input.depth === "full" ? { depth: "full" } : {}), selected: input.selected, ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
+  const unresolvedRules = selected.filter((r) => input.ruleFiles[r] === undefined);
+  const notRun = [...(input.depth === "light" ? ["Not run: mutation (light round)"] : []), ...skipped.map(skipLine)];
+  const dispatch = { version: 1, mode: input.mode, ...(input.depth === "light" ? { depth: "light" } : input.depth === "full" ? { depth: "full" } : {}), ...(notRun.length === 0 ? {} : { notRun }), selected, ...(skipped.length === 0 ? {} : { skipped: skipped.map((skip) => ({ reviewer: skip.reviewer, reason: skip.reason })) }), ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
 
   const obligations: Array<Record<string, unknown>> = [];
   const derived = new Set<string>();
-  const canonicalByReviewer = (reviewer: string, id: string) => input.canonical.filter((f) => f.reviewer === reviewer && f.id === id);
+  // A raw finding the ingest merged into another reviewer's (flow 458 AC5) is found through `reported_by` + `merged_from`.
+  const absorbedInto = (f: Record<string, unknown>, reviewer: string, id: string): boolean =>
+    Array.isArray(f.reported_by) && f.reported_by.includes(reviewer) && Array.isArray(f.merged_from) && f.merged_from.some((m) => m === id || (typeof m === "string" && m.endsWith(`#${id}`)));
+  const canonicalByReviewer = (reviewer: string, id: string) => {
+    const own = input.canonical.filter((f) => f.reviewer === reviewer && f.id === id);
+    return own.length > 0 ? own : input.canonical.filter((f) => absorbedInto(f, reviewer, id));
+  };
   for (const raw of attributed) {
     const reviewer = raw.result!.reviewer!;
     for (const finding of Array.isArray(raw.result!.findings) ? raw.result!.findings! : []) {
@@ -503,7 +518,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   }
 
   const reconciled = raws.every((r) => r.empty || (r.result !== undefined && text(r.result.reviewer))) && obligations.every((o) => CLOSED.has(String(o.status)));
-  let scopeReviewed = input.selected.length > 0 && runs.every((r) => r.scopeComplete === true);
+  let scopeReviewed = selected.length > 0 && runs.every((r) => r.scopeComplete === true);
   if (scopeReviewed && manifest !== undefined) {
     const covered = new Set<string>();
     for (const seen of complete.values()) seen.forEach((id) => covered.add(id));

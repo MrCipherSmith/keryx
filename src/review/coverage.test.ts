@@ -432,3 +432,81 @@ describe("light depth cannot be forged", () => {
     expect(errors).toContain("never run");
   });
 });
+
+describe("supersedes and overlap groups (flow 458 AC6)", () => {
+  async function installWith(name: string, metadata: string, base: "bundled" | "project" = "bundled", paths?: string): Promise<void> {
+    const dir = base === "bundled" ? path.join(root, ".metaproject", "skills", "gdskills", "review", name) : path.join(root, ".metaproject", "project-skills", "review", name);
+    await mkdir(dir, { recursive: true });
+    const meta = [metadata, paths === undefined ? "" : `  paths: "${paths}"`].filter(Boolean).join("\n");
+    await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: Use when testing ${name}.\nmetadata:\n${meta}\n---\n`, "utf8");
+  }
+
+  test("a project overlay removes the bundled reviewers it supersedes, recorded as excluded with the reason", async () => {
+    await installWith("acme-frontend", '  supersedes: "review-frontend, review-style"', "project");
+    const need = await requiredReviewers(root, "all", frontendFiles);
+    expect(need.required).toContain("acme-frontend");
+    expect(need.required).not.toContain("review-frontend");
+    expect(need.required).not.toContain("review-style");
+    expect(need.excluded).toEqual(expect.arrayContaining([
+      { reviewer: "review-frontend", reason: "superseded by acme-frontend" },
+      { reviewer: "review-style", reason: "superseded by acme-frontend" },
+    ]));
+  });
+
+  test("a supersedes naming a reviewer the round does not require changes nothing", async () => {
+    await installWith("acme-frontend", '  supersedes: "review-highload"', "project");
+    const need = await requiredReviewers(root, "all", frontendFiles);
+    expect(need.required).toContain("review-frontend");
+    expect(need.excluded.some((entry) => entry.reason.startsWith("superseded"))).toBe(false);
+  });
+
+  test("an overlap group keeps its most specific member; a generic member it covers is excluded", async () => {
+    await installWith("review-frontend", '  overlap_group: "frontend"');
+    await installWith("review-frontend-conventions", '  overlap_group: "frontend"\n  overlap_rank: "generic"');
+    const need = await requiredReviewers(root, "all", frontendFiles);
+    expect(need.required).toContain("review-frontend");
+    expect(need.required).not.toContain("review-frontend-conventions");
+    expect(need.excluded).toContainEqual({ reviewer: "review-frontend-conventions", reason: "overlap group frontend: review-frontend reads the same lines" });
+  });
+
+  test("a project overlay in the group wins, but a path-gated one that covers only part of the diff leaves the bundled member", async () => {
+    await installWith("review-frontend", '  overlap_group: "frontend"');
+    await installWith("acme-ui", '  overlap_group: "frontend"', "project", "src/ui/**");
+    const partial = await requiredReviewers(root, "all", ["src/ui/a.tsx", "src/app/b.tsx"]);
+    expect(partial.required).toEqual(expect.arrayContaining(["acme-ui", "review-frontend"]));
+    const covered = await requiredReviewers(root, "all", ["src/ui/a.tsx"]);
+    expect(covered.required).toContain("acme-ui");
+    expect(covered.required).not.toContain("review-frontend");
+    expect(covered.excluded).toContainEqual({ reviewer: "review-frontend", reason: "overlap group frontend: acme-ui reads the same lines" });
+  });
+
+  test("a light round raises its conventions pick to the overlap group's top member", async () => {
+    await installWith("review-frontend", '  overlap_group: "frontend"');
+    await installWith("review-frontend-conventions", '  overlap_group: "frontend"\n  overlap_rank: "generic"');
+    const need = await requiredReviewers(root, "all", ["src/app/page.tsx"], { depth: "light" });
+    expect(need.required).toContain("review-frontend");
+    expect(need.required).not.toContain("review-frontend-conventions");
+  });
+});
+
+describe("projectRootOfPackage (flow 458 AC7)", () => {
+  test("a flow-bound package resolves to the project, not to .metaproject/flows", async () => {
+    const flowPackage = path.join(root, ".metaproject", "flows", "458-x", "reviews", "2026-10-16-pr-1");
+    await mkdir(flowPackage, { recursive: true });
+    expect(projectRootOfPackage(flowPackage)).toBe(root);
+    expect(projectRootOfPackage(path.join(root, ".metaproject", "reviews", "r1"))).toBe(root);
+  });
+
+  test("a package outside any .metaproject falls back to the project found from it", async () => {
+    const elsewhere = path.join(root, "tmp", "pkg");
+    await mkdir(elsewhere, { recursive: true });
+    expect(projectRootOfPackage(elsewhere)).toBe(root);
+  });
+
+  test("required reviewers of a flow-bound package read that project's reviewers", async () => {
+    const flowPackage = path.join(root, ".metaproject", "flows", "458-x", "reviews", "p");
+    await mkdir(flowPackage, { recursive: true });
+    const need = await requiredReviewers(projectRootOfPackage(flowPackage), "all", undefined);
+    expect(need.required).toContain("review-logic");
+  });
+});

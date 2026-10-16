@@ -22,7 +22,7 @@ import {
   reviewerPathGate,
   type PathTriggerSource,
 } from "../gdskills/reviewer-triggers";
-import { parseSkillFrontmatter } from "../gdskills/skill-frontmatter";
+import { frontmatterList, frontmatterScalar, parseSkillFrontmatter } from "../gdskills/skill-frontmatter";
 import { extractStackRequiresField, parseStackRequires, type StackTag } from "./stack";
 
 // The pure text helpers behind the path gate and the flags live in gdskills,
@@ -91,7 +91,16 @@ export type BundledReviewer = {
    * every bundled `SKILL.md` a second time.
    */
   description?: string;
+  /** `metadata.supersedes` (flow 458): reviewers this one replaces when both would run. Absent when it declares none. */
+  supersedes?: string[];
+  /** `metadata.overlap_group`: reviewers in one group read the same lines; a slice gets one of them. */
+  overlapGroup?: string;
+  /** `metadata.overlap_rank: generic` marks the group's fallback member; absent is `specific`. */
+  overlapRank?: OverlapRank;
 };
+
+/** Where a member of an overlap group stands: a project overlay beats a bundled specific reviewer, which beats a generic one. */
+export type OverlapRank = "specific" | "generic";
 
 export type ProjectReviewer = {
   name: string;
@@ -150,7 +159,62 @@ export type ProjectReviewer = {
   originHash?: string;
   importedAt?: string;
   drift: OriginDrift;
+  /** See {@link BundledReviewer.supersedes}. A project overlay may supersede bundled reviewers. */
+  supersedes?: string[];
+  /** See {@link BundledReviewer.overlapGroup}. */
+  overlapGroup?: string;
+  overlapRank?: OverlapRank;
 };
+
+/**
+ * The overlap fields of one reviewer's SKILL.md: `supersedes`, `overlap_group` and `overlap_rank`, read under
+ * `metadata:` (where every other routing key lives) or at the top level. Each is left off when not declared, so a
+ * reviewer that declares nothing reads exactly as before.
+ */
+export function overlapFields(content: string): { supersedes?: string[]; overlapGroup?: string; overlapRank?: OverlapRank } {
+  const list = (key: string): string[] => {
+    const nested = metadataList(content, key);
+    return nested.length > 0 ? nested : frontmatterList(content, key);
+  };
+  const scalar = (key: string): string | undefined => {
+    const value = (frontmatterScalar(content, key, "metadata") ?? frontmatterScalar(content, key))?.trim();
+    return value === undefined || value === "" ? undefined : value;
+  };
+  const supersedes = [...new Set(list("supersedes").map((name) => name.trim()).filter(Boolean))];
+  const overlapGroup = scalar("overlap_group");
+  const rank = scalar("overlap_rank");
+  return {
+    ...(supersedes.length > 0 ? { supersedes } : {}),
+    ...(overlapGroup !== undefined ? { overlapGroup } : {}),
+    ...(rank === "generic" || rank === "specific" ? { overlapRank: rank } : {}),
+  };
+}
+
+/**
+ * Overlap groups of an inventory: group name to its members, most specific first — project overlays, then bundled
+ * reviewers (`overlap_rank` specific, the default), then generic ones; ties by name.
+ */
+export function overlapGroupsOf(inventory: Pick<ReviewerInventory, "bundled" | "project">): Record<string, string[]> {
+  const tier = (source: "bundled" | "project-skill", rank: OverlapRank | undefined): number =>
+    source === "project-skill" ? 0 : rank === "generic" ? 2 : 1;
+  const members = new Map<string, Array<{ name: string; tier: number }>>();
+  for (const reviewer of [...inventory.project, ...inventory.bundled]) {
+    if (reviewer.overlapGroup === undefined) continue;
+    const list = members.get(reviewer.overlapGroup) ?? [];
+    if (!list.some((entry) => entry.name === reviewer.name)) list.push({ name: reviewer.name, tier: tier(reviewer.source, reviewer.overlapRank) });
+    members.set(reviewer.overlapGroup, list);
+  }
+  const groups: Record<string, string[]> = {};
+  for (const [group, list] of [...members].sort(([a], [b]) => a.localeCompare(b))) {
+    groups[group] = list.sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name)).map((entry) => entry.name);
+  }
+  return groups;
+}
+
+/** {@link overlapGroupsOf} for the project at `projectRoot`. */
+export async function loadOverlapGroups(projectRoot: string): Promise<Record<string, string[]>> {
+  return overlapGroupsOf(await collectReviewers(projectRoot));
+}
 
 /**
  * Where the `bundled` half of the inventory came from (flow 347 T9).
@@ -239,6 +303,7 @@ async function bundledReviewerFromFile(
     path: projectRelativePath,
     ...(engine !== undefined ? { engine } : {}),
     ...(description !== undefined ? { description } : {}),
+    ...(content !== undefined ? overlapFields(content) : {}),
   };
 }
 
@@ -345,6 +410,7 @@ export async function collectReviewers(projectRoot: string, deps: CollectReviewe
       ...(originHash ? { originHash } : {}),
       ...(importedAt ? { importedAt } : {}),
       drift: await driftFor(projectRoot, origin, originHash),
+      ...overlapFields(content),
     });
   }
 
