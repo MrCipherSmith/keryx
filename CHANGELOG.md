@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.121] - 2026-10-16
+
 ### Added
 - **`review-premise`, an independent final check of every finding's premise.** After the verifier, on the deep tier and a clean context, it reads each finding's bare claim and the code before the reviewer's argument and asks: is this a deliberate choice (an explicit override, suppression, exemption, a comment or commit giving a reason, a sibling doing the same), is the suggested behaviour accepted practice (platform guidelines, language idioms, clean code), would the fix make the system more consistent, would a senior reviewer accept the fix. It answers `upheld`, `downgraded`, `challenged` or `owner-decision`, and it can only lower or hold: never add a finding, raise a severity or edit text. A downgrade needs cited evidence and stops at `minor`, the fix-loop threshold.
 - `keryx review ingest --premises <file|->` takes the judge's claims (the bare object or a `json keryx:premises` block); invalid claims are listed in scope.md and change nothing.
