@@ -1204,7 +1204,7 @@ for (const stage of ["discovery", "provider"] as const) {
 test("native provider failure reports Error and failed fleet with partial text", async () => {
   const { provider } = scriptedChildProvider(() => [
     { kind: "text_delta", text: "Partial findings before disconnect." },
-    { kind: "provider_error", error: { kind: "rate_limit", retryable: true, message: "slow down" } },
+    { kind: "provider_error", error: { kind: "unavailable", retryable: true, message: "transport disconnected" } },
   ]);
   const events: SpawnSubagentFleetEvent[] = [];
   const result = await childTool(provider, events).invoke({ task: "review" });
@@ -1212,7 +1212,7 @@ test("native provider failure reports Error and failed fleet with partial text",
   expect(result.isError).toBe(true);
   expect(result.output).toStartWith("status: Error");
   expect(result.output).toContain("provider_error");
-  expect(result.output).toContain("slow down");
+  expect(result.output).toContain("transport disconnected");
   expect(result.partial).toContain("Partial findings before disconnect.");
   expect(events.some((e) => e.kind === "upsert" && e.status === "done")).toBe(false);
   expect(events.some((e) => e.kind === "upsert" && e.status === "failed" && e.detail === "error")).toBe(true);
@@ -1220,7 +1220,7 @@ test("native provider failure reports Error and failed fleet with partial text",
 
 test("native failure without text returns the cause rather than successful empty summary", async () => {
   const { provider } = scriptedChildProvider(() => [
-    { kind: "provider_error", error: { kind: "rate_limit", retryable: false, message: "credentials rejected" } },
+    { kind: "provider_error", error: { kind: "authentication", retryable: false, message: "credentials rejected" } },
   ]);
   const result = await childTool(provider, []).invoke({ task: "review" });
   expect(result.status).toBe("Error");
