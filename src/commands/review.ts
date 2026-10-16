@@ -110,6 +110,7 @@ import { recordRadiusAndPlan } from "../review/chunks";
 import { READINESS_ITEMS, computeReadiness, readinessDepthLines, recountRefusal, readinessLine, renderReadiness } from "../review/readiness";
 import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
 import { findPreviousRound, skippedRound, type PriorRoundDeps } from "../review/prior-round";
+import { recordFinishedRound } from "../review/round-registry";
 import { renderRoundLine, ROUND_FILE, writeRoundRecord } from "../review/round-record";
 // Flow 328, AC6: attach the latest CACHED check-ac result to a review
 // package. Minimal, additive — this hook never triggers a fresh Jev call
@@ -1088,6 +1089,13 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     console.log(
       `round record: ${path.join(result.path, ROUND_FILE)} (${detected.round.mode}; ${detected.priorFindings.length} prior finding(s); fix hunks ${detected.round.fixHunks.length}, new hunks ${detected.round.newHunks.length})`,
     );
+  }
+  if (mode === "ingest") {
+    // Flow 458: the flow loop starts round N+1 right after ingest, so a round past its draft (a scopeReviewed ledger)
+    // is recorded in the machine-local round registry here, not only at complete/publish (review/round-registry.ts).
+    const registered = recordFinishedRound(result.path, "ingest", { cwd });
+    if (registered.error !== undefined) console.error(`warning: round not recorded in the local round registry (${registered.error})`);
+    if (registered.warning !== undefined) console.error(`warning: ${registered.warning}`);
   }
   await refreshCreatedPackageLayers(result.path, result.manifest.target.head, cwd, { timeoutSeconds: graphTimeout });
   const startRadius = input.blastRadius as { dropped?: unknown } | undefined;

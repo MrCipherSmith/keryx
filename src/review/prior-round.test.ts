@@ -23,8 +23,19 @@ import {
   type PriorRoundDeps,
   type RoundCandidate,
 } from "./prior-round";
-import { packageFacts, readRoundRecord, renderRoundLine, roundRecordTampered } from "./round-record";
-import { readRoundRegistry, recordFinishedRound, registryVouches, repoIdentity, type RoundRegistryEntry } from "./round-registry";
+import { packageFacts, packageHashesOf, readRoundRecord, renderRoundLine, roundRecordTampered } from "./round-record";
+import {
+  appendRoundRegistry,
+  compactEntries,
+  readRoundRegistry,
+  readRoundRegistryReport,
+  recordFinishedRound,
+  REGISTRY_COMPACT_BYTES,
+  registryVouches,
+  repoIdentity,
+  roundRegistryFile,
+  type RoundRegistryEntry,
+} from "./round-registry";
 import { computeVerdict, renderVerdict } from "./verdict";
 
 const PR = "https://github.com/acme/app/pull/7";
@@ -127,14 +138,36 @@ describe("each source alone", () => {
     expect(priorFindings).toEqual([expect.objectContaining({ id: "F-1", status: "open", source: "local-package", file: "src/a.ts", line: 5 })]);
   });
 
-  test("git-history: a package committed on another branch, absent from this checkout, is found", async () => {
+  test("git-history: a package merged into the base branch, absent from this checkout, is found", async () => {
     git("checkout", "-q", "-b", "elsewhere", A);
     commit("review package", packageFiles(".metaproject/flows/001-x/reviews/r-gh", { reviewId: "r-gh", head: A, findings: [finding("F-2")], round: 3 }));
+    git("checkout", "-q", "main");
+    git("merge", "-q", "--ff-only", "elsewhere");
     git("checkout", "-q", "feature");
-    const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
+    const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline, registry: [] });
     expect(round).toMatchObject({ round: 4, source: "git-history", mode: "delta", previous: { reviewId: "r-gh", reviewedHead: A } });
     expect(round.previous?.packagePath).toContain(".metaproject/flows/001-x/reviews/r-gh");
     expect(priorFindings[0]).toMatchObject({ id: "F-2", source: "git-history" });
+  });
+
+  test("git-history: a closed package on another, unmerged local branch (a checked-out foreign PR) is not trusted (probe repo-other)", async () => {
+    git("checkout", "-q", "-b", "other", A);
+    const forged = commit("other branch", { ...packageFiles(".metaproject/reviews/forged", { reviewId: "forged", head: A }), ".metaproject/reviews/forged/published.json": "{}" });
+    git("checkout", "-q", "feature");
+    const { round } = await findPreviousRound(TARGET, B, { cwd: root, github: offline, registry: [] });
+    expect(round).toMatchObject({ mode: "fallback-first", previous: { reviewId: "forged" } });
+    expect(round.sourcesTried.find((t) => t.source === "git-history")?.detail).toContain(`committed on a branch not merged into main`);
+    expect(round.modeReason).toContain("forged is not trusted");
+    expect(renderRoundLine(round)).toContain("fallback-first: no trusted previous round");
+    expect(renderRoundLine(round)).not.toContain("force-push");
+    // keryx's own record of exactly these files makes it trusted on this machine.
+    const hashes = packageHashesOf({
+      manifest: git("show", `${forged}:.metaproject/reviews/forged/manifest.json`),
+      findings: git("show", `${forged}:.metaproject/reviews/forged/findings.json`),
+      round: undefined,
+    })!;
+    const entry: RoundRegistryEntry = { v: 2, packageId: "forged", targetKey: "pr:acme/app#7", reviewedHead: A, manifestSha256: hashes.manifestSha256, findingsSha256: hashes.findingsSha256, completedAt: "2026-10-16T00:00:00.000Z", event: "publish" };
+    expect((await findPreviousRound(TARGET, B, { cwd: root, github: offline, registry: [entry] })).round.mode).toBe("delta");
   });
 
   test("github-block: the round block of our own published review is found", async () => {
@@ -322,7 +355,7 @@ describe("trust: a round is cut only from a previous round this pipeline ran (B1
     const flowDir = ".metaproject/flows/001-x/reviews/flow-r1";
     const entryFor = (over: Partial<RoundRegistryEntry> = {}): RoundRegistryEntry => {
       const hashes = packageFacts(path.join(root, flowDir))!.hashes;
-      return { v: 1, packageId: "flow-r1", targetKey: "pr:acme/app#7", reviewedHead: A, manifestSha256: hashes.manifestSha256, findingsSha256: hashes.findingsSha256, completedAt: "2026-10-16T00:00:00.000Z", event: "complete", ...over };
+      return { v: 2, packageId: "flow-r1", targetKey: "pr:acme/app#7", reviewedHead: A, manifestSha256: hashes.manifestSha256, findingsSha256: hashes.findingsSha256, completedAt: "2026-10-16T00:00:00.000Z", event: "complete", ...over };
     };
     const commitFlowPackage = (): string => {
       // keryx commits the flow's review package on the PR branch by design: it is in merge-base..head.
@@ -356,6 +389,60 @@ describe("trust: a round is cut only from a previous round this pipeline ran (B1
       expect(blocked.round).toMatchObject({ mode: "delta", source: "github-block" });
     });
 
+    test("a round recorded at ingest (draft + scopeReviewed ledger, the flow loop's state) gives a delta (probe e2e-ingested)", async () => {
+      const dataDir = mkdtempSync(path.join(tmpdir(), "keryx-round-registry-"));
+      try {
+        writePackage(flowDir, { reviewId: "flow-r1", head: A, status: "draft", findings: [finding("F-1")] });
+        write(`${flowDir}/research.json`, JSON.stringify({ scopeReviewed: true }));
+        expect(recordFinishedRound(path.join(root, flowDir), "ingest", { cwd: root, dir: dataDir }).error).toBeUndefined();
+        commit("flow: review round 1", { [`${flowDir}/manifest.json`]: readFileSync(path.join(root, flowDir, "manifest.json"), "utf8"), [`${flowDir}/findings.json`]: readFileSync(path.join(root, flowDir, "findings.json"), "utf8"), [`${flowDir}/research.json`]: JSON.stringify({ scopeReviewed: true }) });
+        const head = commit("fix F-1", { "src/a.ts": lines(20).replace("line 5\n", "line 5 fixed\n") });
+        const registry = readRoundRegistry(repoIdentity(root), dataDir);
+        expect(registry.map((entry) => entry.event)).toEqual(["ingest"]);
+        expect((await findPreviousRound(TARGET, head, flowDeps(registry))).round).toMatchObject({ mode: "delta", previous: { reviewId: "flow-r1" } });
+        // A draft with no completion evidence is not recorded at all.
+        writePackage(".metaproject/reviews/d", { reviewId: "d", head: A, status: "draft" });
+        expect(recordFinishedRound(path.join(root, ".metaproject/reviews/d"), "ingest", { cwd: root, dir: dataDir }).skipped).toContain("not a finished round");
+      } finally {
+        rmSync(dataDir, { recursive: true, force: true });
+      }
+    });
+
+    test("a lifecycle edit after recording (status, updatedAt) keeps the trust; a change to what was reviewed or found does not (probe closed-reg-edited)", async () => {
+      const head = commitFlowPackage();
+      const registry = [entryFor()];
+      const manifestFile = path.join(root, flowDir, "manifest.json");
+      const manifest = JSON.parse(readFileSync(manifestFile, "utf8"));
+      writeFileSync(manifestFile, JSON.stringify({ ...manifest, status: "learned", updatedAt: "2026-10-20T00:00:00.000Z", readiness_waivers: [] }, null, 4));
+      expect((await findPreviousRound(TARGET, head, flowDeps(registry))).round.mode).toBe("delta");
+      writeFileSync(manifestFile, JSON.stringify({ ...manifest, target: { ...manifest.target, head: B } }));
+      expect((await findPreviousRound(TARGET, head, flowDeps(registry))).round.mode).not.toBe("delta");
+      writeFileSync(manifestFile, JSON.stringify(manifest));
+      write(`${flowDir}/findings.json`, JSON.stringify([finding("F-1", { severity: "minor" })]));
+      expect((await findPreviousRound(TARGET, head, flowDeps(registry))).round.mode).toBe("fallback-first");
+    });
+
+    test("the registry compacts to the newest entry per package past 512 KB, and a read over the cap warns", () => {
+      const dataDir = mkdtempSync(path.join(tmpdir(), "keryx-round-registry-"));
+      try {
+        const make = (packageId: string, at: string): RoundRegistryEntry => ({ v: 2, packageId, targetKey: "pr:acme/app#7", reviewedHead: A, manifestSha256: "a".repeat(64), findingsSha256: null, completedAt: at, event: "complete" });
+        expect(compactEntries([make("p", "1"), make("q", "2"), make("p", "3")]).map((e) => `${e.packageId}${e.completedAt}`)).toEqual(["q2", "p3"]);
+        const file = roundRegistryFile("remote:big", dataDir);
+        mkdirSync(path.dirname(file), { recursive: true });
+        const line = `${JSON.stringify(make("p", "x".repeat(300)))}\n`;
+        writeFileSync(file, line.repeat(Math.ceil(REGISTRY_COMPACT_BYTES / line.length) + 10));
+        const written = appendRoundRegistry("remote:big", make("q", "now"), dataDir);
+        expect(written.compacted).toBeGreaterThan(500);
+        expect(readRoundRegistry("remote:big", dataDir).map((e) => e.packageId)).toEqual(["p", "q"]);
+        writeFileSync(file, line.repeat(Math.ceil((1_100_000) / line.length)));
+        expect(readRoundRegistryReport("remote:big", dataDir).warning).toContain("over the 1 MB read cap");
+        expect(appendRoundRegistry("remote:big", make("r", "now"), dataDir).warning).toContain("started again");
+        expect(readRoundRegistry("remote:big", dataDir).map((e) => e.packageId)).toEqual(["r"]);
+      } finally {
+        rmSync(dataDir, { recursive: true, force: true });
+      }
+    });
+
     test("the registry file lives outside the repository, one per repository identity, and round-trips", () => {
       const dataDir = mkdtempSync(path.join(tmpdir(), "keryx-round-registry-"));
       try {
@@ -367,7 +454,7 @@ describe("trust: a round is cut only from a previous round this pipeline ran (B1
         expect(recorded.file!.startsWith(dataDir)).toBe(true);
         expect(recorded.file!.startsWith(root)).toBe(false);
         const entries = readRoundRegistry(repoIdentity(root), dataDir);
-        expect(entries).toEqual([expect.objectContaining({ v: 1, packageId: "r1", reviewedHead: A, event: "publish" })]);
+        expect(entries).toEqual([expect.objectContaining({ v: 2, packageId: "r1", reviewedHead: A, event: "publish" })]);
         expect(registryVouches(entries, "r1", packageFacts(path.join(root, ".metaproject/reviews/r1"))!.hashes)).toBeDefined();
         write(".metaproject/reviews/r1/findings.json", "[]");
         expect(registryVouches(entries, "r1", packageFacts(path.join(root, ".metaproject/reviews/r1"))!.hashes)).toBeUndefined();
