@@ -1,0 +1,17 @@
+# Flow Journal
+
+- 2026-10-16T06:30:13.529Z - flow created
+- 2026-10-16T06:37:01.005Z - task-done: T1: Collect remaining context
+- 2026-10-16T06:37:01.162Z - task-done: T2: Implement per plan
+- 2026-10-16T06:37:01.312Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-16T06:37:01.465Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-16T06:37:01.630Z - task-added: T5: L1a: prior-round discovery from all sources, publish block, collect parses own block, round.json
+- 2026-10-16T06:37:01.779Z - task-added: T6: L2: dedupe + canonical severity, supersedes/overlap groups, ledger root/skips, ingest head
+- 2026-10-16T06:37:01.929Z - task-added: T7: L1b: split FIX/NEW, rosters, split coverage/readiness/ledger/estimate, review plan
+- 2026-10-16T06:37:02.097Z - task-added: T8: L3a: flow-orchestrator matrix, gate, behavior_changes, hypotheses, one implementer
+- 2026-10-16T06:37:02.265Z - task-added: T9: L3b: review-orchestrator + other orchestrators use start's delta; read-only reviewers
+- 2026-10-16T06:37:02.426Z - task-added: T10: Review round + PR + merge
+- 2026-10-16T06:37:02.574Z - task-added: T11: Live eval round 2 on a multi-round PR
+- 2026-10-16T06:37:02.721Z - task-added: T12: Release
+- 2026-10-16T06:37:02.872Z - frozen: 11 criteria; checksum recorded
+- 2026-10-16T06:37:03.020Z - started
