@@ -11,7 +11,7 @@
   "title": "Large-PR reviews scale by risk, not by graph reach, and find more",
   "status": "in-progress",
   "createdAt": "2026-10-15T21:34:19.482Z",
-  "updatedAt": "2026-10-16T04:50:28.249Z",
+  "updatedAt": "2026-10-16T04:51:10.086Z",
   "source": {
     "type": "description",
     "ref": null
@@ -186,7 +186,7 @@
       "id": "T10",
       "title": "E2: live eval rounds on #424 #939 #940 #1005",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8",
         "T9"
@@ -197,7 +197,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -356,6 +357,11 @@
       "at": "2026-10-16T04:50:28.249Z",
       "event": "ac-updated",
       "detail": "AC8: \"Harness robustness: results and drivers live per package; wave bytes per host; the autonomous prompt passes scope/package and runs one round unless the head moved; attended is derived from mode, and `chunks estimate --mode automatic` / `publish --yes` cannot bypass the operator; mutation waiver, reviewer-set override and `comments reply --final` need a card or TTY; item 10 says \"not observable\" outside keryx shell; trigger reviews route to the autonomous runner; verification commands can run in the parent and reach the verifier as context; installed host skill copies older than bundled are warned about. [verify: exec `bun test src/review/harness-robustness.test.ts`]\" -> \"Harness robustness: results and drivers live per package; wave bytes per host; the autonomous prompt passes scope/package and runs one round unless the head moved; attended is derived from mode, and `chunks estimate --mode automatic` / `publish --yes` / `review start --unattended` cannot bypass the operator; mutation waiver, reviewer-set override, plan confirmation and `comments reply --final` need a card or TTY and are bound to what the operator saw; item 10 says \"not observable\" outside keryx shell; trigger review tasks go through the normal containment, spend and attempt path (routing them to the autonomous runner was reverted: it would bypass the sandbox and budget); verification commands can run in the parent and reach the verifier as context; installed host skill copies older than bundled are warned about. [verify: exec `bun test src/review/harness-robustness.test.ts`]\" (security review: routing trigger reviews to the autonomous runner bypassed containment, spend and attempts; reverted; plus decision binding and the --unattended gate)"
+    },
+    {
+      "at": "2026-10-16T04:51:10.086Z",
+      "event": "task-done",
+      "detail": "T10: E2: live eval rounds on #424 #939 #940 #1005"
     }
   ],
   "acKinds": {
