@@ -11,7 +11,7 @@
   "title": "Large-PR reviews scale by risk, not by graph reach, and find more",
   "status": "in-progress",
   "createdAt": "2026-10-15T21:34:19.482Z",
-  "updatedAt": "2026-10-16T04:51:10.086Z",
+  "updatedAt": "2026-10-16T05:12:56.916Z",
   "source": {
     "type": "description",
     "ref": null
@@ -204,7 +204,7 @@
       "id": "T11",
       "title": "Review round + PR + merge",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T10"
       ],
@@ -214,7 +214,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -362,6 +363,11 @@
       "at": "2026-10-16T04:51:10.086Z",
       "event": "task-done",
       "detail": "T10: E2: live eval rounds on #424 #939 #940 #1005"
+    },
+    {
+      "at": "2026-10-16T05:12:56.916Z",
+      "event": "task-done",
+      "detail": "T11: Review round + PR + merge"
     }
   ],
   "acKinds": {

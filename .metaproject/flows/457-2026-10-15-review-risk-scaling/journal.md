@@ -43,3 +43,4 @@ First routing pass missed 3 architecture/security findings (#424 ×2, #939 D2-b,
 - Review round (security + correctness, Opus): blockers — trigger review bypassed containment (reverted), operator commands missing from the CLI allowlist, red tests; majors — env-var exemption forgeable, --unattended self-declared, routing trusted from manifest, decisions unbound, hub damping hid direct callers, branch base, base text commit, plan key ignored cost, escalation only via retry-plan, verify-run grandchildren, skill drift on npm, pre-457 packages refused. All fixed in lanes S and R; AC8 updated (trigger routing reverted).
 - Eval artifacts: eval/README.md + per-PR reports.
 - 2026-10-16T04:51:10.086Z - task-done: T10: E2: live eval rounds on #424 #939 #940 #1005
+- 2026-10-16T05:12:56.916Z - task-done: T11: Review round + PR + merge
