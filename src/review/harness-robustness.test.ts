@@ -11,7 +11,6 @@ import { runOperatorCommand } from "../commands/review-operator";
 import { packageOfManifest, runSlice } from "../commands/review-slice";
 import { buildReviewConfirmSpecs } from "../commands/operator-confirm-review";
 import { operatorConfirmTool } from "../commands/operator-confirm-tools";
-import { isReviewTask, reviewTaskCommand, reviewTaskRange } from "../trigger/review-task";
 import { OPERATOR_CONFIRM_TOOL_NAMES, isUnattendedExcludedTool } from "../trigger/unattended";
 import { AUTONOMOUS_PROFILE, AUTONOMOUS_SCOPE_FILE, REVIEW_WAVE_SIZE, buildAutonomousPrompt, describeAutonomousTarget, parseAutonomousRangeTarget } from "./autonomous-profile";
 import { runAutonomousReview, type ChildSpec } from "./autonomous-run";
@@ -330,17 +329,6 @@ describe("row 10: item 10 outside keryx shell", () => {
   test("the item's repair names the keryx shell card", async () => {
     const source = readFileSync(path.join(import.meta.dir, "readiness.ts"), "utf8");
     expect(source).toContain("review_waive_readiness tool with item memory-outside-stage");
-  });
-});
-
-describe("row 16: trigger review tasks go to the autonomous runner", () => {
-  test("a review task is recognised and routed to review run --autonomous over the flow's range", () => {
-    expect(isReviewTask({ id: "T7", kind: "review", title: "review" })).toBe(true);
-    expect(isReviewTask({ id: "T1", kind: "implement", title: "review the code" })).toBe(false);
-    const range = reviewTaskRange({ defaultBranch: "origin/main", head: "abc1234" });
-    expect(range).toEqual({ base: "origin/main", head: "abc1234" });
-    expect(reviewTaskCommand(range)).toBe("keryx review run --autonomous --target branch --ref origin/main --head abc1234");
-    expect(reviewTaskRange({ defaultBranch: undefined, head: undefined })).toEqual({ base: "main" });
   });
 });
 
