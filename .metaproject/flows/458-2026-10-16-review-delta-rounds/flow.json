@@ -11,7 +11,7 @@
   "title": "Fix rounds review the delta, flows plan states up front, review lines dedupe",
   "status": "in-progress",
   "createdAt": "2026-10-16T06:30:13.529Z",
-  "updatedAt": "2026-10-16T06:37:03.020Z",
+  "updatedAt": "2026-10-16T08:40:48.951Z",
   "source": {
     "type": "description",
     "ref": null
@@ -104,7 +104,7 @@
       "id": "T5",
       "title": "L1a: prior-round discovery from all sources, publish block, collect parses own block, round.json",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -112,13 +112,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "L2: dedupe + canonical severity, supersedes/overlap groups, ledger root/skips, ingest head",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -126,13 +127,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "L1b: split FIX/NEW, rosters, split coverage/readiness/ledger/estimate, review plan",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -140,13 +142,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "L3a: flow-orchestrator matrix, gate, behavior_changes, hypotheses, one implementer",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -154,13 +157,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "L3b: review-orchestrator + other orchestrators use start's delta; read-only reviewers",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -168,13 +172,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Review round + PR + merge",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -182,7 +187,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -286,6 +292,36 @@
     {
       "at": "2026-10-16T06:37:03.020Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-16T06:52:51.832Z",
+      "event": "task-done",
+      "detail": "T9: L3b: review-orchestrator + other orchestrators use start's delta; read-only reviewers"
+    },
+    {
+      "at": "2026-10-16T07:01:04.974Z",
+      "event": "task-done",
+      "detail": "T5: L1a: prior-round discovery from all sources, publish block, collect parses own block, round.json"
+    },
+    {
+      "at": "2026-10-16T07:16:49.045Z",
+      "event": "task-done",
+      "detail": "T6: L2: dedupe + canonical severity, supersedes/overlap groups, ledger root/skips, ingest head"
+    },
+    {
+      "at": "2026-10-16T07:23:01.441Z",
+      "event": "task-done",
+      "detail": "T8: L3a: flow-orchestrator matrix, gate, behavior_changes, hypotheses, one implementer"
+    },
+    {
+      "at": "2026-10-16T07:32:29.819Z",
+      "event": "task-done",
+      "detail": "T7: L1b: split FIX/NEW, rosters, split coverage/readiness/ledger/estimate, review plan"
+    },
+    {
+      "at": "2026-10-16T08:40:48.951Z",
+      "event": "task-done",
+      "detail": "T10: Review round + PR + merge"
     }
   ],
   "acKinds": {

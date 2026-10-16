@@ -15,3 +15,9 @@
 - 2026-10-16T06:37:02.721Z - task-added: T12: Release
 - 2026-10-16T06:37:02.872Z - frozen: 11 criteria; checksum recorded
 - 2026-10-16T06:37:03.020Z - started
+- 2026-10-16T06:52:51.832Z - task-done: T9: L3b: review-orchestrator + other orchestrators use start's delta; read-only reviewers
+- 2026-10-16T07:01:04.974Z - task-done: T5: L1a: prior-round discovery from all sources, publish block, collect parses own block, round.json
+- 2026-10-16T07:16:49.045Z - task-done: T6: L2: dedupe + canonical severity, supersedes/overlap groups, ledger root/skips, ingest head
+- 2026-10-16T07:23:01.441Z - task-done: T8: L3a: flow-orchestrator matrix, gate, behavior_changes, hypotheses, one implementer
+- 2026-10-16T07:32:29.819Z - task-done: T7: L1b: split FIX/NEW, rosters, split coverage/readiness/ledger/estimate, review plan
+- 2026-10-16T08:40:48.951Z - task-done: T10: Review round + PR + merge
