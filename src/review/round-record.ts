@@ -102,6 +102,27 @@ function readRaw(packageDir: string): Record<string, unknown> | undefined {
   }
 }
 
+/** What a delta round concluded about one prior finding after reading the fix: the vocabulary of `prior_findings_status` in the reviewer input. */
+export const PRIOR_DISPOSITIONS = ["closed", "open", "partial", "regressed", "withdrawn"] as const;
+export type PriorDisposition = (typeof PRIOR_DISPOSITIONS)[number];
+
+export function isPriorDisposition(value: unknown): value is PriorDisposition {
+  return typeof value === "string" && (PRIOR_DISPOSITIONS as readonly string[]).includes(value);
+}
+
+/** The slice kinds of a delta round: a FIX slice answers prior findings, a NEW slice is code no prior finding touched. */
+export type SliceKind = "fix" | "new";
+
+/** The package's prior_findings.json, or [] when it has none or it is unreadable. */
+export function readPriorFindings(packageDir: string): PriorFinding[] {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path.join(packageDir, PRIOR_FINDINGS_FILE), "utf8"));
+    return Array.isArray(parsed) ? parsed.filter((entry): entry is PriorFinding => record(entry) !== undefined && typeof (entry as PriorFinding).id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 function attemptText(attempt: SourceAttempt): string {
   return attempt.result === "not-consulted" ? `${attempt.source}: not consulted (${attempt.detail})` : `${attempt.source}: ${attempt.result}`;
 }

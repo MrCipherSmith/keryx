@@ -452,3 +452,32 @@ describe("item 2 counts only cap drops (flow 457 AC2)", () => {
     expect(plan?.chunks.flatMap((chunk) => chunk.files)).toEqual([CUT[0] as string]);
   });
 });
+
+describe("a delta round's fix slice (flow 458 AC4)", () => {
+  const fixOnly = (covered: string[]): void => {
+    writeBlastRadius([CHANGED[0]!], []);
+    writeJson("scope-files.json", { files: [CHANGED[0]] });
+    mkdirSync(path.join(pkg, "slices"), { recursive: true });
+    writeJson("slices/manifest.json", {
+      schemaVersion: 1,
+      maxBytes: 18000,
+      source: "diff",
+      slices: [{ id: "slice-01", path: "slice-01.diff", bytes: 10, files: [CHANGED[0]], domain: "src", split: "domain", roles: ["review-logic", "review-regression"], depth: "deep", kind: "fix", findingIds: ["F1"] }],
+      omissions: [],
+      totals: { slices: 1, bytes: 10, files: 1, omittedFiles: 0, omittedBytes: 0, droppedBlocks: 0 },
+    });
+    writeResearch("repaired");
+    const research = JSON.parse(readFileSync(path.join(pkg, "research.json"), "utf8"));
+    research.dispatch.fixSlicesCovered = covered;
+    writeJson("research.json", research);
+  };
+
+  test("the file of a fix slice is uncovered until every finding attached to the slice has a disposition", async () => {
+    fixOnly([]);
+    const open = (await computeReadiness(pkg)).items.find((item) => item.id === "files-covered");
+    expect(open?.status).toBe("fail");
+    fixOnly(["slice-01"]);
+    const covered = (await computeReadiness(pkg)).items.find((item) => item.id === "files-covered");
+    expect(covered?.status).toBe("pass");
+  });
+});

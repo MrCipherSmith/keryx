@@ -11,7 +11,9 @@ export function requiredSlices(manifest: Pick<SliceManifest, "slices">, reviewer
   const gate = BUNDLED_PATH_GATES[reviewer];
   const routable = ROUTABLE_ROLES.has(reviewer);
   return manifest.slices
-    .filter((s) => s.retryOf === undefined && (routable && Array.isArray(s.roles) ? s.roles.includes(reviewer) : gate === undefined || s.files.some(gate)))
+    // A fix slice of a delta round (flow 458) belongs to exactly its roster, whether or not a role is routable: an author
+    // that is a project reviewer reads the slice that answers its finding, and no other project reviewer is owed it.
+    .filter((s) => s.retryOf === undefined && (s.kind === "fix" && Array.isArray(s.roles) ? s.roles.includes(reviewer) : routable && Array.isArray(s.roles) ? s.roles.includes(reviewer) : gate === undefined || s.files.some(gate)))
     .map((s) => s.id);
 }
 

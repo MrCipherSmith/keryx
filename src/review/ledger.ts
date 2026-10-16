@@ -7,6 +7,7 @@ import { readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } fr
 import { type SliceManifest, packWaves, waveBytesOf } from "./slice";
 import { ALWAYS_ROLE, DEEP_ROLES, ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
+import { fixSlicesCoveredByDispositions, priorDispositionsOf } from "./round-split";
 
 /** Statuses of `reviewer-finding.schema.json` that mean the reviewer finished what it was given. */
 const FINISHED = new Set(["DONE", "DONE_WITH_CONCERNS"]);
@@ -21,6 +22,8 @@ export type ParsedResult = {
   slices?: unknown;
   /** Work the reviewer hands back to the parent. Each entry becomes an obligation that only a disposition closes. */
   follow_ups?: unknown;
+  /** Delta round (flow 458): what the reviewer concluded about each prior finding its fix slices answer, `[{ id, disposition }]`. */
+  prior_dispositions?: unknown;
 };
 
 export type RawFile = {
@@ -80,6 +83,8 @@ export type LedgerInputs = {
    * `selected`, and are written to `dispatch.skipped` and as `Not run: <reviewer> — <reason>` lines to `dispatch.notRun`.
    */
   skipped?: readonly ReviewerSkip[] | undefined;
+  /** Findings a delta round carried over unchanged (`round.json` `carried`): their recorded dispositions count as dispositions. */
+  carried?: ReadonlyArray<{ findingId: string; disposition: string }> | undefined;
 };
 
 export type LedgerResult = {
@@ -378,6 +383,12 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   const selected = input.selected.filter((reviewer) => !skippedNames.has(reviewer));
   const { manifest, raws } = input;
   const attributed = raws.filter((r) => r.result?.reviewer !== undefined && text(r.result.reviewer));
+  // Delta round (flow 458): a fix slice is covered once every finding attached to it has a disposition, from a reviewer's
+  // `prior_dispositions` or a carried finding's recorded one, whichever reviewers claimed it.
+  const priorDispositions = new Map<string, string>();
+  for (const carried of input.carried ?? []) if (text(carried.findingId) && text(carried.disposition)) priorDispositions.set(carried.findingId, carried.disposition);
+  for (const raw of attributed) for (const [id, disposition] of priorDispositionsOf(raw.result)) priorDispositions.set(id, disposition);
+  const fixCovered = new Set(manifest === undefined ? [] : fixSlicesCoveredByDispositions(manifest, new Set(priorDispositions.keys())));
   for (const raw of raws) {
     if (raw.empty) continue;
     if (raw.result === undefined) gaps.push({ detail: `${raw.name}: no parseable REVIEW_RESULT block`, next: `re-dispatch the reviewer that produced ${raw.name}, or remove the file if it is not a reviewer result` });
@@ -434,7 +445,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       }
       for (const id of known?.covered ?? []) claimed.add(id);
     }
-    const seen = manifest === undefined ? new Set<string>() : accountedFor(manifest, reviewer, claimed);
+    const seen = manifest === undefined ? new Set<string>() : new Set([...accountedFor(manifest, reviewer, claimed), ...fixCovered]);
     if (manifest !== undefined) run.coveredSlices = [...seen].sort();
     const dropped = [...new Set(mine.flatMap((raw) => sliceReadingNotes(readSliceIds(raw.result!.slices))))];
     const droppedTail = dropped.length === 0 ? "" : ` (${dropped.join("; ")})`;
@@ -468,7 +479,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
 
   const unresolvedRules = selected.filter((r) => input.ruleFiles[r] === undefined);
   const notRun = [...(input.depth === "light" ? ["Not run: mutation (light round)"] : []), ...skipped.map(skipLine)];
-  const dispatch = { version: 1, mode: input.mode, ...(input.depth === "light" ? { depth: "light" } : input.depth === "full" ? { depth: "full" } : {}), ...(notRun.length === 0 ? {} : { notRun }), selected, ...(skipped.length === 0 ? {} : { skipped: skipped.map((skip) => ({ reviewer: skip.reviewer, reason: skip.reason })) }), ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
+  const dispatch = { version: 1, mode: input.mode, ...(fixCovered.size === 0 ? {} : { fixSlicesCovered: [...fixCovered].sort() }), ...(priorDispositions.size === 0 ? {} : { priorDispositions: Object.fromEntries([...priorDispositions].sort(([a], [b]) => a.localeCompare(b))) }), ...(input.depth === "light" ? { depth: "light" } : input.depth === "full" ? { depth: "full" } : {}), ...(notRun.length === 0 ? {} : { notRun }), selected, ...(skipped.length === 0 ? {} : { skipped: skipped.map((skip) => ({ reviewer: skip.reviewer, reason: skip.reason })) }), ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
 
   const obligations: Array<Record<string, unknown>> = [];
   const derived = new Set<string>();

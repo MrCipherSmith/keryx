@@ -11,6 +11,8 @@ import { pendingMutants } from "../review/mutate";
 import { type Disposition, type LedgerGap, type RawFile, buildLedger, followUpsOf, isEmptyOutput, isReviewerResult, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
 import { type RetryState, applyEscalations, emptyRetryState, escalationsFor, readSliceIds, scopeFingerprint } from "../review/retry-plan";
 import { narrowedSlices, packageRoutingRefusal, routingRefusal, sliceTextReader } from "../review/routing-check";
+import { fixContextOf, fixSliceRoles } from "../review/round-split";
+import { readRoundRecord } from "../review/round-record";
 import { type SliceManifest, manifestSizeProblem } from "../review/slice";
 import { packagePlanGate } from "../review/estimate";
 
@@ -276,7 +278,7 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     const unsized = manifestSizeProblem(manifest);
     if (unsized !== undefined) throw new Error(`${manifestLabel}: ${unsized}`);
     // Security review M3: the recorded routing may only be wider than what each slice's own text needs.
-    const routing = narrowedSlices(manifest, sliceTextReader(path.dirname(manifestPath)));
+    const routing = narrowedSlices(manifest, sliceTextReader(path.dirname(manifestPath)), fixContextOf(packageDir));
     const narrowed = routingRefusal(manifestLabel, routing.narrowed);
     if (narrowed !== undefined) throw new Error(`ledger build refused: ${narrowed}`);
   }
@@ -306,7 +308,10 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   const notRequired = skipped.filter((skip) => !required.required.includes(skip.reviewer));
   if (notRequired.length > 0) throw new Error(`--skip ${notRequired.map((skip) => skip.reviewer).join(", ")}: not a reviewer this round requires (required: ${required.required.join(", ") || "none"}); nothing to skip`);
   const { payloadSlices, payloadDispatchCounts, ruleFiles, toolLogs: toolLogPaths, assignments, replies, dropped } = await readDrivers(inputDir, root);
-  const { raws, ignored, setAside } = await loadRaws(inputDir, { files: replies.files, reviewers: [...new Set([...replies.reviewers, ...required.required])] });
+  // A delta round's fix slices are read by their own roster (flow 458): the reviewers that authored the findings they answer
+  // join the round even when no changed path asks for them, and each slice kind is held to its own roster below.
+  const selected = [...new Set([...required.required, ...(manifest === undefined ? [] : fixSliceRoles(manifest))])].sort();
+  const { raws, ignored, setAside } = await loadRaws(inputDir, { files: replies.files, reviewers: [...new Set([...replies.reviewers, ...selected])] });
 
   assignRawDispatch(raws, assignments);
   // Security review M5: a major-or-worse finding on a light slice re-opens it deep here too, not only through
@@ -325,12 +330,13 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   const plan = await packagePlanGate(packageDir, manifest === undefined ? {} : { manifest: manifestPath, manifestValue: manifest });
   if (plan.refusal !== undefined) throw new Error(`ledger build refused: ${plan.refusal}`);
   const toolLogs: Record<string, string | undefined> = {};
-  for (const reviewer of required.required) toolLogs[reviewer] = await readToolLog(inputDir, reviewer, toolLogPaths[reviewer]);
+  for (const reviewer of selected) toolLogs[reviewer] = await readToolLog(inputDir, reviewer, toolLogPaths[reviewer]);
   const { ledger, gaps } = buildLedger({
     dispatchRoles: await knownDispatchRoles(out, replies.reviewers),
     mode,
     depth,
-    selected: required.required,
+    selected,
+    carried: readRoundRecord(packageDir)?.carried ?? [],
     manifest,
     payloadSlices,
     payloadDispatchCounts,
