@@ -3,6 +3,7 @@ import { coverageErrors, skipLine, type ReviewMode, type ReviewerSkip } from "./
 import { dispatchErrors } from "./dispatch";
 import { layersUsedFrom } from "./layers-usage";
 import { researchErrors } from "./research";
+import { describeUnusableResult, holdsResultList, lenientReviewResult } from "./result-parse";
 import { readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } from "./retry-plan";
 import { type SliceManifest, packWaves, waveBytesOf } from "./slice";
 import { ALWAYS_ROLE, DEEP_ROLES, ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
@@ -22,6 +23,8 @@ export type ParsedResult = {
   slices?: unknown;
   /** Work the reviewer hands back to the parent. Each entry becomes an obligation that only a disposition closes. */
   follow_ups?: unknown;
+  /** The model the reviewer ran on, when the dispatcher or the reviewer recorded it. */
+  model?: string;
   /** Delta round (flow 458): what the reviewer concluded about each prior finding its fix slices answer, `[{ id, disposition }]`. */
   prior_dispositions?: unknown;
 };
@@ -36,6 +39,8 @@ export type RawFile = {
   result?: ParsedResult;
   /** True for a file a reviewer left empty ("(subagent produced no text)"): lost output, not a result to reconcile. */
   empty: boolean;
+  /** Why no result was read from this file (what is missing), set by the loader when `result` is absent. */
+  diagnosis?: string;
 };
 
 export type Disposition = {
@@ -66,6 +71,8 @@ export type LedgerInputs = {
   payloadDispatchCounts?: Record<string, number>;
   /** Reviewer → resolved rule file, only when it exists. */
   ruleFiles: Record<string, string>;
+  /** Reviewer → the model its driver records (the dispatcher passes it); a result's own `model` wins. */
+  models?: Record<string, string> | undefined;
   raws: RawFile[];
   /** Reviewer → the text of its tool-call log; a reviewer with no entry has `layersUsed` unknown. */
   toolLogs?: Record<string, string | undefined>;
@@ -314,11 +321,26 @@ function scannedResult(raw: string): ParsedResult | undefined {
  *    - with no fenced one, the last reviewer-shaped bare object, unless the bare objects (any with a status) carry
  *      different statuses (then none; the same status twice is not ambiguous).
  * Never guessed from prose.
+ * When none of that gives a result, the lenient reader (./result-parse.ts) is tried: a JSON array of results (one per
+ * wave), a result wrapped in `result` / `review_result`, a fenced ```json block or a bare object with prose around it.
+ * It is skipped for a reply that looks cut off, and gives none for disagreeing results.
  */
 export function parseReviewResult(raw: string): ParsedResult | undefined {
   const labelled = labelledFence(raw);
-  if (labelled !== undefined) return labelled.result;
-  return afterMarker(raw)?.result ?? scannedResult(raw);
+  if (labelled !== undefined) return labelled.result ?? lenientReviewResult(raw.slice(labelled.at));
+  const marked = afterMarker(raw)?.result;
+  if (marked !== undefined) return marked;
+  // A JSON list of results (one per wave) is merged, not read as its last object.
+  if (holdsResultList(raw)) return lenientReviewResult(raw);
+  const strict = scannedResult(raw);
+  if (strict !== undefined) return strict;
+  if (topLevelObjects(raw).truncated) return undefined;
+  return lenientReviewResult(raw);
+}
+
+/** Why `parseReviewResult` found nothing in a reply, naming what is missing (reviewer, status, slices, findings). */
+export function explainUnparsedResult(raw: string): string {
+  return describeUnusableResult(raw);
 }
 
 /** A line that starts with `Parent follow-up:` (after at most a quote, list or emphasis prefix); the rest of the line is the follow-up. */
@@ -407,7 +429,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   const readBy = new Map<string, ReadonlySet<string>>();
   for (const raw of raws) {
     if (raw.empty) continue;
-    if (raw.result === undefined) gaps.push({ detail: `${raw.name}: no parseable REVIEW_RESULT block`, next: `re-dispatch the reviewer that produced ${raw.name}, or remove the file if it is not a reviewer result` });
+    if (raw.result === undefined) gaps.push({ detail: `${raw.name}: no parseable REVIEW_RESULT block${raw.diagnosis === undefined ? "" : ` (${raw.diagnosis})`}`, next: `re-dispatch the reviewer that produced ${raw.name}, or remove the file if it is not a reviewer result` });
     else if (!text(raw.result.reviewer)) gaps.push({ detail: `${raw.name}: the result names no reviewer, so it cannot be attributed`, next: `have the reviewer re-emit its result with "reviewer" set` });
   }
 
@@ -445,6 +467,8 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     const asked = Array.isArray(result.needs_context) ? result.needs_context.filter(text) : [];
     const finished = FINISHED.has(status) && asked.length === 0;
     const run: Record<string, unknown> = { reviewer, executionId: `${reviewer}:${latest.hash}`, rawEvidence: `${latest.name}#sha256:${latest.hash}`, executionRequired: false, layersUsed: layersUsedFrom(input.toolLogs?.[reviewer]) };
+    const recorded = [...mine].reverse().map((raw) => raw.result?.model).find(text) ?? input.models?.[reviewer];
+    if (text(recorded)) run.model = recorded.trim();
     const rule = input.ruleFiles[reviewer];
     run.ruleEvidence = rule === undefined ? [] : [rule];
     if (rule === undefined) gaps.push({ reviewer, detail: `${reviewer}: no resolved rule file (driver payload names none that exists)`, next: `write drivers/${reviewer}.json with the reviewer's definition path` });
@@ -606,6 +630,54 @@ export function auditRecord(manifest: SliceManifest, raws: readonly RawFile[]): 
   });
   const hits = caught.filter((entry) => entry.findings.length > 0).length;
   return { slices: audited.map((s) => s.id), caught: caught.filter((entry) => entry.findings.length > 0), catchRate: Number((hits / audited.length).toFixed(3)) };
+}
+
+/** Keys a list of dispositions is commonly wrapped in, tried in order (`obligations` is what an earlier `ledger build` wrote). */
+export const DISPOSITION_WRAPPER_KEYS: readonly string[] = ["dispositions", "items", "results", "data", "entries", "obligations"];
+
+/** The one schema of a `ledger build --dispositions` row, worded for an error. */
+export const DISPOSITION_SCHEMA = `{"id":"<raw/file.txt:Fn>","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"finding":… (status finding),"remains":… (status narrowed)}`;
+
+/**
+ * The dispositions of a `--dispositions` input: an array, or an object holding one under a wrapper key (`dispositions`,
+ * `items`, `results`, `data`, `entries`, `obligations`; wrappers may nest). Rows are `Disposition`s of the one schema:
+ * an `id`, a `status` that closes (`finding`, `refuted`, `out-of-scope`, `narrowed`), and for `narrowed` the `remains`
+ * that still stands. `strict` (an input the caller wrote, as opposed to the obligations of an earlier build, whose still
+ * open rows are `unresolved`) collects every row that breaks the schema in `bad`, one line each, instead of reading it.
+ */
+export function normalizeDispositions(given: unknown, options: { strict: boolean }): { rows: Disposition[]; bad: string[] } {
+  const bad: string[] = [];
+  const find = (value: unknown, depth: number): unknown[] | undefined => {
+    if (Array.isArray(value)) return value;
+    if (value === null || typeof value !== "object" || depth > 3) return undefined;
+    for (const key of DISPOSITION_WRAPPER_KEYS) {
+      const inner = find((value as Record<string, unknown>)[key], depth + 1);
+      if (inner !== undefined) return inner;
+    }
+    return undefined;
+  };
+  const list = find(given, 0);
+  if (list === undefined) {
+    if (given === undefined || !options.strict) return { rows: [], bad };
+    bad.push(`not a list of dispositions: expected an array, or an object holding one under ${DISPOSITION_WRAPPER_KEYS.map((key) => `"${key}"`).join(", ")}`);
+    return { rows: [], bad };
+  }
+  const rows: Disposition[] = [];
+  list.forEach((row, at) => {
+    const label = row !== null && typeof row === "object" && text((row as Disposition).id) ? `row ${at + 1} (${(row as Disposition).id})` : `row ${at + 1}`;
+    if (row === null || typeof row !== "object" || Array.isArray(row)) { bad.push(`${label}: not an object`); return; }
+    const given = row as Disposition;
+    if (options.strict) {
+      const problems: string[] = [];
+      if (!text(given.id)) problems.push('no "id"');
+      const status = String(given.status);
+      if (!CLOSED.has(status) && status !== "unresolved") problems.push(`status "${status === "undefined" ? "" : status}" is not one of finding, refuted, out-of-scope, narrowed`);
+      else if (status === "narrowed" && !text(given.remains)) problems.push('narrowed needs "remains" (what of the finding still stands)');
+      if (problems.length > 0) { bad.push(`${label}: ${problems.join("; ")}`); return; }
+    }
+    rows.push(given);
+  });
+  return { rows, bad };
 }
 
 function closeWith(given: Disposition | undefined, canonical: Array<Record<string, unknown>>): Record<string, unknown> | undefined {

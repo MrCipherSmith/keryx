@@ -240,7 +240,8 @@ describe("raw/ files through loadRaws and runLedger (flow 430 AC3, AC4)", () => 
       expect(loaded.raws.map((raw) => [raw.name, raw.result])).toEqual([["raw/review-logic.txt", undefined]]);
       const out = await build(pkg);
       expect(out.ready).toBe(false);
-      expect(out.gaps.map((gap) => gap.detail)).toContain("raw/review-logic.txt: no parseable REVIEW_RESULT block");
+      // The gap names what the reply lacks (flow 458 AC12), not only that it failed.
+      expect(out.gaps.map((gap) => gap.detail)).toContain("raw/review-logic.txt: no parseable REVIEW_RESULT block (the closest JSON object in the reply cannot be read as a reviewer result: missing reviewer, slices, findings)");
     } finally {
       await cleanup();
     }
@@ -433,6 +434,132 @@ describe("ledger build --skip and flow-bound packages (flow 458 AC7)", () => {
       await writeFile(path.join(overlay, "SKILL.md"), "---\nname: acme-review\ndescription: Use when reviewing acme code.\n---\n");
       const out = JSON.parse((await run([pkg, "--mode", "all", "--json"])).text) as Out;
       expect(out.ledger.dispatch.selected).toContain("acme-review");
+    } finally {
+      await cleanup();
+    }
+  });
+});
+
+describe("dispositions and the recorded model (flow 458 AC12)", () => {
+  type Out = { ready: boolean; gaps: Array<{ reviewer?: string; detail: string }>; ledger: { obligations: Array<Record<string, unknown>>; dispatch: { runs: Array<Record<string, unknown>> } } };
+  const REVIEW = { reviewer: "review-logic", status: "DONE", slices: ["S1"], findings: [{ id: "F1", problem: "p" }] };
+
+  async function pkgWith(extra: Record<string, string> = {}, driver: object = { reviewer: "review-logic", slices: ["S1"], result: "raw/review-logic.txt" }): Promise<{ pkg: string; cleanup: () => Promise<void> }> {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-f458-ledger-"));
+    const pkg = path.join(root, ".metaproject", "reviews", "pkg");
+    await mkdir(path.join(pkg, "raw"), { recursive: true });
+    await mkdir(path.join(pkg, "drivers"), { recursive: true });
+    await writeFile(path.join(pkg, "scope-files.json"), JSON.stringify({ files: ["src/a.ts"] }));
+    await writeFile(path.join(pkg, "raw", "review-logic.txt"), `REVIEW_RESULT: ${JSON.stringify(REVIEW)}\n`);
+    await writeFile(path.join(pkg, "drivers", "review-logic.json"), JSON.stringify(driver));
+    for (const [name, body] of Object.entries(extra)) await writeFile(path.join(pkg, name), body);
+    return { pkg, cleanup: () => rm(root, { recursive: true, force: true }) };
+  }
+
+  async function run(args: string[]): Promise<{ out?: Out; text: string; error?: string }> {
+    const lines: string[] = [];
+    const log = console.log;
+    const exitCode = process.exitCode;
+    console.log = (...a: unknown[]) => { lines.push(a.join(" ")); };
+    try {
+      await runLedger(["build", ...args], { rejectUnknownFlags: () => undefined });
+    } catch (error) {
+      return { text: "", error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      console.log = log;
+      process.exitCode = exitCode;
+    }
+    const text = lines.join("\n");
+    return { text, ...(args.includes("--json") ? { out: JSON.parse(text) as Out } : {}) };
+  }
+
+  const ID = "review-logic:F1";
+
+  test("every known wrapper key is normalised to the same dispositions", async () => {
+    const row = { id: ID, status: "refuted", evidence: "ran it", reason: "not reproducible" };
+    for (const wrapped of [[row], { dispositions: [row] }, { items: [row] }, { results: [row] }, { data: [row] }, { entries: [row] }, { data: { dispositions: [row] } }]) {
+      const { pkg, cleanup } = await pkgWith({ "dispositions.json": JSON.stringify(wrapped) });
+      try {
+        const { out } = await run([pkg, "--mode", "all", "--json", "--dispositions", path.join(pkg, "dispositions.json")]);
+        expect(out?.ledger.obligations.find((o) => o.id === ID)).toMatchObject({ status: "refuted", evidence: "ran it" });
+      } finally {
+        await cleanup();
+      }
+    }
+  });
+
+  test("a narrowed row without remains, an unknown status and a row without id are all refused in one message, nothing written", async () => {
+    const rows = [
+      { id: ID, status: "narrowed", evidence: "e", reason: "r" },
+      { id: "review-logic:F2", status: "maybe", evidence: "e", reason: "r" },
+      { status: "refuted", evidence: "e", reason: "r" },
+      "not an object",
+      { id: "review-logic:F3", status: "narrowed", evidence: "e", reason: "r", remains: "the null case" },
+    ];
+    const { pkg, cleanup } = await pkgWith({ "dispositions.json": JSON.stringify({ dispositions: rows }) });
+    try {
+      const { error } = await run([pkg, "--mode", "all", "--json", "--dispositions", path.join(pkg, "dispositions.json")]);
+      expect(error).toContain("4 bad row(s)");
+      expect(error).toContain(`row 1 (${ID}): narrowed needs "remains"`);
+      expect(error).toContain('row 2 (review-logic:F2): status "maybe" is not one of finding, refuted, out-of-scope, narrowed');
+      expect(error).toContain('row 3: no "id"');
+      expect(error).toContain("row 4: not an object");
+      expect(error).not.toContain("row 5");
+      expect(error).toContain("One schema per row");
+      expect(existsSync(path.join(pkg, "research.json"))).toBe(false);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("a dispositions input that is not a list, or not JSON, is refused by name", async () => {
+    const { pkg, cleanup } = await pkgWith({ "object.json": JSON.stringify({ note: "nothing here" }), "broken.json": "{" });
+    try {
+      expect((await run([pkg, "--mode", "all", "--dispositions", path.join(pkg, "object.json")])).error).toContain("not a list of dispositions");
+      expect((await run([pkg, "--mode", "all", "--dispositions", path.join(pkg, "broken.json")])).error).toContain("missing or not valid JSON");
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("the default input (the obligations of the last build) keeps its still-open rows without being refused", async () => {
+    const { pkg, cleanup } = await pkgWith();
+    try {
+      expect((await run([pkg, "--mode", "all", "--json"])).out?.ledger.obligations.find((o) => o.id === ID)?.status).toBe("unresolved");
+      // The second build reads research.json back, `unresolved` obligation included.
+      const again = await run([pkg, "--mode", "all", "--json"]);
+      expect(again.error).toBeUndefined();
+      expect(again.out?.ledger.obligations.find((o) => o.id === ID)?.status).toBe("unresolved");
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("the model a driver records is on the run and in the report; without one the report says model not recorded", async () => {
+    const withModel = await pkgWith({}, { reviewer: "review-logic", slices: ["S1"], result: "raw/review-logic.txt", model: "claude-sonnet-5-5" });
+    try {
+      const { out } = await run([withModel.pkg, "--mode", "all", "--json"]);
+      expect(out?.ledger.dispatch.runs.find((r) => r.reviewer === "review-logic")?.model).toBe("claude-sonnet-5-5");
+      expect((await run([withModel.pkg, "--mode", "all"])).text).toContain("review-logic claude-sonnet-5-5");
+    } finally {
+      await withModel.cleanup();
+    }
+    const without = await pkgWith();
+    try {
+      const { out } = await run([without.pkg, "--mode", "all", "--json"]);
+      expect(out?.ledger.dispatch.runs.find((r) => r.reviewer === "review-logic")).not.toHaveProperty("model");
+      expect((await run([without.pkg, "--mode", "all"])).text).toContain("review-logic model not recorded");
+    } finally {
+      await without.cleanup();
+    }
+  });
+
+  test("a result's own model wins over the driver's", async () => {
+    const { pkg, cleanup } = await pkgWith({}, { reviewer: "review-logic", slices: ["S1"], result: "raw/review-logic.txt", model: "from-driver" });
+    try {
+      await writeFile(path.join(pkg, "raw", "review-logic.txt"), `REVIEW_RESULT: ${JSON.stringify({ ...REVIEW, model: "from-result" })}\n`);
+      const { out } = await run([pkg, "--mode", "all", "--json"]);
+      expect(out?.ledger.dispatch.runs.find((r) => r.reviewer === "review-logic")?.model).toBe("from-result");
     } finally {
       await cleanup();
     }

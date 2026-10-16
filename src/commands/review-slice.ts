@@ -1,17 +1,21 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { writeFileAtomic } from "../lib/fs";
 import { placeReviewPath, reviewPathFlagRefusal } from "../lib/review-path-flags";
-import { hasStatus, parseReviewResult } from "../review/ledger";
+import { explainUnparsedResult, parseReviewResult, sha } from "../review/ledger";
 import { layersSummaryLine } from "../review/layers-view";
 import { ensurePackageLayers, resolvePackageDir } from "./review-layers";
 import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
-import { MAX_RETRY_ROUNDS, type RetryState, type ReviewerResult, applyEscalations, emptyRetryState, planRetry, readSliceIds, scopeFingerprint } from "../review/retry-plan";
-import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceEntry, type SliceManifest, buildSlices, manifestSizeProblem, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
+import { MAX_RETRY_ROUNDS, type ReviewerResult } from "../review/retry-plan";
+import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceManifest, buildSlices, manifestSizeProblem, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
 import { packagePlanGate } from "../review/estimate";
+import { packageReviewers, writeWaveDrivers } from "../review/wave-drivers";
+import { RETRY_STATE_NAME, UnreadableInput, commitRetryPlan, evaluateRetry, packageOfManifest, readJsonSource, wholeFileResult, writeSliceFiles } from "../review/retry-eval";
+
+export { packageOfManifest };
 import { resolveActiveReview } from "../review/active-review";
 import { operatorGateApplies } from "../review/run-profile";
 import { commentRuleScopeConfig } from "../review/comment-rule";
@@ -35,7 +39,6 @@ export const RETRY_PLAN_FLAGS = ["--manifest", "--result", "--reviewer", "--slic
 
 const DEFAULT_SLICE_DIR = ".metaproject/data/review/slices";
 const MANIFEST_NAME = "manifest.json";
-const RETRY_STATE_NAME = "retry-state.json";
 
 function wantsHelp(args: readonly string[]): boolean {
   return args.includes("--help") || args.includes("-h");
@@ -107,6 +110,12 @@ retry-plan and the ledger look for them), else ${DEFAULT_SLICE_DIR} (shared by e
 --package so one review's slices never mix with another's).
 Manifest paths are relative to the manifest. Put each slice's TEXT in the
 reviewer prompt; then \`keryx review dispatch-check\` the payload.
+
+With --package it also writes <review-dir>/drivers/<reviewer>-w<n>.json for every reviewer x wave:
+the slice ids (slices), their ABSOLUTE paths (slicePaths), the wave, the file the reply goes to
+(result: raw/<reviewer>-w<n>.txt) and the reviewer's rule file (definition) when one exists. The
+dispatcher adds "model"; a re-slice keeps it. \`keryx review next --package <review-dir>\` then lists
+what is left to dispatch.
 `);
 }
 
@@ -182,13 +191,6 @@ manifest records \`escalated\`), and \`ledger build\` holds those roles to it.
 `);
 }
 
-async function writeSliceFiles(dir: string, slices: ReadonlyArray<{ path: string; text: string }>): Promise<void> {
-  await mkdir(dir, { recursive: true });
-  for (const slice of slices) {
-    await writeFileAtomic(path.join(dir, slice.path), slice.text);
-  }
-}
-
 export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   if (wantsHelp(args)) {
     printSliceHelp();
@@ -249,8 +251,11 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const manifestPath = path.join(outDir, MANIFEST_NAME);
   await writeFileAtomic(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
+  // Flow 458 AC12: with a package, one driver per reviewer x wave, absolute slice paths and slice ids, so the dispatcher
+  // and `review next` read the same files the ledger does.
+  const drivers = packageOut === undefined ? [] : await writeWaveDrivers({ packageDir: packageOut, manifest: manifest as SliceManifest, sliceDir: outDir, reviewers: await packageReviewers(packageOut, manifest as SliceManifest) });
   if (args.includes("--json")) {
-    console.log(JSON.stringify({ ...manifest, dir: outDir, manifestPath }, null, 2));
+    console.log(JSON.stringify({ ...manifest, dir: outDir, manifestPath, ...(packageOut === undefined ? {} : { drivers }) }, null, 2));
     return;
   }
   console.log(renderSliceSummary(manifest));
@@ -258,6 +263,7 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const split = delta === undefined ? undefined : splitCounts(manifest);
   if (delta !== undefined && split !== undefined) console.log(`round ${delta.round} delta ${delta.range.base!.slice(0, 12)}..${delta.range.head!.slice(0, 12)}: ${split.fix} fix slice(s) (logic, regression, finding authors), ${split.new} new slice(s)`);
   console.log(`\nmanifest: ${manifestPath}`);
+  if (packageOut !== undefined) console.log(`drivers: ${drivers.length} written to ${path.join(packageOut, "drivers")} (one per reviewer x wave; \`keryx review next --package <dir>\` lists what is left)`);
 }
 
 /**
@@ -320,22 +326,6 @@ async function readNumberMap(file: string, flag: string): Promise<Record<string,
   return out;
 }
 
-async function readJsonSource<T>(source: string, label: string): Promise<T> {
-  let raw: string;
-  try {
-    raw = source === "-" ? await Bun.stdin.text() : await readFile(source, "utf8");
-  } catch (error) {
-    throw new UnreadableInput(`${label} is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);
-  }
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    throw new UnreadableInput(`${label} is not valid JSON: ${source}`);
-  }
-}
-
-class UnreadableInput extends Error {}
-
 /** A reviewer result: a file that is plain JSON with a status, or a saved raw reply read by `parseReviewResult` (the shapes it accepts are listed in its doc). A truncated or ambiguous reply is refused. */
 async function readResult(source: string): Promise<ReviewerResult> {
   let raw: string;
@@ -345,71 +335,8 @@ async function readResult(source: string): Promise<ReviewerResult> {
     throw new UnreadableInput(`result is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);
   }
   const parsed = wholeFileResult(raw) ?? parseReviewResult(raw);
-  if (parsed === undefined) throw new UnreadableInput(`result holds no usable reviewer result (a JSON object with a status; a \`\`\`REVIEW_RESULT block with a status; or one object with a status and a reviewer or findings, bare or after a REVIEW_RESULT marker; a truncated or ambiguous reply is refused): ${source}`);
+  if (parsed === undefined) throw new UnreadableInput(`result holds no usable reviewer result (a JSON object with a status; a \`\`\`REVIEW_RESULT block with a status; or one object with a status and a reviewer or findings, bare or after a REVIEW_RESULT marker; a truncated or ambiguous reply is refused). Why: ${explainUnparsedResult(raw)}. Also read: a \`\`\`json block, prose around the object, a JSON array of one reviewer's results (one per wave), an object wrapped in result / review_result: ${source}`);
   return parsed as ReviewerResult;
-}
-
-/** A file that is one JSON object with a status is the documented plain-JSON input; `--reviewer` may name a reviewer it leaves out. */
-function wholeFileResult(raw: string): ReviewerResult | undefined {
-  try {
-    const whole: unknown = JSON.parse(raw);
-    return hasStatus(whole) ? whole as ReviewerResult : undefined;
-  } catch { return undefined; }
-}
-
-/**
- * Finished results a reviewer left in the package after its caller stopped waiting: for each driver of `reviewer` that
- * names its result file, a raw file that parses as DONE or DONE_WITH_CONCERNS with no open needs_context covers the slices
- * the driver handed out. `collected` counts those files that add a slice not yet in `known`. Anything unreadable, malformed
- * or unfinished covers nothing.
- */
-async function collectLateResults(packageDir: string, reviewer: string, known: ReadonlySet<string>, fingerprint?: string): Promise<{ covered: string[]; collected: number }> {
-  const covered = new Set<string>();
-  const countedFiles = new Set<string>();
-  let collected = 0;
-  const driversDir = path.join(packageDir, "drivers");
-  if (!existsSync(driversDir)) return { covered: [], collected: 0 };
-  for (const name of (await readdir(driversDir)).filter((entry) => entry.endsWith(".json")).sort()) {
-    let driver: { reviewer?: unknown; slices?: unknown; result?: unknown };
-    try {
-      driver = JSON.parse(await readFile(path.join(driversDir, name), "utf8"));
-    } catch { continue; }
-    if (driver === null || typeof driver !== "object" || driver.reviewer !== reviewer || typeof driver.result !== "string" || !Array.isArray(driver.slices)) continue;
-    const file = path.join(packageDir, "raw", path.basename(driver.result));
-    if (!existsSync(file)) continue;
-    let raw: string;
-    try { raw = await readFile(file, "utf8"); } catch { continue; }
-    const result = wholeFileResult(raw) ?? parseReviewResult(raw);
-    if (result === undefined) continue;
-    const status = String(result.status ?? "").trim().toUpperCase();
-    const open = (Array.isArray(result.needs_context) ? result.needs_context : []).some((item) => String(item).trim() !== "");
-    if (open || (status !== "DONE" && status !== "DONE_WITH_CONCERNS")) continue;
-    if (result.reviewer !== undefined && result.reviewer !== reviewer) continue;
-    const stamped = (result as { scopeFingerprint?: unknown }).scopeFingerprint;
-    if (typeof stamped === "string" && stamped !== fingerprint) continue;
-    const assigned = readSliceIds(driver.slices, "assigned");
-    if (assigned.unusable > 0) continue;
-    // Same rule as the ledger: the reply's own slice list bounded by what was assigned; no list means the whole assignment.
-    const allowed = new Set(assigned.ids);
-    const claimed = result.slices === undefined ? assigned.ids : readSliceIds(result.slices).ids.filter((id) => allowed.has(id));
-    if (!countedFiles.has(file) && claimed.some((id) => !known.has(id) && !covered.has(id))) {
-      collected += 1;
-      countedFiles.add(file);
-    }
-    for (const id of claimed) covered.add(id);
-  }
-  return { covered: [...covered], collected };
-}
-
-/**
- * Flow 457 (T7, audit row 11): the review package a slice manifest belongs to — `<package>/slices/manifest.json` —
- * so retry-plan reads that package's raw/ and drivers/ without `--package`. Undefined for the shared slice directory.
- */
-export function packageOfManifest(manifestDir: string): string | undefined {
-  const candidate = path.dirname(manifestDir);
-  return path.basename(manifestDir) === "slices" && existsSync(path.join(candidate, "manifest.json")) && existsSync(path.join(candidate, "raw"))
-    ? candidate
-    : undefined;
 }
 
 function failUnreadable(error: unknown): void {
@@ -503,10 +430,7 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
 
   try {
     const manifestDir = path.dirname(manifestSource);
-    const manifest = await readJsonSource<SliceManifest>(manifestSource, "manifest");
     const result = resultSource === undefined ? {} : await readResult(resultSource);
-    const statePath = placed("--state", path.join(manifestDir, RETRY_STATE_NAME)) as string;
-    const state = existsSync(statePath) ? await readJsonSource<RetryState>(statePath, "state") : emptyRetryState();
     const reviewer = optionValue(args, "--reviewer") ?? result.reviewer;
     if (reviewer === undefined || reviewer === "") {
       throw new Error("The result names no reviewer; pass --reviewer <id>.");
@@ -514,38 +438,22 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
     const sliceList = optionValue(args, "--slices");
     const coveredList = optionValue(args, "--covered");
     const packageSource = placed("--package") ?? packageOfManifest(manifestDir);
-    if (packageSource !== undefined && (!existsSync(packageSource) || !statSync(packageSource).isDirectory())) {
-      throw new Error(`--package ${packageSource} is not a directory.`);
-    }
-    const knownCovered = state.scopeFingerprint === undefined ? [] : state.reviewers[reviewer]?.covered ?? [];
-    const readSliceText = (entry: SliceEntry): string => {
-      const file = path.resolve(manifestDir, entry.path);
-      if (!existsSync(file)) {
-        throw new UnreadableInput(`slice file is missing: ${file}`);
-      }
-      return readFileSync(file, "utf8");
-    };
-    const late = packageSource === undefined ? { covered: [], collected: 0 } : await collectLateResults(packageSource, reviewer, new Set(knownCovered), scopeFingerprint(manifest, readSliceText));
-    const coveredIds = [...(coveredList === undefined ? [] : coveredList.split(",").map((item) => item.trim()).filter(Boolean)), ...late.covered];
-    const plan = planRetry({
-      manifest,
+    const statePath = placed("--state", path.join(manifestDir, RETRY_STATE_NAME)) as string;
+    const evaluation = await evaluateRetry({
+      manifestSource,
       result,
       reviewer,
-      ...(sliceList === undefined ? {} : { sliceIds: sliceList.split(",").map((item) => item.trim()).filter(Boolean) }),
-      ...(coveredIds.length === 0 ? {} : { covered: coveredIds }),
-      ...(nextWave ? { nextWave } : {}),
-      state,
-      readSliceText,
+      statePath,
+      ...(packageSource === undefined ? {} : { packageSource }),
+      ...(sliceList === undefined ? {} : { sliceList: sliceList.split(",").map((item) => item.trim()).filter(Boolean) }),
+      ...(coveredList === undefined ? {} : { coveredList: coveredList.split(",").map((item) => item.trim()).filter(Boolean) }),
+      nextWave,
     });
+    const { plan, late } = evaluation;
 
     if (!args.includes("--dry-run")) {
-      if (plan.newSlices.length > 0 || plan.escalations.length > 0) {
-        await writeSliceFiles(manifestDir, plan.newSlices);
-        const added = plan.newSlices.map(({ text: _text, ...entry }) => entry);
-        const escalated = applyEscalations(manifest, plan.escalations);
-        await writeFileAtomic(manifestSource, `${JSON.stringify({ ...escalated, slices: [...escalated.slices, ...added] }, null, 2)}\n`);
-      }
-      await writeFileAtomic(statePath, `${JSON.stringify(plan.state, null, 2)}\n`);
+      const processed = resultSource === undefined || resultSource === "-" ? undefined : sha(await readFile(resultSource, "utf8"));
+      await commitRetryPlan(evaluation, processed);
     }
 
     const dispatch = plan.wave.map((slice) => ({ reviewer, slice: slice.id, path: slice.path, bytes: slice.bytes }));

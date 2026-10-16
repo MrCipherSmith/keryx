@@ -13,6 +13,7 @@ import { type PlacedPathResult, placePathWithinSync, resolveProjectRoot } from "
 export const REVIEW_CONFINED_PATH_FLAGS: Readonly<Record<string, readonly string[]>> = {
   slice: ["--diff", "--out", "--reach", "--jev-scores", "--package"],
   "retry-plan": ["--manifest", "--result", "--state", "--package"],
+  next: ["--package"],
   "dispatch-check": ["--manifest", "--payload", "--package"],
   layers: ["--package"],
   chunks: ["--package", "--result"],
@@ -26,6 +27,7 @@ export const REVIEW_CONFINED_PATH_FLAGS: Readonly<Record<string, readonly string
 export const REVIEW_NON_PATH_FLAGS: Readonly<Record<string, readonly string[]>> = {
   slice: ["--ref", "--base", "--context", "--max-bytes", "--wave-bytes", "--head", "--host", "--json", "--help", "-h"],
   "retry-plan": ["--reviewer", "--slices", "--covered", "--next-wave", "--dry-run", "--json", "--help", "-h"],
+  next: ["--reviewers", "--apply", "--json", "--help", "-h"],
   "dispatch-check": ["--max-bytes", "--pr-context", "--json", "--help", "-h"],
   layers: ["--head", "--base", "--write-wiki", "--files", "--max-bytes", "--force", "--json", "--help", "-h"],
   chunks: ["--chunk", "--status", "--mode", "--answer", "--quote", "--json", "--help", "-h"],

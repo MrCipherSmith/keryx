@@ -8,6 +8,7 @@ import path from "node:path";
 import { REVIEW_CONFINED_PATH_FLAGS, REVIEW_NON_PATH_FLAGS, confinedPathFlags, reviewPathFlagRefusal } from "../lib/review-path-flags";
 import { CHUNKS_FLAGS, COVERAGE_FLAGS } from "./review-chunks";
 import { ESTIMATE_FLAGS, REQUIRED_FLAGS, VERDICT_FLAGS } from "./review";
+import { NEXT_FLAGS } from "./review-next";
 import { LAYERS_BLOCK_FLAGS, LAYERS_REFRESH_FLAGS, LAYERS_STATUS_FLAGS } from "./review-layers";
 import {
   DISPATCH_CHECK_FLAGS,
@@ -262,6 +263,7 @@ test("guard: every flag of a review command is sorted into confined or non-path,
     required: REQUIRED_FLAGS,
     estimate: ESTIMATE_FLAGS,
     verdict: VERDICT_FLAGS,
+    next: NEXT_FLAGS,
   };
   expect(Object.keys(REVIEW_CONFINED_PATH_FLAGS).sort()).toEqual(Object.keys(commands).sort());
   expect(Object.keys(REVIEW_NON_PATH_FLAGS).sort()).toEqual(Object.keys(commands).sort());

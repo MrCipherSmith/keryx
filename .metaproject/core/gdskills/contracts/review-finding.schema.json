@@ -155,6 +155,10 @@
         }
       ]
     },
+    "path_missing": {
+      "type": "boolean",
+      "description": "Written, as true, only by `review ingest` when `file` does not exist at the round's reviewed head (a cat-file existence check of `<head>:<file>`). The finding is kept, never dropped, and is listed in scope.md: a finding that cites a path nobody can open is the reviewer's claim, not a located site."
+    },
     "symbol": { "type": ["string", "null"] },
     "problem": { "type": "string" },
     "impact": { "type": "string" },

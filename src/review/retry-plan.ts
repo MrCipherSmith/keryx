@@ -22,6 +22,8 @@ export type ReviewerRetryState = {
   covered?: string[];
   /** The open questions of the last NEEDS_CONTEXT this reviewer sent, normalised; a second one that repeats them shows no progress. */
   questions?: string[];
+  /** Hashes of the raw replies already counted (`review next`, `retry-plan --result <file>`): a reply is never counted twice. */
+  processed?: string[];
 };
 
 export type RetryState = {
@@ -285,7 +287,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
 
   const remember = (over: Partial<ReviewerRetryState>): void => {
     const asked = asksForContext ? questions : known?.questions;
-    state.reviewers[reviewer] = { attempt: priorRounds, status: evaluated ? status : (known?.status ?? ""), notRun: false, stalls, covered: [...covered].sort(), ...(asked === undefined ? {} : { questions: asked }), ...over };
+    state.reviewers[reviewer] = { attempt: priorRounds, status: evaluated ? status : (known?.status ?? ""), notRun: false, stalls, covered: [...covered].sort(), ...(asked === undefined ? {} : { questions: asked }), ...(known?.processed === undefined ? {} : { processed: known.processed }), ...over };
   };
   const plan = (decision: RetryDecision, reason: string, extra: Partial<RetryPlan> = {}): RetryPlan => {
     const waves = packWaves(open, budget);

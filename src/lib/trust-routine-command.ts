@@ -83,6 +83,7 @@ export const TRUST_ROUTINE_KEYRYX: readonly RoutineKeryxEntry[] = [
     "slice",
     "dispatch-check",
     "retry-plan",
+    "next",
     "ledger",
     "floor",
     "blast-radius",

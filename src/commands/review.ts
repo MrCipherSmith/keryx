@@ -78,6 +78,7 @@ import { gitSourceReader, parseDiffHunks, workingTreeSourceReader } from "../gdg
 import { keryxSelfCommand } from "../harness/tool/builtin/metaproject-tools";
 import { shellWord } from "../lib/shell-quote";
 import { layersSummaryLine } from "../review/layers-view";
+import { printNextHelp, runNext } from "./review-next";
 import { type SliceDeps, printDispatchCheckHelp, printRetryPlanHelp, printSliceHelp, runDispatchCheck, runRetryPlan, runSlice } from "./review-slice";
 import { runJevScenarios } from "./review-jev-scenarios";
 import { runJevDocs } from "./review-jev-docs";
@@ -707,6 +708,10 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
     }
     if (command === "retry-plan") {
       await runRetryPlan(args.slice(1), SLICE_DEPS);
+      return;
+    }
+    if (command === "next") {
+      await runNext(args.slice(1), SLICE_DEPS);
       return;
     }
     if (command === "ledger") {
@@ -4720,6 +4725,7 @@ const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["slice", printSliceHelp],
   ["dispatch-check", printDispatchCheckHelp],
   ["retry-plan", printRetryPlanHelp],
+  ["next", printNextHelp],
   ["ledger", printLedgerHelp],
   ["verdict", printVerdictHelp],
   ["layers", printLayersHelp],
@@ -4949,6 +4955,11 @@ Usage:
                           nothing new, or 6 failed rounds, are "Not run" — never a clean
                           pass. NEEDS_CONTEXT is not terminal: its questions are answered,
                           the scope stays open. --result is optional with --next-wave.
+  keryx review next --package <review-dir> [--reviewers a,b] [--apply] [--json]
+                          What is left to dispatch for the whole package at once: every
+                          reviewer's next wave (slices, absolute paths, model, reason
+                          missing|retry|stalled|escalated), or "done". Run it after each
+                          batch instead of polling retry-plan per reviewer.
   keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff]
                             [--findings <file>] [--dispositions <file>] [--out <file>]
                             [--dry-run] [--json]
