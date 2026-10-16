@@ -73,6 +73,7 @@ export const PREMISE_REJECTION_REASONS = [
   "raise-severity",
   "malformed-field",
   "challenged-without-evidence",
+  "downgrade-without-evidence",
   "held-without-question",
   "owner-decision-without-options",
   "duplicate-claim",
@@ -295,6 +296,14 @@ export function mergePremises<T extends StructuredReviewFinding>(
     }
     if (claim.reasoning !== undefined && typeof claim.reasoning !== "string") {
       reject("malformed-field", "`reasoning` must be a string.");
+      continue;
+    }
+
+    // A downgrade is a premise judgement too, never a re-grade against the severity rubric: the
+    // reviewer and the verifier already own the rubric. Without a cited intent signal or practice
+    // source, a downgrade is the judge re-scoring a finding it has no new evidence about.
+    if (verdict === "downgraded" && (signals.value?.length ?? 0) + (sources.value?.length ?? 0) === 0) {
+      reject("downgrade-without-evidence", "`downgraded` needs at least one intent signal (a cited ref) or practice source (a named guideline) showing the defect is smaller than reported. Re-grading against the severity rubric is not the premise judge's call: use `upheld`.");
       continue;
     }
 

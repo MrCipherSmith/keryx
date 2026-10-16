@@ -1,0 +1,33 @@
+{
+  "flow": 459, "task": "T8", "ac": "AC7", "date": "2026-10-16",
+  "judge_model": "opus (claude-opus-5-5)", "skill": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+  "runs": {
+    "fixture": { "dispatches": 1, "subagent_tokens": 70419, "tool_uses": 7, "duration_ms": 41853, "repo": "synthetic fixture (inputs/fixture.bundle, head e503a37)", "raw": "judge-fixture.raw.md", "validation": "validate-fixture.json", "rejections": 0 },
+    "pr1005": { "dispatches": 1, "subagent_tokens": 74684, "tool_uses": 7, "duration_ms": 52608, "repo": "keryx @ f5d3385f", "raw": "judge-pr1005.raw.md", "validation": "validate-pr1005.json", "rejections": 0 },
+    "pr992": { "dispatches": 1, "subagent_tokens": 80772, "tool_uses": 16, "duration_ms": 79430, "repo": "keryx @ d9ccfb6c", "raw": "judge-pr992.raw.md", "validation": "validate-pr992.json", "rejections": 0 }
+  },
+  "findings": [
+    { "set": "fixture", "id": "F1", "kind": "premise-defect", "severity": "major", "verdict": "challenged", "intent_signals": 6, "practice_sources": 2, "expected": "challenged|owner-decision with >=1 intent and >=1 practice", "pass": true },
+    { "set": "fixture", "id": "C1", "kind": "real", "severity": "major", "verdict": "upheld", "expected": "upheld", "pass": true },
+    { "set": "fixture", "id": "C2", "kind": "real", "severity": "major", "verdict": "upheld", "expected": "upheld", "pass": true },
+    { "set": "fixture", "id": "C3", "kind": "real", "severity": "major", "verdict": "upheld", "expected": "upheld", "pass": true },
+    { "set": "pr1005", "id": "F-066", "kind": "truth", "severity": "major", "verdict": "upheld", "expected": "upheld", "pass": true },
+    { "set": "pr1005", "id": "F-067", "kind": "truth", "severity": "major", "verdict": "upheld", "expected": "upheld", "pass": true },
+    { "set": "pr992", "id": "F-007", "kind": "truth", "severity": "major", "verdict": "upheld", "expected": "upheld", "pass": true },
+    { "set": "pr992", "id": "F-008", "kind": "truth", "severity": "major", "verdict": "upheld", "expected": "upheld", "pass": true },
+    { "set": "pr992", "id": "F-009", "kind": "truth", "severity": "major", "verdict": "downgraded", "to": "minor", "expected": "upheld", "pass": false, "note": "downgrade of a truth finding counts as a miss" },
+    { "set": "pr992", "id": "F-011", "kind": "truth", "severity": "major", "verdict": "downgraded", "to": "minor", "expected": "upheld", "pass": false, "note": "downgrade of a truth finding counts as a miss" },
+    { "set": "pr992", "id": "F-012", "kind": "truth", "severity": "major", "verdict": "downgraded", "to": "minor", "expected": "upheld", "pass": false, "note": "downgrade of a truth finding counts as a miss" }
+  ],
+  "summary": {
+    "f1_pass": true,
+    "controls_total": 10,
+    "controls_upheld": 7,
+    "controls_challenged_or_held": 0,
+    "controls_downgraded": 3,
+    "misses": ["F-009", "F-011", "F-012"],
+    "ac7_literal": "met: F1 challenged with intent+practice; no control challenged",
+    "ac7_strict": "not met: 3 of 7 #992/#1005 truth findings downgraded major->minor (never held)",
+    "claims_validated_with_code": "all 3 files parse; 11 claims applied, 0 rejected"
+  }
+}

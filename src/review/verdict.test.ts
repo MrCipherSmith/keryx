@@ -90,7 +90,7 @@ describe("held findings (flow 459, AC2)", () => {
       JSON.stringify({
         judge: "review-premise",
         premises: [
-          { finding_id: "LY-1", verdict: "downgraded", severity: "minor" },
+          { finding_id: "LY-1", verdict: "downgraded", severity: "minor", intent_signals: [{ ref: "src/t.tsx:1", says: "legacy path, read-only" }] },
           { finding_id: "LY-2", verdict: "challenged", practice_sources: [{ name: "Material", says: "x" }], question: "q" },
           { finding_id: "LY-1", verdict: "upheld" },
         ],

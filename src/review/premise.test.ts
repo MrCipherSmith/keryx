@@ -64,10 +64,10 @@ describe("verdicts", () => {
 
   test("downgraded lowers the severity, keeps what the reviewer reported, and edits no text", () => {
     const original = finding();
-    const result = mergePremises([original], parsed([claim({ verdict: "downgraded", severity: "minor" })]));
+    const result = mergePremises([original], parsed([claim({ verdict: "downgraded", severity: "minor", practice_sources: [SOURCE] })]));
     const merged = result.findings[0] as StructuredReviewFinding;
     expect(merged.severity).toBe("minor");
-    expect(merged.premise).toMatchObject({ verdict: "downgraded", severity: "minor", original_severity: "major" });
+    expect(merged.premise).toMatchObject({ verdict: "downgraded", severity: "minor", practice_sources: [SOURCE], original_severity: "major" });
     expect({ ...merged, severity: original.severity, premise: undefined }).toEqual({ ...original, premise: undefined });
     expect(result.counts.downgraded).toBe(1);
   });
@@ -93,7 +93,7 @@ describe("verdicts", () => {
   test("a finding with no claim is returned untouched, and nothing is added or removed", () => {
     const first = finding();
     const second = finding({ id: "LY-004", global_id: "2026-10-16-round#LY-004" });
-    const result = mergePremises([first, second], parsed([claim({ verdict: "downgraded", severity: "minor" })]));
+    const result = mergePremises([first, second], parsed([claim({ verdict: "downgraded", severity: "minor", practice_sources: [SOURCE] })]));
     expect(result.findings).toHaveLength(2);
     expect(result.findings[1]).toBe(second);
     expect(first.severity).toBe("major");
@@ -168,6 +168,14 @@ describe("rejections, each of which leaves the finding as it was", () => {
     expect(reasons(rejectedAlone([claim({ verdict: "downgraded", severity: "huge" })]))).toEqual(["not-a-downgrade"]);
   });
 
+  test("downgrade-without-evidence: a downgrade with no intent signal or practice source is a rubric re-grade, and the finding keeps its severity", () => {
+    // The live eval (flow 459 eval/) had the judge downgrade three real surviving-mutant majors on
+    // the severity rubric alone; that is the reviewer's call, not the premise judge's.
+    const result = rejectedAlone([claim({ verdict: "downgraded", severity: "minor", reasoning: "names no input that produces a wrong result today" })]);
+    expect(reasons(result)).toEqual(["downgrade-without-evidence"]);
+    expect((result.findings[0] as StructuredReviewFinding).severity).toBe("major");
+  });
+
   test("severity-without-downgrade: a severity next to any other verdict is a way to smuggle one in", () => {
     expect(reasons(rejectedAlone([claim({ verdict: "upheld", severity: "blocker" })]))).toEqual(["severity-without-downgrade"]);
   });
@@ -193,7 +201,7 @@ describe("rejections, each of which leaves the finding as it was", () => {
     const original = finding();
     const result = mergePremises(
       [original],
-      parsed([claim({ verdict: "downgraded", severity: "minor" }), claim({ verdict: "challenged", question: "q", practice_sources: [SOURCE] })]),
+      parsed([claim({ verdict: "downgraded", severity: "minor", practice_sources: [SOURCE] }), claim({ verdict: "challenged", question: "q", practice_sources: [SOURCE] })]),
     );
     expect(result.findings[0]).toBe(original);
     expect(reasons(result)).toEqual(["duplicate-claim", "duplicate-claim"]);
@@ -203,7 +211,7 @@ describe("rejections, each of which leaves the finding as it was", () => {
   test("unknown-property: a claim that tries to edit the finding is discarded whole, verdict included", () => {
     const attempts: Array<Partial<PremiseClaimInput>> = [{ problem: "rewritten" }, { suggested_fix: "something else" }, { file: "elsewhere.ts" }, { disposition: { state: "dismissed-incorrect" } }];
     for (const attempt of attempts) {
-      const result = rejectedAlone([claim({ verdict: "downgraded", severity: "minor", ...attempt })]);
+      const result = rejectedAlone([claim({ verdict: "downgraded", severity: "minor", practice_sources: [SOURCE], ...attempt })]);
       expect(reasons(result)).toEqual(["unknown-property"]);
       expect(result.rejections[0]?.detail).toContain(Object.keys(attempt)[0] as string);
     }
@@ -238,7 +246,7 @@ describe("rejections, each of which leaves the finding as it was", () => {
     const challenged = mergePremises([external], parsed([claim({ verdict: "challenged", question: "q", practice_sources: [SOURCE] })]));
     expect((challenged.findings[0] as StructuredReviewFinding).premise?.verdict).toBe("challenged");
     expect((challenged.findings[0] as StructuredReviewFinding).disposition).toBeUndefined();
-    expect(reasons(rejectedAlone([claim({ verdict: "downgraded", severity: "minor" })], { source: "external" }))).toEqual(["external-downgrade"]);
+    expect(reasons(rejectedAlone([claim({ verdict: "downgraded", severity: "minor", practice_sources: [SOURCE] })], { source: "external" }))).toEqual(["external-downgrade"]);
   });
 
   test("a claim that is not an object is rejected by name, not thrown on", () => {
@@ -250,7 +258,7 @@ describe("rejections, each of which leaves the finding as it was", () => {
   test("the claims the judge made are counted, applied plus rejected", () => {
     const result = mergePremises(
       [finding()],
-      parsed([claim({ verdict: "downgraded", severity: "minor" }), claim({ finding_id: "ghost" })]),
+      parsed([claim({ verdict: "downgraded", severity: "minor", practice_sources: [SOURCE] }), claim({ finding_id: "ghost" })]),
     );
     expect(result.counts).toMatchObject({ claims: 2, applied: 1, rejected: 1 });
   });
@@ -346,19 +354,19 @@ describe("the claims reach the review record", () => {
   });
 
   test("the persisted record passes review-finding.schema.json (the ingest validates it before writing)", async () => {
-    const { findings } = await ingest({ premises: { judge: "review-premise", premises: [claim({ finding_id: ID, verdict: "downgraded", severity: "minor", reasoning: "r" })] } });
+    const { findings } = await ingest({ premises: { judge: "review-premise", premises: [claim({ finding_id: ID, verdict: "downgraded", severity: "minor", practice_sources: [SOURCE], reasoning: "r" })] } });
     expect(await validateJson(findings[0], await loadSchema("review-finding"))).toEqual([]);
   });
 
   test("a downgrade is the severity on the record, and the original is kept beside it", async () => {
-    const { findings } = await ingest({ premises: { judge: "review-premise", premises: [claim({ finding_id: ID, verdict: "downgraded", severity: "minor" })] } });
+    const { findings } = await ingest({ premises: { judge: "review-premise", premises: [claim({ finding_id: ID, verdict: "downgraded", severity: "minor", practice_sources: [SOURCE] })] } });
     expect(findings[0]?.severity).toBe("minor");
     expect(findings[0]?.premise?.original_severity).toBe("major");
     expect(findings[0]?.problem).toBe(finding().problem);
   });
 
   test("a rejected claim is listed in scope.md and the finding is untouched", async () => {
-    const { findings, scope, result } = await ingest({ premises: { judge: "review-layout", premises: [claim({ finding_id: ID, verdict: "downgraded", severity: "minor" })] } });
+    const { findings, scope, result } = await ingest({ premises: { judge: "review-layout", premises: [claim({ finding_id: ID, verdict: "downgraded", severity: "minor", practice_sources: [SOURCE] })] } });
     expect(findings[0]?.premise).toBeUndefined();
     expect(findings[0]?.severity).toBe("major");
     expect(scope).toContain("### Premise claims discarded");

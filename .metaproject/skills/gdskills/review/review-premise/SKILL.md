@@ -90,7 +90,7 @@ judgement on it; the claim and the code read first let you see what the reviewer
 | Verdict | Meaning | Must carry |
 |---|---|---|
 | `upheld` | The premise stands; the finding goes on unchanged. | — |
-| `downgraded` | A defect, but smaller than reported. | `severity`, strictly lower than the finding's |
+| `downgraded` | A defect, but intent or practice shows it is smaller than reported. | `severity`, strictly lower, and ≥1 `intent_signals` or `practice_sources` |
 | `challenged` | Evidence says it is not a defect. | ≥1 `intent_signals` or `practice_sources`, and a `question` |
 | `owner-decision` | A product choice the code cannot settle either way. | a `question` and ≥2 `options` |
 
@@ -108,6 +108,7 @@ signal and no practice source against it is upheld.
 | **Never judge your own finding.** | The merge rejects a judge equal to the reporter (`self-judgement`). |
 | **Claim first, argument second.** | The case passed two reviews that read the fix's argument and never the premise. |
 | **`challenged` cites.** Each intent signal names its `ref` (`file:line` or a SHA) and what it says; each practice source names the guideline and section precisely enough to look up. | An uncited challenge is rejected and the finding stays as reported. Never invent a quote. |
+| **Never re-grade by the rubric.** Severity is the reviewer's and the verifier's call; a test gap, a surviving mutant or a minor stays as reported unless intent or practice shrinks it. | An uncited downgrade is rejected (`downgrade-without-evidence`). Minors matter: a finding you weaken is one nobody fixes. |
 | **Read-only.** Run nothing but `git log`, `git blame` and `git show`, and read files. | Executing is the verifier's job; this judgement is about meaning. |
 | **An external finding is held, never dismissed.** | A human asked; the operator answers them. |
 
@@ -146,8 +147,7 @@ Then one premise claims object. The orchestrator saves it unchanged as the file
       "question": "The timeline is LTR on purpose, as platforms do. Keep it, or mirror it anyway?",
       "options": ["dismiss — keep LTR, as platforms do", "uphold — mirror the timeline"]
     },
-    { "finding_id": "LG-002", "verdict": "downgraded", "severity": "minor",
-      "reasoning": "Dead branch, but no input reaches it; no runtime outcome is named." },
+    { "finding_id": "LG-002", "verdict": "downgraded", "severity": "minor", "intent_signals": [{ "ref": "src/a.ts:12", "says": "comment: legacy fallback kept until v3, read-only" }], "reasoning": "A real defect in a path the code marks as legacy and read-only." },
     { "finding_id": "LG-004", "verdict": "upheld", "reasoning": "No signal of intent; the null path is reachable from the form reset." }
   ]
 }
