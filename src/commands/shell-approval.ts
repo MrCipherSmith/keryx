@@ -170,7 +170,7 @@ export function formatShellApprovalHints(evaled: ShellApprovalEval): string[] {
     lines.push("touches agent credentials — will not be remembered");
   }
   if (evaled.sacReviewConfirmation) {
-    lines.push("human-confirmation command (SAC confirm-review or `flow confirm`) — will not be remembered");
+    lines.push("explicit-confirmation command (SAC, flow, schedule or evidence mutation) — will not be remembered");
   }
   if (evaled.hookAsk) {
     lines.push("a policy hook asked about this call — will not be remembered");

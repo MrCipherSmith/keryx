@@ -18,11 +18,8 @@ metadata:
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
-
 # Flow Orchestrator
-
 ## Preflight
-
 Run in the main session: this skill dispatches workers. Without a subagent-spawn tool (`Agent`, `spawn_subagent` or the host's equivalent), or with the depth budget spent (Claude Code nests at most 3 deep), the whole output is this line, with no tool calls and no work of your own: `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
 
 ## Purpose
@@ -539,7 +536,10 @@ the bound plus an escalation — never an unbounded loop.
 1. Run the relevant `review-orchestrator` checks against the PR and current
    branch state.
 2. If findings or required check failures remain, create or update a flow fix
-   task, dispatch `task-implementer`, push the fix, and run review again.
+   task, dispatch `task-implementer`, push the fix, and run review again. Before
+   each push, run the author gate (`.metaproject/rules/core/owner-intent.mdc`,
+   rule 6). A `Mis-scoped: split` record or an unanswered owner comment is not a
+   fix task: stop and report it to the operator.
 
    **A required check failure is not automatically a fix task.** When `review.jev.ci_triage` is on, run `keryx review ci-triage --run <id> --json` on each failed run first: `top: flaky` (or a `deterministic` override) → rerun once (`gh run rerun --failed <id>`), record it in `journal.md`, and treat a second failure as `real-regression` regardless; `top: real-regression` → investigate and fix as usual; `top: infra` → report it in the completion notes and leave the code alone. The verdict is advisory only — never the sole reason to skip a fix task.
 

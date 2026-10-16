@@ -849,6 +849,7 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
   expect(toolNames.sort()).toEqual([
     "apply_patch",
     "ask_user",
+    "evidence_search",
     // Flow 456: operator-confirmed cards. The operator answers; nothing else can.
     "external_apply",
     "flow_confirm",
@@ -1402,7 +1403,12 @@ describe("flow 173 AC7 — shellCommand's readline jobRegistry session-scope wir
   // before this branch runs) can reach it too — see `shell.ts`'s own comment
   // there and this file's dedicated "closeAndExit sweeps tracked background
   // jobs" describe block below.
-  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 7800);
+  // Use a declaration boundary instead of the historical character budgets above.
+  const agentDepsEndAc7 = shellSourceAc7.indexOf("const agentDeps: AgentDeps = {", agentModeBranchStartAc7);
+  if (agentModeBranchStartAc7 < 0 || agentDepsEndAc7 < agentModeBranchStartAc7) {
+    throw new Error("readline agent dependency boundaries not found");
+  }
+  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentDepsEndAc7);
 
   test("imports createJobRegistry from the background-job-registry module", () => {
     expect(shellSourceAc7).toContain(

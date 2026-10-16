@@ -595,3 +595,6 @@ export function createSecurityService(cwd: string = process.cwd()): SecurityServ
     gate: (input) => runGate(input),
   };
 }
+
+// Public scanner boundary for runtime consumers outside the security module.
+export { buildHarnessScanner } from "./harness-scan";

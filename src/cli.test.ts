@@ -233,6 +233,8 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx research sync --schedule daily | --unschedule\n",
     "                                               Run that sync once a day inside keryx serve (the daily entry), or take the entry away\n",
     "  research  Part 1 materials: sync the -latest counts, the decisions export and the status page\n",
+    // Flow 415: explicit Evidence Retrieval Layer CLI surface.
+    "  keryx evidence index [--full] | search <query> [--json] | status [--json] | clear\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed

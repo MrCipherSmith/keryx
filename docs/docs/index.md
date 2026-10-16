@@ -51,6 +51,7 @@ the one that describes shipped behaviour.
 - [`/goal` — deterministic starts, optional autonomous continuation](guides/goal.md)
 - [Slate for external agents](guides/slate.md)
 - [Keep the wiki current](guides/keep-the-wiki-current.md)
+- [Search past evidence (evidence retrieval)](guides/evidence-retrieval.md)
 - [Run keryx in CI](guides/run-in-ci.md)
 - [Undo a turn with /rewind](guides/rewind.md)
 - [Keep a record of what an agent recommended and what you chose](guides/recommendation-journal.md)

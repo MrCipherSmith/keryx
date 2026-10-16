@@ -7466,3 +7466,57 @@ the agent's reader. Kill stops the supervised process group without a model
 turn. These commands operate only on tasks tracked by this session.
 In the TUI, unknown slash commands display a collapsible available-command
 list with an eight-line preview (Ctrl+O, then Enter to expand).
+
+## evidence
+
+Search derived evidence from explicitly configured sources. Excerpts are untrusted
+reference data, not accepted memory, wiki or Shared Agent Context knowledge.
+Evidence retrieval and automatic recall are disabled by default.
+
+```bash
+keryx evidence index [--full]
+keryx evidence search "query" [--json]
+keryx evidence status [--json]
+keryx evidence clear
+keryx evidence maintenance
+```
+
+`index` builds configured file roots; `--full` bypasses incremental reuse.
+`search` performs bounded explicit retrieval; `status` returns metadata only.
+`clear` removes derived artifacts, preserving sources and the revocation ledger.
+`maintenance` purges expired derived data and superseded generations.
+Indexing, clearing and maintenance are mutations requiring approval in agent workflows.
+
+Each subcommand prints one JSON object with a `code`. `ok`, `no-match`, `disabled`
+and `index-absent` exit 0; any other code (for example `invalid-config`,
+`source-unavailable`, `budget-exceeded`, `timeout`) sets a non-zero exit. A search
+query is at most 8192 bytes. `invalid-config` is also what you get when
+`mode: "hybrid"` is enabled, because no embedding owner is wired.
+
+**Configuration** lives in `.metaproject/evidence.json` (at most 64 KiB, an absent
+file means disabled). Keys, all optional except `schemaVersion: 1`; unknown keys
+make the file invalid:
+
+| Key | Default | Notes |
+|---|---|---|
+| `enabled` | `false` | Master switch. |
+| `automatic` | `false` | Opt-in recall each user turn; requires `enabled: true`. |
+| `mode` | `"lexical"` | `"hybrid"` is accepted by the schema but unavailable (`hybrid-owner-unavailable`). |
+| `roots` | `[]` | Up to 32 project-relative directories to index. |
+| `sessionArchives` | `false` | Also index this project's session archives. |
+| `maxSourceBytes`, `maxIndexBytes`, `maxChunks`, `maxResults`, `maxTokens`, `timeoutMs` | 8 MiB, 256 MiB, 100000, 10, 2000, 1000 | Upper bounds; larger values are invalid. |
+
+Derived data is stored under `.metaproject/evidence/` (owner-only permissions) and
+expires after 30 days. Text is sanitized by the security scanner before it is
+stored; results mark `redaction` as `applied` or `not-needed`. Lexical mode calls no
+embedding service. Disable by setting `enabled: false` or removing the file: search
+returns `disabled`. `clear` needs `enabled: true`, deletes only derived data and
+keeps the revocation ledger. Session revocation is a trusted runtime API, with no
+CLI command and no archive deletion.
+
+Agents get a read-only `evidence_search` tool (`query`, optional `limit` 1 to 10)
+that never builds an index. With `automatic: true`, the agent runs one retrieval per
+user turn, filters out what the request already shows, and injects the rest as
+untrusted historical data. Exact filtering works only for adapters that expose the
+serialized request (OpenAI today); others report unknown. No TUI surface exists yet.
+See the [evidence retrieval guide](guides/evidence-retrieval.md).

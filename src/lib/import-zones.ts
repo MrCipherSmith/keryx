@@ -98,6 +98,8 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   { segment: "harness", zone: "client" },
   { segment: "tui", zone: "client" },
   { segment: "session", zone: "client" },
+  // Derived evidence composes session archives and provider visibility.
+  { segment: "evidence", zone: "client" },
   // Per-turn file snapshots for `/rewind`: a shadow git repository beside the
   // session, driven by the turn loop and the shells. Client like `session`.
   { segment: "rewind", zone: "client" },

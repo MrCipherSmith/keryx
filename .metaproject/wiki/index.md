@@ -81,6 +81,7 @@ _No pages yet._
 - [src/gdgraph](components/src-gdgraph.md) (accepted)
   - [src/gdgraph/treesitter](components/src-gdgraph-treesitter.md) (accepted)
 - [src/gdskills](components/src-gdskills.md) (accepted)
+- [src/evidence](components/src-evidence.md) (draft)
 - [src/harness](components/src-harness.md) (accepted)
   - [src/harness/branch](components/src-harness-branch.md) (draft)
   - [src/harness/budget](components/src-harness-budget.md) (draft)

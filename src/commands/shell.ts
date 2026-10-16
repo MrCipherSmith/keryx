@@ -4182,8 +4182,12 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         ...(sel.baseUrl !== undefined ? { baseUrl: sel.baseUrl } : {}),
         ...(runtime.cacheDir !== undefined ? { configDir: runtime.cacheDir } : {}),
       });
+      const { loadAutomaticEvidenceFactory } = await import("../evidence/automatic");
+      const automaticEvidence = await loadAutomaticEvidenceFactory(cwd);
       const deps = {
         provider: agentProvider,
+        ...(automaticEvidence ? { automaticEvidence } : {}),
+
         providerId: sel.provider,
         modelId: sel.model,
         controlNonce,
@@ -4683,8 +4687,12 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           resetSubagentBudget = controls.resetBudget;
         },
       });
+      const { loadAutomaticEvidenceFactory } = await import("../evidence/automatic");
+      const automaticEvidence = await loadAutomaticEvidenceFactory(agentCwd);
       const agentDepsBase = {
         provider: agentProvider,
+        ...(automaticEvidence ? { automaticEvidence } : {}),
+
         providerId: provider,
         modelId: model,
         tools: buildInteractiveAgentTools({

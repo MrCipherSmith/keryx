@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { classifyCommand, isDestructiveCommand, isPublishCommand } from "./command-risk";
+import { classifyCommand, isDestructiveCommand, isPublishCommand, touchesHumanConfirmation } from "./command-risk";
 
 // Table-driven: every row is (command, expected class). The classifier is pure
 // and deterministic, so the table IS the specification.
@@ -153,4 +153,11 @@ test("isPublishCommand: non-publishing commands", () => {
   for (const [cmd, why] of NOT_PUBLISHES) {
     expect(`${cmd} => ${isPublishCommand(cmd)} (${why})`).toBe(`${cmd} => false (${why})`);
   }
+});
+
+test("ERL mutations require confirmation; reads do not", () => {
+  for (const command of ["keryx evidence index", "keryx evidence index --full", "keryx evidence clear", "bun run src/cli.ts evidence clear", "env FOO=1 keryx evidence index", "sh -c 'keryx evidence clear'", 'keryx "evidence" "index"', "echo done && keryx evidence clear"])
+    expect(touchesHumanConfirmation(command)).toBe(true);
+  for (const command of ["keryx evidence search query --json", "keryx evidence status --json", "keryx evidence --help", "keryx evidence-index", "echo evidence indexing"])
+    expect(touchesHumanConfirmation(command)).toBe(false);
 });

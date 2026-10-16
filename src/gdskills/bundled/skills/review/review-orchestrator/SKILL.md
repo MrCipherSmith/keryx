@@ -19,19 +19,14 @@ metadata:
 license: "MIT"
 ---
 # Review Orchestrator
-
 **You are the orchestrator. Run the round yourself, inline, in the main session that loaded this skill; never hand the whole round to one subagent.** This skill routes: it detects scope, dispatches specialized reviewers, and consolidates their findings into one report sorted by severity. The reviewers do the reviewing.
-
 ## Preflight — before Step 0, in this order
-
 1. **Can it spawn?** The round needs a subagent-spawn tool (`Agent`, `spawn_subagent` or the host's equivalent) and depth budget left: Claude Code nests subagents at most 3 deep, and at the limit `Agent` is withheld. A host with no spawn tool at all (Codex and other AGENTS.md hosts) does not stop here and does not review alone: it runs the round through the autonomous runner, `keryx review run --autonomous --target pr --ref <pull request URL>` (no pull request: `--target branch --ref <base> [--head <commit>]`), and relays its verdict and exit code (see "Hosts"). Only a session that has spent the depth budget (a nested subagent) stops; its whole output is this line, with no tool calls and no review of your own:
    `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
 2. **Is a round needed?** List the files with `git diff --name-status --no-renames <base>...HEAD`, so a rename shows both paths. A diff where EVERY file is prose or machine-written data ends here with one line, `round not needed: <reason>`, and no reviewer. Prose is exactly: README or CHANGELOG at any depth; CONTRIBUTING, LICENSE, SECURITY or CODE_OF_CONDUCT at the top level; and under `docs/`, `.metaproject/wiki`, `.metaproject/reviews` or a flow's `journal.md`, a file with extension md, rst or adoc whose name holds a lowercase letter (an all-uppercase name such as AGENT or WARP is steering by convention). Machine-written data is a file under `coverage/` or `__generated__/` with extension lcov, info or map only; json, txt, html and md there are code. Steering is code wherever it sits, `docs/` included: a directory (singular or plural) named agent, skill, command, rule, prompt, instruction, persona, steering or hook, any path segment starting with a dot (`.claude`, `.cursorrules`, `.mcp.json`), a file name starting with SKILL, AGENT, CLAUDE, GEMINI, QWEN, CODEX, WARP, CRUSH, JULES, KNOWLEDGE, GUIDELINES, CONVENTIONS or copilot-instructions, ending in .local, .override, .instructions, .prompt, .agent or .chatmode before the extension, or containing prompt, instruction or system. A flow's `description.md`, `acceptance-criteria.md` and `tasks/` are gate inputs, so they are code. Every other file counts as code too, including lockfiles, committed `dist/` output, CI, auth, migrations, config JSON, and any path with `..`, a backslash, a leading `./` or `//`. `classifyRoundNeed` in `src/review/round-need.ts` is the tested reference of this rule; the host executes this text, and nothing in the CLI calls the function yet. `--all`, an explicit reviewer list or a gating round forces a round.
 3. **Round ceiling.** 5 rounds (`REVIEW_ROUND_CAP`) over the same `merge-base..HEAD`. Past it: interactive, ask the operator; unattended, `STATUS: BLOCKED round_cap`.
 4. **PR state, shown before dispatch.** On a PR target read its state (merged, approved, CI) and tell the operator the risk that it merges before the round ends: a verdict ready at minute 55 and held to minute 119 lost the race to the merge. Depth and the estimate need the package and the slice manifest, so they come later: after `review scope`, `review start` and `review slice`, before the first reviewer starts ("Round plan" steps 5-6; `SKILL.detail.md` § "Preflight 4").
-
 ## Hosts — the same round, different tools
-
 | | keryx shell | Claude Code | Codex, other AGENTS.md hosts | autonomous runner |
 |---|---|---|---|---|
 | Spawn | `spawn_subagent` | `Agent` (`subagent_type`) | its spawn tool; none → the runner (Preflight 1) | its own reviewers |
@@ -40,14 +35,11 @@ license: "MIT"
 | Operator decision | the card tool | the exact terminal command, for the operator | the exact terminal command, for the operator | refused: recorded Not run |
 | Result file | `save_result_to: <package>/raw/<reviewer>.txt` | the reviewer writes `<package>/raw/<reviewer>.txt` itself, before it replies | as Claude Code | its own package |
 | Wave bytes | `--host keryx-shell` (60000: a child dies at 5 min) | `--host claude-code` (150000) | `--host codex` / `--host other` (150000) | its own |
-
 - **Every host keeps the same files, per package** (`<package>` is the directory `keryx review start` created): slices in `<package>/slices/`, one reply per dispatch in `<package>/raw/<reviewer>.txt` (reviewer replies only), one driver per dispatch in `<package>/drivers/<reviewer>.json`, and `research.json` from `keryx review ledger build --package <package>` — never by hand. `retry-plan --package`, `verdict` and `ledger build` read `<package>/raw` by default; the shared `.metaproject/data/review/raw` holds other rounds' replies and is read only when named, so never write there.
 - **The result is the file, never the spawn tool's output.** keryx shell cuts a child's summary at 16000 characters and Claude Code returns only the last message: parse `<package>/raw/<reviewer>.txt`. A missing file is no result (`BLOCKED`).
 - **Caller token.** `keryx review start` prints `export KERYX_REVIEW_CALLER_TOKEN=…`; outside keryx shell export it on this session's keryx calls, or readiness item 10 reads "not observable on this host".
 - **Operator decisions.** In keryx shell the operator answers a card: `review_confirm_plan`, `review_waive_readiness`, `review_waive_coverage`, `review_waive_mutation`, `review_override_reviewers`, `review_chunks_answer`, `review_publish`, `review_comments_reply`. Elsewhere give the operator the exact command to run in their own terminal — `keryx review confirm-plan --package <package>`, `keryx review complete <package> --waive <item> "<their words>"` or `--waive-coverage "<their words>"`, `keryx review waive-mutation --package <package> --reason "<why>"`, `keryx review override-reviewers --package <package> --reason "<why>"`, `keryx review chunks estimate --package <package> --answer yes --quote "<their words>"`, `keryx review publish <package>`, `keryx review comments reply … --final` — and wait. You never run `--mode automatic` or `--yes`, and never write an operator quote yourself; unattended, the item is Not run.
-
 ## Round plan — the order on every host
-
 1. `keryx review scope --ref <base> --json > .metaproject/data/review/scope.json` (Step 3).
 2. `keryx review start --target <kind> --ref <ref> --scope .metaproject/data/review/scope.json --memory-query "<query>" --host <host>`, plus `--unattended` when nobody is at the keyboard.
 3. `keryx review blast-radius --ref <base> --package <package> --json > blast-radius.json` (Step 3b). Reasoned omissions (`unrelated-symbol`, `hub-damped`, `text-hub`, `test-consumer`) are context, not scope; only cap drops become chunks. Run the tests in `<package>/tests-to-run.json` with the command the radius prints, instead of reading them, and hand the output to the reviewers as context.
@@ -509,6 +501,7 @@ Required content:
 - Git/PR metadata: repo, branch, base, head, merge-base, PR number/URL when available.
 - Scope summary: changed files grouped by domain, high-risk files, generated/ignored files.
 - Requirements: issue URL, linked task docs, acceptance criteria extracted from `context_doc` when available.
+- **Owner intent**, in `requirements.owner_intent`: the owning spec's open questions and the code owner's and reviewers' latest comments on the PR and linked issue — never the author's own text as settled (`.metaproject/rules/core/owner-intent.mdc`). The brief asks scope before polish and never sets "other reviewers find nothing" as its goal: `SKILL.detail.md` § "Scope before severity".
 - **The PR's own description**, fetched not assumed: `gh pr view <n> --json title,body`, into the typed `pr.body`. See below.
 - **Cross-repo contracts the diff depends on**, in the typed `cross_repo`: each pinned to the ref you read it at, and each recording whether the producer has merged. See below.
 - Rules: matched repository rules and convention docs by path.
@@ -534,11 +527,7 @@ and not a pleasantry because unfiled housekeeping is raised again every round an
 fixed in none — three consecutive rounds of "still worth rewriting" is the
 recorded outcome of leaving it out of the findings array.
 
-**The Stage 1 gate files it.** Handing the body to every reviewer is what makes
-the body available; it is not what makes the comparison happen. A rule addressed
-to everyone is owned by no one, and that is the state this finding sat in for
-three rounds. The gate already holds the stated intent and the diff side by side,
-so the comparison belongs there — see `## Stage 1 Gate — Spec Compliance`.
+**The Stage 1 gate files it** — see `## Stage 1 Gate — Spec Compliance`.
 
 Same class, same severity: an approach that depends on another repository's change
 being deployed first, with no deploy note saying so. Note the boundary — that
@@ -1073,6 +1062,7 @@ This table applies once this skill is running; reaching it is a separate questio
 **Run this FIRST, before dispatching quality reviewers, whenever the change has a
 stated intent — an `issue_url`, a task doc, or a PR body.**
 
+0. Ask the scope question first (`### Scope before severity`). On `Mis-scoped: split`, it is reported first and steps 1-5 run on the part that stays.
 1. Fetch issue or task requirements.
 2. Map changed files and functions to acceptance criteria.
 3. Identify any criteria that are not addressed by the diff.
@@ -1273,6 +1263,15 @@ their own. Ten private rubrics feeding one sort produce a ranking that means ten
 different things at once, and ranking is what an operator uses to decide what to
 read first. A reviewer may state which of *its* conditions land where; it may not
 redefine the levels.
+
+### Scope before severity
+
+**Before grading, ask: should this change exist in this PR?** A fix PR carrying a
+new shared mechanism or an architecture change is not graded on the ladder: it is
+reported first as `Mis-scoped: split`, naming what stays and what moves out. A
+placement or ownership finding escalates to it, never to `minor`, and it is never
+auto-fixed — the round stops and asks the operator. Record and rationale:
+`SKILL.detail.md` § "Scope before severity".
 
 ### `blocker` — merge-blocking, and nothing else
 
@@ -1591,6 +1590,7 @@ When a prompt carries `JOB_NAME` and `CONTEXT_PATH`, read that context document 
 | "I'll deduplicate findings manually in my head" | Always normalize to [F-NNN] format before consolidation to avoid losing findings |
 | "The reviewer's own severity table said blocker" | There are no reviewer tables. One rubric, in **Severity (canonical)** above; a reviewer that ships one is the defect this replaced |
 | "It's a security/architecture finding, so it's a blocker" | Severity is the demonstrated outcome, not the domain that found it. `blocker` is exactly the four shapes |
+| "Placement is just a `minor`; fix it in this round" | It is `Mis-scoped: split`: reported first, never auto-fixed. Fixing it in place hardens what the owner may want removed |
 | "It will definitely break something eventually, so blocker" | Name the trigger and the outcome. Named → `major`. Unnamed → `info`. "Eventually" is neither |
 | "A strict re-read of the findings will sharpen them" | That pass existed and was removed: self-correction without new evidence measured 95.5 → 91.5 → 89.0 on GSM8K and 75.8 → 38.1 on CommonSenseQA. Run something instead |
 | "Three reviewers agree, so the finding is verified" | Consensus is not evidence. 80+ agents unanimously endorsed a vulnerability that did not exist; one empirical test killed it |

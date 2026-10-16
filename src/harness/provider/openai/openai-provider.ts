@@ -1,3 +1,4 @@
+import { attributeSerializedContent, projectResponsesBody, verifiedVisibleRequest } from "../visible-context";
 // Native OpenAI Responses-API provider adapter (flow 183, T6 / AC1/AC5/AC6).
 //
 // A THIN `fetch` + SSE adapter over the OpenAI **Responses API** (`POST
@@ -195,19 +196,23 @@ function ownedReasoningItems(reasoning: MessageReasoning | undefined, providerId
  * item belongs to a different provider) injects nothing here and builds
  * exactly as before.
  */
-function toResponsesInput(messages: readonly NormalizedMessage[], providerId: string): Record<string, unknown>[] {
+function toResponsesInput(messages: readonly NormalizedMessage[], providerId: string, trackVisibility = false): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
+  const pushContent = (message: NormalizedMessage, item: Record<string, unknown>) => {
+    if (trackVisibility) attributeSerializedContent(item, message);
+    out.push(item);
+  };
   for (const linked of linkToolCalls(messages)) {
     const message = linked.message;
     if (message.role === "tool") {
       if (linked.linkedToolCallId !== undefined) {
-        out.push({ type: "function_call_output", call_id: linked.linkedToolCallId, output: message.content });
+        pushContent(message, { type: "function_call_output", call_id: linked.linkedToolCallId, output: message.content });
         continue;
       }
       // Half-pair: no assistant call in this request answers this result.
       // Degrade to a plain user message rather than emitting a dangling
       // function_call_output the API would reject.
-      out.push({ type: "message", role: "user", content: [{ type: "input_text", text: message.content }] });
+      pushContent(message, { type: "message", role: "user", content: [{ type: "input_text", text: message.content }] });
       continue;
     }
     if (message.role === "assistant" && message.content.length === 0 && linked.linkedCalls.length === 0) {
@@ -224,7 +229,7 @@ function toResponsesInput(messages: readonly NormalizedMessage[], providerId: st
     }
     if (message.role === "assistant" && linked.linkedCalls.length > 0) {
       if (message.content.length > 0) {
-        out.push({
+        pushContent(message, {
           type: "message",
           role: "assistant",
           content: [{ type: "output_text", text: message.content }],
@@ -235,13 +240,112 @@ function toResponsesInput(messages: readonly NormalizedMessage[], providerId: st
       }
       continue;
     }
-    out.push({
+    pushContent(message, {
       type: "message",
       role: message.role === "assistant" ? "assistant" : "user",
       content: [{ type: message.role === "assistant" ? "output_text" : "input_text", text: message.content }],
     });
   }
   return out;
+}
+
+/** Shared serializer for native OpenAI and subscription Codex. No transport credentials. */
+export function serializeOpenAiRequest(request: NormalizedRequest, providerId = "openai", trackVisibility = true) {
+  const codex = providerId === "openai-codex" ? {} : undefined;
+    const requestedReasoningEffort = request.options?.reasoning;
+    const reasoningRequested =
+      typeof requestedReasoningEffort === "string" && requestedReasoningEffort.length > 0 && requestedReasoningEffort !== "off";
+    // flow 268 T16: clamp a level OpenAI does not document ("xhigh"/"max") to
+    // its nearest supported one BEFORE it reaches the wire — see
+    // `clampOpenAiReasoningEffort`'s doc comment. Only meaningful when
+    // `reasoningRequested`; left unclamped (but unused) otherwise.
+    const reasoningEffort = reasoningRequested ? clampOpenAiReasoningEffort(requestedReasoningEffort) : requestedReasoningEffort;
+    const payload: Record<string, unknown> = {
+      model: request.modelId,
+      instructions: request.systemInstruction,
+      input: toResponsesInput(request.messages, providerId, trackVisibility),
+      stream: true,
+      // Output token limit (flow 268 T6): the Responses API field is
+      // `max_output_tokens`, distinct from Chat Completions' `max_tokens`.
+      // `budget.maxOutputTokens` is required/always-populated on every
+      // `NormalizedRequest` (every call site defaults it — see
+      // `resolveAgentMaxOutputTokens`/`runShell`'s own chat-mode fallback),
+      // and this engine used to silently drop it rather than serialize it on
+      // the NATIVE (API-key) branch — sent unconditionally there so a
+      // configured override actually reaches the wire.
+      //
+      // The Codex (ChatGPT-subscription) branch does NOT send it, because the
+      // endpoint rejects it (flow 354, L-10, AC2). Probed 2026-09-28 against
+      // `https://chatgpt.com/backend-api/codex/responses` with this adapter's
+      // own request construction and a model the subscription serves
+      // (`gpt-6-luna`): with the field -> HTTP 400
+      // `{"detail":"Unsupported parameter: max_output_tokens"}`; the same
+      // request without it -> HTTP 200. Recorded in the flow journal. A
+      // configured output budget therefore cannot reach this surface; the
+      // turn budget still bounds the round on the keryx side.
+      ...(codex === undefined ? { max_output_tokens: request.budget.maxOutputTokens } : { store: false, tool_choice: "auto", parallel_tool_calls: true, tools: [] }),
+      // Flow 387 T5: `prompt_cache_key` = the session id (from the request,
+      // never invented here), so the provider routes every round of a session
+      // to the same prefix cache. Sent on both branches (Codex and the native
+      // Responses API both accept it); absent when the caller has no session.
+      // Clamped to 64 chars — the documented ceiling (pi does the same).
+      ...(request.promptCacheKey !== undefined && request.promptCacheKey !== ""
+        ? { prompt_cache_key: request.promptCacheKey.slice(0, 64) }
+        : {}),
+      // `temperature` stays conditional: genuinely absent (not merely
+      // defaulted) on every request until an operator configures one (AC3).
+      // NEVER sent alongside `reasoning` below — the Responses API 400s a
+      // reasoning-effort request that also carries a sampling temperature
+      // (confirmed: reasoning is accepted only by o-series/gpt-5* reasoning
+      // models, and those same models reject `temperature` outright) — so an
+      // operator-configured temperature is silently omitted whenever
+      // `reasoningRequested`, rather than sent on a request guaranteed to
+      // fail with a 400.
+      ...(codex === undefined && request.options?.temperature !== undefined && !reasoningRequested
+        ? { temperature: request.options.temperature }
+        : {}),
+      ...(reasoningRequested
+        ? {
+            // `summary: "auto"` asks for the reasoning-summary text stream
+            // this adapter already normalizes into `reasoning_delta`
+            // (`response.reasoning_summary_text.delta`) — confirmed current
+            // (live docs, developers.openai.com/api/docs/guides/reasoning,
+            // fetched for this task): "auto" is accepted and is "equivalent
+            // to detailed for most reasoning models today".
+            reasoning: { effort: reasoningEffort, summary: "auto" },
+            // `include: ["reasoning.encrypted_content"]`: the SAME live docs
+            // page calls this the "legacy" spelling, now optional ("doesn't
+            // require it") because a `store:false` turn returns
+            // `encrypted_content` on the reasoning item regardless — but
+            // AC9 (frozen for this task) pins its presence explicitly, and
+            // sending the accepted-but-optional value is harmless, so it is
+            // sent unconditionally alongside `reasoning`.
+            include: ["reasoning.encrypted_content"],
+            // `store: false`: the same docs page confirms `encrypted_content`
+            // is populated "when store is false" — required to get the
+            // opaque bytes this adapter replays, and consistent with this
+            // adapter's storage-off contract (`descriptorDocument().
+            // remoteState` pins storage/retention/continuation to `false`;
+            // this adapter never sends a `previous_response_id`
+            // continuation, only a full replayed `input` array).
+            store: false,
+          }
+        : {}),
+      ...(request.tools !== undefined
+        ? {
+            tools: request.tools.map((tool) => ({
+              type: "function",
+              name: tool.name,
+              ...(tool.description !== undefined ? { description: tool.description } : {}),
+              parameters: tool.inputSchema,
+            })),
+            parallel_tool_calls: true,
+          }
+        : {}),
+    };
+  const body = JSON.stringify(payload);
+  return { body, projection: trackVisibility ? projectResponsesBody(body,
+    payload.input as object[], `${providerId}-responses-v1`) : undefined };
 }
 
 /**
@@ -550,97 +654,6 @@ export class OpenAiProvider implements ProviderPort {
     // model (gpt-4.1/gpt-4o) given a `reasoning` field at all (confirmed:
     // reasoning is accepted only by o-series/gpt-5* reasoning models), so
     // this must stay opt-in rather than always-on.
-    const requestedReasoningEffort = request.options?.reasoning;
-    const reasoningRequested =
-      typeof requestedReasoningEffort === "string" && requestedReasoningEffort.length > 0 && requestedReasoningEffort !== "off";
-    // flow 268 T16: clamp a level OpenAI does not document ("xhigh"/"max") to
-    // its nearest supported one BEFORE it reaches the wire — see
-    // `clampOpenAiReasoningEffort`'s doc comment. Only meaningful when
-    // `reasoningRequested`; left unclamped (but unused) otherwise.
-    const reasoningEffort = reasoningRequested ? clampOpenAiReasoningEffort(requestedReasoningEffort) : requestedReasoningEffort;
-    const payload: Record<string, unknown> = {
-      model: request.modelId,
-      instructions: request.systemInstruction,
-      input: toResponsesInput(request.messages, this.providerId),
-      stream: true,
-      // Output token limit (flow 268 T6): the Responses API field is
-      // `max_output_tokens`, distinct from Chat Completions' `max_tokens`.
-      // `budget.maxOutputTokens` is required/always-populated on every
-      // `NormalizedRequest` (every call site defaults it — see
-      // `resolveAgentMaxOutputTokens`/`runShell`'s own chat-mode fallback),
-      // and this engine used to silently drop it rather than serialize it on
-      // the NATIVE (API-key) branch — sent unconditionally there so a
-      // configured override actually reaches the wire.
-      //
-      // The Codex (ChatGPT-subscription) branch does NOT send it, because the
-      // endpoint rejects it (flow 354, L-10, AC2). Probed 2026-09-28 against
-      // `https://chatgpt.com/backend-api/codex/responses` with this adapter's
-      // own request construction and a model the subscription serves
-      // (`gpt-6-luna`): with the field -> HTTP 400
-      // `{"detail":"Unsupported parameter: max_output_tokens"}`; the same
-      // request without it -> HTTP 200. Recorded in the flow journal. A
-      // configured output budget therefore cannot reach this surface; the
-      // turn budget still bounds the round on the keryx side.
-      ...(codex === undefined ? { max_output_tokens: request.budget.maxOutputTokens } : { store: false, tool_choice: "auto", parallel_tool_calls: true, tools: [] }),
-      // Flow 387 T5: `prompt_cache_key` = the session id (from the request,
-      // never invented here), so the provider routes every round of a session
-      // to the same prefix cache. Sent on both branches (Codex and the native
-      // Responses API both accept it); absent when the caller has no session.
-      // Clamped to 64 chars — the documented ceiling (pi does the same).
-      ...(request.promptCacheKey !== undefined && request.promptCacheKey !== ""
-        ? { prompt_cache_key: request.promptCacheKey.slice(0, 64) }
-        : {}),
-      // `temperature` stays conditional: genuinely absent (not merely
-      // defaulted) on every request until an operator configures one (AC3).
-      // NEVER sent alongside `reasoning` below — the Responses API 400s a
-      // reasoning-effort request that also carries a sampling temperature
-      // (confirmed: reasoning is accepted only by o-series/gpt-5* reasoning
-      // models, and those same models reject `temperature` outright) — so an
-      // operator-configured temperature is silently omitted whenever
-      // `reasoningRequested`, rather than sent on a request guaranteed to
-      // fail with a 400.
-      ...(codex === undefined && request.options?.temperature !== undefined && !reasoningRequested
-        ? { temperature: request.options.temperature }
-        : {}),
-      ...(reasoningRequested
-        ? {
-            // `summary: "auto"` asks for the reasoning-summary text stream
-            // this adapter already normalizes into `reasoning_delta`
-            // (`response.reasoning_summary_text.delta`) — confirmed current
-            // (live docs, developers.openai.com/api/docs/guides/reasoning,
-            // fetched for this task): "auto" is accepted and is "equivalent
-            // to detailed for most reasoning models today".
-            reasoning: { effort: reasoningEffort, summary: "auto" },
-            // `include: ["reasoning.encrypted_content"]`: the SAME live docs
-            // page calls this the "legacy" spelling, now optional ("doesn't
-            // require it") because a `store:false` turn returns
-            // `encrypted_content` on the reasoning item regardless — but
-            // AC9 (frozen for this task) pins its presence explicitly, and
-            // sending the accepted-but-optional value is harmless, so it is
-            // sent unconditionally alongside `reasoning`.
-            include: ["reasoning.encrypted_content"],
-            // `store: false`: the same docs page confirms `encrypted_content`
-            // is populated "when store is false" — required to get the
-            // opaque bytes this adapter replays, and consistent with this
-            // adapter's storage-off contract (`descriptorDocument().
-            // remoteState` pins storage/retention/continuation to `false`;
-            // this adapter never sends a `previous_response_id`
-            // continuation, only a full replayed `input` array).
-            store: false,
-          }
-        : {}),
-      ...(request.tools !== undefined
-        ? {
-            tools: request.tools.map((tool) => ({
-              type: "function",
-              name: tool.name,
-              ...(tool.description !== undefined ? { description: tool.description } : {}),
-              parameters: tool.inputSchema,
-            })),
-            parallel_tool_calls: true,
-          }
-        : {}),
-    };
     // The wait for response headers has its own deadline: a server that accepts
     // the connection and never answers would otherwise hold the turn until the
     // caller aborts, and the body deadlines below only start after headers.
@@ -657,16 +670,35 @@ export class OpenAiProvider implements ProviderPort {
       headersTimedOut = true;
       headersAbort.abort();
     }, headersDeadlineMs);
-    const init: RequestInit = {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
-      signal: headersAbort.signal,
-    };
-
     let response: Response;
     try {
-      response = await this.deps.fetch(url, init);
+      const serialized = serializeOpenAiRequest(request, this.providerId,
+        opts.onSerializedRequest !== undefined || opts.prepareSerializedRequest !== undefined);
+      let pending: Promise<Response> | undefined;
+      const allowed = new Set([serialized.projection]);
+      const send = (projection: NonNullable<typeof serialized.projection>) => {
+        if (pending || !allowed.has(projection)) throw Error("invalid prepared request delivery");
+        if (opts.signal?.aborted) throw Error("attempt cancelled");
+        const { body } = verifiedVisibleRequest(projection);
+        opts.onSerializedRequest?.(projection);
+        // Fetch starts synchronously while the source owner holds its reader lease.
+        pending = this.deps.fetch(url, { method: "POST", headers, body,
+          signal: headersAbort.signal });
+        void pending.catch(() => undefined);
+      };
+      if (opts.prepareSerializedRequest && serialized.projection) {
+        await opts.prepareSerializedRequest(serialized.projection, extra => {
+          const prepared = serializeOpenAiRequest({ ...request, messages: [...request.messages, ...extra] }, this.providerId, true);
+          allowed.add(prepared.projection);
+          return prepared.projection!;
+        }, send);
+        if (!pending) send(serialized.projection);
+      } else {
+        if (serialized.projection) opts.onSerializedRequest?.(serialized.projection);
+        pending = this.deps.fetch(url, { method: "POST", headers, body: serialized.body,
+          signal: headersAbort.signal });
+      }
+      response = await pending!;
     } catch (cause) {
       if (headersTimedOut && opts.signal?.aborted !== true) {
         yield errorEvent({

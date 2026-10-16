@@ -155,6 +155,9 @@ as a numbered question. Otherwise drop it from the prose (it stays in the
 
 Pre-existing code does not block the merge. Render it under Pre-existing and
 say so. A serious one may *suggest* a follow-up issue. Do not open the issue.
+Check the suggestion's direction against the latest owner and reviewer feedback
+first: a follow-up must not entrench what a reviewer asked to remove
+(`.metaproject/rules/core/owner-intent.mdc`, rule 7).
 
 ## Verified clean
 

@@ -10,8 +10,10 @@ guarantees are P1 lexical prerequisites. P2 adds incremental/vector reuse, P4 ad
 automatic integration, not the first safe lifecycle.
 
 ## Writer protocol
-1. Acquire project writer lease; stale recovery checks process ownership, not age
-   alone. Readers pin CURRENT, continuing during build.
+1. Acquire project build lease before source snapshot, retain through publication.
+   Kernel ownership releases it on process death, never by age. Concurrent builds
+   fail closed. A separate short writer lease serializes ledger writes and CURRENT
+   publication, allowing immediate tombstones during embedding. Readers pin CURRENT.
 2. Snapshot config/security/source-set, realpath sources and scan/redact.
 3. Unchanged hash/fingerprint reuses chunks/vectors. Archive append checks saved
    prefix hash, file identity and complete-record byte cursor; ingest only complete
@@ -27,7 +29,8 @@ automatic integration, not the first safe lifecycle.
    evidence. Persist cursor only for published complete records.
 6. Flush files/directory, rename staging to immutable generation, atomically replace
    CURRENT on same filesystem with manifest hash. Readers verify members, never mix.
-7. Release lease; collect superseded generation only after reader pins release.
+7. Release build lease on success, cancellation or failure; collect superseded
+   generation only after reader pins release.
 
 ## Deletion, revocation and retention
 Every query checks source existence/permissions/version and ledger regardless of
@@ -39,7 +42,14 @@ generations after readers stop. Clear cancels readers and removes all derived
 snapshots/staging under writer lease, preserving tombstones until explicit source
 reauthorization. Authoritative sources are never erased by clear.
 Maximum derived retention: 30 days since source eligibility check; expired entries
-withheld until explicit reindex. No new source-archive retention policy. Secure
+withheld until explicit reindex. Physical cleanup is an explicit owner operation:
+`runtime.maintenance()` / `keryx evidence maintenance` (fresh approval in agent
+workflows). It decides expiry under the writer lease, durably invalidates CURRENT,
+cancels/drains readers, and purges derived artifacts while preserving sources and
+tombstones. Healthy CURRENT is preserved; superseded artifacts are collected only
+without reader pins. Search/status never trigger cleanup. No background schedule
+is installed; operators must invoke maintenance to perform physical cleanup.
+No new source-archive retention policy. Secure
 physical erasure is not promised for SSDs/backups; backup retention is operator-owned.
 
 ## Failure and rollback

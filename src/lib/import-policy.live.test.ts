@@ -255,7 +255,9 @@ const AVOIDABLE_SLACK = 15;
  * `intake` joined in flow 403 with only unavoidable edges: it reuses the granted-tool
  * runner and binary pinning from `src/trigger/`, which has no `service.ts`.
  */
-const BYPASSING_ZONES = ["bus", "cli-registry.ts", "commands", "harness", "intake", "mcp", "scheduler", "session", "tui"];
+// Evidence uses capability/seam.ts: capability has no service facade.
+// This unavoidable dependency does not raise the avoidable-bypass ceiling.
+const BYPASSING_ZONES = ["bus", "cli-registry.ts", "commands", "evidence", "harness", "intake", "mcp", "scheduler", "session", "tui"];
 
 let cached: Awaited<ReturnType<typeof checkImportPolicy>> | undefined;
 async function report() {

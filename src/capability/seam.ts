@@ -90,11 +90,12 @@ export async function isCapabilityEnabled(cwd: string, id: string): Promise<bool
 export async function resolveCapability<In, Out>(
   cwd: string,
   spec: CapabilitySpec<In, Out>,
+  signal?: AbortSignal,
 ): Promise<CapabilityAdapter<In, Out> | null> {
   try {
     // Gate 1: manifest-enabled. Disabled ⇒ null with NO dep load, NO asset
     // touch, and NO warning (a disabled ceiling is the normal default path).
-    if (!(await isCapabilityEnabled(cwd, spec.id))) {
+    if (signal?.aborted || !(await isCapabilityEnabled(cwd, spec.id)) || signal?.aborted) {
       return null;
     }
 
@@ -104,6 +105,7 @@ export async function resolveCapability<In, Out>(
     if (spec.optionalDependency) {
       try {
         dep = await import(spec.optionalDependency);
+        if (signal?.aborted) return null;
       } catch {
         warnCapabilityDegraded(
           spec.id,
@@ -118,8 +120,10 @@ export async function resolveCapability<In, Out>(
     let asset: { path: string } | null = null;
     if (spec.asset) {
       const lock = await loadAssetsLock(cwd);
+      if (signal?.aborted) return null;
       const registry = registryFromLock(lock);
       const resolved = await resolveAsset(registry, spec.asset);
+      if (signal?.aborted) return null;
       if (!resolved) {
         warnCapabilityDegraded(
           spec.id,
@@ -132,10 +136,13 @@ export async function resolveCapability<In, Out>(
 
     // Build the adapter, then Gate 4: `isAvailable()` — caught so an adapter
     // that throws while probing degrades to the deterministic path (AC0-8).
+    if (signal?.aborted) return null;
     const adapter = spec.load({ dep, asset });
+    if (signal?.aborted) return null;
     let available: boolean;
     try {
       available = await adapter.isAvailable();
+      if (signal?.aborted) return null;
     } catch {
       warnCapabilityDegraded(spec.id, "adapter availability check threw");
       return null;

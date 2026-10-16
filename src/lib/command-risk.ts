@@ -617,13 +617,16 @@ export function touchesSchedulerControl(command: string): boolean {
 /**
  * Every command whose purpose is to show that a person, not the agent, took a
  * step: SAC's review confirmation, flow 299's completion confirmation (`flow
- * confirm`), and flow 295's scheduler control (a schedule exists only after the
+ * confirm`), ERL index/clear mutations, and flow 295's scheduler control (a schedule exists only after the
  * operator confirms its card). The approval gate's `sacReviewConfirmation` floor is
  * fed from this, so every family forces `ask` in every permission mode, `auto`
  * included; no answer is remembered, and a pattern for any of them is refused.
  */
 export function touchesHumanConfirmation(command: string): boolean {
-  return touchesSacConfirmReview(command) || touchesFlowConfirm(command) || touchesSchedulerControl(command) || touchesCoverageWaiver(command) || touchesChunkEstimateAnswer(command) || touchesReviewPublish(command) || touchesOperatorDecision(command);
+  // ERL index/clear mutate derived state. Conservatively include quoted/wrapped
+  // forms: an extra prompt is preferable to an inherited corpus-write grant.
+  const evidenceMutation = /(?:^|\s)evidence\s+(?:index|clear|maintenance)(?=$|[\s;&|])/i.test(command.replace(/["'`\\]/g, ""));
+  return touchesSacConfirmReview(command) || touchesFlowConfirm(command) || touchesSchedulerControl(command) || evidenceMutation || touchesCoverageWaiver(command) || touchesChunkEstimateAnswer(command) || touchesReviewPublish(command) || touchesOperatorDecision(command);
 }
 
 const COVERAGE_WAIVER_FLAG = "--waive";

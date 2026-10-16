@@ -385,6 +385,7 @@
         "src/gdskills/bundled/rules/core/implementation-plans.mdc",
         "src/gdskills/bundled/rules/core/jobs-documentation.mdc",
         "src/gdskills/bundled/rules/core/model-selection.mdc",
+        "src/gdskills/bundled/rules/core/owner-intent.mdc",
         "src/gdskills/bundled/rules/core/playwright-testing.mdc",
         "src/gdskills/bundled/rules/core/requirements-management.mdc",
         "src/gdskills/bundled/rules/core/requirements-package-standard.mdc",

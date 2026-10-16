@@ -40,6 +40,8 @@
 // deliberately excluded here too, so this module never fights that
 // existing special-casing.
 export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map([
+  // commands/evidence.ts: closed owner-side CLI surface
+  ["evidence", ["index", "search", "status", "clear", "maintenance"]],
   // commands/modules.ts:98,142,149,165
   ["modules", ["status", "list", "enable", "on", "disable", "off", "interactive", "help"]],
   // commands/projects.ts:26,39,56,61
