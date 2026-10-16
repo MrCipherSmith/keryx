@@ -13,3 +13,6 @@
 - 2026-10-16T11:45:29.253Z - task-added: T10: CHANGELOG, release 0.3.121
 - 2026-10-16T11:45:29.556Z - frozen: 8 criteria; checksum recorded
 - 2026-10-16T11:45:29.707Z - started
+- 2026-10-16T11:46:27.181Z - task-attempt: T5: started (attempt 1) — 459-T5 sonnet worktree lane L1
+- 2026-10-16T11:46:27.335Z - task-attempt: T6: started (attempt 1) — 459-T6 opus worktree lane L3
+- 2026-10-16T12:04:21.666Z - task-done: T6: L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators

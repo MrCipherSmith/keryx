@@ -11,7 +11,7 @@
   "title": "Review findings get an independent premise check before anyone acts on them",
   "status": "in-progress",
   "createdAt": "2026-10-16T11:39:19.756Z",
-  "updatedAt": "2026-10-16T11:45:29.707Z",
+  "updatedAt": "2026-10-16T12:04:21.666Z",
   "source": {
     "type": "description",
     "ref": null
@@ -103,8 +103,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-16T11:46:27.181Z",
+            "outcome": "started",
+            "detail": "459-T5 sonnet worktree lane L1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -114,15 +120,22 @@
       "id": "T6",
       "title": "L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-16T11:46:27.335Z",
+            "outcome": "started",
+            "detail": "459-T6 opus worktree lane L3"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
@@ -254,6 +267,21 @@
     {
       "at": "2026-10-16T11:45:29.707Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-16T11:46:27.181Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 459-T5 sonnet worktree lane L1"
+    },
+    {
+      "at": "2026-10-16T11:46:27.335Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 459-T6 opus worktree lane L3"
+    },
+    {
+      "at": "2026-10-16T12:04:21.666Z",
+      "event": "task-done",
+      "detail": "T6: L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators"
     }
   ],
   "acKinds": {
