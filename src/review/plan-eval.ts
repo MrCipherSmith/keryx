@@ -54,6 +54,8 @@ export type PlanEval = {
   findings: FindingLanding[];
   /** Blocker and major findings: how many land under each plan. */
   serious: { total: number; landed: number; oldLanded: number };
+  /** Every severity (minors and nits too), lower-cased, in finding order: how many land under each plan. */
+  bySeverity: Record<string, { total: number; landed: number; oldLanded: number }>;
 };
 
 export type PlanEvalInput = {
@@ -131,7 +133,15 @@ export function evaluatePlans(input: PlanEvalInput): PlanEval {
     return { ...finding, ...(reviewer === undefined ? {} : { reviewer }), slices, landed: byOwner || deep, how, oldLanded };
   });
   const serious = findings.filter((finding) => SERIOUS.has(finding.severity.toLowerCase()));
+  const bySeverity: PlanEval["bySeverity"] = {};
+  for (const finding of findings) {
+    const entry = (bySeverity[finding.severity.toLowerCase()] ??= { total: 0, landed: 0, oldLanded: 0 });
+    entry.total += 1;
+    if (finding.landed) entry.landed += 1;
+    if (finding.oldLanded) entry.oldLanded += 1;
+  }
   return {
+    bySeverity,
     old: oldSide,
     new: newSide,
     reduction: oldSide.runs === 0 ? 0 : Number((1 - newSide.runs / oldSide.runs).toFixed(3)),
@@ -188,6 +198,8 @@ export function renderPlanEval(result: PlanEval): string {
   const lines = [row("old", result.old), row("new", result.new), `reduction: ${(result.reduction * 100).toFixed(1)}% fewer runs`];
   if (result.findings.length > 0) {
     lines.push(`blocker/major landed: new ${result.serious.landed}/${result.serious.total}, old ${result.serious.oldLanded}/${result.serious.total}`);
+    const severities = Object.entries(result.bySeverity).map(([severity, s]) => `${severity} new ${s.landed}/${s.total}, old ${s.oldLanded}/${s.total}`);
+    lines.push(`landed by severity: ${severities.join("; ")}`);
     for (const f of result.findings) {
       lines.push(`- ${f.id} [${f.severity}] ${f.reviewer ?? "(no reviewer)"} ${f.file}${f.line === undefined ? "" : `:${f.line}`}: ${f.landed ? "lands" : "MISSES"} (${f.how}; slices ${f.slices.join(", ") || "none"})${f.oldLanded ? "" : "; old plan missed it too"}`);
     }

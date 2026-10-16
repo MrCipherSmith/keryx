@@ -5,13 +5,15 @@
 // gets the testing reviewer, a stylesheet the layout and style reviewers, a slice that spawns processes the security
 // reviewer, ...), `review-logic` on every slice, and a depth:
 //
-// - deep: the full core set reads it, when it holds any non-test source code, agent instructions (skills, rules,
-//   AGENTS/CLAUDE files, prompts) or a contract/schema; also on a deterministic risk class, a high symbol reach, or an
-//   injected Jev risk score >= 0.7. Live evaluation showed that a risk-score gate left every defect in a light slice;
-// - light: only when every file is docs, tests, config/data or generated; only its content roles read it.
+// - deep: every role of the roster its path gates allow reads it (the old plan's full set for the slice), when it
+//   holds any non-test source code, agent instructions (skills, rules, AGENTS/CLAUDE files, prompts) or a
+//   contract/schema; also on a deterministic risk class, a high symbol reach, or an injected Jev risk score >= 0.7.
+//   Live evaluation showed that a risk-score gate left every defect in a light slice;
+// - light: only when every file is docs, tests, config/data or generated; logic and its content roles read it.
 //
-// A deterministic 10-15% sample of light slices (hash of head SHA + slice id) runs deep anyway, marked `audit`, so the
-// light routing is measured against a deep read of the same text. Nothing here calls a model: the facts come from the
+// A deterministic sample of light slices (hash of head SHA + slice id) runs deep anyway with the core set, marked
+// `audit`, so the light routing is measured against a deep read of the same text: none below 4 light slices,
+// otherwise ceil(n x rate) clamped to [ceil(10% n), floor(15% n)] and at least one. Nothing here calls a model: the facts come from the
 // changed lines and paths (`computeHunkRiskFacts`, the bundled path gates, content patterns below).
 
 import { createHash } from "node:crypto";
@@ -128,6 +130,19 @@ const ROLE_RULES: readonly RoleRule[] = [
  */
 export const ROUTABLE_ROLES: ReadonlySet<string> = new Set([ALWAYS_ROLE, ...DEEP_ROLES, ...ROLE_RULES.map((rule) => rule.role)]);
 
+/**
+ * The roles a deep slice gets: every routable role whose bundled path gate (when it has one) matches a file of the
+ * slice — the old plan's full set for that slice (style, clean-code, performance, highload, testing-practices, ...
+ * where their gates allow), not only the core set. Only the round's own roles are dispatched (`estimateRound`,
+ * `requiredSlices` count the roster's roles), so listing a role the round does not run costs nothing.
+ */
+export function deepRosterRoles(files: readonly string[]): string[] {
+  return [...ROUTABLE_ROLES].filter((role) => {
+    const gate = BUNDLED_PATH_GATES[role];
+    return gate === undefined || files.some((file) => gate(file));
+  });
+}
+
 /** Routable roles that still run with no slice routed to them: the regression reviewer reads scope B (blast-radius chunks), not only slices. */
 export const ROLES_RUN_WITHOUT_SLICES: ReadonlySet<string> = new Set([REGRESSION_ROLE]);
 
@@ -222,15 +237,31 @@ export function routeSliceRegions(id: string, regions: readonly ScopedRegion[], 
       }
     }
   }
-  if (deep) for (const role of DEEP_ROLES) roles.add(role);
+  if (deep) for (const role of deepRosterRoles(files)) roles.add(role);
   return { roles: [...roles].sort(), depth: deep ? "deep" : "light", risk: { score: Number(score.toFixed(2)), why } };
 }
 
 const auditKey = (head: string, id: string): string => createHash("sha256").update(`${head}\0${id}`).digest("hex");
 
-/** The light slices sampled to run deep: round(n x rate) of them, the lowest hashes of head + id. Same head, same picks. */
+/** Light slices below this count get no audit sample: one of three would be a third of them, far over 15%. */
+export const AUDIT_MIN_LIGHT = 4;
+
+/**
+ * How many of `n` light slices the audit samples. None below {@link AUDIT_MIN_LIGHT} or at a rate of 0; otherwise
+ * ceil(n x rate) clamped to [ceil(10% n), floor(15% n)] — the 15% cap wins when no whole count lies in the band
+ * (n = 11-13: one, just under 10%) — and at least one (for 4-6 light slices the one sampled is 17-25%:
+ * the floor of one wins over the cap, so a small light set is still measured).
+ */
+export function auditCount(n: number, rate: number = AUDIT_RATE): number {
+  if (n < AUDIT_MIN_LIGHT || !(rate > 0)) return 0;
+  const low = Math.ceil(n * 0.1);
+  const high = Math.floor(n * 0.15);
+  return Math.max(1, Math.min(high, Math.max(low, Math.ceil(n * rate))));
+}
+
+/** The light slices sampled to run deep: {@link auditCount} of them, the lowest hashes of head + id. Same head, same picks. */
 export function auditSample(head: string, lightIds: readonly string[], rate: number = AUDIT_RATE): Set<string> {
-  const count = Math.round(lightIds.length * rate);
+  const count = auditCount(lightIds.length, rate);
   return new Set([...lightIds].sort((a, b) => auditKey(head, a).localeCompare(auditKey(head, b))).slice(0, count));
 }
 
