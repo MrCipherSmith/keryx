@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { MIN_SLICE_MAX_BYTES, type SliceEntry, type SliceManifest, packWaves, resliceText, waveBytesOf } from "./slice";
+import { MIN_SLICE_MAX_BYTES, type SliceEntry, type SliceManifest, packWaves, packWavesByKind, resliceText, waveBytesOf } from "./slice";
 import { escalateSlice } from "./slice-routing";
 import { type WaveSummary, requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 
@@ -290,7 +290,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
     state.reviewers[reviewer] = { attempt: priorRounds, status: evaluated ? status : (known?.status ?? ""), notRun: false, stalls, covered: [...covered].sort(), ...(asked === undefined ? {} : { questions: asked }), ...(known?.processed === undefined ? {} : { processed: known.processed }), ...over };
   };
   const plan = (decision: RetryDecision, reason: string, extra: Partial<RetryPlan> = {}): RetryPlan => {
-    const waves = packWaves(open, budget);
+    const waves = packWavesByKind(open, budget);
     return {
       decision,
       reviewer,
@@ -329,7 +329,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
       return notRun(`${stalls} results in a row covered no new slice; ${open.length} assigned slice(s) are still open`);
     }
     remember({});
-    const waves = packWaves(open, budget);
+    const waves = packWavesByKind(open, budget);
     const summary = summarizeWaves(waves);
     return plan("wave", `${status || "no result"}; ${summary.slices} slice(s) are uncovered — dispatch the next wave (${summary.waves} left), no attempt is spent`);
   }
@@ -356,7 +356,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
     remember({ attempt: rounds });
     const needsContext = asStrings(result.needs_context).filter((item) => item.trim() !== "");
     const redo = open.length > 0 ? open : graph.open(wanted.filter((id) => ids.has(id)), new Set());
-    const waves = packWaves(redo, budget);
+    const waves = packWavesByKind(redo, budget);
     return plan("context", `${status}; answer ${needsContext.length || "its"} open question(s) and re-dispatch ${progress ? "the uncovered slices" : "the same slices"} — the scope is not closed`, {
       needsContext,
       wave: waves[0] ?? [],
@@ -370,7 +370,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
 
   if (progress) {
     remember({ attempt: rounds });
-    const waves = packWaves(open, budget);
+    const waves = packWavesByKind(open, budget);
     const summary = summarizeWaves(waves);
     return plan("retry", `${status}, but it covered new slices; hand out the next wave of the ${summary.slices} still uncovered (${summary.waves} left), no attempt is spent`);
   }

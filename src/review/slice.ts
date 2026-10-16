@@ -11,6 +11,18 @@ export const MIN_SLICE_MAX_BYTES = 200;
  */
 export const DEFAULT_WAVE_BYTES = 60_000;
 
+/** The slice kinds in the order their waves are handed out; a slice with no kind (a first round, a re-cut piece) is `new`. */
+export const WAVE_KIND_ORDER = ["fix", "second-look", "new"] as const;
+
+/**
+ * Pack waves per slice kind: a dispatch carries one kind (fix slices come with the prior findings they answer, second-look
+ * and new slices do not), so fix, second-look and new slices are never in the same wave. The one packing the drivers,
+ * `retry-plan --next-wave`, `review next`, the ledger and the estimate all use. Without kinds it is {@link packWaves}.
+ */
+export function packWavesByKind<T extends { bytes: number; kind?: "fix" | "new" | "second-look" | undefined }>(entries: readonly T[], budget: number): T[][] {
+  return WAVE_KIND_ORDER.flatMap((kind) => packWaves(entries.filter((entry) => (entry.kind ?? "new") === kind), budget));
+}
+
 export type SliceSplit = "domain" | "file" | "hunk";
 
 export type SliceEntry = {
