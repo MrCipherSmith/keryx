@@ -11,7 +11,7 @@
   "title": "Review findings get an independent premise check before anyone acts on them",
   "status": "in-progress",
   "createdAt": "2026-10-16T11:39:19.756Z",
-  "updatedAt": "2026-10-16T12:09:31.742Z",
+  "updatedAt": "2026-10-16T12:43:37.574Z",
   "source": {
     "type": "description",
     "ref": null
@@ -142,7 +142,7 @@
       "id": "T7",
       "title": "L2 operator + CLI: premise-question decision, decide-premise card, flags, tier, catalog, docs",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -158,13 +158,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Live eval: #7849 fixture + #992/#1005 controls",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6",
@@ -176,7 +177,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -299,6 +301,16 @@
       "at": "2026-10-16T12:09:31.742Z",
       "event": "task-attempt",
       "detail": "T7: started (attempt 1) — 459-T7 sonnet worktree lane L2"
+    },
+    {
+      "at": "2026-10-16T12:43:37.426Z",
+      "event": "task-done",
+      "detail": "T7: L2 operator + CLI: premise-question decision, decide-premise card, flags, tier, catalog, docs"
+    },
+    {
+      "at": "2026-10-16T12:43:37.574Z",
+      "event": "task-done",
+      "detail": "T8: Live eval: #7849 fixture + #992/#1005 controls"
     }
   ],
   "acKinds": {

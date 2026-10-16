@@ -18,3 +18,5 @@
 - 2026-10-16T12:04:21.666Z - task-done: T6: L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators
 - 2026-10-16T12:09:31.586Z - task-done: T5: L1 code core: premise claims, delete-only merge, held findings in verdict/readiness/gate/dedupe
 - 2026-10-16T12:09:31.742Z - task-attempt: T7: started (attempt 1) — 459-T7 sonnet worktree lane L2
+- 2026-10-16T12:43:37.426Z - task-done: T7: L2 operator + CLI: premise-question decision, decide-premise card, flags, tier, catalog, docs
+- 2026-10-16T12:43:37.574Z - task-done: T8: Live eval: #7849 fixture + #992/#1005 controls
