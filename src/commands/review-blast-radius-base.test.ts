@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { computeSymbolReach, gitSourceReader, parseDiffHunks } from "../gdgraph/symbol-reach";
 import { defaultLayerDeps, resolveLayersBase } from "../review/layers";
 import { changedFilesArgv, radiusDiffArgv, radiusRange } from "../review/radius-range";
 
@@ -48,6 +49,12 @@ beforeAll(() => {
   git("add", ".");
   git("commit", "-qm", "second commit of the PR");
   headSha = git("rev-parse", "HEAD");
+  // The branch moved on after the review pinned its head: its tip is a descendant of the head, never a base.
+  git("checkout", "-qb", "feature-moved");
+  write("src/later.ts", "export const later = 1;\n");
+  git("add", ".");
+  git("commit", "-qm", "a commit after the pinned head");
+  git("checkout", "-q", "feature");
   // The checkout moves away from the reviewed head, and the working tree carries an unrelated edit.
   git("checkout", "-q", "main");
   write("src/uses-beta.ts", 'import { beta } from "./core";\nexport const b = beta() + 1;\n');
@@ -123,12 +130,50 @@ describe("the layers base (AC7)", () => {
   });
 
   test("`<head>~1` is the last resort and is printed as a warning", async () => {
-    const { deps: d, warnings } = deps({ git: async (cwd, args) => (args[0] === "rev-parse" && args.includes(`${headSha}^{commit}`) ? headSha : args[0] === "rev-parse" ? null : defaultLayerDeps.git(cwd, args)) });
-    const pkg = packageWith({ kind: "branch", ref: "feature-gone", head: headSha });
+    // The branch resolves (to a commit past the pinned head); only the default branches are hidden.
+    const hidden = ["origin/HEAD", "origin/main", "origin/master", "main", "master"].map((name) => `${name}^{commit}`);
+    const { deps: d, warnings } = deps({ git: async (cwd, args) => (args[0] === "rev-parse" && hidden.some((rev) => args.includes(rev)) ? null : defaultLayerDeps.git(cwd, args)) });
+    const pkg = packageWith({ kind: "branch", ref: "feature-moved", head: headSha });
     expect(await resolveLayersBase({ projectRoot: repo, packageDir: pkg, prHead: headSha }, d)).toEqual({ base: `${headSha}~1`, source: "fallback" });
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain("falling back to");
     expect(warnings[0]).toContain("Pass --base <sha>");
+  });
+
+  test("a branch target never takes its own branch as the base (review M2)", async () => {
+    const { deps: d, warnings } = deps();
+    const pkg = packageWith({ kind: "branch", ref: "feature-moved", head: headSha });
+    expect(await resolveLayersBase({ projectRoot: repo, packageDir: pkg, prHead: headSha }, d)).toEqual({ base: baseSha, source: "merge-base" });
+    expect(warnings).toEqual([]);
+  });
+
+  test("a target ref that is not an ancestor of the head is skipped with a warning (review M2)", async () => {
+    const { deps: d, warnings } = deps();
+    const pkg = packageWith({ kind: "commit", ref: "feature-moved", head: headSha });
+    expect(await resolveLayersBase({ projectRoot: repo, packageDir: pkg, prHead: headSha }, d)).toEqual({ base: baseSha, source: "merge-base" });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("is not an ancestor of the head");
+    const ancestor = packageWith({ kind: "commit", ref: "main", head: headSha });
+    expect(await resolveLayersBase({ projectRoot: repo, packageDir: ancestor, prHead: headSha }, d)).toEqual({ base: baseSha, source: "target-ref" });
+  });
+});
+
+describe("the base text is read where the diff's hunks are numbered (review M3)", () => {
+  test("main changed the file after the fork: the base is read at the merge base, and the seed names stay right", () => {
+    git("branch", "-f", "main-later", baseSha);
+    git("checkout", "-q", "main-later");
+    // main moves on: lines inserted above alpha shift every line number of the file at the base branch's tip.
+    const later = "// one\n// two\n// three\nexport function zeta(): number {\n  return 0;\n}\n\nexport function alpha(): number {\n  return 1;\n}\n\nexport function beta(): number {\n  return 2;\n}\n";
+    writeFileSync(path.join(repo, "src/core.ts"), later);
+    // Only core.ts: the working tree also carries the unrelated uses-beta.ts edit.
+    git("commit", "-qm", "main later", "--", "src/core.ts");
+    const laterSha = git("rev-parse", "HEAD");
+    git("checkout", "-q", "main");
+    const read = gitSourceReader(repo, headSha, laterSha);
+    expect(read.base?.("src/core.ts")?.trimEnd()).toBe(git("show", `${baseSha}:src/core.ts`));
+    const patch = git("diff", "--no-color", "--unified=0", `${laterSha}...${headSha}`, "--", "src/core.ts");
+    const result = computeSymbolReach({ graph: { nodes: [], edges: [] }, seeds: ["src/core.ts"], changedFiles: ["src/core.ts"], diff: parseDiffHunks(`${patch}\n`), read, depth: 1 });
+    expect(result.seeds[0]).toMatchObject({ mode: "symbol", names: ["alpha"] });
   });
 });
 
