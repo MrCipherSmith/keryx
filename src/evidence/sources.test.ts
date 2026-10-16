@@ -152,7 +152,7 @@ test("session store cannot bypass archive ownership through generic file roots",
   const futureStore = path.join(base, "future-store");
   const candidate = await readVerifiedEvidenceFile({ projectRoot, path: relative, dataDir: futureStore,
     roots: ["docs"], maxSourceBytes: 1024,
-    scanner: async text => ({ code: "ok", text, redaction: "not-needed" }) });
+    scanner: async (text: string) => ({ code: "ok", text, redaction: "not-needed" }) });
   expect(candidate.code).toBe("ok");
   await symlink(dataDir, futureStore);
   if (candidate.code !== "ok") throw Error("candidate unavailable");

@@ -1,0 +1,25 @@
+### Focused static review result
+
+**No actionable defect confirmed within the inspected scope.** This is reduced coverage, not an overall approval.
+
+**Source-supported checks**
+- **Revocation is fenced through actual transport initiation:** `src/evidence/index.ts:461–469` performs source confirmation, retention/deadline checks, and a final reader checkpoint inside `reader.deliver`. `src/evidence/lifecycle.ts:77–90` holds the writer lease across that synchronous delivery, excluding concurrent ledger revocation. Automatic packing and OpenAI `fetch` initiation remain synchronous within the callback (`src/evidence/automatic.ts:72–108`; `src/harness/provider/openai/openai-provider.ts:679–694`).
+- **Final bytes are sealed:** `src/harness/provider/visible-context.ts:65–79` freezes projections and retains their exact serialized bodies privately. OpenAI sends the verified body and accepts only projections produced for the current request (`openai-provider.ts:678–686`).
+- **Unstable visibility falls back without added evidence:** `automatic.ts:99–102` sends the retained `base` on second-pass instability; `src/evidence/visibility.ts:40` likewise returns the verified baseline. The automatic fallback does not send the discarded speculative assembly.
+- **Enabled hybrid without an embedding owner is gated:** `src/evidence/runtime.ts:38–39` rejects construction before filesystem discovery. CLI and tool reach this gate through `loadEvidenceRuntime`; automatic recall directly calls the same constructor without an embedding owner and falls back to baseline if construction fails. Thus these paths do not silently execute lexical retrieval for ownerless enabled hybrid.
+
+**Residual concern—not promoted to a finding**
+- Source confirmation occurs **before** automatic packing, telemetry, and the optional provider serialization observer. The writer lease prevents ledger revocation during that interval, but does not freeze ordinary source-file edits by another process. I did not establish a reproducible, contract-violating stale-source handoff; this remains a useful targeted follow-up rather than a confirmed defect.
+
+**Inspected**
+- Complete: `src/evidence/{automatic,visibility,tool,lifecycle}.ts`, `src/harness/provider/visible-context.ts`, `src/commands/evidence.ts`, `src/evidence/automatic.test.ts`.
+- Relevant portions: `src/evidence/{runtime,index}.ts`, `src/harness/provider/{types.ts,openai/openai-provider.ts}`.
+- Text search located automatic caller integrations in `src/commands/{agent,shell}.ts`; their surrounding implementations were **not inspected**. Provider lookup established the shared native OpenAI/Codex serializer rather than assuming adapter filenames.
+
+**NOT RUN / gaps**
+- No shell, tests, edits, or execution.
+- Could not independently verify the worktree’s commit identity against `7fcc469fb3205b36c23e09c0ed546b99cb5bc005`.
+- Prior T13 reports were not used as evidence.
+- Non-OpenAI adapter behavior and complete agent/shell lifecycle integration remain uncovered.
+
+**Recommended next step:** inspect agent/shell ownership and attempt-retry wiring, then add or run a targeted source-change-during-final-assembly test if strict final-source freshness is required.
