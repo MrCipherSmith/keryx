@@ -15,9 +15,10 @@ import { afterEach, expect, mock, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createFlowService } from "./service";
 import { runOperatorCommand } from "../commands/review-operator";
-import { recordPremiseDecision } from "../review/operator-decisions";
+import { OPERATOR_DECISIONS_FILE, recordPremiseDecision } from "../review/operator-decisions";
+import { premiseAnswer, premiseAnswerInput } from "../review/premise-fixtures";
+import { createFlowService } from "./service";
 import {
   EXTERNAL_COMMENT_COVERAGE_REVIEWERS,
   REVIEW_GATE_CONFIG_PATH,
@@ -1628,7 +1629,7 @@ test("flow 459 — a dismiss decision in the package clears the hold and the gat
   const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
   expect(latestFindingStates(await readReviewRounds(ROOT, dir)).map((finding) => findingVerdict(finding).terminal)).toEqual([false]);
 
-  await recordPremiseDecision(packageDir, { kind: "premise-question", finding: "round-1#LY-003", answer: "dismiss", reason: "platforms do not mirror media controls", at: "2026-10-16T12:00:00Z", actor: "owner" });
+  await recordPremiseDecision(packageDir, premiseAnswerInput(heldFinding() as Record<string, unknown>, { finding: "round-1#LY-003" }));
 
   expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("pass");
 });
@@ -1655,7 +1656,7 @@ test("flow 459 — an uphold decision ends the question but not the finding: it 
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
   const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
-  await recordPremiseDecision(packageDir, { kind: "premise-question", finding: "LY-003", answer: "uphold", reason: "mirror it", at: "2026-10-16T12:00:00Z", actor: "owner" });
+  await recordPremiseDecision(packageDir, premiseAnswerInput(heldFinding() as Record<string, unknown>, { finding: "LY-003", answer: "uphold", reason: "mirror it" }));
 
   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
 
@@ -1664,7 +1665,24 @@ test("flow 459 — an uphold decision ends the question but not the finding: it 
   expect(conditionDetail(gate, "terminal-dispositions")).not.toContain("awaiting an operator decision");
 });
 
-test("flow 459 — the operator's answer written onto the record is read the same way", async () => {
+test("flow 459 — an answer written onto the finding record is not an operator decision: the hold stays", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service);
+  await writeReviewPackage({
+    cwd: ROOT,
+    flowDir: dir,
+    reviewId: "round-1",
+    head: HEAD,
+    findings: [heldFinding({ premise: { ...HELD_PREMISE, operator: { answer: "dismiss", reason: "kept LTR", at: "t", actor: "owner" } } })],
+  });
+
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+  expect(gate.status).toBe("fail");
+  expect(conditionDetail(gate, "terminal-dispositions")).toContain("awaiting an operator decision");
+});
+
+test("flow 459 — a dismissed-incorrect written onto a held record without a decision still needs the verifier", async () => {
   await fresh();
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
@@ -1676,7 +1694,32 @@ test("flow 459 — the operator's answer written onto the record is read the sam
     findings: [heldFinding({ premise: { ...HELD_PREMISE, operator: { answer: "dismiss", reason: "kept LTR", at: "t", actor: "owner" } }, disposition: { state: "dismissed-incorrect", evidence: "operator owner: kept LTR" } })],
   });
 
-  expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("pass");
+  expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("fail");
+});
+
+test("flow 459 — a premise-question entry without confirmedVia leaves the finding awaiting", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service);
+  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
+  const { confirmedVia: _via, ...unconfirmed } = premiseAnswer(heldFinding() as Record<string, unknown>, { finding: "round-1#LY-003" });
+  await writeFile(path.join(packageDir, OPERATOR_DECISIONS_FILE), JSON.stringify({ schemaVersion: 1, decisions: [unconfirmed] }), "utf8");
+
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+  expect(gate.status).toBe("fail");
+  expect(conditionDetail(gate, "terminal-dispositions")).toContain("awaiting an operator decision");
+});
+
+test("flow 459 — a held finding below the floor is named as blocking, not as at or above the floor", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service);
+  await writeFile(path.join(ROOT, REVIEW_GATE_CONFIG_PATH), `${JSON.stringify({ completion: { severity_floor: "major" } }, null, 2)}\n`, "utf8");
+  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding({ severity: "minor" })] });
+
+  const detail = conditionDetail(reviewOf((await service.complete({ cwd: ROOT, id })).gates), "terminal-dispositions");
+  expect(detail).toContain("blocking finding(s) are not terminal");
+  expect(detail).toContain("held by the premise judge at any severity");
 });
 
 test("flow 459 — a downgraded finding is not held: its lowered severity is the one the gate applies", async () => {
@@ -1699,8 +1742,10 @@ test("flow 459 — findingVerdict: awaiting is not terminal, dismissed is, an un
   const base: GateFinding = { id: "F-1", severity: "major", round: "r1" };
   expect(findingVerdict({ ...base, premise: { verdict: "challenged" } })).toMatchObject({ terminal: false });
   expect(findingVerdict({ ...base, premise: { verdict: "owner-decision" } })).toMatchObject({ terminal: false });
-  expect(findingVerdict({ ...base, premise: { verdict: "challenged", operatorAnswer: "dismiss" } })).toEqual({ terminal: true, kind: "dismissed" });
-  expect(findingVerdict({ ...base, premise: { verdict: "challenged", operatorAnswer: "uphold" } })).toMatchObject({ terminal: false, reason: "no disposition recorded" });
+  expect(findingVerdict({ ...base, premise: { verdict: "challenged", hold: "dismissed" } })).toEqual({ terminal: true, kind: "dismissed" });
+  expect(findingVerdict({ ...base, premise: { verdict: "challenged", hold: "upheld" } })).toMatchObject({ terminal: false, reason: "no disposition recorded" });
+  // A held finding that already has another outcome is not waiting for the operator: the ordinary rules apply.
+  expect(findingVerdict({ ...base, premise: { verdict: "challenged" }, disposition: { state: "dismissed-out-of-scope", evidence: "not in this PR" } })).not.toMatchObject({ reason: expect.stringContaining("awaiting an operator decision") });
   expect(findingVerdict({ ...base, premise: { verdict: "upheld" } })).toMatchObject({ terminal: false, reason: "no disposition recorded" });
 });
 

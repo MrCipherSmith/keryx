@@ -360,9 +360,11 @@ export async function createManagedReviewPackage(
   // duplicate merge (so a claim names the one record that survives) and before the cap (so a downgraded severity
   // is the one the cap and every later reader sees). External findings are in the set: they may be challenged,
   // which makes them a question for the operator and never a dismissal. A carried finding keeps its premise.
+  // One merge over both sets (a claim may name either, and two claims on one finding must meet to cancel), then split
+  // by what each finding IS rather than by position.
   const premised = mergePremises([...deduped.findings, ...scoped.external], premiseClaims);
-  const premisedInternal = premised.findings.slice(0, deduped.findings.length);
-  const premisedExternal = premised.findings.slice(deduped.findings.length);
+  const premisedInternal = premised.findings.filter((finding) => finding.source !== "external");
+  const premisedExternal = premised.findings.filter((finding) => finding.source === "external");
 
   const findingsCap = applyFindingsCap(premisedInternal, {
     limit: input.maxFindingsPerReviewer,
@@ -497,17 +499,22 @@ export async function createManagedReviewPackage(
   await writeFileAtomic(path.join(packageDir, "research.json"), `${JSON.stringify(input.research ?? PENDING_RESEARCH, null, 2)}\n`);
   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   if (input.premises !== undefined) {
-    // The claims as received, rejected ones included: the record of what the judge said, which readers of a
-    // package without `findings.json` (the interim verdict) re-apply.
+    // The claims as received, rejected ones included: the record of what the judge said. Only a package without an
+    // ingested round re-applies it (the interim verdict over raw results); findings.json is the record after ingest.
     await mkdir(path.join(packageDir, "research-evidence"), { recursive: true });
     await writeFileAtomic(path.join(packageDir, PREMISES_FILE), `${JSON.stringify(input.premises, null, 2)}\n`);
+  } else {
+    // An ingest without --premises leaves no claims file behind from an earlier ingest of the same package.
+    await rm(path.join(packageDir, PREMISES_FILE), { force: true });
   }
   if (input.scope?.files !== undefined) {
     await writeFileAtomic(path.join(packageDir, "scope-files.json"), `${JSON.stringify({ version: 1, files: input.scope.files, ...(typeof input.scope.counts?.changedLinesRetained === "number" ? { changedLines: input.scope.counts.changedLinesRetained } : {}) }, null, 2)}\n`);
   }
+  const premiseBlock = renderPremiseMarkdown({ counts: premised.counts, rejections: premised.rejections, findings });
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
-    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats, findings, renderPremiseMarkdown({ counts: premised.counts, rejections: premised.rejections, findings })) +
+    renderScope(input, flowMatch, at, verification, carried, caps, { externalReclaims, scopeBScreen: scopeB.record, filterStats, allFindings: findings }) +
+      premiseBlock +
       renderDuplicatesMarkdown(deduped.merges),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
@@ -1869,18 +1876,7 @@ export function parseEmbeddedFindings(report: string, reportLabel: string): Revi
         .join(" and ")}); exactly one is allowed. Concatenating one block per reviewer drops every block after the first — merge them into a single array.`,
     );
   }
-  const fence = fences[0] as RegExpExecArray;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(embeddedBlockBody(report, fence)) as unknown;
-  } catch (error) {
-    // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
-    throw new Error(
-      `${reportLabel} carries a keryx:findings block that is not valid JSON: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-  }
+  const parsed = parseJsonBody(embeddedBlockBody(report, fences[0] as RegExpExecArray), (detail) => `${reportLabel} carries a keryx:findings block that is not valid JSON: ${detail}`);
   if (!Array.isArray(parsed) && !isReviewerResult(parsed)) {
     // Named for what it is. Passing a non-array through produced a schema
     // failure about missing `id`/`impact`/`evidence`, which sends the reader
@@ -1907,16 +1903,18 @@ export function parseEmbeddedPremises(text: string, label: string): unknown {
     throw new Error(`${label} carries ${fences.length} keryx:premises blocks; exactly one is allowed. Nothing was merged.`);
   }
   const fence = fences[0];
-  const body = fence === undefined ? text : embeddedBlockBody(text, fence);
+  return fence === undefined
+    ? parseJsonBody(text, (detail) => `${label} is neither JSON nor a report with a keryx:premises block: ${detail}. Nothing was merged.`)
+    : parseJsonBody(embeddedBlockBody(text, fence), (detail) => `${label} carries a keryx:premises block that is not valid JSON: ${detail}. Nothing was merged.`);
+}
+
+/** `JSON.parse(body)`, or an error worded by `message` from the parser's own detail (never the raw caught value). */
+function parseJsonBody(body: string, message: (detail: string) => string): unknown {
   try {
     return JSON.parse(body) as unknown;
   } catch (error) {
     // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
-    throw new Error(
-      fence === undefined
-        ? `${label} is neither JSON nor a report with a keryx:premises block: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`
-        : `${label} carries a keryx:premises block that is not valid JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`,
-    );
+    throw new Error(message(error instanceof Error ? error.message : String(error)));
   }
 }
 
@@ -2472,6 +2470,14 @@ async function readPreFilterScopeBlock(packageDir: string): Promise<string | und
  *    things in cannot destroy the record: it appends the block at Step 3 and
  *    ingests after Step 12.
  */
+/** The optional blocks of scope.md, by name. */
+type ScopeExtras = {
+  externalReclaims?: readonly ExternalReclaim[] | undefined;
+  scopeBScreen?: ScopeBScreenRecord | undefined;
+  filterStats?: ReviewFilterStats | undefined;
+  allFindings?: readonly StructuredReviewFinding[] | undefined;
+};
+
 function renderScope(
   input: ManagedReviewInput,
   flowMatch: FlowMatchResult | null,
@@ -2479,12 +2485,9 @@ function renderScope(
   verification: VerificationMergeResult<NormalizedReviewFinding>,
   carriedPreFilter: string | undefined,
   caps: ReviewCapsRecord,
-  externalReclaims: readonly ExternalReclaim[] = [],
-  scopeBScreen: ScopeBScreenRecord = { source: "none", scopeBFindings: 0 },
-  filterStats?: ReviewFilterStats | undefined,
-  allFindings: readonly StructuredReviewFinding[] = [],
-  premiseBlock = "",
+  extras: ScopeExtras = {},
 ): string {
+  const { externalReclaims = [], scopeBScreen = { source: "none", scopeBFindings: 0 }, filterStats, allFindings = [] } = extras;
   const preFilter: ReviewScopeCountsLike | undefined = input.scope?.counts ?? input.scopeCounts;
   const drops: readonly ReviewScopeDropLike[] | undefined = input.scope?.drops;
   const head = `# Review Scope
@@ -2508,7 +2511,7 @@ ${renderStageCountsMarkdown({
 ${renderCapsMarkdown(caps)}
 ${renderScopeBScreenMarkdown(scopeBScreen)}${
     filterStats === undefined ? "" : `\n${renderFilterStatsMarkdown(filterStats)}`
-  }${renderExternalReclaimsMarkdown(externalReclaims)}${renderPathMissingMarkdown(allFindings)}${premiseBlock}`;
+  }${renderExternalReclaimsMarkdown(externalReclaims)}${renderPathMissingMarkdown(allFindings)}`;
   return carriedPreFilter === undefined ? head : `${head.trimEnd()}\n\n${carriedPreFilter}\n`;
 }
 

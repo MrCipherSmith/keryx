@@ -205,6 +205,12 @@ test("apply_patch may write only data files into the package, never a test or a 
   expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/mutants.json`, `.metaproject/reviews/${ID}/log.jsonl`])).toBe(true);
 });
 
+test("apply_patch is never approved for the operator's decisions file: only the operator's commands and cards write it", () => {
+  const run = boundRun();
+  expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/operator-decisions.json`])).toBe(false);
+  expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/findings.json`, `.metaproject/reviews/${ID}/operator-decisions.json`])).toBe(false);
+});
+
 test("mutate --test takes only `bun test` with plain paths and no option that loads code", () => {
   const run = boundRun();
   expect(run.approvesShell(`keryx review mutate --test "bun test --bail src/a.test.ts" --package ${PKG}`)).toBe(true);

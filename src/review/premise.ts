@@ -24,12 +24,14 @@
  * folded into it): the reporter is the one actor whose agreement says nothing about the premise.
  */
 
+import { createHash } from "node:crypto";
 import { actorKey } from "./verification";
 import {
   HELD_PREMISE_VERDICTS,
   PREMISE_VERDICTS,
   REVIEW_FINDING_SEVERITIES,
   type PremiseClaimInput,
+  type PremiseOperatorAnswer,
   type PremiseIntentSignal,
   type PremisePracticeSource,
   type PremiseVerdict,
@@ -37,7 +39,7 @@ import {
   type ReviewFindingSeverity,
   type StructuredReviewFinding,
 } from "./types";
-import type { PremiseQuestionDecision } from "./operator-decisions";
+import type { PremiseDecisionSubject, PremiseQuestionDecision } from "./operator-decisions";
 
 /** The only properties a claim may carry. Anything else is a shape the judge has no authority over. */
 export const PREMISE_CLAIM_PROPERTIES = [
@@ -59,6 +61,7 @@ export const PREMISES_FILE = "research-evidence/premises.json";
 
 /** Why a claim was discarded. Every one of these leaves the finding as it was. */
 export const PREMISE_REJECTION_REASONS = [
+  "malformed-claim",
   "no-judge",
   "unknown-property",
   "unknown-finding",
@@ -68,6 +71,7 @@ export const PREMISE_REJECTION_REASONS = [
   "unknown-verdict",
   "self-judgement",
   "external-downgrade",
+  "security-downgrade",
   "severity-without-downgrade",
   "not-a-downgrade",
   "downgrade-below-threshold",
@@ -123,6 +127,17 @@ export type ParsedPremiseClaims = {
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
 const present = (value: unknown): value is string => typeof value === "string" && value.trim() !== "";
 
+/** Marks an entry of `premises` that was not an object, with its position. A symbol, so no claim can spell it. */
+const MALFORMED_CLAIM = Symbol("malformed-claim");
+type MalformedClaim = PremiseClaimInput & { [MALFORMED_CLAIM]: number };
+/** How a claim without a usable `finding_id` is named in a rejection row. */
+const UNNAMED_CLAIM = "<unnamed>";
+/** The reviewer whose findings a premise judge may hold but never downgrade. */
+const SECURITY_REVIEWER = "review-security-code";
+/** Width of a one-line problem statement in scope.md, ellipsis included. */
+const MAX_LINE_CHARS = 160;
+const ELLIPSIS = "...";
+
 /**
  * Read a premise claims file: a bare object `{ judge, model?, premises: [...] }`. A bare array is refused
  * because it names no judge, and the never-judge-your-own-finding rule cannot be checked against nobody.
@@ -145,7 +160,9 @@ export function parsePremiseClaims(source: unknown): ParsedPremiseClaims | undef
   if (!Array.isArray(source.premises)) {
     throw new Error("A premise result needs `premises: [...]`. Nothing was merged.");
   }
-  const claims = source.premises.map((claim): PremiseClaimInput => (isRecord(claim) ? { ...claim } : { finding_id: "<not an object>", __invalid: claim }));
+  // An entry that is not an object still counts as a claim received, and the merge rejects it as `malformed-claim`
+  // naming its position: dropping it here would make `claims = applied + rejected` false.
+  const claims = source.premises.map((claim, index): PremiseClaimInput => (isRecord(claim) ? { ...claim } : ({ [MALFORMED_CLAIM]: index } as MalformedClaim)));
   return {
     ...(present(source.judge) ? { judge: source.judge.trim() } : {}),
     ...(present(source.model) ? { model: source.model.trim() } : {}),
@@ -171,8 +188,38 @@ function isSeverity(value: unknown): value is ReviewFindingSeverity {
   return typeof value === "string" && (REVIEW_FINDING_SEVERITIES as readonly string[]).includes(value);
 }
 
+function isMalformed(claim: PremiseClaimInput): claim is MalformedClaim {
+  return MALFORMED_CLAIM in claim;
+}
+
 function claimName(claim: PremiseClaimInput): string {
-  return typeof claim.finding_id === "string" && claim.finding_id !== "" ? claim.finding_id : "<unnamed>";
+  if (isMalformed(claim)) return `premises[${claim[MALFORMED_CLAIM]}]`;
+  return typeof claim.finding_id === "string" && claim.finding_id !== "" ? claim.finding_id : UNNAMED_CLAIM;
+}
+
+/**
+ * The findings a claim names: by `global_id` or `id`, else (review LG8-002) the canonical finding whose `merged_from`
+ * lists it. The judge runs before ingest's duplicate merge, so a claim may name a key the merge folded into another
+ * record; it targets the record that survived, and two claims landing there cancel as `duplicate-claim`.
+ */
+function claimTargets<T extends StructuredReviewFinding>(findings: readonly T[], id: unknown): T[] {
+  const direct = findings.filter((finding) => finding.global_id === id || finding.id === id);
+  if (direct.length > 0 || typeof id !== "string" || id === "") return direct;
+  return findings.filter((finding) => finding.merged_from?.includes(id) === true);
+}
+
+/**
+ * A finding that arrived already carrying a premise (carried into a delta round) keeps the judgement, never an operator
+ * answer: an answer counts only from the package's decisions store, and `--findings` is written by an agent, which
+ * cannot answer for the operator. `finding.severity` wins over a `premise.severity` that disagrees with it.
+ */
+function normaliseCarriedPremise<T extends StructuredReviewFinding>(finding: T): T {
+  const premise = finding.premise;
+  if (premise === undefined) return finding;
+  const stale = premise.severity !== undefined && premise.severity !== finding.severity;
+  if (premise.operator === undefined && !stale) return finding;
+  const { operator: _operator, ...judgement } = premise;
+  return { ...finding, premise: { ...judgement, ...(stale ? { severity: finding.severity } : {}) } } as T;
 }
 
 type Field<V> = { ok: true; value: V | undefined } | { ok: false; detail: string };
@@ -217,6 +264,10 @@ export function mergePremises<T extends StructuredReviewFinding>(
     const reject = (reason: PremiseRejectionReason, detail: string): void => {
       rejections.push({ finding: name, reason, detail });
     };
+    if (isMalformed(claim)) {
+      reject("malformed-claim", "this entry of `premises` is not an object, so it names no finding and carries no verdict.");
+      continue;
+    }
     if (judge === undefined || actorKey(judge) === "") {
       reject("no-judge", "the premise file names no judge, so the never-judge-your-own-finding rule cannot be checked.");
       continue;
@@ -231,7 +282,7 @@ export function mergePremises<T extends StructuredReviewFinding>(
       continue;
     }
 
-    const matches = findings.filter((finding) => finding.global_id === claim.finding_id || finding.id === claim.finding_id);
+    const matches = claimTargets(findings, claim.finding_id);
     if (matches.length === 0) {
       reject("unknown-finding", "this round reported no such finding. A premise judge cannot introduce one.");
       continue;
@@ -268,6 +319,12 @@ export function mergePremises<T extends StructuredReviewFinding>(
     if (verdict === "downgraded") {
       if (target.source === "external") {
         reject("external-downgrade", "a comment somebody else left on the PR is not re-graded by a machine: challenge it with a question instead.");
+        continue;
+      }
+      // A security finding's severity measures exposure; a sign that the shape was chosen does not make it less
+      // exploitable. It may be held with a question, and then the operator decides.
+      if (raisedBy.some((reviewer) => actorKey(reviewer) === actorKey(SECURITY_REVIEWER))) {
+        reject("security-downgrade", `a ${SECURITY_REVIEWER} finding is never downgraded by a premise judge: uphold it, or hold it with \`challenged\` / \`owner-decision\` for the operator.`);
         continue;
       }
       if (!isSeverity(claim.severity)) {
@@ -363,15 +420,16 @@ export function mergePremises<T extends StructuredReviewFinding>(
       appliedClaims += 1;
       continue;
     }
-    group.forEach(() => {
+    // One row per discarded claim: `claims = applied + rejected` counts every claim.
+    for (let index = 0; index < group.length; index += 1) {
       rejections.push({ finding: key, reason: "duplicate-claim", detail: `${group.length} claims name this finding. None is applied: claim order must not decide whether it is held.` });
-    });
+    }
   }
 
   const out = findings.map((finding) => {
     const premise = applied.get(finding.global_id ?? finding.id);
     if (premise === undefined) {
-      return finding;
+      return normaliseCarriedPremise(finding);
     }
     // The ORIGINAL plus a premise and, for `downgraded`, the lower severity. Nothing else from the claim reaches it.
     return { ...finding, ...(premise.severity === undefined ? {} : { severity: premise.severity }), premise } as T;
@@ -411,8 +469,48 @@ function keysOf(record: Loose): string[] {
   return [record.global_id, record.id].filter((key): key is string => typeof key === "string" && key !== "");
 }
 
+/** Dispositions that say the finding was fixed (the verdict's own set). */
+const RESOLVED_DISPOSITIONS: ReadonlySet<string> = new Set(["acted-on", "fixed"]);
+
+/** Whether the record already has an outcome: refuted by the verifier, dismissed, or acted on. */
+function hasTerminalOutcome(record: Loose): boolean {
+  if (isRecord(record.verification) && record.verification.verdict === "refuted") return true;
+  const state = isRecord(record.disposition) ? record.disposition.state : undefined;
+  return typeof state === "string" && (state.startsWith("dismissed") || RESOLVED_DISPOSITIONS.has(state));
+}
+
+/** sha256 hex of a problem statement, whitespace-normalised so a re-wrapped line hashes the same. */
+function problemSha256(problem: unknown): string {
+  return createHash("sha256").update(typeof problem === "string" ? problem.replace(/\s+/g, " ").trim() : "").digest("hex");
+}
+
+/**
+ * What the operator is shown of a held finding, and what a decision is bound to: its severity, the judge's verdict and
+ * its problem text. `undefined` for a finding without a premise.
+ */
+export function premiseSubjectOf(record: Loose): PremiseDecisionSubject | undefined {
+  const premise = isRecord(record.premise) ? record.premise : undefined;
+  if (premise === undefined || typeof premise.verdict !== "string") return undefined;
+  return { severity: typeof record.severity === "string" ? record.severity : "unknown", verdict: premise.verdict, problemSha256: problemSha256(record.problem) };
+}
+
+function sameSubject(a: PremiseDecisionSubject, b: PremiseDecisionSubject | undefined): boolean {
+  return b !== undefined && a.severity === b.severity && a.verdict === b.verdict && a.problemSha256 === b.problemSha256;
+}
+
+/**
+ * The latest decision that answers THIS finding: it names one of the finding's keys and was given for what the finding
+ * still is (see {@link premiseSubjectOf}). A decision recorded for another finding under a reused id, or before the
+ * finding's severity, verdict or problem changed, answers nothing.
+ */
+export function latestPremiseDecision(record: Loose, decisions: readonly PremiseQuestionDecision[]): PremiseQuestionDecision | undefined {
+  const keys = keysOf(record);
+  const subject = premiseSubjectOf(record);
+  return decisions.filter((decision) => keys.includes(decision.finding) && sameSubject(decision.subject, subject)).at(-1);
+}
+
 export type PremiseHoldState =
-  /** No premise, or one that does not hold the finding. */
+  /** No premise, one that does not hold the finding, or a held finding that already has another outcome. */
   | "none"
   /** Held, and the operator has not answered. */
   | "awaiting"
@@ -422,58 +520,74 @@ export type PremiseHoldState =
   | "dismissed";
 
 /**
- * Where a finding stands against its premise judgement. A hold is lifted only by an operator answer, read
- * from the finding's own `premise.operator` or from the package's decisions (the later of the two does not
- * matter: they hold the same answer once applied).
+ * Where a finding stands against its premise judgement: the one rule the verdict, readiness, the flow gate and the
+ * answer commands share. A hold is lifted only by an operator decision from the package's decisions store
+ * (`decisions`). `premise.operator` on the record is the audit trail of an answer already applied, never an answer of
+ * its own: a finding record an agent wrote cannot answer for the operator. A held finding with no answer that already
+ * has another outcome (refuted, dismissed, acted on) waits for nobody, and is `none`, as the verdict classifies it.
  */
 export function premiseHoldState(record: Loose, decisions: readonly PremiseQuestionDecision[] = []): PremiseHoldState {
   const premise = isRecord(record.premise) ? record.premise : undefined;
   if (premise === undefined || !isHeldVerdict(premise.verdict)) {
     return "none";
   }
-  const decided = [...decisions].filter((decision) => keysOf(record).includes(decision.finding)).at(-1);
-  const answer = decided?.answer ?? (isRecord(premise.operator) ? premise.operator.answer : undefined);
-  return answer === "uphold" ? "upheld" : answer === "dismiss" ? "dismissed" : "awaiting";
+  const decided = latestPremiseDecision(record, decisions);
+  if (decided !== undefined) {
+    return decided.answer === "uphold" ? "upheld" : "dismissed";
+  }
+  return hasTerminalOutcome(record) ? "none" : "awaiting";
 }
 
 /** Ids (`global_id` when there is one) of the findings that wait for an operator decision. */
 export function awaitingOperator(records: readonly Loose[], decisions: readonly PremiseQuestionDecision[] = []): string[] {
-  return records.filter((record) => premiseHoldState(record, decisions) === "awaiting").map((record) => keysOf(record)[0] ?? "<unnamed>");
+  return records.filter((record) => premiseHoldState(record, decisions) === "awaiting").map((record) => keysOf(record)[0] ?? UNNAMED_CLAIM);
 }
 
 /**
- * Apply the operator's answer to a finding. Pure; the CLI command and the card write the result.
+ * Apply the operator's answer to a finding. Pure; `answerPremiseQuestion` (./premise-question.ts) writes the result to
+ * findings.json, so the readers that know nothing of premises (the round-to-round carry, the published round block)
+ * see it.
  *
  * - `uphold` — the finding is kept at its ORIGINAL severity: a premise that was held by `challenged` carries no
  *   severity change, and the answer is recorded on `premise.operator`.
  * - `dismiss` — the finding is recorded `dismissed-incorrect` with the operator's reason as the evidence, unless
  *   it already carries a disposition (an outcome somebody recorded is not overwritten by an answer).
  *
- * A finding that is not held, or is not the one the decision names, is returned unchanged.
+ * A later answer replaces an earlier one, including the `dismissed-incorrect` an earlier `dismiss` wrote. A finding
+ * that is not held, or that the decision does not answer (see {@link latestPremiseDecision}), is returned unchanged.
  */
 export function applyPremiseDecision<T extends object>(finding: T, decision: PremiseQuestionDecision): T {
   const record = finding as unknown as Loose;
   const premise = isRecord(record.premise) ? record.premise : undefined;
-  if (premise === undefined || !isHeldVerdict(premise.verdict) || !keysOf(record).includes(decision.finding)) {
+  if (premise === undefined || !isHeldVerdict(premise.verdict) || latestPremiseDecision(record, [decision]) === undefined) {
     return finding;
   }
-  const operator = { answer: decision.answer, reason: decision.reason, at: decision.at, actor: decision.actor };
-  const existing = isRecord(record.disposition) ? record.disposition : undefined;
-  const open = existing === undefined || existing.state === undefined || existing.state === "unknown";
+  const operator: PremiseOperatorAnswer = {
+    answer: decision.answer,
+    reason: decision.reason,
+    quote: decision.quote,
+    at: decision.at,
+    actor: decision.actor,
+    confirmedVia: decision.confirmedVia,
+  };
+  const { disposition: existing, ...rest } = record;
+  const current = isRecord(existing) ? existing : undefined;
+  // A `dismissed-incorrect` an earlier premise answer wrote belongs to that answer, and goes with it.
+  const ownDismissal = isRecord(premise.operator) && premise.operator.answer === "dismiss" && current?.state === "dismissed-incorrect";
+  const open = ownDismissal || current === undefined || current.state === undefined || current.state === "unknown";
   return {
-    ...record,
+    ...(ownDismissal ? rest : record),
     premise: { ...premise, operator },
     ...(decision.answer === "dismiss" && open
-      ? { disposition: { state: "dismissed-incorrect", evidence: `operator ${decision.actor} (${decision.at}) on the premise question: ${decision.reason}` } }
+      ? { disposition: { state: "dismissed-incorrect", evidence: `operator (${decision.confirmedVia}, ${decision.at}) on the premise question: ${decision.reason}` } }
       : {}),
   } as unknown as T;
 }
 
-/** {@link applyPremiseDecision} over a list, with the LATEST decision per finding. */
+/** {@link applyPremiseDecision} over a list, with the LATEST decision that answers each finding. */
 export function applyPremiseDecisions<T extends object>(findings: readonly T[], decisions: readonly PremiseQuestionDecision[]): T[] {
   return findings.map((finding) => {
-    const keys = keysOf(finding as unknown as Loose);
-    const decision = [...decisions].filter((entry) => keys.includes(entry.finding)).at(-1);
+    const decision = latestPremiseDecision(finding as unknown as Loose, decisions);
     return decision === undefined ? finding : applyPremiseDecision(finding, decision);
   });
 }
@@ -488,7 +602,7 @@ function escapePipes(value: string): string {
 
 function oneLine(value: string): string {
   const first = (value.split(/\r?\n/).find((line) => line.trim() !== "") ?? "").replace(/\s+/g, " ").trim();
-  return first.length > 160 ? `${first.slice(0, 157)}...` : first;
+  return first.length > MAX_LINE_CHARS ? `${first.slice(0, MAX_LINE_CHARS - ELLIPSIS.length)}${ELLIPSIS}` : first;
 }
 
 export type PremiseRenderInput = {

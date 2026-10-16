@@ -5,6 +5,7 @@
 import type { VerificationCap, VerificationCounts, VerificationRejection } from "./verification";
 // Type-only for the same reason as the verification types above.
 import type { PremiseCounts, PremiseRejection } from "./premise";
+import type { PremiseQuestionDecision } from "./operator-decisions";
 // Type-only for the same reason, in the other direction: `review/caps` imports
 // `ReviewFindingSeverity` from here as a type, and this imports the caps record
 // as a type. Both are erased, so neither is a runtime cycle.
@@ -409,13 +410,11 @@ export type PremiseIntentSignal = { ref: string; says: string };
 /** A guideline, idiom or convention the premise runs against. */
 export type PremisePracticeSource = { name: string; says: string };
 
-/** What the operator answered to a held finding (`premise-question` decision). */
-export type PremiseOperatorAnswer = {
-  answer: "uphold" | "dismiss";
-  reason: string;
-  at: string;
-  actor: string;
-};
+/**
+ * What the operator answered to a held finding, as applied to the record: the fields of the `premise-question`
+ * decision it came from. The decision in the package's decisions store is the answer; this copy is its audit trail.
+ */
+export type PremiseOperatorAnswer = Pick<PremiseQuestionDecision, "answer" | "reason" | "quote" | "at" | "actor" | "confirmedVia">;
 
 /**
  * One premise judgement, as it is recorded on the finding. `severity` is present for
@@ -433,7 +432,11 @@ export type ReviewFindingPremise = {
   reasoning?: string | undefined;
   question?: string | undefined;
   options?: string[] | undefined;
-  /** Written when the operator's answer is applied to the record; the decisions store holds it too. */
+  /**
+   * Written when the operator's answer is applied to the record (`keryx review decide-premise`, the
+   * `review_decide_premise` card). An audit trail only: the answer counts from the package's decisions store, and
+   * ingest strips this field from any finding it receives.
+   */
   operator?: PremiseOperatorAnswer | undefined;
 };
 

@@ -1385,8 +1385,8 @@ function raiseOne(tier: ModelTier): ModelTier {
  *
  *   1. base `standard`
  *   2. downgrades to `light`, which are PERMISSIONS ("allow light"), not commands
- *   3. floors — `blast-radius` and a forced strategy change raise to `deep` and
- *      therefore beat any downgrade above them
+ *   3. floors — `blast-radius`, a forced strategy change and the premise judge
+ *      (flow 459) raise to `deep` and therefore beat any downgrade above them
  *   4. a repeated fix attempt raises one tier
  *   5. the security floor, applied last, so nothing below it can slip through
  *

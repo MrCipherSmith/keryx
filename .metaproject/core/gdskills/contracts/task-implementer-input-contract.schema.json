@@ -144,7 +144,6 @@
       "properties": {
         "review_feedback": {
           "type": "array",
-          "description": "Findings to fix. Never carries a finding held by review-premise (verdict challenged or owner-decision) until the operator upholds it with `keryx review decide-premise`; the caller filters held findings out before dispatch.",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -179,10 +178,25 @@
                 "type": "string",
                 "description": "Which review skill found this",
                 "examples": ["code-ai-review", "code-learned-review", "code-style-review"]
+              },
+              "premise_verdict": {
+                "type": "string",
+                "enum": ["upheld", "downgraded", "challenged", "owner-decision"],
+                "description": "What review-premise found, when it judged this finding (flow 459). `challenged` and `owner-decision` HOLD the finding: such an item is valid only with `premise_answer: uphold`, so a held finding that reached a fixer without the operator's answer fails this contract instead of being fixed."
+              },
+              "premise_answer": {
+                "type": "string",
+                "enum": ["uphold"],
+                "description": "The operator's answer to a held finding, recorded with `keryx review decide-premise` (or the `review_decide_premise` card). Only `uphold` returns a finding to the fix; a dismissed one is never dispatched."
               }
-            }
+            },
+            "if": {
+              "required": ["premise_verdict"],
+              "properties": { "premise_verdict": { "enum": ["challenged", "owner-decision"] } }
+            },
+            "then": { "required": ["premise_answer"] }
           },
-          "description": "Structured findings from review skills"
+          "description": "Structured findings from review skills, to fix. Never carries a finding held by review-premise (verdict challenged or owner-decision) until the operator upholds it with `keryx review decide-premise`; the caller filters held findings out before dispatch, and an item that names a held verdict without `premise_answer: uphold` is refused by this contract."
         },
         "original_task_ids": {
           "type": "array",

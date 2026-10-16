@@ -10,6 +10,7 @@ import path from "node:path";
 import { reviewCommand } from "../commands/review";
 import { CHUNK_REVIEWER, ensureChunkPlan, recordChunk } from "./chunks";
 import { CALLER_UNATTRIBUTED, recordLogStart, recordOrchestratorCall } from "./orchestrator-log";
+import { premiseAnswer } from "./premise-fixtures";
 import { computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
 
 let root: string;
@@ -179,7 +180,19 @@ describe("premise-decisions: every held finding has an operator decision (flow 4
 
   test("passes once the package holds a premise-question decision for the finding", async () => {
     writeJson("findings.json", [held]);
-    writeJson("operator-decisions.json", { schemaVersion: 1, decisions: [{ kind: "premise-question", finding: "pr7932-r1#f-9", answer: "dismiss", reason: "platforms do not mirror it", at: "2026-10-16T12:00:00Z", actor: "owner" }] });
+    writeJson("operator-decisions.json", { schemaVersion: 1, decisions: [premiseAnswer(held)] });
+    expect((await item())?.status).toBe("pass");
+  });
+
+  test("a hand-written entry without how it was confirmed is not a decision: the item stays failing", async () => {
+    writeJson("findings.json", [held]);
+    const { confirmedVia: _via, ...unconfirmed } = premiseAnswer(held);
+    writeJson("operator-decisions.json", { schemaVersion: 1, decisions: [unconfirmed] });
+    expect((await item())?.status).toBe("fail");
+  });
+
+  test("a held finding that already has another outcome is not waiting for the operator", async () => {
+    writeJson("findings.json", [{ ...held, disposition: { state: "dismissed-out-of-scope", evidence: "not in this PR" } }]);
     expect((await item())?.status).toBe("pass");
   });
 

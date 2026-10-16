@@ -12,10 +12,11 @@
 import { createInterface } from "node:readline/promises";
 import { optionValue } from "../lib/args";
 import { operatorDecisionSubject } from "../review/coverage";
-import { recordOperatorDecision, recordPremiseDecision, type OperatorDecisionKind } from "../review/operator-decisions";
+import { recordOperatorDecision, type OperatorDecisionKind } from "../review/operator-decisions";
 import { estimatePlan, recordPlanConfirmation } from "../review/plan-confirmation";
-import { findHeldFinding } from "../review/premise-question";
+import { answerPremiseQuestion, findHeldFinding } from "../review/premise-question";
 import { verifyRun } from "../review/verify-run";
+import { cardSafe } from "../trigger/schedules";
 import { resolvePackageDir } from "./review-layers";
 
 export const OPERATOR_COMMANDS = ["waive-mutation", "override-reviewers", "confirm-plan", "decide-premise", "verify-run"] as const;
@@ -56,7 +57,8 @@ keryx shell the review_confirm_plan tool asks the same as a card.`,
     "decide-premise": `keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason "<why>"
 
 Answers the premise question on a finding the premise judge held (verdict challenged or owner-decision) and
-records it in <review-dir>/operator-decisions.json. uphold returns the finding to kept at its original
+records it in <review-dir>/operator-decisions.json, with your typed words, and on the finding in findings.json
+(so the next round and the published round block read the answer too). uphold returns the finding to kept at its original
 severity; dismiss records it dismissed-incorrect with your reason as the evidence. Refused for an unknown
 finding, a finding that is not held, or a missing reason. Asks at the terminal; refused without a TTY. In
 keryx shell the review_decide_premise tool asks the same as a card.`,
@@ -140,15 +142,19 @@ export async function runOperatorCommand(command: OperatorCommand, args: string[
     const held = await findHeldFinding(packageDir, ref);
     if (!held.ok) throw new Error(held.refusal);
     const finding = held.finding;
-    const effect = answerArg === "uphold" ? `keep it at ${finding.severity}` : "dismiss it as incorrect";
-    const question = `Premise question on ${finding.key} (${finding.severity}: ${finding.problem}; judge ${finding.verdict}: ${finding.question}): ${effect} (${reason.trim()})?`;
+    // The finding's problem and the judge's question are model-written: cleaned as the card cleans them, so neither can
+    // draw a line of its own into the prompt, and the effect is printed last where nothing after it can overwrite it.
+    const effect = answerArg === "uphold" ? `keep it at ${cardSafe(finding.severity)}` : "dismiss it as incorrect";
+    const question =
+      `Premise question on ${cardSafe(finding.key)} (${cardSafe(finding.severity)}: ${cardSafe(finding.problem)}; judge ${cardSafe(finding.verdict)}: ${cardSafe(finding.question)})` +
+      `${finding.answered === undefined ? "" : `; already answered ${finding.answered}, this answer replaces it`}; reason: ${cardSafe(reason.trim())}. Answer: ${effect}?`;
     const answer = (await ask(`${question} Type your own words to confirm, or nothing to decline: `)).trim();
     if (answer === "" || /^n(o)?$/i.test(answer)) {
       log("not confirmed; nothing was recorded");
       return 1;
     }
-    await recordPremiseDecision(packageDir, { kind: "premise-question", finding: finding.key, answer: answerArg, reason: reason.trim(), at, actor: process.env["USER"] ?? "operator", confirmedVia: "terminal" });
-    log(`premise-question ${answerArg} recorded for ${finding.key} (terminal, ${at}) in operator-decisions.json`);
+    await answerPremiseQuestion(packageDir, { finding, answer: answerArg, reason: reason.trim(), quote: answer, at, confirmedVia: "terminal" });
+    log(`premise-question ${answerArg} recorded for ${finding.key} (terminal, ${at}) in operator-decisions.json and findings.json`);
     return 0;
   }
   const kind: OperatorDecisionKind = command === "waive-mutation" ? "mutation-waiver" : "reviewer-override";

@@ -10,6 +10,7 @@ import path from "node:path";
 import { ASK_USER_EMERGENCIES } from "../harness/tool/builtin/ask-user-tool";
 import type { InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import { AUTOMATIC_REVIEW_DISCLOSURE_FILE } from "../review/chunks-estimate";
+import { OPERATOR_DECISIONS_FILE } from "../review/operator-decisions";
 import { describeAutomaticReviewLimit } from "./round-limit";
 
 /** The flag that records the mode on a review package's manifest. */
@@ -204,6 +205,11 @@ const CREATE_PATH_FLAGS = ["--research", "--report", "--refuted", "--verificatio
 
 /** What an approved `apply_patch` may write inside the package: data, never anything runnable. */
 const PACKAGE_DATA_EXTENSIONS: ReadonlySet<string> = new Set([".md", ".json", ".jsonl", ".txt"]);
+/**
+ * Package data only the operator's own commands and cards write (flow 459 review): the operator's decisions. A patch to
+ * it is never approved without asking, so an agent cannot write an answer the operator did not give.
+ */
+const OPERATOR_ONLY_FILES: ReadonlySet<string> = new Set([OPERATOR_DECISIONS_FILE]);
 
 /**
  * The state of one automatic-review turn: which package it is bound to, whether
@@ -256,7 +262,11 @@ export class AutomaticReviewRun {
     }
     return targets.every((target) => {
       const resolved = path.resolve(this.cwd, target);
-      return resolved.startsWith(`${dir}${path.sep}`) && PACKAGE_DATA_EXTENSIONS.has(path.extname(resolved).toLowerCase());
+      return (
+        resolved.startsWith(`${dir}${path.sep}`) &&
+        PACKAGE_DATA_EXTENSIONS.has(path.extname(resolved).toLowerCase()) &&
+        !OPERATOR_ONLY_FILES.has(path.relative(dir, resolved))
+      );
     });
   }
 

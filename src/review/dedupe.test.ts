@@ -158,6 +158,17 @@ describe("mergeDuplicates", () => {
     expect(findings[0]?.premise?.verdict).toBe("upheld");
   });
 
+  test("an upheld premise on the ABSORBED member survives a merge into a higher re-statement that has none (flow 459)", () => {
+    const { findings, merges } = mergeDuplicates([
+      finding({ severity: "major", premise: { verdict: "upheld", judge: "review-premise" } }),
+      finding({ id: "F-002", reviewer: "review-regression", severity: "blocker", line: 12, problem: "attempt counter is never reset after success in the retry loop" }),
+    ]);
+    expect(findings).toHaveLength(1);
+    expect(merges[0]?.kept).toBe("F-002");
+    expect(findings[0]?.severity).toBe("blocker");
+    expect(findings[0]?.premise).toEqual({ verdict: "upheld", judge: "review-premise" });
+  });
+
   test("the absorbed finding's problem statement is kept in merged_problems", () => {
     const { findings } = mergeDuplicates([
       finding({ global_id: "r#F-001" }),
