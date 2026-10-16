@@ -10,6 +10,7 @@ import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools"
 import { ensureChunkPlan } from "../review/chunks";
 import { readChunkEstimate } from "../review/chunks-estimate";
 import { computeCoverage, readCoverageWaiver } from "../review/coverage-complete";
+import { heldFinding, heldPremise } from "../review/premise-fixtures";
 import { computeReadiness } from "../review/readiness";
 import { computeVerdict } from "../review/verdict";
 import type { PostResult, ReviewEvent } from "../review/publish";
@@ -350,6 +351,16 @@ describe("review_waive_readiness", () => {
     expect(read("report.md")).toBe(report);
   });
 
+  test("item 11 (premise-decisions) is refused before a card is drawn, naming review_decide_premise (review RG2-003)", async () => {
+    makePackage();
+    put("findings.json", [heldFinding({ global_id: "pr7932-r1#LY-003" })]);
+    const t = tool("review_waive_readiness");
+    for (const item of ["premise-decisions", "11"]) {
+      expect(await ask(t, { package: pkg, item })).toEqual({ error: expect.stringContaining("review_decide_premise") });
+    }
+    expect(readJson("manifest.json").readiness_waivers).toBeUndefined();
+  });
+
   test("an item that passes, an unknown item and an already waived item are refusals", async () => {
     makePackage();
     const t = tool("review_waive_readiness");
@@ -362,14 +373,7 @@ describe("review_waive_readiness", () => {
 
 // Flow 459 (AC3): review_decide_premise, the operator's answer to a finding the premise judge held.
 describe("review_decide_premise", () => {
-  const held = {
-    id: "LY-003",
-    global_id: "pr7932-r1#LY-003",
-    reviewer: "review-layout",
-    severity: "major",
-    problem: "timeline pinned LTR",
-    premise: { verdict: "challenged", judge: "review-premise", question: "Should the timeline mirror?" },
-  };
+  const held = heldFinding({ global_id: "pr7932-r1#LY-003", premise: heldPremise({ question: "Should the timeline mirror?" }) });
 
   function makePackage(findings: unknown[] = [held]): void {
     put("manifest.json", {
@@ -444,7 +448,8 @@ describe("review_decide_premise", () => {
   });
 
   test("a change to the problem or the judge's question after the card was shown also refuses", async () => {
-    for (const changed of [{ ...held, problem: "a different defect" }, { ...held, premise: { ...held.premise, question: "a different question?" } }]) {
+    const verdictChanged = { ...held, premise: heldPremise({ verdict: "owner-decision", question: "Should the timeline mirror?", options: ["mirror", "keep LTR"] }) };
+    for (const changed of [{ ...held, problem: "a different defect" }, { ...held, premise: heldPremise({ question: "a different question?" }) }, verdictChanged]) {
       makePackage();
       const t = tool("review_decide_premise");
       const input = { package: pkg, finding: "LY-003", answer: "dismiss", reason: "r" };

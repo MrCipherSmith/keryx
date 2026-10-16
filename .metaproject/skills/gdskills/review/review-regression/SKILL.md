@@ -22,7 +22,7 @@ license: "MIT"
 # Review: Regression
 
 You are reviewing **scope B** of a deep round. The files you are given are not
-under review. They are under **regression check**. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
+under review. They are under **regression check**. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
 
 ## The one question
 

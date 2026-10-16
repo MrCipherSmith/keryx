@@ -45,7 +45,7 @@ only the implementation. Asked "is this standard practice?", a model refuted it 
 
 ```
 review-premise Progress:
-- [ ] Step 1: Drop every finding you raised yourself, and every finding below `minor`
+- [ ] Step 1: Drop every finding below `minor`
 - [ ] Step 2: Per finding, read only its bare claim (title, file, quote) and the code there; form a view
 - [ ] Step 3: Collect intent signals at and around the site (see question 1)
 - [ ] Step 4: Answer the four questions
@@ -60,10 +60,10 @@ judgement on it; the claim and the code read first let you see what the reviewer
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `findings` | array | yes | Canonical findings (`review-finding.schema.json`), each with its `global_id` (your claim's `finding_id` whenever reviewer-local ids can collide) or id (a claim may name a key the duplicate merge absorbed; it then targets the surviving finding), `reviewer`, `severity`, `source` (`external` marks a PR comment), `file`, `quote`, `problem`, `suggested_fix`. In a delta round, only findings with no carried premise. |
+| `findings` | array | yes | Canonical findings (`review-finding.schema.json`), each with its display `id`, unique in the package: your claim's `finding_id` (a claim may name an id the duplicate merge absorbed; it then targets the surviving finding). Only a finding carried from an earlier round also has a `global_id` (ingest mints the rest after you run); name it when that finding shares a new one's `id`. Each has `reviewer`, `severity`, `source` (`external` marks a PR comment), `file`, `quote`, `problem`, `suggested_fix`. In a delta round, only findings with no carried premise. |
 | `judge` | string | yes | Your own name. Recorded on the claims file. |
-| `source` | string | no | `round` (default), `follow-up-issue` or `external-comment`: where the findings came from. The last two have no review package: each finding is the issue or comment text as `problem`, its `file:line` refs as `file`/`line` with the code there as `quote`, the issue or comment URL as `id`, its author as `reviewer` and the severity it states (else `minor`). The caller saves your claims as `<flow-dir>/premise/<n>.json` and journals the operator's answer; no `ingest` or `decide-premise` runs, so the caller applies the merge's rules (cited challenge, no downgrade of an external) by hand. |
-| `branch` / `base_sha` | string | no | So `git log` and `git blame` read the change under review. |
+| `source` | string | no | `round` (default), `follow-up-issue` or `external-comment`: where the findings came from. The last two have no review package: each finding is the issue or comment text as `problem`, its `file:line` refs as `file`/`line` with the code there as `quote`, the comment's `C-NNN` (review-pr-feedback) or the issue's number as `id` with its URL as `url`, its author as `reviewer` and the severity it states (else `minor`). The caller saves your claims beside its own record (a flow: `<flow-dir>/premise/<n>.json`) and journals the operator's answer; no `ingest` or `decide-premise` runs, so the caller applies every refusal of the merge (`PREMISE_REJECTION_REASONS`, `src/review/premise.ts`) by hand. For one finding those are: an uncited `challenged` or `downgraded`; a downgrade of an external or `review-security-code` finding, of a `minor`, or below `minor`; a hold without a `question`; an `owner-decision` with fewer than two options; a judge that raised the finding. |
+| `branch` / `base_sha` | string | no | So `git log` and `git blame` read the change under review, where your host gives you git; on keryx shell the caller passes their output in `context_files`. |
 
 ## The four questions
 
@@ -90,7 +90,7 @@ judgement on it; the claim and the code read first let you see what the reviewer
 | Verdict | Meaning | Must carry |
 |---|---|---|
 | `upheld` | The premise stands; the finding goes on unchanged. | — |
-| `downgraded` | A defect, but intent or practice shows it is smaller than reported. Never for a `minor` or an external finding: hold those with `challenged` or `owner-decision` instead. | `severity`, strictly lower and never below `minor`, and ≥1 `intent_signals` or `practice_sources` |
+| `downgraded` | A defect, but intent or practice shows it is smaller than reported. Never for a `minor`, an external or a `review-security-code` finding: hold those with `challenged` or `owner-decision` instead. | `severity`, strictly lower and never below `minor`, and ≥1 `intent_signals` or `practice_sources` |
 | `challenged` | Evidence says it is not a defect. | ≥1 `intent_signals` or `practice_sources`, and a `question` |
 | `owner-decision` | A product choice the code cannot settle either way. | a `question` and ≥2 `options` |
 
@@ -109,7 +109,7 @@ signal and no practice source against it is upheld.
 | **Claim first, argument second.** | The case passed two reviews that read the fix's argument and never the premise. |
 | **`challenged` cites.** Each intent signal names its `ref` (`file:line` or a SHA) and what it says; each practice source names the guideline and section precisely enough to look up. | An uncited challenge is rejected and the finding stays as reported. Never invent a quote. |
 | **Never re-grade by the rubric.** Severity is the reviewer's and the verifier's call; a test gap or a surviving mutant stays as reported unless intent or practice shrinks it, and a minor is upheld or challenged, never downgraded. | An uncited downgrade is rejected (`downgrade-without-evidence`). Minors matter: a finding you weaken is one nobody fixes. |
-| **Read-only.** Run nothing but `git log`, `git blame` and `git show`, the history commands `allowed_tools: read-only` allows every reviewer, and read files. | Executing is the verifier's job; this judgement is about meaning. |
+| **Read-only.** Read files; run nothing but `git log`, `git blame` and `git show`, and those only where your host gives a read-only child git. On keryx shell you have no shell and no git tool: read the history excerpts in `context_files`, or say the history was not read. | Executing is the verifier's job; this judgement is about meaning. |
 | **An external finding, and a `review-security-code` finding, is held or upheld, never dismissed or downgraded.** | A human asked; the operator answers them. Severity of a security finding measures exposure, which intent does not lower. The merge rejects the downgrade (`external-downgrade`, `security-downgrade`). |
 
 ## Output Contract
@@ -118,7 +118,7 @@ signal and no practice source against it is upheld.
 STATUS: DONE | NEEDS_CONTEXT | BLOCKED
 ```
 
-- `DONE` — every finding given was judged or explicitly left alone (yours, below `minor`).
+- `DONE` — every finding given was judged or explicitly left alone (below `minor`).
 - `NEEDS_CONTEXT` — the code at a finding's site cannot be read; say which.
 - `BLOCKED` — the findings input is unreadable or carries no ids.
 
@@ -132,7 +132,7 @@ Then one premise claims object. The orchestrator saves it unchanged as the file
   "model": "<model id>",
   "premises": [
     {
-      "finding_id": "2026-10-16-review-pr-42#LY-003",
+      "finding_id": "LY-003",
       "verdict": "challenged",
       "intent_signals": [
         { "ref": "src/player/TimelineSlider.tsx:150", "says": "explicit dir=\"ltr\" on the timeline root" },

@@ -13,6 +13,7 @@ import path from "node:path";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import { createManagedReviewPackage } from "./managed";
 import { PREMISES_FILE, mergePremises, parsePremiseClaims, renderPremiseMarkdown, type PremiseRejectionReason } from "./premise";
+import { downgradedPremise, heldPremise } from "./premise-fixtures";
 import { PREMISE_VERDICTS, type PremiseClaimInput, type StructuredReviewFinding } from "./types";
 
 const roots: string[] = [];
@@ -96,13 +97,33 @@ describe("verdicts", () => {
   });
 
   test("a finding with no claim is returned untouched, and nothing is added or removed", () => {
-    const first = finding();
-    const second = finding({ id: "LY-004", global_id: GID_4 });
-    const result = mergePremises([first, second], parsed([claim({ verdict: "downgraded", severity: "minor", practice_sources: [SOURCE] })]));
+    const claimed = finding();
+    const untouched = finding({ id: "LY-004", global_id: GID_4 });
+    const result = mergePremises([claimed, untouched], parsed([claim({ verdict: "downgraded", severity: "minor", practice_sources: [SOURCE] })]));
     expect(result.findings).toHaveLength(2);
-    expect(result.findings[1]).toBe(second);
-    expect(first.severity).toBe("major");
-    expect(first.premise).toBeUndefined();
+    expect(result.findings[1]).toBe(untouched);
+    expect(claimed.severity).toBe("major");
+    expect(claimed.premise).toBeUndefined();
+  });
+
+  test("the shared test fixtures are premises the merge can produce (review testing F-003)", () => {
+    const { judge: _judge, verdict: _verdict, ...held } = heldPremise();
+    const asHeld = mergePremises([finding()], parsed([claim({ verdict: "challenged", ...held } as Partial<PremiseClaimInput>)]));
+    expect(asHeld.rejections).toEqual([]);
+    expect(first(asHeld).premise as unknown).toEqual(heldPremise());
+    const { practice_sources } = downgradedPremise("major", "minor");
+    const asDowngraded = mergePremises([finding()], parsed([claim({ verdict: "downgraded", severity: "minor", practice_sources } as Partial<PremiseClaimInput>)]));
+    expect(asDowngraded.rejections).toEqual([]);
+    expect(first(asDowngraded).premise as unknown).toEqual(downgradedPremise("major", "minor"));
+  });
+
+  test("premise-fixtures.ts is test scaffolding: no shipped module imports it", async () => {
+    const importers: string[] = [];
+    for await (const file of new Bun.Glob("**/*.{ts,tsx}").scan({ cwd: path.join(import.meta.dir, "..") })) {
+      if (/\.test\.tsx?$/.test(file) || file.endsWith("premise-fixtures.ts")) continue;
+      if ((await readFile(path.join(import.meta.dir, "..", file), "utf8")).includes("premise-fixtures")) importers.push(file);
+    }
+    expect(importers).toEqual([]);
   });
 
   test("the vocabulary in the schema and in the code is the same set", async () => {
@@ -287,13 +308,44 @@ describe("rejections, each of which leaves the finding as it was", () => {
     expect(reasons(both)).toEqual(["duplicate-claim", "duplicate-claim"]);
   });
 
-  test("a carried premise keeps the judgement but never an operator answer, and the finding's severity wins", () => {
+  test("a claim naming the BARE id of an absorbed finding resolves too: the judge runs before ingest mints global_ids (review LG8-002)", () => {
+    const canonical = finding({ merged_from: ["2026-10-16-round#FE-001"] });
+    const result = mergePremises([canonical], parsed([claim({ finding_id: "FE-001", verdict: "challenged", question: "q", practice_sources: [SOURCE] })]));
+    expect(result.rejections).toEqual([]);
+    expect(first(result).premise?.verdict).toBe("challenged");
+    // Two survivors that each absorbed an FE-001 (from different packages' ids) make the bare id ambiguous.
+    const other = finding({ id: "LY-004", global_id: GID_4, merged_from: ["2026-10-15-round#FE-001"] });
+    expect(reasons(mergePremises([canonical, other], parsed([claim({ finding_id: "FE-001" })])))).toEqual(["ambiguous-finding"]);
+    // A different id never matches by suffix.
+    expect(reasons(mergePremises([canonical], parsed([claim({ finding_id: "E-001" })])))).toEqual(["unknown-finding"]);
+  });
+
+  test("a carried premise keeps the judgement but never an operator answer; a held verdict carries no severity", () => {
     const carried = finding({
       severity: "minor",
       premise: { verdict: "challenged", judge: "review-premise", question: "q", severity: "major", operator: { answer: "dismiss", reason: "r", quote: "q", at: "t", actor: "a", confirmedVia: "terminal" } },
     });
     const result = mergePremises([carried], undefined);
-    expect(first(result).premise).toEqual({ verdict: "challenged", judge: "review-premise", question: "q", severity: "minor" });
+    expect(first(result).premise).toEqual({ verdict: "challenged", judge: "review-premise", question: "q" });
+  });
+
+  describe("a carried downgrade whose severity disagrees with the finding's (review LG2-002)", () => {
+    const downgraded = (severity: StructuredReviewFinding["severity"]) =>
+      finding({ severity, premise: { verdict: "downgraded", judge: "review-premise", severity: "minor", original_severity: "blocker", practice_sources: [SOURCE] } });
+
+    test("still a downgrade (major, below the original blocker): the finding's severity is kept on the premise", () => {
+      expect(first(mergePremises([downgraded("major")], undefined)).premise).toMatchObject({ verdict: "downgraded", severity: "major", original_severity: "blocker" });
+    });
+
+    for (const severity of ["blocker", "info"] as const) {
+      test(`at ${severity}, no longer a downgrade the schema allows: the premise is dropped and the finding stands unjudged`, async () => {
+        const merged = first(mergePremises([downgraded(severity)], undefined));
+        expect(merged.severity).toBe(severity);
+        expect(merged.premise).toBeUndefined();
+        const schema = await loadSchema("review-finding");
+        expect(await validateJson({ ...merged, class_scope: { sites: ["a"], enumeration_method: "grep" } }, schema)).toEqual([]);
+      });
+    }
   });
 
   test("the claims the judge made are counted, applied plus rejected", () => {

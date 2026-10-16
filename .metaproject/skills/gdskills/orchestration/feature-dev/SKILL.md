@@ -39,7 +39,7 @@ End-to-end feature development workflow from idea to merge-ready PR.
 
 ### Phase 1: REQUIREMENTS + SPEC
 
-1. Parse input (description or GitHub issue via `gh issue view`). An issue filed from a review finding, or an external review comment, is a premise to check: dispatch `review-premise` on it first, shaped and recorded as `flow-orchestrator` Phase 1 says ("A flow sourced from a finding": claims in `<flow-dir>/premise/<n>.json`, no `decide-premise`), and on `challenged` or `owner-decision` ask the operator its question with its options and journal their answer before writing the spec
+1. Parse input (description or GitHub issue via `gh issue view`). An issue filed from a review finding, or an external review comment, is a premise to check: dispatch `review-premise` on it first, shaped and recorded as `flow-orchestrator` Phase 1 says ("A flow sourced from a finding": no `decide-premise`; claims in `<flow-dir>/premise/<n>.json` if a flow exists; with none, its claims object goes into the Implementation Spec under **Premise**), and on `challenged` or `owner-decision` ask the operator its question with its options and journal their answer before writing the spec
 2. Clarify ambiguities — ask the user up to 3 questions max
 3. Produce the **Implementation Spec** (per `implementation-doc-mandate.mdc`):
    - **What**: feature description in 2-3 sentences
@@ -113,7 +113,7 @@ Input:  codebase_path=<project_root>, scope=changed, base_branch=<base>
    - `git diff main...HEAD` — review the full diff
    - Check for: TODOs left behind, console.logs, hardcoded values
    - Verify all acceptance criteria from Phase 1 spec
-3. Fix any findings (max 2 review-fix cycles), never one `review-premise` holds: a held finding is neither fixable nor clean and blocks the cycle until answered; ask the operator about it as `review-orchestrator` "Wave D" says, and only an upheld one is fixed, with `premise_verdict` set on each `fix_context.review_feedback` item the judge ruled on and `premise_answer: "uphold"` on a held one the operator upheld (unattended: stop and report the held list). Each next round is `keryx review start` or `keryx review plan` on the new head: the round comes from `round.json`; no own range, no whole-branch re-review (the `git diff main...HEAD` above is round 1 only).
+3. Fix any findings (max 2 review-fix cycles), never one `review-premise` holds: a held finding is neither fixable nor clean and blocks the cycle until answered; ask the operator about it as `review-orchestrator` "Wave D" says, and only an upheld one is fixed, carrying `premise_verdict` and `premise_answer` as task-implementer's `FIX_CONTEXT` defines them (unattended: stop and report the held list). Each next round is `keryx review start` or `keryx review plan` on the new head: the round comes from `round.json`; no own range, no whole-branch re-review (the `git diff main...HEAD` above is round 1 only).
 4. Re-run `code-verifier` after any fixes
 
 ### Phase 8: DELIVER + CHANGE REPORT

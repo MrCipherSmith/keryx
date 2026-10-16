@@ -58,6 +58,8 @@ export const PREMISE_FILE_PROPERTIES = ["judge", "model", "premises"] as const;
 
 /** Where the claims are stored, relative to the package directory. */
 export const PREMISES_FILE = "research-evidence/premises.json";
+/** Where an ingest without `--premises` moves an earlier ingest's claims file: kept as the record, never re-read. */
+export const PREMISES_SUPERSEDED_FILE = "research-evidence/premises.superseded.json";
 
 /** Why a claim was discarded. Every one of these leaves the finding as it was. */
 export const PREMISE_REJECTION_REASONS = [
@@ -198,28 +200,60 @@ function claimName(claim: PremiseClaimInput): string {
 }
 
 /**
+ * Whether `key` (a `merged_from` entry, a global_id `<reviewId>#<id>`) names `id`: the key itself, or its display-id
+ * part. The judge runs before ingest mints global_ids, so its claim names the display id it was shown.
+ */
+function mergedKeyNames(key: string, id: string): boolean {
+  if (key === id) return true;
+  const hash = key.lastIndexOf("#");
+  return hash >= 0 && !id.includes("#") && key.slice(hash + 1) === id;
+}
+
+/**
  * The findings a claim names: by `global_id` or `id`, else (review LG8-002) the canonical finding whose `merged_from`
- * lists it. The judge runs before ingest's duplicate merge, so a claim may name a key the merge folded into another
- * record; it targets the record that survived, and two claims landing there cancel as `duplicate-claim`.
+ * lists it, by its global_id or by the bare display id the judge saw. The judge runs before ingest's duplicate merge,
+ * so a claim may name a key the merge folded into another record; it targets the record that survived, and two claims
+ * landing there cancel as `duplicate-claim`.
  */
 function claimTargets<T extends StructuredReviewFinding>(findings: readonly T[], id: unknown): T[] {
   const direct = findings.filter((finding) => finding.global_id === id || finding.id === id);
   if (direct.length > 0 || typeof id !== "string" || id === "") return direct;
-  return findings.filter((finding) => finding.merged_from?.includes(id) === true);
+  return findings.filter((finding) => finding.merged_from?.some((key) => mergedKeyNames(key, id)) === true);
 }
+
+/** The severities a `downgraded` premise may land on: `minor` is the floor, and nothing is downgraded to `blocker`. */
+const DOWNGRADE_TARGETS: readonly ReviewFindingSeverity[] = ["major", "minor"];
 
 /**
  * A finding that arrived already carrying a premise (carried into a delta round) keeps the judgement, never an operator
  * answer: an answer counts only from the package's decisions store, and `--findings` is written by an agent, which
- * cannot answer for the operator. `finding.severity` wins over a `premise.severity` that disagrees with it.
+ * cannot answer for the operator.
+ *
+ * A `premise.severity` that disagrees with `finding.severity` is stale (review LG2-002). A `downgraded` premise keeps
+ * the finding's severity only while that is still a downgrade the merge could have made (major or minor, strictly
+ * below `original_severity`); otherwise the downgrade no longer describes the finding, and the premise is dropped so
+ * the finding stands unjudged at its own severity, never as a downgrade the schema rejects. Any other verdict carries
+ * no severity, so a stray one is removed.
  */
 function normaliseCarriedPremise<T extends StructuredReviewFinding>(finding: T): T {
   const premise = finding.premise;
   if (premise === undefined) return finding;
   const stale = premise.severity !== undefined && premise.severity !== finding.severity;
-  if (premise.operator === undefined && !stale) return finding;
+  const stray = premise.verdict !== "downgraded" && (premise.severity !== undefined || premise.original_severity !== undefined);
+  if (premise.operator === undefined && !stale && !stray) return finding;
   const { operator: _operator, ...judgement } = premise;
-  return { ...finding, premise: { ...judgement, ...(stale ? { severity: finding.severity } : {}) } } as T;
+  if (premise.verdict !== "downgraded") {
+    const { severity: _severity, original_severity: _original, ...rest } = judgement;
+    return { ...finding, premise: rest } as T;
+  }
+  if (!stale) return { ...finding, premise: judgement } as T;
+  const original = premise.original_severity;
+  const stillADowngrade = DOWNGRADE_TARGETS.includes(finding.severity) && isSeverity(original) && severityRank(finding.severity) < severityRank(original);
+  if (!stillADowngrade) {
+    const { premise: _dropped, ...unjudged } = finding;
+    return unjudged as T;
+  }
+  return { ...finding, premise: { ...judgement, severity: finding.severity } } as T;
 }
 
 type Field<V> = { ok: true; value: V | undefined } | { ok: false; detail: string };
@@ -472,11 +506,15 @@ function keysOf(record: Loose): string[] {
 /** Dispositions that say the finding was fixed (the verdict's own set). */
 const RESOLVED_DISPOSITIONS: ReadonlySet<string> = new Set(["acted-on", "fixed"]);
 
-/** Whether the record already has an outcome: refuted by the verifier, dismissed, or acted on. */
+/**
+ * Whether the record already has an outcome that lifts a premise hold: refuted by the verifier, or acted on. A
+ * `dismissed*` disposition does not (review SEC2-002): it is text in findings.json, which an agent writes, and the hold
+ * exists to keep exactly that decision for the operator. Only the operator's decisions store dismisses a held finding.
+ */
 function hasTerminalOutcome(record: Loose): boolean {
   if (isRecord(record.verification) && record.verification.verdict === "refuted") return true;
   const state = isRecord(record.disposition) ? record.disposition.state : undefined;
-  return typeof state === "string" && (state.startsWith("dismissed") || RESOLVED_DISPOSITIONS.has(state));
+  return typeof state === "string" && RESOLVED_DISPOSITIONS.has(state);
 }
 
 /** sha256 hex of a problem statement, whitespace-normalised so a re-wrapped line hashes the same. */
@@ -523,8 +561,9 @@ export type PremiseHoldState =
  * Where a finding stands against its premise judgement: the one rule the verdict, readiness, the flow gate and the
  * answer commands share. A hold is lifted only by an operator decision from the package's decisions store
  * (`decisions`). `premise.operator` on the record is the audit trail of an answer already applied, never an answer of
- * its own: a finding record an agent wrote cannot answer for the operator. A held finding with no answer that already
- * has another outcome (refuted, dismissed, acted on) waits for nobody, and is `none`, as the verdict classifies it.
+ * its own: a finding record an agent wrote cannot answer for the operator. A held finding with no answer that the
+ * verifier refuted, or that was acted on, waits for nobody, and is `none`, as the verdict classifies it; a `dismissed*`
+ * disposition without an operator decision leaves it `awaiting`.
  */
 export function premiseHoldState(record: Loose, decisions: readonly PremiseQuestionDecision[] = []): PremiseHoldState {
   const premise = isRecord(record.premise) ? record.premise : undefined;

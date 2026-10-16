@@ -6,7 +6,7 @@ import path from "node:path";
 import { VERDICT_FILE, computeVerdict, renderVerdict, writeVerdict } from "./verdict";
 import { recordPremiseDecision } from "./operator-decisions";
 import { PREMISES_FILE } from "./premise";
-import { premiseAnswerInput } from "./premise-fixtures";
+import { downgradedPremise, heldFinding, heldPremise, premiseAnswerInput } from "./premise-fixtures";
 
 const dirs: string[] = [];
 
@@ -28,8 +28,9 @@ function reply(reviewer: string, findings: unknown[]): string {
 }
 
 describe("held findings (flow 459, AC2)", () => {
+  // The shared held finding, renamed per test: its premise carries the evidence mergePremises requires.
   const held = (id: string, severity: string, verdict = "challenged") =>
-    finding(id, severity, `${id} timeline pinned LTR`, { reviewer: "review-layout", premise: { verdict, judge: "review-premise", question: "mirror it?", ...(verdict === "owner-decision" ? { options: ["a", "b"] } : {}) } });
+    heldFinding({ id, global_id: undefined, severity, problem: `${id} timeline pinned LTR`, premise: heldPremise({ verdict, ...(verdict === "owner-decision" ? { options: ["a", "b"] } : {}) }) });
   const decision = (record: Record<string, unknown>, answer: "uphold" | "dismiss") => premiseAnswerInput(record, { answer, reason: "platforms do not mirror it" });
 
   test("a held blocker or major is not an open blocker or major: it is listed as awaiting the operator", async () => {
@@ -74,7 +75,7 @@ describe("held findings (flow 459, AC2)", () => {
 
   test("a downgraded finding counts at the judge's severity, from the record", async () => {
     const dir = await pkg();
-    await writeFile(path.join(dir, "findings.json"), JSON.stringify([finding("LY-1", "minor", "timeline", { reviewer: "review-layout", premise: { verdict: "downgraded", judge: "review-premise", severity: "minor", original_severity: "major" } })]));
+    await writeFile(path.join(dir, "findings.json"), JSON.stringify([finding("LY-1", "minor", "timeline", { reviewer: "review-layout", premise: downgradedPremise("major", "minor") })]));
     const verdict = await computeVerdict(dir);
     expect(verdict.counts).toEqual({ blocker: 0, major: 0, minor: 1, info: 0 });
     expect(verdict.open).toEqual([]);
@@ -101,7 +102,7 @@ describe("held findings (flow 459, AC2)", () => {
     // LY-1 was claimed twice: neither claim applies, so it stays at its reported severity.
     expect(verdict.counts).toEqual({ blocker: 0, major: 1, minor: 0, info: 0 });
     expect(verdict.held.map((f) => f.id)).toEqual(["LY-2"]);
-    expect(verdict.premiseClaims).toBe(1);
+    expect(verdict.premisedFindings).toBe(1);
     expect(renderVerdict(verdict, "r1")).toContain(`premise results: 1 finding(s) carry a premise judgement (${PREMISES_FILE})`);
   });
 
@@ -112,7 +113,7 @@ describe("held findings (flow 459, AC2)", () => {
     await writeFile(
       path.join(dir, "findings.json"),
       JSON.stringify([
-        finding("LY-1", "minor", "timeline", { reviewer: "review-layout", premise: { verdict: "downgraded", judge: "review-premise", severity: "minor", original_severity: "major" } }),
+        finding("LY-1", "minor", "timeline", { reviewer: "review-layout", premise: downgradedPremise("major", "minor") }),
         finding("LY-2", "major", "label pinned LTR", { reviewer: "review-layout" }),
       ]),
     );
@@ -130,7 +131,7 @@ describe("held findings (flow 459, AC2)", () => {
     const verdict = await computeVerdict(dir);
     expect(verdict.held).toEqual([]);
     expect(verdict.open.map((f) => f.id)).toEqual(["LY-2"]);
-    expect(verdict.premiseClaims).toBe(1);
+    expect(verdict.premisedFindings).toBe(1);
   });
 
   test("a premise file the shape check refuses is not applied", async () => {
@@ -139,7 +140,7 @@ describe("held findings (flow 459, AC2)", () => {
     await mkdir(path.join(dir, "research-evidence"), { recursive: true });
     await writeFile(path.join(dir, PREMISES_FILE), JSON.stringify([{ finding_id: "LY-1", verdict: "challenged" }]));
     const verdict = await computeVerdict(dir);
-    expect(verdict.premiseClaims).toBeUndefined();
+    expect(verdict.premisedFindings).toBeUndefined();
     expect(verdict.counts.major).toBe(1);
   });
 });

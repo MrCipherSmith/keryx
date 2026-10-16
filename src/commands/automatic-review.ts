@@ -5,12 +5,14 @@
 // limit), the approval of the review's OWN commands and files, and which
 // questions reach the operator.
 
+import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ASK_USER_EMERGENCIES } from "../harness/tool/builtin/ask-user-tool";
 import type { InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import { AUTOMATIC_REVIEW_DISCLOSURE_FILE } from "../review/chunks-estimate";
-import { OPERATOR_DECISIONS_FILE } from "../review/operator-decisions";
+import { OPERATOR_DECISIONS_FILE, OPERATOR_DECISIONS_LOCK } from "../review/operator-decisions";
+import { isReviewPackageDir } from "../review/premise-question";
 import { describeAutomaticReviewLimit } from "./round-limit";
 
 /** The flag that records the mode on a review package's manifest. */
@@ -206,10 +208,58 @@ const CREATE_PATH_FLAGS = ["--research", "--report", "--refuted", "--verificatio
 /** What an approved `apply_patch` may write inside the package: data, never anything runnable. */
 const PACKAGE_DATA_EXTENSIONS: ReadonlySet<string> = new Set([".md", ".json", ".jsonl", ".txt"]);
 /**
- * Package data only the operator's own commands and cards write (flow 459 review): the operator's decisions. A patch to
- * it is never approved without asking, so an agent cannot write an answer the operator did not give.
+ * Package data only the operator's own commands and cards write (flow 459 review): the operator's decisions, and the
+ * lock directory beside them. A patch naming either is never approved without asking, so an agent cannot write an
+ * answer the operator did not give. Lower-cased: on a case-insensitive filesystem (APFS, NTFS defaults)
+ * `Operator-Decisions.JSON` is the same file.
  */
-const OPERATOR_ONLY_FILES: ReadonlySet<string> = new Set([OPERATOR_DECISIONS_FILE]);
+const OPERATOR_ONLY_NAMES: ReadonlySet<string> = new Set([OPERATOR_DECISIONS_FILE.toLowerCase(), OPERATOR_DECISIONS_LOCK.toLowerCase()]);
+
+/** Whether `file` exists as an entry, a dangling symlink included (existsSync follows the link). */
+function entryExists(file: string): boolean {
+  try {
+    lstatSync(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `target` with every symlink in its existing part resolved; the part that does not exist yet is appended as written.
+ * A dangling symlink resolves to "" (no package contains it), so a patch through one is never approved.
+ */
+function realTarget(target: string): string {
+  let existing = target;
+  const rest: string[] = [];
+  while (!entryExists(existing)) {
+    const parent = path.dirname(existing);
+    if (parent === existing) return target;
+    rest.unshift(path.basename(existing));
+    existing = parent;
+  }
+  try {
+    return path.join(realpathSync(existing), ...rest);
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Whether a patch to `resolved` would touch an operator-only file of the package `dir`, or leave it: any path segment,
+ * at any depth, whose case-folded name is one of {@link OPERATOR_ONLY_NAMES}, read both as written and with symlinks
+ * resolved (a link named `notes.json` that points at the decisions file is the decisions file).
+ */
+function touchesOperatorOnly(dir: string, resolved: string): boolean {
+  const named = (base: string, target: string): boolean =>
+    path
+      .relative(base, target)
+      .split(/[\\/]/)
+      .some((segment) => OPERATOR_ONLY_NAMES.has(segment.toLowerCase()));
+  const real = realTarget(resolved);
+  const realDir = realTarget(dir);
+  return named(dir, resolved) || named(realDir, real) || !real.startsWith(`${realDir}${path.sep}`);
+}
 
 /**
  * The state of one automatic-review turn: which package it is bound to, whether
@@ -249,7 +299,11 @@ export class AutomaticReviewRun {
         return false;
       }
       const flags = flagValues(words.slice(3));
-      return flags !== undefined && CREATE_PATH_FLAGS.every((name) => !flags.has(name) || this.insideCwd(flags.get(name)?.[0] ?? ""));
+      return (
+        flags !== undefined &&
+        CREATE_PATH_FLAGS.every((name) => !flags.has(name) || this.insideCwd(flags.get(name)?.[0] ?? "")) &&
+        (!flags.has("--prior") || this.namesReviewPackage(flags.get("--prior")?.[0] ?? ""))
+      );
     }
     return this.approvesPackageCommand(sub, words.slice(3));
   }
@@ -265,7 +319,8 @@ export class AutomaticReviewRun {
       return (
         resolved.startsWith(`${dir}${path.sep}`) &&
         PACKAGE_DATA_EXTENSIONS.has(path.extname(resolved).toLowerCase()) &&
-        !OPERATOR_ONLY_FILES.has(path.relative(dir, resolved))
+        PACKAGE_DATA_EXTENSIONS.has(path.extname(realTarget(resolved)).toLowerCase()) &&
+        !touchesOperatorOnly(dir, resolved)
       );
     });
   }
@@ -462,6 +517,20 @@ export class AutomaticReviewRun {
     const resolved = path.resolve(this.cwd, value);
     const root = path.resolve(this.cwd);
     return resolved === root || resolved.startsWith(`${root}${path.sep}`);
+  }
+
+  /**
+   * `--prior` names a previous round (review SEC2-001): a review id (no path separator), or the directory of a real
+   * review package of this checkout. Any other directory holding a manifest.json, one an agent wrote inside a package
+   * among them, needs the operator: the delta round carries premise answers out of the previous package.
+   */
+  private namesReviewPackage(value: string): boolean {
+    if (value === "" || value.startsWith("-")) return false;
+    const asPath = path.resolve(this.cwd, value);
+    // `--prior` tries the value as a path first (prior-round.ts resolveForced), so a bare id is an id only when no
+    // directory of that name holds a manifest.
+    if (!/[\\/]/.test(value) && value !== "." && value !== ".." && !existsSync(path.join(asPath, "manifest.json"))) return true;
+    return this.insideCwd(value) && isReviewPackageDir(asPath, this.cwd);
   }
 
   private isBoundRef(ref: string): boolean {

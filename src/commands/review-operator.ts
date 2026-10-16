@@ -153,7 +153,7 @@ export async function runOperatorCommand(command: OperatorCommand, args: string[
       log("not confirmed; nothing was recorded");
       return 1;
     }
-    await answerPremiseQuestion(packageDir, { finding, answer: answerArg, reason: reason.trim(), quote: answer, at, confirmedVia: "terminal" });
+    await answerPremiseQuestion(packageDir, { finding, answer: answerArg, reason: reason.trim(), quote: answer, at, confirmedVia: "terminal" }, { cwd, warn: (line) => log(`warning: ${line}`) });
     log(`premise-question ${answerArg} recorded for ${finding.key} (terminal, ${at}) in operator-decisions.json and findings.json`);
     return 0;
   }

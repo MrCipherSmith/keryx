@@ -9,7 +9,7 @@ import { roundRecordTampered } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
 import { PENDING_RESEARCH, packageResearchErrors } from "./research";
 import { computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
-import { lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { loadSchema, validateJson } from "../gdskills/contracts";
@@ -51,7 +51,8 @@ import {
 } from "./filter-stats";
 import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
 import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
-import { PREMISES_FILE, mergePremises, parsePremiseClaims, renderPremiseMarkdown } from "./premise";
+import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, mergePremises, parsePremiseClaims, renderPremiseMarkdown } from "./premise";
+import { withOperatorDecisionsLock } from "./operator-decisions";
 import { repairMechanicalOmissions, type FindingRepair } from "./repair";
 import { writeReviewNotes, type ReviewNoteResult } from "./review-notes";
 import {
@@ -503,9 +504,11 @@ export async function createManagedReviewPackage(
     // ingested round re-applies it (the interim verdict over raw results); findings.json is the record after ingest.
     await mkdir(path.join(packageDir, "research-evidence"), { recursive: true });
     await writeFileAtomic(path.join(packageDir, PREMISES_FILE), `${JSON.stringify(input.premises, null, 2)}\n`);
-  } else {
-    // An ingest without --premises leaves no claims file behind from an earlier ingest of the same package.
-    await rm(path.join(packageDir, PREMISES_FILE), { force: true });
+  } else if (await pathExists(path.join(packageDir, PREMISES_FILE))) {
+    // An ingest without --premises keeps the judge's record, moved aside (review RG2-004): the verdict never re-applies
+    // claims to an ingested round, so the file at its own name would only mislead a reader into thinking this ingest
+    // carried them.
+    await rename(path.join(packageDir, PREMISES_FILE), path.join(packageDir, PREMISES_SUPERSEDED_FILE));
   }
   if (input.scope?.files !== undefined) {
     await writeFileAtomic(path.join(packageDir, "scope-files.json"), `${JSON.stringify({ version: 1, files: input.scope.files, ...(typeof input.scope.counts?.changedLinesRetained === "number" ? { changedLines: input.scope.counts.changedLinesRetained } : {}) }, null, 2)}\n`);
@@ -519,10 +522,12 @@ export async function createManagedReviewPackage(
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
-  await writeFileAtomic(
+  // Under the decisions lock, like every other findings.json writer: a premise answer to a re-ingested package
+  // rewrites the same file.
+  await withOperatorDecisionsLock(packageDir, () => writeFileAtomic(
     path.join(packageDir, "findings.json"),
     `${JSON.stringify(findings.map(toContractFinding), null, 2)}\n`,
-  );
+  ));
   await writeFileAtomic(path.join(packageDir, "learning.md"), renderLearning(findings));
   await writeFileAtomic(path.join(packageDir, "decisions.md"), renderDecisions(findings));
   // Last, and only once the package is complete. See {@link persistScreenRadius}.
@@ -1746,8 +1751,19 @@ function refutedClassification(state: FindingDispositionState): FindingClassific
   return state === "dismissed-incorrect" ? "false_positive" : "out_of_scope";
 }
 
-/** Write the recorded outcomes into `findings.json`, or refuse and write nothing. */
+/**
+ * Write the recorded outcomes into `findings.json`, or refuse and write nothing. The read-modify-write runs under the
+ * package's decisions lock, the one a premise answer holds while it rewrites findings.json (review F-001/HL2-002): an
+ * answer and a disposition that overlap both land.
+ */
 async function recordDispositions(
+  packageDir: string,
+  records: readonly FindingDispositionRecord[],
+): Promise<void> {
+  await withOperatorDecisionsLock(packageDir, () => recordDispositionsLocked(packageDir, records));
+}
+
+async function recordDispositionsLocked(
   packageDir: string,
   records: readonly FindingDispositionRecord[],
 ): Promise<void> {
@@ -1851,7 +1867,20 @@ async function recordDispositions(
  * ordinary result of nesting one under a list item — invisible, and an invisible
  * block is a silent fall-through to the prose parser rather than an error.
  */
-const EMBEDDED_FINDINGS_FENCE = /^ {0,3}(`{3,}|~{3,})[^\n]*\bkeryx:findings\b[^\n]*$/gm;
+function embeddedFence(tag: "findings" | "premises"): RegExp {
+  return new RegExp("^ {0,3}(`{3,}|~{3,})[^\\n]*\\bkeryx:" + tag + "\\b[^\\n]*$", "gm");
+}
+
+/**
+ * The body of the one `keryx:<tag>` block in `text`, or undefined when there is none. More than one throws, worded by
+ * `tooMany` from the blocks' character offsets: keeping the first would silently drop every block after it.
+ */
+function singleEmbeddedBlock(text: string, tag: "findings" | "premises", tooMany: (offsets: number[]) => string): string | undefined {
+  const fences = [...text.matchAll(embeddedFence(tag))];
+  if (fences.length > 1) throw new Error(tooMany(fences.map((fence) => fence.index ?? 0)));
+  const fence = fences[0];
+  return fence === undefined ? undefined : embeddedBlockBody(text, fence);
+}
 
 /**
  * The one `keryx:findings` block in a report, or null when there is none.
@@ -1862,21 +1891,18 @@ const EMBEDDED_FINDINGS_FENCE = /^ {0,3}(`{3,}|~{3,})[^\n]*\bkeryx:findings\b[^\
  * carries the structured array its author expected to be read.
  */
 export function parseEmbeddedFindings(report: string, reportLabel: string): ReviewFindingsSource | null {
-  const fences = [...report.matchAll(EMBEDDED_FINDINGS_FENCE)];
-  if (fences.length === 0) {
+  // An orchestrator that concatenates one block per reviewer produces several, and the non-global match used to keep
+  // the first and drop the rest: a report visibly holding findings ingested as zero.
+  const body = singleEmbeddedBlock(
+    report,
+    "findings",
+    (offsets) =>
+      `${reportLabel} carries ${offsets.length} keryx:findings blocks (at character ${offsets.join(" and ")}); exactly one is allowed. Concatenating one block per reviewer drops every block after the first — merge them into a single array.`,
+  );
+  if (body === undefined) {
     return null;
   }
-  if (fences.length > 1) {
-    // An orchestrator that concatenates one block per reviewer produces exactly
-    // this, and the non-global match silently kept the first and dropped the
-    // rest — a report visibly holding findings ingested as zero.
-    throw new Error(
-      `${reportLabel} carries ${fences.length} keryx:findings blocks (at character ${fences
-        .map((fence) => String(fence.index ?? 0))
-        .join(" and ")}); exactly one is allowed. Concatenating one block per reviewer drops every block after the first — merge them into a single array.`,
-    );
-  }
-  const parsed = parseJsonBody(embeddedBlockBody(report, fences[0] as RegExpExecArray), (detail) => `${reportLabel} carries a keryx:findings block that is not valid JSON: ${detail}`);
+  const parsed = parseJsonBody(body, (detail) => `${reportLabel} carries a keryx:findings block that is not valid JSON: ${detail}`);
   if (!Array.isArray(parsed) && !isReviewerResult(parsed)) {
     // Named for what it is. Passing a non-array through produced a schema
     // failure about missing `id`/`impact`/`evidence`, which sends the reader
@@ -1890,22 +1916,16 @@ export function parseEmbeddedFindings(report: string, reportLabel: string): Revi
   return parsed as ReviewFindingsSource;
 }
 
-const EMBEDDED_PREMISES_FENCE = /^ {0,3}(`{3,}|~{3,})[^\n]*\bkeryx:premises\b[^\n]*$/gm;
-
 /**
  * `--premises` input (flow 459): the bare `{ judge, model?, premises }` object, or a report / judge reply that carries it
  * in one fenced `keryx:premises` block (what the review-premise skill prints). Anything else throws, and a block that is
  * present but not valid JSON is an error, never a silent fall-through. The parsed value is not shape-checked here.
  */
 export function parseEmbeddedPremises(text: string, label: string): unknown {
-  const fences = [...text.matchAll(EMBEDDED_PREMISES_FENCE)];
-  if (fences.length > 1) {
-    throw new Error(`${label} carries ${fences.length} keryx:premises blocks; exactly one is allowed. Nothing was merged.`);
-  }
-  const fence = fences[0];
-  return fence === undefined
+  const body = singleEmbeddedBlock(text, "premises", (offsets) => `${label} carries ${offsets.length} keryx:premises blocks; exactly one is allowed. Nothing was merged.`);
+  return body === undefined
     ? parseJsonBody(text, (detail) => `${label} is neither JSON nor a report with a keryx:premises block: ${detail}. Nothing was merged.`)
-    : parseJsonBody(embeddedBlockBody(text, fence), (detail) => `${label} carries a keryx:premises block that is not valid JSON: ${detail}. Nothing was merged.`);
+    : parseJsonBody(body, (detail) => `${label} carries a keryx:premises block that is not valid JSON: ${detail}. Nothing was merged.`);
 }
 
 /** `JSON.parse(body)`, or an error worded by `message` from the parser's own detail (never the raw caught value). */
@@ -2451,6 +2471,14 @@ async function readPreFilterScopeBlock(packageDir: string): Promise<string | und
   return extractPreFilterScopeBlock(await readFile(scopePath, "utf8")) ?? undefined;
 }
 
+/** The optional blocks of scope.md, by name. */
+type ScopeExtras = {
+  externalReclaims?: readonly ExternalReclaim[] | undefined;
+  scopeBScreen?: ScopeBScreenRecord | undefined;
+  filterStats?: ReviewFilterStats | undefined;
+  allFindings?: readonly StructuredReviewFinding[] | undefined;
+};
+
 /**
  * `scope.md`: what this review looked at, and what each stage removed (AC5/AC11).
  *
@@ -2470,14 +2498,6 @@ async function readPreFilterScopeBlock(packageDir: string): Promise<string | und
  *    things in cannot destroy the record: it appends the block at Step 3 and
  *    ingests after Step 12.
  */
-/** The optional blocks of scope.md, by name. */
-type ScopeExtras = {
-  externalReclaims?: readonly ExternalReclaim[] | undefined;
-  scopeBScreen?: ScopeBScreenRecord | undefined;
-  filterStats?: ReviewFilterStats | undefined;
-  allFindings?: readonly StructuredReviewFinding[] | undefined;
-};
-
 function renderScope(
   input: ManagedReviewInput,
   flowMatch: FlowMatchResult | null,

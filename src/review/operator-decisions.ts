@@ -20,7 +20,10 @@ import { readJsonFileOr } from "../lib/json";
 import type { ConfirmedVia } from "./types";
 
 export const OPERATOR_DECISIONS_FILE = "operator-decisions.json";
-/** The lock directory serialising writes to {@link OPERATOR_DECISIONS_FILE} (and, for a premise answer, findings.json). */
+/**
+ * The lock directory serialising writes to {@link OPERATOR_DECISIONS_FILE} and to the package's findings.json: the
+ * decisions writers, a premise answer (which writes both), the disposition recorder and ingest all take it.
+ */
 export const OPERATOR_DECISIONS_LOCK = ".operator-decisions.lock";
 
 /** The gate decisions: the kinds that relax a gate and carry the quote/subject shape of {@link OperatorDecision}. */
@@ -163,13 +166,16 @@ export async function readPremiseDecisions(packageDir: string): Promise<PremiseQ
 }
 
 /**
- * Appends a premise-question decision. `onRecorded` runs inside the same lock, after the decision is on disk: the answer
- * command uses it to apply the answer to findings.json, so no other writer interleaves between the two files.
+ * Appends a premise-question decision. `applyFirst` runs inside the same lock, BEFORE the decision is appended: the
+ * answer command uses it to apply the answer to findings.json, so no other writer interleaves between the two files.
+ * The two writes land together or not at all (review HL2-003): `applyFirst` returns how to undo its write, and a failed
+ * append undoes it before the error reaches the caller. A failed `applyFirst` records nothing. Either way a retry
+ * starts from the state before the answer, never from a recorded decision whose findings.json was not updated.
  */
 export async function recordPremiseDecision(
   packageDir: string,
   input: PremiseDecisionInput,
-  onRecorded?: (decision: PremiseQuestionDecision) => Promise<void>,
+  applyFirst?: (decision: PremiseQuestionDecision) => Promise<(() => Promise<void>) | undefined>,
 ): Promise<PremiseQuestionDecision> {
   const kept: PremiseQuestionDecision = {
     kind: PREMISE_DECISION_KIND,
@@ -187,8 +193,13 @@ export async function recordPremiseDecision(
     throw new Error("a premise decision needs the finding, an answer of uphold or dismiss, a reason, the operator's words, the time, how it was confirmed and the finding it was shown");
   }
   await withOperatorDecisionsLock(packageDir, async () => {
-    await appendDecision(packageDir, kept);
-    await onRecorded?.(kept);
+    const undo = await applyFirst?.(kept);
+    try {
+      await appendDecision(packageDir, kept);
+    } catch (error) {
+      await undo?.();
+      throw error;
+    }
   });
   return kept;
 }

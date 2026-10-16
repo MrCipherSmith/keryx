@@ -40,8 +40,11 @@ export type RoundRegistryEntry = {
   findingsSha256: string | null;
   roundRecordSha256?: string | undefined;
   completedAt: string;
-  /** What recorded it: `review ingest` of a finished round, `review complete`, or `review publish`. */
-  event: "ingest" | "complete" | "publish";
+  /**
+   * What recorded it: `review ingest` of a finished round, `review complete`, `review publish`, or the operator's premise
+   * answer (`decide-premise`), which rewrites findings.json of a round the registry already vouched for.
+   */
+  event: "ingest" | "complete" | "publish" | "decide-premise";
 };
 
 const sha256 = (value: string): string => createHash("sha256").update(value).digest("hex");
@@ -166,6 +169,28 @@ export function registryVouches(entries: readonly RoundRegistryEntry[], packageI
   );
 }
 
+/** The package id the registry records a package under: its manifest's `reviewId`, else its directory name. */
+function packageIdOf(packageDir: string, manifest: Record<string, unknown>): string {
+  return typeof manifest.reviewId === "string" ? manifest.reviewId : path.basename(packageDir);
+}
+
+/**
+ * Whether the registry vouches for the package's files as they are now (review RG2-001). A writer that changes a
+ * vouched package's findings.json (the operator's premise answer) asks this before the write, and re-records after it
+ * only when it was vouched, so the answer keeps the round trusted without vouching for a package keryx never finished.
+ */
+export function registryVouchesPackage(packageDir: string, options: { cwd?: string; dir?: string } = {}): boolean {
+  try {
+    const facts = packageFacts(packageDir);
+    if (facts === undefined) return false;
+    const identity = repoIdentity(options.cwd ?? packageDir);
+    if (identity === undefined) return false;
+    return registryVouches(readRoundRegistry(identity, options.dir), packageIdOf(packageDir, facts.manifest), facts.hashes) !== undefined;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Record a round keryx just finished: `review ingest` of a round past its draft (the flow loop starts round N+1 right
  * after it), `review complete`, `review publish` — each re-records, since each may change findings. A package without
@@ -186,7 +211,7 @@ export function recordFinishedRound(
     // Outside a git checkout no commit can carry the package, so there is nothing for the registry to vouch for later.
     if (identity === undefined) return {};
     const target = facts.manifest.target !== null && typeof facts.manifest.target === "object" ? (facts.manifest.target as Record<string, unknown>) : {};
-    const packageId = typeof facts.manifest.reviewId === "string" ? facts.manifest.reviewId : path.basename(packageDir);
+    const packageId = packageIdOf(packageDir, facts.manifest);
     const head = typeof target.head === "string" ? target.head : null;
     const entry: RoundRegistryEntry = {
       v: 2,

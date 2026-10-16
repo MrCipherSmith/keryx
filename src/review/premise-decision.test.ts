@@ -6,7 +6,7 @@
 // readiness, the round-to-round carry).
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -21,7 +21,7 @@ import {
 } from "./operator-decisions";
 import { applyPremiseDecision, applyPremiseDecisions, awaitingOperator, latestPremiseDecision, premiseHoldState } from "./premise";
 import { heldFinding, premiseAnswer, premiseAnswerInput } from "./premise-fixtures";
-import { answerPremiseQuestion, carryPremiseDecisions, findHeldFinding } from "./premise-question";
+import { answerPremiseQuestion, carryPremiseDecisions, findHeldFinding, isReviewPackageDir } from "./premise-question";
 import { computeReadiness } from "./readiness";
 import { findingStatus } from "./round-record";
 import { computeVerdict } from "./verdict";
@@ -38,45 +38,101 @@ async function pkg(): Promise<string> {
 }
 
 describe("carryPremiseDecisions (a delta round does not ask again)", () => {
-  async function previousWith(finding: Record<string, unknown>, answer: "uphold" | "dismiss" = "uphold"): Promise<string> {
-    const previous = await pkg();
-    await writeFile(path.join(previous, "findings.json"), JSON.stringify([finding]));
+  /** A checkout with review packages under `.metaproject/reviews/`, where `--prior` and the round search find them. */
+  async function checkout(): Promise<{ root: string; review: (id: string, findings?: unknown[]) => Promise<string> }> {
+    const root = await pkg();
+    const review = async (id: string, findings: unknown[] = []): Promise<string> => {
+      const dir = path.join(root, ".metaproject", "reviews", id);
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(dir, "manifest.json"), JSON.stringify({ reviewId: id }));
+      await writeFile(path.join(dir, "findings.json"), JSON.stringify(findings));
+      return dir;
+    };
+    return { root, review };
+  }
+  async function previousWith(finding: Record<string, unknown>, answer: "uphold" | "dismiss" = "uphold"): Promise<{ root: string; previous: string; next: string }> {
+    const { root, review } = await checkout();
+    const previous = await review("r1", [finding]);
     await recordPremiseDecision(previous, premiseAnswerInput(finding, { answer, reason: "keep it" }));
-    return previous;
+    return { root, previous, next: await review("r2") };
   }
 
   test("an upheld answer lands in the new package as carried from the previous one, and the finding is not awaiting", async () => {
     const finding = heldFinding();
-    const previous = await previousWith(finding);
-    const next = await pkg();
-    expect(await carryPremiseDecisions(next, previous, ["LY-003"], "reviews/r1")).toEqual(["r1#LY-003"]);
+    const { root, previous, next } = await previousWith(finding);
+    expect(await carryPremiseDecisions(next, previous, ["LY-003"], "reviews/r1", { projectRoot: root })).toEqual(["r1#LY-003"]);
     const [carried] = await readPremiseDecisions(next);
     expect(carried).toMatchObject({ answer: "uphold", carriedFrom: "reviews/r1", actor: "operator", confirmedVia: "terminal" });
     expect(premiseHoldState(finding, await readPremiseDecisions(next))).toBe("upheld");
-    expect(await carryPremiseDecisions(next, previous, ["LY-003"], "reviews/r1")).toEqual([]);
+    expect(await carryPremiseDecisions(next, previous, ["LY-003"], "reviews/r1", { projectRoot: root })).toEqual([]);
     expect(await readPremiseDecisions(next)).toHaveLength(1);
   });
 
+  test("an answer carried into round 2 travels on into round 3 while the finding is unchanged", async () => {
+    const finding = heldFinding();
+    const { root, previous, next } = await previousWith(finding);
+    await writeFile(path.join(next, "findings.json"), JSON.stringify([finding]));
+    await carryPremiseDecisions(next, previous, ["LY-003"], "reviews/r1", { projectRoot: root });
+    const third = path.join(root, ".metaproject", "reviews", "r3");
+    await mkdir(third, { recursive: true });
+    expect(await carryPremiseDecisions(third, next, ["LY-003"], "reviews/r2", { projectRoot: root })).toEqual(["r1#LY-003"]);
+  });
+
   test("a finding the round did not carry carries no answer", async () => {
-    const previous = await previousWith(heldFinding());
-    const next = await pkg();
-    expect(await carryPremiseDecisions(next, previous, ["LY-999"], "reviews/r1")).toEqual([]);
+    const { root, previous, next } = await previousWith(heldFinding());
+    expect(await carryPremiseDecisions(next, previous, ["LY-999"], "reviews/r1", { projectRoot: root })).toEqual([]);
     expect(await readPremiseDecisions(next)).toEqual([]);
   });
 
   test("a changed subject does not carry: the answer was given for another problem, and the new finding asks again", async () => {
     const finding = heldFinding();
-    const previous = await pkg();
+    const { root, review } = await checkout();
     // The package holds an answer bound to a problem the finding no longer states.
-    await writeFile(path.join(previous, "findings.json"), JSON.stringify([{ ...finding, problem: "a different problem" }]));
+    const previous = await review("r1", [{ ...finding, problem: "a different problem" }]);
     await recordPremiseDecision(previous, premiseAnswerInput(finding, { answer: "uphold", reason: "keep it" }));
-    const next = await pkg();
-    expect(await carryPremiseDecisions(next, previous, ["LY-003"], "reviews/r1")).toEqual([]);
+    const next = await review("r2");
+    expect(await carryPremiseDecisions(next, previous, ["LY-003"], "reviews/r1", { projectRoot: root })).toEqual([]);
     // And a carried answer never answers a finding whose problem changed in the new round.
     const upheld = await previousWith(finding);
-    const copied = await pkg();
-    await carryPremiseDecisions(copied, upheld, ["LY-003"], "reviews/r1");
-    expect(premiseHoldState({ ...finding, problem: "rewritten in round 2" }, await readPremiseDecisions(copied))).toBe("awaiting");
+    await carryPremiseDecisions(upheld.next, upheld.previous, ["LY-003"], "reviews/r1", { projectRoot: upheld.root });
+    expect(premiseHoldState({ ...finding, problem: "rewritten in round 2" }, await readPremiseDecisions(upheld.next))).toBe("awaiting");
+  });
+
+  test("a directory nested inside a package is not a decision source, nor a symlink to one, nor a dir outside the reviews roots (review SEC2-001)", async () => {
+    const finding = heldFinding();
+    const { root, review } = await checkout();
+    const next = await review("r2");
+    // What an agent can write without asking: a directory inside the bound package, with a manifest and decisions.
+    const nested = path.join(next, "x");
+    await mkdir(nested, { recursive: true });
+    await writeFile(path.join(nested, "manifest.json"), JSON.stringify({ reviewId: "x" }));
+    await writeFile(path.join(nested, "findings.json"), JSON.stringify([finding]));
+    await writeFile(path.join(nested, OPERATOR_DECISIONS_FILE), JSON.stringify({ schemaVersion: 1, decisions: [premiseAnswer(finding, { answer: "uphold" })] }));
+    expect(isReviewPackageDir(nested, root)).toBe(false);
+    expect(await carryPremiseDecisions(next, nested, ["LY-003"], "reviews/r2/x", { projectRoot: root })).toEqual([]);
+    const link = path.join(root, ".metaproject", "reviews", "looks-real");
+    await symlink(nested, link);
+    expect(isReviewPackageDir(link, root)).toBe(false);
+    expect(await carryPremiseDecisions(next, link, ["LY-003"], "reviews/looks-real", { projectRoot: root })).toEqual([]);
+    const elsewhere = path.join(root, "tmp-pkg");
+    await mkdir(elsewhere, { recursive: true });
+    await writeFile(path.join(elsewhere, "manifest.json"), "{}");
+    expect(isReviewPackageDir(elsewhere, root)).toBe(false);
+    expect(await readPremiseDecisions(next)).toEqual([]);
+    // The package itself is never its own previous round.
+    expect(await carryPremiseDecisions(next, next, ["LY-003"], "reviews/r2", { projectRoot: root })).toEqual([]);
+  });
+
+  test("a forged record in the previous package is re-validated and not carried: incomplete, or for a finding that is not held", async () => {
+    const finding = heldFinding();
+    const unheld = heldFinding({ id: "LY-004", global_id: "r1#LY-004", premise: { verdict: "upheld", judge: "review-premise" } });
+    const { root, review } = await checkout();
+    const { confirmedVia: _via, ...unconfirmed } = premiseAnswer(finding, { answer: "uphold", carriedFrom: "reviews/r0" });
+    const previous = await review("r1", [finding, unheld]);
+    await writeFile(path.join(previous, OPERATOR_DECISIONS_FILE), JSON.stringify({ schemaVersion: 1, decisions: [unconfirmed, premiseAnswer(unheld, { answer: "uphold" })] }));
+    const next = await review("r2");
+    expect(await carryPremiseDecisions(next, previous, ["LY-003", "LY-004"], "reviews/r1", { projectRoot: root })).toEqual([]);
+    expect(await readPremiseDecisions(next)).toEqual([]);
   });
 });
 
@@ -154,10 +210,28 @@ describe("hold state", () => {
     expect(premiseHoldState(written)).toBe("awaiting");
   });
 
-  test("a held finding that already has another outcome waits for nobody, as the verdict classifies it", () => {
-    expect(premiseHoldState(heldFinding({ disposition: { state: "dismissed-out-of-scope", evidence: "not this PR" } }))).toBe("none");
+  test("a held finding the verifier refuted, or that was acted on, waits for nobody, as the verdict classifies it", () => {
     expect(premiseHoldState(heldFinding({ disposition: { state: "acted-on", evidence: "abc1234" } }))).toBe("none");
     expect(premiseHoldState(heldFinding({ verification: { verdict: "refuted" } }))).toBe("none");
+  });
+
+  test("a dismissal written into findings.json does not lift a hold: only the operator's decisions store does (review SEC2-002)", async () => {
+    for (const state of ["dismissed-out-of-scope", "dismissed-wont-fix", "dismissed-deprioritised", "dismissed-incorrect"]) {
+      const written = heldFinding({ disposition: { state, evidence: "the owner decided: not this PR" } });
+      expect(premiseHoldState(written)).toBe("awaiting");
+      expect(premiseHoldState(written, [premiseAnswer(written)])).toBe("dismissed");
+    }
+    // The verdict and readiness read the same rule: held, not dismissed, and item 11 still fails.
+    const dir = await pkg();
+    await writeFile(
+      path.join(dir, "manifest.json"),
+      JSON.stringify({ schemaVersion: 1, reviewId: "r1", mode: "ingest", status: "draft", target: { kind: "report", ref: "r.md" }, artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" }, coverage: [] }),
+    );
+    await writeFile(path.join(dir, "findings.json"), JSON.stringify([heldFinding({ disposition: { state: "dismissed-wont-fix", evidence: "the owner decided" } })]));
+    const verdict = await computeVerdict(dir);
+    expect(verdict.held.map((entry) => entry.id)).toEqual(["LY-003"]);
+    expect(verdict.dismissed).toBe(0);
+    expect((await computeReadiness(dir)).items.find((item) => item.id === "premise-decisions")?.status).toBe("fail");
   });
 
   test("a finding with no premise, or an unheld one, is not held", () => {
@@ -255,6 +329,27 @@ describe("findHeldFinding: the hold is the finding record's, never a raw claim",
     expect(lookup.ok ? "" : lookup.refusal).toContain("is not held");
   });
 
+  test("an id two findings share is refused, naming each by its global_id", async () => {
+    const dir = await pkg();
+    await writeFile(path.join(dir, "findings.json"), JSON.stringify([heldFinding(), heldFinding({ global_id: "r1#LY-003-b", reviewer: "review-logic" })]));
+    const lookup = await findHeldFinding(dir, "LY-003");
+    expect(lookup.ok).toBe(false);
+    expect(lookup.ok ? "" : lookup.refusal).toContain("names 2 findings (r1#LY-003, r1#LY-003-b)");
+    expect((await findHeldFinding(dir, "r1#LY-003-b")).ok).toBe(true);
+  });
+
+  test("a decision write that fails restores findings.json: the two files never disagree (review HL2-003)", async () => {
+    const dir = await pkg();
+    const original = `${JSON.stringify([heldFinding()], null, 2)}\n`;
+    await writeFile(path.join(dir, "findings.json"), original);
+    const lookup = await findHeldFinding(dir, "LY-003");
+    if (!lookup.ok) throw new Error(lookup.refusal);
+    // A directory where the decisions file should be: the append fails after findings.json was rewritten.
+    await mkdir(path.join(dir, OPERATOR_DECISIONS_FILE));
+    await expect(answerPremiseQuestion(dir, { finding: lookup.finding, answer: "dismiss", reason: "r", quote: "dismiss it", at: "2026-10-16T12:00:00Z", confirmedVia: "terminal" })).rejects.toThrow();
+    expect(await readFile(path.join(dir, "findings.json"), "utf8")).toBe(original);
+  });
+
   test("shows the answered state and a digest that changes with what was shown", async () => {
     const dir = await pkg();
     await writeFile(path.join(dir, "findings.json"), JSON.stringify([heldFinding()]));
@@ -323,6 +418,46 @@ describe("after the answer, the readers agree", () => {
     // Changing the answer to uphold puts the finding back into the next round as open.
     await answer(dir, "uphold");
     expect(findingStatus((await records(dir))[0])).toBe("open");
+  });
+
+  test("with two answers on file, every reader takes the later one (review testing F-001)", async () => {
+    const dir = await held();
+    const finding = heldFinding();
+    await recordPremiseDecision(dir, premiseAnswerInput(finding, { answer: "dismiss", at: "2026-10-16T12:00:00Z" }));
+    await recordPremiseDecision(dir, premiseAnswerInput(finding, { answer: "uphold", reason: "changed my mind", at: "2026-10-16T13:00:00Z" }));
+    const decisions = await readPremiseDecisions(dir);
+    expect(decisions.map((entry) => entry.answer)).toEqual(["dismiss", "uphold"]);
+    expect(latestPremiseDecision(finding, decisions)?.answer).toBe("uphold");
+    expect(premiseHoldState(finding, decisions)).toBe("upheld");
+    const verdict = await computeVerdict(dir);
+    expect(verdict.open.map((entry) => entry.id)).toEqual(["LY-003"]);
+    expect(verdict.dismissed).toBe(0);
+    expect((await readiness(dir))?.status).toBe("pass");
+    // And the other way round: a later dismiss ends the finding.
+    await recordPremiseDecision(dir, premiseAnswerInput(finding, { answer: "dismiss", reason: "on reflection", at: "2026-10-16T14:00:00Z" }));
+    expect(premiseHoldState(finding, await readPremiseDecisions(dir))).toBe("dismissed");
+    expect((await computeVerdict(dir)).dismissed).toBe(1);
+  });
+
+  test("readiness item 11 before an ingest names the ingest as the repair: no answer can be recorded yet (review F-002)", async () => {
+    const dir = await pkg();
+    await mkdir(path.join(dir, "raw"), { recursive: true });
+    await mkdir(path.join(dir, "research-evidence"), { recursive: true });
+    await writeFile(
+      path.join(dir, "manifest.json"),
+      JSON.stringify({ schemaVersion: 1, reviewId: "r1", mode: "ingest", status: "draft", target: { kind: "report", ref: "r.md" }, artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" }, coverage: [] }),
+    );
+    const result = { reviewer: "review-layout", status: "DONE", findings: [{ id: "LY-2", severity: "major", problem: "timeline pinned LTR" }] };
+    await writeFile(path.join(dir, "raw", "review-layout.txt"), `done\n\`\`\`REVIEW_RESULT\n${JSON.stringify(result)}\n\`\`\`\n`);
+    await writeFile(
+      path.join(dir, "research-evidence", "premises.json"),
+      JSON.stringify({ judge: "review-premise", premises: [{ finding_id: "LY-2", verdict: "challenged", practice_sources: [{ name: "Material", says: "do not mirror" }], question: "mirror it?" }] }),
+    );
+    const item = await readiness(dir);
+    expect(item?.status).toBe("fail");
+    expect(item?.evidence).toContain("not ingested yet");
+    expect(item?.repair).toContain("--premises");
+    expect(item?.repair).not.toContain("decide-premise");
   });
 
   test("readiness and the verdict read one view on a raw package too: a held claim in premises.json holds for both", async () => {
