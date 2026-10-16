@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
+import { readRoundRecord, renderRoundLine } from "./round-record";
 import { isEmptyOutput, isReviewerResult, parseReviewResult } from "./ledger";
 import { mergeVerifications, verificationClaims } from "./verification";
 import { readRunProfile } from "./run-profile";
@@ -65,6 +66,8 @@ export type InterimVerdict = {
   headline: string;
   /** How the round runs (`<package>/run-profile.json`): `attended (default)`, `unattended (--unattended)`, ...; undefined for a package without one. */
   runMode?: string | undefined;
+  /** Flow 458: `round N (source: …)` or `round 1 — no previous round found (sources tried: …)`, from round.json; undefined without one. */
+  round?: string | undefined;
   /** A warning when `tests-to-run.json` lists tests and no `keryx review verify-run` record exists: "N tests listed to run; none recorded as run". */
   testsNotRun?: string | undefined;
 };
@@ -241,7 +244,9 @@ export async function computeVerdict(packageDir: string, options: VerdictOptions
   const profile = readRunProfile(packageDir);
   const runMode = profile === undefined ? undefined : `${profile.mode} (${profile.declaredVia})`;
   const testsNotRun = testsNotRunWarning(packageDir);
-  return { source, counts, total, verified, unverified, refuted, dismissed, resolved, verifierClaims, rawDir, open, minors, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline, ...(runMode === undefined ? {} : { runMode }), ...(testsNotRun === undefined ? {} : { testsNotRun }) };
+  const roundRecord = readRoundRecord(packageDir);
+  const round = roundRecord === undefined ? undefined : renderRoundLine(roundRecord);
+  return { source, counts, total, verified, unverified, refuted, dismissed, resolved, verifierClaims, rawDir, open, minors, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline, ...(runMode === undefined ? {} : { runMode }), ...(testsNotRun === undefined ? {} : { testsNotRun }), ...(round === undefined ? {} : { round }) };
 }
 
 function findingLine(finding: VerdictFinding): string {
@@ -250,6 +255,7 @@ function findingLine(finding: VerdictFinding): string {
 
 export function renderVerdict(verdict: InterimVerdict, reviewId: string): string {
   const lines = [`# Interim verdict: ${reviewId}`, "", `verdict: ${verdict.headline}`, `source: ${verdict.source}`];
+  if (verdict.round !== undefined) lines.push(verdict.round);
   if (verdict.runMode !== undefined) lines.push(`run mode: ${verdict.runMode}`);
   if (verdict.testsNotRun !== undefined) lines.push(`warning: ${verdict.testsNotRun}`);
   if (verdict.total === 0 && verdict.source !== "none") lines.push("findings: none");
