@@ -5,7 +5,7 @@ import { layersUsedFrom } from "./layers-usage";
 import { researchErrors } from "./research";
 import { describeUnusableResult, holdsResultList, lenientReviewResult } from "./result-parse";
 import { readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } from "./retry-plan";
-import { type SliceManifest, packWaves, waveBytesOf } from "./slice";
+import { type SliceManifest, packWavesByKind, waveBytesOf } from "./slice";
 import { ALWAYS_ROLE, DEEP_ROLES, ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 import { fixSliceCoverage, priorDispositionsOf } from "./round-split";
@@ -391,7 +391,7 @@ function retryNext(reviewer: string, raw: RawFile, manifestPath: string | undefi
 /** The dispatches still owed to a reviewer: its uncovered required slices, packed under the manifest's wave budget. */
 function wavesLeft(manifest: SliceManifest, reviewer: string, seen: ReadonlySet<string>): { slices: number; waves: number; bytes: number } {
   const graph = sliceGraph(manifest, reviewer);
-  return summarizeWaves(packWaves(graph.open(requiredSlices(manifest, reviewer), seen), waveBytesOf(manifest)));
+  return summarizeWaves(packWavesByKind(graph.open(requiredSlices(manifest, reviewer), seen), waveBytesOf(manifest)));
 }
 
 function waveNext(reviewer: string, manifestPath: string | undefined, processed: RawFile | undefined): string {

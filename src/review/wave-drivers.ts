@@ -5,7 +5,7 @@ import { type DriverFile, readDrivers } from "./driver-read";
 import { writeFileAtomic } from "../lib/fs";
 import { packageHasBlastRadius, packageHasPrContext, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
 import { fixSliceRoles } from "./round-split";
-import { type SliceManifest, packWaves, waveBytesOf } from "./slice";
+import { type SliceManifest, packWavesByKind, waveBytesOf } from "./slice";
 import { requiredSlices, sliceGraph } from "./waves";
 
 /** Flow 458 AC12: the reviewers of a package and the per-wave driver files `review slice --package` writes for them. */
@@ -60,7 +60,7 @@ export async function writeWaveDrivers(input: { packageDir: string; manifest: Sl
     const graph = sliceGraph(manifest, reviewer);
     const open = graph.open(requiredSlices(manifest, reviewer), new Set());
     // A dispatch carries one kind (fix, second-look, new), as the estimate counts: waves are packed per kind.
-    const waves = (["fix", "second-look", "new"] as const).flatMap((kind) => packWaves(open.filter((entry) => (entry.kind === "fix" ? "fix" : entry.kind === "second-look" ? "second-look" : "new") === kind), waveBytesOf(manifest)));
+    const waves = packWavesByKind(open, waveBytesOf(manifest));
     const definition = DEFINITION_CANDIDATES(reviewer).find((candidate) => existsSync(path.resolve(root, candidate)));
     for (const [at, wave] of waves.entries()) {
       const number = at + 1;

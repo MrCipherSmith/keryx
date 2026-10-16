@@ -71,6 +71,24 @@ test("waves are packed per slice kind, so a dispatch never mixes fix, second-loo
   expect(kinds).toEqual([["slice-01"], ["slice-03"], ["slice-02"]]);
 });
 
+test("review next hands out per-kind waves whose ids match the drivers and result paths (no fallback naming)", async () => {
+  const { reviewNext } = await import("./review-next");
+  const slice = (id: string, kind: NonNullable<SliceEntry["kind"]>): SliceEntry => ({ id, path: `${id}.diff`, bytes: 100, files: [`${id}.ts`], domain: "d", split: "domain", roles: ["review-logic"], depth: "deep", kind });
+  const manifest: SliceManifest = { schemaVersion: 1, maxBytes: 10_000, waveBytes: 10_000, source: "diff", slices: [slice("slice-01", "fix"), slice("slice-02", "new")], omissions: [], totals: { slices: 2, bytes: 200, files: 2, omittedFiles: 0, omittedBytes: 0, droppedBlocks: 0 } };
+  const pkg = path.join(dir, ".metaproject", "reviews", "r");
+  const sliceDir = path.join(pkg, "slices");
+  mkdirSync(sliceDir, { recursive: true });
+  for (const entry of manifest.slices) writeFileSync(path.join(sliceDir, entry.path), `--- ${entry.files[0]}\n@@ 1,1 @@\n+x\n`);
+  writeFileSync(path.join(sliceDir, "manifest.json"), JSON.stringify(manifest));
+  await writeWaveDrivers({ packageDir: pkg, manifest, sliceDir, reviewers: ["review-logic"] });
+  const first = await reviewNext({ packageDir: pkg, reviewers: ["review-logic"] });
+  expect(first.dispatches.map((d) => [d.slices, d.driver, d.result])).toEqual([[["slice-01"], "drivers/review-logic-w1.json", "raw/review-logic-w1.txt"]]);
+  mkdirSync(path.join(pkg, "raw"), { recursive: true });
+  writeFileSync(path.join(pkg, "raw", "review-logic-w1.txt"), JSON.stringify({ reviewer: "review-logic", status: "DONE", slices: ["slice-01"], findings: [] }));
+  const second = await reviewNext({ packageDir: pkg, reviewers: ["review-logic"] });
+  expect(second.dispatches.map((d) => [d.slices, d.driver, d.result])).toEqual([[["slice-02"], "drivers/review-logic-w2.json", "raw/review-logic-w2.txt"]]);
+});
+
 test("an explicit base is kept even when it gives an empty range", async () => {
   const run = (...args: string[]): void => {
     const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_COMMITTER_NAME: "t", GIT_AUTHOR_EMAIL: "200531777+MrCipherSmith@users.noreply.github.com", GIT_COMMITTER_EMAIL: "200531777+MrCipherSmith@users.noreply.github.com" };
