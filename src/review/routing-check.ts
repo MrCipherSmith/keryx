@@ -24,20 +24,17 @@ export function narrowedSlices(manifest: Pick<SliceManifest, "slices">, readText
       unreadable.push(entry.id);
       continue;
     }
-    // A fix slice of a delta round (flow 458) has its own roster, computed with the function `review slice` routes with. The
-    // round must back the claim; one it does not back is routed, and so judged, as a new slice.
-    if (fixClaimBacked(entry, fix)) {
-      const recordedFix = new Set(entry.roles ?? []);
-      const missingFix = expectedFixRoles(entry, fix!).filter((role) => !recordedFix.has(role));
-      if (missingFix.length > 0) narrowed.push({ id: entry.id, missingRoles: missingFix });
-      continue;
-    }
     // Slice files are always written in the scoped format (like `routeSlices` reads them). Sniffing the format would let
     // an added line that starts with `++ ` pass for a git header and route the slice as an empty unified diff.
     const needed = routeSliceRegions(entry.id, parseScopedDiff(text), { changedFiles });
+    // A fix slice of a delta round (flow 458) must have the fix roster (computed with the function `review slice` routes
+    // with) AND everything its own content routes as a round-1 slice (M3), and a deep read. The round must back the claim;
+    // one it does not back is judged as a new slice.
+    const backedFix = fixClaimBacked(entry, fix);
+    const roles = backedFix ? [...new Set([...needed.roles, ...expectedFixRoles(entry, fix!)])] : needed.roles;
     const recorded = new Set(entry.roles ?? []);
-    const missingRoles = needed.roles.filter((role) => !recorded.has(role));
-    const shallow = needed.depth === "deep" && entry.depth !== "deep";
+    const missingRoles = roles.filter((role) => !recorded.has(role)).sort();
+    const shallow = (backedFix || needed.depth === "deep") && entry.depth !== "deep";
     if (missingRoles.length > 0 || shallow) {
       narrowed.push({ id: entry.id, missingRoles, ...(shallow ? { depth: { recorded: entry.depth ?? "unset", needed: "deep" as const } } : {}) });
     }

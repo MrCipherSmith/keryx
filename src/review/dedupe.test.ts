@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { isDuplicate, knownFindingsForWave, mergeDuplicates, problemSimilarity } from "./dedupe";
+import { codeTokens, isDuplicate, knownFindingsForWave, mergeDuplicates, problemSimilarity, renderDuplicatesMarkdown } from "./dedupe";
 import { createManagedReviewPackage } from "./managed";
 import type { StructuredReviewFinding } from "./types";
 
@@ -118,6 +118,30 @@ describe("mergeDuplicates", () => {
     expect(findings[0]?.severity).toBe("minor");
     expect(findings[0]?.verification?.verdict).toBe("confirmed");
     expect(merges[0]?.severityRule).toBe("verified");
+    // The duplicates block says the lower confirmed severity beat the higher unconfirmed one, and whose it was.
+    expect(merges[0]?.outranked).toEqual({ severity: "blocker", reviewer: "review-regression", id: "F-002" });
+    expect(renderDuplicatesMarkdown(merges)).toContain("the confirmed minor outranks the unconfirmed blocker of review-regression (F-002)");
+  });
+
+  test("the absorbed finding's problem statement is kept in merged_problems", () => {
+    const { findings } = mergeDuplicates([
+      finding({ global_id: "r#F-001" }),
+      finding({ id: "F-002", global_id: "r#F-002", reviewer: "review-regression", line: 12, problem: "attempt counter is never reset after success in the retry loop" }),
+    ]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.problem).toBe("the retry loop never resets the attempt counter after a success");
+    expect(findings[0]?.merged_problems).toEqual(["attempt counter is never reset after success in the retry loop"]);
+  });
+
+  test("statements that name different identifiers are never merged, however alike the rest of the words", () => {
+    const a = finding({ problem: "the retry loop in `loadUser` never resets the attempt counter after a success" });
+    const b = finding({ id: "F-002", reviewer: "review-regression", line: 11, problem: "the retry loop in `loadOrder` never resets the attempt counter after a success" });
+    expect(isDuplicate(a, b)).toBe(false);
+    expect(isDuplicate(a, { ...b, dedupe_key: "k" })).toBe(false);
+    // One naming a subset of the other's identifiers (or none) still merges on the rest of the rule.
+    expect(isDuplicate(a, { ...b, problem: "the retry loop in `loadUser()` never resets the attempt counter after success" })).toBe(true);
+    expect(isDuplicate(a, { ...b, problem: "the retry loop never resets the attempt counter after a success" })).toBe(true);
+    expect([...codeTokens("`user.id` vs session_token and parseInput() in fooBar")].sort()).toEqual(["fooBar", "parseInput", "session_token", "user.id"]);
   });
 
   test("never merges external, dispositioned or refuted findings", () => {

@@ -17,7 +17,7 @@ import { operatorGateApplies } from "../review/run-profile";
 import { commentRuleScopeConfig } from "../review/comment-rule";
 import { renderRoutingSummary, routeSlices, summarizeRouting } from "../review/slice-routing";
 import { NOT_REVIEW_PACKAGES } from "../review/prior-round";
-import { readPriorFindings, readRoundRecord } from "../review/round-record";
+import { readPriorFindings, readRoundRecord, roundRecordTampered, type RoundRecord } from "../review/round-record";
 import { classifyDeltaSlices, isDeltaRound, splitCounts } from "../review/round-split";
 import { defaultWaveBytes, detectReviewHost, HOST_WAVE_BYTES, parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
 
@@ -94,9 +94,12 @@ the slice id; none below 4 light slices) run deep as an audit sample (\`audit: t
 
 In a delta round (the package's round.json, written by \`review start\`, names a previous
 round at an ancestor head) only the round's range prevHead..head is cut. A slice holding a
-fix hunk is \`kind: "fix"\` with its \`findingIds\`: read by review-logic, review-regression
-and the reviewers that authored those findings; every other slice is \`kind: "new"\` and routed
-as above. First and fallback-first rounds are cut over --ref as before.
+fix hunk is \`kind: "fix"\` with its \`findingIds\`, read deep by review-logic, review-regression,
+the reviewers that authored those findings AND every role its own content routes as above;
+every other slice is \`kind: "new"\` and routed as above. The delta diff takes the same context,
+exclusions and pre-filters as a round-1 cut and is never larger than merge-base..head (when it
+would be, merge-base..head is cut instead, still split fix/new). First and fallback-first
+rounds are cut over --ref as before. A round.json edited after \`review start\` is refused.
 
 Accepts a git diff or the output of \`keryx review scope --scoped-diff\`.
 Writes slice-NN.diff and ${MANIFEST_NAME} into --out, else <review-dir>/slices with --package (where
@@ -202,10 +205,18 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   // Flow 458: a package whose `review start` found a previous round of this target at an ancestor head slices only the
   // round's range (prevHead..head), then tags each slice fix or new. A first or fallback-first round is cut as before.
   const packageFlag = optionValue(args, "--out") === undefined ? placed("--package") : undefined;
+  const tampered = packageFlag === undefined ? undefined : roundRecordTampered(packageFlag);
+  if (tampered !== undefined) throw new Error(`review slice refused: ${tampered}`);
   const round = packageFlag === undefined ? undefined : readRoundRecord(packageFlag);
   const delta = isDeltaRound(round) && diffFile === undefined ? round : undefined;
   if (delta !== undefined && ref !== undefined) console.error(`--ref ${ref} ignored: the package's round ${delta.round} is a delta round, sliced over ${delta.range.base}..${delta.range.head}`);
-  const diff = diffFile !== undefined ? await deps.readDiffSource(diffFile) : delta !== undefined ? await gitRangeDiff(delta.range.base!, delta.range.head!, contextLines) : await deps.gitDiff(ref, contextLines);
+  let diff: string;
+  if (diffFile !== undefined) diff = await deps.readDiffSource(diffFile);
+  else if (delta !== undefined) {
+    const cut = await deltaSliceDiff(delta, contextLines);
+    if (cut.note !== undefined) console.error(cut.note);
+    diff = cut.diff;
+  } else diff = await deps.gitDiff(ref, contextLines);
   const hostArg = optionValue(args, "--host");
   const host = hostArg === undefined ? detectReviewHost() : parseReviewHost(hostArg);
   if (host === undefined) throw new Error(`--host must be one of ${REVIEW_HOSTS.join(", ")}, got "${hostArg}"`);
@@ -247,6 +258,30 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const split = delta === undefined ? undefined : splitCounts(manifest);
   if (delta !== undefined && split !== undefined) console.log(`round ${delta.round} delta ${delta.range.base!.slice(0, 12)}..${delta.range.head!.slice(0, 12)}: ${split.fix} fix slice(s) (logic, regression, finding authors), ${split.new} new slice(s)`);
   console.log(`\nmanifest: ${manifestPath}`);
+}
+
+/**
+ * The diff a delta round is sliced from. It goes through exactly what a round-1 cut of the same head goes through — the
+ * same context lines, the same review-package pathspec, and afterwards the same scope pre-filters and omissions in
+ * `sliceSourceFromDiff` — and it is never larger than the round-1 diff merge-base..head: prevHead..head also carries the
+ * lines the fix removed from code the branch itself added (absent from merge-base..head), and when that makes it the
+ * bigger of the two the round is cut from merge-base..head instead, its slices still tagged fix or new by the fix hunks
+ * (which are head-side lines, the same in both).
+ */
+export async function deltaSliceDiff(
+  round: Pick<RoundRecord, "range" | "mergeBase">,
+  contextLines: number,
+  rangeDiff: (base: string, head: string, contextLines: number) => Promise<string> = gitRangeDiff,
+): Promise<{ diff: string; note?: string | undefined }> {
+  const delta = await rangeDiff(round.range.base!, round.range.head!, contextLines);
+  const mergeBase = round.mergeBase;
+  if (mergeBase === undefined || mergeBase === null || mergeBase === round.range.base) return { diff: delta };
+  const full = await rangeDiff(mergeBase, round.range.head!, contextLines);
+  if (Buffer.byteLength(delta) <= Buffer.byteLength(full)) return { diff: delta };
+  return {
+    diff: full,
+    note: `delta ${round.range.base!.slice(0, 12)}..${round.range.head!.slice(0, 12)} (${Buffer.byteLength(delta)} bytes) is larger than the round-1 diff ${mergeBase.slice(0, 12)}..${round.range.head!.slice(0, 12)} (${Buffer.byteLength(full)} bytes): sliced over merge-base..head, still split fix/new`,
+  };
 }
 
 /** `git diff <base> <head>` of a delta round, without committed review packages (the same pathspec the round's hunks were cut with). */

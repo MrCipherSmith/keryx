@@ -94,7 +94,8 @@ test("a delta round: the steps run in order, plan.json carries the round, both s
   expect(calls.map((call) => call[0])).toEqual(["start", "scope", "blast-radius", "slice", "required"]);
   expect(calls[0]).toEqual(["start", "--target", "pr", "--ref", "https://github.com/o/r/pull/7", "--head", HEAD, "--host", "claude-code"]);
   // A delta round is scoped and sliced over the previous reviewed head, whatever --ref said; slice reads the range from round.json.
-  expect(calls[1]).toEqual(["scope", "--json", "--ref", BASE]);
+  // --head pins the scope too: the diff ends at that commit, not at the working tree.
+  expect(calls[1]).toEqual(["scope", "--json", "--ref", BASE, "--head", HEAD]);
   expect(calls[3]).toEqual(["slice", "--package", pkg, "--head", HEAD, "--host", "claude-code", "--json"]);
   expect(calls[4]).toEqual(["required", "--depth", "auto", "--scope", path.join(pkg, "scope.json"), "--package", pkg, "--json"]);
 
@@ -145,6 +146,12 @@ test("a failing step stops the plan with the step named; nothing is written and 
   expect(existsSync(path.join(pkg, PLAN_FILE))).toBe(false);
   calls = [];
   await expect(runPlan(["--target", "feature/x"], deps({ failStep: "start" }))).rejects.toThrow(/`review start` failed/);
+});
+
+test("--memory-query and --unattended reach `review start` as given (start keeps its own terminal gate for --unattended)", async () => {
+  await runPlan(["--target", "feature/x", "--ref", "origin/main", "--memory-query", "review rounds", "--unattended"], deps({ slices: [] }));
+  expect(calls[0]).toEqual(["start", "--target", "branch", "--ref", "feature/x", "--memory-query", "review rounds", "--unattended"]);
+  expect(PLAN_FLAGS).toEqual(expect.arrayContaining(["--memory-query", "--unattended"]));
 });
 
 test("--target is required, unknown flags are refused, --help prints usage and runs nothing", async () => {

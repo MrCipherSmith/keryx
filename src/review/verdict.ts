@@ -247,9 +247,23 @@ export async function computeVerdict(packageDir: string, options: VerdictOptions
   const profile = readRunProfile(packageDir);
   const runMode = profile === undefined ? undefined : `${profile.mode} (${profile.declaredVia})`;
   const testsNotRun = testsNotRunWarning(packageDir);
-  const roundRecord = readRoundRecord(packageDir);
-  const round = roundRecord === undefined ? undefined : renderRoundLine(roundRecord);
-  const notRun = dispatchSkips(object(object(await readJson(path.join(packageDir, "research.json")))?.dispatch)).map(skipLine);
+  // A malformed round.json is refused by slice, ledger and complete; the verdict only reports, so it says so instead.
+  let round: string | undefined;
+  try {
+    const roundRecord = readRoundRecord(packageDir);
+    round = roundRecord === undefined ? undefined : renderRoundLine(roundRecord);
+  } catch (error) {
+    round = `round record unusable: ${error instanceof Error ? error.message : String(error)}`;
+  }
+  const dispatchRecord = object(object(await readJson(path.join(packageDir, "research.json")))?.dispatch);
+  // M6: reviewers the required set dropped as superseded or overlapping are named in the verdict, with what replaced them.
+  const superseded = (Array.isArray(dispatchRecord?.superseded) ? dispatchRecord.superseded : []).flatMap((entry) => {
+    const item = object(entry);
+    const reviewer = text(item?.reviewer);
+    const reason = text(item?.reason);
+    return reviewer === undefined || reason === undefined ? [] : [`excluded: ${reviewer} — ${reason}`];
+  });
+  const notRun = [...dispatchSkips(dispatchRecord).map(skipLine), ...superseded];
   return { source, counts, total, verified, unverified, refuted, dismissed, resolved, verifierClaims, rawDir, open, minors, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline, ...(runMode === undefined ? {} : { runMode }), ...(testsNotRun === undefined ? {} : { testsNotRun }), ...(round === undefined ? {} : { round }), ...(notRun.length === 0 ? {} : { notRun }) };
 }
 

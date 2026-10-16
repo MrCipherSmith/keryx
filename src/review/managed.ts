@@ -4,6 +4,7 @@ import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate
 import { REPORT_FIELD_EVIDENCE_LEVEL, parseEvidenceLevel } from "./evidence-level";
 import { packageCoverageWarnings } from "./coverage";
 import { packageParityWarnings } from "./parity";
+import { roundRecordTampered } from "./round-record";
 import { PENDING_RESEARCH, packageResearchErrors } from "./research";
 import { computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
 import { lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
@@ -886,6 +887,9 @@ export async function completeManagedReview(
   if (missing.length > 0) {
     throw new Error(`Cannot complete managed review; missing artifacts: ${missing.join(", ")}`);
   }
+  // Flow 458: the round record decides what the round reviewed; one edited after `review start` is refused here too.
+  const tampered = roundRecordTampered(packageDir);
+  if (tampered !== undefined) throw new Error(`Cannot complete managed review; ${tampered}`);
   const warnings: string[] = [];
   let manifest = stored;
   if (options.head !== undefined) {

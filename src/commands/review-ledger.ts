@@ -4,7 +4,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
-import { DISPATCH_KNOWN_ROLES, skipLine, type ReviewerSkip, packageChangedLines, packageRoundDepth, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
+import { DISPATCH_KNOWN_ROLES, skipDecision, skipLine, type ReviewerSkip, packageChangedLines, packageRoundDepth, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
 import { SLICE_MANIFEST_COPY } from "../review/coverage-complete";
 import { readToolLog } from "../review/layers-usage";
 import { pendingMutants } from "../review/mutate";
@@ -12,7 +12,7 @@ import { type Disposition, type LedgerGap, type RawFile, buildLedger, followUpsO
 import { type RetryState, applyEscalations, emptyRetryState, escalationsFor, readSliceIds, scopeFingerprint } from "../review/retry-plan";
 import { narrowedSlices, packageRoutingRefusal, routingRefusal, sliceTextReader } from "../review/routing-check";
 import { fixContextOf, fixSliceRoles } from "../review/round-split";
-import { readRoundRecord } from "../review/round-record";
+import { readRoundRecord, roundRecordTampered } from "../review/round-record";
 import { type SliceManifest, manifestSizeProblem } from "../review/slice";
 import { packagePlanGate } from "../review/estimate";
 
@@ -45,8 +45,11 @@ are true only when established.
 --skip <reviewer> --reason "<why>" (repeatable, each --skip followed by its --reason) records a
 required reviewer the operator deliberately did not run: it leaves the dispatch selection, is
 written to dispatch.skipped and as \`Not run: <reviewer> — <why>\` to dispatch.notRun and the
-report, and the reviewer-set gate accepts it with that line on the record. A skip with no
-reason, or of a reviewer the round does not require, is refused.
+report. Skipping a required reviewer is a smaller reviewer set, so it is refused unless the
+operator recorded that decision for this head (card review_override_reviewers, or
+\`keryx review override-reviewers --package <dir> --selected <every other reviewer>\` at a
+terminal). A skip of a reviewer the round does not require is only recorded. A skip with no
+reason is refused.
 
 Slices are dispatched in waves bounded by the manifest's wave budget; a reviewer that covered
 new slices is not penalised for the rest (retry-state.json keeps what it covered).
@@ -270,6 +273,8 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   if (mode !== "all" && mode !== "diff") throw new Error('--mode must be "all" or "diff".');
 
   const root = projectRootOfPackage(packageDir);
+  const tampered = roundRecordTampered(packageDir);
+  if (tampered !== undefined) throw new Error(`ledger build refused: ${tampered}`);
   const files = await packageScopeFiles(packageDir);
   const manifestPath = path.join(inputDir, "slices", "manifest.json");
   let manifest = await readJson<SliceManifest>(manifestPath);
@@ -304,13 +309,15 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   if (recordedDepth?.stale !== undefined) console.error(`round-depth.json ignored (${recordedDepth.stale}); building the full round. Re-run \`keryx review required --package\` to decide again.`);
   const depth = recordedDepth?.depth;
   const required = await requiredReviewers(root, mode, files, { blastRadius, prContext: packageHasPrContext(packageDir), depth });
-  const skipped = parseSkips(rest);
-  const notRequired = skipped.filter((skip) => !required.required.includes(skip.reviewer));
-  if (notRequired.length > 0) throw new Error(`--skip ${notRequired.map((skip) => skip.reviewer).join(", ")}: not a reviewer this round requires (required: ${required.required.join(", ") || "none"}); nothing to skip`);
   const { payloadSlices, payloadDispatchCounts, ruleFiles, toolLogs: toolLogPaths, assignments, replies, dropped } = await readDrivers(inputDir, root);
   // A delta round's fix slices are read by their own roster (flow 458): the reviewers that authored the findings they answer
   // join the round even when no changed path asks for them, and each slice kind is held to its own roster below.
   const selected = [...new Set([...required.required, ...(manifest === undefined ? [] : fixSliceRoles(manifest))])].sort();
+  // M5: skipping a reviewer the round requires is a smaller reviewer set, the operator's decision (card or terminal), never
+  // the agent's flag alone. A skip of a reviewer the round does not require changes nothing and is only recorded.
+  const skipped = parseSkips(rest).map((skip) => (selected.includes(skip.reviewer) ? skip : { ...skip, reason: `${skip.reason} (not required this round)` }));
+  const decided = await skipDecision(packageDir, skipped.filter((skip) => selected.includes(skip.reviewer)).map((skip) => skip.reviewer));
+  if (!decided.ok) throw new Error(`ledger build refused: --skip ${decided.refusal}`);
   const { raws, ignored, setAside } = await loadRaws(inputDir, { files: replies.files, reviewers: [...new Set([...replies.reviewers, ...selected])] });
 
   assignRawDispatch(raws, assignments);
@@ -348,6 +355,8 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     dispositions,
     manifestPath: path.relative(process.cwd(), manifestPath),
     skipped,
+    superseded: required.excluded.filter((entry) => entry.reason.startsWith("superseded by ") || entry.reason.startsWith("overlap group ")),
+    supersedeNotes: required.notes,
   });
   for (const driver of dropped) {
     gaps.push({ reviewer: driver.reviewer, detail: `drivers/${driver.file}: ${driver.unusable} slice entr${driver.unusable === 1 ? "y" : "ies"} without a usable id; none of this dispatch's slices counts as handed to ${driver.reviewer}`, next: `give every entry in drivers/${driver.file} an id string, or an object with an id` });
