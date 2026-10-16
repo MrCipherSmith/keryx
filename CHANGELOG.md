@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.120] - 2026-10-16
+
 ### Added
 - **Review rounds 2+ review the delta.** `keryx review start` finds the previous round of the same target — local package, review packages merged into the base branch, keryx's own round block on the PR, other PR comments, the flow package — and splits the change since the previous reviewed head into FIX changes (logic, regression and the authors of the attached findings, plus the slice's normal routing; every attached finding gets a disposition) and NEW changes (round-1 treatment). Code unchanged since the previous round gets a second look by review-logic and review-security-code, or a full review when the previous round was weak. Every orchestrator gets this by just calling `review start`; round details land in `<package>/round.json`.
 - **A previous round counts only when it is ours:** our own login's round block on the PR, a completed package merged into the base, or a matching entry in the machine-local round registry (written at ingest, complete and publish). A package the PR committed itself, a draft, or another branch's package gives a full round with the old findings as context.
