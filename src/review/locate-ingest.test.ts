@@ -204,3 +204,56 @@ test("the tree reader is injectable, and what it returns is what gets located", 
   expect(recorded?.line).toBe(3);
   expect(recorded?.locator).toMatchObject({ state: "derived", method: "exact" });
 });
+
+async function commitTree(): Promise<string> {
+  await $`git init -q`.cwd(ROOT).quiet();
+  await $`git -c user.email=t@t -c user.name=t add -A`.cwd(ROOT).quiet();
+  await $`git -c user.email=t@t -c user.name=t commit -q -m first`.cwd(ROOT).quiet();
+  return (await $`git rev-parse HEAD`.cwd(ROOT).quiet().text()).trim();
+}
+
+test("flow 458 AC12 — a finding whose file is absent at the reviewed head is kept, flagged path_missing and listed in scope.md", async () => {
+  const head = await commitTree();
+  // Present in the working tree after the round's head, absent AT the head: the finding cited a file the reviewer never read there.
+  await writeFile(path.join(ROOT, "src", "later.ts"), "export const later = 1;\n", "utf8");
+
+  const result = await createManagedReviewPackage({
+    cwd: ROOT,
+    mode: "ingest",
+    reviewId: "2026-09-15-path-missing",
+    target: { kind: "report", ref: "review.md", head },
+    reportText: "# Round\n\nno machine-readable block here\n",
+    findings: [
+      finding({ id: "F-001" }),
+      finding({ id: "F-002", file: "src/never-existed.ts", line: 3 }),
+      finding({ id: "F-003", file: "src/later.ts" }),
+      finding({ id: "F-004", file: "../outside.ts" }),
+    ],
+    now: new Date("2026-09-15T12:00:00Z"),
+  });
+  const recorded = JSON.parse(await readFile(path.join(ROOT, result.path, "findings.json"), "utf8")) as StructuredReviewFinding[];
+  const byId = new Map(recorded.map((entry) => [entry.id, entry]));
+  expect(byId.get("F-001")?.path_missing).toBeUndefined();
+  expect(byId.get("F-002")?.path_missing).toBe(true);
+  expect(byId.get("F-003")?.path_missing).toBe(true);
+  expect(byId.get("F-004")?.path_missing).toBe(true);
+  const scope = await readFile(path.join(ROOT, result.path, "scope.md"), "utf8");
+  expect(scope).toContain("## Paths missing at the reviewed head");
+  expect(scope).toContain("src/never-existed.ts");
+  expect(scope).not.toMatch(/F-001 \(review-logic\): src\/greet\.ts/);
+});
+
+test("flow 458 AC12 — a quoted finding on a missing path is flagged, not refused as an unresolved quote", async () => {
+  const head = await commitTree();
+  const [recorded] = await ingest({
+    target: { kind: "report", ref: "review.md", head },
+    findings: [finding({ file: "src/gone.ts", line: 4, quote: "anything at all" })],
+  });
+  expect(recorded?.path_missing).toBe(true);
+  expect(recorded?.line).toBeNull();
+});
+
+test("flow 458 AC12 — with no recorded head nothing is flagged: the tree reader decides alone", async () => {
+  const [recorded] = await ingest({ findings: [finding({ file: "src/gone.ts" })] });
+  expect(recorded?.path_missing).toBeUndefined();
+});

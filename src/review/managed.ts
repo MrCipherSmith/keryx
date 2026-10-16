@@ -291,6 +291,7 @@ export async function createManagedReviewPackage(
   // checked. A finding with no quote is untouched — it keeps whatever it said,
   // and says so by carrying no locator.
   await anchorFindings(reported, input, head);
+  await flagMissingPaths(reported, input, head);
   refuseUnresolvedLocators(reported, input, head);
 
   // Minted BEFORE the verifier runs, because a claim names a finding by
@@ -489,7 +490,7 @@ export async function createManagedReviewPackage(
   }
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
-    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats) +
+    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats, findings) +
       renderDuplicatesMarkdown(deduped.merges),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
@@ -1320,6 +1321,44 @@ async function anchorFindings(
   }
 }
 
+/** Whether `git cat-file -e <spec>` succeeds in `cwd`. */
+async function gitObjectExists(cwd: string, spec: string): Promise<boolean> {
+  try {
+    const proc = Bun.spawn(["git", "cat-file", "-e", spec], { cwd, stdout: "ignore", stderr: "ignore", stdin: "ignore" });
+    return (await proc.exited) === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Flow 458 AC12: a finding whose `file` does not exist at the reviewed head is marked `path_missing` (and listed in
+ * `scope.md`), never dropped. Skipped when the round records no head, when the head is not in this checkout (nothing could
+ * be established), or when a test injects the tree. External comments keep the path GitHub gave them.
+ */
+async function flagMissingPaths(
+  findings: Array<StructuredReviewFinding & { summary: string }>,
+  input: ManagedReviewInput,
+  head: string | null,
+): Promise<void> {
+  if (head === null || input.readTreeFile !== undefined) return;
+  if (!(await gitObjectExists(input.cwd, `${head}^{commit}`))) return;
+  for (const finding of findings) {
+    if (finding.source === "external" || typeof finding.file !== "string" || finding.file.trim() === "") continue;
+    const relative = lexicalRelativePath(finding.file.trim().replace(/:\d+(?:[-:]\d+)*$/, ""));
+    if (relative === null || !(await gitObjectExists(input.cwd, `${head}:${relative}`))) finding.path_missing = true;
+    else delete finding.path_missing;
+  }
+}
+
+/** `## Paths missing at the reviewed head`: the findings flagged `path_missing`, or an empty string when there are none. */
+function renderPathMissingMarkdown(findings: readonly StructuredReviewFinding[]): string {
+  const missing = findings.filter((finding) => finding.path_missing === true);
+  if (missing.length === 0) return "";
+  const lines = missing.map((finding) => `- ${finding.global_id ?? finding.id} (${finding.reviewer}): ${finding.file ?? "(no file)"}`);
+  return `\n## Paths missing at the reviewed head\n\n${missing.length} finding(s) cite a file that does not exist at the reviewed head. They are kept, flagged \`path_missing\` in findings.json; check the path before acting on them.\n\n${lines.join("\n")}\n`;
+}
+
 /**
  * A round is a claim about a commit. Where the commit is known and an internal
  * finding's quote is not at its `path:line` there, the finding cites something the
@@ -1337,7 +1376,7 @@ function refuseUnresolvedLocators(
   }
   const unresolved = findings.filter(
     (finding) =>
-      finding.source !== "external" && finding.disposition === undefined && finding.locator?.state === "unlocatable",
+      finding.source !== "external" && finding.disposition === undefined && finding.locator?.state === "unlocatable" && finding.path_missing !== true,
   );
   if (unresolved.length === 0) {
     return;
@@ -1460,6 +1499,9 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   }
   if (finding.locator !== undefined) {
     record.locator = finding.locator;
+  }
+  if (finding.path_missing === true) {
+    record.path_missing = true;
   }
   if (finding.symbol !== undefined) {
     record.symbol = finding.symbol;
@@ -2387,6 +2429,7 @@ function renderScope(
   externalReclaims: readonly ExternalReclaim[] = [],
   scopeBScreen: ScopeBScreenRecord = { source: "none", scopeBFindings: 0 },
   filterStats?: ReviewFilterStats | undefined,
+  allFindings: readonly StructuredReviewFinding[] = [],
 ): string {
   const preFilter: ReviewScopeCountsLike | undefined = input.scope?.counts ?? input.scopeCounts;
   const drops: readonly ReviewScopeDropLike[] | undefined = input.scope?.drops;
@@ -2411,7 +2454,7 @@ ${renderStageCountsMarkdown({
 ${renderCapsMarkdown(caps)}
 ${renderScopeBScreenMarkdown(scopeBScreen)}${
     filterStats === undefined ? "" : `\n${renderFilterStatsMarkdown(filterStats)}`
-  }${renderExternalReclaimsMarkdown(externalReclaims)}`;
+  }${renderExternalReclaimsMarkdown(externalReclaims)}${renderPathMissingMarkdown(allFindings)}`;
   return carriedPreFilter === undefined ? head : `${head.trimEnd()}\n\n${carriedPreFilter}\n`;
 }
 

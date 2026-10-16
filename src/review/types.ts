@@ -441,6 +441,8 @@ export type StructuredReviewFinding = {
   quote?: string | null | undefined;
   /** How {@link line} was arrived at. Present exactly when {@link quote} is. */
   locator?: ReviewFindingLocator | undefined;
+  /** True when {@link file} does not exist at the reviewed head; the finding is kept and listed in `scope.md`. */
+  path_missing?: boolean | undefined;
   symbol?: string | null | undefined;
   dedupe_key?: string | null | undefined;
   blocking_merge?: boolean | undefined;
