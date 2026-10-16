@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { CHUNKS_FILE, CHUNK_PASS_FILE, CHUNK_LOCK_WAIT_MS, ensureChunkPlan, mergeChunkPass, mergeFindings, nextChunk, planChunks, readChunkPlan, readChunkState, recordChunk, withChunkStateLock } from "./chunks";
+import { CHUNKS_FILE, CHUNK_PASS_FILE, CHUNK_LOCK_WAIT_MS, ensureChunkPlan, legacyDroppedKeyOf, mergeChunkPass, mergeFindings, nextChunk, planChunks, readChunkPlan, readChunkState, recordChunk, withChunkStateLock } from "./chunks";
 import { recordRadiusAndPlan } from "./chunks";
 import { answerChunkEstimate, estimateChunkRun, recordChunkEstimate } from "./chunks-estimate";
 
@@ -93,6 +93,22 @@ describe("the chunk plan over the dropped blast-radius files (AC8a)", () => {
     expect(onDisk.dropped).toBe(4);
     expect(onDisk.droppedKey).toBe(second?.droppedKey as string);
     expect(onDisk.droppedKey).not.toBe(first?.droppedKey as string);
+  });
+
+  test("an in-flight plan keyed by the pre-457 dropped set (every reason, not only the cap) is kept with its passes", async () => {
+    const files = names(3);
+    await sizedFiles(files);
+    const prefiltered = { ...drop("dist/bundle.js"), reason: "pre-filter" as const };
+    await writeFile(
+      path.join(packageDir, "blast-radius.json"),
+      JSON.stringify({ schemaVersion: 1, scope: "blast-radius", depth: 2, maxFiles: 40, changedFiles: ["src/a.ts"], files: [], dropped: [...files.map((file) => drop(file)), prefiltered], unresolved: [], counts: {}, graph: { nodes: 1, edges: 0 } }),
+    );
+    const current = (await ensureChunkPlan(packageDir, root))!;
+    const legacy = { ...current, droppedKey: legacyDroppedKeyOf({ dropped: [...files.map((file) => drop(file)), prefiltered] }) };
+    expect(legacy.droppedKey).not.toBe(current.droppedKey);
+    await writeFile(path.join(packageDir, CHUNKS_FILE), JSON.stringify(legacy));
+    await recordChunk(packageDir, "chunk-001", { status: "DONE" });
+    expect(await ensureChunkPlan(packageDir, root)).toEqual(legacy);
   });
 
   test("a plan written before droppedKey existed is kept with its recorded passes, even when the dropped set differs (R2-30)", async () => {
