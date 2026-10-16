@@ -97,7 +97,7 @@ test("a per-runtime build the bundle no longer ships is removed from an existing
     for (const stale of ["SKILL.codex.md", "SKILL.cursor.md", "SKILL.zed.md", "SKILL.opencode.md"]) {
       await writeFile(path.join(skillDir, stale), "# stale build from an older keryx\n", "utf8");
     }
-    await writeFile(path.join(skillDir, "SKILL.detail.md"), "companion, not a build\n", "utf8");
+    await writeFile(path.join(skillDir, "SKILL.detail.md"), "stale companion, replaced by the bundled one\n", "utf8");
     await writeFile(path.join(skillDir, "SKILL.claude.md"), "not a harness build name\n", "utf8");
     await writeFile(path.join(skillDir, "notes.md"), "unrelated file\n", "utf8");
 
@@ -107,7 +107,10 @@ test("a per-runtime build the bundle no longer ships is removed from an existing
       expect(existsSync(path.join(skillDir, stale))).toBe(false);
     }
     // Only runtime-build names are touched.
-    expect(await readFile(path.join(skillDir, "SKILL.detail.md"), "utf8")).toBe("companion, not a build\n");
+    // job-orchestrator ships a SKILL.detail.md, so install refreshes it from the
+    // bundle; what matters is that the build sweep did not remove it.
+    expect(await readFile(path.join(skillDir, "SKILL.detail.md"), "utf8"))
+      .toBe(await readFile(path.join(bundledDir, "SKILL.detail.md"), "utf8"));
     expect(await readFile(path.join(skillDir, "SKILL.claude.md"), "utf8")).toBe("not a harness build name\n");
     expect(await readFile(path.join(skillDir, "notes.md"), "utf8")).toBe("unrelated file\n");
     expect(await readFile(path.join(skillDir, "SKILL.md"), "utf8"))

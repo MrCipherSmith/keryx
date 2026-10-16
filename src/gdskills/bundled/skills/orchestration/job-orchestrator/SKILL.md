@@ -988,7 +988,8 @@ never-bundled `code-review` 4-agent skill — are gone. They emitted prose into 
 transcript and nothing else, which is precisely the failure the managed pipeline
 replaced.
 
-A pull request driven by this orchestrator has to pass the completion gate shipped in 0.2.71. Its conditions are what 2.6 and 2.7 are built to satisfy:
+A pull request driven by this orchestrator has to pass the completion gate shipped in
+0.2.71. Its conditions are what 2.6 and 2.7 are built to satisfy:
 
 | Gate condition | Satisfied by |
 |---|---|
@@ -1134,9 +1135,17 @@ is_fix_round:      <true on any round after the first; the round, its range and 
 pr_comments:       { enabled: <true when a PR exists> }
 ```
 
-It emits the unified report AND the fenced ```json keryx:findings``` block, runs `review-verifier` (Wave C) and then `review-premise` (Wave D) over the consolidated findings, and returns the verification claims and the premise claims as file paths.
+It emits the unified report AND the fenced ```json keryx:findings``` block, runs
+`review-verifier` (Wave C) and then `review-premise` (Wave D) over the consolidated
+findings, and returns the verification claims and the premise claims as file paths.
 
-**Step 7 — verification and the premise check are part of the round, not extras.** `review-orchestrator` dispatches `review-verifier` in Wave C over the consolidated findings. The verifier **runs something** and can only delete — it never raises a severity, adds a finding, or rewrites one, and it never verifies a finding raised by the same reviewer. After it, `review-premise` (Wave D) judges whether each finding is a defect at all: it can lower a severity or hold a finding for the operator, never add one. Both claim sets are merged by the CLI, not by hand.
+**Step 7 — verification and the premise check are part of the round, not extras.**
+`review-orchestrator` dispatches `review-verifier` in Wave C over the consolidated
+findings. The verifier **runs something** and can only delete — it never raises a
+severity, adds a finding, or rewrites one, and it never verifies a finding raised by the
+same reviewer. After it, `review-premise` (Wave D) judges whether each finding is a
+defect at all: it can lower a severity or hold a finding for the operator, never add
+one. Both claim sets are merged by the CLI, not by hand.
 
 **Step 8 — ingest the round.** This is what makes it citable.
 
@@ -1150,7 +1159,11 @@ keryx review ingest --report <path/to/review-report.md> --ref <feature-branch> \
   --spent <usd-so-far> --outstanding <subagents in flight>
 ```
 
-An unrecognised option is **refused, not ignored** — a silently dropped flag writes nothing and still reports success. `--refuted` carries findings this round raised and then dismissed; without it the package keeps only the survivors of an unlogged triage. Without `--premises` nothing is held, and a finding the judge challenged goes to the fixer.
+An unrecognised option is **refused, not ignored** — a silently dropped flag writes
+nothing and still reports success. `--refuted` carries findings this round raised and
+then dismissed; without it the package keeps only the survivors of an unlogged triage.
+Without `--premises` nothing is held, and a finding the judge challenged goes to the
+fixer.
 
 **Findings are the canonical shape.** One vocabulary, everywhere in this skill:
 
@@ -1171,7 +1184,12 @@ OPEN      = blocker + major findings not in HELD
 NEEDS_FIX = count(OPEN) > 0
 ```
 
-A HELD finding is neither fixable nor clean: it never enters a fix prompt, and it blocks the job until answered. Ask the operator about each one as `review-orchestrator` "Wave D" says; an upheld one rejoins OPEN at its severity (carrying `premise_verdict` and `premise_answer` as task-implementer's `FIX_CONTEXT` defines them), a dismissed one carries `dismissed-incorrect` from the operator's decision. Unattended: stop and report the HELD list; never let the loop end reading clean while HELD is non-empty.
+A HELD finding is neither fixable nor clean: it never enters a fix prompt, and it blocks
+the job until answered. Ask the operator about each one as `review-orchestrator` "Wave
+D" says; an upheld one rejoins OPEN at its severity (carrying `premise_verdict` and
+`premise_answer` as task-implementer's `FIX_CONTEXT` defines them), a dismissed one
+carries `dismissed-incorrect` from the operator's decision. Unattended: stop and report
+the HELD list; never let the loop end reading clean while HELD is non-empty.
 
 **Document:** record the report in the job package too, so the job and the review
 record point at each other:
@@ -1254,16 +1272,22 @@ with evidence, not silence.
 Only runs if NEEDS_FIX is true. Default max: **3 iterations** (`max_review_iterations`).
 
 Three is the self-fix bound `task-implementer` and this skill share
-(`flow-orchestrator`'s review bound is five, by operator decision). *"The first three to four repair iterations account for
-most achievable gains"* ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197));
-correctness falls **0.820 -> 0.673** across two forced revisions while
-cumulative ever-correct is **0.847**
-([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Other agent tools
+(`flow-orchestrator`'s review bound is five, by operator decision). *"The first three to
+four repair iterations account for most achievable gains"*
+([arXiv:2607.05197](https://arxiv.org/abs/2607.05197)); correctness falls
+**0.820 -> 0.673** across two forced revisions while cumulative ever-correct is
+**0.847** ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Other agent tools
 hardcode the same bound (`max_reflections = 3`).
 
-The bound is a ceiling, not a target. Repetition ends the loop earlier and **regardless of remaining iterations** — a counter cannot tell "converging slowly" from "stuck", and an agent emitting the identical failing output three times spends the whole budget before anything notices.
+The bound is a ceiling, not a target. Repetition ends the loop earlier and **regardless
+of remaining iterations** — a counter cannot tell "converging slowly" from "stuck", and
+an agent emitting the identical failing output three times spends the whole budget
+before anything notices.
 
-**A finding leaves this loop by being dispositioned, never by being absent.** The previous version of this section recomputed "unresolved" as whatever the next round still reported — so a finding the next reviewer simply did not look at was recorded as fixed. That is absence-as-evidence, and the completion gate refuses it.
+**A finding leaves this loop by being dispositioned, never by being absent.** The
+previous version of this section recomputed "unresolved" as whatever the next round
+still reported — so a finding the next reviewer simply did not look at was recorded as
+fixed. That is absence-as-evidence, and the completion gate refuses it.
 
 ```
 UNRESOLVED_FINDINGS = OPEN from step 2.6          # never a HELD finding (Classify, 2.6.1)
@@ -1927,28 +1951,8 @@ When `dry_run: true` is set (or `--dry-run` is passed):
 3. **Phase 2 is skipped entirely** — no sub-agents dispatched, no git operations
 4. **Output:** Full plan tree with agent names, input data shapes, dependencies:
 
-```
-Dry-run plan for: issue-4141--pipeline-validation
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Step 1: analyze          [issue-analyzer]           → input: issue #4141
-Step 2: context          [context-collector]        → input: analysis result, project_dir
-Step 3: prepare          [orchestrator]             → creates: feature/pipeline-validation worktree
-Step 4: tests-creator    [tests-creator × 3]        → RED stubs, one per task
-Step 5: implement        [task-implementer × 3]     → wave-parallel, 3 tasks
-Step 6: sanity-check     [orchestrator]             → verifies commits exist
-Step 7: verify           [code-verifier]            → lint + type-check + test + imports
-Step 8: review           [review-orchestrator]      → managed round, ingested
-Step 9: security         [security-audit]           → conditional: auth/API/DB/env files
-Step 10: fix             [task-implementer]         → conditional: if NEEDS_FIX
-Step 11: verify-post-fix [code-verifier]            → conditional: after fix
-Step 12: perf-check      [perf-check]               → conditional: frontend/bundle files
-Step 13: report          [orchestrator]             → aggregates all results
-Step 14: pr              [orchestrator + gh CLI]    → conditional: if create_pr
-Step 15: deploy          [deploy]                   → conditional: if user asks
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Estimated sub-agent calls: 11-14 (varies with tasks and review findings)
-No changes will be made. Use without --dry-run to execute.
-```
+The full plan tree (agent names, input shapes, dependencies, no changes made):
+`SKILL.detail.md`, "Dry-run plan output example".
 
 5. Ask user: "Execute this plan? (yes / adjust / abort)"
 
@@ -2149,29 +2153,7 @@ When a job ends with a step recorded `failed`, or with unresolved blocker findin
    off `journal.md`, which `keryx job` timestamped as the job ran, and the retry counts
    come from `keryx job status <job-name> --json`:
 
-```markdown
-# Post-Mortem: <job-name>
-
-## Timeline
-(from .metaproject/jobs/<job-name>/journal.md — every line as recorded)
-- <ISO timestamp> - created
-- <ISO timestamp> - step: implement in-progress (retries 0)
-- <ISO timestamp> - step: implement in-progress (retries 1)
-- <ISO timestamp> - step: implement failed (retries 1) — <reason>
-
-## What Went Wrong
-- <Step name> failed with: <error class> — <error message>
-- Recorded retries: <metrics.steps[].retries>
-- Root cause hypothesis: <analysis>
-
-## What Worked
-- <N> tasks completed successfully
-- Context collection was accurate
-
-## Recommendations for Retry
-- Fix <specific issue> before re-running
-- Consider splitting task-3 into smaller subtasks
-```
+Use the template in `SKILL.detail.md`, "Post-mortem document template".
 
 2. Save to `.metaproject/jobs/<job-name>/post-mortem.md`
 3. Include in final user message: "Post-mortem saved to `.metaproject/jobs/<job-name>/post-mortem.md`"
@@ -2211,16 +2193,7 @@ terminal disposition.
 keryx job status <job-name> --json     # `retries` per step, plus phase and next_step
 ```
 
-**Aggregated in the report:**
-```markdown
-## Metrics
-| Step | Duration | Retries |
-|------|----------|---------|
-| Analyze | 45s | 0 |
-| Context | 30s | 0 |
-| Implement | 5m 22s | 1 |
-| Review | 1m 10s | 0 |
-| **Total** | **7m 47s** | **1** |
-```
+**Aggregated in the report:** a per-step Duration/Retries table with a total row
+(`SKILL.detail.md`, "Metrics table in the report").
 
 This data identifies which steps are bottlenecks and which ones needed a second attempt.
