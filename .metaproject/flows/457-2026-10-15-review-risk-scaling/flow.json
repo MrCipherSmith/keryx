@@ -11,12 +11,12 @@
   "title": "Large-PR reviews scale by risk, not by graph reach, and find more",
   "status": "in-progress",
   "createdAt": "2026-10-15T21:34:19.482Z",
-  "updatedAt": "2026-10-15T21:43:05.216Z",
+  "updatedAt": "2026-10-16T04:50:28.249Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:b72967b48c247712f4f3309579b41db6d0707b090d72332b6520da1c966a3596",
+  "acChecksum": "sha256:8fbb41760247430945fc2f0ca059394dca62e87859943ececb4780be040af8cd",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -104,7 +104,7 @@
       "id": "T5",
       "title": "A: symbol radius, text links, reasoned omissions, radius bugs",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -112,13 +112,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "B: slice routing, risk depth, audit, escalation, estimate gate, NaN",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -126,13 +127,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "C: harness robustness (raw per package, autonomous, attended, cards, verify-run, item 10, drift)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -140,13 +142,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "D: review-orchestrator skill across hosts",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6",
@@ -158,13 +161,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "E1: plan-eval offline comparison",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6"
@@ -175,7 +179,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -321,6 +326,36 @@
     {
       "at": "2026-10-15T21:43:05.216Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-15T22:09:52.303Z",
+      "event": "task-done",
+      "detail": "T6: B: slice routing, risk depth, audit, escalation, estimate gate, NaN"
+    },
+    {
+      "at": "2026-10-15T22:16:41.970Z",
+      "event": "task-done",
+      "detail": "T5: A: symbol radius, text links, reasoned omissions, radius bugs"
+    },
+    {
+      "at": "2026-10-15T22:28:30.253Z",
+      "event": "task-done",
+      "detail": "T7: C: harness robustness (raw per package, autonomous, attended, cards, verify-run, item 10, drift)"
+    },
+    {
+      "at": "2026-10-15T22:38:20.428Z",
+      "event": "task-done",
+      "detail": "T9: E1: plan-eval offline comparison"
+    },
+    {
+      "at": "2026-10-16T03:56:32.294Z",
+      "event": "task-done",
+      "detail": "T8: D: review-orchestrator skill across hosts"
+    },
+    {
+      "at": "2026-10-16T04:50:28.249Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Harness robustness: results and drivers live per package; wave bytes per host; the autonomous prompt passes scope/package and runs one round unless the head moved; attended is derived from mode, and `chunks estimate --mode automatic` / `publish --yes` cannot bypass the operator; mutation waiver, reviewer-set override and `comments reply --final` need a card or TTY; item 10 says \"not observable\" outside keryx shell; trigger reviews route to the autonomous runner; verification commands can run in the parent and reach the verifier as context; installed host skill copies older than bundled are warned about. [verify: exec `bun test src/review/harness-robustness.test.ts`]\" -> \"Harness robustness: results and drivers live per package; wave bytes per host; the autonomous prompt passes scope/package and runs one round unless the head moved; attended is derived from mode, and `chunks estimate --mode automatic` / `publish --yes` / `review start --unattended` cannot bypass the operator; mutation waiver, reviewer-set override, plan confirmation and `comments reply --final` need a card or TTY and are bound to what the operator saw; item 10 says \"not observable\" outside keryx shell; trigger review tasks go through the normal containment, spend and attempt path (routing them to the autonomous runner was reverted: it would bypass the sandbox and budget); verification commands can run in the parent and reach the verifier as context; installed host skill copies older than bundled are warned about. [verify: exec `bun test src/review/harness-robustness.test.ts`]\" (security review: routing trigger reviews to the autonomous runner bypassed containment, spend and attempts; reverted; plus decision binding and the --unattended gate)"
     }
   ],
   "acKinds": {
