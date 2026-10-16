@@ -60,7 +60,7 @@ import { guardReviewPaths } from "../lib/review-path-flags";
 import { ENV_REVIEW_CALLER_TOKEN, startOrchestratorLog } from "../review/orchestrator-log";
 import { parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
 import { defaultBundledReviewRoot, renderSkillDrift, reviewSkillDrift } from "../review/skill-drift";
-import { buildRunProfile, isAutonomousEnv, writeRunProfile } from "../review/run-profile";
+import { buildRunProfile, unattendedStartRefusal, writeRunProfile } from "../review/run-profile";
 import { promoteParentExecutions } from "../review/verify-run";
 import { OPERATOR_COMMANDS, printOperatorCommandHelp, runOperatorCommand, type OperatorCommand } from "./review-operator";
 import { printChunksHelp, printCoverageHelp, runChunks, runCoverage } from "./review-chunks";
@@ -631,11 +631,11 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
 
   try {
     if (command === "attach") {
-      await runCreate("attach-review", args.slice(1));
+      await runCreate("attach-review", args.slice(1), seams);
       return;
     }
     if (command === "start") {
-      await runCreate("review-flow", args.slice(1));
+      await runCreate("review-flow", args.slice(1), seams);
       return;
     }
     if (command === "ingest") {
@@ -956,7 +956,7 @@ export async function refreshCreatedPackageLayers(
   }
 }
 
-async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void> {
+async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: ReviewCommandSeams = {}): Promise<void> {
   rejectUnknownFlags(args, CREATE_FLAGS, mode === "ingest" ? "ingest" : mode === "review-flow" ? "start" : "attach");
   const targetKind = targetKindFromArgs(mode, args);
   const targetRef = optionValue(args, "--ref") ?? optionValue(args, "--target-ref");
@@ -967,6 +967,11 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
   const graphTimeout = parseGraphTimeout(optionValue(args, "--graph-timeout"));
   const hostArg = optionValue(args, "--host");
   if (hostArg !== undefined && parseReviewHost(hostArg) === undefined) throw new Error(`--host must be one of ${REVIEW_HOSTS.join(", ")}, got "${hostArg}"`);
+  const unattendedRefusal = unattendedStartRefusal({
+    unattended: mode !== "ingest" && args.includes("--unattended"),
+    isTerminal: createSeams.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true),
+  });
+  if (unattendedRefusal !== undefined) throw new Error(unattendedRefusal);
   const cwd = process.cwd();
   const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
   const input: ManagedReviewIngestInput = {
@@ -980,7 +985,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     reviewers,
     reportPath: optionValue(args, "--report"),
     refuted: await readRefuted(optionValue(args, "--refuted")),
-    verifications: await readVerifications(optionValue(args, "--verifications")),
+    verifications: await readVerifications(optionValue(args, "--verifications"), optionValue(args, "--review-id")),
     research: optionValue(args, "--research") ? JSON.parse(await readFile(path.resolve(cwd, optionValue(args, "--research")!), "utf8")) : undefined,
     verificationMode: parseVerificationMode(optionValue(args, "--verification-mode")),
     scope: await readScope(optionValue(args, "--scope")),
@@ -3488,7 +3493,7 @@ async function readRefuted(source: string | undefined): Promise<ReviewFindingsSo
  * payload loses fields, and the loss is what made the recorded corpus
  * unmeasurable.
  */
-async function readVerifications(source: string | undefined): Promise<ManagedReviewInput["verifications"]> {
+async function readVerifications(source: string | undefined, reviewId: string | undefined): Promise<ManagedReviewInput["verifications"]> {
   if (source === undefined) {
     return undefined;
   }
@@ -3502,8 +3507,10 @@ async function readVerifications(source: string | undefined): Promise<ManagedRev
       `--verifications ${source} is not JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`,
     );
   }
-  // Flow 457 (T7): a claim citing a `keryx review verify-run` record of its own finding ran in the parent: execution.
-  return promoteParentExecutions(verificationClaims(parsed as VerificationSource), process.cwd());
+  // Flow 457 (T7): a claim citing a `keryx review verify-run` record of its own finding, in the package this ingest
+  // writes (`--review-id`), ran in the parent: execution. Without a review id no record can be bound to a package.
+  const packageDir = reviewId === undefined || !/^[\w.-]+$/.test(reviewId) ? undefined : path.join(resolveProjectRoot(process.cwd()), ".metaproject", "reviews", reviewId);
+  return promoteParentExecutions(verificationClaims(parsed as VerificationSource), packageDir);
 }
 
 /**
@@ -4307,10 +4314,11 @@ async function runPublish(args: string[], seams?: ReviewCommandSeams): Promise<v
   const yes = tokens.some((token) => token.name === "--yes");
   const packageDir = await resolveReviewPackagePath(process.cwd(), ref);
   const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
-  // Flow 457 (T7, audit row 7): `--yes` skips the operator's reading of the body, so only a person at a terminal or
-  // the autonomous runner (whose run was started by the operator to publish unattended) may pass it.
-  if (yes && !isTerminal() && !isAutonomousEnv()) {
-    throw new Error("publish --yes needs a terminal or the autonomous runner: it posts without the operator reading the body, and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_publish tool: the operator reads the body and answers a card. Outside keryx shell, run this command in a terminal.");
+  // Flow 457 (T7, audit row 7; security review M2): `--yes` skips the operator's reading of the body, so only a person
+  // at a terminal may pass it. The autonomous runner's environment variable is no exemption: any process can set it.
+  // An unattended run that reaches this step records the publish as needing the operator (Not run).
+  if (yes && !isTerminal()) {
+    throw new Error("publish --yes needs a terminal: it posts without the operator reading the body, and is refused when stdin or stdout is not a TTY (an unattended or autonomous run included: record the publish as Not run, needs operator). Inside keryx shell, call the review_publish tool: the operator reads the body and answers a card. Outside keryx shell, run this command in a terminal.");
   }
   let shown = false;
   const confirm = seams?.confirmPublish ?? (async (body: string, target: string, kind: ReviewEvent): Promise<boolean> => {

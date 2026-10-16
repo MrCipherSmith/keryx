@@ -5,6 +5,7 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { shellWord } from "../lib/shell-quote";
+import { testsNotRunWarning } from "./tests-to-run";
 import { writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { isCapDrop, isReasonedDrop } from "./blast-radius";
@@ -53,6 +54,8 @@ export type ReadinessReport = {
   review: string;
   verdict: "READY" | "NOT READY";
   items: ReadinessItem[];
+  /** Non-blocking notes, e.g. "N tests listed to run; none recorded as run". Absent when there is none. */
+  warnings?: string[];
 };
 
 export type ReadinessOptions = {
@@ -328,7 +331,8 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     if (waiver !== undefined) return { ...spec, status: "waived", evidence: verdict.evidence, repair: verdict.repair, waiver: { operatorQuote: waiver.operator_quote, time: waiver.time } };
     return { ...spec, status: "fail", evidence: verdict.evidence, repair: verdict.repair };
   });
-  return { schemaVersion: 1, review: manifest.reviewId, verdict: items.every((item) => item.status !== "fail") ? "READY" : "NOT READY", items };
+  const testsNotRun = testsNotRunWarning(packageDir);
+  return { schemaVersion: 1, review: manifest.reviewId, verdict: items.every((item) => item.status !== "fail") ? "READY" : "NOT READY", items, ...(testsNotRun === undefined ? {} : { warnings: [testsNotRun] }) };
 }
 
 export const failingItems = (report: ReadinessReport): ReadinessItem[] => report.items.filter((item) => item.status === "fail");
@@ -344,6 +348,7 @@ export function renderReadiness(report: ReadinessReport): string[] {
     if (item.status === "waived" && item.waiver !== undefined) lines.push(`       waived by the operator: ${item.waiver.operatorQuote}`);
     if (item.status === "fail" && item.repair !== undefined) lines.push(`       repair: ${item.repair}`);
   }
+  for (const warning of report.warnings ?? []) lines.push(`  warning (not blocking): ${warning}`);
   return lines;
 }
 

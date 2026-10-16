@@ -4,6 +4,8 @@ import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 import { isEmptyOutput, isReviewerResult, parseReviewResult } from "./ledger";
 import { mergeVerifications, verificationClaims } from "./verification";
+import { readRunProfile } from "./run-profile";
+import { testsNotRunWarning } from "./tests-to-run";
 import { promoteParentExecutions } from "./verify-run";
 import type { StructuredReviewFinding, VerificationSource } from "./types";
 
@@ -57,6 +59,10 @@ export type InterimVerdict = {
   /** Raw files that held no parsable reviewer result. */
   unreadable: string[];
   headline: string;
+  /** How the round runs (`<package>/run-profile.json`): `attended (default)`, `unattended (--unattended)`, ...; undefined for a package without one. */
+  runMode?: string | undefined;
+  /** A warning when `tests-to-run.json` lists tests and no `keryx review verify-run` record exists: "N tests listed to run; none recorded as run". */
+  testsNotRun?: string | undefined;
 };
 
 const object = (value: unknown): Record<string, unknown> | undefined =>
@@ -148,8 +154,8 @@ async function applyVerifierClaims(packageDir: string, entries: Loose[]): Promis
   if (source === undefined) return undefined;
   let claims;
   try {
-    // A claim citing a `keryx review verify-run` record of its finding ran in the parent (flow 457): execution.
-    claims = promoteParentExecutions(verificationClaims(source as VerificationSource), path.resolve(packageDir, "..", "..", ".."));
+    // A claim citing a `keryx review verify-run` record of its finding in this package ran in the parent (flow 457).
+    claims = promoteParentExecutions(verificationClaims(source as VerificationSource), packageDir);
   } catch {
     return undefined;
   }
@@ -214,11 +220,16 @@ export async function computeVerdict(packageDir: string, options: VerdictOptions
     : "no open blockers or majors";
   // An ingested round lists only reviewers that raised a finding; one that ran clean is indistinguishable from one that never ran.
   const pendingAmbiguous = useRound && raws.results.length === 0;
-  return { source, counts, total, verified, unverified, refuted, dismissed, resolved, verifierClaims, rawDir, open, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline };
+  const profile = readRunProfile(packageDir);
+  const runMode = profile === undefined ? undefined : `${profile.mode} (${profile.declaredVia})`;
+  const testsNotRun = testsNotRunWarning(packageDir);
+  return { source, counts, total, verified, unverified, refuted, dismissed, resolved, verifierClaims, rawDir, open, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline, ...(runMode === undefined ? {} : { runMode }), ...(testsNotRun === undefined ? {} : { testsNotRun }) };
 }
 
 export function renderVerdict(verdict: InterimVerdict, reviewId: string): string {
   const lines = [`# Interim verdict: ${reviewId}`, "", `verdict: ${verdict.headline}`, `source: ${verdict.source}`];
+  if (verdict.runMode !== undefined) lines.push(`run mode: ${verdict.runMode}`);
+  if (verdict.testsNotRun !== undefined) lines.push(`warning: ${verdict.testsNotRun}`);
   if (verdict.total === 0 && verdict.source !== "none") lines.push("findings: none");
   else lines.push(`findings: ${verdict.total} (${SEVERITIES.map((severity) => `${verdict.counts[severity]} ${severity}`).join(", ")})`);
   lines.push(`verified: ${verdict.verified}, unverified: ${verdict.unverified}`);

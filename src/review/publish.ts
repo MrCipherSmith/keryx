@@ -6,6 +6,7 @@ import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { isPrBound } from "./complete-head-gate";
+import { readRunProfile } from "./run-profile";
 import { computeReadiness, failingItems, readinessRefusal, type ReadinessOptions, type ReadinessReport } from "./readiness";
 import type { ConfirmedVia, ManagedReviewManifest } from "./types";
 
@@ -46,6 +47,19 @@ export function partialPublishHeader(readiness: ReadinessReport): string[] {
   ];
 }
 
+/** Security review M1: an unattended round says so at the top of what it posts, before anything else is read. */
+function runModeHeader(packageDir: string): string {
+  const profile = readRunProfile(packageDir);
+  if (profile?.mode !== "unattended") return "";
+  return `**Unattended review** (${profile.declaredVia}): nobody was at the keyboard; a mutation pass may be recorded as Not run.\n\n`;
+}
+
+/** Every package with a run profile names its run mode at the foot of the posted body. */
+function runModeFooter(packageDir: string): string {
+  const profile = readRunProfile(packageDir);
+  return profile === undefined ? "" : `\n_run mode: ${profile.mode} (${profile.declaredVia})_\n`;
+}
+
 export async function publishReview(packageDir: string, options: PublishOptions): Promise<PublishResult> {
   const manifest = await readJsonFileOr<ManagedReviewManifest | undefined>(path.join(packageDir, "manifest.json"), undefined);
   if (manifest === undefined) throw new Error(`Managed review package has no readable manifest.json: ${packageDir}`);
@@ -62,7 +76,7 @@ export async function publishReview(packageDir: string, options: PublishOptions)
   }
   const report = (await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => "")).trim();
   if (report === "") throw new Error(`Review ${manifest.reviewId} has no report.md body to publish.`);
-  const body = `${partial ? `${partialPublishHeader(readiness).join("\n")}\n` : ""}${report}\n`;
+  const body = `${partial ? `${partialPublishHeader(readiness).join("\n")}\n` : ""}${runModeHeader(packageDir)}${report}\n${runModeFooter(packageDir)}`;
   if (!(await options.confirm(body, manifest.target.ref, event))) return { readiness, body, event, partial, posted: false };
   const result = await options.post(manifest.target.ref, event, body);
   if (!result.ok) throw new Error(`GitHub refused the review: ${result.detail}`);

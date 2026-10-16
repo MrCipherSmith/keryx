@@ -7,6 +7,7 @@
 // A claim that cites such a file for its own finding is executed evidence, not reasoning: ingest records it as
 // `execution` (`promoteParentExecutions`).
 
+import { spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -15,7 +16,8 @@ import type { VerificationClaimInput } from "./types";
 
 export const VERIFY_EVIDENCE_DIR = "research-evidence";
 const FINDING_ID = /^[\w.:#-]{1,80}$/;
-const VERIFY_FILE = /research-evidence\/verify-([\w.:#-]+?)-(\d+)\.txt/g;
+/** `[reviews/<id>/]research-evidence/verify-<finding>-<n>.txt`; the package id, when cited, must be the package's own. */
+const VERIFY_FILE = /(reviews\/([\w.-]+)\/)?research-evidence\/verify-([\w.:#-]+?)-(\d+)\.txt/g;
 const MAX_STREAM_CHARS = 200_000;
 
 export type VerifyRunResult = {
@@ -28,11 +30,49 @@ export type VerifyRunResult = {
 
 export type CommandRunner = (argv: readonly string[], options: { cwd: string; timeoutMs: number }) => Promise<{ exitCode: number; stdout: string; stderr: string; timedOut: boolean }>;
 
-export const defaultRunner: CommandRunner = async (argv, options) => {
-  const proc = Bun.spawn([...argv], { cwd: options.cwd, stdout: "pipe", stderr: "pipe", stdin: "ignore", timeout: options.timeoutMs, killSignal: "SIGKILL" });
-  const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
-  return { exitCode, stdout, stderr, timedOut: proc.signalCode === "SIGKILL" };
-};
+/**
+ * Runs the command in its own process group (security review M7) and, on timeout, kills the whole group: a
+ * `sh -c "…"` command line forks children that a kill of the shell alone would leave running.
+ */
+export const defaultRunner: CommandRunner = (argv, options) =>
+  new Promise((resolve, reject) => {
+    const [command, ...rest] = argv;
+    if (command === undefined) {
+      reject(new Error("verify-run needs a command"));
+      return;
+    }
+    const child = spawn(command, rest, { cwd: options.cwd, stdio: ["ignore", "pipe", "pipe"], detached: true });
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
+      if (stdout.length <= MAX_STREAM_CHARS) stdout += chunk;
+    });
+    child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
+      if (stderr.length <= MAX_STREAM_CHARS) stderr += chunk;
+    });
+    const killGroup = (): void => {
+      if (child.pid === undefined) return;
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {
+        child.kill("SIGKILL");
+      }
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killGroup();
+    }, options.timeoutMs);
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code, signal) => {
+      clearTimeout(timer);
+      // The group leader may have exited while a grandchild still runs; a timed-out run has already killed the group.
+      resolve({ exitCode: code ?? (signal === null ? 1 : 128 + (signal === "SIGKILL" ? 9 : 15)), stdout, stderr, timedOut });
+    });
+  });
 
 /** A file-name-safe form of a finding id (`#` and `:` are kept out of file names). */
 export function findingSlug(finding: string): string {
@@ -97,31 +137,23 @@ function isRecordFor(file: string, finding: string): boolean {
 }
 
 /**
- * Claims whose evidence cites a verify-run record of their own finding (an existing file under `cwd`, written by
- * `keryx review verify-run` for that finding) are recorded as `execution`: the command ran, in the parent. Any other
+ * Claims whose evidence cites a verify-run record of their own finding IN THIS PACKAGE (an existing file under
+ * `<packageDir>/research-evidence/`, written by `keryx review verify-run` for that finding) are recorded as
+ * `execution`: the command ran, in the parent. A record of the same finding id in another package (another round,
+ * another review) does not count (security review minor), and without a package nothing is promoted. Any other
  * claim passes through unchanged.
  */
-export function promoteParentExecutions(claims: readonly VerificationClaimInput[], cwd: string): VerificationClaimInput[] {
+export function promoteParentExecutions(claims: readonly VerificationClaimInput[], packageDir: string | undefined): VerificationClaimInput[] {
   return claims.map((claim) => {
-    if (typeof claim.evidence !== "string" || typeof claim.finding !== "string" || claim.method === "execution") return { ...claim };
+    if (packageDir === undefined || typeof claim.evidence !== "string" || typeof claim.finding !== "string" || claim.method === "execution") return { ...claim };
     for (const match of claim.evidence.matchAll(VERIFY_FILE)) {
-      if (match[1] !== findingSlug(claim.finding)) continue;
-      const cited = match[0];
-      const candidates = [path.resolve(cwd, cited), ...findCited(cwd, cited)];
-      const found = candidates.find((candidate) => existsSync(candidate) && isRecordFor(candidate, claim.finding as string));
-      if (found !== undefined) return { ...claim, method: "execution", evidence: `${claim.evidence} [executed in the parent: ${path.relative(cwd, found)}]` };
+      if (match[2] !== undefined && match[2] !== path.basename(packageDir)) continue;
+      if (match[3] !== findingSlug(claim.finding)) continue;
+      const found = path.join(packageDir, VERIFY_EVIDENCE_DIR, `verify-${match[3]}-${match[4]}.txt`);
+      if (existsSync(found) && isRecordFor(found, claim.finding)) {
+        return { ...claim, method: "execution", evidence: `${claim.evidence} [executed in the parent: ${path.join(path.basename(packageDir), VERIFY_EVIDENCE_DIR, path.basename(found))}]` };
+      }
     }
     return { ...claim };
   });
-}
-
-/** `research-evidence/verify-…` cited without its package: look in every review package under `cwd`. */
-function findCited(cwd: string, cited: string): string[] {
-  const reviews = path.join(cwd, ".metaproject", "reviews");
-  if (!existsSync(reviews)) return [];
-  try {
-    return readdirSync(reviews).map((id) => path.join(reviews, id, cited));
-  } catch {
-    return [];
-  }
 }

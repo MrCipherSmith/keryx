@@ -20,11 +20,12 @@ import { HOST_WAVE_BYTES, defaultWaveBytes, detectReviewHost } from "./host-prof
 import { confirmedDecision, recordOperatorDecision } from "./operator-decisions";
 import { recordProcessCall, startOrchestratorLog } from "./orchestrator-log";
 import { planConfirmed, recordPlanConfirmation, type PlanNumbers } from "./plan-confirmation";
-import { computeReadiness } from "./readiness";
-import { RUN_PROFILE_FILE, buildRunProfile, isAttendedRun, writeRunProfile } from "./run-profile";
+import { computeReadiness, renderReadiness } from "./readiness";
+import { publishReview } from "./publish";
+import { RUN_PROFILE_FILE, buildRunProfile, isAttendedRun, unattendedStartRefusal, writeRunProfile } from "./run-profile";
 import { compareVersions, renderSkillDrift, reviewSkillDrift, skillVersion } from "./skill-drift";
-import { computeVerdict } from "./verdict";
-import { promoteParentExecutions, verifyRun } from "./verify-run";
+import { computeVerdict, renderVerdict } from "./verdict";
+import { defaultRunner, promoteParentExecutions, verifyRun } from "./verify-run";
 
 const NOW = new Date("2026-10-16T08:00:00.000Z");
 let root: string;
@@ -200,17 +201,65 @@ describe("row 6: attended is derived from the mode", () => {
 });
 
 describe("row 7: chunks estimate --mode automatic cannot bypass the operator", () => {
-  test("refused without a terminal outside the autonomous runner, naming the card", async () => {
+  test("refused without a terminal, naming the card; the autonomous runner's env is no exemption (security review M2)", async () => {
     const deps = { rejectUnknownFlags: () => undefined };
-    await expect(runChunks(["estimate", "--package", pkg, "--mode", "automatic"], deps, { isTerminal: () => false, env: {} })).rejects.toThrow("review_chunks_answer");
+    await expect(runChunks(["estimate", "--package", pkg, "--mode", "automatic"], deps, { isTerminal: () => false })).rejects.toThrow("review_chunks_answer");
+    const saved = process.env["KERYX_AUTONOMOUS_ANSWERS_FILE"];
+    process.env["KERYX_AUTONOMOUS_ANSWERS_FILE"] = "x";
+    try {
+      await expect(runChunks(["estimate", "--package", pkg, "--mode", "automatic"], deps, { isTerminal: () => false })).rejects.toThrow("needs a terminal");
+    } finally {
+      if (saved === undefined) delete process.env["KERYX_AUTONOMOUS_ANSWERS_FILE"];
+      else process.env["KERYX_AUTONOMOUS_ANSWERS_FILE"] = saved;
+    }
     const log = console.log;
     console.log = () => undefined;
     try {
-      await runChunks(["estimate", "--package", pkg, "--mode", "automatic"], deps, { isTerminal: () => false, env: { KERYX_AUTONOMOUS_ANSWERS_FILE: "/x" } });
-      await runChunks(["estimate", "--package", pkg, "--mode", "automatic"], deps, { isTerminal: () => true, env: {} });
+      await runChunks(["estimate", "--package", pkg, "--mode", "automatic"], deps, { isTerminal: () => true });
     } finally {
       console.log = log;
     }
+  });
+
+  test("the autonomous prompt never names --mode automatic and reports an over-ceiling chunk run as needing the operator", () => {
+    const text = buildAutonomousPrompt({ ref: "https://github.com/o/r/pull/7" });
+    expect(text).not.toContain("--mode automatic");
+    expect(text).toContain("needing the operator");
+  });
+});
+
+describe("security review M1: review start --unattended needs a terminal or the autonomous runner", () => {
+  test("refused without a terminal, naming the command and the card; allowed at a terminal or under the runner", () => {
+    const refusal = unattendedStartRefusal({ unattended: true, isTerminal: () => false, env: {} });
+    expect(refusal).toContain("needs a terminal");
+    expect(refusal).toContain("keryx review run --autonomous");
+    expect(refusal).toContain("review_waive_mutation");
+    expect(unattendedStartRefusal({ unattended: true, isTerminal: () => true, env: {} })).toBeUndefined();
+    expect(unattendedStartRefusal({ unattended: true, isTerminal: () => false, env: { KERYX_AUTONOMOUS_ANSWERS_FILE: "/x" } })).toBeUndefined();
+    expect(unattendedStartRefusal({ unattended: false, isTerminal: () => false, env: {} })).toBeUndefined();
+  });
+
+  test("the verdict and the publish body show the run mode", async () => {
+    manifest();
+    await writeRunProfile(pkg, buildRunProfile({ unattended: true, env: {}, now: NOW }));
+    const verdict = await computeVerdict(pkg);
+    expect(verdict.runMode).toBe("unattended (--unattended)");
+    expect(renderVerdict(verdict, "r1")).toContain("run mode: unattended (--unattended)");
+    let shown = "";
+    await publishReview(pkg, { partial: true, post: async () => ({ ok: true, detail: "" }), confirm: async (body) => ((shown = body), false) });
+    expect(shown).toContain("**Unattended review** (--unattended)");
+    expect(shown).toContain("_run mode: unattended (--unattended)_");
+  });
+
+  test("tests listed to run with no verify-run record is a non-blocking warning in the verdict and the readiness", async () => {
+    manifest();
+    put("tests-to-run.json", [{ file: "src/a.test.ts", reason: "test-consumer", symbols: ["a"] }, { file: "src/b.test.ts", reason: "test-consumer", symbols: ["b"] }]);
+    expect((await computeVerdict(pkg)).testsNotRun).toBe("2 tests listed to run; none recorded as run");
+    const readiness = await computeReadiness(pkg);
+    expect(readiness.warnings).toEqual(["2 tests listed to run; none recorded as run"]);
+    expect(renderReadiness(readiness).join("\n")).toContain("warning (not blocking): 2 tests listed to run; none recorded as run");
+    await verifyRun({ packageDir: pkg, finding: "f-1", argv: ["true"], cwd: root, runner: async () => ({ exitCode: 0, stdout: "", stderr: "", timedOut: false }) });
+    expect((await computeVerdict(pkg)).testsNotRun).toBeUndefined();
   });
 });
 
@@ -353,13 +402,34 @@ describe("row 4: verification commands run in the parent", () => {
         { finding: "f-1", verdict: "confirmed", method: "reasoning", evidence: `the test fails: ${cited}`, verifier: "review-verifier" },
         { finding: "f-2", verdict: "confirmed", method: "reasoning", evidence: `see ${cited}`, verifier: "review-verifier" },
       ],
-      root,
+      pkg,
     );
     expect(own!.method).toBe("execution");
     expect(other!.method).toBe("reasoning");
     const second = await verifyRun({ packageDir: pkg, finding: "f-1", argv: ["true"], cwd: root, runner: async () => ({ exitCode: 0, stdout: "", stderr: "", timedOut: false }) });
     expect(path.basename(second.file)).toBe("verify-f-1-2.txt");
   });
+
+  test("a record of the same finding id in another package is not execution (security review minor)", async () => {
+    const other = path.join(root, ".metaproject", "reviews", "r0");
+    mkdirSync(other, { recursive: true });
+    await verifyRun({ packageDir: other, finding: "f-1", argv: ["true"], cwd: root, runner: async () => ({ exitCode: 0, stdout: "", stderr: "", timedOut: false }) });
+    const claims = [{ finding: "f-1", verdict: "confirmed" as const, method: "reasoning" as const, evidence: "see .metaproject/reviews/r0/research-evidence/verify-f-1-1.txt", verifier: "review-verifier" }];
+    expect(promoteParentExecutions(claims, pkg)[0]!.method).toBe("reasoning");
+    expect(promoteParentExecutions([{ ...claims[0]!, evidence: "see research-evidence/verify-f-1-1.txt" }], pkg)[0]!.method).toBe("reasoning");
+    expect(promoteParentExecutions(claims, other)[0]!.method).toBe("execution");
+    expect(promoteParentExecutions(claims, undefined)[0]!.method).toBe("reasoning");
+  });
+
+  test("a timed-out command is killed with its whole process group (security review M7)", async () => {
+    const marker = path.join(root, "grandchild-survived");
+    const started = Date.now();
+    const result = await defaultRunner(["sh", "-c", `(sleep 6; touch ${marker}) & sleep 6`], { cwd: root, timeoutMs: 1000 });
+    expect(result.timedOut).toBe(true);
+    expect(Date.now() - started).toBeLessThan(5000);
+    await new Promise((resolve) => setTimeout(resolve, 6500));
+    expect(existsSync(marker)).toBe(false);
+  }, 15_000);
 
   test("verify-run through the CLI needs a command and a finding", async () => {
     await expect(runOperatorCommand("verify-run", ["--package", pkg, "--finding", "f-1"], { cwd: root })).rejects.toThrow("needs a command");
