@@ -324,11 +324,13 @@ describe("the decision store", () => {
   });
 
   test("folds a file name the way a case-insensitive filesystem may compare it (review SEC3-001)", () => {
-    for (const name of ["operator-deciſions.json", "operator-decısions.json", "OPERATOR-DECISIONS.JSON", "ｏperator-decisions.json", "operator-decisions.json".normalize("NFD")]) {
+    for (const name of ["operator-deciſions.json", "operator-decısions.json", "OPERATOR-DECISIONS.JSON", "ｏperator-decisions.json"]) {
       expect(foldFileName(name)).toBe("operator-decisions.json");
     }
     expect(foldFileName(".operator-decisions.locK")).toBe(".operator-decisions.lock");
-    expect(foldFileName("operator-décisions.json")).toBe(foldFileName("operator-décisions.json"));
+    // A decomposed spelling (e + U+0301) folds onto its composed form (review T4-004: NFD of an ASCII name is a no-op).
+    expect(foldFileName("operator-de\u0301cisions.json")).toBe(foldFileName("operator-d\u00e9cisions.json"));
+    expect(foldFileName("operator-de\u0301cisions.json")).not.toBe("operator-de\u0301cisions.json");
   });
 
   test("the store is read by its exact name only: a planted look-alike alone is not the store (review SEC3-001)", async () => {
@@ -352,6 +354,12 @@ describe("the decision store", () => {
     await expect(recordPremiseDecision(dir, premiseAnswerInput(heldFinding(), { answer: "uphold" }))).rejects.toThrow(/look-alike/);
     await rm(lookalike);
     expect((await readPremiseDecisions(dir)).map((entry) => entry.answer)).toEqual(["dismiss"]);
+  });
+
+  test("a package directory that cannot be listed holds no decisions (review T4-005)", async () => {
+    const missing = path.join(await pkg(), "no-such-package");
+    expect(await readPremiseDecisions(missing)).toEqual([]);
+    expect(await readOperatorDecisions(missing)).toEqual([]);
   });
 
   test("a premise record is never read as a gate decision, even with the fields of one", async () => {

@@ -886,7 +886,7 @@ export type ManagedReviewPackageResult = {
   /** Flow 459. Present on every package, whether or not a premise judge ran. */
   premise: PremiseCounts;
   premiseRejections: readonly PremiseRejection[];
-  /** Set when an ingest without `--premises` re-applied the package's stored claims (review RG2-004). */
+  /** Set when an ingest without `--premises` carried the previous findings.json's holds forward (review RG2-004). */
   premisesCarriedForward?: true | undefined;
   /**
    * What the findings, spend and concurrency caps did (flow 203 AC5–AC7, AC10).

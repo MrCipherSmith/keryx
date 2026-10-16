@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import { createManagedReviewPackage } from "./managed";
-import { PREMISES_FILE, inheritedPremiseClaims, mergePremises, parsePremiseClaims, renderPremiseMarkdown, type PremiseRejectionReason } from "./premise";
+import { PREMISES_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaims, renderPremiseMarkdown, type PremiseRejectionReason } from "./premise";
 import { downgradedPremise, heldPremise } from "./premise-fixtures";
 import { PREMISE_VERDICTS, type PremiseClaimInput, type StructuredReviewFinding } from "./types";
 
@@ -526,50 +526,67 @@ describe("the claims reach the review record", () => {
   });
 });
 
-// Review T4-001, LG4-001, RG4-001: what an ingest without --premises does with the claims a package already holds.
-describe("inheritedPremiseClaims", () => {
+// Review T4-001, LG4-001, RG4-001, SEC5-001, LG5-003: what an ingest without --premises does with the holds a package
+// already has. Holds come from the previous findings.json only; premises.json is not an input.
+describe("carriedPremiseHolds", () => {
   const held = (over: Partial<PremiseClaimInput> = {}): PremiseClaimInput => claim({ verdict: "challenged", intent_signals: [SIGNAL], practice_sources: [SOURCE], question: "mirror it?", ...over });
-  const stored = (claims: PremiseClaimInput[]): unknown => ({ judge: "review-premise", premises: claims });
   /** What the previous ingest's findings.json recorded once `claims` were merged over `findings`. */
   const previousIngest = (claims: PremiseClaimInput[], findings = [finding()]): StructuredReviewFinding[] => mergePremises(findings, parsed(claims)).findings;
-  const refusal = (result: ReturnType<typeof inheritedPremiseClaims>): string => (result?.ok === false ? result.refusal : "");
+  const refusal = (result: ReturnType<typeof carriedPremiseHolds>): string => (result?.ok === false ? result.refusal : "");
+  const carriedFindings = (result: ReturnType<typeof carriedPremiseHolds<StructuredReviewFinding>>): StructuredReviewFinding[] => (result?.ok === true ? result.findings : []);
 
-  test("a first ingest (no findings.json) holds nothing, whatever premises.json holds (LG4-001)", () => {
-    expect(inheritedPremiseClaims([finding()], stored([held()]), undefined)).toBeUndefined();
+  test("a first ingest (no findings.json) holds nothing (LG4-001)", () => {
+    expect(carriedPremiseHolds([finding()], undefined)).toBeUndefined();
   });
 
-  test("a stored held claim the merge rejected never held anything: the re-ingest carries the claims (RG4-001)", () => {
-    const claims = [held(), held({ finding_id: "2026-10-16-round#LY-999" })];
-    expect(reasons(mergePremises([finding()], parsed(claims)))).toEqual(["unknown-finding"]);
-    expect(inheritedPremiseClaims([finding()], stored(claims), previousIngest(claims))).toMatchObject({ ok: true });
+  test("nothing previously held: undefined, even when a held claim was sent and rejected", () => {
+    expect(carriedPremiseHolds([finding()], previousIngest([held({ finding_id: "2026-10-16-round#LY-999" })]))).toBeUndefined();
   });
 
-  test("nothing previously held: undefined, even over a rejected held claim", () => {
-    const rejected = [held({ finding_id: "2026-10-16-round#LY-999" })];
-    expect(inheritedPremiseClaims([finding()], stored(rejected), previousIngest(rejected))).toBeUndefined();
+  test("an unchanged held finding gets the previous record's premise, and the merge counts it held", () => {
+    const previous = previousIngest([held()]);
+    const result = carriedPremiseHolds([finding()], previous);
+    expect(carriedFindings(result)[0]?.premise).toEqual(previous[0]?.premise);
+    expect(mergePremises(carriedFindings(result), undefined).counts).toMatchObject({ claims: 0, held: 1, challenged: 1 });
   });
 
-  test("premises.json gone while a finding was held: refused, naming the file", () => {
-    const result = inheritedPremiseClaims([finding()], undefined, previousIngest([held()]));
-    expect(result?.ok).toBe(false);
-    expect(refusal(result)).toContain(`${PREMISES_FILE} is gone`);
+  test("two held claims on one finding, one rejected: the hold that applied carries (RG4-001)", () => {
+    const claims = [held(), held({ question: undefined })];
+    expect(reasons(mergePremises([finding()], parsed(claims)))).toEqual(["held-without-question"]);
+    const result = carriedPremiseHolds([finding()], previousIngest(claims));
+    expect(result?.ok).toBe(true);
+    expect(carriedFindings(result)[0]?.premise).toMatchObject({ verdict: "challenged", question: "mirror it?" });
   });
 
-  test("premises.json unreadable while a finding was held: refused with the parse error", () => {
-    const result = inheritedPremiseClaims([finding()], ["not", "an", "object"], previousIngest([held()]));
-    expect(result?.ok).toBe(false);
-    expect(refusal(result)).toContain(`${PREMISES_FILE} cannot be read`);
+  test("a hold carried in from an earlier round needs no claims file (LG5-003)", () => {
+    const previous = previousIngest([held()]).map((record) => ({ ...record, premise: { ...record.premise, judge: "an earlier round" } }));
+    expect(carriedFindings(carriedPremiseHolds([finding()], previous))[0]?.premise).toMatchObject({ verdict: "challenged", judge: "an earlier round" });
+  });
+
+  test("a held finding whose problem or severity changed: refused, naming it, asking for --premises", () => {
+    for (const changed of [finding({ problem: "a different problem" }), finding({ severity: "minor" })]) {
+      const result = carriedPremiseHolds([changed], previousIngest([held()]));
+      expect(result?.ok).toBe(false);
+      expect(refusal(result)).toContain(GID);
+      expect(refusal(result)).toContain("Pass --premises");
+    }
   });
 
   test("a held finding gone from this round: refused, naming it", () => {
-    const result = inheritedPremiseClaims([finding({ id: "LY-004", global_id: GID_4 })], stored([held()]), previousIngest([held()]));
+    const result = carriedPremiseHolds([finding({ id: "LY-004", global_id: GID_4 })], previousIngest([held()]));
     expect(result?.ok).toBe(false);
     expect(refusal(result)).toContain(GID);
   });
 
-  test("an applied claim rejected as already-judged is no loss: the carried premise still holds the finding", () => {
+  test("a finding that arrives already judged keeps its own premise", () => {
     const previous = previousIngest([held()]);
-    expect(reasons(mergePremises(previous, parsed([held()])))).toEqual(["already-judged"]);
-    expect(inheritedPremiseClaims(previous, stored([held()]), previous)).toMatchObject({ ok: true });
+    const result = carriedPremiseHolds(previous, previous);
+    expect(carriedFindings(result)[0]).toBe(previous[0]);
+  });
+
+  test("an upheld or downgraded judgement is not carried, only holds are", () => {
+    const previous = previousIngest([held(), claim({ finding_id: GID_4, verdict: "upheld" })], [finding(), finding({ id: "LY-004", global_id: GID_4 })]);
+    const result = carriedPremiseHolds([finding(), finding({ id: "LY-004", global_id: GID_4 })], previous);
+    expect(carriedFindings(result).map((record) => record.premise?.verdict)).toEqual(["challenged", undefined]);
   });
 });

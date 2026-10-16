@@ -1,11 +1,13 @@
 // Where a review package lives (review R3-ARCH-001, R4-ARCH-001): directly under `.metaproject/reviews/`, or
 // under `.metaproject/flows/<flow>/reviews/`. The ingest's allocation, the prior-round detector (globs and disk
 // scan), the "is this a real package" check, the flow review gate, the loop detector, flow spend, the arbiter log,
-// the autonomous run and `review` commands that open a package by id take the layout from here. Not yet routed: the
-// TUI's flow readers (tui/jev-triage-command.ts, tui/conform-source.ts), the bot's package scan (bot/packages.ts)
-// and flow-move; and the pr-comments and bot caches, which sit under the reviews root but are not packages.
+// the autonomous run, and ingest's lookup of verify-run records by `--review-id` ({@link packageDirById}, review
+// LG5-002) take the layout from here; `resolveReviewPackagePath` (managed.ts) walks both roots with these helpers.
+// Not yet routed: the TUI's flow readers (tui/jev-triage-command.ts, tui/conform-source.ts), the bot's package scan
+// (bot/packages.ts) and flow-move; and the pr-comments and bot caches, which sit under the reviews root but are
+// not packages.
 
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { flowsRoot } from "../flow/store";
 
@@ -17,6 +19,26 @@ export function reviewsRoot(cwd: string): string {
 /** The packages' root of one flow. */
 export function flowReviewsRoot(cwd: string, flowDir: string): string {
   return path.join(flowsRoot(cwd), flowDir, "reviews");
+}
+
+/**
+ * The directory of package `reviewId` (a plain directory name, never a path): the standalone one when it exists, else
+ * the one under a flow's reviews root, else where a standalone package of that id is written. A flow-bound ingest
+ * writes its package, and `keryx review verify-run --package` its records, under the flow (review LG5-002).
+ */
+export function packageDirById(cwd: string, reviewId: string): string {
+  const standalone = path.join(reviewsRoot(cwd), reviewId);
+  if (existsSync(standalone)) return standalone;
+  return flowDirs(cwd).map((flowDir) => path.join(flowReviewsRoot(cwd, flowDir), reviewId)).find((dir) => existsSync(dir)) ?? standalone;
+}
+
+/** The flow directories of the checkout; none when there is no flows root. */
+function flowDirs(cwd: string): string[] {
+  try {
+    return readdirSync(flowsRoot(cwd));
+  } catch {
+    return [];
+  }
 }
 
 /** Every package's manifest, as git pathspec globs relative to the checkout. */
