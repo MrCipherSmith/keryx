@@ -2255,10 +2255,17 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           });
           await foldChildSlateAndCleanup("incomplete");
           await fireSubagentStop("Error");
+          // Earlier rounds may have produced text before the refusal: hand it back (quarantined, bounded) so the
+          // parent keeps that context when it requeues the task.
+          const hadText = raw !== "(subagent produced no text)";
+          const earlier = hadText ? boundSummary(folded.text) : undefined;
           return {
             status: "Error",
             isError: true,
-            output: `${rateLimitedStatusLine(turnResult.rateLimited.retryAfterMs)}\nsubagent ${label} (${workerId}) via ${runModel.provider}/${runModel.model}: the provider refused the request for load (rate limit or overloaded); nothing was retried inside the child.`,
+            output:
+              `${rateLimitedStatusLine(turnResult.rateLimited.retryAfterMs)}\nsubagent ${label} (${workerId}) via ${runModel.provider}/${runModel.model}: the provider refused the request for load (rate limit or overloaded); nothing was retried inside the child.` +
+              (earlier === undefined ? "" : `\n--- output before the refusal ---\n${earlier}`),
+            ...(earlier === undefined ? {} : { partial: earlier }),
           };
         }
         // D2b: a clean stream/text finish is NOT automatically "Completed" —

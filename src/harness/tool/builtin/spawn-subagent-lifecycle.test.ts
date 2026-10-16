@@ -111,6 +111,20 @@ test("E5: an overloaded child reports STATUS: RATE_LIMITED too; another provider
   expect(unavailable.output).not.toContain("RATE_LIMITED");
 });
 
+test("E5: a rate-limited child hands back the text it produced before the refusal", async () => {
+  const provider = (): ProviderPort => ({
+    describe: () => DESCRIPTION,
+    stream: (_r, opts) =>
+      (async function* (): AsyncGenerator<NormalizedEvent> {
+        yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: "found the bug in parser.ts" };
+        yield { kind: "provider_error", sequence: 1, attemptId: opts.attemptId, error: { kind: "rate_limit", retryable: true, message: "429" } };
+      })(),
+  });
+  const result = await toolWith(provider).invoke({ task: "review", label: "r4" });
+  expect(result.output.split("\n")[0]).toBe("STATUS: RATE_LIMITED");
+  expect(result.output).toContain("found the bug in parser.ts");
+});
+
 test("a fast subagent returns its unused budget, so a session is not capped at three", async () => {
   const tool = toolWith(fastProvider);
   const outcomes: boolean[] = [];
