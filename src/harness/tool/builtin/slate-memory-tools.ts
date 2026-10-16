@@ -18,6 +18,7 @@ import path from "node:path";
 import { createInterface } from "node:readline";
 import { redactSensitiveText } from "../../../security/service";
 import {
+  ASK_ANSWER_NOTE_PREFIX,
   NOTE_KEY_PATTERN,
   NOTE_MAX_CHARS,
   NOTES_MAX_TOKENS,
@@ -94,6 +95,7 @@ export function slateNoteTool(getSessionDir: () => string | undefined, clock: ()
         "Older tool rounds leave the request as the session grows; Notes do not, they are re-shown to you in full every time the request is rebuilt. " +
         `Input: { key: string, text?: string }. A new key adds a note, an existing key replaces it, and omitting text deletes it. ` +
         `At most ${NOTE_MAX_CHARS} characters per note and ${NOTES_MAX_TOKENS} tokens in all; secrets are redacted. ` +
+        `Keys starting with "${ASK_ANSWER_NOTE_PREFIX}" hold the operator's recorded answers and are read-only to you. ` +
         "Notes are your own scratch memory: they are never Seeds and never leave this session.",
       inputSchema: {
         type: "object",

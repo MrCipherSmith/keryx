@@ -63,7 +63,8 @@ import {
   type SubmittedResult,
 } from "../harness/tool/builtin/submit-result-tool";
 import type { McpRuntime } from "../mcp-servers/runtime";
-import { parseAskUserInput, selfAnswerAskUser, type AskUserFn } from "../harness/tool/builtin/ask-user-tool";
+import { parseAskUserInput, selfAnswerAskUser, type AskUserFn, type AskUserRequest } from "../harness/tool/builtin/ask-user-tool";
+import { isIrreversible, loadDecisionsConfig } from "../decisions/blind";
 import { askFloor } from "../review/arbiter-floor";
 import type { JobRegistry, TaskCompletion } from "../harness/tool/builtin/background-job-registry";
 import type { BusInbox } from "../bus/inbox";
@@ -2576,26 +2577,43 @@ function selfAnsweredQuestion(
   return { question, label: option.label, result };
 }
 
-function askUserQuestion(call: PendingCall): string | undefined {
-  const question = parseToolInput(call.input).question;
-  return call.name === "ask_user" && typeof question === "string" ? question : undefined;
+/** A well-formed `ask_user` call's request, or undefined (another tool, or input the tool itself will reject). */
+function askUserRequest(call: PendingCall): AskUserRequest | undefined {
+  if (call.name !== "ask_user") return undefined;
+  const parsed = parseAskUserInput(parseToolInput(call.input));
+  return parsed.ok ? parsed.request : undefined;
 }
 
-/** An irreversible decision is asked every time; the stored answer is for ordinary questions only. */
-function isIrreversibleAsk(call: PendingCall): boolean {
-  const input = parseToolInput(call.input);
-  return input.irreversible === true || (typeof input.action === "string" && input.action.trim().length > 0);
+/**
+ * An irreversible decision is asked every time; the stored answer is for ordinary questions only. The same test the
+ * decision journal applies: a caller's own flag or action tag, else the project's irreversible terms and patterns
+ * matched against the question and every option.
+ */
+async function isIrreversibleAsk(request: AskUserRequest, cwd: string): Promise<boolean> {
+  if (request.irreversible === true || (request.action !== undefined && request.action.trim().length > 0)) return true;
+  const config = await loadDecisionsConfig(cwd);
+  return isIrreversible(config.irreversible, request.question, request.action, request.options);
+}
+
+/** The request, the session dir and the question's option ids when its answer may be stored or replayed. */
+async function replayableAsk(
+  call: PendingCall,
+  options: RunAgentTurnOptions,
+): Promise<{ request: AskUserRequest; dir: string; optionIds: string[] } | undefined> {
+  const request = askUserRequest(call);
+  const dir = liveSessionDir(options);
+  const session = options.slateSession;
+  if (request === undefined || dir === undefined || session?.opened !== true) return undefined;
+  if (await isIrreversibleAsk(request, session.cwd)) return undefined;
+  return { request, dir, optionIds: request.options.map((option) => option.id) };
 }
 
 /** The operator's earlier answer to this same question, when the session slate is open and still ours. */
 async function storedAskUserAnswer(call: PendingCall, options: RunAgentTurnOptions): Promise<string | undefined> {
-  const question = askUserQuestion(call);
-  const dir = liveSessionDir(options);
-  if (question === undefined || dir === undefined || options.slateSession?.opened !== true || isIrreversibleAsk(call)) {
-    return undefined;
-  }
   try {
-    const answer = await findStoredAnswer(dir, question);
+    const ask = await replayableAsk(call, options);
+    if (ask === undefined) return undefined;
+    const answer = await findStoredAnswer(ask.dir, ask.request.question, ask.optionIds);
     return answer === undefined ? undefined : `Already answered by the operator earlier in this session (no new prompt shown): ${answer}`;
   } catch {
     return undefined;
@@ -2609,13 +2627,11 @@ async function rememberAskUserAnswer(
   options: RunAgentTurnOptions,
   ts: string,
 ): Promise<void> {
-  const question = askUserQuestion(call);
-  const dir = liveSessionDir(options);
-  if (question === undefined || dir === undefined || options.slateSession?.opened !== true || isIrreversibleAsk(call) || result.isError === true) {
-    return;
-  }
+  if (result.isError === true) return;
   try {
-    await rememberAnswer(dir, question, result.output, ts);
+    const ask = await replayableAsk(call, options);
+    if (ask === undefined) return;
+    await rememberAnswer(ask.dir, ask.request.question, ask.optionIds, result.output, ts);
   } catch {
     // a full shelf or a closed slate just means the question may be asked again
   }

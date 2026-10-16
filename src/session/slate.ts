@@ -173,6 +173,16 @@ export const NOTE_MAX_CHARS = 2000;
 /** The whole Notes shelf may hold at most this many estimated tokens (flow 393 AC2). */
 export const NOTES_MAX_TOKENS = 8000;
 export const NOTE_KEY_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
+/**
+ * Prefix of the harness-only notes that hold an operator's answer to an `ask_user` question. The harness replays
+ * such a note as "already answered by the operator", so only the harness may write or delete one.
+ */
+export const ASK_ANSWER_NOTE_PREFIX = "answer.";
+
+/** Whether a note key is in a namespace only the harness may write (any letter case). */
+export function isReservedNoteKey(key: string): boolean {
+  return key.toLowerCase().startsWith(ASK_ANSWER_NOTE_PREFIX);
+}
 
 /** A `slate_note` write that was refused; `message` is shown to the model verbatim. */
 export class SlateNoteRefusedError extends Error {
@@ -457,10 +467,16 @@ export async function writeNote(
   key: string,
   text: string | undefined,
   ts: string,
+  writer: { harness?: boolean } = {},
 ): Promise<{ slate: Slate; stored?: SlateNote; truncated: boolean; deleted: boolean }> {
   if (!NOTE_KEY_PATTERN.test(key)) {
     throw new SlateNoteRefusedError(
       `invalid note key ${JSON.stringify(key.slice(0, 40))}: use 1-64 characters from A-Z a-z 0-9 . _ -`,
+    );
+  }
+  if (isReservedNoteKey(key) && writer.harness !== true) {
+    throw new SlateNoteRefusedError(
+      `note keys starting with "${ASK_ANSWER_NOTE_PREFIX}" are reserved for the operator's recorded answers; choose another key`,
     );
   }
   let stored: SlateNote | undefined;
