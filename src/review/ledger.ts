@@ -7,7 +7,7 @@ import { readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } fr
 import { type SliceManifest, packWaves, waveBytesOf } from "./slice";
 import { ALWAYS_ROLE, DEEP_ROLES, ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
-import { fixSlicesCoveredByDispositions, priorDispositionsOf } from "./round-split";
+import { fixSliceCoverage, priorDispositionsOf } from "./round-split";
 
 /** Statuses of `reviewer-finding.schema.json` that mean the reviewer finished what it was given. */
 const FINISHED = new Set(["DONE", "DONE_WITH_CONCERNS"]);
@@ -83,7 +83,10 @@ export type LedgerInputs = {
    * `selected`, and are written to `dispatch.skipped` and as `Not run: <reviewer> — <reason>` lines to `dispatch.notRun`.
    */
   skipped?: readonly ReviewerSkip[] | undefined;
-  /** Findings a delta round carried over unchanged (`round.json` `carried`): their recorded dispositions count as dispositions. */
+  /** Reviewers the required set dropped by `supersedes` or an overlap group, and the notes of the ones it refused to drop (M6). */
+  superseded?: ReadonlyArray<{ reviewer: string; reason: string }> | undefined;
+  supersedeNotes?: readonly string[] | undefined;
+  /** Findings a delta round carried over unchanged (`round.json` `carried`): kept in the record; they cover no fix slice. */
   carried?: ReadonlyArray<{ findingId: string; disposition: string }> | undefined;
 };
 
@@ -383,12 +386,25 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   const selected = input.selected.filter((reviewer) => !skippedNames.has(reviewer));
   const { manifest, raws } = input;
   const attributed = raws.filter((r) => r.result?.reviewer !== undefined && text(r.result.reviewer));
-  // Delta round (flow 458): a fix slice is covered once every finding attached to it has a disposition, from a reviewer's
-  // `prior_dispositions` or a carried finding's recorded one, whichever reviewers claimed it.
+  // Delta round (flow 458, M4): a `prior_dispositions` entry counts only for the reviewer that gave it, and only from a
+  // finished result of this scope (a result stamped with another scope fingerprint is a stale round's). Carried findings
+  // keep their recorded disposition for the report; they are never attached to a fix slice, so they cover none.
+  const fingerprintNow = manifest === undefined ? undefined : scopeFingerprint(manifest);
+  const dispositionsBy = new Map<string, Map<string, string>>();
+  for (const raw of [...attributed].sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name))) {
+    const result = raw.result!;
+    const open = Array.isArray(result.needs_context) && result.needs_context.filter(text).length > 0;
+    const stamped = (result as { scopeFingerprint?: unknown }).scopeFingerprint;
+    if (!FINISHED.has(String(result.status ?? "").toUpperCase()) || open || (typeof stamped === "string" && stamped !== fingerprintNow)) continue;
+    const mine = dispositionsBy.get(result.reviewer!) ?? new Map<string, string>();
+    for (const [id, disposition] of priorDispositionsOf(result)) mine.set(id, disposition);
+    dispositionsBy.set(result.reviewer!, mine);
+  }
   const priorDispositions = new Map<string, string>();
   for (const carried of input.carried ?? []) if (text(carried.findingId) && text(carried.disposition)) priorDispositions.set(carried.findingId, carried.disposition);
-  for (const raw of attributed) for (const [id, disposition] of priorDispositionsOf(raw.result)) priorDispositions.set(id, disposition);
-  const fixCovered = new Set(manifest === undefined ? [] : fixSlicesCoveredByDispositions(manifest, new Set(priorDispositions.keys())));
+  for (const given of dispositionsBy.values()) for (const [id, disposition] of given) priorDispositions.set(id, disposition);
+  /** Slices each reviewer's finished run read. */
+  const readBy = new Map<string, ReadonlySet<string>>();
   for (const raw of raws) {
     if (raw.empty) continue;
     if (raw.result === undefined) gaps.push({ detail: `${raw.name}: no parseable REVIEW_RESULT block`, next: `re-dispatch the reviewer that produced ${raw.name}, or remove the file if it is not a reviewer result` });
@@ -445,7 +461,8 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       }
       for (const id of known?.covered ?? []) claimed.add(id);
     }
-    const seen = manifest === undefined ? new Set<string>() : new Set([...accountedFor(manifest, reviewer, claimed), ...fixCovered]);
+    const seen = manifest === undefined ? new Set<string>() : new Set(accountedFor(manifest, reviewer, claimed));
+    if (finished) readBy.set(reviewer, seen);
     if (manifest !== undefined) run.coveredSlices = [...seen].sort();
     const dropped = [...new Set(mine.flatMap((raw) => sliceReadingNotes(readSliceIds(raw.result!.slices))))];
     const droppedTail = dropped.length === 0 ? "" : ` (${dropped.join("; ")})`;
@@ -477,9 +494,16 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     runs.push(run);
   }
 
+  // A fix slice is covered only when every reviewer on its roster (but a skip the operator confirmed) read it AND every
+  // finding attached to it has a disposition from a reviewer on that roster (M4).
+  const fix = manifest === undefined ? { covered: [], gaps: [] } : fixSliceCoverage(manifest, readBy, dispositionsBy, skippedNames);
+  const fixCovered = new Set(fix.covered);
+  gaps.push(...fix.gaps);
+
   const unresolvedRules = selected.filter((r) => input.ruleFiles[r] === undefined);
   const notRun = [...(input.depth === "light" ? ["Not run: mutation (light round)"] : []), ...skipped.map(skipLine)];
-  const dispatch = { version: 1, mode: input.mode, ...(fixCovered.size === 0 ? {} : { fixSlicesCovered: [...fixCovered].sort() }), ...(priorDispositions.size === 0 ? {} : { priorDispositions: Object.fromEntries([...priorDispositions].sort(([a], [b]) => a.localeCompare(b))) }), ...(input.depth === "light" ? { depth: "light" } : input.depth === "full" ? { depth: "full" } : {}), ...(notRun.length === 0 ? {} : { notRun }), selected, ...(skipped.length === 0 ? {} : { skipped: skipped.map((skip) => ({ reviewer: skip.reviewer, reason: skip.reason })) }), ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
+  const superseded = (input.superseded ?? []).map((entry) => ({ reviewer: entry.reviewer, reason: entry.reason }));
+  const dispatch = { version: 1, mode: input.mode, ...(superseded.length === 0 ? {} : { superseded }), ...((input.supersedeNotes ?? []).length === 0 ? {} : { supersedeNotes: [...input.supersedeNotes!] }), ...(fixCovered.size === 0 ? {} : { fixSlicesCovered: [...fixCovered].sort() }), ...(priorDispositions.size === 0 ? {} : { priorDispositions: Object.fromEntries([...priorDispositions].sort(([a], [b]) => a.localeCompare(b))) }), ...(input.depth === "light" ? { depth: "light" } : input.depth === "full" ? { depth: "full" } : {}), ...(notRun.length === 0 ? {} : { notRun }), selected, ...(skipped.length === 0 ? {} : { skipped: skipped.map((skip) => ({ reviewer: skip.reviewer, reason: skip.reason })) }), ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
 
   const obligations: Array<Record<string, unknown>> = [];
   const derived = new Set<string>();
@@ -529,7 +553,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   }
 
   const reconciled = raws.every((r) => r.empty || (r.result !== undefined && text(r.result.reviewer))) && obligations.every((o) => CLOSED.has(String(o.status)));
-  let scopeReviewed = selected.length > 0 && runs.every((r) => r.scopeComplete === true);
+  let scopeReviewed = selected.length > 0 && runs.every((r) => r.scopeComplete === true) && fix.gaps.length === 0;
   if (scopeReviewed && manifest !== undefined) {
     const covered = new Set<string>();
     for (const seen of complete.values()) seen.forEach((id) => covered.add(id));

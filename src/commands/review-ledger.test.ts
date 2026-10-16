@@ -3,7 +3,8 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { coverageErrors, isAttendedRun, requiredReviewers } from "../review/coverage";
+import { recordOperatorDecision } from "../review/operator-decisions";
+import { coverageErrors, isAttendedRun, operatorDecisionSubject, requiredReviewers } from "../review/coverage";
 import type { RawFile } from "../review/ledger";
 import { pendingMutants } from "../review/mutate";
 import { runCoverage } from "./review-chunks";
@@ -372,33 +373,41 @@ describe("ledger build --skip and flow-bound packages (flow 458 AC7)", () => {
     return { text: lines.join("\n") };
   }
 
-  test("a skip with its reason leaves the selection, is written as Not run, and the reviewer-set gate accepts it", async () => {
+  test("a skip of a required reviewer needs the operator's recorded decision (M5); with it the skip leaves the selection as Not run", async () => {
     const { root, pkg, cleanup } = await packageAt(["reviews", "pkg"]);
     try {
       const required = (await requiredReviewers(root, "all", ["src/a.ts"])).required;
       const skipped = required.find((name) => name !== "review-logic")!;
+      // The agent's flag alone is refused, and names the card and the terminal command.
+      await expect(run([pkg, "--mode", "all", "--json", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).rejects.toThrow(/needs the operator's decision.*review_override_reviewers/s);
+      const subject = await operatorDecisionSubject(pkg, "reviewer-override", required.filter((name) => name !== skipped));
+      expect(subject.items).toEqual([skipped]);
+      await recordOperatorDecision(pkg, { kind: "reviewer-override", quote: "yes, skip it", reason: "hotfix", confirmedVia: "terminal", at: new Date().toISOString(), subject });
       const out = JSON.parse((await run([pkg, "--mode", "all", "--json", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).text) as Out;
       expect(out.ledger.dispatch.skipped).toEqual([{ reviewer: skipped, reason: "operator: no style pass on a hotfix" }]);
       expect(out.ledger.dispatch.notRun).toContain(`Not run: ${skipped} — operator: no style pass on a hotfix`);
       expect(out.ledger.dispatch.selected).not.toContain(skipped);
       expect(out.gaps.some((gap) => gap.reviewer === skipped)).toBe(false);
       expect(out.blockers.join("\n")).not.toContain(skipped);
-      // The gate on the dispatch alone: accepted with the skip, refused without it.
+      // The gate on the dispatch: the skip counts with the package's recorded decision, never as a dispatch entry alone.
       const dispatch = out.ledger.dispatch;
-      expect((await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"] })).join("\n")).not.toContain("missing");
-      expect((await coverageErrors({ mode: "all", selected: dispatch.selected }, { root, files: ["src/a.ts"] })).join("\n")).toContain(`missing: ${skipped}`);
+      expect((await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"], packageDir: pkg })).join("\n")).not.toContain("missing");
+      expect((await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"] })).join("\n")).toContain("dispatch.skipped is not accepted");
+      expect((await coverageErrors({ mode: "all", selected: dispatch.selected }, { root, files: ["src/a.ts"], packageDir: pkg })).join("\n")).toContain(`missing: ${skipped}`);
 
       const text = (await run([pkg, "--mode", "all", "--dry-run", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).text;
       expect(text).toContain(`- Not run: ${skipped} — operator: no style pass on a hotfix`);
       const verdict = await computeVerdict(pkg);
-      expect(verdict.notRun).toEqual([`Not run: ${skipped} — operator: no style pass on a hotfix`]);
+      expect(verdict.notRun?.[0]).toBe(`Not run: ${skipped} — operator: no style pass on a hotfix`);
+      // M6: a reviewer the required set dropped by an overlap group or a supersede is named in the verdict, with why.
+      expect(verdict.notRun).toContain("excluded: review-frontend-conventions — overlap group frontend: review-frontend reads the same lines");
       expect(renderVerdict(verdict, "pkg")).toContain(`Not run: ${skipped} — operator: no style pass on a hotfix`);
     } finally {
       await cleanup();
     }
   });
 
-  test("a skip without a reason, a reason without a skip, and a skip of a reviewer the round does not require are refused", async () => {
+  test("a skip without a reason or a reason without a skip is refused; a skip of a reviewer the round does not require is only recorded", async () => {
     expect(() => parseSkips(["--skip", "review-style"])).toThrow("needs --reason");
     expect(() => parseSkips(["--reason", "why"])).toThrow("must follow");
     expect(() => parseSkips(["--skip", "a", "--skip", "b", "--reason", "x"])).toThrow("has no --reason");
@@ -409,7 +418,8 @@ describe("ledger build --skip and flow-bound packages (flow 458 AC7)", () => {
     ]);
     const { pkg, cleanup } = await packageAt(["reviews", "pkg"]);
     try {
-      await expect(run([pkg, "--skip", "review-nonexistent", "--reason", "x"])).rejects.toThrow("not a reviewer this round requires");
+      const out = JSON.parse((await run([pkg, "--json", "--skip", "review-nonexistent", "--reason", "x"])).text) as Out;
+      expect(out.ledger.dispatch.notRun).toContain("Not run: review-nonexistent — x (not required this round)");
     } finally {
       await cleanup();
     }

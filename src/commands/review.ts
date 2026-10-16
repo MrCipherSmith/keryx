@@ -4,7 +4,7 @@ import { mkdir, readdir, readFile } from "node:fs/promises";
 import path, { join } from "node:path";
 import { optionValue } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
-import { revisionOperand } from "../lib/git-revision";
+import { assertGitRevision, revisionOperand } from "../lib/git-revision";
 // Through the security facade, not `security/redact` directly — same
 // discipline as `src/review/conform-jev.ts`/`conform-clauses.ts`.
 import { redactSensitiveText } from "../security/service";
@@ -469,6 +469,8 @@ const SCOPE_FLAGS = [
   "--diff",
   "--ref",
   "--base",
+  // Flow 458: with --ref, the diff ends at this commit instead of the working tree (`review plan --head`).
+  "--head",
   "--json",
   "--scoped-diff",
   "--append",
@@ -1073,7 +1075,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     const roundHead = result.manifest.target.head ?? null;
     const forcedPrior = optionValue(args, "--prior");
     const detected = args.includes("--no-prior-round")
-      ? skippedRound(roundHead)
+      ? skippedRound(roundHead, result.manifest.target)
       : await findPreviousRound(result.manifest.target, roundHead, {
           cwd,
           ...createSeams.priorRound,
@@ -1081,7 +1083,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
           excludeReviewId: result.reviewId,
           ...(forcedPrior === undefined ? {} : { forced: forcedPrior }),
         });
-    await writeRoundRecord(result.path, detected.round, detected.priorFindings);
+    await writeRoundRecord(result.path, detected.round, detected.priorFindings, detected.identity);
     console.log(renderRoundLine(detected.round));
     console.log(
       `round record: ${path.join(result.path, ROUND_FILE)} (${detected.round.mode}; ${detected.priorFindings.length} prior finding(s); fix hunks ${detected.round.fixHunks.length}, new hunks ${detected.round.newHunks.length})`,
@@ -3691,6 +3693,8 @@ async function runScope(args: string[]): Promise<void> {
   const pathList = optionValue(args, "--path");
   const diffFile = optionValue(args, "--diff");
   const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
+  const head = optionValue(args, "--head");
+  if (head !== undefined && (ref === undefined || diffFile !== undefined || pathList !== undefined)) throw new Error("--head needs --ref (the diff is <ref>..<head>) and cannot be combined with --diff or --path.");
 
   let scope: ReviewScope;
   if (pathList !== undefined) {
@@ -3700,7 +3704,7 @@ async function runScope(args: string[]): Promise<void> {
       .filter(Boolean);
     scope = buildPathScope(paths, { contextLines });
   } else {
-    const diff = diffFile !== undefined ? await readDiffSource(diffFile) : await gitDiff(ref, contextLines);
+    const diff = diffFile !== undefined ? await readDiffSource(diffFile) : await gitDiff(ref, contextLines, head);
     scope = buildReviewScope(diff, { contextLines, ...(await commentRuleScopeConfig(process.cwd())) });
   }
 
@@ -4067,8 +4071,8 @@ const SLICE_DEPS: SliceDeps = { gitDiff, readDiffSource, parseContextLines, reje
  * would make every region report `context_truncated` and hand reviewers less
  * than the configured bound.
  */
-async function gitDiff(ref: string | undefined, contextLines: number): Promise<string> {
-  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref))];
+async function gitDiff(ref: string | undefined, contextLines: number, head?: string): Promise<string> {
+  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref)), ...(ref === undefined || head === undefined ? [] : [assertGitRevision(head)])];
   const proc = Bun.spawn(command, { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -4910,7 +4914,7 @@ Usage:
                         4 in parallel); not sliced: assignments = roles. Over the
                         plan threshold it says so; --confirm --quote at a terminal
                         records the operator's confirmation.
-  keryx review plan --target <pr-url|branch> [--ref <base>] [--head <sha>] [--host keryx-shell|claude-code|codex|other] [--json]
+  keryx review plan --target <pr-url|branch> [--ref <base>] [--head <sha>] [--host keryx-shell|claude-code|codex|other] [--memory-query "<query>"] [--unattended] [--json]
                         The round plan in one command, never dispatching: start (round detection),
                         scope, blast-radius, slice, required and estimate; writes <review-dir>/plan.json
                         (round, fix and new slices, roster, dispatches, minutes, next step).

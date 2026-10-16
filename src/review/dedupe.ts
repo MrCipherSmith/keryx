@@ -60,6 +60,11 @@ export type DuplicateMerge = {
   severityRule: "max" | "verified";
   /** Severities the reporters gave, in reporter order, so drift stays visible. */
   reportedSeverities: ReviewFindingSeverity[];
+  /**
+   * When a verifier-confirmed severity was kept over a HIGHER one nobody confirmed: that higher severity and who reported
+   * it, so the report says the lower severity won on evidence, not by accident.
+   */
+  outranked?: { severity: ReviewFindingSeverity; reviewer: string; id: string } | undefined;
 };
 
 export type MergeDuplicatesResult<T> = {
@@ -176,12 +181,43 @@ export function isDuplicate(a: StructuredReviewFinding, b: StructuredReviewFindi
       return false;
     }
   }
+  // Two statements naming different code (`loadA` and `loadB`, `user.id` and `user.name`) are two findings, however
+  // alike the rest of the words are: unless one's identifiers are all among the other's, never merged.
+  const tokensA = codeTokens(a.problem);
+  const tokensB = codeTokens(b.problem);
+  if (tokensA.size > 0 && tokensB.size > 0 && !subsetOf(tokensA, tokensB) && !subsetOf(tokensB, tokensA)) {
+    return false;
+  }
   const keyA = present(a.dedupe_key);
   const keyB = present(b.dedupe_key);
   if (keyA !== null && keyB !== null) {
     return keyA === keyB;
   }
   return problemSimilarity(a.problem, b.problem) >= PROBLEM_SIMILARITY;
+}
+
+function subsetOf(small: ReadonlySet<string>, large: ReadonlySet<string>): boolean {
+  for (const item of small) if (!large.has(item)) return false;
+  return true;
+}
+
+const CODE_SPAN = /`([^`\n]+)`/g;
+/** dotted.names, camelCase / PascalCase-with-inner-capital, snake_case, and calls `name(` — words that name code. */
+const IDENTIFIER = /(?<![\w$.])(?:[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+|[a-z][a-z0-9]*[A-Z][\w$]*|[A-Za-z][A-Za-z0-9]*_[\w$]+|[A-Za-z_$][\w$]*(?=\())/g;
+
+/** The identifiers a problem statement names: its code spans, and identifier-shaped words outside them. */
+export function codeTokens(problem: string): Set<string> {
+  const tokens = new Set<string>();
+  const normalise = (token: string): string => token.trim().replace(/\(\)$/, "").replace(/[;,.:]+$/, "");
+  for (const match of problem.matchAll(CODE_SPAN)) {
+    const token = normalise(match[1]!);
+    if (token !== "") tokens.add(token);
+  }
+  for (const match of problem.replace(CODE_SPAN, " ").matchAll(IDENTIFIER)) {
+    const token = normalise(match[0]);
+    if (token !== "") tokens.add(token);
+  }
+  return tokens;
 }
 
 /**
@@ -265,11 +301,22 @@ function mergeCluster<T extends StructuredReviewFinding>(members: readonly T[]):
     }
   }
 
+  // The absorbed statements stay readable: a merge must never lose what another reviewer said the problem was.
+  const mergedProblems = [...(canonical.merged_problems ?? [])];
+  for (const member of others) {
+    for (const problem of [member.problem, ...(member.merged_problems ?? [])]) {
+      if (present(problem) !== null && problem.trim() !== canonical.problem.trim() && !mergedProblems.includes(problem)) {
+        mergedProblems.push(problem);
+      }
+    }
+  }
+
   const finding: T = {
     ...canonical,
     evidence,
     reported_by: reportedBy,
     merged_from: mergedFrom,
+    ...(mergedProblems.length === 0 ? {} : { merged_problems: mergedProblems }),
   };
   if (members.some((member) => member.blocking_merge === true)) {
     finding.blocking_merge = true;
@@ -286,6 +333,8 @@ function mergeCluster<T extends StructuredReviewFinding>(members: readonly T[]):
     }
   }
 
+  const higher = severityRule === "verified" ? others.filter((member) => member.verification?.verdict !== "confirmed" && rank(member.severity) > rank(canonical.severity)) : [];
+  const top = higher.length === 0 ? undefined : bestOf(higher);
   return {
     finding,
     record: {
@@ -295,6 +344,7 @@ function mergeCluster<T extends StructuredReviewFinding>(members: readonly T[]):
       severity: canonical.severity,
       severityRule,
       reportedSeverities: [canonical, ...others].map((member) => member.severity),
+      ...(top === undefined ? {} : { outranked: { severity: top.severity, reviewer: top.reviewer, id: keyOf(top) } }),
     },
   };
 }
@@ -346,7 +396,9 @@ export function renderDuplicatesMarkdown(merges: readonly DuplicateMerge[]): str
   }
   const rows = merges.map(
     (merge) =>
-      `- ${merge.kept} kept (${merge.severity}, ${merge.severityRule === "verified" ? "verifier-confirmed severity" : "highest reported severity"}); absorbed ${merge.absorbed.join(", ")}; reported by ${merge.reportedBy.join(", ")}; reported severities ${merge.reportedSeverities.join("/")}`,
+      `- ${merge.kept} kept (${merge.severity}, ${merge.severityRule === "verified" ? "verifier-confirmed severity" : "highest reported severity"}); absorbed ${merge.absorbed.join(", ")}; reported by ${merge.reportedBy.join(", ")}; reported severities ${merge.reportedSeverities.join("/")}${
+        merge.outranked === undefined ? "" : `; the confirmed ${merge.severity} outranks the unconfirmed ${merge.outranked.severity} of ${merge.outranked.reviewer} (${merge.outranked.id})`
+      }`,
   );
   return `\n## Duplicates merged\n\n${rows.join("\n")}\n`;
 }

@@ -33,9 +33,11 @@ export function fixFindingIdsOf(slice: Pick<SliceEntry, "files"> & { text: strin
 }
 
 /**
- * Tag the routed slices of a delta round. A slice holding any fix hunk becomes `kind: "fix"` with its `findingIds`, the
- * fix roster and a deep read (audit and escalation marks drop: they belong to light routing); every other slice becomes
- * `kind: "new"` and keeps the routing it was given. Retry pieces are left alone.
+ * Tag the routed slices of a delta round. A slice holding any fix hunk becomes `kind: "fix"` with its `findingIds`, a
+ * deep read (audit and escalation marks drop: they belong to light routing) and a roster that is the fix roster PLUS the
+ * routing its own content gets as a round-1 slice (M2/M3): a fix slice may hold new lines too, and a fix touching
+ * process spawning still gets the security reviewer. Every other slice becomes `kind: "new"` and keeps the routing it
+ * was given. Retry pieces are left alone.
  */
 export function classifyDeltaSlices<T extends SliceEntry & { text: string }>(slices: readonly T[], round: RoundRecord, prior: readonly PriorFinding[]): T[] {
   return slices.map((slice) => {
@@ -47,7 +49,7 @@ export function classifyDeltaSlices<T extends SliceEntry & { text: string }>(sli
       ...(rest as T),
       kind: "fix" as const,
       findingIds,
-      roles: fixRosterRoles(findingIds, prior),
+      roles: [...new Set([...fixRosterRoles(findingIds, prior), ...(slice.roles ?? [])])].sort(),
       depth: "deep" as const,
       risk: { score: Math.max(slice.risk?.score ?? 0, 0.5), why: [...(slice.risk?.why ?? []).filter((why) => !why.startsWith("audit sample")), `fix slice: answers ${findingIds.length} prior finding(s) ${findingIds.slice(0, 4).join(", ")}${findingIds.length > 4 ? ", …" : ""}`] },
     };
@@ -108,11 +110,39 @@ export function priorDispositionsOf(result: { prior_dispositions?: unknown } | u
 }
 
 /**
- * Fix slices that count covered because every finding attached to them has a disposition (a reviewer's `prior_dispositions`
- * or a carried finding's recorded one). A fix slice with no attached finding never counts: nothing says what it answered.
+ * Which fix slices are covered (M4). A fix slice is covered only when every reviewer on its roster read it (`readBy`: the
+ * slices each finished run accounted for) — a reviewer the operator confirmed skipping excepted — and every finding
+ * attached to it has a disposition from a reviewer ON THAT ROSTER (`dispositionsBy`: reviewer → finding id →
+ * disposition, from finished results of this scope only). Another reviewer's word, or a carried record, covers nothing:
+ * a fix slice with no attached finding never counts, since nothing says what it answered.
  */
-export function fixSlicesCoveredByDispositions(manifest: { slices: readonly SliceEntry[] }, dispositioned: ReadonlySet<string>): string[] {
-  return manifest.slices
-    .filter((slice) => slice.retryOf === undefined && slice.kind === "fix" && (slice.findingIds ?? []).length > 0 && (slice.findingIds ?? []).every((id) => dispositioned.has(id)))
-    .map((slice) => slice.id);
+export function fixSliceCoverage(
+  manifest: { slices: readonly SliceEntry[] },
+  readBy: ReadonlyMap<string, ReadonlySet<string>>,
+  dispositionsBy: ReadonlyMap<string, ReadonlyMap<string, string>>,
+  skipped: ReadonlySet<string> = new Set(),
+): { covered: string[]; gaps: Array<{ detail: string; next: string }> } {
+  const covered: string[] = [];
+  const gaps: Array<{ detail: string; next: string }> = [];
+  for (const slice of manifest.slices) {
+    if (slice.retryOf !== undefined || slice.kind !== "fix") continue;
+    const roster = (slice.roles ?? []).filter((role) => !skipped.has(role));
+    const ids = slice.findingIds ?? [];
+    const unread = roster.filter((role) => readBy.get(role)?.has(slice.id) !== true);
+    const undisposed = ids.filter((id) => !roster.some((role) => dispositionsBy.get(role)?.has(id) === true));
+    if (ids.length > 0 && unread.length === 0 && undisposed.length === 0) {
+      covered.push(slice.id);
+      continue;
+    }
+    const why = [
+      ids.length === 0 ? "it names no prior finding" : undefined,
+      unread.length > 0 ? `not read by ${unread.join(", ")}` : undefined,
+      undisposed.length > 0 ? `no disposition from its roster for ${undisposed.join(", ")}` : undefined,
+    ].filter(Boolean).join("; ");
+    gaps.push({
+      detail: `fix slice ${slice.id}: ${why}`,
+      next: `dispatch ${unread.length > 0 ? unread.join(", ") : "a reviewer of its roster"} on ${slice.id} with the prior findings attached, and have it return prior_dispositions for ${ids.join(", ") || "them"}`,
+    });
+  }
+  return { covered, gaps };
 }

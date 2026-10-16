@@ -2,17 +2,20 @@
 // estimate and the ledger count both kinds, each against its own roster.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
+import { deltaSliceDiff } from "../commands/review-slice";
 import { computeCoverage } from "./coverage-complete";
 import { estimateRound } from "./estimate";
 import { buildLedger, type LedgerInputs, type RawFile } from "./ledger";
 import { type PriorFinding, type RoundRecord } from "./round-record";
-import { classifyDeltaSlices, expectedFixRoles, fixClaimBacked, fixRosterRoles, fixSliceRoles, fixSlicesCoveredByDispositions, isDeltaRound, priorDispositionsOf, splitCounts } from "./round-split";
+import { classifyDeltaSlices, expectedFixRoles, fixClaimBacked, fixRosterRoles, fixSliceCoverage, fixSliceRoles, isDeltaRound, priorDispositionsOf, splitCounts } from "./round-split";
 import { narrowedSlices } from "./routing-check";
-import type { SliceEntry, SliceManifest } from "./slice";
+import { parseScopedDiff, type SliceEntry, type SliceManifest } from "./slice";
+import { routeSliceRegions } from "./slice-routing";
 import { requiredSlices } from "./waves";
 
 const prior = (id: string, reviewer: string, file = "src/a/a.ts"): PriorFinding => ({ id, reviewer, severity: "major", file, line: 10, problem: "p", status: "open", source: "local-package" });
@@ -75,7 +78,8 @@ describe("classifyDeltaSlices", () => {
       entry("slice-02", ["src/c/c.ts"], region("src/c/c.ts", 1, 3)),
     ];
     const [fix, fresh] = classifyDeltaSlices(slices, round(), PRIOR);
-    expect(fix).toMatchObject({ kind: "fix", findingIds: ["F1"], roles: ["review-logic", "review-regression", "review-security-code"], depth: "deep" });
+    // The fix roster joined by the slice's own round-1 routing (M2/M3): nothing its content needs is dropped.
+    expect(fix).toMatchObject({ kind: "fix", findingIds: ["F1"], roles: ["review-logic", "review-performance", "review-regression", "review-security-code", "review-style"], depth: "deep" });
     expect(fresh).toMatchObject({ kind: "new", roles: ["review-logic", "review-style", "review-performance"], depth: "light" });
     expect(fresh?.findingIds).toBeUndefined();
   });
@@ -143,15 +147,21 @@ describe("routing check accepts fix rosters", () => {
   const context = { round: round(), prior: PRIOR };
   const read = () => text;
 
-  test("a fix slice with the fix roster is not refused as narrowed, though its content would route a wider set as a new slice", () => {
-    const fix = slice({ roles: expectedFixRoles({ findingIds: ["F1"] }, context), depth: "deep" });
-    expect(narrowedSlices({ slices: [fix] }, read, context).narrowed).toEqual([]);
-    // The same entry without the round behind it is judged as a new slice, whose content needs more.
-    expect(narrowedSlices({ slices: [fix] }, read).narrowed.length).toBe(1);
+  const contentRoles = routeSliceRegions("slice-01", parseScopedDiff(text), { changedFiles: ["src/a/a.ts"] }).roles;
+
+  test("a fix slice is held to the fix roster AND its content's round-1 routing (M3): the fix roster alone is narrowed", () => {
+    const fixOnly = slice({ roles: expectedFixRoles({ findingIds: ["F1"] }, context), depth: "deep" });
+    const missing = contentRoles.filter((role) => !fixOnly.roles!.includes(role));
+    expect(missing.length).toBeGreaterThan(0);
+    expect(narrowedSlices({ slices: [fixOnly] }, read, context).narrowed).toEqual([{ id: "slice-01", missingRoles: missing.sort() }]);
+    const union = slice({ roles: [...new Set([...contentRoles, ...expectedFixRoles({ findingIds: ["F1"] }, context)])], depth: "deep" });
+    expect(narrowedSlices({ slices: [union] }, read, context).narrowed).toEqual([]);
+    // A fix slice is read deep.
+    expect(narrowedSlices({ slices: [{ ...union, depth: "light" }] }, read, context).narrowed).toEqual([{ id: "slice-01", missingRoles: [], depth: { recorded: "light", needed: "deep" } }]);
   });
 
   test("a fix slice missing an author of its finding is narrowed", () => {
-    const fix = slice({ roles: ["review-logic", "review-regression"], depth: "deep" });
+    const fix = slice({ roles: [...new Set([...contentRoles, "review-logic", "review-regression"])].filter((role) => role !== "review-security-code"), depth: "deep" });
     expect(narrowedSlices({ slices: [fix] }, read, context).narrowed).toEqual([{ id: "slice-01", missingRoles: ["review-security-code"] }]);
   });
 
@@ -199,8 +209,10 @@ describe("ledger: a split round", () => {
     });
   const claims = (reviewer: string, slices: string[], extra: Record<string, unknown> = {}): RawFile => ({ ...raw(reviewer, { slices, ...extra }), assignedSlices: slices });
 
+  const answered = { prior_dispositions: [{ id: "F1", disposition: "closed" }, { id: "F2", disposition: "partial" }] };
+
   test("each kind is checked against its own roster: the style reviewer owes the new slice only, regression the fix slice only", () => {
-    const { ledger, gaps } = build([claims("review-logic", ["slice-01", "slice-02"]), claims("review-regression", ["slice-01"]), claims("review-style", ["slice-02"])]);
+    const { ledger, gaps } = build([claims("review-logic", ["slice-01", "slice-02"]), claims("review-regression", ["slice-01"], answered), claims("review-style", ["slice-02"])]);
     expect(gaps).toEqual([]);
     expect(ledger.scopeReviewed).toBe(true);
     const runs = (ledger.dispatch.runs as Array<{ reviewer: string; scopeComplete: boolean }>).map((r) => [r.reviewer, r.scopeComplete]);
@@ -213,36 +225,54 @@ describe("ledger: a split round", () => {
     expect(gaps.some((g) => g.reviewer === "review-regression" && g.detail.includes("slice-01"))).toBe(true);
   });
 
-  test("a fix slice is covered when every attached finding has a disposition, whichever reviewers claimed it", () => {
-    const dispositions = { prior_dispositions: [{ id: "F1", disposition: "closed" }, { id: "F2", disposition: "partial" }] };
-    const { ledger, gaps } = build([claims("review-logic", ["slice-02"], dispositions), claims("review-regression", []), claims("review-style", ["slice-02"])]);
+  test("a fix slice is covered when every roster reviewer read it and its findings have dispositions from that roster (M4)", () => {
+    const { ledger, gaps } = build([claims("review-logic", ["slice-01", "slice-02"], answered), claims("review-regression", ["slice-01"]), claims("review-style", ["slice-02"])]);
     expect(gaps).toEqual([]);
     expect(ledger.scopeReviewed).toBe(true);
     expect(ledger.dispatch.fixSlicesCovered).toEqual(["slice-01"]);
     expect(ledger.dispatch.priorDispositions).toEqual({ F1: "closed", F2: "partial" });
   });
 
-  test("one finding without a disposition leaves the fix slice uncovered; an unknown disposition word counts for nothing", () => {
-    const { ledger, gaps } = build([claims("review-logic", ["slice-02"], { prior_dispositions: [{ id: "F1", disposition: "closed" }, { id: "F2", disposition: "fixed-ish" }] }), claims("review-regression", []), claims("review-style", ["slice-02"])]);
+  test("dispositions alone do not cover a fix slice nobody on its roster read", () => {
+    const { ledger, gaps } = build([claims("review-logic", ["slice-02"], answered), claims("review-regression", []), claims("review-style", ["slice-02"])]);
     expect(ledger.scopeReviewed).toBe(false);
     expect(ledger.dispatch.fixSlicesCovered).toBeUndefined();
-    expect(gaps.length).toBeGreaterThan(0);
+    expect(gaps.some((g) => g.detail.startsWith("fix slice slice-01: not read by review-logic, review-regression"))).toBe(true);
   });
 
-  test("carried findings' recorded dispositions count as dispositions", () => {
-    const { ledger } = build(
-      [claims("review-logic", ["slice-02"], { prior_dispositions: [{ id: "F1", disposition: "withdrawn" }] }), claims("review-regression", []), claims("review-style", ["slice-02"])],
-      { carried: [{ findingId: "F2", disposition: "closed" }] },
-    );
-    expect(ledger.dispatch.fixSlicesCovered).toEqual(["slice-01"]);
-    expect(ledger.scopeReviewed).toBe(true);
+  test("a disposition from a reviewer off the roster, or a carried record, covers nothing", () => {
+    const off = build([claims("review-logic", ["slice-01", "slice-02"]), claims("review-regression", ["slice-01"]), claims("review-style", ["slice-02"], answered)]);
+    expect(off.ledger.scopeReviewed).toBe(false);
+    expect(off.gaps.some((g) => g.detail.includes("no disposition from its roster for F1, F2"))).toBe(true);
+    const carried = build([claims("review-logic", ["slice-01", "slice-02"], { prior_dispositions: [{ id: "F1", disposition: "withdrawn" }] }), claims("review-regression", ["slice-01"]), claims("review-style", ["slice-02"])], { carried: [{ findingId: "F2", disposition: "closed" }] });
+    expect(carried.ledger.dispatch.fixSlicesCovered).toBeUndefined();
+    expect(carried.ledger.scopeReviewed).toBe(false);
+  });
+
+  test("a disposition counts only from a finished result of this scope", () => {
+    const unfinished = build([claims("review-logic", ["slice-01", "slice-02"]), claims("review-regression", ["slice-01"]), claims("review-style", ["slice-02"]), claims("review-regression", ["slice-01"], { ...answered, status: "NEEDS_CONTEXT" })]);
+    expect(unfinished.gaps.some((g) => g.detail.includes("no disposition from its roster"))).toBe(true);
+    const stale = build([claims("review-logic", ["slice-01", "slice-02"], { ...answered, scopeFingerprint: "another-scope" }), claims("review-regression", ["slice-01"]), claims("review-style", ["slice-02"])]);
+    expect(stale.ledger.scopeReviewed).toBe(false);
+    expect(stale.gaps.some((g) => g.detail.includes("no disposition from its roster for F1, F2"))).toBe(true);
+  });
+
+  test("one finding without a disposition leaves the fix slice uncovered; an unknown disposition word counts for nothing", () => {
+    const { ledger, gaps } = build([claims("review-logic", ["slice-01", "slice-02"], { prior_dispositions: [{ id: "F1", disposition: "closed" }, { id: "F2", disposition: "fixed-ish" }] }), claims("review-regression", ["slice-01"]), claims("review-style", ["slice-02"])]);
+    expect(ledger.scopeReviewed).toBe(false);
+    expect(ledger.dispatch.fixSlicesCovered).toBeUndefined();
+    expect(gaps.some((g) => g.detail.includes("no disposition from its roster for F2"))).toBe(true);
   });
 
   test("the vocabulary is the prior-disposition one: closed, open, partial, regressed, withdrawn", () => {
     const parsed = priorDispositionsOf({ prior_dispositions: ["x", { id: "A", disposition: "open" }, { finding: "B", status: "regressed" }, { id: "C", disposition: "fixed" }, { disposition: "closed" }] });
     expect([...parsed]).toEqual([["A", "open"], ["B", "regressed"]]);
-    expect(fixSlicesCoveredByDispositions({ slices: [fix] }, new Set(["F1", "F2"]))).toEqual(["slice-01"]);
-    expect(fixSlicesCoveredByDispositions({ slices: [{ ...fix, findingIds: [] }] }, new Set(["F1"]))).toEqual([]);
+    const read = new Map([["review-logic", new Set(["slice-01"])], ["review-regression", new Set(["slice-01"])]]);
+    const given = new Map([["review-logic", new Map([["F1", "closed"], ["F2", "open"]])]]);
+    expect(fixSliceCoverage({ slices: [fix] }, read, given).covered).toEqual(["slice-01"]);
+    expect(fixSliceCoverage({ slices: [{ ...fix, findingIds: [] }] }, read, given).covered).toEqual([]);
+    // A reviewer the operator confirmed skipping does not hold the slice open.
+    expect(fixSliceCoverage({ slices: [fix] }, new Map([["review-logic", new Set(["slice-01"])]]), given, new Set(["review-regression"])).covered).toEqual(["slice-01"]);
   });
 });
 
@@ -328,12 +358,54 @@ describe("review slice in a delta round", () => {
     const { slices } = await manifestOf(pkg);
     const fix = slices.find((s) => s.files.includes("src/a/a.ts"));
     const fresh = slices.find((s) => s.files.includes("src/c/c.ts"));
-    expect(fix).toMatchObject({ kind: "fix", findingIds: ["F1"], roles: ["review-logic", "review-regression", "review-security-code"] });
+    expect(fix).toMatchObject({ kind: "fix", findingIds: ["F1"], depth: "deep" });
+    expect(fix?.roles).toEqual(expect.arrayContaining(["review-logic", "review-regression", "review-security-code"]));
     expect(fresh?.kind).toBe("new");
     expect(fresh?.findingIds).toBeUndefined();
     expect(fresh?.roles).toContain("review-logic");
     // Unchanged code of the round is not in any slice: only the delta's files are.
     expect([...new Set(slices.flatMap((s) => s.files))].sort()).toEqual(["src/a/a.ts", "src/c/c.ts"]);
+  });
+
+  test("a delta slice never exceeds the round-1 slice of the same head under the same exclusions", async () => {
+    // Round 1 reviewed `prev`, which added a large block the fix then removed: prev..head carries every removed line,
+    // merge-base..head does not. The delta is cut from merge-base..head then, still split fix/new.
+    await writeFile(path.join(repo, "src/c/c.ts"), `${lines("c", 3)}${lines("n", 5)}${lines("big", 300)}`);
+    git("add", "-A");
+    git("commit", "-q", "-m", "round-1 head with a big block");
+    const prev = git("rev-parse", "HEAD");
+    await writeFile(path.join(repo, "src/c/c.ts"), `${lines("c", 3)}${lines("n", 5)}export const fixed = 1;\n`);
+    git("add", "-A");
+    git("commit", "-q", "-m", "fix: drop the block");
+    const fixed = git("rev-parse", "HEAD");
+    const pkg = await writeRound({ previous: { reviewId: "r1", reviewedHead: prev }, range: { base: prev, head: fixed }, mergeBase: base, fixHunks: [{ file: "src/c/c.ts", startLine: 9, endLine: 9, findingIds: ["F1"] }], newHunks: [] });
+    await reviewCommand(["slice", "--package", pkg, "--max-bytes", "100000", "--head", fixed]);
+    const delta = JSON.parse(await readFile(path.join(pkg, "slices", "manifest.json"), "utf8")) as SliceManifest;
+    const fullDir = path.join(repo, "full-slices");
+    await reviewCommand(["slice", "--out", fullDir, "--ref", base, "--max-bytes", "100000", "--head", fixed]);
+    const full = JSON.parse(await readFile(path.join(fullDir, "manifest.json"), "utf8")) as SliceManifest;
+    expect(delta.totals.bytes).toBeLessThanOrEqual(full.totals.bytes);
+    expect(delta.slices.some((slice) => slice.kind === "fix")).toBe(true);
+
+    // The ordinary case: a small fix on top of round 1 is cut from prev..head, smaller than the whole branch.
+    const pkg2 = await writeRound({ previous: { reviewId: "r1", reviewedHead: base }, range: { base, head }, mergeBase: base, fixHunks: [{ file: "src/a/a.ts", startLine: 10, endLine: 10, findingIds: ["F1"] }], newHunks: [] });
+    const cut = await deltaSliceDiff({ range: { base: prev, head: fixed }, mergeBase: base }, 3, async (from) => (from === prev ? "x".repeat(10) : "y".repeat(100)));
+    expect(cut).toEqual({ diff: "x".repeat(10) });
+    const larger = await deltaSliceDiff({ range: { base: prev, head: fixed }, mergeBase: base }, 3, async (from) => (from === prev ? "x".repeat(100) : "y".repeat(10)));
+    expect(larger.diff).toBe("y".repeat(10));
+    expect(larger.note).toContain("larger than the round-1 diff");
+    expect(pkg2).toBe(pkg);
+  });
+
+  test("a round record edited after review start is refused by slice", async () => {
+    const pkg = await writeRound({});
+    await writeFile(path.join(pkg, "manifest.json"), `${JSON.stringify({ reviewId: "r2", roundRecord: { roundSha256: "0".repeat(64), priorFindingsSha256: "0".repeat(64) } })}\n`);
+    const errors: string[] = [];
+    console.error = (...parts: unknown[]) => void errors.push(parts.join(" "));
+    await reviewCommand(["slice", "--package", pkg, "--head", head]).catch((error: unknown) => void errors.push(String(error)));
+    expect(errors.join("\n")).toMatch(/changed after `keryx review start`/);
+    expect(existsSync(path.join(pkg, "slices", "manifest.json"))).toBe(false);
+    process.exitCode = 0;
   });
 
   test("a first round and a fallback-first round are sliced as before: no kinds", async () => {

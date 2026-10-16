@@ -33,6 +33,8 @@ export type RoundRecord = {
   fixHunks: FixHunk[];
   newHunks: RoundHunk[];
   carried: Array<{ findingId: string; disposition: string }>;
+  /** merge-base of the target's base and this head, when known: a delta round's slice never cuts more than merge-base..head. */
+  mergeBase?: string | null | undefined;
 };
 
 export type PriorFinding = {
@@ -73,19 +75,113 @@ export function isOpenStatus(status: string): boolean {
   return status === "open" || status === "unknown";
 }
 
-export async function writeRoundRecord(packageDir: string, round: RoundRecord, prior: readonly PriorFinding[]): Promise<void> {
-  await writeFileAtomic(path.join(packageDir, ROUND_FILE), `${JSON.stringify(round, null, 2)}\n`);
-  await writeFileAtomic(path.join(packageDir, PRIOR_FINDINGS_FILE), `${JSON.stringify(prior, null, 2)}\n`);
+/**
+ * What `review start` stamps into manifest.json beside round.json (flow 458): sha256 of round.json and prior_findings.json
+ * as written, so slice, ledger and complete refuse a round record edited afterwards; and the target's normalised key and
+ * the base ref its merge-base was read from, so a later round matches this one however the target was spelled.
+ */
+export type RoundStamp = { roundSha256: string; priorFindingsSha256: string; targetKey?: string | undefined; targetBase?: string | undefined };
+
+const sha256Of = (body: string | Buffer): string => createHash("sha256").update(body).digest("hex");
+
+function fileSha(file: string): string | undefined {
+  try {
+    return sha256Of(readFileSync(file));
+  } catch {
+    return undefined;
+  }
 }
 
-/** The package's round.json, or undefined when it has none (a package cut before flow 458, or an ingest). */
+export async function writeRoundRecord(
+  packageDir: string,
+  round: RoundRecord,
+  prior: readonly PriorFinding[],
+  identity: { targetKey?: string | undefined; targetBase?: string | undefined } = {},
+): Promise<void> {
+  const roundBody = `${JSON.stringify(round, null, 2)}\n`;
+  const priorBody = `${JSON.stringify(prior, null, 2)}\n`;
+  await writeFileAtomic(path.join(packageDir, ROUND_FILE), roundBody);
+  await writeFileAtomic(path.join(packageDir, PRIOR_FINDINGS_FILE), priorBody);
+  const manifestFile = path.join(packageDir, "manifest.json");
+  let manifest: Record<string, unknown> | undefined;
+  try {
+    manifest = record(JSON.parse(readFileSync(manifestFile, "utf8")));
+  } catch {
+    manifest = undefined;
+  }
+  if (manifest === undefined) return;
+  const stamp: RoundStamp = {
+    roundSha256: sha256Of(roundBody),
+    priorFindingsSha256: sha256Of(priorBody),
+    ...(identity.targetKey === undefined ? {} : { targetKey: identity.targetKey }),
+    ...(identity.targetBase === undefined ? {} : { targetBase: identity.targetBase }),
+  };
+  await writeFileAtomic(manifestFile, `${JSON.stringify({ ...manifest, roundRecord: stamp }, null, 2)}\n`);
+}
+
+/** The stamp `review start` left in manifest.json, or undefined (a package cut before it, or an ingest). */
+export function readRoundStamp(packageDir: string): RoundStamp | undefined {
+  try {
+    return roundStampOf(JSON.parse(readFileSync(path.join(packageDir, "manifest.json"), "utf8")));
+  } catch {
+    return undefined;
+  }
+}
+
+/** The `roundRecord` stamp of a parsed manifest, or undefined. */
+export function roundStampOf(manifest: unknown): RoundStamp | undefined {
+  const stamp = record(record(manifest)?.roundRecord);
+  if (stamp === undefined || typeof stamp.roundSha256 !== "string" || typeof stamp.priorFindingsSha256 !== "string") return undefined;
+  return stamp as unknown as RoundStamp;
+}
+
+/**
+ * Why the package's round record cannot be trusted any more, or undefined. A package whose manifest carries the stamp of
+ * `review start` must still hold round.json and prior_findings.json byte for byte as written: an edit that narrows the
+ * round (drops a fix hunk, marks a prior finding closed) is refused by slice, ledger build and complete.
+ */
+export function roundRecordTampered(packageDir: string): string | undefined {
+  const stamp = readRoundStamp(packageDir);
+  if (stamp === undefined) return undefined;
+  const changed: string[] = [];
+  if (fileSha(path.join(packageDir, ROUND_FILE)) !== stamp.roundSha256) changed.push(ROUND_FILE);
+  if (fileSha(path.join(packageDir, PRIOR_FINDINGS_FILE)) !== stamp.priorFindingsSha256) changed.push(PRIOR_FINDINGS_FILE);
+  if (changed.length === 0) return undefined;
+  return (
+    `${changed.join(" and ")} of ${packageDir} changed after \`keryx review start\` wrote ${changed.length === 1 ? "it" : "them"} (the sha256 in manifest.json roundRecord no longer matches). ` +
+    "The round record decides what the round reviews and is never edited by hand: start a new round with `keryx review start`"
+  );
+}
+
+/** The package's round.json, or undefined when it has none (a package cut before flow 458, or an ingest). A malformed one is refused. */
 export function readRoundRecord(packageDir: string): RoundRecord | undefined {
   const raw = readRaw(packageDir);
   if (raw === undefined || readRoundNumber(packageDir) === undefined) return undefined;
-  const previous = raw.previous;
-  if (!Array.isArray(raw.sourcesTried) || typeof raw.mode !== "string" || typeof raw.source !== "string" || record(raw.range) === undefined) return undefined;
-  if (previous !== null && typeof record(previous)?.reviewId !== "string") return undefined;
+  const problem = roundRecordProblem(raw);
+  if (problem !== undefined) throw new Error(`${path.join(packageDir, ROUND_FILE)} is malformed (${problem}); re-run \`keryx review start\``);
   return raw as unknown as RoundRecord;
+}
+
+const isHunk = (value: unknown): boolean => {
+  const hunk = record(value);
+  return hunk !== undefined && typeof hunk.file === "string" && Number.isInteger(hunk.startLine) && Number.isInteger(hunk.endLine);
+};
+
+const isStringList = (value: unknown): boolean => Array.isArray(value) && value.every((item) => typeof item === "string");
+
+/** What is wrong with a round.json's shape, or undefined. Every array field is checked entry by entry. */
+export function roundRecordProblem(raw: Record<string, unknown>): string | undefined {
+  if (!Array.isArray(raw.sourcesTried) || !raw.sourcesTried.every((entry) => typeof record(entry)?.source === "string" && typeof record(entry)?.result === "string")) return "sourcesTried is not a list of attempts";
+  if (raw.mode !== "first" && raw.mode !== "delta" && raw.mode !== "fallback-first") return "mode is not first, delta or fallback-first";
+  if (typeof raw.source !== "string" || !(ROUND_SOURCES as readonly string[]).includes(raw.source)) return "source is not a known source";
+  const range = record(raw.range);
+  if (range === undefined || !(range.base === null || typeof range.base === "string") || !(range.head === null || typeof range.head === "string")) return "range is not {base, head}";
+  if (raw.previous !== null && typeof record(raw.previous)?.reviewId !== "string") return "previous is neither null nor a round";
+  if (!Array.isArray(raw.fixHunks) || !raw.fixHunks.every((hunk) => isHunk(hunk) && isStringList(record(hunk)?.findingIds))) return "fixHunks is not a list of hunks with findingIds";
+  if (!Array.isArray(raw.newHunks) || !raw.newHunks.every(isHunk)) return "newHunks is not a list of hunks";
+  if (!Array.isArray(raw.carried) || !raw.carried.every((entry) => typeof record(entry)?.findingId === "string" && typeof record(entry)?.disposition === "string")) return "carried is not a list of {findingId, disposition}";
+  if (raw.mergeBase !== undefined && raw.mergeBase !== null && typeof raw.mergeBase !== "string") return "mergeBase is not a commit";
+  return undefined;
 }
 
 /** Just the round number of round.json, read leniently; undefined without a usable one. */

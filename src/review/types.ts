@@ -124,6 +124,8 @@ export type ManagedReviewManifest = {
    * Absent on ingest packages and on packages that predate the gate.
    */
   operatorGate?: number | undefined;
+  /** Flow 458: what `review start|attach` stamped beside round.json (see review/round-record.ts `RoundStamp`). */
+  roundRecord?: { roundSha256: string; priorFindingsSha256: string; targetKey?: string | undefined; targetBase?: string | undefined } | undefined;
   /**
    * Fields the ingest supplied rather than the reviewer authoring them.
    * Written only when something was repaired — see
@@ -420,6 +422,8 @@ export type StructuredReviewFinding = {
   reported_by?: string[] | undefined;
   /** The `global_id`s (or ids) the duplicate merge folded into this finding. */
   merged_from?: string[] | undefined;
+  /** The problem statements of the absorbed findings that differ from this one's, so a merge loses no reviewer's words. */
+  merged_problems?: string[] | undefined;
   severity: ReviewFindingSeverity;
   problem: string;
   impact: string;

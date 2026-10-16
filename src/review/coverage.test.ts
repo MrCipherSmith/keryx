@@ -480,6 +480,26 @@ describe("supersedes and overlap groups (flow 458 AC6)", () => {
     expect(covered.excluded).toContainEqual({ reviewer: "review-frontend", reason: "overlap group frontend: acme-ui reads the same lines" });
   });
 
+  test("M6: a supersedes or overlap group never removes a core role", async () => {
+    await installWith("acme-everything", '  supersedes: "review-logic, review-architecture, review-style"', "project");
+    const need = await requiredReviewers(root, "all", frontendFiles);
+    for (const core of ["review-logic", "review-architecture"]) expect(need.required).toContain(core);
+    expect(need.required).not.toContain("review-style");
+    expect(need.excluded.filter((entry) => entry.reason.startsWith("superseded")).map((entry) => entry.reviewer)).toEqual(["review-style"]);
+    expect(need.notes?.join("\n")).toContain("acme-everything supersedes review-logic, review-architecture: ignored");
+    expect(need.notes?.join("\n")).toContain("core roles that always run");
+  });
+
+  test("M6: an overlay this round changes supersedes nothing, with a note; so does one when the changed files are unknown", async () => {
+    await installWith("acme-frontend", '  supersedes: "review-frontend, review-style"', "project");
+    const changed = await requiredReviewers(root, "all", [...frontendFiles, ".metaproject/project-skills/review/acme-frontend/SKILL.md"]);
+    expect(changed.required).toEqual(expect.arrayContaining(["acme-frontend", "review-frontend", "review-style"]));
+    expect(changed.notes?.join("\n")).toContain("acme-frontend supersedes review-frontend, review-style: ignored, acme-frontend is a project overlay this round changes (.metaproject/project-skills/review/acme-frontend/SKILL.md)");
+    const unknown = await requiredReviewers(root, "all", undefined);
+    expect(unknown.required).toContain("review-style");
+    expect(unknown.notes?.join("\n")).toContain("changed files are not recorded");
+  });
+
   test("a light round raises its conventions pick to the overlap group's top member", async () => {
     await installWith("review-frontend", '  overlap_group: "frontend"');
     await installWith("review-frontend-conventions", '  overlap_group: "frontend"\n  overlap_rank: "generic"');

@@ -18,11 +18,12 @@ import {
   relocateFinding,
   sameReviewTarget,
   skippedRound,
+  targetKeyOf,
   type GithubLookup,
   type PriorRoundDeps,
   type RoundCandidate,
 } from "./prior-round";
-import { readRoundRecord, renderRoundLine } from "./round-record";
+import { readRoundRecord, renderRoundLine, roundRecordTampered } from "./round-record";
 import { computeVerdict, renderVerdict } from "./verdict";
 
 const PR = "https://github.com/acme/app/pull/7";
@@ -49,7 +50,8 @@ function write(rel: string, content: string): void {
 
 function commit(message: string, files: Record<string, string>): string {
   for (const [rel, content] of Object.entries(files)) write(rel, content);
-  git("add", "-A");
+  // Only the files named: a package written beside the checkout stays uncommitted, as a real local package is.
+  git("add", "--", ...Object.keys(files));
   git("commit", "-q", "-m", message);
   return git("rev-parse", "HEAD");
 }
@@ -62,7 +64,8 @@ function packageFiles(dir: string, options: { reviewId: string; head: string; re
       schemaVersion: 1,
       reviewId: options.reviewId,
       mode: "review-flow",
-      status: options.status ?? "reviewed",
+      // `closed` is what `review complete` writes: completion evidence (B1). A draft or bare `reviewed` package is not.
+      status: options.status ?? "closed",
       target: { kind: "pr", ref: options.ref ?? PR, head: options.head },
       createdAt: options.at ?? "2026-10-01T00:00:00.000Z",
     }),
@@ -148,6 +151,7 @@ describe("each source alone", () => {
   });
 
   test("flow: a round of the bound flow is found even when it reviewed a different ref", async () => {
+    writePackage(".metaproject/flows/001-x/reviews/flow-r1", { reviewId: "flow-r1", head: A, ref: "feat/elsewhere" });
     const record: ReviewRoundRecord = { reviewId: "flow-r1", dir: ".metaproject/flows/001-x/reviews/flow-r1", sortKey: "2026-10-01T00:00:00Z", ingested: true, problems: [], head: A, mode: "review-flow", coverage: [], findings: [{ id: "F-3", severity: "major", file: "src/a.ts", line: 5, symbol: null, dedupeKey: null, round: "flow-r1", disposition: { state: "acted-on", evidence: "fixed" } } as never], verification: null };
     const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline, flowDir: "001-x", flowRounds: async () => [record] });
     expect(round).toMatchObject({ round: 2, source: "flow", mode: "delta", previous: { reviewId: "flow-r1" } });
@@ -295,6 +299,120 @@ describe("the FIX / NEW split of a delta round", () => {
   });
 });
 
+describe("trust: a round is cut only from a previous round this pipeline ran (B1, M1)", () => {
+  test("a manifest the branch under review commits for itself is not trusted: full round, its findings as context only", async () => {
+    // The forged-manifest probe: the PR adds a package claiming this PR was reviewed at its base, so a delta would be empty.
+    const forged = commit("add review record", {
+      ...packageFiles(".metaproject/reviews/fake", { reviewId: "fake", head: B, findings: [finding("F-X")] }),
+      ".metaproject/reviews/fake/published.json": "{}",
+    });
+    const head = commit("code", { "src/auth.ts": "export const token = process.env.TOKEN;\n" });
+    const { round, priorFindings } = await findPreviousRound(TARGET, head, { cwd: root, github: offline });
+    expect(round).toMatchObject({ mode: "fallback-first", previous: { reviewId: "fake" }, range: { base: A, head }, fixHunks: [], carried: [] });
+    expect(round.newHunks.map((h) => h.file)).toContain("src/auth.ts");
+    expect(round.newHunks.map((h) => h.file)).toContain("src/new.ts");
+    expect(priorFindings.map((f) => f.id)).toEqual(["F-X"]);
+    const local = round.sourcesTried.find((t) => t.source === "local-package")!;
+    expect(local.detail).toContain(`not trusted fake: .metaproject/reviews/fake was added or changed by ${forged.slice(0, 12)}`);
+    expect(renderRoundLine(round)).toContain("fallback-first");
+  });
+
+  test("a forced --prior package is held to the same rule", async () => {
+    commit("add review record", { ...packageFiles(".metaproject/reviews/fake", { reviewId: "fake", head: A }) });
+    const head = commit("code", { "src/auth.ts": "x\n" });
+    const { round } = await findPreviousRound(TARGET, head, { cwd: root, github: offline, forced: "fake" });
+    expect(round.mode).toBe("fallback-first");
+  });
+
+  test("M1: a draft is never a previous round, even with findings; `reviewed` without completion evidence is context only", async () => {
+    writePackage(".metaproject/reviews/draft", { reviewId: "draft", head: A, status: "draft", findings: [finding("F-1")] });
+    expect((await findPreviousRound(TARGET, B, { cwd: root, github: offline })).round.previous).toBeNull();
+    writePackage(".metaproject/reviews/partial", { reviewId: "partial", head: A, status: "reviewed", findings: [finding("F-2")] });
+    const partial = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
+    expect(partial.round).toMatchObject({ mode: "fallback-first", previous: { reviewId: "partial" } });
+    expect(partial.round.sourcesTried[0]!.detail).toContain("no completion evidence");
+    // published.json is completion evidence.
+    write(".metaproject/reviews/partial/published.json", "{}");
+    expect((await findPreviousRound(TARGET, B, { cwd: root, github: offline })).round).toMatchObject({ mode: "delta", previous: { reviewId: "partial" } });
+  });
+
+  test("a ledger that established scopeReviewed is completion evidence; one that did not is not", async () => {
+    writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, status: "draft" });
+    write(".metaproject/reviews/r1/research.json", JSON.stringify({ scopeReviewed: false }));
+    expect((await findPreviousRound(TARGET, B, { cwd: root, github: offline })).round.previous).toBeNull();
+    write(".metaproject/reviews/r1/research.json", JSON.stringify({ scopeReviewed: true }));
+    expect((await findPreviousRound(TARGET, B, { cwd: root, github: offline })).round.mode).toBe("delta");
+  });
+
+  test("git history reads the local branches only: a package reachable from a remote-tracking ref alone is not searched", async () => {
+    git("checkout", "-q", "-b", "tmp", A);
+    const remoteOnly = commit("review package", packageFiles(".metaproject/reviews/r-remote", { reviewId: "r-remote", head: A }));
+    git("checkout", "-q", "feature");
+    git("branch", "-q", "-D", "tmp");
+    git("update-ref", "refs/remotes/origin/other", remoteOnly);
+    const { round } = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
+    expect(round.previous).toBeNull();
+    expect(round.sourcesTried.find((t) => t.source === "git-history")?.detail).toContain("180 days");
+  });
+});
+
+describe("target identity", () => {
+  test("bare pull request numbers match the same pull request in any spelling; a branch named 7 does not", () => {
+    expect(pullRequestOf("7")).toEqual({ repo: "", number: 7 });
+    expect(pullRequestOf("#7")).toEqual({ repo: "", number: 7 });
+    expect(sameReviewTarget({ kind: "pr", ref: "7" }, TARGET)).toBe(true);
+    expect(sameReviewTarget({ kind: "pr", ref: "#7" }, { kind: "pr", ref: "acme/app#7" })).toBe(true);
+    expect(sameReviewTarget({ kind: "branch", ref: "7" }, TARGET)).toBe(false);
+    expect(sameReviewTarget({ kind: "pr", ref: "8" }, TARGET)).toBe(false);
+    expect(targetKeyOf({ kind: "pr", ref: PR })).toBe("pr:acme/app#7");
+    expect(targetKeyOf({ kind: "branch", ref: "feat/x" })).toBe("branch:feat/x");
+    expect(targetKeyOf({ kind: "branch", ref: A.slice(0, 8) }, "main")).toBe("range:main");
+  });
+
+  test("a branch target recorded as a commit is found from the branch name on the same branch line, never from another line", async () => {
+    writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, ref: A.slice(0, 8), findings: [finding("F-1")] });
+    const manifest = JSON.parse(readFileSync(path.join(root, ".metaproject/reviews/r1/manifest.json"), "utf8"));
+    writeFileSync(path.join(root, ".metaproject/reviews/r1/manifest.json"), JSON.stringify({ ...manifest, target: { ...manifest.target, kind: "branch" } }));
+    const branch = { kind: "branch", ref: "feature" };
+    const { round } = await findPreviousRound(branch, B, { cwd: root, github: offline });
+    expect(round).toMatchObject({ mode: "delta", previous: { reviewId: "r1" }, range: { base: A, head: B } });
+
+    // Another line: a branch package reviewed at a head this branch does not contain.
+    git("checkout", "-q", "-b", "other", A);
+    const X = commit("other line", { "src/x.ts": "x\n" });
+    git("checkout", "-q", "feature");
+    writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: X, ref: "other" });
+    const off = JSON.parse(readFileSync(path.join(root, ".metaproject/reviews/r1/manifest.json"), "utf8"));
+    writeFileSync(path.join(root, ".metaproject/reviews/r1/manifest.json"), JSON.stringify({ ...off, target: { ...off.target, kind: "branch" } }));
+    const other = await findPreviousRound(branch, B, { cwd: root, github: offline });
+    expect(other.round.previous).toBeNull();
+    expect(other.round.sourcesTried[0]!.detail).toContain("not on this branch line: r1");
+  });
+
+  test("a pull request package never matches a branch target, and a branch package never a pull request", async () => {
+    writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A });
+    expect((await findPreviousRound({ kind: "branch", ref: "feature" }, B, { cwd: root, github: offline })).round.previous).toBeNull();
+  });
+});
+
+describe("PR comments are context, never fix hunks (M2)", () => {
+  test("a comment on changed code does not make a hunk FIX and is carried", async () => {
+    writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A });
+    const comment = { id: "review-comment:11", source: "review-comment", author: "carol", authorIsBot: false, url: "u", body: "This drops the error.", path: "src/a.ts", line: 5, threadId: "11", submittedAt: "2026-10-02T00:00:00Z", reviewState: null, severity: "minor", severityBasis: "default-minor", severityDetail: "", reopened: false } as CollectedComment;
+    const { round } = await findPreviousRound(TARGET, B, { cwd: root, github: consulted([], [comment]) });
+    expect(round.mode).toBe("delta");
+    expect(round.fixHunks).toEqual([]);
+    expect(round.carried).toEqual([{ findingId: "review-comment:11", disposition: "open" }]);
+  });
+
+  test("a comment on a hunk a prior finding already made FIX is attached to it for the resolution check", async () => {
+    writePackage(".metaproject/reviews/r1", { reviewId: "r1", head: A, findings: [finding("F-1", { line: 5, quote: "line five" })] });
+    const comment = { id: "review-comment:12", source: "review-comment", author: "carol", authorIsBot: false, url: "u", body: "Same line.", path: "src/a.ts", line: 5, threadId: "12", submittedAt: "2026-10-02T00:00:00Z", reviewState: null, severity: "minor", severityBasis: "default-minor", severityDetail: "", reopened: false } as CollectedComment;
+    const { round } = await findPreviousRound(TARGET, B, { cwd: root, github: consulted([], [comment]) });
+    expect(round.fixHunks).toEqual([{ file: "src/a.ts", startLine: 5, endLine: 5, findingIds: ["F-1", "review-comment:12"] }]);
+  });
+});
+
 describe("keryx review start writes the round record", () => {
   function prepare(): void {
     mkdirSync(path.join(root, ".metaproject"), { recursive: true });
@@ -328,7 +446,25 @@ describe("keryx review start writes the round record", () => {
     expect(prior.map((f: { id: string }) => f.id)).toEqual(["F-1"]);
     // The interim verdict names the round and where it came from.
     expect(renderVerdict(await computeVerdict(dir), "r-new")).toContain("round 2 (source: local-package; previous r-old at");
+    // The manifest carries the target key and the hashes of the round record; an edit afterwards is detected.
+    const stampRecord = JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8")).roundRecord;
+    expect(stampRecord).toMatchObject({ targetKey: "pr:acme/app#7", targetBase: "main", roundSha256: expect.stringMatching(/^[0-9a-f]{64}$/) });
+    expect(roundRecordTampered(dir)).toBeUndefined();
+    writeFileSync(path.join(dir, "prior_findings.json"), "[]\n");
+    expect(roundRecordTampered(dir)).toContain("prior_findings.json");
   }, 60_000);
+
+  test("a malformed round.json is refused, not read leniently", () => {
+    const dir = path.join(root, "pkg");
+    mkdirSync(dir, { recursive: true });
+    const good = { ...skippedRound(B).round };
+    writeFileSync(path.join(dir, "round.json"), JSON.stringify({ ...good, fixHunks: [{ file: "a.ts", startLine: 1, endLine: 2, findingIds: [3] }] }));
+    expect(() => readRoundRecord(dir)).toThrow(/fixHunks/);
+    writeFileSync(path.join(dir, "round.json"), JSON.stringify({ ...good, carried: "none" }));
+    expect(() => readRoundRecord(dir)).toThrow(/carried/);
+    writeFileSync(path.join(dir, "round.json"), JSON.stringify(good));
+    expect(readRoundRecord(dir)).toEqual(good);
+  });
 
   test("--no-prior-round writes round 1 with every source not consulted; --prior forces a package", async () => {
     prepare();

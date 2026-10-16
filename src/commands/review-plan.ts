@@ -15,7 +15,7 @@ import type { SliceEntry, SliceManifest } from "../review/slice";
 import { REVIEW_HOSTS } from "../review/host-profile";
 
 export const PLAN_FILE = "plan.json";
-export const PLAN_FLAGS = ["--target", "--ref", "--head", "--host", "--json", "--help", "-h"] as const;
+export const PLAN_FLAGS = ["--target", "--ref", "--head", "--host", "--memory-query", "--unattended", "--json", "--help", "-h"] as const;
 
 /** What one re-entered review subcommand did: its stdout, stderr and exit code. */
 export type StepResult = { stdout: string; stderr: string; exitCode: number };
@@ -47,7 +47,8 @@ export type ReviewPlan = {
 };
 
 export function printPlanHelp(): void {
-  console.log(`keryx review plan --target <pr-url|branch> [--ref <base>] [--head <sha>] [--host ${REVIEW_HOSTS.join("|")}] [--json]
+  console.log(`keryx review plan --target <pr-url|branch> [--ref <base>] [--head <sha>] [--host ${REVIEW_HOSTS.join("|")}]
+                  [--memory-query "<query>"] [--unattended] [--json]
 
 The round plan in one command; it never dispatches. Runs, in this order: \`review start\` (which finds the previous round
 of the target in every source and writes round.json), \`review scope\`, \`review blast-radius --package\`,
@@ -57,7 +58,9 @@ slices, the roster, dispatches, minutes, whether the plan is over the operator t
 "dispatch", or "confirm plan (card ${CONFIRM_PLAN_TOOL} / keryx review confirm-plan)".
 
 --target is a pull request (URL, owner/repo#n or number) or a branch. --ref is the base the diff is taken against (a first round;
-a delta round uses the previous reviewed head). --head pins the commit the round reviews. --host: the agent host.`);
+a delta round uses the previous reviewed head). --head pins the commit the round reviews (scope, blast-radius and slice
+read that commit, not the working tree). --host: the agent host. --memory-query and --unattended are passed to
+\`review start\` as they are; --unattended is refused there at a terminal, like \`review start --unattended\`.`);
 }
 
 /** A pull request reference (URL, `owner/repo#n`, `#n`, number) targets kind `pr`; anything else is a branch. */
@@ -121,7 +124,18 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   const warnings: string[] = [];
 
   // 1. start: finds the previous round and writes round.json beside the package.
-  const started = await deps.run(["start", "--target", kind, "--ref", target, ...(head === undefined ? [] : ["--head", head]), ...(host === undefined ? [] : ["--host", host])]);
+  const memoryQuery = optionValue(args, "--memory-query");
+  const started = await deps.run([
+    "start",
+    "--target",
+    kind,
+    "--ref",
+    target,
+    ...(head === undefined ? [] : ["--head", head]),
+    ...(host === undefined ? [] : ["--host", host]),
+    ...(memoryQuery === undefined ? [] : ["--memory-query", memoryQuery]),
+    ...(args.includes("--unattended") ? ["--unattended"] : []),
+  ]);
   if (started.exitCode !== 0) fail("start", started);
   const packageDir = packagePathOf(started.stdout, cwd);
   if (packageDir === undefined || !existsSync(packageDir)) throw new Error("review plan: `review start` printed no package path; the plan stops here.");
@@ -131,7 +145,7 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   const baseRef = delta !== undefined ? delta.range.base! : base ?? round?.range.base ?? undefined;
 
   // 2. scope: the changed files of the round, recorded as scope-files.json (what required and estimate read).
-  const scoped = await deps.run(["scope", "--json", ...(baseRef === undefined ? [] : ["--ref", baseRef])]);
+  const scoped = await deps.run(["scope", "--json", ...(baseRef === undefined ? [] : ["--ref", baseRef, ...(head === undefined ? [] : ["--head", head])])]);
   if (scoped.exitCode !== 0) fail("scope", scoped);
   const scopeFile = path.join(packageDir, "scope.json");
   await writeFileAtomic(scopeFile, scoped.stdout.endsWith("\n") ? scoped.stdout : `${scoped.stdout}\n`);
