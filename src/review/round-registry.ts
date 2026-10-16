@@ -2,8 +2,9 @@
 //
 // A delta round is cut only from a previous round this pipeline ran. A package the branch under review committed fails
 // that rule — including the flow packages keryx commits on a PR branch by design. This registry tells them apart on
-// the machine that ran the round: `review complete` and `review publish` append one line per finished round, with the
-// sha256 of the package's manifest.json, findings.json and round.json, to a file OUTSIDE the repository, under the
+// the machine that ran the round: `review ingest` (of a round past its draft), `review complete` and `review publish`
+// append one line per finished round, with the sha256 of the package's manifest identity, findings.json and round.json,
+// to a file OUTSIDE the repository, under the
 // user's keryx directory (`keryxConfigDir`, the root auth.json, projects.json and the hook trust store live in), one
 // file per repository identity. A package whose current files hash to an entry is one keryx finished here, whatever
 // commit carried it.
@@ -18,13 +19,20 @@
 
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { appendOwnerOnlyLine, ensureKeryxSubdir, keryxConfigDir, readConfigFile } from "../lib/config-dir";
+import { appendOwnerOnlyLine, ensureKeryxSubdir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
 import { packageFacts, roundStampOf, type PackageHashes } from "./round-record";
 
 export const ROUND_REGISTRY_DIR = "review-rounds";
 
+/** Compact the registry file once it grows past this, keeping the newest entry per package. */
+export const REGISTRY_COMPACT_BYTES = 512 * 1024;
+
+/**
+ * v2: the manifest is hashed over its identity fields (round-record.ts `MANIFEST_IDENTITY_FIELDS`), findings and the
+ * round record over their JSON content. A v1 entry hashed raw bytes and is ignored: it costs one full round, never trust.
+ */
 export type RoundRegistryEntry = {
-  v: 1;
+  v: 2;
   packageId: string;
   targetKey: string;
   reviewedHead: string | null;
@@ -32,8 +40,8 @@ export type RoundRegistryEntry = {
   findingsSha256: string | null;
   roundRecordSha256?: string | undefined;
   completedAt: string;
-  /** What recorded it. */
-  event: "complete" | "publish";
+  /** What recorded it: `review ingest` of a finished round, `review complete`, or `review publish`. */
+  event: "ingest" | "complete" | "publish";
 };
 
 const sha256 = (value: string): string => createHash("sha256").update(value).digest("hex");
@@ -69,7 +77,7 @@ function valid(entry: unknown): entry is RoundRegistryEntry {
   const e = entry as Record<string, unknown>;
   const hex = (value: unknown): boolean => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
   return (
-    e.v === 1 &&
+    e.v === 2 &&
     typeof e.packageId === "string" &&
     typeof e.targetKey === "string" &&
     (e.reviewedHead === null || typeof e.reviewedHead === "string") &&
@@ -80,13 +88,9 @@ function valid(entry: unknown): entry is RoundRegistryEntry {
   );
 }
 
-/** Every well-formed entry of a repository's registry; [] when it has none, or the file cannot be read. */
-export function readRoundRegistry(identity: string | undefined, dir?: string): RoundRegistryEntry[] {
-  if (identity === undefined) return [];
-  const read = readConfigFile(roundRegistryFile(identity, dir));
-  if (!read.ok) return [];
+function parseEntries(text: string): RoundRegistryEntry[] {
   const out: RoundRegistryEntry[] = [];
-  for (const line of read.text.split("\n")) {
+  for (const line of text.split("\n")) {
     if (line.trim() === "") continue;
     try {
       const parsed: unknown = JSON.parse(line);
@@ -98,16 +102,58 @@ export function readRoundRegistry(identity: string | undefined, dir?: string): R
   return out;
 }
 
-export function appendRoundRegistry(identity: string, entry: RoundRegistryEntry, dir?: string): string {
-  ensureKeryxSubdir([ROUND_REGISTRY_DIR], dir);
+/**
+ * Every well-formed entry of a repository's registry, and a warning when the file could not be read whole: one past
+ * the config read cap, not a regular file, or unreadable. An absent file is no warning, just no entries.
+ */
+export function readRoundRegistryReport(identity: string | undefined, dir?: string): { entries: RoundRegistryEntry[]; warning?: string | undefined } {
+  if (identity === undefined) return { entries: [] };
   const file = roundRegistryFile(identity, dir);
-  appendOwnerOnlyLine(file, JSON.stringify(entry));
-  return file;
+  const read = readConfigFile(file);
+  if (read.ok) return { entries: parseEntries(read.text) };
+  if (read.reason === "absent") return { entries: [] };
+  return { entries: [], warning: `the local round registry ${file} was not read (${read.reason === "too-large" ? "over the 1 MB read cap" : read.reason}): no committed package is vouched for by it this round` };
+}
+
+/** Every well-formed entry of a repository's registry; [] when it has none, or the file cannot be read. */
+export function readRoundRegistry(identity: string | undefined, dir?: string): RoundRegistryEntry[] {
+  return readRoundRegistryReport(identity, dir).entries;
+}
+
+/** The newest entry per package, in recording order: what a compaction keeps. */
+export function compactEntries(entries: readonly RoundRegistryEntry[]): RoundRegistryEntry[] {
+  const newest = new Map<string, number>();
+  entries.forEach((entry, index) => newest.set(entry.packageId, index));
+  return entries.filter((entry, index) => newest.get(entry.packageId) === index);
 }
 
 /**
- * The entry that vouches for a package with these files, or undefined: same package id, the same manifest and findings
- * bytes, and — when the entry recorded one — the same round.json. Any edit after keryx finished it breaks the match.
+ * Append one entry. Past {@link REGISTRY_COMPACT_BYTES} the file is rewritten (atomically, owner-only) with the newest
+ * entry per package, so it stays well under the read cap; a file already past the cap cannot be read and is started
+ * again, which costs at most one full round per package, never trust it should not give.
+ */
+export function appendRoundRegistry(identity: string, entry: RoundRegistryEntry, dir?: string): { file: string; compacted?: number | undefined; warning?: string | undefined } {
+  ensureKeryxSubdir([ROUND_REGISTRY_DIR], dir);
+  const file = roundRegistryFile(identity, dir);
+  appendOwnerOnlyLine(file, JSON.stringify(entry));
+  const read = readConfigFile(file);
+  if (read.ok && Buffer.byteLength(read.text) > REGISTRY_COMPACT_BYTES) {
+    const all = parseEntries(read.text);
+    const kept = compactEntries(all);
+    writeOwnerOnlyFileAtomic(file, kept.map((item) => `${JSON.stringify(item)}\n`).join(""));
+    return { file, compacted: all.length - kept.length };
+  }
+  if (!read.ok && read.reason === "too-large") {
+    writeOwnerOnlyFileAtomic(file, `${JSON.stringify(entry)}\n`);
+    return { file, warning: `the local round registry ${file} was past the read cap and was started again with this entry` };
+  }
+  return { file };
+}
+
+/**
+ * The entry that vouches for a package with these files, or undefined: same package id, the same manifest identity
+ * (target, head, flow, mode and start's stamps — not its lifecycle status), the same findings and, when the entry
+ * recorded one, the same round.json. Changing what the round reviewed or found breaks the match; closing it does not.
  */
 export function registryVouches(entries: readonly RoundRegistryEntry[], packageId: string, hashes: PackageHashes | undefined): RoundRegistryEntry | undefined {
   if (hashes === undefined) return undefined;
@@ -121,14 +167,21 @@ export function registryVouches(entries: readonly RoundRegistryEntry[], packageI
 }
 
 /**
- * Record a round keryx just finished (`review complete`, `review publish`). Best-effort: a registry that cannot be
- * written costs a later delta round on this machine (it falls back to a full round), never the command's own result,
- * so the failure is returned for the caller to print rather than thrown.
+ * Record a round keryx just finished: `review ingest` of a round past its draft (the flow loop starts round N+1 right
+ * after it), `review complete`, `review publish` — each re-records, since each may change findings. A package without
+ * completion evidence is not recorded (`skipped` says why). Best-effort: a registry that cannot be written costs a later
+ * delta round on this machine (it falls back to a full round), never the command's own result, so the failure is
+ * returned for the caller to print rather than thrown.
  */
-export function recordFinishedRound(packageDir: string, event: RoundRegistryEntry["event"], options: { cwd?: string; dir?: string; now?: Date } = {}): { file?: string; error?: string } {
+export function recordFinishedRound(
+  packageDir: string,
+  event: RoundRegistryEntry["event"],
+  options: { cwd?: string; dir?: string; now?: Date } = {},
+): { file?: string; error?: string; skipped?: string; warning?: string } {
   try {
     const facts = packageFacts(packageDir);
     if (facts === undefined) return { error: `${packageDir} has no readable manifest.json` };
+    if (!facts.completion.eligible || !facts.completion.completed.ok) return { skipped: `not a finished round yet (${facts.completion.completed.why})` };
     const identity = repoIdentity(options.cwd ?? packageDir);
     // Outside a git checkout no commit can carry the package, so there is nothing for the registry to vouch for later.
     if (identity === undefined) return {};
@@ -136,7 +189,7 @@ export function recordFinishedRound(packageDir: string, event: RoundRegistryEntr
     const packageId = typeof facts.manifest.reviewId === "string" ? facts.manifest.reviewId : path.basename(packageDir);
     const head = typeof target.head === "string" ? target.head : null;
     const entry: RoundRegistryEntry = {
-      v: 1,
+      v: 2,
       packageId,
       targetKey: roundStampOf(facts.manifest)?.targetKey ?? `${String(target.kind ?? "unknown")}:${String(target.ref ?? "")}`,
       reviewedHead: head,
@@ -146,7 +199,8 @@ export function recordFinishedRound(packageDir: string, event: RoundRegistryEntr
       completedAt: (options.now ?? new Date()).toISOString(),
       event,
     };
-    return { file: appendRoundRegistry(identity, entry, options.dir) };
+    const written = appendRoundRegistry(identity, entry, options.dir);
+    return { file: written.file, ...(written.warning === undefined ? {} : { warning: written.warning }) };
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }

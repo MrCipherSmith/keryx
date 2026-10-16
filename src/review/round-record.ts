@@ -35,6 +35,8 @@ export type RoundRecord = {
   carried: Array<{ findingId: string; disposition: string }>;
   /** merge-base of the target's base and this head, when known: a delta round's slice never cuts more than merge-base..head. */
   mergeBase?: string | null | undefined;
+  /** Why the round has this mode (a force-push, no trusted previous round, …); absent on records cut before it. */
+  modeReason?: string | undefined;
 };
 
 export type PriorFinding = {
@@ -122,13 +124,79 @@ export async function writeRoundRecord(
 /** sha256 of the files that identify a finished round: what the local round registry records and compares. */
 export type PackageHashes = { manifestSha256: string; findingsSha256: string | null; roundRecordSha256: string | null };
 
-/** The hashes of three package files given as text (from disk or from a commit); a missing manifest gives undefined. */
+/**
+ * The manifest fields that say WHICH round a package is: what it reviewed (target with its head, the flow, the mode)
+ * and what `review start` stamped (operator gate, round record hashes, target key). Lifecycle fields that legitimately
+ * change after a round finished — status, updatedAt, readiness waivers, coverage, cost, report fields, artifacts — are
+ * left out of the hash, so `review learn` closing a package does not make keryx distrust a round it ran.
+ */
+export const MANIFEST_IDENTITY_FIELDS = ["schemaVersion", "reviewId", "mode", "target", "flow", "createdAt", "operatorGate", "roundRecord"] as const;
+
+/** JSON with object keys sorted at every level: one spelling per value, whatever order a writer used. */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).filter(([, item]) => item !== undefined).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/** sha256 of a manifest's identity fields; an unparseable manifest hashes its raw text (it then matches nothing else). */
+export function manifestIdentitySha256(manifestText: string): string {
+  let parsed: Record<string, unknown> | undefined;
+  try {
+    parsed = record(JSON.parse(manifestText));
+  } catch {
+    parsed = undefined;
+  }
+  if (parsed === undefined) return sha256Of(manifestText);
+  const identity: Record<string, unknown> = {};
+  for (const field of MANIFEST_IDENTITY_FIELDS) if (parsed[field] !== undefined) identity[field] = parsed[field];
+  return sha256Of(canonicalJson(identity));
+}
+
+/** sha256 of a JSON file's content, independent of formatting; text that is not JSON hashes as it is. */
+function jsonSha256(text: string): string {
+  try {
+    return sha256Of(canonicalJson(JSON.parse(text)));
+  } catch {
+    return sha256Of(text);
+  }
+}
+
+/**
+ * The hashes of three package files given as text (from disk or from a commit); a missing manifest gives undefined.
+ * The manifest is hashed over its identity fields ({@link MANIFEST_IDENTITY_FIELDS}); findings.json and round.json
+ * over their whole content, formatting aside: a changed finding or round record is a different round.
+ */
 export function packageHashesOf(files: { manifest: string | undefined; findings: string | undefined; round: string | undefined }): PackageHashes | undefined {
   if (files.manifest === undefined) return undefined;
   return {
-    manifestSha256: sha256Of(files.manifest),
-    findingsSha256: files.findings === undefined ? null : sha256Of(files.findings),
-    roundRecordSha256: files.round === undefined ? null : sha256Of(files.round),
+    manifestSha256: manifestIdentitySha256(files.manifest),
+    findingsSha256: files.findings === undefined ? null : jsonSha256(files.findings),
+    roundRecordSha256: files.round === undefined ? null : jsonSha256(files.round),
+  };
+}
+
+/** Manifest statuses of a round that got past its draft (M1): a draft or partial package is never a previous round. */
+const REVIEWED_STATUSES = new Set(["reviewed", "decided", "learned", "closed"]);
+/** Statuses that only `review complete` and the steps after it write. */
+const COMPLETED_STATUSES = new Set(["decided", "learned", "closed"]);
+
+/**
+ * M1 and the completion half of the trust rule. `eligible`: the round got past its draft (status reviewed or later, or a
+ * ledger that established `scopeReviewed`). `completed`: it shows that the pipeline finished it — published.json, a
+ * scopeReviewed ledger, or a status only `review complete` and later write.
+ */
+export function completionOf(manifest: Record<string, unknown>, research: unknown, published: boolean): { eligible: boolean; completed: { ok: boolean; why: string } } {
+  const status = typeof manifest.status === "string" && manifest.status !== "" ? manifest.status : "draft";
+  const scopeReviewed = record(research)?.scopeReviewed === true;
+  const eligible = REVIEWED_STATUSES.has(status) || scopeReviewed;
+  const evidence = [published ? "published.json" : undefined, scopeReviewed ? "a scopeReviewed ledger" : undefined, COMPLETED_STATUSES.has(status) ? `status ${status}` : undefined].filter((item): item is string => item !== undefined);
+  return {
+    eligible,
+    completed: evidence.length > 0 ? { ok: true, why: evidence.join(", ") } : { ok: false, why: `no completion evidence (status ${status}; no published.json, no ledger with scopeReviewed)` },
   };
 }
 
@@ -140,8 +208,8 @@ const readText = (file: string): string | undefined => {
   }
 };
 
-/** The hashes of a package directory on disk, and its parsed manifest; undefined without a readable manifest. */
-export function packageFacts(packageDir: string): { hashes: PackageHashes; manifest: Record<string, unknown> } | undefined {
+/** The hashes of a package directory on disk, its parsed manifest and whether it shows completion; undefined without a readable manifest. */
+export function packageFacts(packageDir: string): { hashes: PackageHashes; manifest: Record<string, unknown>; completion: ReturnType<typeof completionOf> } | undefined {
   const manifestText = readText(path.join(packageDir, "manifest.json"));
   let manifest: Record<string, unknown> | undefined;
   try {
@@ -150,7 +218,15 @@ export function packageFacts(packageDir: string): { hashes: PackageHashes; manif
     manifest = undefined;
   }
   const hashes = packageHashesOf({ manifest: manifestText, findings: readText(path.join(packageDir, "findings.json")), round: readText(path.join(packageDir, ROUND_FILE)) });
-  return manifest === undefined || hashes === undefined ? undefined : { hashes, manifest };
+  if (manifest === undefined || hashes === undefined) return undefined;
+  let research: unknown;
+  try {
+    const raw = readText(path.join(packageDir, "research.json"));
+    research = raw === undefined ? undefined : JSON.parse(raw);
+  } catch {
+    research = undefined;
+  }
+  return { hashes, manifest, completion: completionOf(manifest, research, readText(path.join(packageDir, "published.json")) !== undefined) };
 }
 
 /** The stamp `review start` left in manifest.json, or undefined (a package cut before it, or an ingest). */
@@ -215,6 +291,7 @@ export function roundRecordProblem(raw: Record<string, unknown>): string | undef
   if (!Array.isArray(raw.newHunks) || !raw.newHunks.every(isHunk)) return "newHunks is not a list of hunks";
   if (!Array.isArray(raw.carried) || !raw.carried.every((entry) => typeof record(entry)?.findingId === "string" && typeof record(entry)?.disposition === "string")) return "carried is not a list of {findingId, disposition}";
   if (raw.mergeBase !== undefined && raw.mergeBase !== null && typeof raw.mergeBase !== "string") return "mergeBase is not a commit";
+  if (raw.modeReason !== undefined && typeof raw.modeReason !== "string") return "modeReason is not text";
   return undefined;
 }
 
@@ -264,6 +341,6 @@ export function renderRoundLine(round: RoundRecord): string {
     return `round ${round.round} — no previous round found${headless} (sources tried: ${round.sourcesTried.map(attemptText).join(", ")})`;
   }
   const head = round.previous.reviewedHead === null ? "no head" : round.previous.reviewedHead.slice(0, 12);
-  const how = round.mode === "delta" ? `delta ${round.range.base?.slice(0, 12) ?? "?"}..${round.range.head?.slice(0, 12) ?? "?"}` : round.mode === "fallback-first" ? "fallback-first: the previous head is not an ancestor of this head (force-push or rebase); full review with prior findings attached" : "first";
+  const how = round.mode === "delta" ? `delta ${round.range.base?.slice(0, 12) ?? "?"}..${round.range.head?.slice(0, 12) ?? "?"}` : round.mode === "fallback-first" ? `fallback-first: ${round.modeReason ?? "the previous head is not an ancestor of this head (force-push or rebase)"}; full review with prior findings attached` : "first";
   return `round ${round.round} (source: ${round.source}; previous ${round.previous.reviewId} at ${head}; ${how})`;
 }
