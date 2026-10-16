@@ -52,8 +52,8 @@ import {
 import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
 import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
 import { flowReviewsRoot, reviewsRoot } from "./package-location";
-import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaims, renderPremiseMarkdown } from "./premise";
-import { readJsonFileOr } from "../lib/json";
+import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaims, previousFindingsUnreadable, renderPremiseMarkdown } from "./premise";
+import { promoteParentExecutions } from "./verify-run";
 import { withOperatorDecisionsLock } from "./operator-decisions";
 import { repairMechanicalOmissions, type FindingRepair } from "./repair";
 import { writeReviewNotes, type ReviewNoteResult } from "./review-notes";
@@ -84,6 +84,7 @@ import {
   type ReviewScopeCountsLike,
   type ReviewScopeDropLike,
   type StructuredReviewFinding,
+  type VerificationClaimInput,
 } from "./types";
 
 const REQUIRED_ARTIFACTS = ["scope", "coverage", "report", "findings", "learning", "decisions"] as const;
@@ -267,6 +268,8 @@ export async function createManagedReviewPackage(
   const premiseClaims = parsePremiseClaims(input.premises);
   const flowMatch = await resolvePackageFlow(input);
   const { reviewId, packageDir } = await allocatePackage(input, flowMatch, at);
+  // Before anything is written: an id that names packages in two places refuses here (review LG6-002, SEC6-001).
+  const verifications = await ownPackageVerifications(input, reviewId, packageDir);
   const coverage = normalizeCoverage(input.coverage, input.reviewers);
   const report = await readReport(input);
   const reviewers = coverage.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
@@ -307,7 +310,7 @@ export async function createManagedReviewPackage(
   // release — nothing is removed and a `refuted` verdict is recorded on a finding
   // that is still reported, so the drop rate is a measured number before it costs
   // a real finding.
-  const merged = mergeVerifications(reported, input.verifications ?? [], {
+  const merged = mergeVerifications(reported, verifications, {
     mode: input.verificationMode ?? DEFAULT_VERIFICATION_MODE,
   });
 
@@ -364,9 +367,10 @@ export async function createManagedReviewPackage(
   // One merge over both sets (a claim may name either, and two claims on one finding must meet to cancel), then split
   // by what each finding IS rather than by position.
   const premiseSet = [...deduped.findings, ...scoped.external];
-  // Review RG2-004: an ingest without --premises over a package the judge held carries each hold from the previous
-  // findings.json to the same, unchanged finding, and is refused otherwise; it never silently drops a hold.
-  const carriedHolds = premiseClaims === undefined ? carriedPremiseHolds(premiseSet, await readJsonFileOr<unknown>(path.join(packageDir, "findings.json"), undefined)) : undefined;
+  // Review RG2-004: an ingest without --premises over a package the judge held re-applies each hold of the previous
+  // findings.json, as a claim under the merge's rules, to the same, unchanged finding, and is refused otherwise; it
+  // never silently drops a hold, and an unreadable findings.json refuses rather than reading as "nothing held" (LG6-001).
+  const carriedHolds = premiseClaims === undefined ? carriedPremiseHolds(premiseSet, await readPreviousFindings(packageDir)) : undefined;
   if (carriedHolds?.ok === false) throw new Error(carriedHolds.refusal);
   const premised = mergePremises(carriedHolds?.ok === true ? carriedHolds.findings : premiseSet, premiseClaims);
   const premisedInternal = premised.findings.filter((finding) => finding.source !== "external");
@@ -512,13 +516,19 @@ export async function createManagedReviewPackage(
   } else if (carriedHolds === undefined && (await pathExists(path.join(packageDir, PREMISES_FILE)))) {
     // An ingest without --premises that carried no hold keeps the judge's record, moved aside (review RG2-004): the
     // verdict never re-applies claims to an ingested round, so the file at its own name would only mislead a reader
-    // into thinking this ingest applied them. When holds were carried it stays, as the record of the claims they came from.
+    // into thinking this ingest applied them. When holds were carried it stays where it is, untouched: the holds came
+    // from the previous findings.json, not from this file, which may predate them or be gone (review SEC6-002).
     await rename(path.join(packageDir, PREMISES_FILE), path.join(packageDir, PREMISES_SUPERSEDED_FILE));
   }
   if (input.scope?.files !== undefined) {
     await writeFileAtomic(path.join(packageDir, "scope-files.json"), `${JSON.stringify({ version: 1, files: input.scope.files, ...(typeof input.scope.counts?.changedLinesRetained === "number" ? { changedLines: input.scope.counts.changedLinesRetained } : {}) }, null, 2)}\n`);
   }
-  const premiseBlock = renderPremiseMarkdown({ counts: premised.counts, rejections: premised.rejections, findings });
+  const premiseBlock = renderPremiseMarkdown({
+    counts: premised.counts,
+    rejections: premised.rejections,
+    findings,
+    ...(carriedHolds?.ok === true && carriedHolds.carried > 0 ? { carried: { holds: carriedHolds.carried, judges: carriedHolds.judges } } : {}),
+  });
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
     renderScope(input, flowMatch, at, verification, carried, caps, { externalReclaims, scopeBScreen: scopeB.record, filterStats, allFindings: findings }) +
@@ -2786,11 +2796,24 @@ export async function resolveReviewPackagePath(cwd: string, ref: string): Promis
     return path.dirname(absolute);
   }
 
+  const [first] = await reviewPackagesNamed(cwd, ref);
+  if (first !== undefined) {
+    return first;
+  }
+  throw new Error(`Managed review package not found: ${ref}`);
+}
+
+/**
+ * Every package a review id names, in the order {@link resolveReviewPackagePath} prefers them: the standalone one (a
+ * directory with a manifest.json under the reviews root), then each flow's directory of that name, in flow order. The
+ * one lookup of a package by id; more than one entry means the id is ambiguous.
+ */
+async function reviewPackagesNamed(cwd: string, ref: string): Promise<string[]> {
+  const found: string[] = [];
   const standalone = path.join(reviewsRoot(cwd), ref);
   if (await pathExists(path.join(standalone, "manifest.json"))) {
-    return standalone;
+    found.push(standalone);
   }
-
   for (const flowDir of await listFlowDirs(cwd)) {
     const reviewsDir = flowReviewsRoot(cwd, flowDir);
     if (!(await pathExists(reviewsDir))) {
@@ -2798,12 +2821,53 @@ export async function resolveReviewPackagePath(cwd: string, ref: string): Promis
     }
     for (const entry of await readdir(reviewsDir, { withFileTypes: true })) {
       if (entry.isDirectory() && entry.name === ref) {
-        return path.join(reviewsDir, entry.name);
+        found.push(path.join(reviewsDir, entry.name));
       }
     }
   }
+  return found;
+}
 
-  throw new Error(`Managed review package not found: ${ref}`);
+/**
+ * The ingest's verification claims, with each one citing a `keryx review verify-run` record of its own finding in THIS
+ * ingest's package promoted to `execution` (flow 457 T7). The records are read only from `packageDir`, the directory
+ * the ingest writes (review LG6-002, SEC6-001): a package of the same id elsewhere never promotes a claim. An id that
+ * already names packages in more than one place refuses the ingest, since which package the claims cite cannot be told.
+ */
+async function ownPackageVerifications(input: ManagedReviewInput, reviewId: string, packageDir: string): Promise<VerificationClaimInput[]> {
+  const claims = input.verifications ?? [];
+  if (claims.length === 0) {
+    return [];
+  }
+  const named = await reviewPackagesNamed(input.cwd, reviewId);
+  if (named.length > 1) {
+    throw new Error(
+      `Refusing to bind verify-run records: the review id ${reviewId} names ${named.length} packages (${named.map((dir) => path.relative(input.cwd, dir)).join(", ")}), so which one its verification claims cite cannot be told. Remove or rename the stray package, or pass a --review-id no other package uses. Nothing was written.`,
+    );
+  }
+  return promoteParentExecutions(claims, packageDir);
+}
+
+/**
+ * The previous ingest's findings.json, for the hold carry (review LG6-001): `undefined` when there is none (a first
+ * ingest), parsed JSON otherwise. One that exists but cannot be read or parsed refuses the ingest, since reading it as
+ * "nothing held" would drop every hold it recorded.
+ */
+async function readPreviousFindings(packageDir: string): Promise<unknown> {
+  let text: string;
+  try {
+    text = await readFile(path.join(packageDir, "findings.json"), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return undefined;
+    }
+    throw new Error(previousFindingsUnreadable((error as NodeJS.ErrnoException).code ?? "the file could not be read"), { cause: error });
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch (error) {
+    throw new Error(previousFindingsUnreadable(`it is not JSON (${error instanceof Error ? error.message : String(error)})`), { cause: error });
+  }
 }
 
 async function loadDocpackSchema(cwd: string): Promise<Record<string, unknown> | null> {

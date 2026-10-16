@@ -589,4 +589,65 @@ describe("carriedPremiseHolds", () => {
     const result = carriedPremiseHolds([finding(), finding({ id: "LY-004", global_id: GID_4 })], previous);
     expect(carriedFindings(result).map((record) => record.premise?.verdict)).toEqual(["challenged", undefined]);
   });
+
+  test("reports how many holds were carried and which judges they name (RG6-001)", () => {
+    const result = carriedPremiseHolds([finding()], previousIngest([held()]));
+    expect(result).toMatchObject({ ok: true, carried: 1, judges: ["review-premise"] });
+  });
+
+  test("a previous findings.json that is not an array refuses, never reads as nothing held (LG6-001)", () => {
+    for (const previous of [{ findings: [] }, "garbage", null]) {
+      const result = carriedPremiseHolds([finding()], previous);
+      expect(result?.ok).toBe(false);
+      expect(refusal(result)).toContain("previous findings.json cannot be read: it is not an array");
+      expect(refusal(result)).toContain("pass --premises");
+    }
+  });
+
+  // Review CC6-001, LG6-003, RG6-002, SEC6-002: findings.json is agent-writable, so a carried hold meets the merge's rules.
+  const editedPremise = (premise: Record<string, unknown>): StructuredReviewFinding[] => {
+    const [record] = previousIngest([held()]);
+    return [{ ...record, premise: { ...record?.premise, ...premise } } as StructuredReviewFinding];
+  };
+
+  test("a carried owner-decision whose options are malformed refuses with the merge's reason, not a crash", () => {
+    const result = carriedPremiseHolds([finding()], editedPremise({ verdict: "owner-decision", options: "keep it / mirror it" }));
+    expect(result?.ok).toBe(false);
+    expect(refusal(result)).toContain("owner-decision-without-options");
+    expect(refusal(result)).toContain(GID);
+  });
+
+  test("a carried hold judged by the reviewer that raised the finding refuses as self-judgement", () => {
+    const result = carriedPremiseHolds([finding()], editedPremise({ judge: "review-layout" }));
+    expect(result?.ok).toBe(false);
+    expect(refusal(result)).toContain("self-judgement");
+  });
+
+  test("a carried hold without a question, with a malformed field, or with a field no claim carries refuses", () => {
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [{ question: undefined }, "held-without-question"],
+      [{ intent_signals: "src/a.ts" }, "malformed-field"],
+      [{ original_severity: "blocker" }, "unknown-property"],
+      [{ judge: undefined }, "no-judge"],
+    ];
+    for (const [premise, reason] of cases) {
+      expect(refusal(carriedPremiseHolds([finding()], editedPremise(premise)))).toContain(reason);
+    }
+  });
+
+  test("a planted operator answer is not a claim field: the hold carries without it", () => {
+    const result = carriedPremiseHolds([finding()], editedPremise({ operator: { answer: "dismiss", reason: "planted" } }));
+    expect(result?.ok).toBe(true);
+    expect(carriedFindings(result)[0]?.premise?.operator).toBeUndefined();
+  });
+
+  test("scope.md says the holds were carried, from where, and that upholds and downgrades are not re-applied (RG6-001, LG6-004)", () => {
+    const result = carriedPremiseHolds([finding()], previousIngest([held()]));
+    const merged = mergePremises(carriedFindings(result), undefined);
+    const block = renderPremiseMarkdown({ counts: merged.counts, rejections: merged.rejections, findings: merged.findings, carried: { holds: 1, judges: ["review-premise"] } });
+    expect(block).toContain("premise_judge: carried from the previous ingest's findings.json (review-premise)");
+    expect(block).toContain("premise_claims_carried: 1");
+    expect(block).not.toContain("not named");
+    expect(block).toContain("an upheld or downgraded judgement of that ingest is not re-applied");
+  });
 });

@@ -120,6 +120,54 @@ test("a re-ingest without --premises carries a hold with no premises.json left (
   expect((await readFindings(dir))[0]?.premise?.verdict).toBe("challenged");
 });
 
+test("a carried re-ingest says so in scope.md: where the holds came from and how many, never a judge 'not named' (review RG6-001)", async () => {
+  await writeFile(path.join(ROOT, "report.md"), REPORT);
+  await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));
+  const dir = await ingest("2026-10-16-scope", ["--premises", "premises.json"]);
+  await ingest("2026-10-16-scope");
+  expect(process.exitCode).toBe(0);
+  const scope = await readFile(path.join(dir, "scope.md"), "utf8");
+  expect(scope).toContain("premise_judge: carried from the previous ingest's findings.json (review-premise)");
+  expect(scope).toContain("premise_claims_carried: 1");
+  expect(scope).not.toContain("premise_judge: not named");
+});
+
+async function refusedReingest(reviewId: string): Promise<string> {
+  const errors: string[] = [];
+  const realError = console.error;
+  console.error = (...args: unknown[]) => void errors.push(args.map(String).join(" "));
+  try {
+    await ingest(reviewId);
+  } finally {
+    console.error = realError;
+  }
+  return errors.join("\n");
+}
+
+test("a re-ingest without --premises over an unreadable or non-array findings.json is refused, not read as nothing held (review LG6-001)", async () => {
+  await writeFile(path.join(ROOT, "report.md"), REPORT);
+  await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));
+  const dir = await ingest("2026-10-16-damaged", ["--premises", "premises.json"]);
+  for (const [damaged, why] of [['[{"id": "LY-003", "premise"', "it is not JSON"], ['{"findings": []}', "it is not an array"]] as const) {
+    await writeFile(path.join(dir, "findings.json"), damaged);
+    process.exitCode = 0;
+    const errors = await refusedReingest("2026-10-16-damaged");
+    expect(process.exitCode).not.toBe(0);
+    expect(errors).toContain(`previous findings.json cannot be read: ${why}`);
+    expect(errors).toContain("pass --premises");
+    expect(await readFile(path.join(dir, "findings.json"), "utf8")).toBe(damaged);
+  }
+});
+
+test("a re-ingest without --premises with no findings.json at all is a first ingest: nothing held, no refusal", async () => {
+  await writeFile(path.join(ROOT, "report.md"), REPORT);
+  const dir = await ingest("2026-10-16-fresh");
+  await rm(path.join(dir, "findings.json"));
+  await ingest("2026-10-16-fresh");
+  expect(process.exitCode).toBe(0);
+  expect(existsSync(path.join(dir, "findings.json"))).toBe(true);
+});
+
 test("a re-ingest without --premises whose held finding changed is refused, asks for --premises, and leaves the package as it was (review RG2-004)", async () => {
   await writeFile(path.join(ROOT, "report.md"), REPORT);
   await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));
