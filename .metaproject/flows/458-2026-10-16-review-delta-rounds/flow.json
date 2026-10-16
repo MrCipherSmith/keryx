@@ -11,7 +11,7 @@
   "title": "Fix rounds review the delta, flows plan states up front, review lines dedupe",
   "status": "in-progress",
   "createdAt": "2026-10-16T06:30:13.529Z",
-  "updatedAt": "2026-10-16T09:07:35.483Z",
+  "updatedAt": "2026-10-16T09:37:26.325Z",
   "source": {
     "type": "description",
     "ref": null
@@ -222,7 +222,7 @@
       "id": "T13",
       "title": "L4: review next, lenient result parse, drivers, disposition schema, path check, model record",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -230,7 +230,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -345,6 +346,11 @@
     {
       "at": "2026-10-16T09:07:35.483Z",
       "event": "task-added",
+      "detail": "T13: L4: review next, lenient result parse, drivers, disposition schema, path check, model record"
+    },
+    {
+      "at": "2026-10-16T09:37:26.325Z",
+      "event": "task-done",
       "detail": "T13: L4: review next, lenient result parse, drivers, disposition schema, path check, model record"
     }
   ],
