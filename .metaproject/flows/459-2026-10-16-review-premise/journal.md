@@ -20,3 +20,7 @@
 - 2026-10-16T12:09:31.742Z - task-attempt: T7: started (attempt 1) — 459-T7 sonnet worktree lane L2
 - 2026-10-16T12:43:37.426Z - task-done: T7: L2 operator + CLI: premise-question decision, decide-premise card, flags, tier, catalog, docs
 - 2026-10-16T12:43:37.574Z - task-done: T8: Live eval: #7849 fixture + #992/#1005 controls
+
+## 2026-10-16 — AC7 owner decision
+
+Live eval rerun on #992 after the downgrade fix: 3 upheld, F-009 downgraded to minor with cited intent and practice (still in the fix loop), F-012 held as an operator question. Owner (question tool, this session): "Принять как есть" — downgrades need cited evidence and stop at minor (commit 80a16d021); disputed findings are held for the operator. premise-eval.json carries the rerun.
