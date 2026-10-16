@@ -309,6 +309,7 @@ export async function ensureSlateOpened(
       seeds: [],
       ...(live.trail !== undefined || archived.trail !== undefined ? { trail: live.trail ?? archived.trail } : {}),
       ...(live.notes !== undefined || archived.notes !== undefined ? { notes: live.notes ?? archived.notes } : {}),
+      ...(live.answers !== undefined || archived.answers !== undefined ? { answers: live.answers ?? archived.answers } : {}),
     };
   }, signal));
   if (opened !== undefined) ref.opened = true;

@@ -110,7 +110,8 @@ export type SpawnSubagentFleetEvent =
  * - `"Denied"` — MAE admission denial, e.g. depth/count/budget cap (existing
  *   path, now labeled).
  * - `"Error"` — a thrown/internal error, or a local input-validation failure
- *   before the child ever spawned (existing paths, now labeled).
+ *   before the child ever spawned (existing paths, now labeled), or a child
+ *   whose provider refused it for load (output starts `STATUS: RATE_LIMITED`).
  * - `"NoProgress"` — `runAgentTurn`'s existing no-progress detector fired
  *   (`finishReason: "no-progress"`, D2a), distinct from budget exhaustion.
  * - `"Interrupted"` — the child was aborted during its `submit_result`
@@ -518,6 +519,16 @@ function formatStoppedStatusLine(
   return stop === undefined
     ? "status: BudgetExhausted"
     : `status: BudgetExhausted (${stop.used}/${stop.limit} ${stop.unit})`;
+}
+
+/**
+ * First line of a child the provider refused for load: `STATUS: RATE_LIMITED`, with the provider's
+ * `retry-after` in whole seconds when it gave one. The review orchestrator halves its wave on it.
+ */
+export function rateLimitedStatusLine(retryAfterMs: number | undefined): string {
+  return retryAfterMs === undefined || !Number.isFinite(retryAfterMs) || retryAfterMs < 0
+    ? "STATUS: RATE_LIMITED"
+    : `STATUS: RATE_LIMITED (retry-after: ${Math.ceil(retryAfterMs / 1000)}s)`;
 }
 
 /**
@@ -2254,6 +2265,33 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
                 .join("\n")
                 .trim() || "(subagent produced no text)";
         const folded = foldChildSummary(raw);
+        // E5: a child the provider refused for load ended with no result of its own. It is not
+        // "Completed"; its first line is the harness signal the review orchestrator halves its wave on.
+        if (turnResult?.rateLimited !== undefined) {
+          emitFleetEvent({
+            kind: "upsert",
+            id: workerId,
+            label,
+            status: "failed",
+            detail: "rate-limited",
+            model: `${runModel.provider}/${runModel.model}`,
+            task,
+          });
+          await foldChildSlateAndCleanup("incomplete");
+          await fireSubagentStop("Error");
+          // Earlier rounds may have produced text before the refusal: hand it back (quarantined, bounded) so the
+          // parent keeps that context when it requeues the task.
+          const hadText = raw !== "(subagent produced no text)";
+          const earlier = hadText ? boundSummary(folded.text) : undefined;
+          return {
+            status: "Error",
+            isError: true,
+            output:
+              `${rateLimitedStatusLine(turnResult.rateLimited.retryAfterMs)}\nsubagent ${label} (${workerId}) via ${runModel.provider}/${runModel.model}: the provider refused the request for load (rate limit or overloaded); nothing was retried inside the child.` +
+              (earlier === undefined ? "" : `\n--- output before the refusal ---\n${earlier}`),
+            ...(earlier === undefined ? {} : { partial: earlier }),
+          };
+        }
         // D2b: a clean stream/text finish is NOT automatically "Completed" —
         // check whether `runAgentTurnCore` itself cut the turn short for one
         // of D2a's two internal reasons FIRST. No new detection here; this

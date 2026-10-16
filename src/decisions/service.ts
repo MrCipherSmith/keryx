@@ -12,7 +12,7 @@ export { DECISION_SOURCES, WORK_DECISION_SOURCES } from "./sources";
 export type { DecisionSource } from "./sources";
 export type { AskAnswer, AskFn, AskOption, AskRequest, JournalAskDeps } from "./ask";
 export * from "./arms";
-export { BLIND_PROBABILITY, DEFAULT_IRREVERSIBLE, loadDecisionsConfig } from "./blind";
+export { BLIND_PROBABILITY, DEFAULT_IRREVERSIBLE, isIrreversible, loadDecisionsConfig } from "./blind";
 export { answerDecision, openDecision, recordReason } from "./journal";
 export { buildReport, renderReport, renderReportLine } from "./report";
 export type { AnnotatedRow, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionsReport, DeviationRow, IneligibleReport, LegacyReport, ProgressReport, ReasonShare, ReasonStats, ReportOptions, SettingsReport, Tally, TimingStats } from "./report";

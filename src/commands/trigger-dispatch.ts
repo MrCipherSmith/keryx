@@ -844,6 +844,8 @@ async function dispatchLocked(
         unattended: true,
         // An unattended run keeps the `ask` limit whatever its entry's mode: the larger limits (trust 200, auto 200) are for an operator at the keyboard.
         maxRounds: resolveAgentMaxRounds(process.env, "ask"),
+        // Nor does it get trust mode's plan follow-through nudges: nobody is there to stop them.
+        planFollowThrough: false,
         hardDeny: unattendedRefusal,
         ...(shellHooks !== undefined ? { hooks: shellHooks } : {}),
       };

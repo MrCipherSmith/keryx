@@ -230,7 +230,7 @@ test("flow 300: /governance and /triggers are read-only while busy — never def
 });
 
 // AC5 (flow 418): a slash line sent while main is busy is queued, not dropped.
-for (const name of ["/route", "/external", "/model", "/goal", "/connect", "/compact", "/sessions"]) {
+for (const name of ["/route", "/external", "/model", "/goal", "/connect", "/compact"]) {
   test(`busy slash ${name} is deferred by the classifier and QUEUED for the turn's end`, () => {
     const line = `${name} some args`;
     expect(classifyBusyDispatch({ line, commandName: undefined, ...base })).toBe("deferred");
@@ -245,7 +245,7 @@ for (const name of ["/mode", "/remote-control", "/status"]) {
   });
 }
 
-for (const name of ["/new", "/clear", "/resume"]) {
+for (const name of ["/new", "/clear", "/resume", "/sessions", "/rewind"]) {
   test(`busy slash ${name} is REFUSED, not queued: it would replace the session under the queued questions`, () => {
     expect(BUSY_REFUSED_COMMANDS.has(name)).toBe(true);
     expect(deferredBusyAction(`${name} x`, undefined)).toBe("refuse");
