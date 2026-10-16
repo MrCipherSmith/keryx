@@ -441,6 +441,9 @@ async function writePartialHeader(packageDir: string, waivers: readonly Readines
 /**
  * Waives the named failing items in the operator's own words: written into the manifest and into the first lines of
  * report.md. A quote that is a flag name, a one-word "ok" or too short is refused, as the coverage waiver does.
+ * `premise-decisions` (item 11) is the one item that cannot be waived: a held finding needs its own answer
+ * (`keryx review decide-premise` / the `review_decide_premise` card), which says uphold or dismiss for that finding; a
+ * blanket quote would let every held finding through unanswered.
  */
 export async function waiveReadiness(packageDir: string, selectors: readonly string[], operatorQuote: string, options: ReadinessOptions & { now?: Date; confirmedVia?: ConfirmedVia } = {}): Promise<ReadinessWaiver[]> {
   const quote = operatorQuote.replace(/-{0,2}waive/gi, "").trim();
@@ -452,6 +455,11 @@ export async function waiveReadiness(packageDir: string, selectors: readonly str
     if (id === undefined) throw new Error(`--waive: "${selector}" is not a readiness item. Items: ${READINESS_ITEMS.map((item) => `${item.number} ${item.id}`).join(", ")}.`);
     return id;
   });
+  if (ids.includes("premise-decisions")) {
+    throw new Error(
+      "--waive: premise-decisions cannot be waived in the operator's own words. A held finding needs its own answer: run `keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason \"<why>\"`, or in keryx shell call the review_decide_premise tool (the operator answers a card).",
+    );
+  }
   const report = await computeReadiness(packageDir, options);
   const notFailing = ids.filter((id) => report.items.find((item) => item.id === id)?.status === "pass");
   if (notFailing.length > 0) throw new Error(`--waive: ${notFailing.join(", ")} already pass${notFailing.length === 1 ? "es" : ""}; there is nothing to waive.`);

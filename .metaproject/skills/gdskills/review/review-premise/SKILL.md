@@ -39,9 +39,7 @@ progress indicator do not mirror (Material Design, Bidirectionality; Apple HIG, 
 left), and the code carried three signals of a deliberate choice: the explicit override,
 a lint exemption naming that area a physical-LTR island, and a sibling media control
 forcing the same direction. The finding was implemented; two reviews of the fix checked
-only the implementation, and one of them filed the sibling as a follow-up instead of as
-evidence against the premise. Asked "is this standard practice?", a model refuted the
-finding in one turn. No role had asked.
+only the implementation. Asked "is this standard practice?", a model refuted it in one turn.
 
 ## Workflow
 
@@ -62,7 +60,7 @@ judgement on it; the claim and the code read first let you see what the reviewer
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `findings` | array | yes | Canonical findings (`review-finding.schema.json`), each with its `global_id` (your claim's `finding_id` whenever reviewer-local ids can collide) or id, `reviewer`, `severity`, `source` (`external` marks a PR comment), `file`, `quote`, `problem`, `suggested_fix`. In a delta round, only findings with no carried premise. |
+| `findings` | array | yes | Canonical findings (`review-finding.schema.json`), each with its `global_id` (your claim's `finding_id` whenever reviewer-local ids can collide) or id (a claim may name a key the duplicate merge absorbed; it then targets the surviving finding), `reviewer`, `severity`, `source` (`external` marks a PR comment), `file`, `quote`, `problem`, `suggested_fix`. In a delta round, only findings with no carried premise. |
 | `judge` | string | yes | Your own name. Recorded on the claims file. |
 | `source` | string | no | `round` (default), `follow-up-issue` or `external-comment`: where the findings came from. The last two have no review package: each finding is the issue or comment text as `problem`, its `file:line` refs as `file`/`line` with the code there as `quote`, the issue or comment URL as `id`, its author as `reviewer` and the severity it states (else `minor`). The caller saves your claims as `<flow-dir>/premise/<n>.json` and journals the operator's answer; no `ingest` or `decide-premise` runs, so the caller applies the merge's rules (cited challenge, no downgrade of an external) by hand. |
 | `branch` / `base_sha` | string | no | So `git log` and `git blame` read the change under review. |
@@ -75,6 +73,8 @@ judgement on it; the claim and the code read first let you see what the reviewer
    comment or commit message giving a reason (`git log -L <start>,<end>:<file>`,
    `git blame`, `git show <sha>`), and sibling code doing the same. A signal does not prove
    the choice right; it proves someone chose, so the finding has to show their reason wrong.
+   A signal the branch under review itself introduces (in `git log <base>..<head>`, or in lines
+   the diff adds) is not evidence of a prior deliberate choice: the change cannot ratify itself.
 2. **Accepted practice.** What do platform guidelines (Material Design, Apple HIG, WCAG,
    the framework's own docs), the language's idioms, clean-code principles and common
    patterns say? Then the project's own rules, with their known exceptions. A project rule
@@ -104,13 +104,13 @@ signal and no practice source against it is upheld.
 
 | Rule | Why |
 |------|-----|
-| **You can only lower or hold.** No new finding, no raised severity, no edit to a finding's text. | The merge builds the record from the original finding and takes only your verdict; a claim carrying more is rejected. |
+| **You can only lower or hold.** No new finding, no raised severity, no edit to a finding's text. | The merge builds the record from the original finding and takes only your verdict; a claim carrying more is rejected (`unknown-property`), an entry that is no object too (`malformed-claim`). |
 | **Never judge your own finding.** | The merge rejects a judge equal to the reporter (`self-judgement`). |
 | **Claim first, argument second.** | The case passed two reviews that read the fix's argument and never the premise. |
 | **`challenged` cites.** Each intent signal names its `ref` (`file:line` or a SHA) and what it says; each practice source names the guideline and section precisely enough to look up. | An uncited challenge is rejected and the finding stays as reported. Never invent a quote. |
 | **Never re-grade by the rubric.** Severity is the reviewer's and the verifier's call; a test gap or a surviving mutant stays as reported unless intent or practice shrinks it, and a minor is upheld or challenged, never downgraded. | An uncited downgrade is rejected (`downgrade-without-evidence`). Minors matter: a finding you weaken is one nobody fixes. |
 | **Read-only.** Run nothing but `git log`, `git blame` and `git show`, the history commands `allowed_tools: read-only` allows every reviewer, and read files. | Executing is the verifier's job; this judgement is about meaning. |
-| **An external finding is held, never dismissed or downgraded.** Upheld, challenged or owner-decision only. | A human asked; the operator answers them. The merge rejects a downgrade of one (`external-downgrade`). |
+| **An external finding, and a `review-security-code` finding, is held or upheld, never dismissed or downgraded.** | A human asked; the operator answers them. Severity of a security finding measures exposure, which intent does not lower. The merge rejects the downgrade (`external-downgrade`, `security-downgrade`). |
 
 ## Output Contract
 

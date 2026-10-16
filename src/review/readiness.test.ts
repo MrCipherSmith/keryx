@@ -196,6 +196,15 @@ describe("premise-decisions: every held finding has an operator decision (flow 4
     expect((await item())?.status).toBe("pass");
   });
 
+  test("the item cannot be waived in the operator's words; the refusal names the repair and nothing is written", async () => {
+    writeJson("findings.json", [held]);
+    const before = readFileSync(path.join(pkg, "manifest.json"), "utf8");
+    const attempt = waiveReadiness(pkg, ["premise-decisions"], "the operator said it is fine to ship these");
+    await expect(attempt).rejects.toThrow(/decide-premise/);
+    await expect(waiveReadiness(pkg, ["11"], "the operator said it is fine to ship these")).rejects.toThrow(/review_decide_premise/);
+    expect(readFileSync(path.join(pkg, "manifest.json"), "utf8")).toBe(before);
+  });
+
   test("a downgraded finding is not held", async () => {
     writeJson("findings.json", [{ ...held, premise: { verdict: "downgraded", judge: "review-premise", severity: "minor", original_severity: "major" } }]);
     expect((await item())?.status).toBe("pass");
