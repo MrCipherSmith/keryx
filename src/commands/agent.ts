@@ -64,7 +64,7 @@ import {
 } from "../harness/tool/builtin/submit-result-tool";
 import type { McpRuntime } from "../mcp-servers/runtime";
 import { parseAskUserInput, selfAnswerAskUser, type AskUserFn, type AskUserRequest } from "../harness/tool/builtin/ask-user-tool";
-import { isIrreversible, loadDecisionsConfig } from "../decisions/blind";
+import { isIrreversible, loadDecisionsConfig } from "../decisions/service";
 import { askFloor } from "../review/arbiter-floor";
 import type { JobRegistry, TaskCompletion } from "../harness/tool/builtin/background-job-registry";
 import type { BusInbox } from "../bus/inbox";
