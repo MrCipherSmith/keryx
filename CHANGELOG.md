@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+- **`review-premise`, an independent final check of every finding's premise.** After the verifier, on the deep tier and a clean context, it reads each finding's bare claim and the code before the reviewer's argument and asks: is this a deliberate choice (an explicit override, suppression, exemption, a comment or commit giving a reason, a sibling doing the same), is the suggested behaviour accepted practice (platform guidelines, language idioms, clean code), would the fix make the system more consistent, would a senior reviewer accept the fix. It answers `upheld`, `downgraded`, `challenged` or `owner-decision`, and it can only lower or hold: never add a finding, raise a severity or edit text. A downgrade needs cited evidence and stops at `minor`, the fix-loop threshold.
+- `keryx review ingest --premises <file|->` takes the judge's claims (the bare object or a `json keryx:premises` block); invalid claims are listed in scope.md and change nothing.
+- **Held findings wait for the operator.** A `challenged` or `owner-decision` finding is not an open blocker/major and never reaches a fixer; the verdict lists it as awaiting the operator, and readiness and the flow review gate fail until `keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<why>"` (card `review_decide_premise` in keryx shell) records the answer.
+- `keryx review tier --premise` gives the judge the deep tier.
+
+### Changed
+- Every reviewer carries a fourth shared law: a deliberate choice is not a defect until its reason is read and shown wrong, and a project rule is checked against accepted platform practice and its known exceptions. review-layout lists what does not mirror under RTL (media/playback controls and progress, timelines, numbers, code).
+- review-orchestrator runs the premise check as Wave D; flow-orchestrator, job-orchestrator, review-pr-feedback and feature-dev keep held findings out of fix rounds and ask the operator; a flow that starts from a follow-up issue or an external finding checks its premise before planning.
+
 ## [0.3.120] - 2026-10-16
 
 ### Added
