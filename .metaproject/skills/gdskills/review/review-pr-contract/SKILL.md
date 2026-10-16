@@ -36,8 +36,7 @@ frontend PR missed a documentation gap that sat in plain view: the body left
 the page that describes that table lives outside the diff. The box and the diff
 disagreed, and no reviewer held both.
 
-A finding here is a disagreement between two things you can quote: a line of
-`pr-context.md` and a line of the diff (or of a document). Nothing else is filed.
+A finding here is a disagreement between two things you can quote: a line of `pr-context.md` and a line of the diff (or of a document). Nothing else is filed.
 
 ---
 
@@ -149,6 +148,7 @@ finding ids prefixed `PC-`, then a short summary; `NEEDS_CONTEXT` rather than a 
 1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
 2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
 3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
+4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
 
 Severity levels are defined once, in `review-orchestrator/SKILL.md` → **Severity (canonical)**. This reviewer does not restate them: `blocker` is the four merge-blocking shapes named there and nothing else, and the `major`/`minor` boundary is the trigger-and-outcome test.
 

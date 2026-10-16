@@ -1276,7 +1276,7 @@ still reported — so a finding the next reviewer simply did not look at was rec
 fixed. That is absence-as-evidence, and the completion gate refuses it.
 
 ```
-UNRESOLVED_FINDINGS = all blocker + major findings from step 2.6
+UNRESOLVED_FINDINGS = all blocker + major findings from step 2.6, never one review-premise holds   # held (challenged/owner-decision): ask the operator its question with its options (card `review_decide_premise` in keryx shell, the question tool elsewhere), record it with `keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<their words>"`; only an upheld one enters the fix prompt
 PREVIOUS_REVIEW_OUTPUT = <the ingested report from step 2.6>
 
 FOR iteration in [1, 2, 3]:
@@ -1305,7 +1305,7 @@ FOR iteration in [1, 2, 3]:
        <run review-orchestrator inline, in this session; it takes the round from round.json>
        keryx review ingest  --report <new-report> --ref <feature-branch> --head <new-head> \
                             --scope scope.json --blast-radius blast-radius.json \
-                            --verifications <file> --refuted <file> --outstanding <n>
+                            --verifications <file> --premises <file> --refuted <file> --outstanding <n>
   6. Recompute NEEDS_FIX from the ingested findings
   7. Record what became of each finding raised in the PREVIOUS round — every one of
      them, before the next iteration starts:
@@ -1322,7 +1322,7 @@ FOR iteration in [1, 2, 3]:
      Closing with no dispositions leaves every finding reading `unknown`, which means
      "nobody wrote down what happened".
   8. UNRESOLVED_FINDINGS = the blocker + major findings of the NEW round that are
-     still without a terminal disposition
+     still without a terminal disposition and not held by review-premise
 
   9. STUCK CHECK — runs before the next iteration and ignores the budget:
      IF any finding identity is in UNRESOLVED_FINDINGS for the SECOND iteration

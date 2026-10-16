@@ -39,7 +39,7 @@ End-to-end feature development workflow from idea to merge-ready PR.
 
 ### Phase 1: REQUIREMENTS + SPEC
 
-1. Parse input (description or GitHub issue via `gh issue view`)
+1. Parse input (description or GitHub issue via `gh issue view`). An issue filed from a review finding, or an external review comment, is a premise to check: dispatch `review-premise` on it first, and on `challenged` or `owner-decision` ask the operator its question with its options before writing the spec
 2. Clarify ambiguities — ask the user up to 3 questions max
 3. Produce the **Implementation Spec** (per `implementation-doc-mandate.mdc`):
    - **What**: feature description in 2-3 sentences
@@ -113,7 +113,7 @@ Input:  codebase_path=<project_root>, scope=changed, base_branch=<base>
    - `git diff main...HEAD` — review the full diff
    - Check for: TODOs left behind, console.logs, hardcoded values
    - Verify all acceptance criteria from Phase 1 spec
-3. Fix any findings (max 2 review-fix cycles). Each next round is `keryx review start` or `keryx review plan` on the new head: the round comes from `round.json`; no own range, no whole-branch re-review (the `git diff main...HEAD` above is round 1 only).
+3. Fix any findings (max 2 review-fix cycles), never one `review-premise` holds: ask the operator its question with its options (card `review_decide_premise` in keryx shell, the question tool elsewhere) and record it with `keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<their words>"`; only an upheld one is fixed. Each next round is `keryx review start` or `keryx review plan` on the new head: the round comes from `round.json`; no own range, no whole-branch re-review (the `git diff main...HEAD` above is round 1 only).
 4. Re-run `code-verifier` after any fixes
 
 ### Phase 8: DELIVER + CHANGE REPORT

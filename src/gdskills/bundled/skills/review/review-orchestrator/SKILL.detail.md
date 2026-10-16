@@ -917,3 +917,25 @@ Default budget guidance:
 | medium | <= 20 files or <= 2,000 changed lines | `light` | per-domain filtered diff |
 | large | > 20 files or > 2,000 changed lines | ask `full` | staged waves by domain |
 | high-risk | auth/API/core/security/data migrations | ask `full` | staged waves, verifier included |
+
+## Everything written to GitHub is brief
+
+One rule, applied to every outward surface: **PR bodies, PR comments, review
+replies, issue comments, and commit messages going to a PR.**
+
+- Lead with the conclusion. No preamble, no restating the question, no apology,
+  no summary of the flow.
+- Say what changed and where. **Link, do not paste.**
+- The reasoning, the evidence, the rejected alternatives and the round history live
+  in the flow package — `journal.md`, `context.md`, the review artifacts — which is
+  durable, searchable, and costs a reader nothing to skip.
+- A GitHub artifact that needs more than a short paragraph is a signal that the
+  detail belongs in the flow with a link out, **not** that the paragraph should
+  grow.
+- No orchestrator-written PR comment or reply exceeds two sentences without
+  carrying a link to the artifact holding the detail. The reply pass enforces
+  this; for anything else you write outward, hold yourself to it.
+
+This is deliberately asymmetric: **verbose in the flow, terse on GitHub.** The
+flow is written for whoever resumes the work; GitHub is read by someone who did
+not ask for our reasoning and is reading between other tasks.

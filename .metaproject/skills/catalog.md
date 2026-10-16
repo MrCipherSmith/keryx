@@ -113,6 +113,7 @@ Resolution order:
 | review-style | review | Review naming, readability, duplication, dead code, and maintainability. | gdskills/review/review-style/SKILL.md |
 | review-testing-practices | review | Review test structure, coverage quality, determinism, and repository test conventions. | gdskills/review/review-testing-practices/SKILL.md |
 | review-verifier | review | Verify reported findings by executing a check that fails if the finding is real; delete-only. | gdskills/review/review-verifier/SKILL.md |
+| review-premise | review | Judge each finding's premise — intent, accepted practice, consistency, fix soundness — before anyone acts on it; delete-only. | gdskills/review/review-premise/SKILL.md |
 
 <!-- gdskills:project-skills:start -->
 ## Project Skills
