@@ -90,7 +90,7 @@ judgement on it; the claim and the code read first let you see what the reviewer
 | Verdict | Meaning | Must carry |
 |---|---|---|
 | `upheld` | The premise stands; the finding goes on unchanged. | — |
-| `downgraded` | A defect, but intent or practice shows it is smaller than reported. | `severity`, strictly lower, and ≥1 `intent_signals` or `practice_sources` |
+| `downgraded` | A defect, but intent or practice shows it is smaller than reported. | `severity`, strictly lower and never below `minor`, and ≥1 `intent_signals` or `practice_sources` |
 | `challenged` | Evidence says it is not a defect. | ≥1 `intent_signals` or `practice_sources`, and a `question` |
 | `owner-decision` | A product choice the code cannot settle either way. | a `question` and ≥2 `options` |
 

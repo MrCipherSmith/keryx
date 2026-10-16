@@ -176,6 +176,12 @@ describe("rejections, each of which leaves the finding as it was", () => {
     expect((result.findings[0] as StructuredReviewFinding).severity).toBe("major");
   });
 
+  test("downgrade-below-threshold: a downgrade stops at minor, so it never takes a finding out of the fix loop", () => {
+    const result = rejectedAlone([claim({ verdict: "downgraded", severity: "info", practice_sources: [SOURCE] })]);
+    expect(reasons(result)).toEqual(["downgrade-below-threshold"]);
+    expect((result.findings[0] as StructuredReviewFinding).severity).toBe("major");
+  });
+
   test("severity-without-downgrade: a severity next to any other verdict is a way to smuggle one in", () => {
     expect(reasons(rejectedAlone([claim({ verdict: "upheld", severity: "blocker" })]))).toEqual(["severity-without-downgrade"]);
   });

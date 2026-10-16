@@ -70,6 +70,7 @@ export const PREMISE_REJECTION_REASONS = [
   "external-downgrade",
   "severity-without-downgrade",
   "not-a-downgrade",
+  "downgrade-below-threshold",
   "raise-severity",
   "malformed-field",
   "challenged-without-evidence",
@@ -279,6 +280,12 @@ export function mergePremises<T extends StructuredReviewFinding>(
       }
       if (claim.severity === target.severity) {
         reject("not-a-downgrade", `\`downgraded\` to ${claim.severity} changes nothing: the finding is already ${target.severity}. Use \`upheld\`.`);
+        continue;
+      }
+      // `minor` is the fix-loop threshold (flow-orchestrator Phase 4): a downgrade may shrink a
+      // finding, never take it out of the fix loop. Below it only the operator decides.
+      if (claim.severity === "info") {
+        reject("downgrade-below-threshold", "`downgraded` stops at `minor`, the fix-loop threshold: a premise judge may shrink a finding, never take it out of the fix. Hold it with `challenged` or `owner-decision` instead.");
         continue;
       }
       severity = claim.severity;
