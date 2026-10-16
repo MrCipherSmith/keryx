@@ -13,7 +13,7 @@ import { buildReviewConfirmSpecs } from "../commands/operator-confirm-review";
 import { operatorConfirmTool } from "../commands/operator-confirm-tools";
 import { isReviewTask, reviewTaskCommand, reviewTaskRange } from "../trigger/review-task";
 import { OPERATOR_CONFIRM_TOOL_NAMES, isUnattendedExcludedTool } from "../trigger/unattended";
-import { AUTONOMOUS_PROFILE, AUTONOMOUS_SCOPE_FILE, REVIEW_WAVE_SIZE, buildAutonomousPrompt, describeAutonomousTarget, parseAutonomousRangeTarget } from "./autonomous-profile";
+import { AUTONOMOUS_PROFILE, AUTONOMOUS_SCOPE_FILE, REVIEW_WAVE_SIZE, autonomousScopeFile, buildAutonomousPrompt, describeAutonomousTarget, parseAutonomousRangeTarget } from "./autonomous-profile";
 import { runAutonomousReview, type ChildSpec } from "./autonomous-run";
 import { validateSummary } from "./autonomous-summary";
 import { coverageErrors, requiredReviewers } from "./coverage";
@@ -146,6 +146,19 @@ describe("rows 5, 15, 3: the autonomous run", () => {
     expect(text).toContain("Open one more round only if the head moved");
     expect(AUTONOMOUS_PROFILE.waveSize).toBe(REVIEW_WAVE_SIZE);
     expect(text).toContain(`at most ${REVIEW_WAVE_SIZE} reviewers per wave`);
+  });
+
+  test("each autonomous run writes its own scope file, never the shared one (review minor)", () => {
+    const cwd = "/repo";
+    const a = autonomousScopeFile("/repo/.metaproject/data/review/autonomous/o-r-7", cwd);
+    const b = autonomousScopeFile("/repo/.metaproject/data/review/autonomous/o-r-8", cwd);
+    expect(a).toBe(".metaproject/data/review/autonomous/o-r-7/scope.json");
+    expect(a).not.toBe(b);
+    expect(autonomousScopeFile("/elsewhere/run", cwd)).toBe("/elsewhere/run/scope.json");
+    const text = buildAutonomousPrompt({ ref: "https://github.com/o/r/pull/7", scopeFile: a });
+    expect(text).toContain(`keryx review scope --json > ${a}`);
+    expect(text).toContain(`--scope ${a} --package`);
+    expect(text).not.toContain(AUTONOMOUS_SCOPE_FILE);
   });
 
   test("a local range is a target: base...head, head defaulting to HEAD", () => {

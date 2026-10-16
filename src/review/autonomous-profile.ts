@@ -4,6 +4,7 @@
 // --autonomous` and observed through its events file. Nothing here starts a process; the runner
 // (`autonomous-run`) and every surface (TUI, scheduler, docs) read the numbers from this module.
 
+import path from "node:path";
 import { REFUSED_EARLIER } from "./review-system";
 
 export const AUTONOMOUS_PROFILE_ID = "review-autonomous";
@@ -14,8 +15,19 @@ export const AUTONOMOUS_PROFILE_ID = "review-autonomous";
  */
 export const REVIEW_WAVE_SIZE = 10;
 
-/** Where the orchestrator writes `keryx review scope --json`, which `required` reads for the scope-A file list. */
+/**
+ * Where an attended orchestrator writes `keryx review scope --json`. An autonomous run never uses it: two runs at
+ * once (two targets, or a scheduler beside a manual run) would overwrite each other's scope between `scope` and
+ * `required`. Each run writes its own, {@link autonomousScopeFile}.
+ */
 export const AUTONOMOUS_SCOPE_FILE = ".metaproject/data/review/scope.json";
+
+/** The scope file of one autonomous run: `scope.json` in its own run directory, relative to `cwd` when inside it. */
+export function autonomousScopeFile(runDir: string, cwd: string): string {
+  const file = path.join(runDir, "scope.json");
+  const relative = path.relative(cwd, file);
+  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative) ? relative.split(path.sep).join("/") : file;
+}
 
 export const AUTONOMOUS_PROFILE = {
   id: AUTONOMOUS_PROFILE_ID,
@@ -123,7 +135,10 @@ export function buildAutonomousPrompt(input: {
   readonly head?: string | null | undefined;
   /** A local range target (flow 457): the base the range is reviewed against. */
   readonly base?: string | undefined;
+  /** This run's own scope file ({@link autonomousScopeFile}); the shared attended path only when none is given. */
+  readonly scopeFile?: string | undefined;
 }): string {
+  const scopeFile = input.scopeFile ?? AUTONOMOUS_SCOPE_FILE;
   const subject = input.base === undefined ? input.ref : `the local range ${input.ref} (start the package with \`keryx review start --target branch --ref ${input.base}\`)`;
   const lines = [
     `Run a full managed code review of ${subject} and finish it yourself: keryx review start, the reviewer waves, keryx review ingest, then keryx review complete.`,
@@ -131,7 +146,7 @@ export function buildAutonomousPrompt(input: {
     `When \`keryx review blast-radius\` says "Cut blast radius", run every wave without asking: \`keryx review chunks plan\`, \`keryx review chunks estimate --mode automatic\`, then \`chunks next\` and \`chunks record\` until none is left, then \`chunks merge\`. A review with files nobody read does not close: \`keryx review readiness\` lists what is missing.`,
     `Review the source only (source-only): skip any check that needs a browser or a running app and say that it was skipped.`,
     `Open ${AUTONOMOUS_PROFILE.roundLimit} review round on this head and dispatch at most ${AUTONOMOUS_PROFILE.waveSize} reviewers per wave. Do not open another round on the same head: a second round of the same reviewers on the same commit only repeats the first. Open one more round only if the head moved while you worked, and review the new head.`,
-    `Dispatch the full reviewer set: write the scope with \`keryx review scope --json > ${AUTONOMOUS_SCOPE_FILE}\`, then run \`keryx review required --mode all --scope ${AUTONOMOUS_SCOPE_FILE} --package <the package directory keryx review start printed>\` and dispatch every reviewer it prints, with dispatch mode "all". Without --scope and --package it can only name the whole set for a full round. Nobody can name a narrower review in a run like this, so do not use mode "diff".`,
+    `Dispatch the full reviewer set: write the scope with \`keryx review scope --json > ${scopeFile}\` (this run's own file: another run may be writing the shared one), then run \`keryx review required --mode all --scope ${scopeFile} --package <the package directory keryx review start printed>\` and dispatch every reviewer it prints, with dispatch mode "all". Without --scope and --package it can only name the whole set for a full round. Nobody can name a narrower review in a run like this, so do not use mode "diff".`,
     `Run the whole orchestration yourself in this session. A subagent has no shell and cannot dispatch reviewers (it answers BLOCKED nested_dispatch_unavailable), so hand a subagent only the review of one slice, never the orchestration, the ledger, the ingest or the complete.`,
     `The review skills live in this clone under \`.metaproject/skills/gdskills/review/\` (the orchestration is \`review-orchestrator/SKILL.md\` there): read them from that path and do not search the filesystem or \`$HOME/.keryx\` for them.`,
     `A guard refuses raw \`git diff\`, \`cat\`, \`sed\`, \`find\` and \`tail\` in the shell. Use \`keryx ctx diff\`, \`keryx ctx read <file>\` and \`keryx ctx run -- <command>\` instead, or end a command that must stay raw with \`# keryx:raw <why>\`.`,
