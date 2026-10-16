@@ -60,7 +60,7 @@ import { guardReviewPaths } from "../lib/review-path-flags";
 import { ENV_REVIEW_CALLER_TOKEN, startOrchestratorLog } from "../review/orchestrator-log";
 import { parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
 import { defaultBundledReviewRoot, renderSkillDrift, reviewSkillDrift } from "../review/skill-drift";
-import { buildRunProfile, unattendedStartRefusal, writeRunProfile } from "../review/run-profile";
+import { buildRunProfile, runProfileRefusal, unattendedStartRefusal, writeRunProfile } from "../review/run-profile";
 import { promoteParentExecutions } from "../review/verify-run";
 import { packageRoutingRefusal } from "../review/routing-check";
 import { OPERATOR_COMMANDS, printOperatorCommandHelp, runOperatorCommand, type OperatorCommand } from "./review-operator";
@@ -1015,7 +1015,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
   if (mode !== "ingest") {
     const profile = buildRunProfile({ unattended: args.includes("--unattended"), host: hostArg });
-    await writeRunProfile(result.path, profile);
+    await writeRunProfile(result.path, profile, { stampManifest: true });
     await startOrchestratorLog(cwd, result.reviewId, result.path, profile.callerToken);
     console.log(`run mode: ${profile.mode} (${profile.declaredVia}), host ${profile.host}`);
     console.log(`caller token: export ${ENV_REVIEW_CALLER_TOKEN}=${profile.callerToken} on this session's keryx calls so the readiness check can attribute them`);
@@ -4378,7 +4378,9 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
   }
   // Security review M3: slice routing recorded in the manifest may not be narrower than each slice's content needs.
   const completeDir = await resolveReviewPackagePath(process.cwd(), ref);
-  const narrowedRouting = packageRoutingRefusal(completeDir, resolveProjectRoot(process.cwd()));
+  const profileMissing = runProfileRefusal(completeDir);
+  if (profileMissing !== undefined) throw new Error(`review complete refused: ${profileMissing}`);
+  const narrowedRouting = packageRoutingRefusal(completeDir, resolveProjectRoot(process.cwd()), { refuseUnreadable: true });
   if (narrowedRouting !== undefined) throw new Error(`review complete refused: ${narrowedRouting}`);
   const {
     manifest,

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { extractStackRequiresField, parseStackRequires, scopeReviewerByStack, detectProjectStack } from "./stack";
 import { collectReviewers } from "./reviewers";
-import { isAttendedRun, operatorGateApplies } from "./run-profile";
+import { isAttendedRun, operatorGateApplies, runProfileRefusal } from "./run-profile";
 import { confirmedDecision, decisionWriters, type OperatorDecisionKind, type OperatorDecisionSubject } from "./operator-decisions";
 import { pendingMutants } from "./mutate";
 import { buildReviewScope } from "./scope";
@@ -457,7 +457,8 @@ export function packageHasPrContext(packageDir: string, name = "pr-context.md"):
 export async function coverageErrors(dispatch: unknown, options: CoverageOptions): Promise<string[]> {
   const record = dispatch && typeof dispatch === "object" && !Array.isArray(dispatch) ? (dispatch as Record<string, unknown>) : undefined;
   const effective = record === undefined ? undefined : await effectiveDepth(record, options);
-  return [...(await reviewerSetErrors(dispatch, options, effective)), ...(record === undefined || effective === undefined ? [] : await mutationErrors(record, options, effective.depth))];
+  const profileMissing = runProfileRefusal(options.packageDir);
+  return [...(profileMissing === undefined ? [] : [profileMissing]), ...(await reviewerSetErrors(dispatch, options, effective)), ...(record === undefined || effective === undefined ? [] : await mutationErrors(record, options, effective.depth))];
 }
 
 async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions, effective: { depth: RoundDepth; refused?: string } | undefined): Promise<string[]> {

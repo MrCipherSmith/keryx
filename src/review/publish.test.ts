@@ -6,8 +6,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
-import { partialPublishHeader, publishReview, reviewEvent, type PostResult, type ReviewEvent } from "./publish";
+import { mentionsFindingId, minorSection, partialPublishHeader, PUBLISHED_BODY_LIMIT, publishReview, reviewEvent, type PostResult, type ReviewEvent } from "./publish";
 import { computeReadiness } from "./readiness";
+import type { VerdictFinding } from "./verdict";
+
+const minor = (id: string, problem = "a small thing"): VerdictFinding => ({ id, reviewer: "review-style", severity: "minor", problem, location: "src/a.ts:1", verification: "none" });
 
 const PR = "https://github.com/Presight-AI/vantage-frontend/pull/7932";
 
@@ -124,6 +127,30 @@ describe("publishReview", () => {
     makePackage({ ready: true, kind: "path" });
     const io = seams();
     await expect(publishReview(pkg, { post: io.post, confirm: io.confirm })).rejects.toThrow(/not bound to a pull request/);
+  });
+
+  test("round-2 m4: a report names a minor by its whole id, so F-12 does not hide F-1", () => {
+    expect(mentionsFindingId("see F-12 and XF-1", "F-1")).toBe(false);
+    expect(mentionsFindingId("fixed F-1.", "F-1")).toBe(true);
+    expect(mentionsFindingId("(review-logic#F-1)", "review-logic#F-1")).toBe(true);
+    const section = minorSection([minor("F-1"), minor("F-12")], "We addressed F-12.");
+    expect(section).toContain("- F-1 ");
+    expect(section).not.toContain("- F-12 ");
+  });
+
+  test("round-2 m2: the minor section fits its budget and counts what it cut", () => {
+    const minors = Array.from({ length: 2000 }, (_, i) => minor(`F-${i}`, "x".repeat(80)));
+    const section = minorSection(minors, "report");
+    expect(section.length).toBeLessThanOrEqual(PUBLISHED_BODY_LIMIT);
+    expect(section).toMatch(/- … \d+ more minor finding\(s\) — see verdict-interim\.md \/ `keryx review verdict`\n$/);
+    const listed = section.split("\n").filter((line) => line.startsWith("- F-")).length;
+    expect(section).toContain(`${2000 - listed} more minor finding(s)`);
+    expect(minorSection(minors.slice(0, 2), "report")).not.toContain("more minor finding");
+    const tight = minorSection(minors, "report", 300);
+    expect(tight.length).toBeLessThanOrEqual(300);
+    expect(tight).toContain("more minor finding(s)");
+    expect(minorSection(minors, "report", 10)).toBe("");
+    expect(minorSection([], "report")).toBe("");
   });
 
   test("the event is one of the three GitHub knows", () => {

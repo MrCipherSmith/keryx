@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { buildRunProfile, writeRunProfile } from "./run-profile";
+import { coverageErrors } from "./coverage";
+import { OPERATOR_GATE_VERSION, RUN_PROFILE_FILE, buildRunProfile, operatorGateApplies, runProfileRefusal, writeRunProfile } from "./run-profile";
 import path from "node:path";
 import { runLedger } from "../commands/review-ledger";
 import { runDispatchCheck } from "../commands/review-slice";
@@ -237,6 +238,74 @@ describe("security review M3: slice routing is recomputed from the slice text", 
       expect(packageRoutingRefusal(pkg, root)).toBeUndefined();
     } finally {
       process.exitCode = 0;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("round-2 review: routing-check hardening", () => {
+  const narrowLogin = (): SliceManifest => oneSliceManifest({ files: ["src/auth/login.ts"], roles: ["review-logic"], depth: "light" });
+
+  test("m1: an added line starting with `++ ` does not make the slice read as a git diff that routes nothing", async () => {
+    const { root, pkg, manifestPath } = await gatedPackage();
+    try {
+      await writeFile(path.join(pkg, "slices", "s0.diff"), fileDiff("src/auth/login.ts", ["++ counter", "export function login(user: string, password: string) {", "  return checkPassword(user, password);", "}"]));
+      await writeFile(manifestPath, JSON.stringify(narrowLogin()));
+      const { narrowed } = narrowedSlices(narrowLogin(), sliceTextReader(path.dirname(manifestPath)));
+      expect(narrowed).toHaveLength(1);
+      expect(narrowed[0]!.missingRoles).toContain("review-security-code");
+      expect(packageRoutingRefusal(pkg, root)).toContain("s0: roles");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("m3: ledger build checks the package's own slice manifest when the input directory is another one", async () => {
+    const { root, pkg, manifestPath } = await gatedPackage();
+    try {
+      await writeFile(path.join(pkg, "slices", "s0.diff"), fileDiff("src/auth/login.ts", ["export function login(user: string, password: string) {", "}"]));
+      await writeFile(manifestPath, JSON.stringify(narrowLogin()));
+      const input = path.join(root, "input");
+      await mkdir(path.join(input, "raw"), { recursive: true });
+      await expect(runLedger(["build", input, "--package", pkg, "--dry-run"], { rejectUnknownFlags: () => {} })).rejects.toThrow("ledger build refused: .metaproject/reviews/r1/slices/manifest.json routes 1 slice(s) narrower");
+    } finally {
+      process.exitCode = 0;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("m3: review complete's check refuses a manifest slice whose text is missing; the ledger's does not", async () => {
+    const { root, pkg, manifestPath } = await gatedPackage();
+    try {
+      await writeFile(manifestPath, JSON.stringify(narrowLogin()));
+      expect(packageRoutingRefusal(pkg, root)).toBeUndefined();
+      expect(packageRoutingRefusal(pkg, root, { refuseUnreadable: true })).toContain("lists 1 slice(s) whose text is missing (s0)");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("round-2 M1(c): deleting run-profile.json does not make a gated package look pre-457", () => {
+  test("a manifest stamped by start|attach keeps the gate on and refuses the package without its run profile", async () => {
+    const { pkg, root, manifestPath } = await gatedPackage();
+    try {
+      await writeFile(path.join(pkg, "manifest.json"), JSON.stringify({ reviewId: "r1", status: "draft" }));
+      await writeRunProfile(pkg, buildRunProfile({ env: {} }), { stampManifest: true });
+      expect(JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"))).toEqual({ reviewId: "r1", status: "draft", operatorGate: OPERATOR_GATE_VERSION });
+      expect(runProfileRefusal(pkg)).toBeUndefined();
+      await rm(path.join(pkg, RUN_PROFILE_FILE));
+      expect(operatorGateApplies(pkg)).toBe(true);
+      expect(runProfileRefusal(pkg)).toContain("run-profile.json is missing or unreadable");
+      await writeFile(manifestPath, JSON.stringify(manifestOf(1, 100, 100)));
+      expect((await packagePlanGate(pkg, { manifest: manifestPath })).refusal).toContain("run-profile.json is missing or unreadable");
+      const errors = await coverageErrors({ mode: "all", selected: [] }, { root, packageDir: pkg, files: [] });
+      expect(errors[0]).toContain("run-profile.json is missing or unreadable");
+      // An unstamped manifest without a run profile is still a pre-457 package.
+      await writeFile(path.join(pkg, "manifest.json"), JSON.stringify({ reviewId: "r1", status: "draft" }));
+      expect(operatorGateApplies(pkg)).toBe(false);
+      expect(runProfileRefusal(pkg)).toBeUndefined();
+    } finally {
       await rm(root, { recursive: true, force: true });
     }
   });

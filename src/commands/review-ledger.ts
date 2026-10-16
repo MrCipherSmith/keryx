@@ -10,7 +10,7 @@ import { readToolLog } from "../review/layers-usage";
 import { pendingMutants } from "../review/mutate";
 import { type Disposition, type LedgerGap, type RawFile, buildLedger, followUpsOf, isEmptyOutput, isReviewerResult, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
 import { type RetryState, applyEscalations, emptyRetryState, escalationsFor, readSliceIds, scopeFingerprint } from "../review/retry-plan";
-import { narrowedSlices, routingRefusal, sliceTextReader } from "../review/routing-check";
+import { narrowedSlices, packageRoutingRefusal, routingRefusal, sliceTextReader } from "../review/routing-check";
 import { type SliceManifest, manifestSizeProblem } from "../review/slice";
 import { packagePlanGate } from "../review/estimate";
 
@@ -240,6 +240,11 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     const routing = narrowedSlices(manifest, sliceTextReader(path.dirname(manifestPath)));
     const narrowed = routingRefusal(manifestLabel, routing.narrowed);
     if (narrowed !== undefined) throw new Error(`ledger build refused: ${narrowed}`);
+  }
+  // Round-2 m3: the package's own slice manifest is checked too, not only the input directory's.
+  if (inputDir !== packageDir || manifest === undefined) {
+    const ownRouting = packageRoutingRefusal(packageDir, root);
+    if (ownRouting !== undefined) throw new Error(`ledger build refused: ${ownRouting}`);
   }
   if (manifest !== undefined) for (const entry of manifest.slices) {
     const hash = await readFile(path.resolve(path.dirname(manifestPath), entry.path))
