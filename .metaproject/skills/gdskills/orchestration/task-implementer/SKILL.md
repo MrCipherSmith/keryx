@@ -98,10 +98,12 @@ For a description-based task, omit `issue_number` and issue references in commit
 
 ```
 FIX_CONTEXT:
-  review_feedback:      structured findings from reviewer (file, line, severity, message)
+  review_feedback:      structured findings from reviewer (id, file, line, severity, message, suggested_fix)
   original_task_ids:    the tasks that introduced the findings (array)
   iteration:            fix iteration number, 1..3 — the same repair bound as 5.4
 ```
+
+**A reviewer's `suggested_fix` is a hypothesis, not an instruction.** Per finding: reproduce it first — a test or probe that fails on the current head (red); check the suggested fix against the plan's state × event matrix (`plan.md`, when it has one) and every caller the change reaches; then fix and show the probe green. A finding that does not reproduce is reported, not fixed. Record each divergence in `notes`: `suggested_fix diverged: <id> — <what you did instead and why>` or `did not reproduce: <id>`.
 
 **1.4 Validate the request against the contract:**
 
@@ -143,7 +145,7 @@ git -C "<codebase_path>" rev-parse --abbrev-ref HEAD   # must equal <branch>
 
 **1.5 TDD Check (if `test_case_specs` is present):**
 
-If the task object contains `test_case_specs` (provided by `tests-creator`):
+If the task object contains `test_case_specs` (provided by `tests-creator`, or in a fix round the reviewers' red probes):
 1. Read each test file listed in `test_case_specs.test_files`
 2. Run the tests using `test_case_specs.run_command` — confirm they FAIL
 3. If tests pass already → report `DONE_WITH_CONCERNS` (tests may not be testing the right thing)
@@ -427,6 +429,7 @@ Write full JSON to `<JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json`:
   "skill_drift": "<none | stale: <module>/<skill> — <what diverged> | missing: <module> should have a project-skill>",
   "noticed_not_touched": [{ "what": "<problem>", "where": "<path|symbol>" }],
   "assumptions": ["<what you assumed where the task did not say>"],
+  "behavior_changes": [{ "description": "<what now behaves differently>", "user_visible": true, "needs_operator": true, "alternatives": ["<option you did not take>"] }],
   "not_touched": [{ "path": "src/path/file.ts", "reason": "<why left alone>" }],
   "notes": "<any warnings, blockers, or additional context>"
 }
@@ -434,23 +437,14 @@ Write full JSON to `<JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json`:
 
 Set `skill_drift` from Phase 2.0b: if the project-skill you used was not `fresh`, or the code you wrote diverged from what a skill documents, name the skill and the divergence. The orchestrator uses this to decide whether to trigger `skills learn` (do NOT run `learn` yourself — it is a mutating step the orchestrator dispatches; see `rules/core/skill-lifecycle.mdc`).
 
-Three of those fields have a bar, and a field that collects noise trains the
-reader to skim all three. Omit one rather than pad it. The trio is adapted (MIT;
-see THIRD_PARTY_NOTICES.md) as contract fields rather than a free-text template; the bars below are ours.
+Four of those fields have a bar, and a field that collects noise trains the reader to skim all of them. Omit one rather than pad it. The first three are adapted (MIT; see THIRD_PARTY_NOTICES.md) as contract fields rather than a free-text template; the bars below are ours.
 
-- `assumptions` — what you assumed where the task was silent AND acted on. If
-  the assumption being wrong would not change a line you wrote, it is a hedge,
-  not an assumption; leave it out.
-- `noticed_not_touched` — a problem in code you actually read, stated so a
-  follow-up task could be written from it alone, with `where` it lives. Not a
-  dumping ground for every smell seen in passing, and not style opinion.
-- `not_touched` — of the files this task was aimed at (`target_files`), the ones
-  absent from `files_modified`/`files_created`/`files_deleted`, each with why.
-  It answers that one question and no other: a reader subtracts those lists and
-  this one from `target_files`, and flags the remainder as an unexplained omission.
+- `assumptions` — what you assumed where the task was silent AND acted on. If the assumption being wrong would not change a line you wrote, it is a hedge, not an assumption; leave it out.
+- `noticed_not_touched` — a problem in code you actually read, stated so a follow-up task could be written from it alone, with `where` it lives. Not a dumping ground for every smell seen in passing, and not style opinion.
+- `not_touched` — of the files this task was aimed at (`target_files`), the ones absent from `files_modified`/`files_created`/`files_deleted`, each with why. It answers that one question and no other: a reader subtracts those lists and this one from `target_files`, and flags the remainder as an unexplained omission.
+- `behavior_changes` — behavior you chose where the task and the plan's state × event matrix did not decide it. **Every user-visible tradeoff goes here with `user_visible: true, needs_operator: true`** and the `alternatives` you rejected: message wording, where an error appears, which state resets or survives a switch, retry or reload. Never only in `assumptions`, `notes` or a journal line — the orchestrator asks the operator before it accepts a result carrying one, and a tradeoff it cannot see is accepted unasked.
 
-Then check the shape and record the file — two commands, both of which refuse
-rather than warn:
+Then check the shape and record the file — two commands, both of which refuse rather than warn:
 
 ```bash
 keryx skills contracts validate <JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json \
@@ -489,7 +483,7 @@ The step's own status is the orchestrator's to write (`keryx job step <JOB_NAME>
 
 Return a compact STATUS response following `rules/core/subagent-status-protocol.md`.
 **Do NOT include the full JSON block inline** — the orchestrator reads the result file when it needs details.
-The inline response must contain only: STATUS line + Completed bullets + Files changed + Verification summary.
+The inline response must contain only: STATUS line + Completed bullets + Files changed + Verification summary + a `## Behavior changes` list (each entry's description, `user_visible`, `needs_operator`, alternatives) whenever `behavior_changes` is non-empty — a flow dispatch writes no result file, so this list is the only copy the orchestrator reads. Any `needs_operator: true` entry makes the status at best `DONE_WITH_CONCERNS`, never `DONE`.
 
 **Status classification:**
 - `success` → `STATUS: DONE`, or `DONE_WITH_CONCERNS` when work that cleared the
