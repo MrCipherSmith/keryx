@@ -16,7 +16,7 @@ import { recordOperatorDecision, type OperatorDecisionKind } from "../review/ope
 import { estimatePlan, recordPlanConfirmation } from "../review/plan-confirmation";
 import { answerPremiseQuestion, findHeldFinding } from "../review/premise-question";
 import { verifyRun } from "../review/verify-run";
-import { cardSafe } from "../trigger/schedules";
+import { cardSafe } from "../lib/card-safe";
 import { resolvePackageDir } from "./review-layers";
 
 export const OPERATOR_COMMANDS = ["waive-mutation", "override-reviewers", "confirm-plan", "decide-premise", "verify-run"] as const;
