@@ -24,6 +24,20 @@
       "pattern": "^[^#]+#[^#]+$"
     },
     "reviewer": { "type": "string" },
+    "reported_by": {
+      "title": "Every reviewer that reported this finding, when ingest merged duplicates into it",
+      "description": "Written only by the ingest duplicate merge (src/review/dedupe.ts): two or more reviewers reported the same defect — same file, located line within 3 or the same quote, same mechanism — and the round keeps ONE finding instead of N with drifting severity. `reviewer` stays the reviewer whose report became the canonical record; this lists all of them, that one first. Absent means one reviewer reported it.",
+      "type": "array",
+      "minItems": 2,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "merged_from": {
+      "title": "The findings the duplicate merge folded into this one",
+      "description": "Their `global_id` (or `id` when none was minted), so a verifier claim, a commit message or a later round that names an absorbed finding can still be traced to the record that now carries it. Present exactly when `reported_by` is.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
     "disposition": {
       "title": "What became of this finding, and the evidence for saying so",
       "description": "Declared HERE and deliberately NOT in the bundled reviewer-finding.schema.json: a reviewer states what is wrong, it never states what became of the finding. The measured reason this exists: precision = acted-on / (acted-on + dismissed-incorrect) computed over the recorded corpus returned 53/53 = 100%, not because the reviewers were right but because nothing on disk could express a wrong finding. `classification` looked like a validity verdict and was assigned from the ingest MODE; decisions.md said the same sentence for every finding. Only `acted-on` and `dismissed-incorrect` say anything about reviewer accuracy, which is why the three non-accuracy dismissals are separate states rather than one `dismissed` bucket — collapsing them is what makes a dismissal rate meaningless.",

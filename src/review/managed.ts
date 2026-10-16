@@ -47,6 +47,7 @@ import {
   type ReviewFilterStats,
 } from "./filter-stats";
 import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
+import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
 import { repairMechanicalOmissions, type FindingRepair } from "./repair";
 import { writeReviewNotes, type ReviewNoteResult } from "./review-notes";
 import {
@@ -219,7 +220,7 @@ const BLAST_RADIUS_ARTIFACT = "blast-radius.json";
 
 export async function createManagedReviewPackage(
   input: ManagedReviewIngestInput,
-): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord }> {
+): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord; duplicates: DuplicateMerge[] }> {
   const at = (input.now ?? new Date()).toISOString();
   const flowMatch = await resolvePackageFlow(input);
   const { reviewId, packageDir } = await allocatePackage(input, flowMatch, at);
@@ -304,7 +305,15 @@ export async function createManagedReviewPackage(
   // budget on its way out.
   const scopeB = await screenScopeBFindings(input, packageDir, scoped.internal);
 
-  const findingsCap = applyFindingsCap(scopeB.retained, {
+  // Flow 458 AC5. One defect reported by several reviewers becomes ONE finding
+  // with the highest severity (the verifier's, when it confirmed one) and every
+  // reporter in `reported_by`. After the verifier so each claim still resolved
+  // against the id it named, after the scope-B screen so a scope-B claim cannot
+  // escape it by merging into a scope-A one, and before the cap so a duplicate
+  // does not spend a reviewer's reading budget. See {@link mergeDuplicates}.
+  const deduped = mergeDuplicates(scopeB.retained);
+
+  const findingsCap = applyFindingsCap(deduped.findings, {
     limit: input.maxFindingsPerReviewer,
   });
 
@@ -441,7 +450,8 @@ export async function createManagedReviewPackage(
   }
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
-    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats),
+    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats) +
+      renderDuplicatesMarkdown(deduped.merges),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
@@ -487,6 +497,7 @@ export async function createManagedReviewPackage(
     // record follows: a removal an operator has to open a file to discover reads,
     // on the terminal they were already looking at, as "there was nothing more".
     scopeBScreen: scopeB.record,
+    duplicates: deduped.merges,
   };
 }
 
@@ -1451,6 +1462,13 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   }
   if (finding.external_ref !== undefined) {
     record.external_ref = finding.external_ref;
+  }
+  // Written by the duplicate merge only, as a pair.
+  if (finding.reported_by !== undefined && finding.reported_by.length > 1) {
+    record.reported_by = finding.reported_by;
+  }
+  if (finding.merged_from !== undefined && finding.merged_from.length > 0) {
+    record.merged_from = finding.merged_from;
   }
   return record;
 }

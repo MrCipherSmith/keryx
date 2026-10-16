@@ -412,6 +412,14 @@ export type StructuredReviewFinding = {
    */
   global_id?: string | undefined;
   reviewer: string;
+  /**
+   * Every reviewer that reported this finding, written only when ingest merged
+   * duplicates into it (see {@link module:review/dedupe}). `reviewer` stays the
+   * reviewer whose record is canonical and comes first here.
+   */
+  reported_by?: string[] | undefined;
+  /** The `global_id`s (or ids) the duplicate merge folded into this finding. */
+  merged_from?: string[] | undefined;
   severity: ReviewFindingSeverity;
   problem: string;
   impact: string;
