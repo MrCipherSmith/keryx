@@ -839,7 +839,7 @@ function heldRecords(previousFindings: readonly unknown[]): Loose[] {
  * silently. A missing findings.json is a first ingest, which holds nothing.
  */
 export function previousFindingsUnreadable(why: string): string {
-  return `This package's previous findings.json cannot be read: ${why}; pass --premises <file> with the judge's claims for this round, so no hold it recorded is dropped silently. Nothing was written.`;
+  return `This package's previous findings.json cannot be read: ${why}. Repair or restore it (git show <commit>:<path>) so its holds can carry; or, when no premise judge ran on this package, pass --premises with an empty claims object ({"judge":"none","premises":[]}); or pass --premises <file> with the judge's claims for this round. Nothing was written.`;
 }
 
 function refuseInheritance<T>(why: string): CarriedPremiseHolds<T> {

@@ -542,15 +542,15 @@ describe("row 4: verification commands run in the parent", () => {
       expect(methodOf(flowPackage("flow-r2"))).toBe("reasoning");
     });
 
-    test("an id that names a standalone and a flow package refuses the ingest, naming both", async () => {
+    test("an id that also names a standalone package does not block the flow package's re-ingest (review LG7-001)", async () => {
       mkdirSync(standalonePackage("flow-r3"), { recursive: true });
       writeFileSync(path.join(standalonePackage("flow-r3"), "manifest.json"), "{}");
       mkdirSync(flowPackage("flow-r3"), { recursive: true });
       const run = await verifyRun({ packageDir: flowPackage("flow-r3"), finding: "F-001", argv: ["true"], cwd, runner: ok });
-      const refused = flowIngest("flow-r3", [claimCiting(run.file)]);
-      await expect(refused).rejects.toThrow(/names 2 packages/);
-      await expect(refused).rejects.toThrow(path.join(".metaproject", "reviews", "flow-r3"));
-      expect(existsSync(path.join(flowPackage("flow-r3"), "findings.json"))).toBe(false);
+      await flowIngest("flow-r3", [claimCiting(run.file)]);
+      await flowIngest("flow-r3", [claimCiting(run.file)]);
+      expect(methodOf(flowPackage("flow-r3"))).toBe("execution");
+      expect(existsSync(path.join(standalonePackage("flow-r3"), "findings.json"))).toBe(false);
     });
   });
 

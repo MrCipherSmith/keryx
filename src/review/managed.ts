@@ -269,7 +269,7 @@ export async function createManagedReviewPackage(
   const flowMatch = await resolvePackageFlow(input);
   const { reviewId, packageDir } = await allocatePackage(input, flowMatch, at);
   // Before anything is written: an id that names packages in two places refuses here (review LG6-002, SEC6-001).
-  const verifications = await ownPackageVerifications(input, reviewId, packageDir);
+  const verifications = await ownPackageVerifications(input, packageDir);
   const coverage = normalizeCoverage(input.coverage, input.reviewers);
   const report = await readReport(input);
   const reviewers = coverage.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
@@ -2831,19 +2831,13 @@ async function reviewPackagesNamed(cwd: string, ref: string): Promise<string[]> 
 /**
  * The ingest's verification claims, with each one citing a `keryx review verify-run` record of its own finding in THIS
  * ingest's package promoted to `execution` (flow 457 T7). The records are read only from `packageDir`, the directory
- * the ingest writes (review LG6-002, SEC6-001): a package of the same id elsewhere never promotes a claim. An id that
- * already names packages in more than one place refuses the ingest, since which package the claims cite cannot be told.
+ * the ingest writes (review LG6-002, SEC6-001): a package of the same id elsewhere never promotes a claim, so a
+ * duplicate id elsewhere needs no refusal here (review LG7-001, SEC7-001).
  */
-async function ownPackageVerifications(input: ManagedReviewInput, reviewId: string, packageDir: string): Promise<VerificationClaimInput[]> {
+async function ownPackageVerifications(input: ManagedReviewInput, packageDir: string): Promise<VerificationClaimInput[]> {
   const claims = input.verifications ?? [];
   if (claims.length === 0) {
     return [];
-  }
-  const named = await reviewPackagesNamed(input.cwd, reviewId);
-  if (named.length > 1) {
-    throw new Error(
-      `Refusing to bind verify-run records: the review id ${reviewId} names ${named.length} packages (${named.map((dir) => path.relative(input.cwd, dir)).join(", ")}), so which one its verification claims cite cannot be told. Remove or rename the stray package, or pass a --review-id no other package uses. Nothing was written.`,
-    );
   }
   return promoteParentExecutions(claims, packageDir);
 }
