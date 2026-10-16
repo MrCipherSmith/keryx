@@ -6,6 +6,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 
+/** The round's code: everything but committed review packages, which record a review rather than being reviewed. Every diff a review slices goes through this pathspec. */
+export const NOT_REVIEW_PACKAGES = [".", ":(exclude).metaproject/reviews", ":(exclude,glob).metaproject/flows/*/reviews/**"];
+
 export const ROUND_FILE = "round.json";
 export const PRIOR_FINDINGS_FILE = "prior_findings.json";
 
@@ -37,6 +40,17 @@ export type RoundRecord = {
   mergeBase?: string | null | undefined;
   /** Why the round has this mode (a force-push, no trusted previous round, …); absent on records cut before it. */
   modeReason?: string | undefined;
+  /**
+   * Flow 458 "cheap second look": code in merge-base..head that is unchanged since the previous round (new-side hunks). A
+   * delta round reads it once, as `kind: "second-look"` slices (review-logic and review-security-code), because the previous
+   * round, which saw it first, may have missed something in it. Empty or absent when there is none, or when the previous
+   * round was weak (then `weakPrevious` is set and the same code is in `newHunks`, read as in round 1).
+   */
+  secondLookHunks?: RoundHunk[] | undefined;
+  /** Why the previous round counted as weak ("previous round weak: …"); set only when the unchanged code got the full round-1 treatment. */
+  weakPrevious?: string | undefined;
+  /** Problems with the round's range the operator must see (an empty range: the base equals the head). */
+  warnings?: string[] | undefined;
 };
 
 export type PriorFinding = {
@@ -292,6 +306,9 @@ export function roundRecordProblem(raw: Record<string, unknown>): string | undef
   if (!Array.isArray(raw.carried) || !raw.carried.every((entry) => typeof record(entry)?.findingId === "string" && typeof record(entry)?.disposition === "string")) return "carried is not a list of {findingId, disposition}";
   if (raw.mergeBase !== undefined && raw.mergeBase !== null && typeof raw.mergeBase !== "string") return "mergeBase is not a commit";
   if (raw.modeReason !== undefined && typeof raw.modeReason !== "string") return "modeReason is not text";
+  if (raw.secondLookHunks !== undefined && !(Array.isArray(raw.secondLookHunks) && raw.secondLookHunks.every(isHunk))) return "secondLookHunks is not a list of hunks";
+  if (raw.weakPrevious !== undefined && typeof raw.weakPrevious !== "string") return "weakPrevious is not text";
+  if (raw.warnings !== undefined && !isStringList(raw.warnings)) return "warnings is not a list of text";
   return undefined;
 }
 
@@ -318,7 +335,27 @@ export function isPriorDisposition(value: unknown): value is PriorDisposition {
 }
 
 /** The slice kinds of a delta round: a FIX slice answers prior findings, a NEW slice is code no prior finding touched. */
-export type SliceKind = "fix" | "new";
+export type SliceKind = "fix" | "new" | "second-look";
+
+/**
+ * What a finished package says about how thoroughly it read its scope: the reasons it was weak (none: no evidence of
+ * weakness) and the merge-base its round.json recorded. Only a ledger that ran says anything: an ingest's research.json is
+ * an empty ledger, evidence neither way.
+ */
+export function previousRoundFacts(research: unknown, round: unknown): { weak: string[]; mergeBase: string | null | undefined } {
+  const weak: string[] = [];
+  const ledger = record(research);
+  const dispatch = record(ledger?.dispatch);
+  if (dispatch !== undefined) {
+    if (ledger?.scopeReviewed === false) weak.push("coverage incomplete (the ledger's scopeReviewed is false: uncovered slices or unfinished reviewers)");
+    const skipped = Array.isArray(dispatch.skipped) ? dispatch.skipped.map((entry) => record(entry)?.reviewer).filter((name): name is string => typeof name === "string") : [];
+    if (skipped.length > 0) weak.push(`required reviewers skipped (${skipped.join(", ")})`);
+    const notRun = (Array.isArray(dispatch.notRun) ? dispatch.notRun : []).filter((line): line is string => typeof line === "string" && !/^Not run: mutation \(light round\)/.test(line));
+    if (notRun.length > 0) weak.push(`${notRun.length} "Not run" line(s): ${notRun.slice(0, 2).join("; ")}`);
+  }
+  const base = record(round)?.mergeBase;
+  return { weak, mergeBase: typeof base === "string" ? base : base === null ? null : undefined };
+}
 
 /** The package's prior_findings.json, or [] when it has none or it is unreadable. */
 export function readPriorFindings(packageDir: string): PriorFinding[] {

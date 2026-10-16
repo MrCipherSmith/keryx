@@ -13,7 +13,7 @@ export function requiredSlices(manifest: Pick<SliceManifest, "slices">, reviewer
   return manifest.slices
     // A fix slice of a delta round (flow 458) belongs to exactly its roster, whether or not a role is routable: an author
     // that is a project reviewer reads the slice that answers its finding, and no other project reviewer is owed it.
-    .filter((s) => s.retryOf === undefined && (s.kind === "fix" && Array.isArray(s.roles) ? s.roles.includes(reviewer) : routable && Array.isArray(s.roles) ? s.roles.includes(reviewer) : gate === undefined || s.files.some(gate)))
+    .filter((s) => s.retryOf === undefined && ((s.kind === "fix" || s.kind === "second-look") && Array.isArray(s.roles) ? s.roles.includes(reviewer) : routable && Array.isArray(s.roles) ? s.roles.includes(reviewer) : gate === undefined || s.files.some(gate)))
     .map((s) => s.id);
 }
 

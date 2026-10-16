@@ -34,7 +34,7 @@ export type ReviewPlan = {
   package: string;
   target: { kind: "pr" | "branch"; ref: string; base: string | null; head: string | null };
   round: { number: number; mode: string; source: string; previous: string | null; range: { base: string | null; head: string | null }; fixHunks: number; newHunks: number; priorFindings: number; carried: number; line: string };
-  slices: { fix: PlanSlice[]; new: PlanSlice[] };
+  slices: { fix: PlanSlice[]; new: PlanSlice[]; secondLook?: PlanSlice[] };
   roster: string[];
   dispatches: number;
   minutes: { min: number; max: number };
@@ -84,9 +84,14 @@ export function packagePathOf(startOutput: string, cwd: string): string | undefi
 const toPlanSlice = (entry: SliceEntry): PlanSlice => ({ id: entry.id, files: entry.files, ...(entry.depth === undefined ? {} : { depth: entry.depth }), roles: entry.roles ?? [], ...(entry.findingIds === undefined ? {} : { findingIds: entry.findingIds }) });
 
 /** The slices of a manifest by kind: fix slices, and everything else (a first round's slices are all `new`). */
-export function slicesByKind(manifest: Pick<SliceManifest, "slices">): { fix: PlanSlice[]; new: PlanSlice[] } {
+export function slicesByKind(manifest: Pick<SliceManifest, "slices">): { fix: PlanSlice[]; new: PlanSlice[]; secondLook?: PlanSlice[] } {
   const originals = manifest.slices.filter((entry) => entry.retryOf === undefined);
-  return { fix: originals.filter((entry) => entry.kind === "fix").map(toPlanSlice), new: originals.filter((entry) => entry.kind !== "fix").map(toPlanSlice) };
+  const secondLook = originals.filter((entry) => entry.kind === "second-look").map(toPlanSlice);
+  return {
+    fix: originals.filter((entry) => entry.kind === "fix").map(toPlanSlice),
+    new: originals.filter((entry) => entry.kind !== "fix" && entry.kind !== "second-look").map(toPlanSlice),
+    ...(secondLook.length === 0 ? {} : { secondLook }),
+  };
 }
 
 export function nextStepOf(estimate: Pick<RoundEstimate, "overThreshold">, confirmed: boolean): string {
@@ -97,8 +102,8 @@ export function renderPlanSummary(plan: ReviewPlan): string {
   const lines = [
     `plan: ${plan.package}`,
     plan.round.line,
-    `slices: fix ${plan.slices.fix.length}, new ${plan.slices.new.length}`,
-    ...(plan.split === undefined || plan.split === null ? [] : [`dispatches: fix: ${plan.split.fix.slices} slices / ${plan.split.fix.dispatches} dispatches, new: ${plan.split.new.slices} slices / ${plan.split.new.dispatches} dispatches`]),
+    `slices: fix ${plan.slices.fix.length}, new ${plan.slices.new.length}${plan.slices.secondLook === undefined ? "" : `, second-look ${plan.slices.secondLook.length}`}`,
+    ...(plan.split === undefined || plan.split === null ? [] : [`dispatches: fix: ${plan.split.fix.slices} slices / ${plan.split.fix.dispatches} dispatches, new: ${plan.split.new.slices} slices / ${plan.split.new.dispatches} dispatches${plan.split.secondLook === undefined ? "" : `, second-look: ${plan.split.secondLook.slices} slices / ${plan.split.secondLook.dispatches} dispatches`}`]),
     `roster (${plan.roster.length}): ${plan.roster.join(", ") || "none"}`,
     `estimate: ${plan.dispatches} dispatches, ${plan.minutes.min}-${plan.minutes.max} min${plan.overThreshold ? ` — over threshold (${plan.overReasons.join("; ")})` : ""}`,
     ...plan.warnings.map((warning) => `warning: ${warning}`),
@@ -132,6 +137,7 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
     "--ref",
     target,
     ...(head === undefined ? [] : ["--head", head]),
+    ...(base === undefined ? [] : ["--base", base]),
     ...(host === undefined ? [] : ["--host", host]),
     ...(memoryQuery === undefined ? [] : ["--memory-query", memoryQuery]),
     ...(args.includes("--unattended") ? ["--unattended"] : []),
@@ -141,6 +147,8 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
   if (packageDir === undefined || !existsSync(packageDir)) throw new Error("review plan: `review start` printed no package path; the plan stops here.");
   const round: RoundRecord | undefined = readRoundRecord(packageDir);
   const delta = isDeltaRound(round) ? round : undefined;
+  warnings.push(...(round?.warnings ?? []));
+  if (round?.weakPrevious !== undefined) warnings.push(round.weakPrevious);
   // A delta round is cut over the previous reviewed head; a first round over --ref, else the base start recorded.
   const baseRef = delta !== undefined ? delta.range.base! : base ?? round?.range.base ?? undefined;
 

@@ -17,6 +17,31 @@ export function fixRosterRoles(findingIds: readonly string[], prior: readonly Pr
   return [...new Set([...FIX_BASE_ROLES, ...authors])].sort();
 }
 
+/** The roles that read a second-look slice, once: logic and the code-level security reviewer. */
+export const SECOND_LOOK_ROLES: readonly string[] = [ALWAYS_ROLE, "review-security-code"];
+
+/** Whether a region of the full range overlaps one of the second-look hunks (same file, intersecting new-side lines). */
+export function regionInSecondLook(region: { path: string; startLine: number; endLine: number }, hunks: readonly { file: string; startLine: number; endLine: number }[]): boolean {
+  return hunks.some((hunk) => hunk.file === region.path && region.startLine <= hunk.endLine && region.endLine >= hunk.startLine);
+}
+
+/**
+ * Tag slices cut from the second-look regions: `kind: "second-look"`, read once by logic and security-code, deep. Audit and
+ * escalation marks drop (they belong to light routing); findings from these slices are ordinary findings.
+ */
+export function tagSecondLookSlices<T extends SliceEntry & { text: string }>(slices: readonly T[], previousRound: number): T[] {
+  return slices.map((slice) => {
+    const { audit: _audit, escalated: _escalated, ...rest } = slice;
+    return {
+      ...(rest as T),
+      kind: "second-look" as const,
+      roles: [...SECOND_LOOK_ROLES].sort(),
+      depth: "deep" as const,
+      risk: { score: slice.risk?.score ?? 0.3, why: [...(slice.risk?.why ?? []).filter((why) => !why.startsWith("audit sample")), `second look: unchanged since round ${previousRound}, which may have missed something in it`] },
+    };
+  });
+}
+
 /** Only a delta round splits; a first or fallback-first round routes every slice as before. */
 export function isDeltaRound(round: RoundRecord | undefined): round is RoundRecord {
   return round !== undefined && round.mode === "delta" && round.range.base !== null && round.range.head !== null;
@@ -81,17 +106,32 @@ export function expectedFixRoles(entry: Pick<SliceEntry, "findingIds">, context:
   return fixRosterRoles(entry.findingIds ?? [], context.prior);
 }
 
-/** Roles that own at least one original fix slice of the manifest (they join the round's required set). */
-export function fixSliceRoles(manifest: { slices: readonly SliceEntry[] }): string[] {
-  return [...new Set(manifest.slices.filter((slice) => slice.retryOf === undefined && slice.kind === "fix").flatMap((slice) => slice.roles ?? []))].sort();
+/**
+ * Whether the round backs a manifest entry's claim to be a second-look slice: a delta round that recorded second-look
+ * hunks in one of its files. A slice that only says `second-look` is routed as a new slice, so the tag cannot narrow its roster.
+ */
+export function secondLookClaimBacked(entry: Pick<SliceEntry, "kind" | "files">, context: FixContext | undefined): boolean {
+  if (entry.kind !== "second-look" || context === undefined || !isDeltaRound(context.round)) return false;
+  const hunks = context.round.secondLookHunks ?? [];
+  return entry.files.some((file) => hunks.some((hunk) => hunk.file === file));
 }
 
-export type SplitCounts = { fix: number; new: number };
+/** Roles that own at least one original fix or second-look slice of the manifest (they join the round's required set). */
+export function fixSliceRoles(manifest: { slices: readonly SliceEntry[] }): string[] {
+  return [...new Set(manifest.slices.filter((slice) => slice.retryOf === undefined && (slice.kind === "fix" || slice.kind === "second-look")).flatMap((slice) => slice.roles ?? []))].sort();
+}
+
+export type SplitCounts = { fix: number; new: number; secondLook?: number };
 
 export function splitCounts(manifest: { slices: readonly SliceEntry[] }): SplitCounts | undefined {
   const originals = manifest.slices.filter((slice) => slice.retryOf === undefined);
   if (!originals.some((slice) => slice.kind !== undefined)) return undefined;
-  return { fix: originals.filter((slice) => slice.kind === "fix").length, new: originals.filter((slice) => slice.kind !== "fix").length };
+  const secondLook = originals.filter((slice) => slice.kind === "second-look").length;
+  return {
+    fix: originals.filter((slice) => slice.kind === "fix").length,
+    new: originals.filter((slice) => slice.kind !== "fix" && slice.kind !== "second-look").length,
+    ...(secondLook === 0 ? {} : { secondLook }),
+  };
 }
 
 /** The dispositions a reviewer result gives to prior findings: `prior_dispositions: [{ id, disposition }]`, unknown words dropped. */

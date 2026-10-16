@@ -70,7 +70,7 @@ export type RoundEstimate = {
   /** Original slices a major-or-worse finding re-opened deep (`escalated` in the manifest). */
   escalated: string[];
   /** Delta round (flow 458): the fix and new slices and the dispatches each kind needs. Absent in a round without kinds. */
-  split?: { fix: { slices: number; dispatches: number }; new: { slices: number; dispatches: number } } | undefined;
+  split?: { fix: { slices: number; dispatches: number }; new: { slices: number; dispatches: number }; secondLook?: { slices: number; dispatches: number } } | undefined;
 };
 
 /**
@@ -96,8 +96,8 @@ export function estimateRound(
   const routedOut: string[] = [];
   const owners = new Map<string, string[]>();
   const counts = manifest === undefined ? undefined : splitCounts(manifest);
-  const kindOf = new Map((manifest?.slices ?? []).map((s) => [s.id, s.kind === "fix" ? "fix" : "new"] as const));
-  const kindDispatches = { fix: 0, new: 0 };
+  const kindOf = new Map((manifest?.slices ?? []).map((s) => [s.id, s.kind === "fix" ? "fix" : s.kind === "second-look" ? "second-look" : "new"] as const));
+  const kindDispatches = { fix: 0, new: 0, "second-look": 0 };
   const perRole: RoleEstimate[] = roles.map((role) => {
     if (manifest === undefined) return { role, slices: 0, waves: 1 };
     const ids = requiredSlices(manifest, role);
@@ -110,7 +110,7 @@ export function estimateRound(
     if (counts !== undefined) {
       // A dispatch carries one kind: fix slices come with the prior findings they answer, new slices as in round 1.
       let waves = 0;
-      for (const kind of ["fix", "new"] as const) {
+      for (const kind of ["fix", "second-look", "new"] as const) {
         const ofKind = ids.filter((id) => kindOf.get(id) === kind);
         if (ofKind.length === 0) continue;
         const count = packWaves(graph.open(ofKind, new Set()), waveBytesOf(manifest)).length;
@@ -158,7 +158,7 @@ export function estimateRound(
     overReasons,
     planKey: planKeyOf({ perRole, slicePlan, waveBytes }),
     escalated: originals.filter((s) => s.escalated !== undefined).map((s) => s.id),
-    ...(counts === undefined ? {} : { split: { fix: { slices: counts.fix, dispatches: kindDispatches.fix }, new: { slices: counts.new, dispatches: kindDispatches.new } } }),
+    ...(counts === undefined ? {} : { split: { fix: { slices: counts.fix, dispatches: kindDispatches.fix }, new: { slices: counts.new, dispatches: kindDispatches.new }, ...(counts.secondLook === undefined ? {} : { secondLook: { slices: counts.secondLook, dispatches: kindDispatches["second-look"] } }) } }),
   };
 }
 
