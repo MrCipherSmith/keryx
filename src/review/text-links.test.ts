@@ -7,7 +7,7 @@ const DIFF = [
   "diff --git a/src/panel.tsx b/src/panel.tsx",
   "--- a/src/panel.tsx",
   "+++ b/src/panel.tsx",
-  "@@ -3,0 +4,5 @@",
+  "@@ -3,1 +4,5 @@",
   '+import { x } from "./not.a.key";',
   '+  const label = t("panel.title.save");',
   '+  bus.emit("order:created", order);',
@@ -17,7 +17,7 @@ const DIFF = [
   "diff --git a/settings.json b/settings.json",
   "--- a/settings.json",
   "+++ b/settings.json",
-  "@@ -1 +1 @@",
+  "@@ -0,0 +1,2 @@",
   '+  "blast_radius_max_files": 40,',
   '+  "name": "x",',
 ].join("\n");
@@ -33,6 +33,58 @@ describe("key extraction", () => {
     expect(keys.map((key) => key.key)).not.toContain("not.a.key");
     expect(keys.map((key) => key.key)).not.toContain("name");
     expect(keys.find((key) => key.key === "blast_radius_max_files")?.file).toBe("settings.json");
+  });
+
+  test("a removed `-- ` or added `++ ` content line is content, not a file header (review minor)", () => {
+    const diff = [
+      "diff --git a/src/a.ts b/src/a.ts",
+      "--- a/src/a.ts",
+      "+++ b/src/a.ts",
+      "@@ -1,2 +1,2 @@",
+      "--- x",
+      '+++ y; t("a.b.c")',
+      '-  t("old.key")',
+      '+  t("new.key")',
+    ].join("\n");
+    const keys = extractTextKeys(diff);
+    expect(keys.map((key) => [key.key, key.file])).toEqual([
+      ["a.b.c", "src/a.ts"],
+      ["old.key", "src/a.ts"],
+      ["new.key", "src/a.ts"],
+    ]);
+  });
+
+  test("removed and changed keys of structured locale files (json, yaml) are keys (review minor)", () => {
+    const diff = [
+      "diff --git a/src/locales/en.json b/src/locales/en.json",
+      "--- a/src/locales/en.json",
+      "+++ b/src/locales/en.json",
+      "@@ -2,4 +2,3 @@",
+      '   "checkout": {',
+      '-    "pay_now": "Pay now",',
+      '-    "legacy_total": "Total",',
+      '+    "pay_now": "Pay",',
+      "   },",
+      "diff --git a/i18n/fr.yaml b/i18n/fr.yaml",
+      "--- a/i18n/fr.yaml",
+      "+++ b/i18n/fr.yaml",
+      "@@ -1,2 +1,1 @@",
+      " cart:",
+      "-  empty_message: Vide",
+      "diff --git a/src/locales/de.json b/src/locales/de.json",
+      "--- a/src/locales/de.json",
+      "+++ b/src/locales/de.json",
+      "@@ -7 +6,0 @@",
+      '-    "orphan_key": "x",',
+    ].join("\n");
+    const keys = extractTextKeys(diff).filter((key) => key.kind === "i18n-key");
+    expect(keys.map((key) => [key.key, key.file])).toEqual([
+      ["checkout.pay_now", "src/locales/en.json"],
+      ["checkout.legacy_total", "src/locales/en.json"],
+      ["cart.empty_message", "i18n/fr.yaml"],
+      // Zero context: the parent is unknown, the leaf key is searched.
+      ["orphan_key", "src/locales/de.json"],
+    ]);
   });
 
   test("file names, versions and template interpolations are not keys", () => {
