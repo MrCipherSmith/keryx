@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { runOperatorCommand } from "../commands/review-operator";
 import { OPERATOR_DECISIONS_FILE, recordPremiseDecision } from "../review/operator-decisions";
-import { downgradedPremise, heldPremise, premiseAnswer, premiseAnswerInput } from "../review/premise-fixtures";
+import { downgradedPremise, heldFinding, heldPremise, premiseAnswer, premiseAnswerInput } from "../review/premise-fixtures";
 import { createFlowService } from "./service";
 import {
   EXTERNAL_COMMENT_COVERAGE_REVIEWERS,
@@ -1607,14 +1607,15 @@ test("research ledger blocks a clean round and rechecks tampering after closure"
 
 // The shared held premise (premise-fixtures.ts), on a finding of this suite's round: `round-1#LY-003`.
 const HELD_PREMISE = heldPremise({ question: "Should the timeline mirror?" });
-const heldFinding = (over: Partial<ReviewFixtureFinding> = {}): ReviewFixtureFinding => ({ id: "LY-003", global_id: "round-1#LY-003", severity: "major", problem: "timeline pinned LTR", premise: HELD_PREMISE, ...over });
+/** The shared held finding (premise-fixtures.ts `heldFinding`) under this round's key, typed for writeReviewPackage. */
+const roundHeld = (over: Partial<ReviewFixtureFinding> = {}): ReviewFixtureFinding => heldFinding({ global_id: "round-1#LY-003", premise: HELD_PREMISE, ...over }) as ReviewFixtureFinding;
 
 test("flow 459 — a held finding with no operator decision fails the gate, at any severity, and is named", async () => {
   await fresh();
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
   await writeFile(path.join(ROOT, REVIEW_GATE_CONFIG_PATH), `${JSON.stringify({ completion: { severity_floor: "major" } }, null, 2)}\n`, "utf8");
-  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding({ severity: "minor" })] });
+  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld({ severity: "minor" })] });
 
   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
 
@@ -1627,10 +1628,10 @@ test("flow 459 — a dismiss decision in the package clears the hold and the gat
   await fresh();
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
-  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
+  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld()] });
   expect(latestFindingStates(await readReviewRounds(ROOT, dir)).map((finding) => findingVerdict(finding).terminal)).toEqual([false]);
 
-  await recordPremiseDecision(packageDir, premiseAnswerInput(heldFinding() as Record<string, unknown>, { finding: "round-1#LY-003" }));
+  await recordPremiseDecision(packageDir, premiseAnswerInput(roundHeld(), { finding: "round-1#LY-003" }));
 
   expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("pass");
 });
@@ -1639,7 +1640,7 @@ test("flow 459 — the decision `keryx review decide-premise` writes clears the 
   await fresh();
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
-  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
+  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld()] });
   expect(latestFindingStates(await readReviewRounds(ROOT, dir)).map((finding) => findingVerdict(finding).terminal)).toEqual([false]);
 
   const code = await runOperatorCommand(
@@ -1656,8 +1657,8 @@ test("flow 459 — an uphold decision ends the question but not the finding: it 
   await fresh();
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
-  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
-  await recordPremiseDecision(packageDir, premiseAnswerInput(heldFinding() as Record<string, unknown>, { finding: "LY-003", answer: "uphold", reason: "mirror it" }));
+  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld()] });
+  await recordPremiseDecision(packageDir, premiseAnswerInput(roundHeld(), { finding: "LY-003", answer: "uphold", reason: "mirror it" }));
 
   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
 
@@ -1675,7 +1676,7 @@ test("flow 459 — an answer written onto the finding record is not an operator 
     flowDir: dir,
     reviewId: "round-1",
     head: HEAD,
-    findings: [heldFinding({ premise: { ...HELD_PREMISE, operator: { answer: "dismiss", reason: "kept LTR", at: "t", actor: "owner" } } })],
+    findings: [roundHeld({ premise: { ...HELD_PREMISE, operator: { answer: "dismiss", reason: "kept LTR", at: "t", actor: "owner" } } })],
   });
 
   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
@@ -1692,7 +1693,7 @@ test("flow 459 — a dismissed-incorrect written onto a held record without a de
     flowDir: dir,
     reviewId: "round-1",
     head: HEAD,
-    findings: [heldFinding({ premise: { ...HELD_PREMISE, operator: { answer: "dismiss", reason: "kept LTR", at: "t", actor: "owner" } }, disposition: { state: "dismissed-incorrect", evidence: "operator owner: kept LTR" } })],
+    findings: [roundHeld({ premise: { ...HELD_PREMISE, operator: { answer: "dismiss", reason: "kept LTR", at: "t", actor: "owner" } }, disposition: { state: "dismissed-incorrect", evidence: "operator owner: kept LTR" } })],
   });
 
   expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("fail");
@@ -1702,7 +1703,7 @@ test("flow 459 — a dismissed-wont-fix an agent wrote with human-decision wordi
   await fresh();
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
-  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding({ disposition: { state: "dismissed-wont-fix", evidence: "the owner decided in the PR thread: keep LTR" } })] });
+  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld({ disposition: { state: "dismissed-wont-fix", evidence: "the owner decided in the PR thread: keep LTR" } })] });
 
   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
   expect(gate.status).toBe("fail");
@@ -1714,8 +1715,8 @@ for (const [first, last] of [["dismiss", "uphold"], ["uphold", "dismiss"]] as co
     await fresh();
     const service = createFlowService(makeDeps());
     const { id, dir } = await driveToGates(service);
-    const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
-    const record = heldFinding() as Record<string, unknown>;
+    const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld()] });
+    const record = roundHeld();
     await recordPremiseDecision(packageDir, premiseAnswerInput(record, { finding: "round-1#LY-003", answer: first, at: "2026-10-16T12:00:00Z" }));
     await recordPremiseDecision(packageDir, premiseAnswerInput(record, { finding: "round-1#LY-003", answer: last, reason: "changed my mind", at: "2026-10-16T13:00:00Z" }));
     const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
@@ -1732,8 +1733,8 @@ test("flow 459 — a premise-question entry without confirmedVia leaves the find
   await fresh();
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
-  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
-  const { confirmedVia: _via, ...unconfirmed } = premiseAnswer(heldFinding() as Record<string, unknown>, { finding: "round-1#LY-003" });
+  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld()] });
+  const { confirmedVia: _via, ...unconfirmed } = premiseAnswer(roundHeld(), { finding: "round-1#LY-003" });
   await writeFile(path.join(packageDir, OPERATOR_DECISIONS_FILE), JSON.stringify({ schemaVersion: 1, decisions: [unconfirmed] }), "utf8");
 
   const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
@@ -1746,7 +1747,7 @@ test("flow 459 — a held finding below the floor is named as blocking, not as a
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
   await writeFile(path.join(ROOT, REVIEW_GATE_CONFIG_PATH), `${JSON.stringify({ completion: { severity_floor: "major" } }, null, 2)}\n`, "utf8");
-  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding({ severity: "minor" })] });
+  await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld({ severity: "minor" })] });
 
   const detail = conditionDetail(reviewOf((await service.complete({ cwd: ROOT, id })).gates), "terminal-dispositions");
   expect(detail).toContain("blocking finding(s) are not terminal");
@@ -1763,7 +1764,7 @@ test("flow 459 — a downgraded finding is not held: its lowered severity is the
     flowDir: dir,
     reviewId: "round-1",
     head: HEAD,
-    findings: [heldFinding({ severity: "minor", premise: downgradedPremise("major", "minor") })],
+    findings: [roundHeld({ severity: "minor", premise: downgradedPremise("major", "minor") })],
   });
 
   expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("pass");
@@ -1792,7 +1793,7 @@ test("flow 459 — a round's premise stats reach the round record", async () => 
   await fresh();
   const service = createFlowService(makeDeps());
   const { dir } = await driveToGates(service);
-  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
+  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld()] });
   const scope = await readFile(path.join(packageDir, "scope.md"), "utf8");
   await writeFile(path.join(packageDir, "scope.md"), `${scope}\n## Premise check\n\npremise_claims_received: 1\npremise_claims_applied: 1\npremise_claims_rejected: 0\npremise_held: 1\n`, "utf8");
 

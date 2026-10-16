@@ -14,6 +14,7 @@
 // Every write is a read-modify-write of the whole file. An atomic rename stops a torn file, not a lost update, so the
 // read and the write run under one lock beside the file: two writers that overlap both land.
 
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
@@ -131,8 +132,43 @@ function validDecision(entry: unknown): entry is OperatorDecision | PremiseQuest
   return validGateDecision(entry) || validPremise(entry);
 }
 
+/**
+ * A file name as a case-insensitive, normalisation-insensitive filesystem may compare it (review SEC3-001): NFKC (a
+ * full-width or composed spelling is its plain form), then upper- and lower-cased, so U+017F long s and U+0131 dotless
+ * i land on `s` and `i`, and U+212A Kelvin on `k`. Wider than any one filesystem's match, which is the point: a name
+ * that folds onto an operator-only name is treated as that name.
+ */
+export function foldFileName(name: string): string {
+  return name.normalize("NFKC").toUpperCase().toLowerCase().normalize("NFKC");
+}
+
+/**
+ * The decisions store's path, read by its exact name only (review SEC3-001). Undefined when the package holds no entry
+ * of that exact name: on a case-insensitive volume the plain path would open a look-alike an agent planted
+ * (`operator-deciſions.json`), so the store is never read through a name it does not have. Throws when any other
+ * entry folds to the store's name ({@link foldFileName}): with a look-alike in the package, which file the filesystem
+ * opens is not a fact the reader can trust, so no decision is read or written until it is removed.
+ */
+async function decisionsStorePath(packageDir: string): Promise<string | undefined> {
+  let names: string[];
+  try {
+    names = await readdir(packageDir);
+  } catch {
+    return undefined;
+  }
+  const folded = foldFileName(OPERATOR_DECISIONS_FILE);
+  const lookalikes = names.filter((name) => name !== OPERATOR_DECISIONS_FILE && foldFileName(name) === folded);
+  if (lookalikes.length > 0) {
+    throw new Error(
+      `${path.basename(packageDir)} holds ${lookalikes.map((name) => JSON.stringify(name)).join(", ")}, which a case-insensitive filesystem may read as ${OPERATOR_DECISIONS_FILE}. No operator decision is read or written while it is there: only the operator's own commands write that file, so remove the look-alike and check the decisions again.`,
+    );
+  }
+  return names.includes(OPERATOR_DECISIONS_FILE) ? path.join(packageDir, OPERATOR_DECISIONS_FILE) : undefined;
+}
+
 async function readEntries(packageDir: string): Promise<unknown[]> {
-  const file = await readJsonFileOr<unknown>(path.join(packageDir, OPERATOR_DECISIONS_FILE), undefined);
+  const store = await decisionsStorePath(packageDir);
+  const file = store === undefined ? undefined : await readJsonFileOr<unknown>(store, undefined);
   return file !== null && typeof file === "object" && Array.isArray((file as { decisions?: unknown }).decisions) ? (file as { decisions: unknown[] }).decisions : [];
 }
 
@@ -165,18 +201,26 @@ export async function readPremiseDecisions(packageDir: string): Promise<PremiseQ
   return (await readEntries(packageDir)).filter(validPremise);
 }
 
+/** What an `applyFirst` step hands back: how to undo its write, and a value the caller reads once the decision landed. */
+export type AppliedFirst<A> = { undo: () => Promise<void>; value: A };
+
+/** Appends a premise-question decision (the operator's answer, or one carried from an earlier round). */
+export async function recordPremiseDecision(packageDir: string, input: PremiseDecisionInput): Promise<PremiseQuestionDecision> {
+  return (await recordPremiseDecisionAfter(packageDir, input, async () => undefined)).decision;
+}
+
 /**
- * Appends a premise-question decision. `applyFirst` runs inside the same lock, BEFORE the decision is appended: the
- * answer command uses it to apply the answer to findings.json, so no other writer interleaves between the two files.
- * The two writes land together or not at all (review HL2-003): `applyFirst` returns how to undo its write, and a failed
- * append undoes it before the error reaches the caller. A failed `applyFirst` records nothing. Either way a retry
- * starts from the state before the answer, never from a recorded decision whose findings.json was not updated.
+ * Appends a premise-question decision after `applyFirst`, inside the same lock: the answer command uses it to apply the
+ * answer to findings.json, so no other writer interleaves between the two files. The two writes land together or not
+ * at all (review HL2-003): a failed append runs `applyFirst`'s undo before the error reaches the caller, and a failed
+ * `applyFirst` records nothing. Either way a retry starts from the state before the answer, never from a recorded
+ * decision whose findings.json was not updated. `applied` is `applyFirst`'s value, returned only once both landed.
  */
-export async function recordPremiseDecision(
+export async function recordPremiseDecisionAfter<A>(
   packageDir: string,
   input: PremiseDecisionInput,
-  applyFirst?: (decision: PremiseQuestionDecision) => Promise<(() => Promise<void>) | undefined>,
-): Promise<PremiseQuestionDecision> {
+  applyFirst: (decision: PremiseQuestionDecision) => Promise<AppliedFirst<A> | undefined>,
+): Promise<{ decision: PremiseQuestionDecision; applied: A | undefined }> {
   const kept: PremiseQuestionDecision = {
     kind: PREMISE_DECISION_KIND,
     finding: typeof input.finding === "string" ? input.finding.trim() : input.finding,
@@ -192,16 +236,17 @@ export async function recordPremiseDecision(
   if (!validPremise(kept)) {
     throw new Error("a premise decision needs the finding, an answer of uphold or dismiss, a reason, the operator's words, the time, how it was confirmed and the finding it was shown");
   }
-  await withOperatorDecisionsLock(packageDir, async () => {
-    const undo = await applyFirst?.(kept);
+  const applied = await withOperatorDecisionsLock(packageDir, async () => {
+    const first = await applyFirst(kept);
     try {
       await appendDecision(packageDir, kept);
     } catch (error) {
-      await undo?.();
+      await first?.undo();
       throw error;
     }
+    return first?.value;
   });
-  return kept;
+  return { decision: kept, applied };
 }
 
 function validSubject(value: unknown): value is OperatorDecisionSubject {

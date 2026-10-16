@@ -11,8 +11,8 @@ import path from "node:path";
 import { ASK_USER_EMERGENCIES } from "../harness/tool/builtin/ask-user-tool";
 import type { InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import { AUTOMATIC_REVIEW_DISCLOSURE_FILE } from "../review/chunks-estimate";
-import { OPERATOR_DECISIONS_FILE, OPERATOR_DECISIONS_LOCK } from "../review/operator-decisions";
-import { isReviewPackageDir } from "../review/premise-question";
+import { OPERATOR_DECISIONS_FILE, OPERATOR_DECISIONS_LOCK, foldFileName } from "../review/operator-decisions";
+import { isReviewPackageDir, reviewsRoot } from "../review/package-location";
 import { describeAutomaticReviewLimit } from "./round-limit";
 
 /** The flag that records the mode on a review package's manifest. */
@@ -210,10 +210,17 @@ const PACKAGE_DATA_EXTENSIONS: ReadonlySet<string> = new Set([".md", ".json", ".
 /**
  * Package data only the operator's own commands and cards write (flow 459 review): the operator's decisions, and the
  * lock directory beside them. A patch naming either is never approved without asking, so an agent cannot write an
- * answer the operator did not give. Lower-cased: on a case-insensitive filesystem (APFS, NTFS defaults)
- * `Operator-Decisions.JSON` is the same file.
+ * answer the operator did not give. Folded ({@link foldFileName}): on a case-insensitive filesystem (APFS, NTFS
+ * defaults) `Operator-Decisions.JSON` is the same file.
  */
-const OPERATOR_ONLY_NAMES: ReadonlySet<string> = new Set([OPERATOR_DECISIONS_FILE.toLowerCase(), OPERATOR_DECISIONS_LOCK.toLowerCase()]);
+const OPERATOR_ONLY_NAMES: ReadonlySet<string> = new Set([foldFileName(OPERATOR_DECISIONS_FILE), foldFileName(OPERATOR_DECISIONS_LOCK)]);
+/**
+ * The only path segments an approved patch may name (review SEC3-001). Package data names are keryx's own, all plain
+ * ASCII; a JS case mapping is narrower than a filesystem's name match (U+017F long s folds to `s` on APFS, and
+ * `toLowerCase` leaves it as it is), so a segment with anything else in it could alias an operator-only file and is
+ * left to the operator.
+ */
+const PLAIN_SEGMENT = /^[A-Za-z0-9._-]+$/;
 
 /** Whether `file` exists as an entry, a dangling symlink included (existsSync follows the link). */
 function entryExists(file: string): boolean {
@@ -245,20 +252,24 @@ function realTarget(target: string): string {
   }
 }
 
-/**
- * Whether a patch to `resolved` would touch an operator-only file of the package `dir`, or leave it: any path segment,
- * at any depth, whose case-folded name is one of {@link OPERATOR_ONLY_NAMES}, read both as written and with symlinks
- * resolved (a link named `notes.json` that points at the decisions file is the decisions file).
- */
-function touchesOperatorOnly(dir: string, resolved: string): boolean {
-  const named = (base: string, target: string): boolean =>
-    path
-      .relative(base, target)
-      .split(/[\\/]/)
-      .some((segment) => OPERATOR_ONLY_NAMES.has(segment.toLowerCase()));
-  const real = realTarget(resolved);
-  const realDir = realTarget(dir);
-  return named(dir, resolved) || named(realDir, real) || !real.startsWith(`${realDir}${path.sep}`);
+/** The segments of `target` below `base`. */
+function segmentsBelow(base: string, target: string): string[] {
+  return path.relative(base, target).split(/[\\/]/);
+}
+
+/** Whether every segment of `target` below `base` is plain ASCII ({@link PLAIN_SEGMENT}). */
+function hasOnlyPlainSegments(base: string, target: string): boolean {
+  return segmentsBelow(base, target).every((segment) => PLAIN_SEGMENT.test(segment));
+}
+
+/** Whether any segment of `target` below `base`, at any depth, folds to an operator-only name ({@link OPERATOR_ONLY_NAMES}). */
+function touchesOperatorOnlyName(base: string, target: string): boolean {
+  return segmentsBelow(base, target).some((segment) => OPERATOR_ONLY_NAMES.has(foldFileName(segment)));
+}
+
+/** Whether the real path `real` of a patch target lies outside the real package directory `realDir`. */
+function escapesPackage(realDir: string, real: string): boolean {
+  return !real.startsWith(`${realDir}${path.sep}`);
 }
 
 /**
@@ -308,19 +319,30 @@ export class AutomaticReviewRun {
     return this.approvesPackageCommand(sub, words.slice(3));
   }
 
-  /** Only data files: a test or script written into the package could later be run by an approved command. */
+  /**
+   * Only data files: a test or script written into the package could later be run by an approved command. Each target is
+   * read both as written and with symlinks resolved (a link named `notes.json` that points at the decisions file is the
+   * decisions file, and one that points out of the package leaves it).
+   */
   approvesPatchTargets(targets: readonly string[]): boolean {
     const dir = this.binding?.dir;
     if (dir === undefined || targets.length === 0) {
       return false;
     }
+    const realDir = realTarget(dir);
+    const isData = (file: string): boolean => PACKAGE_DATA_EXTENSIONS.has(path.extname(file).toLowerCase());
     return targets.every((target) => {
       const resolved = path.resolve(this.cwd, target);
+      const real = realTarget(resolved);
       return (
         resolved.startsWith(`${dir}${path.sep}`) &&
-        PACKAGE_DATA_EXTENSIONS.has(path.extname(resolved).toLowerCase()) &&
-        PACKAGE_DATA_EXTENSIONS.has(path.extname(realTarget(resolved)).toLowerCase()) &&
-        !touchesOperatorOnly(dir, resolved)
+        !escapesPackage(realDir, real) &&
+        hasOnlyPlainSegments(dir, resolved) &&
+        hasOnlyPlainSegments(realDir, real) &&
+        isData(resolved) &&
+        isData(real) &&
+        !touchesOperatorOnlyName(dir, resolved) &&
+        !touchesOperatorOnlyName(realDir, real)
       );
     });
   }
@@ -500,8 +522,7 @@ export class AutomaticReviewRun {
       return this.insidePackage(value);
     }
     const resolved = path.resolve(this.cwd, value);
-    const root = path.join(path.resolve(this.cwd), ".metaproject", "reviews") + path.sep;
-    return resolved.startsWith(root);
+    return resolved.startsWith(reviewsRoot(path.resolve(this.cwd)) + path.sep);
   }
 
   private insidePackage(value: string): boolean {

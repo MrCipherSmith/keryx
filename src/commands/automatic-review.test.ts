@@ -220,6 +220,42 @@ test("the decisions guard folds case and looks at every depth: the same file on 
   expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/notes-on-operator-decisions.json.md`])).toBe(true);
 });
 
+test("a non-ASCII spelling that a filesystem may fold onto the decisions file is never approved (review SEC3-001)", () => {
+  const run = boundRun();
+  const spellings = [
+    "operator-deciſions.json", // U+017F long s: APFS folds it to `s`, toLowerCase leaves it
+    "operator-decısions.json", // U+0131 dotless i: upcases to `I`
+    "operator-décisions.json", // NFD: e + combining acute
+    "operator-décisions.json", // NFC é
+    "ｏperator-decisions.json", // full-width o
+    ".operator-decisions.locK/x.json", // U+212A Kelvin sign: NFKC makes it `K`
+    ".operator-deciſions.lock/x.json",
+    "sub/operator-deciſions.json",
+    "notes-été.md", // any non-ASCII segment, even one that aliases nothing
+  ];
+  for (const name of spellings) {
+    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/${name}`])).toBe(false);
+  }
+  expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/research-evidence/notes_1.md`])).toBe(true);
+});
+
+test("a long-s spelling of the decisions file is refused before and after it exists on disk (review SEC3-001)", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "auto-review-fold-"));
+  try {
+    const dir = path.join(cwd, ".metaproject", "reviews", ID);
+    await mkdir(dir, { recursive: true });
+    const run = new AutomaticReviewRun(cwd);
+    run.observe(CREATE, CREATED);
+    const target = `.metaproject/reviews/${ID}/operator-deciſions.json`;
+    expect(run.approvesPatchTargets([target])).toBe(false);
+    await writeFile(path.join(cwd, target), "{}");
+    expect(run.approvesPatchTargets([target])).toBe(false);
+    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/operator-decisions.json`])).toBe(false);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
 test("a symlink inside the package that resolves to the decisions file, or out of the package, is not approved", async () => {
   const cwd = await mkdtemp(path.join(tmpdir(), "auto-review-link-"));
   try {

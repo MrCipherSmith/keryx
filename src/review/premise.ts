@@ -238,22 +238,28 @@ const DOWNGRADE_TARGETS: readonly ReviewFindingSeverity[] = ["major", "minor"];
 function normaliseCarriedPremise<T extends StructuredReviewFinding>(finding: T): T {
   const premise = finding.premise;
   if (premise === undefined) return finding;
-  const stale = premise.severity !== undefined && premise.severity !== finding.severity;
-  const stray = premise.verdict !== "downgraded" && (premise.severity !== undefined || premise.original_severity !== undefined);
-  if (premise.operator === undefined && !stale && !stray) return finding;
+  const severityAgrees = premise.verdict === "downgraded" ? premise.severity === undefined || premise.severity === finding.severity : premise.severity === undefined && premise.original_severity === undefined;
+  // Nothing to strip: the finding itself, so a carried record stays the very object it was.
+  if (premise.operator === undefined && severityAgrees) return finding;
   const { operator: _operator, ...judgement } = premise;
-  if (premise.verdict !== "downgraded") {
-    const { severity: _severity, original_severity: _original, ...rest } = judgement;
-    return { ...finding, premise: rest } as T;
-  }
-  if (!stale) return { ...finding, premise: judgement } as T;
-  const original = premise.original_severity;
-  const stillADowngrade = DOWNGRADE_TARGETS.includes(finding.severity) && isSeverity(original) && severityRank(finding.severity) < severityRank(original);
-  if (!stillADowngrade) {
+  if (premise.verdict !== "downgraded") return { ...finding, premise: withoutSeverities(judgement) };
+  if (severityAgrees) return { ...finding, premise: judgement };
+  if (!downgradeStillHolds(finding.severity, premise.original_severity)) {
     const { premise: _dropped, ...unjudged } = finding;
     return unjudged as T;
   }
-  return { ...finding, premise: { ...judgement, severity: finding.severity } } as T;
+  return { ...finding, premise: { ...judgement, severity: finding.severity } };
+}
+
+/** A judgement without the two severity fields only a `downgraded` verdict may carry. */
+function withoutSeverities(judgement: ReviewFindingPremise): ReviewFindingPremise {
+  const { severity: _severity, original_severity: _original, ...rest } = judgement;
+  return rest;
+}
+
+/** Whether `severity` is still a downgrade the merge could make from `original`: major or minor, strictly below it. */
+function downgradeStillHolds(severity: ReviewFindingSeverity, original: unknown): boolean {
+  return DOWNGRADE_TARGETS.includes(severity) && isSeverity(original) && severityRank(severity) < severityRank(original);
 }
 
 type Field<V> = { ok: true; value: V | undefined } | { ok: false; detail: string };
@@ -705,4 +711,51 @@ export function renderPremiseMarkdown(input: PremiseRenderInput): string {
   }
   lines.push("");
   return lines.join("\n");
+}
+
+/** What an ingest without `--premises` does about the claims a package already holds (see {@link inheritedPremiseClaims}). */
+export type InheritedPremises = { ok: true; parsed: ParsedPremiseClaims } | { ok: false; refusal: string };
+
+/**
+ * An ingest without `--premises` over a package whose findings the judge held (review RG2-004). Ingesting without the
+ * claims would silently return every held finding to the fix loop as an ordinary open finding, and readiness would
+ * pass it as "no finding is held". So the package's stored claims (`stored`, the content of {@link PREMISES_FILE}) are
+ * carried forward when they still hold what they held: every held claim still lands on a finding of `findings`, and
+ * every finding the previous ingest recorded as held (`previousFindings`, its findings.json) is held again for the
+ * same subject (severity, verdict, problem; {@link premiseSubjectOf}). Otherwise the ingest is refused, naming the
+ * findings, so the caller passes `--premises` with claims for what this round reports.
+ *
+ * Undefined when nothing was held: no stored claim holds a finding and no previous record was held.
+ */
+export function inheritedPremiseClaims<T extends StructuredReviewFinding>(findings: readonly T[], stored: unknown, previousFindings: unknown): InheritedPremises | undefined {
+  const previousHeld = (Array.isArray(previousFindings) ? previousFindings : []).filter(isRecord).filter((record) => isRecord(record.premise) && isHeldVerdict(record.premise.verdict));
+  let parsed: ParsedPremiseClaims | undefined;
+  let unreadable: string | undefined;
+  try {
+    parsed = parsePremiseClaims(stored);
+  } catch (error) {
+    unreadable = error instanceof Error ? error.message : String(error);
+  }
+  const heldClaims = (parsed?.claims ?? []).filter((claim) => !isMalformed(claim) && isHeldVerdict(claim.verdict));
+  if (previousHeld.length === 0 && heldClaims.length === 0) return undefined;
+  const refuse = (why: string): InheritedPremises => ({
+    ok: false,
+    refusal: `This package holds findings the premise judge held, and an ingest without --premises would silently return them to the fix loop: ${why}. Pass --premises <file> with the judge's claims for this round (${PREMISES_FILE}, or ${PREMISES_SUPERSEDED_FILE} from an earlier ingest, when they still apply). Nothing was written.`,
+  });
+  if (parsed === undefined) return refuse(unreadable === undefined ? `${PREMISES_FILE} is gone, so the holds cannot be carried` : `${PREMISES_FILE} cannot be read (${unreadable})`);
+  const trial = mergePremises(findings, parsed);
+  const lost = new Set<string>();
+  for (const claim of heldClaims) {
+    const name = claimName(claim);
+    if (trial.rejections.some((rejection) => rejection.finding === name && rejection.reason !== "already-judged")) lost.add(name);
+  }
+  for (const record of previousHeld) {
+    const key = keysOf(record)[0];
+    if (key === undefined) continue;
+    const now: Loose | undefined = trial.findings.find((finding) => keysOf(finding as Loose).includes(key));
+    const subject = premiseSubjectOf(record);
+    if (now === undefined || subject === undefined || !sameSubject(subject, premiseSubjectOf(now))) lost.add(key);
+  }
+  if (lost.size > 0) return refuse(`the stored claims no longer hold ${[...lost].join(", ")} as they did (the finding is gone, or its severity, verdict or problem changed)`);
+  return { ok: true, parsed };
 }
