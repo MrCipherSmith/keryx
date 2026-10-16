@@ -82,6 +82,35 @@ test("a hung subagent is abandoned at its deadline instead of blocking the paren
   }
 });
 
+/** A provider that refuses every request with a normalized error of `kind`. */
+function refusingProvider(kind: "rate_limit" | "overloaded" | "unavailable", retryAfterMs?: number): () => ProviderPort {
+  return () => ({
+    describe: () => DESCRIPTION,
+    stream: (_r, opts) =>
+      (async function* (): AsyncGenerator<NormalizedEvent> {
+        yield {
+          kind: "provider_error",
+          sequence: 0,
+          attemptId: opts.attemptId,
+          error: { kind, retryable: true, message: `429 ${kind}`, ...(retryAfterMs === undefined ? {} : { retryAfterMs }) },
+        };
+      })(),
+  });
+}
+
+test("E5: a rate-limited child is not 'Completed': it reports STATUS: RATE_LIMITED with the provider's retry-after", async () => {
+  const result = await toolWith(refusingProvider("rate_limit", 30_500)).invoke({ task: "review", label: "r1" });
+  expect(result.isError).toBe(true);
+  expect(result.output.split("\n")[0]).toBe("STATUS: RATE_LIMITED (retry-after: 31s)");
+});
+
+test("E5: an overloaded child reports STATUS: RATE_LIMITED too; another provider error does not", async () => {
+  const overloaded = await toolWith(refusingProvider("overloaded")).invoke({ task: "review", label: "r2" });
+  expect(overloaded.output.split("\n")[0]).toBe("STATUS: RATE_LIMITED");
+  const unavailable = await toolWith(refusingProvider("unavailable")).invoke({ task: "review", label: "r3" });
+  expect(unavailable.output).not.toContain("RATE_LIMITED");
+});
+
 test("a fast subagent returns its unused budget, so a session is not capped at three", async () => {
   const tool = toolWith(fastProvider);
   const outcomes: boolean[] = [];

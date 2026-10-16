@@ -1028,6 +1028,19 @@ export interface RunAgentTurnResult {
    * non-empty list into their own crash/outcome classification.
    */
   caughtToolErrors?: CaughtToolError[];
+  /**
+   * The turn ended because the provider refused its request for load (a rate limit or an overloaded
+   * endpoint) and nothing retried it: a run without same-round recovery, which is every subagent child.
+   * `retryAfterMs` is the provider's own hint, when it gave one. The subagent dispatcher reports such a
+   * child as `STATUS: RATE_LIMITED`, the signal the review orchestrator halves its wave on.
+   */
+  rateLimited?: { retryAfterMs?: number };
+}
+
+/** The `rateLimited` result for a turn that ended on `error`, or nothing when the error was not a load refusal. */
+function rateLimitedResult(error: NormalizedError | undefined): Pick<RunAgentTurnResult, "rateLimited"> {
+  if (error === undefined || (error.kind !== "rate_limit" && error.kind !== "overloaded")) return {};
+  return { rateLimited: error.retryAfterMs !== undefined && Number.isFinite(error.retryAfterMs) ? { retryAfterMs: error.retryAfterMs } : {} };
 }
 
 /** One tool call whose `invoke`/`requestApproval` callback threw, caught by {@link runAgentTurnCore}'s own defensive boundary. See {@link RunAgentTurnResult.caughtToolErrors}. */
@@ -1074,10 +1087,13 @@ export const MAX_PLAN_FOLLOW_THROUGHS = 8;
  * every configured provider/local-model combination (a lightly-provisioned
  * local Ollama endpoint, for instance, has none of it, and a burst of
  * concurrent children hammering it at once is a self-inflicted outage, not a
- * speedup). A low single-digit ceiling still gives real wall-clock savings
- * over the old fully-sequential dispatch for the common "review these N
- * things" fan-out, while staying safe as the default for an unknown
- * provider. Overridable per run via {@link AgentDeps.maxSubagentConcurrency}.
+ * speedup). Ten matches the review orchestrator's full wave
+ * (`MAX_REVIEWERS_PER_WAVE_FULL`). A child runs without same-round recovery, so
+ * a provider that pushes back on the burst is not retried inside the child:
+ * the child's turn ends with `RunAgentTurnResult.rateLimited`, and
+ * `spawn_subagent` reports it as `STATUS: RATE_LIMITED`, which is what makes
+ * the orchestrator halve its wave and honour `retry-after`. Overridable per run
+ * via {@link AgentDeps.maxSubagentConcurrency}.
  */
 export const DEFAULT_MAX_SUBAGENT_CONCURRENCY = 10;
 
@@ -3668,6 +3684,8 @@ async function runAgentTurnCore(
     // Flow 387 T6: the round's normalized provider error, held back (not yet
     // printed) when it is a context overflow that may still be recovered.
     let pendingOverflowError: NormalizedError | undefined;
+    // The provider error the round's final attempt ended on, read after the attempt loop.
+    let roundError: NormalizedError | undefined;
 
     let recoveryAttempt = 0;
     for (;;) {
@@ -3871,6 +3889,7 @@ async function runAgentTurnCore(
         }
       }
       attemptComplete = !errored;
+      roundError = attemptError;
       break;
     }
 
@@ -3969,7 +3988,7 @@ async function runAgentTurnCore(
         }
         system(formatProviderErrorMessage(pendingOverflowError));
       }
-      return {};
+      return rateLimitedResult(roundError);
     }
     overflowRetried = false;
     if (calls.length === 0) {
