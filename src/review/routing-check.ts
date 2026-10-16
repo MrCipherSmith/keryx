@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseScopedDiff, type SliceEntry, type SliceManifest } from "./slice";
 import { routeSliceRegions } from "./slice-routing";
-import { expectedFixRoles, fixClaimBacked, fixContextOf, type FixContext } from "./round-split";
+import { expectedFixRoles, fixClaimBacked, fixContextOf, SECOND_LOOK_ROLES, secondLookClaimBacked, type FixContext } from "./round-split";
 
 export type NarrowedSlice = { id: string; missingRoles: string[]; depth?: { recorded: string; needed: "deep" } };
 
@@ -31,10 +31,13 @@ export function narrowedSlices(manifest: Pick<SliceManifest, "slices">, readText
     // with) AND everything its own content routes as a round-1 slice (M3), and a deep read. The round must back the claim;
     // one it does not back is judged as a new slice.
     const backedFix = fixClaimBacked(entry, fix);
-    const roles = backedFix ? [...new Set([...needed.roles, ...expectedFixRoles(entry, fix!)])] : needed.roles;
+    // A second-look slice (unchanged code, one more pass) is read by logic and security-code only: the round must back the
+    // claim, and then the narrower roster is the right one. An unbacked claim is judged as a new slice.
+    const backedSecondLook = secondLookClaimBacked(entry, fix);
+    const roles = backedSecondLook ? [...SECOND_LOOK_ROLES] : backedFix ? [...new Set([...needed.roles, ...expectedFixRoles(entry, fix!)])] : needed.roles;
     const recorded = new Set(entry.roles ?? []);
     const missingRoles = roles.filter((role) => !recorded.has(role)).sort();
-    const shallow = (backedFix || needed.depth === "deep") && entry.depth !== "deep";
+    const shallow = (backedFix || backedSecondLook || needed.depth === "deep") && entry.depth !== "deep";
     if (missingRoles.length > 0 || shallow) {
       narrowed.push({ id: entry.id, missingRoles, ...(shallow ? { depth: { recorded: entry.depth ?? "unset", needed: "deep" as const } } : {}) });
     }

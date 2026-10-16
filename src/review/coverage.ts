@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { NOT_REVIEW_PACKAGES } from "./round-record";
 import { extractStackRequiresField, parseStackRequires, scopeReviewerByStack, detectProjectStack } from "./stack";
 import { collectReviewers, overlapGroupsOf, type ReviewerInventory } from "./reviewers";
 import { CORE_MANDATORY_REVIEWER_IDS } from "./jev-select";
@@ -462,7 +463,7 @@ export async function gitDiffStats(root: string, target: { ref: string; head: st
   try {
     assertGitRevision(target.ref);
     assertGitRevision(target.head);
-    const proc = Bun.spawn(["git", "diff", "--no-color", "-U20", "--end-of-options", `${target.ref}...${target.head}`], { cwd: root, stdout: "pipe", stderr: "pipe", timeout: 15_000, killSignal: "SIGKILL", maxBuffer: 8 * 1024 * 1024 });
+    const proc = Bun.spawn(["git", "diff", "--no-color", "-U20", "--end-of-options", `${target.ref}...${target.head}`, "--", ...NOT_REVIEW_PACKAGES], { cwd: root, stdout: "pipe", stderr: "pipe", timeout: 15_000, killSignal: "SIGKILL", maxBuffer: 8 * 1024 * 1024 });
     const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
     if (exitCode !== 0 || proc.signalCode !== null) return undefined;
     const scope = buildReviewScope(stdout);

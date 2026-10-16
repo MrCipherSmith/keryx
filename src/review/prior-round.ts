@@ -43,6 +43,8 @@ import {
   completionOf,
   findingStatus,
   isOpenStatus,
+  NOT_REVIEW_PACKAGES,
+  previousRoundFacts,
   packageFacts,
   packageHashesOf,
   quoteSha256,
@@ -115,6 +117,10 @@ export type RoundCandidate = {
   hashes?: PackageHashes | undefined;
   /** Set by the trust check. */
   trust?: CandidateTrust | undefined;
+  /** Reasons the round's own record shows it read its scope weakly (uncovered slices, skipped reviewers, "Not run" lines). */
+  weak?: string[] | undefined;
+  /** The merge-base the round recorded in its round.json; undefined when it recorded none. */
+  prevMergeBase?: string | null | undefined;
 };
 
 export type PriorRoundResult = { round: RoundRecord; priorFindings: PriorFinding[]; identity: { targetKey: string; targetBase?: string | undefined } };
@@ -307,12 +313,44 @@ async function distance(git: GitRunner, from: string, head: string): Promise<num
 
 /** The base ref a target's merge-base is read from, and that merge-base: the first of --base, origin/main, main, origin/master, master that resolves. */
 export async function resolveBase(git: GitRunner, target: PriorRoundTarget, head: string): Promise<{ ref: string; sha: string } | null> {
+  // The recorded base (--base / `review plan --ref` / the manifest's target base) comes first. A merged pull request's
+  // merge-base with origin/main is its own head (an empty range), so a candidate that gives an empty range yields to the
+  // next one; when every candidate is empty the first is returned and the caller warns loudly (`emptyRangeWarning`).
+  let empty: { ref: string; sha: string } | null = null;
   for (const ref of [target.base, "origin/main", "main", "origin/master", "master"]) {
     if (ref === undefined || ref === "" || ref.startsWith("-")) continue;
     const sha = await mergeBaseOf(git, ref, head);
-    if (sha !== null) return { ref, sha };
+    if (sha === null) continue;
+    if (!head.toLowerCase().startsWith(sha.toLowerCase()) && !sha.toLowerCase().startsWith(head.toLowerCase())) return { ref, sha };
+    empty ??= { ref, sha };
   }
-  return null;
+  return empty;
+}
+
+/** The loud warning for a round whose range is empty: base and head are the same commit (typically a merged pull request read against its own target branch). */
+export function emptyRangeWarning(base: { ref: string; sha: string } | null, head: string | null): string | undefined {
+  if (base === null || head === null || !(head.toLowerCase().startsWith(base.sha.toLowerCase()) || base.sha.toLowerCase().startsWith(head.toLowerCase()))) return undefined;
+  return `empty review range: base ${base.ref} (${base.sha.slice(0, 12)}) equals head ${head.slice(0, 12)}, so there is nothing to slice. A merged pull request's merge-base with its target branch is its own head: pass the pull request's recorded base (\`review start --base <sha|ref>\`, \`review plan --ref <base>\`) or review an unmerged head.`;
+}
+
+/** New-side hunks of `from` with every line `remove` covers cut out: what `from` holds that `remove` does not. */
+export function subtractHunks(from: readonly RoundHunk[], remove: readonly RoundHunk[]): RoundHunk[] {
+  const out: RoundHunk[] = [];
+  for (const hunk of from) {
+    let pieces: Array<[number, number]> = [[hunk.startLine, hunk.endLine]];
+    for (const cut of remove) {
+      if (cut.file !== hunk.file) continue;
+      pieces = pieces.flatMap(([start, end]): Array<[number, number]> => {
+        if (cut.endLine < start || cut.startLine > end) return [[start, end]];
+        const kept: Array<[number, number]> = [];
+        if (cut.startLine > start) kept.push([start, cut.startLine - 1]);
+        if (cut.endLine < end) kept.push([cut.endLine + 1, end]);
+        return kept;
+      });
+    }
+    for (const [startLine, endLine] of pieces) out.push({ file: hunk.file, startLine, endLine });
+  }
+  return out;
 }
 
 async function mergeBaseOf(git: GitRunner, ref: string, head: string): Promise<string | null> {
@@ -399,9 +437,15 @@ function diskCandidate(dir: string, cwd: string, source: "local-package" | "flow
     completed,
     recordedBase: recordedBaseOf(manifest),
     hashes: packageFacts(dir)?.hashes,
+    ...weakFacts(readJsonFile(path.join(dir, "research.json")), readJsonFile(path.join(dir, "round.json"))),
     eligible,
     manifest,
   };
+}
+
+function weakFacts(research: unknown, round: unknown): Pick<RoundCandidate, "weak" | "prevMergeBase"> {
+  const facts = previousRoundFacts(research, round);
+  return { weak: facts.weak, prevMergeBase: facts.mergeBase };
 }
 
 const strip = ({ eligible: _eligible, manifest: _manifest, ...candidate }: RoundCandidate & { eligible: boolean; manifest: Record<string, unknown> }): RoundCandidate => candidate;
@@ -494,6 +538,7 @@ export async function gitHistoryCandidates(
       completed,
       match,
       recordedBase: recordedBaseOf(manifest),
+      ...weakFacts(parseJson(extras.get(at("research.json"))), parseJson(extras.get(at("round.json")))),
       hashes: packageHashesOf({ manifest: manifests.get(`${entry.commit}:${entry.manifestPath}`), findings: extras.get(at("findings.json")), round: extras.get(at("round.json")) }),
     });
   }
@@ -559,6 +604,8 @@ export function flowCandidates(rounds: readonly ReviewRoundRecord[], cwd: string
       match: "same" as const,
       completed: disk?.completed ?? { ok: false, why: `no package on disk at ${round.dir}` },
       hashes: disk?.hashes,
+      weak: disk?.weak,
+      prevMergeBase: disk?.prevMergeBase,
       findings: priorFindingsOf(round.findings, "flow"),
     }];
   });
@@ -622,8 +669,7 @@ export function parseDiffHunks(diff: string): RoundHunk[] {
   return hunks;
 }
 
-/** The round's code: everything but committed review packages, which record a review rather than being reviewed. */
-export const NOT_REVIEW_PACKAGES = [".", ":(exclude).metaproject/reviews", ":(exclude,glob).metaproject/flows/*/reviews/**"];
+export { NOT_REVIEW_PACKAGES };
 
 /** Lines of slack either side when a hunk is matched to a finding's location. */
 export const FIX_TOLERANCE = 2;
@@ -712,6 +758,22 @@ export async function splitDelta(
     else fixHunks.push({ ...hunk, findingIds: [...named].sort() });
   }
   return { fixHunks, newHunks };
+}
+
+/**
+ * Why the previous round counts as weak (empty: it does not): it did not complete, its own record shows uncovered slices,
+ * skipped required reviewers or "Not run" lines, or it reviewed a scope narrower than the current merge-base..head (its
+ * recorded merge-base is not the current one and not an ancestor of it).
+ */
+export async function weakReasons(git: GitRunner, previous: RoundCandidate, base: { ref: string; sha: string }): Promise<string[]> {
+  const reasons: string[] = [];
+  if (previous.completed !== undefined && !previous.completed.ok) reasons.push(`not completed (${previous.completed.why})`);
+  reasons.push(...(previous.weak ?? []));
+  const was = previous.prevMergeBase;
+  if (typeof was === "string" && was.toLowerCase() !== base.sha.toLowerCase() && !(await isAncestor(git, was, base.sha))) {
+    reasons.push(`it reviewed a scope narrower than the current merge-base..head (its merge-base ${was.slice(0, 12)} is not ${base.sha.slice(0, 12)} or older)`);
+  }
+  return reasons;
 }
 
 async function allHunks(git: GitRunner, base: string | null, head: string): Promise<RoundHunk[]> {
@@ -861,15 +923,34 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
   let fixHunks: FixHunk[] = [];
   let newHunks: RoundHunk[] = [];
   let carried: RoundRecord["carried"] = [];
+  let secondLookHunks: RoundHunk[] = [];
+  let weakPrevious: string | undefined;
+  const warnings: string[] = [];
   if (head !== null && previous !== undefined && choice.mode === "delta") {
     range = { base: previous.reviewedHead, head };
     ({ fixHunks, newHunks } = await splitDelta(git, previous.reviewedHead!, head, previous.findings, commentFindings));
     const attached = new Set(fixHunks.flatMap((hunk) => hunk.findingIds));
     carried = [...previous.findings, ...commentFindings].filter((finding) => !attached.has(finding.id)).map((finding) => ({ findingId: finding.id, disposition: finding.status }));
+    // Cheap second look: code of merge-base..head that did not change since the previous round was read once, by that
+    // round, which may have missed something (a delta round only reads what changed). It gets one more pass by logic and
+    // security-code — or, when that round was itself weak, the full round-1 treatment.
+    if (base !== null && emptyRangeWarning(base, head) === undefined) {
+      const unchanged = subtractHunks(await allHunks(git, base.sha, head), [...fixHunks, ...newHunks]);
+      if (unchanged.length > 0) {
+        const reasons = await weakReasons(git, previous, base);
+        if (reasons.length === 0) secondLookHunks = unchanged;
+        else {
+          weakPrevious = reasons.join("; ");
+          newHunks = [...newHunks, ...unchanged];
+        }
+      }
+    }
   } else if (head !== null) {
     range = { base: base?.sha ?? null, head };
     newHunks = await allHunks(git, range.base, head);
   }
+  const empty = emptyRangeWarning(base, head);
+  if (empty !== undefined) warnings.push(empty);
   if (previous !== undefined) {
     const at = tried.find((attempt) => attempt.source === previous.source);
     if (at !== undefined) at.detail = `${at.detail}; chosen ${previous.reviewId} (${choice.detail})`;
@@ -888,7 +969,10 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
       newHunks,
       carried,
       mergeBase: base?.sha ?? null,
-      ...(previous === undefined ? {} : { modeReason: choice.detail }),
+      ...(previous === undefined ? {} : { modeReason: weakPrevious === undefined ? choice.detail : `${choice.detail}; previous round weak: ${weakPrevious}` }),
+      ...(secondLookHunks.length === 0 ? {} : { secondLookHunks }),
+      ...(weakPrevious === undefined ? {} : { weakPrevious: `previous round weak: ${weakPrevious}` }),
+      ...(warnings.length === 0 ? {} : { warnings }),
     },
     priorFindings,
     identity: { targetKey, ...(base === null ? {} : { targetBase: base.ref }) },

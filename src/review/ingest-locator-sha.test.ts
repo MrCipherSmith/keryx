@@ -53,9 +53,13 @@ test("a quote that is not at the reviewed SHA refuses the ingest, names the find
   await expect(readFile(path.join(dir, ".metaproject", "reviews"), "utf8")).rejects.toThrow();
 });
 
-test("a file that is not in the tree at the SHA refuses too, and says that", async () => {
-  const error = await ingest({ findings: [finding({ file: "src/gone.ts", quote: "anything" })] }).catch((e: Error) => e);
-  expect((error as Error).message).toContain("no such file");
+// Flow 458 AC12 (supersedes the old refusal): a finding's own file absent at the SHA is kept and flagged path_missing;
+// only a quote that fails at a file that EXISTS refuses (above). Citations of absent files are refused elsewhere.
+test("a file that is not in the tree at the SHA is kept, flagged path_missing, not refused", async () => {
+  const result = await ingest({ findings: [finding({ file: "src/gone.ts", quote: "anything" })] });
+  const [kept] = JSON.parse(await readFile(path.join(dir, result.path, "findings.json"), "utf8"));
+  expect(kept.path_missing).toBe(true);
+  expect(kept.locator).toMatchObject({ state: "unlocatable" });
 });
 
 test("a finding the round dismissed is recorded rather than refused", async () => {

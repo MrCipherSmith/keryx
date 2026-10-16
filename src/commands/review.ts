@@ -110,7 +110,7 @@ import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/tracker/
 import { recordRadiusAndPlan } from "../review/chunks";
 import { READINESS_ITEMS, computeReadiness, readinessDepthLines, recountRefusal, readinessLine, renderReadiness } from "../review/readiness";
 import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
-import { findPreviousRound, skippedRound, type PriorRoundDeps } from "../review/prior-round";
+import { findPreviousRound, NOT_REVIEW_PACKAGES, skippedRound, type PriorRoundDeps } from "../review/prior-round";
 import { recordFinishedRound } from "../review/round-registry";
 import { renderRoundLine, ROUND_FILE, writeRoundRecord } from "../review/round-record";
 // Flow 328, AC6: attach the latest CACHED check-ac result to a review
@@ -359,6 +359,8 @@ export const CREATE_FLAGS = [
   // <package|reviewId> names the previous round instead of searching for it.
   "--no-prior-round",
   "--prior",
+  // The base the round's merge-base is read from, ahead of origin/main (a merged PR's merge-base with origin/main is its head).
+  "--base",
 ] as const;
 
 const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers", "--full"] as const;
@@ -1082,7 +1084,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     const forcedPrior = optionValue(args, "--prior");
     const detected = args.includes("--no-prior-round")
       ? skippedRound(roundHead, result.manifest.target)
-      : await findPreviousRound(result.manifest.target, roundHead, {
+      : await findPreviousRound(optionValue(args, "--base") === undefined ? result.manifest.target : { ...result.manifest.target, base: optionValue(args, "--base") }, roundHead, {
           cwd,
           ...createSeams.priorRound,
           ...(result.manifest.flow?.path === undefined ? {} : { flowDir: path.basename(result.manifest.flow.path) }),
@@ -1091,6 +1093,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
         });
     await writeRoundRecord(result.path, detected.round, detected.priorFindings, detected.identity);
     console.log(renderRoundLine(detected.round));
+    for (const warning of detected.round.warnings ?? []) console.error(`warning: ${warning}`);
     console.log(
       `round record: ${path.join(result.path, ROUND_FILE)} (${detected.round.mode}; ${detected.priorFindings.length} prior finding(s); fix hunks ${detected.round.fixHunks.length}, new hunks ${detected.round.newHunks.length})`,
     );
@@ -4085,7 +4088,8 @@ const SLICE_DEPS: SliceDeps = { gitDiff, readDiffSource, parseContextLines, reje
  * than the configured bound.
  */
 async function gitDiff(ref: string | undefined, contextLines: number, head?: string): Promise<string> {
-  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref)), ...(ref === undefined || head === undefined ? [] : [assertGitRevision(head)])];
+  const command = ["git", "diff", "--no-color", `-U${contextLines}`, ...(ref === undefined ? [] : revisionOperand(ref)), ...(ref === undefined || head === undefined ? [] : [assertGitRevision(head)]), "--", ...NOT_REVIEW_PACKAGES];
+  // Committed review/flow packages record a review rather than being reviewed: the same pathspec the delta slicer uses.
   const proc = Bun.spawn(command, { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),

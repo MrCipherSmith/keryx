@@ -1,4 +1,5 @@
 import { type CoverageWaiver, recordCoverageWaiver } from "./coverage-complete";
+import { revisionOperand } from "../lib/git-revision";
 import { flagMissingCitations } from "./rebuttal-citation";
 import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
 import { REPORT_FIELD_EVIDENCE_LEVEL, parseEvidenceLevel } from "./evidence-level";
@@ -1324,7 +1325,7 @@ async function anchorFindings(
 /** Whether `git cat-file -e <spec>` succeeds in `cwd`. */
 async function gitObjectExists(cwd: string, spec: string): Promise<boolean> {
   try {
-    const proc = Bun.spawn(["git", "cat-file", "-e", spec], { cwd, stdout: "ignore", stderr: "ignore", stdin: "ignore" });
+    const proc = Bun.spawn(["git", "cat-file", "-e", ...revisionOperand(spec)], { cwd, stdout: "ignore", stderr: "ignore", stdin: "ignore" });
     return (await proc.exited) === 0;
   } catch {
     return false;
@@ -1332,6 +1333,9 @@ async function gitObjectExists(cwd: string, spec: string): Promise<boolean> {
 }
 
 /**
+ * Rule (two cases, deliberately different): a FINDING's own `file` that is absent at the reviewed head is kept and flagged
+ * `path_missing` here. A CITATION or verification evidence naming a file absent at the SHA is still refused (`citationExists`).
+ *
  * Flow 458 AC12: a finding whose `file` does not exist at the reviewed head is marked `path_missing` (and listed in
  * `scope.md`), never dropped. Skipped when the round records no head, when the head is not in this checkout (nothing could
  * be established), or when a test injects the tree. External comments keep the path GitHub gave them.
