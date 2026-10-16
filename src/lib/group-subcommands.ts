@@ -187,6 +187,7 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "waive-mutation",
       "override-reviewers",
       "confirm-plan",
+      "decide-premise",
       "verify-run",
     ],
   ],

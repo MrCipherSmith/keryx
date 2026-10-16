@@ -29,6 +29,7 @@ Usage:
                      [--memory-query "<query>"]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--verifications <file|->] [--verification-mode off|annotate|filter]
+                      [--premises <file|->]
                       [--scope <scope.json>] [--refuted <file|->]
                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                       [--parallel <n>] [--outstanding <n>]
@@ -578,6 +579,39 @@ alone is capped at `unverifiable`. The default mode is `annotate` — verdicts a
 recorded and **nothing is removed** — so the drop rate is a measured number before
 it costs a real finding. Every package's `scope.md` carries the stage counts:
 dropped by the pre-filter, refuted by the verifier, retained.
+
+## Ask whether the finding is a defect at all
+
+A finding can reproduce and still be wrong: the code may carry an explicit
+override, an exemption note or a sibling doing the same thing, and accepted
+platform practice may back it (media controls and timelines do not mirror in
+right-to-left layouts). The verifier cannot see that, because it checks facts.
+`review-premise` runs after it, on a clean context, and answers `upheld`,
+`downgraded`, `challenged` or `owner-decision` for each finding. Like the
+verifier it **can only hold or lower**, and it never dismisses anything.
+
+```bash
+keryx review ingest --report round7.md --ref round7 \
+  --verifications verifier-result.json \
+  --premises premise-result.json
+```
+
+`--premises` takes the judge's JSON, or a reply that holds it in one
+`` ```json keryx:premises `` block. A `challenged` or `owner-decision` finding is
+**held**: it is not an open blocker or major, it is not handed to a fixer, the
+verdict lists it as "awaiting operator", and readiness and the flow review gate
+fail until you answer. You decide it, at a terminal:
+
+```bash
+keryx review decide-premise --package .metaproject/reviews/round7 \
+  --finding LY-003 --answer dismiss --reason "platforms do not mirror media controls"
+```
+
+`--answer uphold` returns the finding to kept at its original severity;
+`--answer dismiss` records it `dismissed-incorrect` with your reason as the
+evidence. In keryx shell the agent asks you the same question as a
+`review_decide_premise` card. An agent's shell cannot answer for you: the command
+is refused without a terminal.
 
 ## Ingest a report someone already wrote
 

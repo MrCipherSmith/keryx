@@ -66,6 +66,7 @@ export const OPERATOR_CONFIRM_TOOL_NAMES: readonly string[] = [
   "review_override_reviewers",
   "review_comments_reply",
   "review_confirm_plan",
+  "review_decide_premise",
   "flow_confirm",
   "external_apply",
   "learn_accept",

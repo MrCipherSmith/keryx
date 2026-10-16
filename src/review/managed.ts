@@ -1894,6 +1894,32 @@ export function parseEmbeddedFindings(report: string, reportLabel: string): Revi
   return parsed as ReviewFindingsSource;
 }
 
+const EMBEDDED_PREMISES_FENCE = /^ {0,3}(`{3,}|~{3,})[^\n]*\bkeryx:premises\b[^\n]*$/gm;
+
+/**
+ * `--premises` input (flow 459): the bare `{ judge, model?, premises }` object, or a report / judge reply that carries it
+ * in one fenced `keryx:premises` block (what the review-premise skill prints). Anything else throws, and a block that is
+ * present but not valid JSON is an error, never a silent fall-through. The parsed value is not shape-checked here.
+ */
+export function parseEmbeddedPremises(text: string, label: string): unknown {
+  const fences = [...text.matchAll(EMBEDDED_PREMISES_FENCE)];
+  if (fences.length > 1) {
+    throw new Error(`${label} carries ${fences.length} keryx:premises blocks; exactly one is allowed. Nothing was merged.`);
+  }
+  const fence = fences[0];
+  const body = fence === undefined ? text : embeddedBlockBody(text, fence);
+  try {
+    return JSON.parse(body) as unknown;
+  } catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
+    throw new Error(
+      fence === undefined
+        ? `${label} is neither JSON nor a report with a keryx:premises block: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`
+        : `${label} carries a keryx:premises block that is not valid JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`,
+    );
+  }
+}
+
 /** The text between an opening fence and its closing fence of the same marker. */
 function embeddedBlockBody(report: string, fence: RegExpExecArray): string {
   const marker = fence[1] ?? "```";
