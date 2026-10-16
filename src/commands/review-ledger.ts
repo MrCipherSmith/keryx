@@ -4,7 +4,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
-import { DISPATCH_KNOWN_ROLES, packageChangedLines, packageRoundDepth, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
+import { DISPATCH_KNOWN_ROLES, skipLine, type ReviewerSkip, packageChangedLines, packageRoundDepth, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
 import { SLICE_MANIFEST_COPY } from "../review/coverage-complete";
 import { readToolLog } from "../review/layers-usage";
 import { pendingMutants } from "../review/mutate";
@@ -14,15 +14,16 @@ import { narrowedSlices, packageRoutingRefusal, routingRefusal, sliceTextReader 
 import { type SliceManifest, manifestSizeProblem } from "../review/slice";
 import { packagePlanGate } from "../review/estimate";
 
-export const LEDGER_FLAGS = ["--package", "--mode", "--findings", "--dispositions", "--out", "--dry-run", "--json", "--help", "-h"] as const;
-const VALUE_FLAGS = new Set(["--package", "--mode", "--findings", "--dispositions", "--out"]);
+export const LEDGER_FLAGS = ["--package", "--mode", "--findings", "--dispositions", "--out", "--skip", "--reason", "--dry-run", "--json", "--help", "-h"] as const;
+const VALUE_FLAGS = new Set(["--package", "--mode", "--findings", "--dispositions", "--out", "--skip", "--reason"]);
 
 export function printLedgerHelp(): void {
   console.log(`keryx review ledger build — usage:
 
   keryx review ledger build [<input-dir>] [--package <review-dir>] [--mode all|diff]
                             [--findings <findings.json>] [--dispositions <file>]
-                            [--out <research.json>] [--dry-run] [--json]
+                            [--out <research.json>] [--skip <reviewer> --reason "<why>"]...
+                            [--dry-run] [--json]
 
 Builds the research ledger \`keryx review ingest --research\` and \`complete\` demand, from
 files only. <input-dir> holds raw/*.txt (reviewer replies), drivers/*.json and
@@ -38,6 +39,12 @@ Each raw finding becomes an obligation, closed only by a matching canonical find
 valid --dispositions entry ({id, status finding|refuted|out-of-scope|narrowed, evidence, reason,
 finding?, remains? — required for narrowed: what of the finding still stands}; default: the obligations already in research.json). scopeReviewed and rawReconciled
 are true only when established.
+
+--skip <reviewer> --reason "<why>" (repeatable, each --skip followed by its --reason) records a
+required reviewer the operator deliberately did not run: it leaves the dispatch selection, is
+written to dispatch.skipped and as \`Not run: <reviewer> — <why>\` to dispatch.notRun and the
+report, and the reviewer-set gate accepts it with that line on the record. A skip with no
+reason, or of a reviewer the round does not require, is refused.
 
 Slices are dispatched in waves bounded by the manifest's wave budget; a reviewer that covered
 new slices is not penalised for the rest (retry-state.json keeps what it covered).
@@ -191,9 +198,41 @@ async function knownDispatchRoles(ledgerFile: string, driverReviewers: readonly 
   return roles.length === 0 ? undefined : roles;
 }
 
-export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: string[], out: string, ignored: string[], dryRun = false): string {
+/**
+ * `--skip <reviewer> --reason "<why>"` pairs, in order. Each `--skip` takes the next `--reason`; a `--reason` with no
+ * `--skip` before it, a `--skip` left without one, an empty value, or one reviewer skipped twice is refused.
+ */
+export function parseSkips(args: readonly string[]): ReviewerSkip[] {
+  const skips: Array<{ reviewer: string; reason?: string }> = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg !== "--skip" && arg !== "--reason") {
+      if (VALUE_FLAGS.has(arg)) i++;
+      continue;
+    }
+    const value = args[i + 1];
+    if (value === undefined || value.trim() === "" || value.startsWith("--")) throw new Error(`${arg} needs a value: --skip <reviewer> --reason "<why>"`);
+    i++;
+    if (arg === "--skip") {
+      const open = skips.find((skip) => skip.reason === undefined);
+      if (open !== undefined) throw new Error(`--skip ${open.reviewer} has no --reason; give each --skip its own --reason before the next --skip`);
+      if (skips.some((skip) => skip.reviewer === value.trim())) throw new Error(`--skip ${value.trim()} is given twice`);
+      skips.push({ reviewer: value.trim() });
+    } else {
+      const open = skips.find((skip) => skip.reason === undefined);
+      if (open === undefined) throw new Error("--reason must follow the --skip <reviewer> it explains");
+      open.reason = value.trim();
+    }
+  }
+  const unexplained = skips.find((skip) => skip.reason === undefined);
+  if (unexplained !== undefined) throw new Error(`--skip ${unexplained.reviewer} needs --reason "<why>": a skip without a reason is a silent pass`);
+  return skips as ReviewerSkip[];
+}
+
+export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: string[], out: string, ignored: string[], dryRun = false, notRun: readonly string[] = []): string {
   const verb = dryRun ? "would be written" : "written";
   const lines = [ready ? `READY: ${out} ${verb} and satisfies the completion gate.` : `NOT READY: ${out} ${verb}, but the completion gate would refuse it.`];
+  for (const line of notRun) lines.push(`- ${line}`);
   for (const gap of gaps) lines.push(`- gap${gap.reviewer ? ` [${gap.reviewer}]` : ""}: ${gap.detail}\n    next: ${gap.next}`);
   const waves = gaps.filter((gap) => gap.reviewer !== undefined && gap.waves !== undefined && gap.waves > 0);
   if (waves.length > 0) lines.push(`remaining waves: ${waves.map((gap) => `${gap.reviewer} ${gap.waves}`).join(", ")}`);
@@ -263,6 +302,9 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   if (recordedDepth?.stale !== undefined) console.error(`round-depth.json ignored (${recordedDepth.stale}); building the full round. Re-run \`keryx review required --package\` to decide again.`);
   const depth = recordedDepth?.depth;
   const required = await requiredReviewers(root, mode, files, { blastRadius, prContext: packageHasPrContext(packageDir), depth });
+  const skipped = parseSkips(rest);
+  const notRequired = skipped.filter((skip) => !required.required.includes(skip.reviewer));
+  if (notRequired.length > 0) throw new Error(`--skip ${notRequired.map((skip) => skip.reviewer).join(", ")}: not a reviewer this round requires (required: ${required.required.join(", ") || "none"}); nothing to skip`);
   const { payloadSlices, payloadDispatchCounts, ruleFiles, toolLogs: toolLogPaths, assignments, replies, dropped } = await readDrivers(inputDir, root);
   const { raws, ignored, setAside } = await loadRaws(inputDir, { files: replies.files, reviewers: [...new Set([...replies.reviewers, ...required.required])] });
 
@@ -299,6 +341,7 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     canonical,
     dispositions,
     manifestPath: path.relative(process.cwd(), manifestPath),
+    skipped,
   });
   for (const driver of dropped) {
     gaps.push({ reviewer: driver.reviewer, detail: `drivers/${driver.file}: ${driver.unusable} slice entr${driver.unusable === 1 ? "y" : "ies"} without a usable id; none of this dispatch's slices counts as handed to ${driver.reviewer}`, next: `give every entry in drivers/${driver.file} an id string, or an object with an id` });
@@ -310,6 +353,6 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     await writeFileAtomic(out, `${JSON.stringify(ledger, null, 2)}\n`);
     if (manifest !== undefined && path.resolve(packageDir) !== inputDir) await writeFileAtomic(path.join(packageDir, SLICE_MANIFEST_COPY), `${JSON.stringify(manifest, null, 2)}\n`);
   }
-  console.log(rest.includes("--json") ? JSON.stringify({ ready, out, gaps, blockers, ignored, ledger }, null, 2) : renderLedgerReport(ready, gaps, blockers, path.relative(process.cwd(), out) || out, ignored, rest.includes("--dry-run")));
+  console.log(rest.includes("--json") ? JSON.stringify({ ready, out, gaps, blockers, ignored, ledger }, null, 2) : renderLedgerReport(ready, gaps, blockers, path.relative(process.cwd(), out) || out, ignored, rest.includes("--dry-run"), skipped.map(skipLine)));
   if (!ready) process.exitCode = 1;
 }

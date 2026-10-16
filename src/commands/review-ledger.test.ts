@@ -7,7 +7,8 @@ import { coverageErrors, isAttendedRun, requiredReviewers } from "../review/cove
 import type { RawFile } from "../review/ledger";
 import { pendingMutants } from "../review/mutate";
 import { runCoverage } from "./review-chunks";
-import { assignRawDispatch, definitionCandidates, isReviewerReply, loadRaws, readDrivers, runLedger } from "./review-ledger";
+import { assignRawDispatch, definitionCandidates, isReviewerReply, loadRaws, parseSkips, readDrivers, runLedger } from "./review-ledger";
+import { computeVerdict, renderVerdict } from "../review/verdict";
 
 describe("driver files and raw replies (flow 430 AC3, AC4)", () => {
   test("a rule file is found under definition, skill_path, or either key inside payload", () => {
@@ -342,6 +343,88 @@ describe("coverage from the slice manifest of a separate input directory (flow 4
     } finally {
       process.chdir(original);
       await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("ledger build --skip and flow-bound packages (flow 458 AC7)", () => {
+  type Out = { ready: boolean; gaps: Array<{ reviewer?: string; detail: string }>; blockers: string[]; ledger: { dispatch: Record<string, unknown> } };
+
+  async function packageAt(segments: readonly string[]): Promise<{ root: string; pkg: string; cleanup: () => Promise<void> }> {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-f458-ledger-"));
+    const pkg = path.join(root, ".metaproject", ...segments);
+    await mkdir(path.join(pkg, "raw"), { recursive: true });
+    await writeFile(path.join(pkg, "scope-files.json"), JSON.stringify({ files: ["src/a.ts"] }));
+    return { root, pkg, cleanup: () => rm(root, { recursive: true, force: true }) };
+  }
+
+  async function run(args: string[]): Promise<{ text: string }> {
+    const lines: string[] = [];
+    const log = console.log;
+    const exitCode = process.exitCode;
+    console.log = (...items: unknown[]) => void lines.push(items.join(" "));
+    try {
+      await runLedger(["build", ...args], { rejectUnknownFlags: () => undefined });
+    } finally {
+      console.log = log;
+      process.exitCode = exitCode;
+    }
+    return { text: lines.join("\n") };
+  }
+
+  test("a skip with its reason leaves the selection, is written as Not run, and the reviewer-set gate accepts it", async () => {
+    const { root, pkg, cleanup } = await packageAt(["reviews", "pkg"]);
+    try {
+      const required = (await requiredReviewers(root, "all", ["src/a.ts"])).required;
+      const skipped = required.find((name) => name !== "review-logic")!;
+      const out = JSON.parse((await run([pkg, "--mode", "all", "--json", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).text) as Out;
+      expect(out.ledger.dispatch.skipped).toEqual([{ reviewer: skipped, reason: "operator: no style pass on a hotfix" }]);
+      expect(out.ledger.dispatch.notRun).toContain(`Not run: ${skipped} — operator: no style pass on a hotfix`);
+      expect(out.ledger.dispatch.selected).not.toContain(skipped);
+      expect(out.gaps.some((gap) => gap.reviewer === skipped)).toBe(false);
+      expect(out.blockers.join("\n")).not.toContain(skipped);
+      // The gate on the dispatch alone: accepted with the skip, refused without it.
+      const dispatch = { ...out.ledger.dispatch, override: undefined };
+      expect((await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"] })).join("\n")).not.toContain("missing");
+      expect((await coverageErrors({ mode: "all", selected: dispatch.selected }, { root, files: ["src/a.ts"] })).join("\n")).toContain(`missing: ${skipped}`);
+
+      const text = (await run([pkg, "--mode", "all", "--dry-run", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).text;
+      expect(text).toContain(`- Not run: ${skipped} — operator: no style pass on a hotfix`);
+      const verdict = await computeVerdict(pkg);
+      expect(verdict.notRun).toEqual([`Not run: ${skipped} — operator: no style pass on a hotfix`]);
+      expect(renderVerdict(verdict, "pkg")).toContain(`Not run: ${skipped} — operator: no style pass on a hotfix`);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("a skip without a reason, a reason without a skip, and a skip of a reviewer the round does not require are refused", async () => {
+    expect(() => parseSkips(["--skip", "review-style"])).toThrow("needs --reason");
+    expect(() => parseSkips(["--reason", "why"])).toThrow("must follow");
+    expect(() => parseSkips(["--skip", "a", "--skip", "b", "--reason", "x"])).toThrow("has no --reason");
+    expect(() => parseSkips(["--skip", "a", "--reason", ""])).toThrow("needs a value");
+    expect(parseSkips(["--package", "p", "--skip", "a", "--reason", "x", "--skip", "b", "--reason", "y"])).toEqual([
+      { reviewer: "a", reason: "x" },
+      { reviewer: "b", reason: "y" },
+    ]);
+    const { pkg, cleanup } = await packageAt(["reviews", "pkg"]);
+    try {
+      await expect(run([pkg, "--skip", "review-nonexistent", "--reason", "x"])).rejects.toThrow("not a reviewer this round requires");
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("a flow-bound package resolves its project root, so the project's own reviewers are required", async () => {
+    const { root, pkg, cleanup } = await packageAt(["flows", "458-2026-10-16-x", "reviews", "2026-10-16-pr-1"]);
+    try {
+      const overlay = path.join(root, ".metaproject", "project-skills", "review", "acme-review");
+      await mkdir(overlay, { recursive: true });
+      await writeFile(path.join(overlay, "SKILL.md"), "---\nname: acme-review\ndescription: Use when reviewing acme code.\n---\n");
+      const out = JSON.parse((await run([pkg, "--mode", "all", "--json"])).text) as Out;
+      expect(out.ledger.dispatch.selected).toContain("acme-review");
+    } finally {
+      await cleanup();
     }
   });
 });
