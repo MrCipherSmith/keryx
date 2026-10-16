@@ -26,7 +26,7 @@ license: "MIT"
 
 Specialized reviewer for **architectural patterns and structural decisions**.
 Reviews only changes introduced in the current branch (merge-base to HEAD).
-Focuses exclusively on verifiable structural violations — not style opinions or hypothetical concerns. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
+Focuses exclusively on verifiable structural violations — not style opinions or hypothetical concerns. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
 
 ---
 

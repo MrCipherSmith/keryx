@@ -1,0 +1,199 @@
+// Flow 458 AC12: `keryx review next` answers for the whole package at once, with retry-plan's logic per reviewer.
+
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { reviewCommand } from "../commands/review";
+import { renderNext, reviewNext } from "./review-next";
+
+const ORIGINAL_CWD = process.cwd();
+const realError = console.error;
+const realLog = console.log;
+let root = "";
+let pkg = "";
+let logs: string[] = [];
+let errors: string[] = [];
+
+beforeEach(async () => {
+  root = await mkdtemp(path.join(tmpdir(), "gd-review-next-"));
+  pkg = path.join(root, ".metaproject", "reviews", "r1");
+  await mkdir(path.join(pkg, "raw"), { recursive: true });
+  process.chdir(root);
+  logs = [];
+  errors = [];
+  console.log = (...args: unknown[]) => { logs.push(args.map(String).join(" ")); };
+  console.error = (...args: unknown[]) => { errors.push(args.map(String).join(" ")); };
+  process.exitCode = 0;
+});
+
+afterEach(async () => {
+  console.log = realLog;
+  console.error = realError;
+  process.exitCode = 0;
+  process.chdir(ORIGINAL_CWD);
+  await rm(root, { recursive: true, force: true });
+});
+
+function gitFile(filePath: string, count: number): string {
+  const lines = Array.from({ length: count }, (_, n) => `+export const v${n} = ${n};`);
+  return `diff --git a/${filePath} b/${filePath}\n--- a/${filePath}\n+++ b/${filePath}\n@@ -1,0 +1,${count} @@\n${lines.join("\n")}\n`;
+}
+
+/** A package with `files` sliced at `maxBytes`; returns the manifest's slice ids. */
+async function slicePackage(files: Record<string, number>, maxBytes = 30000, waveBytes?: number): Promise<string[]> {
+  await writeFile(path.join(root, "change.diff"), Object.entries(files).map(([name, count]) => gitFile(name, count)).join(""), "utf8");
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", String(maxBytes), ...(waveBytes === undefined ? [] : ["--wave-bytes", String(waveBytes)]), "--package", pkg]);
+  expect(process.exitCode).toBe(0);
+  logs = [];
+  const manifest = JSON.parse(await readFile(path.join(pkg, "slices", "manifest.json"), "utf8")) as { slices: Array<{ id: string }> };
+  return manifest.slices.map((s) => s.id);
+}
+
+const reply = (body: unknown, prose = "Review finished.") => `${prose}\n\nREVIEW_RESULT: ${JSON.stringify(body)}\n`;
+
+test("slice --package writes one driver per reviewer x wave with absolute slice paths and slice ids", async () => {
+  const ids = await slicePackage({ "src/m/a.ts": 40 });
+  const drivers = (await readdir(path.join(pkg, "drivers"))).filter((name) => /-w\d+\.json$/.test(name));
+  expect(drivers).toContain("review-logic-w1.json");
+  const driver = JSON.parse(await readFile(path.join(pkg, "drivers", "review-logic-w1.json"), "utf8"));
+  expect(driver).toMatchObject({ reviewer: "review-logic", wave: 1, slices: ids, result: "raw/review-logic-w1.txt" });
+  expect(driver.slicePaths).toHaveLength(ids.length);
+  for (const entry of driver.slicePaths as Array<{ id: string; path: string }>) {
+    expect(path.isAbsolute(entry.path)).toBe(true);
+    expect(existsSync(entry.path)).toBe(true);
+  }
+});
+
+test("slice --package splits a reviewer's slices into waves, one driver each, and drivers of an older cut are replaced", async () => {
+  await slicePackage({ "src/m/a.ts": 400, "src/m/b.ts": 400, "src/m/c.ts": 400 }, 4000, 4000);
+  const first = (await readdir(path.join(pkg, "drivers"))).filter((name) => name.startsWith("review-logic-w"));
+  expect(first.length).toBeGreaterThan(1);
+  await writeFile(path.join(pkg, "drivers", "review-logic-w1.json"), JSON.stringify({ reviewer: "review-logic", model: "opus", slices: ["x"], result: "raw/review-logic-w1.txt" }));
+  await writeFile(path.join(pkg, "drivers", "review-logic-w9.json"), JSON.stringify({ reviewer: "review-logic", slices: ["stale"] }));
+  await slicePackage({ "src/m/a.ts": 40 });
+  const after = (await readdir(path.join(pkg, "drivers"))).filter((name) => name.startsWith("review-logic-w"));
+  expect(after).toEqual(["review-logic-w1.json"]);
+  // The model the dispatcher recorded in the driver of the same name is kept.
+  expect(JSON.parse(await readFile(path.join(pkg, "drivers", "review-logic-w1.json"), "utf8")).model).toBe("opus");
+});
+
+test("with nothing returned every reviewer is owed its slices (missing), the model hint is echoed, and nothing is written", async () => {
+  const ids = await slicePackage({ "src/m/a.ts": 40 });
+  const driverPath = path.join(pkg, "drivers", "review-logic-w1.json");
+  const driver = JSON.parse(await readFile(driverPath, "utf8"));
+  await writeFile(driverPath, JSON.stringify({ ...driver, model: "sonnet" }));
+  const before = await readdir(path.join(pkg, "slices"));
+  const next = await reviewNext({ packageDir: pkg, reviewers: ["review-logic", "review-style"] });
+  expect(next.done).toBe(false);
+  const logic = next.dispatches.find((entry) => entry.reviewer === "review-logic")!;
+  expect(logic).toMatchObject({ reason: "missing", wave: 1, slices: ids, model: "sonnet", result: "raw/review-logic-w1.txt", driver: "drivers/review-logic-w1.json" });
+  expect(logic.paths.every((file) => path.isAbsolute(file) && existsSync(file))).toBe(true);
+  expect(next.dispatches.find((entry) => entry.reviewer === "review-style")?.reason).toBe("missing");
+  expect(await readdir(path.join(pkg, "slices"))).toEqual(before);
+  expect(existsSync(path.join(pkg, "slices", "retry-state.json"))).toBe(false);
+  expect(renderNext(next)).toContain("model: sonnet");
+  expect(renderNext(next)).toContain("model: model not recorded");
+});
+
+test("done once every reviewer's finished result covers its slices, whatever shape the reply took", async () => {
+  const ids = await slicePackage({ "src/m/a.ts": 40 });
+  await writeFile(path.join(pkg, "raw", "review-logic-w1.txt"), reply({ reviewer: "review-logic", status: "DONE", slices: ids }));
+  // A fenced block, a wrapper key and prose around it: the lenient reader.
+  await writeFile(path.join(pkg, "raw", "review-style-w1.txt"), `All good.\n\`\`\`json\n${JSON.stringify({ result: { reviewer: "review-style", status: "DONE", slices: ids, findings: [] } })}\n\`\`\`\nBye.`);
+  const next = await reviewNext({ packageDir: pkg, reviewers: ["review-logic", "review-style"] });
+  expect(next).toMatchObject({ done: true, dispatches: [], notRun: [], blocked: [] });
+  expect(renderNext(next)).toContain("done — nothing is left to dispatch");
+});
+
+test("a reviewer that finished only some of its waves is owed the rest; a list of per-wave results is merged", async () => {
+  await slicePackage({ "src/m/a.ts": 400, "src/m/b.ts": 400, "src/m/c.ts": 400 }, 4000, 4000);
+  const manifest = JSON.parse(await readFile(path.join(pkg, "slices", "manifest.json"), "utf8")) as { slices: Array<{ id: string }> };
+  const ids = manifest.slices.map((s) => s.id);
+  expect(ids.length).toBeGreaterThan(2);
+  await writeFile(path.join(pkg, "raw", "review-logic-w1.txt"), reply({ reviewer: "review-logic", status: "DONE", slices: ids.slice(0, 1) }));
+  const partial = await reviewNext({ packageDir: pkg, reviewers: ["review-logic"] });
+  expect(partial.done).toBe(false);
+  expect(partial.dispatches).toHaveLength(1);
+  expect(partial.dispatches[0]!.slices).not.toContain(ids[0]);
+  // The agent returns every wave at once as a list.
+  const waves = ids.map((id) => ({ reviewer: "review-logic", status: "DONE", slices: [id] }));
+  await writeFile(path.join(pkg, "raw", "review-logic-w1.txt"), JSON.stringify(waves));
+  expect((await reviewNext({ packageDir: pkg, reviewers: ["review-logic"] })).done).toBe(true);
+});
+
+test("polling again changes nothing: a stalled reviewer is re-cut once with --apply, and the same reply is not counted twice", async () => {
+  const ids = await slicePackage({ "src/m/a.ts": 400 }, 4000, 4000);
+  await writeFile(path.join(pkg, "raw", "review-logic-w1.txt"), reply({ reviewer: "review-logic", status: "INCOMPLETE", slices: [] }));
+  const first = await reviewNext({ packageDir: pkg, reviewers: ["review-logic"] });
+  const second = await reviewNext({ packageDir: pkg, reviewers: ["review-logic"] });
+  expect(second).toEqual(first);
+  expect(first.dispatches[0]).toMatchObject({ reviewer: "review-logic", reason: "stalled", needsApply: true });
+  expect(first.dispatches[0]!.recut).toBeGreaterThan(0);
+  expect(first.dispatches[0]!.slices.every((id) => !ids.includes(id))).toBe(true);
+  expect(existsSync(path.join(pkg, "slices", "retry-state.json"))).toBe(false);
+
+  const applied = await reviewNext({ packageDir: pkg, reviewers: ["review-logic"], apply: true });
+  expect(applied.dispatches[0]).not.toHaveProperty("needsApply");
+  for (const file of applied.dispatches[0]!.paths) expect(existsSync(file)).toBe(true);
+  const state = JSON.parse(await readFile(path.join(pkg, "slices", "retry-state.json"), "utf8"));
+  expect(state.reviewers["review-logic"].attempt).toBe(1);
+
+  // Asking again does not spend another attempt on the reply it already counted.
+  const again = await reviewNext({ packageDir: pkg, reviewers: ["review-logic"] });
+  for (const id of applied.dispatches[0]!.slices) expect(again.dispatches[0]!.slices).toContain(id);
+  expect(again.dispatches[0]!.reason).toBe("retry");
+  const stateAfter = JSON.parse(await readFile(path.join(pkg, "slices", "retry-state.json"), "utf8"));
+  expect(stateAfter.reviewers["review-logic"].attempt).toBe(1);
+});
+
+test("a major finding on a light slice re-opens it deep: the core roles that did not own it are owed it (escalated)", async () => {
+  const ids = await slicePackage({ "docs/guide.md": 30 });
+  const manifestPath = path.join(pkg, "slices", "manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { slices: Array<{ id: string; depth?: string; roles?: string[] }> };
+  expect(manifest.slices[0]!.depth).toBe("light");
+  expect(manifest.slices[0]!.roles).not.toContain("review-architecture");
+  await writeFile(path.join(pkg, "raw", "review-logic-w1.txt"), reply({ reviewer: "review-logic", status: "DONE", slices: ids, findings: [{ id: "F-1", severity: "major", file: "docs/guide.md" }] }));
+  await writeFile(path.join(pkg, "raw", "review-architecture-w1.txt"), reply({ reviewer: "review-architecture", status: "DONE", slices: [] }));
+  const next = await reviewNext({ packageDir: pkg, reviewers: ["review-logic", "review-architecture"] });
+  expect(next.escalated).toEqual([{ slice: ids[0]!, finding: "F-1", by: "review-logic" }]);
+  const architecture = next.dispatches.find((entry) => entry.reviewer === "review-architecture")!;
+  expect(architecture).toMatchObject({ reason: "escalated", slices: ids });
+  expect(next.dispatches.some((entry) => entry.reviewer === "review-logic")).toBe(false);
+  // Read-only: the manifest still says light until --apply.
+  expect((JSON.parse(await readFile(manifestPath, "utf8")) as typeof manifest).slices[0]!.depth).toBe("light");
+  await reviewNext({ packageDir: pkg, reviewers: ["review-logic", "review-architecture"], apply: true });
+  expect((JSON.parse(await readFile(manifestPath, "utf8")) as typeof manifest).slices[0]!.depth).toBe("deep");
+});
+
+test("a reviewer retry-plan marked Not run is listed, not dispatched again", async () => {
+  await slicePackage({ "src/m/a.ts": 400 }, 4000, 4000);
+  const logicReply = path.join(pkg, "raw", "review-logic-w1.txt");
+  const run = async (): Promise<void> => {
+    await reviewCommand(["retry-plan", "--manifest", path.join(pkg, "slices", "manifest.json"), "--result", logicReply, "--reviewer", "review-logic", "--json"]);
+    logs = [];
+  };
+  await writeFile(logicReply, reply({ reviewer: "review-logic", status: "BLOCKED", slices: [] }));
+  await run();
+  await writeFile(logicReply, reply({ reviewer: "review-logic", status: "BLOCKED", slices: [], summary: "again" }));
+  await run();
+  const next = await reviewNext({ packageDir: pkg, reviewers: ["review-logic"] });
+  expect(next.notRun).toHaveLength(1);
+  expect(next.dispatches).toEqual([]);
+  expect(renderNext(next)).toContain("**Not run:** review-logic");
+});
+
+test("the command prints JSON, refuses a package without slices, and a reply it cannot attribute is ignored", async () => {
+  await reviewCommand(["next", "--package", pkg]);
+  expect(process.exitCode).not.toBe(0);
+  expect(errors.join("\n")).toContain("review slice --package");
+  process.exitCode = 0;
+  logs = [];
+  await slicePackage({ "src/m/a.ts": 40 });
+  await writeFile(path.join(pkg, "raw", "mystery.txt"), "no result here");
+  await reviewCommand(["next", "--package", pkg, "--reviewers", "review-logic", "--json"]);
+  const out = JSON.parse(logs.join("\n"));
+  expect(out).toMatchObject({ done: false, applied: false });
+  expect(out.dispatches[0]).toMatchObject({ reviewer: "review-logic", reason: "missing" });
+});

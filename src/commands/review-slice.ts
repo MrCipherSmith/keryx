@@ -1,21 +1,28 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { writeFileAtomic } from "../lib/fs";
 import { placeReviewPath, reviewPathFlagRefusal } from "../lib/review-path-flags";
-import { hasStatus, parseReviewResult } from "../review/ledger";
+import { explainUnparsedResult, parseReviewResult, sha } from "../review/ledger";
 import { layersSummaryLine } from "../review/layers-view";
 import { ensurePackageLayers, resolvePackageDir } from "./review-layers";
 import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
-import { MAX_RETRY_ROUNDS, type RetryState, type ReviewerResult, applyEscalations, emptyRetryState, planRetry, readSliceIds, scopeFingerprint } from "../review/retry-plan";
-import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceEntry, type SliceManifest, buildSlices, manifestSizeProblem, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
+import { MAX_RETRY_ROUNDS, type ReviewerResult } from "../review/retry-plan";
+import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceManifest, buildSlices, manifestSizeProblem, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
 import { packagePlanGate } from "../review/estimate";
+import { packageReviewers, writeWaveDrivers } from "../review/wave-drivers";
+import { RETRY_STATE_NAME, UnreadableInput, commitRetryPlan, evaluateRetry, packageOfManifest, readJsonSource, wholeFileResult, writeSliceFiles } from "../review/retry-eval";
+
+export { packageOfManifest };
 import { resolveActiveReview } from "../review/active-review";
 import { operatorGateApplies } from "../review/run-profile";
 import { commentRuleScopeConfig } from "../review/comment-rule";
 import { renderRoutingSummary, routeSlices, summarizeRouting } from "../review/slice-routing";
+import { NOT_REVIEW_PACKAGES } from "../review/prior-round";
+import { readPriorFindings, readRoundRecord, roundRecordTampered, type RoundRecord } from "../review/round-record";
+import { classifyDeltaSlices, isDeltaRound, regionInSecondLook, splitCounts, tagSecondLookSlices } from "../review/round-split";
 import { defaultWaveBytes, detectReviewHost, HOST_WAVE_BYTES, parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
 
 /** The diff-fetching and flag helpers `review.ts` owns, passed in so this file does not import its caller. */
@@ -32,7 +39,6 @@ export const RETRY_PLAN_FLAGS = ["--manifest", "--result", "--reviewer", "--slic
 
 const DEFAULT_SLICE_DIR = ".metaproject/data/review/slices";
 const MANIFEST_NAME = "manifest.json";
-const RETRY_STATE_NAME = "retry-state.json";
 
 function wantsHelp(args: readonly string[]): boolean {
   return args.includes("--help") || args.includes("-h");
@@ -89,12 +95,32 @@ class hits (auth, crypto, migrations, schema), a file's reach in --reach
 generated. A deterministic 10-15% of light slices (hash of --head, default HEAD, and
 the slice id; none below 4 light slices) run deep as an audit sample (\`audit: true\`).
 
+In a delta round (the package's round.json, written by \`review start\`, names a previous
+round at an ancestor head) only the round's range prevHead..head is cut. A slice holding a
+fix hunk is \`kind: "fix"\` with its \`findingIds\`, read deep by review-logic, review-regression,
+the reviewers that authored those findings AND every role its own content routes as above;
+every other slice is \`kind: "new"\` and routed as above. The delta diff takes the same context,
+exclusions and pre-filters as a round-1 cut and is never larger than merge-base..head (when it
+would be, merge-base..head is cut instead, still split fix/new). Code of merge-base..head that did not change since the previous round gets one more
+look (round.json \`secondLookHunks\`): \`kind: "second-look"\` slices, read once by review-logic and
+review-security-code, findings from them are ordinary findings. When the previous round was weak (not
+completed, uncovered slices, skipped required reviewers, "Not run" lines, or a narrower scope) that code is
+cut as \`new\` instead and round.json says "previous round weak: …". An empty range (base equals head, as
+for a merged pull request read against its target branch) is refused. First and fallback-first
+rounds are cut over --ref as before. A round.json edited after \`review start\` is refused.
+
 Accepts a git diff or the output of \`keryx review scope --scoped-diff\`.
 Writes slice-NN.diff and ${MANIFEST_NAME} into --out, else <review-dir>/slices with --package (where
 retry-plan and the ledger look for them), else ${DEFAULT_SLICE_DIR} (shared by every review: pass
 --package so one review's slices never mix with another's).
 Manifest paths are relative to the manifest. Put each slice's TEXT in the
 reviewer prompt; then \`keryx review dispatch-check\` the payload.
+
+With --package it also writes <review-dir>/drivers/<reviewer>-w<n>.json for every reviewer x wave:
+the slice ids (slices), their ABSOLUTE paths (slicePaths), the wave, the file the reply goes to
+(result: raw/<reviewer>-w<n>.txt) and the reviewer's rule file (definition) when one exists. The
+dispatcher adds "model"; a re-slice keeps it. \`keryx review next --package <review-dir>\` then lists
+what is left to dispatch.
 `);
 }
 
@@ -170,13 +196,6 @@ manifest records \`escalated\`), and \`ledger build\` holds those roles to it.
 `);
 }
 
-async function writeSliceFiles(dir: string, slices: ReadonlyArray<{ path: string; text: string }>): Promise<void> {
-  await mkdir(dir, { recursive: true });
-  for (const slice of slices) {
-    await writeFileAtomic(path.join(dir, slice.path), slice.text);
-  }
-}
-
 export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   if (wantsHelp(args)) {
     printSliceHelp();
@@ -190,23 +209,59 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const diffFile = placed("--diff");
   const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
 
-  const diff = diffFile !== undefined ? await deps.readDiffSource(diffFile) : await deps.gitDiff(ref, contextLines);
+  // Flow 458: a package whose `review start` found a previous round of this target at an ancestor head slices only the
+  // round's range (prevHead..head), then tags each slice fix or new. A first or fallback-first round is cut as before.
+  const packageFlag = optionValue(args, "--out") === undefined ? placed("--package") : undefined;
+  const tampered = packageFlag === undefined ? undefined : roundRecordTampered(packageFlag);
+  if (tampered !== undefined) throw new Error(`review slice refused: ${tampered}`);
+  const round = packageFlag === undefined ? undefined : readRoundRecord(packageFlag);
+  const delta = isDeltaRound(round) && diffFile === undefined ? round : undefined;
+  if (delta !== undefined && ref !== undefined) console.error(`--ref ${ref} ignored: the package's round ${delta.round} is a delta round, sliced over ${delta.range.base}..${delta.range.head}`);
+  let diff: string;
+  if (diffFile !== undefined) diff = await deps.readDiffSource(diffFile);
+  else if (delta !== undefined) {
+    const cut = await deltaSliceDiff(delta, contextLines);
+    if (cut.note !== undefined) console.error(cut.note);
+    diff = cut.diff;
+  } else diff = await deps.gitDiff(ref, contextLines);
   const hostArg = optionValue(args, "--host");
   const host = hostArg === undefined ? detectReviewHost() : parseReviewHost(hostArg);
   if (host === undefined) throw new Error(`--host must be one of ${REVIEW_HOSTS.join(", ")}, got "${hostArg}"`);
   const rawWave = optionValue(args, "--wave-bytes");
   const waveBytes = validateWaveBytes(rawWave === undefined ? defaultWaveBytes(host, maxBytes) : Number(rawWave), maxBytes);
-  const built = buildSlices(sliceSourceFromDiff(diff, { contextLines, ...(await commentRuleScopeConfig(process.cwd())) }), { maxBytes, waveBytes });
+  const scopeConfig = { contextLines, ...(await commentRuleScopeConfig(process.cwd())) };
+  const built = buildSlices(sliceSourceFromDiff(diff, scopeConfig), { maxBytes, waveBytes });
+  // Cheap second look: code of merge-base..head unchanged since the previous round, cut apart from the delta so each slice has one kind.
+  const secondLook = delta === undefined ? undefined : await secondLookSource(delta, contextLines, scopeConfig);
+  const secondBuilt = secondLook === undefined ? undefined : buildSlices(secondLook, { maxBytes, waveBytes });
   // Routing: each slice gets the roles its content needs and a depth by risk; the manifest carries both.
-  const head = optionValue(args, "--head") ?? (await currentHead()) ?? "no-head";
+  const head = optionValue(args, "--head") ?? delta?.range.head ?? (await currentHead()) ?? "no-head";
   const reachFile = placed("--reach");
   const jevFile = placed("--jev-scores");
-  const slices = routeSlices(built.slices, {
+  const routed = routeSlices(built.slices, {
     head,
     ...(reachFile === undefined ? {} : { reach: await readNumberMap(reachFile, "--reach") }),
     ...(jevFile === undefined ? {} : { jevScores: await readNumberMap(jevFile, "--jev-scores") }),
   });
-  const manifest = { ...built.manifest, host, waveBytes, slices: slices.map(({ text: _text, ...entry }) => entry) };
+  const classified = delta === undefined ? routed : classifyDeltaSlices(routed, delta, readPriorFindings(packageFlag!));
+  const second = secondBuilt === undefined || delta === undefined ? [] : tagSecondLookSlices(routeSlices(secondBuilt.slices, { head }), delta.round - 1);
+  const slices = second.length === 0 ? classified : renumberSlices([...classified, ...second]);
+  const omissions = [...built.manifest.omissions, ...(secondBuilt?.manifest.omissions ?? []).filter((omission) => !built.manifest.omissions.some((known) => known.path === omission.path))];
+  const totals = {
+    ...built.manifest.totals,
+    slices: slices.length,
+    bytes: slices.reduce((total, slice) => total + slice.bytes, 0),
+    files: new Set(slices.flatMap((slice) => slice.files)).size,
+    omittedFiles: omissions.length,
+    omittedBytes: omissions.reduce((total, omission) => total + omission.bytes, 0),
+  };
+  // An empty range is refused, not planned: a merged pull request read against its own target branch (base == head) cuts no
+  // slice at all, and `next: dispatch` over zero slices would look like a clean review.
+  if (slices.length === 0 && diffFile === undefined && built.manifest.omissions.length === 0 && (delta !== undefined || round !== undefined || ref !== undefined)) {
+    const base = delta?.range.base ?? round?.range.base ?? ref;
+    throw new Error(`review slice refused: empty review range${base === undefined || base === null ? "" : `: base ${String(base).slice(0, 12)} equals head or changes nothing`} (${head === "no-head" ? "no head" : head.slice(0, 12)}); there is nothing to slice. For a merged pull request pass its recorded base (\`review start --base <sha|ref>\` / \`review plan --ref <base>\`).`);
+  }
+  const manifest = { ...built.manifest, host, waveBytes, omissions, totals, slices: slices.map(({ text: _text, ...entry }) => entry) };
 
   // Placed after the diff is fetched, which can take long: the directory is judged where it is now, right before it is written.
   const packageOut = optionValue(args, "--out") === undefined ? placed("--package") : undefined;
@@ -222,13 +277,82 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const manifestPath = path.join(outDir, MANIFEST_NAME);
   await writeFileAtomic(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
+  // Flow 458 AC12: with a package, one driver per reviewer x wave, absolute slice paths and slice ids, so the dispatcher
+  // and `review next` read the same files the ledger does.
+  const drivers = packageOut === undefined ? [] : await writeWaveDrivers({ packageDir: packageOut, manifest: manifest as SliceManifest, sliceDir: outDir, reviewers: await packageReviewers(packageOut, manifest as SliceManifest) });
   if (args.includes("--json")) {
-    console.log(JSON.stringify({ ...manifest, dir: outDir, manifestPath }, null, 2));
+    console.log(JSON.stringify({ ...manifest, dir: outDir, manifestPath, ...(packageOut === undefined ? {} : { drivers }) }, null, 2));
     return;
   }
   console.log(renderSliceSummary(manifest));
   console.log(renderRoutingSummary(summarizeRouting(manifest.slices)));
+  const split = delta === undefined ? undefined : splitCounts(manifest);
+  if (delta !== undefined && split !== undefined) console.log(`round ${delta.round} delta ${delta.range.base!.slice(0, 12)}..${delta.range.head!.slice(0, 12)}: ${split.fix} fix slice(s) (logic, regression, finding authors), ${split.new} new slice(s)${split.secondLook === undefined ? "" : `, ${split.secondLook} second-look slice(s) (unchanged since round ${delta.round - 1}; logic and security-code read them once)`}`);
   console.log(`\nmanifest: ${manifestPath}`);
+  if (packageOut !== undefined) console.log(`drivers: ${drivers.length} written to ${path.join(packageOut, "drivers")} (one per reviewer x wave; \`keryx review next --package <dir>\` lists what is left)`);
+}
+
+/**
+ * The diff a delta round is sliced from. It goes through exactly what a round-1 cut of the same head goes through — the
+ * same context lines, the same review-package pathspec, and afterwards the same scope pre-filters and omissions in
+ * `sliceSourceFromDiff` — and it is never larger than the round-1 diff merge-base..head: prevHead..head also carries the
+ * lines the fix removed from code the branch itself added (absent from merge-base..head), and when that makes it the
+ * bigger of the two the round is cut from merge-base..head instead, its slices still tagged fix or new by the fix hunks
+ * (which are head-side lines, the same in both).
+ */
+export async function deltaSliceDiff(
+  round: Pick<RoundRecord, "range" | "mergeBase"> & { weakPrevious?: string | undefined },
+  contextLines: number,
+  rangeDiff: (base: string, head: string, contextLines: number) => Promise<string> = gitRangeDiff,
+): Promise<{ diff: string; note?: string | undefined }> {
+  const mergeBase = round.mergeBase;
+  // A weak previous round cannot vouch for the code it left unchanged: the whole merge-base..head is read as in round 1.
+  if (round.weakPrevious !== undefined && mergeBase !== undefined && mergeBase !== null) {
+    return { diff: await rangeDiff(mergeBase, round.range.head!, contextLines), note: `${round.weakPrevious}: sliced over merge-base..head ${mergeBase.slice(0, 12)}..${round.range.head!.slice(0, 12)}, unchanged code read as new, still split fix/new` };
+  }
+  const delta = await rangeDiff(round.range.base!, round.range.head!, contextLines);
+  if (mergeBase === undefined || mergeBase === null || mergeBase === round.range.base) return { diff: delta };
+  const full = await rangeDiff(mergeBase, round.range.head!, contextLines);
+  if (Buffer.byteLength(delta) <= Buffer.byteLength(full)) return { diff: delta };
+  return {
+    diff: full,
+    note: `delta ${round.range.base!.slice(0, 12)}..${round.range.head!.slice(0, 12)} (${Buffer.byteLength(delta)} bytes) is larger than the round-1 diff ${mergeBase.slice(0, 12)}..${round.range.head!.slice(0, 12)} (${Buffer.byteLength(full)} bytes): sliced over merge-base..head, still split fix/new`,
+  };
+}
+
+/** Renumber slices `slice-NN` in order, so ids and file names stay one sequence after two cuts are joined. */
+export function renumberSlices<T extends { id: string; path: string }>(slices: readonly T[]): T[] {
+  const width = Math.max(2, String(slices.length).length);
+  return slices.map((slice, index) => {
+    const id = `slice-${String(index + 1).padStart(width, "0")}`;
+    return { ...slice, id, path: `${id}.diff` };
+  });
+}
+
+/**
+ * The regions of merge-base..head that the delta round does not cover and the previous round already read (the round's
+ * `secondLookHunks`), cut with the same context and pre-filters as every other cut. Undefined when the round has none.
+ */
+export async function secondLookSource(
+  round: Pick<RoundRecord, "range" | "mergeBase" | "secondLookHunks">,
+  contextLines: number,
+  config: Parameters<typeof sliceSourceFromDiff>[1],
+  rangeDiff: (base: string, head: string, contextLines: number) => Promise<string> = gitRangeDiff,
+): Promise<ReturnType<typeof sliceSourceFromDiff> | undefined> {
+  const hunks = round.secondLookHunks ?? [];
+  if (hunks.length === 0 || round.mergeBase === undefined || round.mergeBase === null) return undefined;
+  const source = sliceSourceFromDiff(await rangeDiff(round.mergeBase, round.range.head!, contextLines), config);
+  const regions = source.regions.filter((region) => regionInSecondLook(region, hunks));
+  return regions.length === 0 ? undefined : { ...source, regions };
+}
+
+/** `git diff <base> <head>` of a delta round, without committed review packages (the same pathspec the round's hunks were cut with). */
+async function gitRangeDiff(base: string, head: string, contextLines: number): Promise<string> {
+  for (const sha of [base, head]) if (!/^[0-9a-f]{7,64}$/i.test(sha)) throw new Error(`round.json range ${base}..${head} is not a pair of commit SHAs; re-run \`keryx review start\``);
+  const proc = Bun.spawn(["git", "diff", "--no-color", `-U${contextLines}`, "--no-ext-diff", "--end-of-options", base, head, "--", ...NOT_REVIEW_PACKAGES], { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+  if (exitCode !== 0) throw new Error(`git diff ${base.slice(0, 12)}..${head.slice(0, 12)} failed (exit ${exitCode}): ${stderr.trim()}`);
+  return stdout;
 }
 
 /** The commit the working tree is at; seeds the audit sample. Undefined outside a git checkout. */
@@ -258,22 +382,6 @@ async function readNumberMap(file: string, flag: string): Promise<Record<string,
   return out;
 }
 
-async function readJsonSource<T>(source: string, label: string): Promise<T> {
-  let raw: string;
-  try {
-    raw = source === "-" ? await Bun.stdin.text() : await readFile(source, "utf8");
-  } catch (error) {
-    throw new UnreadableInput(`${label} is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);
-  }
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    throw new UnreadableInput(`${label} is not valid JSON: ${source}`);
-  }
-}
-
-class UnreadableInput extends Error {}
-
 /** A reviewer result: a file that is plain JSON with a status, or a saved raw reply read by `parseReviewResult` (the shapes it accepts are listed in its doc). A truncated or ambiguous reply is refused. */
 async function readResult(source: string): Promise<ReviewerResult> {
   let raw: string;
@@ -283,71 +391,8 @@ async function readResult(source: string): Promise<ReviewerResult> {
     throw new UnreadableInput(`result is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);
   }
   const parsed = wholeFileResult(raw) ?? parseReviewResult(raw);
-  if (parsed === undefined) throw new UnreadableInput(`result holds no usable reviewer result (a JSON object with a status; a \`\`\`REVIEW_RESULT block with a status; or one object with a status and a reviewer or findings, bare or after a REVIEW_RESULT marker; a truncated or ambiguous reply is refused): ${source}`);
+  if (parsed === undefined) throw new UnreadableInput(`result holds no usable reviewer result (a JSON object with a status; a \`\`\`REVIEW_RESULT block with a status; or one object with a status and a reviewer or findings, bare or after a REVIEW_RESULT marker; a truncated or ambiguous reply is refused). Why: ${explainUnparsedResult(raw)}. Also read: a \`\`\`json block, prose around the object, a JSON array of one reviewer's results (one per wave), an object wrapped in result / review_result: ${source}`);
   return parsed as ReviewerResult;
-}
-
-/** A file that is one JSON object with a status is the documented plain-JSON input; `--reviewer` may name a reviewer it leaves out. */
-function wholeFileResult(raw: string): ReviewerResult | undefined {
-  try {
-    const whole: unknown = JSON.parse(raw);
-    return hasStatus(whole) ? whole as ReviewerResult : undefined;
-  } catch { return undefined; }
-}
-
-/**
- * Finished results a reviewer left in the package after its caller stopped waiting: for each driver of `reviewer` that
- * names its result file, a raw file that parses as DONE or DONE_WITH_CONCERNS with no open needs_context covers the slices
- * the driver handed out. `collected` counts those files that add a slice not yet in `known`. Anything unreadable, malformed
- * or unfinished covers nothing.
- */
-async function collectLateResults(packageDir: string, reviewer: string, known: ReadonlySet<string>, fingerprint?: string): Promise<{ covered: string[]; collected: number }> {
-  const covered = new Set<string>();
-  const countedFiles = new Set<string>();
-  let collected = 0;
-  const driversDir = path.join(packageDir, "drivers");
-  if (!existsSync(driversDir)) return { covered: [], collected: 0 };
-  for (const name of (await readdir(driversDir)).filter((entry) => entry.endsWith(".json")).sort()) {
-    let driver: { reviewer?: unknown; slices?: unknown; result?: unknown };
-    try {
-      driver = JSON.parse(await readFile(path.join(driversDir, name), "utf8"));
-    } catch { continue; }
-    if (driver === null || typeof driver !== "object" || driver.reviewer !== reviewer || typeof driver.result !== "string" || !Array.isArray(driver.slices)) continue;
-    const file = path.join(packageDir, "raw", path.basename(driver.result));
-    if (!existsSync(file)) continue;
-    let raw: string;
-    try { raw = await readFile(file, "utf8"); } catch { continue; }
-    const result = wholeFileResult(raw) ?? parseReviewResult(raw);
-    if (result === undefined) continue;
-    const status = String(result.status ?? "").trim().toUpperCase();
-    const open = (Array.isArray(result.needs_context) ? result.needs_context : []).some((item) => String(item).trim() !== "");
-    if (open || (status !== "DONE" && status !== "DONE_WITH_CONCERNS")) continue;
-    if (result.reviewer !== undefined && result.reviewer !== reviewer) continue;
-    const stamped = (result as { scopeFingerprint?: unknown }).scopeFingerprint;
-    if (typeof stamped === "string" && stamped !== fingerprint) continue;
-    const assigned = readSliceIds(driver.slices, "assigned");
-    if (assigned.unusable > 0) continue;
-    // Same rule as the ledger: the reply's own slice list bounded by what was assigned; no list means the whole assignment.
-    const allowed = new Set(assigned.ids);
-    const claimed = result.slices === undefined ? assigned.ids : readSliceIds(result.slices).ids.filter((id) => allowed.has(id));
-    if (!countedFiles.has(file) && claimed.some((id) => !known.has(id) && !covered.has(id))) {
-      collected += 1;
-      countedFiles.add(file);
-    }
-    for (const id of claimed) covered.add(id);
-  }
-  return { covered: [...covered], collected };
-}
-
-/**
- * Flow 457 (T7, audit row 11): the review package a slice manifest belongs to — `<package>/slices/manifest.json` —
- * so retry-plan reads that package's raw/ and drivers/ without `--package`. Undefined for the shared slice directory.
- */
-export function packageOfManifest(manifestDir: string): string | undefined {
-  const candidate = path.dirname(manifestDir);
-  return path.basename(manifestDir) === "slices" && existsSync(path.join(candidate, "manifest.json")) && existsSync(path.join(candidate, "raw"))
-    ? candidate
-    : undefined;
 }
 
 function failUnreadable(error: unknown): void {
@@ -441,10 +486,7 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
 
   try {
     const manifestDir = path.dirname(manifestSource);
-    const manifest = await readJsonSource<SliceManifest>(manifestSource, "manifest");
     const result = resultSource === undefined ? {} : await readResult(resultSource);
-    const statePath = placed("--state", path.join(manifestDir, RETRY_STATE_NAME)) as string;
-    const state = existsSync(statePath) ? await readJsonSource<RetryState>(statePath, "state") : emptyRetryState();
     const reviewer = optionValue(args, "--reviewer") ?? result.reviewer;
     if (reviewer === undefined || reviewer === "") {
       throw new Error("The result names no reviewer; pass --reviewer <id>.");
@@ -452,38 +494,22 @@ export async function runRetryPlan(args: string[], deps: Pick<SliceDeps, "reject
     const sliceList = optionValue(args, "--slices");
     const coveredList = optionValue(args, "--covered");
     const packageSource = placed("--package") ?? packageOfManifest(manifestDir);
-    if (packageSource !== undefined && (!existsSync(packageSource) || !statSync(packageSource).isDirectory())) {
-      throw new Error(`--package ${packageSource} is not a directory.`);
-    }
-    const knownCovered = state.scopeFingerprint === undefined ? [] : state.reviewers[reviewer]?.covered ?? [];
-    const readSliceText = (entry: SliceEntry): string => {
-      const file = path.resolve(manifestDir, entry.path);
-      if (!existsSync(file)) {
-        throw new UnreadableInput(`slice file is missing: ${file}`);
-      }
-      return readFileSync(file, "utf8");
-    };
-    const late = packageSource === undefined ? { covered: [], collected: 0 } : await collectLateResults(packageSource, reviewer, new Set(knownCovered), scopeFingerprint(manifest, readSliceText));
-    const coveredIds = [...(coveredList === undefined ? [] : coveredList.split(",").map((item) => item.trim()).filter(Boolean)), ...late.covered];
-    const plan = planRetry({
-      manifest,
+    const statePath = placed("--state", path.join(manifestDir, RETRY_STATE_NAME)) as string;
+    const evaluation = await evaluateRetry({
+      manifestSource,
       result,
       reviewer,
-      ...(sliceList === undefined ? {} : { sliceIds: sliceList.split(",").map((item) => item.trim()).filter(Boolean) }),
-      ...(coveredIds.length === 0 ? {} : { covered: coveredIds }),
-      ...(nextWave ? { nextWave } : {}),
-      state,
-      readSliceText,
+      statePath,
+      ...(packageSource === undefined ? {} : { packageSource }),
+      ...(sliceList === undefined ? {} : { sliceList: sliceList.split(",").map((item) => item.trim()).filter(Boolean) }),
+      ...(coveredList === undefined ? {} : { coveredList: coveredList.split(",").map((item) => item.trim()).filter(Boolean) }),
+      nextWave,
     });
+    const { plan, late } = evaluation;
 
     if (!args.includes("--dry-run")) {
-      if (plan.newSlices.length > 0 || plan.escalations.length > 0) {
-        await writeSliceFiles(manifestDir, plan.newSlices);
-        const added = plan.newSlices.map(({ text: _text, ...entry }) => entry);
-        const escalated = applyEscalations(manifest, plan.escalations);
-        await writeFileAtomic(manifestSource, `${JSON.stringify({ ...escalated, slices: [...escalated.slices, ...added] }, null, 2)}\n`);
-      }
-      await writeFileAtomic(statePath, `${JSON.stringify(plan.state, null, 2)}\n`);
+      const processed = resultSource === undefined || resultSource === "-" ? undefined : sha(await readFile(resultSource, "utf8"));
+      await commitRetryPlan(evaluation, processed);
     }
 
     const dispatch = plan.wave.map((slice) => ({ reviewer, slice: slice.id, path: slice.path, bytes: slice.bytes }));

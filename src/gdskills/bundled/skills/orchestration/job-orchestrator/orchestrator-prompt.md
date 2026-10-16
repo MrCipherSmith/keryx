@@ -179,7 +179,7 @@ If `blocker` or `major` findings exist:
 1. Group by file
 2. Launch task-implementer (`task_type: "fix"`) with the findings
 3. Run the sanity check — verify commits were made
-4. Run the NEXT managed round (the whole REVIEW sequence above, `is_fix_round: true`)
+4. Run the NEXT managed round: `keryx review plan --target branch --ref <feature-branch> --head <new-head>` (or `review start`) on the new head, then review-orchestrator. The round, range and prior findings come from `round.json`: no own range, no `--all` per round, no whole-branch re-review.
 5. Disposition every finding of the previous round:
    ```bash
    keryx review complete <review-id> --finding F-001 --disposition acted-on --evidence "<commit>"

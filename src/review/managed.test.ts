@@ -1842,6 +1842,59 @@ test("R1-10: `--waive-coverage` is a human-confirmation command the approval flo
   expect(touchesCoverageWaiver("keryx review complete --package p")).toBe(false);
 });
 
+describe("ingest into an existing package defaults to its recorded head (flow 458 AC7)", () => {
+  async function git(...args: string[]): Promise<string> {
+    const proc = Bun.spawn(["git", ...args], { cwd: ROOT, stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_COMMITTER_NAME: "t" } });
+    const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+    if (code !== 0) throw new Error(`git ${args.join(" ")}: ${err}`);
+    return out.trim();
+  }
+
+  async function commit(message: string): Promise<string> {
+    await writeFile(path.join(ROOT, "file.txt"), `${message}\n`, "utf8");
+    await git("add", "file.txt");
+    await git("commit", "-q", "-m", message);
+    return git("rev-parse", "HEAD");
+  }
+
+  const ingest = (head?: string) =>
+    createManagedReviewPackage({
+      cwd: ROOT,
+      mode: "ingest",
+      reviewId: "2026-10-16-head",
+      target: { kind: "branch", ref: "feature", ...(head === undefined ? {} : { head }) },
+      reportText: "# Round\n",
+      findings: [],
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+
+  test("a re-ingest with no --head records the package head, not the moved checkout", async () => {
+    await fresh();
+    await git("init", "-q");
+    const first = await commit("one");
+    const created = await ingest();
+    expect(created.manifest.target.head).toBe(first);
+    const second = await commit("two");
+    expect(second).not.toBe(first);
+    const again = await ingest();
+    expect(again.manifest.target.head).toBe(first);
+    // An explicit --head still wins.
+    expect((await ingest(second)).manifest.target.head).toBe(second);
+  });
+
+  test("a recorded head this checkout does not have is refused, naming the commit", async () => {
+    await fresh();
+    await git("init", "-q");
+    await commit("one");
+    const created = await ingest();
+    const manifestFile = path.join(ROOT, created.path, "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+    manifest.target.head = "0123456789abcdef0123456789abcdef01234567";
+    await writeFile(manifestFile, JSON.stringify(manifest), "utf8");
+    await expect(ingest()).rejects.toThrow("0123456789ab, and that commit is not in this checkout");
+  });
+});
+
 // These synthetic fixtures exercise disposition/ingest, not outstanding research.
 // The pending default is exercised without this helper in research.test.ts.
 function createManagedReviewPackage(input: ManagedReviewIngestInput) {

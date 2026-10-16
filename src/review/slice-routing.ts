@@ -143,6 +143,33 @@ export function deepRosterRoles(files: readonly string[]): string[] {
   });
 }
 
+/**
+ * Overlap groups of the bundled reviewers (flow 458 AC6): members read the same lines, so a slice gets ONE of them, the
+ * first listed that its content routes. Ranked most specific first, the order `overlapGroupsOf` derives from the
+ * reviewers' `metadata.overlap_group` / `overlap_rank` frontmatter; `slice-routing.test.ts` pins this constant to that
+ * frontmatter so the two cannot drift. A constant rather than a read, because routing is pure and both the router
+ * (`keryx review slice`) and the narrowing check (`routing-check.ts`) must collapse the same way.
+ *
+ * `frontend`: review-frontend is kept over review-frontend-conventions. Its rubric is the broader one — React component
+ * correctness, the full MobX store checklist and TypeScript safety, consolidated from code-style-review and
+ * code-mobx-store-review — while the conventions reviewer restates whatever a repository's CLAUDE.md says about the same
+ * code, which a project overlay states more precisely when the project has one.
+ */
+export const BUNDLED_OVERLAP_GROUPS: Readonly<Record<string, readonly string[]>> = {
+  frontend: ["review-frontend", "review-frontend-conventions"],
+};
+
+/** Keep one member of each overlap group: the first-ranked one present in `roles`. */
+export function collapseOverlapGroups(roles: Iterable<string>, groups: Readonly<Record<string, readonly string[]>> = BUNDLED_OVERLAP_GROUPS): string[] {
+  const kept = new Set(roles);
+  for (const members of Object.values(groups)) {
+    const winner = members.find((member) => kept.has(member));
+    if (winner === undefined) continue;
+    for (const member of members) if (member !== winner) kept.delete(member);
+  }
+  return [...kept];
+}
+
 /** Routable roles that still run with no slice routed to them: the regression reviewer reads scope B (blast-radius chunks), not only slices. */
 export const ROLES_RUN_WITHOUT_SLICES: ReadonlySet<string> = new Set([REGRESSION_ROLE]);
 
@@ -161,6 +188,8 @@ export type RoutingOptions = {
   /** Every changed file of the diff, for the nearby-test fact. Defaults to the files of the slices routed. */
   changedFiles?: readonly string[] | undefined;
   auditRate?: number | undefined;
+  /** Overlap groups to collapse per slice; defaults to {@link BUNDLED_OVERLAP_GROUPS}. */
+  overlapGroups?: Readonly<Record<string, readonly string[]>> | undefined;
 };
 
 export type SliceRouting = { roles: string[]; depth: SliceDepth; risk: { score: number; why: string[] }; audit?: boolean };
@@ -238,7 +267,7 @@ export function routeSliceRegions(id: string, regions: readonly ScopedRegion[], 
     }
   }
   if (deep) for (const role of deepRosterRoles(files)) roles.add(role);
-  return { roles: [...roles].sort(), depth: deep ? "deep" : "light", risk: { score: Number(score.toFixed(2)), why } };
+  return { roles: collapseOverlapGroups(roles, options.overlapGroups).sort(), depth: deep ? "deep" : "light", risk: { score: Number(score.toFixed(2)), why } };
 }
 
 const auditKey = (head: string, id: string): string => createHash("sha256").update(`${head}\0${id}`).digest("hex");

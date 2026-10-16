@@ -8,11 +8,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseScopedDiff, type SliceEntry, type SliceManifest } from "./slice";
 import { routeSliceRegions } from "./slice-routing";
+import { expectedFixRoles, fixClaimBacked, fixContextOf, SECOND_LOOK_ROLES, secondLookClaimBacked, type FixContext } from "./round-split";
 
 export type NarrowedSlice = { id: string; missingRoles: string[]; depth?: { recorded: string; needed: "deep" } };
 
 /** Slices whose recorded routing is narrower than their content needs. `readText` returns undefined when unreadable. */
-export function narrowedSlices(manifest: Pick<SliceManifest, "slices">, readText: (entry: SliceEntry) => string | undefined): { narrowed: NarrowedSlice[]; unreadable: string[] } {
+export function narrowedSlices(manifest: Pick<SliceManifest, "slices">, readText: (entry: SliceEntry) => string | undefined, fix?: FixContext): { narrowed: NarrowedSlice[]; unreadable: string[] } {
   const originals = manifest.slices.filter((entry) => entry.retryOf === undefined && Array.isArray(entry.roles));
   const changedFiles = [...new Set(manifest.slices.filter((entry) => entry.retryOf === undefined).flatMap((entry) => entry.files))];
   const narrowed: NarrowedSlice[] = [];
@@ -26,9 +27,17 @@ export function narrowedSlices(manifest: Pick<SliceManifest, "slices">, readText
     // Slice files are always written in the scoped format (like `routeSlices` reads them). Sniffing the format would let
     // an added line that starts with `++ ` pass for a git header and route the slice as an empty unified diff.
     const needed = routeSliceRegions(entry.id, parseScopedDiff(text), { changedFiles });
+    // A fix slice of a delta round (flow 458) must have the fix roster (computed with the function `review slice` routes
+    // with) AND everything its own content routes as a round-1 slice (M3), and a deep read. The round must back the claim;
+    // one it does not back is judged as a new slice.
+    const backedFix = fixClaimBacked(entry, fix);
+    // A second-look slice (unchanged code, one more pass) is read by logic and security-code only: the round must back the
+    // claim, and then the narrower roster is the right one. An unbacked claim is judged as a new slice.
+    const backedSecondLook = secondLookClaimBacked(entry, fix, text);
+    const roles = backedSecondLook ? [...SECOND_LOOK_ROLES] : backedFix ? [...new Set([...needed.roles, ...expectedFixRoles(entry, fix!)])] : needed.roles;
     const recorded = new Set(entry.roles ?? []);
-    const missingRoles = needed.roles.filter((role) => !recorded.has(role));
-    const shallow = needed.depth === "deep" && entry.depth !== "deep";
+    const missingRoles = roles.filter((role) => !recorded.has(role)).sort();
+    const shallow = (backedFix || backedSecondLook || needed.depth === "deep") && entry.depth !== "deep";
     if (missingRoles.length > 0 || shallow) {
       narrowed.push({ id: entry.id, missingRoles, ...(shallow ? { depth: { recorded: entry.depth ?? "unset", needed: "deep" as const } } : {}) });
     }
@@ -66,7 +75,7 @@ export function packageRoutingRefusal(packageDir: string, projectRoot: string, o
     }
     if (manifest === undefined) continue;
     const readers = dirs.map((dir) => sliceTextReader(dir));
-    const { narrowed, unreadable } = narrowedSlices(manifest, (entry) => readers.map((read) => read(entry)).find((text) => text !== undefined));
+    const { narrowed, unreadable } = narrowedSlices(manifest, (entry) => readers.map((read) => read(entry)).find((text) => text !== undefined), fixContextOf(packageDir));
     const label = path.relative(projectRoot, file) || file;
     const refusal = routingRefusal(label, narrowed);
     if (refusal !== undefined || options.refuseUnreadable !== true || unreadable.length === 0) return refusal;

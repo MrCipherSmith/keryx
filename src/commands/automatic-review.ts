@@ -23,7 +23,7 @@ export const AUTOMATIC_REVIEW_FLAG = "--automatic";
  * - create: `start`, `attach`, `ingest` (only with `--automatic`, once per run)
  * - positional package ref: `status`, `report-parity`, `complete`
  * - `--package <dir>`: `ledger build`, `severity-audit`, `mutate`, `compare-reference`, `context-collect`
- * - files inside the package: `retry-plan --manifest`
+ * - files inside the package: `retry-plan --manifest`; `next --package` (writes only inside it)
  * - read-only analysis, output only inside the package: `scope`, `blast-radius`
  * Everything else under `review` (the other subcommands) keeps its normal approval.
  */
@@ -41,6 +41,7 @@ export const AUTOMATIC_REVIEW_PACKAGE_SUBCOMMANDS = [
   ...AUTOMATIC_REVIEW_POSITIONAL_SUBCOMMANDS,
   ...AUTOMATIC_REVIEW_PACKAGE_FLAG_SUBCOMMANDS,
   "retry-plan",
+  "next",
   ...AUTOMATIC_REVIEW_ANALYSIS_SUBCOMMANDS,
 ] as const;
 
@@ -408,6 +409,8 @@ export class AutomaticReviewRun {
       case "chunks":
         return inPackage(one("--package")) && !flags.has("--answer") && !flags.has("--quote") && absentOrUnderCwd("--result");
       case "coverage":
+        return inPackage(one("--package"));
+      case "next":
         return inPackage(one("--package"));
       case "retry-plan":
         return inPackage(one("--manifest")) && absentOrInPackage("--state") && absentOrUnderCwd("--result");

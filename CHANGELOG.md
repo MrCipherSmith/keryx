@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+- **Review rounds 2+ review the delta.** `keryx review start` finds the previous round of the same target — local package, review packages merged into the base branch, keryx's own round block on the PR, other PR comments, the flow package — and splits the change since the previous reviewed head into FIX changes (logic, regression and the authors of the attached findings, plus the slice's normal routing; every attached finding gets a disposition) and NEW changes (round-1 treatment). Code unchanged since the previous round gets a second look by review-logic and review-security-code, or a full review when the previous round was weak. Every orchestrator gets this by just calling `review start`; round details land in `<package>/round.json`.
+- **A previous round counts only when it is ours:** our own login's round block on the PR, a completed package merged into the base, or a matching entry in the machine-local round registry (written at ingest, complete and publish). A package the PR committed itself, a draft, or another branch's package gives a full round with the old findings as context.
+- **`keryx review plan`** runs start, scope, blast radius, slice, required and estimate in one step and writes plan.json; **`keryx review next`** returns the next dispatches for the whole package (no per-reviewer polling).
+- `review publish` adds a hidden machine-readable round block (no raw quotes); `comments collect` reads it back.
+
+### Changed
+- Duplicate findings from different reviewers merge at ingest with one severity (the verifier's when present) and `reported_by`; later waves get `known_findings`.
+- Overlapping reviewer lines (the frontend family, project overlays via `supersedes`) collapse to one per slice; the core roles are never removed.
+- Reviewers are read-only except the verifier and one testing reviewer with a time budget.
+- flow-orchestrator plans a state × event matrix for UI/store work, gates after the first green, asks the operator about user-visible tradeoffs (`behavior_changes`), treats a reviewer's suggested fix as a hypothesis, and sends one implementer when red probes exist; job-orchestrator, feature-dev and review-pr-feedback take the round from `review start` instead of re-reviewing the whole branch.
+- Reviewer results are parsed leniently (fenced JSON, wrapper keys, lists of one reviewer's results) with a precise refusal otherwise; `review slice --package` writes per-wave drivers with absolute paths; dispositions have one validated schema; drivers and results record the model.
+
+### Fixed
+- `ledger build` finds the project root for flow-bound packages; `--skip` of a required reviewer needs an operator decision; ingest into an existing package defaults to its head and refuses a missing commit; findings on a path absent at the reviewed head are flagged `path_missing`.
+- A merged PR no longer yields a silently empty review range; committed review packages are excluded from slices.
+
 ## [0.3.119] - 2026-10-16
 
 ### Added

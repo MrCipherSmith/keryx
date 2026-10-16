@@ -102,6 +102,8 @@ export const TRUST_ROUTINE_KEYRYX: readonly RoutineKeryxEntry[] = [
   ]),
   // The same refusals `automatic-review` makes: --write-wiki rewrites tracked wiki pages in the working copy, and
   // --answer/--quote lift the chunk ceiling on the operator's word.
+  // `review next` only lists what is left to dispatch; --apply writes the drivers and the retry state.
+  row(["review", "next"], { refuseFlags: ["--apply"] }),
   row(["review", "layers"], { refuseFlags: ["--write-wiki"] }),
   row(["review", "chunks"], { refuseFlags: ["--answer", "--quote"] }),
   ...rows("flow", ["status", "list", "check", "next"]),

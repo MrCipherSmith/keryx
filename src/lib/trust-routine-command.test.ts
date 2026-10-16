@@ -803,6 +803,13 @@ test("R3-02: --write-wiki rewrites tracked wiki pages, so a layers refresh that 
   }
 });
 
+test("review next lists what is left and is routine; --apply writes drivers and retry state, so it asks", () => {
+  expect(isTrustRoutineCommand("keryx review next --package .metaproject/reviews/r1")).toBe(true);
+  for (const command of ["keryx review next --package .metaproject/reviews/r1 --apply", "keryx review next --apply --package .metaproject/reviews/r1", "keryx review next --package .metaproject/reviews/r1 --apply=true"]) {
+    expect(isTrustRoutineCommand(command)).toBe(false);
+  }
+});
+
 test("R3-02: a chunks command that carries --answer or --quote is not routine on the table's own account", () => {
   for (const flag of ["--answer yes", "--answer=yes", "--quote x", "--quote=x"]) {
     expect(isTrustRoutineCommand(`keryx review chunks next --package .metaproject/reviews/r1 ${flag}`)).toBe(false);

@@ -22,7 +22,7 @@ license: "MIT"
 # Review: Regression
 
 You are reviewing **scope B** of a deep round. The files you are given are not
-under review. They are under **regression check**. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
+under review. They are under **regression check**. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
 
 ## The one question
 
@@ -164,7 +164,7 @@ rejected anyway, so in practice every finding you report carries one.
 ```
 
 Severity comes from **Severity (canonical)** in `review-orchestrator/SKILL.md`; no table here. When dispatched, follow the `reviewer-input.schema.json` payload and return a `REVIEW_RESULT` object compatible with
-`.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a short summary; `NEEDS_CONTEXT` rather than a guess.
+`.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a short summary; `NEEDS_CONTEXT` rather than a guess. On a FIX slice, also return `prior_dispositions: [{id, disposition}]` for every attached finding id.
 
 ### Shared laws (every reviewer)
 

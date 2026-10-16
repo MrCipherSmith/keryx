@@ -27,7 +27,7 @@ license: "MIT"
 
 Specialized reviewer for **logic correctness and algorithmic soundness**.
 Inherits from the original `code-ai-review` + `code-learned-review` correctness phases
-and unifies them into a single focused pass. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
+and unifies them into a single focused pass. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
 
 This reviewer does not care about formatting, naming, or architecture opinions.
 Every finding must describe an observable, reproducible defect or a spec gap.
@@ -193,7 +193,7 @@ earlier review round, because there the finding is recorded as closed and is not
 
 ## Orchestrated Review Contract
 
-When dispatched by `review-orchestrator`, follow the provided `reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible with `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a concise markdown summary. Keep findings evidence-based, include concrete `suggested_fix` for every blocker/major, and return `NEEDS_CONTEXT` instead of guessing when required context is missing.
+When dispatched by `review-orchestrator`, follow the provided `reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible with `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a concise markdown summary. Keep findings evidence-based, include concrete `suggested_fix` for every blocker/major, and return `NEEDS_CONTEXT` instead of guessing when required context is missing. On a FIX slice, also return `prior_dispositions: [{id, disposition}]` for every attached finding id.
 
 ---
 

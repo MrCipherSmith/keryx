@@ -6,7 +6,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
-import { mentionsFindingId, minorSection, partialPublishHeader, PUBLISHED_BODY_LIMIT, publishReview, reviewEvent, type PostResult, type ReviewEvent } from "./publish";
+import { buildRoundBlock, mentionsFindingId, minorSection, partialPublishHeader, PUBLISHED_BODY_LIMIT, publishReview, reviewEvent, ROUND_BLOCK_LIMIT, type PostResult, type ReviewEvent } from "./publish";
+import { parseRoundBlocks, renderRoundBlock } from "./pr-comments";
+import { quoteSha256 } from "./round-record";
 import { computeReadiness } from "./readiness";
 import type { VerdictFinding } from "./verdict";
 
@@ -104,7 +106,45 @@ describe("publishReview", () => {
     const io = seams();
     const result = await publishReview(pkg, { event: "APPROVE", post: io.post, confirm: io.confirm });
     expect(result).toMatchObject({ posted: true, partial: false });
-    expect(io.posts[0]!.body).toBe("# Review\n\nRequest changes.\n");
+    const body = io.posts[0]!.body;
+    expect(body.startsWith("# Review\n\nRequest changes.\n")).toBe(true);
+    // Flow 458: the only addition is the hidden round block at the foot.
+    expect(body.replace(/\n<!-- keryx:round .* -->\n$/, "")).toBe("# Review\n\nRequest changes.\n");
+  });
+
+  test("flow 458: the round block round-trips publish -> parse, and published.json records head and review id", async () => {
+    makePackage({ ready: true });
+    const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
+    write("manifest.json", { ...manifest, target: { ...manifest.target, head: "abcdef1234567" } });
+    write("round.json", { v: 1, round: 3 });
+    write("report.md", "# Review\n\nF-1 at `src/a.ts:12` still swallows the error.\n");
+    write("findings.json", [
+      { id: "F-1", reviewer: "review-logic", severity: "minor", problem: "swallows", file: "src/a.ts", line: 12, quote: "catch (e) { /* SECRET-QUOTE */ }", disposition: { state: "acted-on" } },
+      { id: "F-2", reviewer: "review-logic", severity: "major", problem: "not in the body", file: "src/hidden.ts", line: 4, verification: { verdict: "confirmed", method: "reproduction", evidence: "ran it", verifier: "review-verifier" } },
+    ]);
+    const io = seams();
+    await publishReview(pkg, { event: "COMMENT", post: io.post, confirm: io.confirm, now: () => new Date("2026-10-16T00:00:00Z") });
+    const body = io.posts[0]!.body;
+    const blocks = parseRoundBlocks(body);
+    expect(blocks).toEqual([
+      { v: 1, round: 3, reviewId: "pr7932-r1", reviewedHead: "abcdef1234567", findings: [{ id: "F-1", file: "src/a.ts", line: 12, quoteSha256: quoteSha256("catch (e) { /* SECRET-QUOTE */ }"), severity: "minor", status: "acted-on" }] },
+    ]);
+    // Nothing the body does not already say: no raw quote, and no finding the body never names.
+    expect(body).not.toContain("SECRET-QUOTE");
+    expect(body).not.toContain("F-2");
+    expect(body).not.toContain("src/hidden.ts");
+    expect(JSON.parse(readFileSync(path.join(pkg, "published.json"), "utf8"))).toMatchObject({ reviewId: "pr7932-r1", head: "abcdef1234567", round: 3 });
+  });
+
+  test("flow 458: a value cannot close the hidden comment, and the block stays within its size limit", () => {
+    const findings = Array.from({ length: 400 }, (_, i) => ({ id: `F-${i}`, severity: "minor", file: "a-->b.ts", line: i }));
+    const body = findings.map((f) => `${f.id} a-->b.ts:${f.line}`).join("\n");
+    const block = buildRoundBlock({ body, round: 1, reviewId: "r", reviewedHead: null, findings });
+    const rendered = renderRoundBlock(block);
+    expect(rendered.length).toBeLessThanOrEqual(ROUND_BLOCK_LIMIT);
+    expect(rendered.indexOf("-->")).toBe(rendered.length - 3);
+    expect(block.truncated).toBe(400 - block.findings.length);
+    expect(parseRoundBlocks(`text\n${rendered}\n`)[0]?.findings[0]).toEqual({ id: "F-0", file: "a-->b.ts", line: 0, severity: "minor", status: "open" });
   });
 
   test("a body the operator did not confirm is not posted and leaves no record", async () => {

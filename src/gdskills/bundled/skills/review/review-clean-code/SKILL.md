@@ -27,7 +27,7 @@ license: "MIT"
 # Review: Clean Code + SOLID
 
 Specialized reviewer for **Clean Code principles** (Robert C. Martin) and **SOLID** at the
-function and class level. Focuses on code in the current branch diff only. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
+function and class level. Focuses on code in the current branch diff only. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
 
 The goal is not stylistic nitpicking — every finding here points to a concrete
 maintainability, readability, or extensibility problem that will cause friction

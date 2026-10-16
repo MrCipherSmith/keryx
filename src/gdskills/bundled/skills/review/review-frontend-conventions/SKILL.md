@@ -11,16 +11,14 @@ description: |
   NOT for: generic React and MobX correctness with no local rule behind it
   (review-frontend), what the CSS actually renders (review-layout), or naming and
   readability as a matter of taste (review-style).
-triggers:
-  - "frontend conventions"
-  - "local frontend rules"
-  - "CLAUDE frontend"
-  - "review frontend conventions"
+triggers: ["frontend conventions", "local frontend rules", "CLAUDE frontend", "review frontend conventions"]
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "review"
   stack_requires: "react,mobx"
+  overlap_group: "frontend"
+  overlap_rank: "generic"
 license: "MIT"
 ---
 
@@ -28,7 +26,7 @@ license: "MIT"
 
 Reviewer for frontend repository conventions that are more specific than generic React/MobX
 correctness. Use it alongside `review-frontend`, `review-style`, `review-performance`, and
-`review-logic`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
+`review-logic`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
 
 Before reviewing, read the nearest project guide files if they exist: root `CLAUDE.md`,
 `AGENTS.md`, `.junie/guidelines.md`, `ARCHITECTURE.md`, and module-level `CLAUDE.md` files.

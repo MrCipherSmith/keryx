@@ -1,9 +1,12 @@
 import { type CoverageWaiver, recordCoverageWaiver } from "./coverage-complete";
+import { revisionOperand } from "../lib/git-revision";
 import { flagMissingCitations } from "./rebuttal-citation";
 import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
 import { REPORT_FIELD_EVIDENCE_LEVEL, parseEvidenceLevel } from "./evidence-level";
 import { packageCoverageWarnings } from "./coverage";
 import { packageParityWarnings } from "./parity";
+import { roundRecordTampered } from "./round-record";
+import { recordFinishedRound } from "./round-registry";
 import { PENDING_RESEARCH, packageResearchErrors } from "./research";
 import { computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
 import { lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
@@ -47,6 +50,7 @@ import {
   type ReviewFilterStats,
 } from "./filter-stats";
 import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
+import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
 import { repairMechanicalOmissions, type FindingRepair } from "./repair";
 import { writeReviewNotes, type ReviewNoteResult } from "./review-notes";
 import {
@@ -133,15 +137,51 @@ export async function resolveGitHead(cwd: string): Promise<string | null> {
  * Keeping the network call out of here is what lets this function run in every
  * test without one.
  */
-export async function resolveTargetHead(input: ManagedReviewInput): Promise<string | null> {
+export async function resolveTargetHead(input: ManagedReviewInput, packageDir?: string): Promise<string | null> {
   const declared = input.target.head;
   if (typeof declared === "string" && declared.trim() !== "") {
     return declared.trim();
+  }
+  // Flow 458 AC7. Ingest into a package that already exists (`review ingest --review-id <id>` after `review start`)
+  // records the round against the head that package was opened for, not whatever the checkout moved to since: the
+  // reviewers read that commit. A head this checkout does not have is refused rather than replaced, because every
+  // quote is located at it and the completion gate compares it with the PR.
+  if (packageDir !== undefined) {
+    const recorded = await recordedPackageHead(packageDir);
+    if (recorded !== undefined) {
+      if (!(await commitExists(input.cwd, recorded))) {
+        throw new Error(
+          `Cannot ingest into ${path.relative(input.cwd, packageDir) || packageDir}: its manifest records head ${recorded.slice(0, 12)}, and that commit is not in this checkout (\`git cat-file -e ${recorded.slice(0, 12)}^{commit}\` fails). Fetch it (\`git fetch origin ${recorded}\` or the PR branch) and ingest again, or pass --head <sha> to name the commit this round really ran against.`,
+        );
+      }
+      return recorded;
+    }
   }
   return (input.resolveHead ?? ((args) => resolveGitHead(args.cwd)))({
     cwd: input.cwd,
     target: input.target,
   });
+}
+
+/** `manifest.target.head` of an existing package, or undefined when there is no package or it records none. */
+async function recordedPackageHead(packageDir: string): Promise<string | undefined> {
+  try {
+    const manifest = JSON.parse(await readFile(path.join(packageDir, "manifest.json"), "utf8")) as { target?: { head?: unknown } };
+    const head = manifest.target?.head;
+    return typeof head === "string" && /^[0-9a-f]{7,40}$/i.test(head.trim()) ? head.trim().toLowerCase() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether `sha` names a commit in the repository at `cwd`. */
+async function commitExists(cwd: string, sha: string): Promise<boolean> {
+  try {
+    const proc = Bun.spawn(["git", "cat-file", "-e", ...revisionOperand(`${sha}^{commit}`)], { cwd, stdout: "ignore", stderr: "ignore", stdin: "ignore" });
+    return (await proc.exited) === 0;
+  } catch {
+    return false;
+  }
 }
 
 /** {@link ManagedReviewTarget} with the resolved head folded in. */
@@ -219,7 +259,7 @@ const BLAST_RADIUS_ARTIFACT = "blast-radius.json";
 
 export async function createManagedReviewPackage(
   input: ManagedReviewIngestInput,
-): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord }> {
+): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord; duplicates: DuplicateMerge[] }> {
   const at = (input.now ?? new Date()).toISOString();
   const flowMatch = await resolvePackageFlow(input);
   const { reviewId, packageDir } = await allocatePackage(input, flowMatch, at);
@@ -243,7 +283,7 @@ export async function createManagedReviewPackage(
   // Resolved HERE rather than beside `buildManifest`, because the locator needs
   // it: a round is a claim about a commit, and its findings are located at that
   // commit rather than against whatever the tree currently holds.
-  const head = await resolveTargetHead(input);
+  const head = await resolveTargetHead(input, packageDir);
 
   // The line becomes a derived fact here, BEFORE anything downstream reads it:
   // the verifier cites a finding, the cap reports one by site, `scope.md` lists
@@ -251,6 +291,7 @@ export async function createManagedReviewPackage(
   // checked. A finding with no quote is untouched — it keeps whatever it said,
   // and says so by carrying no locator.
   await anchorFindings(reported, input, head);
+  await flagMissingPaths(reported, input, head);
   refuseUnresolvedLocators(reported, input, head);
 
   // Minted BEFORE the verifier runs, because a claim names a finding by
@@ -304,7 +345,15 @@ export async function createManagedReviewPackage(
   // budget on its way out.
   const scopeB = await screenScopeBFindings(input, packageDir, scoped.internal);
 
-  const findingsCap = applyFindingsCap(scopeB.retained, {
+  // Flow 458 AC5. One defect reported by several reviewers becomes ONE finding
+  // with the highest severity (the verifier's, when it confirmed one) and every
+  // reporter in `reported_by`. After the verifier so each claim still resolved
+  // against the id it named, after the scope-B screen so a scope-B claim cannot
+  // escape it by merging into a scope-A one, and before the cap so a duplicate
+  // does not spend a reviewer's reading budget. See {@link mergeDuplicates}.
+  const deduped = mergeDuplicates(scopeB.retained);
+
+  const findingsCap = applyFindingsCap(deduped.findings, {
     limit: input.maxFindingsPerReviewer,
   });
 
@@ -441,7 +490,8 @@ export async function createManagedReviewPackage(
   }
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
-    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats),
+    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats, findings) +
+      renderDuplicatesMarkdown(deduped.merges),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
@@ -487,6 +537,7 @@ export async function createManagedReviewPackage(
     // record follows: a removal an operator has to open a file to discover reads,
     // on the terminal they were already looking at, as "there was nothing more".
     scopeBScreen: scopeB.record,
+    duplicates: deduped.merges,
   };
 }
 
@@ -838,6 +889,9 @@ export async function completeManagedReview(
   if (missing.length > 0) {
     throw new Error(`Cannot complete managed review; missing artifacts: ${missing.join(", ")}`);
   }
+  // Flow 458: the round record decides what the round reviewed; one edited after `review start` is refused here too.
+  const tampered = roundRecordTampered(packageDir);
+  if (tampered !== undefined) throw new Error(`Cannot complete managed review; ${tampered}`);
   const warnings: string[] = [];
   let manifest = stored;
   if (options.head !== undefined) {
@@ -914,6 +968,10 @@ export async function completeManagedReview(
     throw error;
   }
   await clearActiveReview(resolveProjectRoot(cwd), updated.reviewId);
+  // Flow 458: keryx's own record that it finished this round, outside the repository, so a later round on this machine
+  // can trust the package even after it is committed on the branch under review (./round-registry.ts).
+  const registered = recordFinishedRound(packageDir, "complete", { cwd });
+  if (registered.error !== undefined) warnings.push(`round not recorded in the local round registry (${registered.error}): a later round on this machine trusts this package only while no commit of the branch changes it`);
 
   // Flow 207 AC5, the second of the two places a `dismissed-incorrect` becomes
   // durable. This one is the attended path by construction: somebody ran
@@ -1263,6 +1321,47 @@ async function anchorFindings(
   }
 }
 
+/** Whether `git cat-file -e <spec>` succeeds in `cwd`. */
+async function gitObjectExists(cwd: string, spec: string): Promise<boolean> {
+  try {
+    const proc = Bun.spawn(["git", "cat-file", "-e", ...revisionOperand(spec)], { cwd, stdout: "ignore", stderr: "ignore", stdin: "ignore" });
+    return (await proc.exited) === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Rule (two cases, deliberately different): a FINDING's own `file` that is absent at the reviewed head is kept and flagged
+ * `path_missing` here. A CITATION or verification evidence naming a file absent at the SHA is still refused (`citationExists`).
+ *
+ * Flow 458 AC12: a finding whose `file` does not exist at the reviewed head is marked `path_missing` (and listed in
+ * `scope.md`), never dropped. Skipped when the round records no head, when the head is not in this checkout (nothing could
+ * be established), or when a test injects the tree. External comments keep the path GitHub gave them.
+ */
+async function flagMissingPaths(
+  findings: Array<StructuredReviewFinding & { summary: string }>,
+  input: ManagedReviewInput,
+  head: string | null,
+): Promise<void> {
+  if (head === null || input.readTreeFile !== undefined) return;
+  if (!(await gitObjectExists(input.cwd, `${head}^{commit}`))) return;
+  for (const finding of findings) {
+    if (finding.source === "external" || typeof finding.file !== "string" || finding.file.trim() === "") continue;
+    const relative = lexicalRelativePath(finding.file.trim().replace(/:\d+(?:[-:]\d+)*$/, ""));
+    if (relative === null || !(await gitObjectExists(input.cwd, `${head}:${relative}`))) finding.path_missing = true;
+    else delete finding.path_missing;
+  }
+}
+
+/** `## Paths missing at the reviewed head`: the findings flagged `path_missing`, or an empty string when there are none. */
+function renderPathMissingMarkdown(findings: readonly StructuredReviewFinding[]): string {
+  const missing = findings.filter((finding) => finding.path_missing === true);
+  if (missing.length === 0) return "";
+  const lines = missing.map((finding) => `- ${finding.global_id ?? finding.id} (${finding.reviewer}): ${finding.file ?? "(no file)"}`);
+  return `\n## Paths missing at the reviewed head\n\n${missing.length} finding(s) cite a file that does not exist at the reviewed head. They are kept, flagged \`path_missing\` in findings.json; check the path before acting on them.\n\n${lines.join("\n")}\n`;
+}
+
 /**
  * A round is a claim about a commit. Where the commit is known and an internal
  * finding's quote is not at its `path:line` there, the finding cites something the
@@ -1280,7 +1379,7 @@ function refuseUnresolvedLocators(
   }
   const unresolved = findings.filter(
     (finding) =>
-      finding.source !== "external" && finding.disposition === undefined && finding.locator?.state === "unlocatable",
+      finding.source !== "external" && finding.disposition === undefined && finding.locator?.state === "unlocatable" && finding.path_missing !== true,
   );
   if (unresolved.length === 0) {
     return;
@@ -1404,6 +1503,9 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   if (finding.locator !== undefined) {
     record.locator = finding.locator;
   }
+  if (finding.path_missing === true) {
+    record.path_missing = true;
+  }
   if (finding.symbol !== undefined) {
     record.symbol = finding.symbol;
   }
@@ -1451,6 +1553,13 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   }
   if (finding.external_ref !== undefined) {
     record.external_ref = finding.external_ref;
+  }
+  // Written by the duplicate merge only, as a pair.
+  if (finding.reported_by !== undefined && finding.reported_by.length > 1) {
+    record.reported_by = finding.reported_by;
+  }
+  if (finding.merged_from !== undefined && finding.merged_from.length > 0) {
+    record.merged_from = finding.merged_from;
   }
   return record;
 }
@@ -2323,6 +2432,7 @@ function renderScope(
   externalReclaims: readonly ExternalReclaim[] = [],
   scopeBScreen: ScopeBScreenRecord = { source: "none", scopeBFindings: 0 },
   filterStats?: ReviewFilterStats | undefined,
+  allFindings: readonly StructuredReviewFinding[] = [],
 ): string {
   const preFilter: ReviewScopeCountsLike | undefined = input.scope?.counts ?? input.scopeCounts;
   const drops: readonly ReviewScopeDropLike[] | undefined = input.scope?.drops;
@@ -2347,7 +2457,7 @@ ${renderStageCountsMarkdown({
 ${renderCapsMarkdown(caps)}
 ${renderScopeBScreenMarkdown(scopeBScreen)}${
     filterStats === undefined ? "" : `\n${renderFilterStatsMarkdown(filterStats)}`
-  }${renderExternalReclaimsMarkdown(externalReclaims)}`;
+  }${renderExternalReclaimsMarkdown(externalReclaims)}${renderPathMissingMarkdown(allFindings)}`;
   return carriedPreFilter === undefined ? head : `${head.trimEnd()}\n\n${carriedPreFilter}\n`;
 }
 

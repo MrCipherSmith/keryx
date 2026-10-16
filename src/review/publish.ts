@@ -7,6 +7,9 @@ import { writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { isPrBound } from "./complete-head-gate";
 import { readRunProfile } from "./run-profile";
+import { renderRoundBlock, ROUND_BLOCK_VERSION, type RoundBlock, type RoundBlockFinding } from "./pr-comments";
+import { findingStatus, quoteSha256, readRoundNumber } from "./round-record";
+import { recordFinishedRound } from "./round-registry";
 import { computeVerdict, type VerdictFinding } from "./verdict";
 import { computeReadiness, failingItems, readinessRefusal, type ReadinessOptions, type ReadinessReport } from "./readiness";
 import type { ConfirmedVia, ManagedReviewManifest } from "./types";
@@ -29,7 +32,7 @@ export type PublishOptions = {
   confirmedVia?: ConfirmedVia | undefined;
 };
 
-export type PublishResult = { readiness: ReadinessReport; body: string; event: ReviewEvent; partial: boolean; posted: boolean };
+export type PublishResult = { readiness: ReadinessReport; body: string; event: ReviewEvent; partial: boolean; posted: boolean; registryWarning?: string | undefined };
 
 export function reviewEvent(value: string | undefined): ReviewEvent {
   const wanted = (value ?? "COMMENT").trim().toUpperCase();
@@ -104,6 +107,42 @@ function runModeFooter(packageDir: string): string {
   return profile === undefined ? "" : `\n_run mode: ${profile.mode} (${profile.declaredVia})_\n`;
 }
 
+/** The most the round block may add to a posted body; findings past it are counted in `truncated`. */
+export const ROUND_BLOCK_LIMIT = 4_000;
+
+/**
+ * Flow 458 AC2: the hidden machine-readable round block for a posted body. It holds only what the body already says —
+ * a finding is listed only when the body names its id, its file only when the body prints it, its line only when the
+ * body prints `file:line`, a symbol only when the body names it, and a quote only as its sha256 — so the block tells a
+ * reader of the pull request nothing the review did not.
+ */
+export function buildRoundBlock(input: { body: string; round: number; reviewId: string; reviewedHead: string | null; findings: readonly unknown[] }): RoundBlock {
+  const listed: RoundBlockFinding[] = [];
+  for (const entry of input.findings) {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const raw = entry as Record<string, unknown>;
+    if (typeof raw.id !== "string" || !mentionsFindingId(input.body, raw.id)) continue;
+    const file = typeof raw.file === "string" && raw.file !== "" && input.body.includes(raw.file) ? raw.file : undefined;
+    const line = file !== undefined && typeof raw.line === "number" && (input.body.includes(`${file}:${raw.line}`) || input.body.includes(`${file}#L${raw.line}`)) ? raw.line : undefined;
+    const quote = typeof raw.quote === "string" && raw.quote.trim() !== "" ? raw.quote : undefined;
+    const symbol = quote === undefined && typeof raw.symbol === "string" && raw.symbol !== "" && input.body.includes(raw.symbol) ? raw.symbol : undefined;
+    const severity = typeof raw.severity === "string" && ["blocker", "major", "minor", "info"].includes(raw.severity) ? (raw.severity as RoundBlockFinding["severity"]) : "info";
+    listed.push({
+      id: raw.id,
+      ...(file === undefined ? {} : { file }),
+      ...(line === undefined ? {} : { line }),
+      ...(quote === undefined ? {} : { quoteSha256: quoteSha256(quote) }),
+      ...(symbol === undefined ? {} : { symbol }),
+      severity,
+      status: findingStatus(raw),
+    });
+  }
+  const base = { v: ROUND_BLOCK_VERSION, round: input.round, reviewId: input.reviewId, reviewedHead: input.reviewedHead } as const;
+  let kept = listed;
+  while (kept.length > 0 && renderRoundBlock({ ...base, findings: kept, truncated: listed.length - kept.length }).length > ROUND_BLOCK_LIMIT) kept = kept.slice(0, -1);
+  return { ...base, findings: kept, ...(kept.length < listed.length ? { truncated: listed.length - kept.length } : {}) };
+}
+
 export async function publishReview(packageDir: string, options: PublishOptions): Promise<PublishResult> {
   const manifest = await readJsonFileOr<ManagedReviewManifest | undefined>(path.join(packageDir, "manifest.json"), undefined);
   if (manifest === undefined) throw new Error(`Managed review package has no readable manifest.json: ${packageDir}`);
@@ -122,14 +161,20 @@ export async function publishReview(packageDir: string, options: PublishOptions)
   if (report === "") throw new Error(`Review ${manifest.reviewId} has no report.md body to publish.`);
   const head = `${partial ? `${partialPublishHeader(readiness).join("\n")}\n` : ""}${runModeHeader(packageDir)}${report}\n`;
   const foot = runModeFooter(packageDir);
-  const minors = minorSection((await computeVerdict(packageDir)).minors, report, PUBLISHED_BODY_LIMIT - head.length - foot.length);
-  const body = `${head}${minors}${foot}`;
+  const minors = minorSection((await computeVerdict(packageDir)).minors, report, PUBLISHED_BODY_LIMIT - head.length - foot.length - ROUND_BLOCK_LIMIT);
+  const visible = `${head}${minors}${foot}`;
+  const reviewedHead = manifest.target.head ?? null;
+  const findings = await readJsonFileOr<unknown>(path.join(packageDir, "findings.json"), []);
+  const roundBlock = buildRoundBlock({ body: visible, round: readRoundNumber(packageDir) ?? 1, reviewId: manifest.reviewId, reviewedHead, findings: Array.isArray(findings) ? findings : [] });
+  const body = `${visible}\n${renderRoundBlock(roundBlock)}\n`;
   if (!(await options.confirm(body, manifest.target.ref, event))) return { readiness, body, event, partial, posted: false };
   const result = await options.post(manifest.target.ref, event, body);
   if (!result.ok) throw new Error(`GitHub refused the review: ${result.detail}`);
   await writeFileAtomic(
     path.join(packageDir, "published.json"),
-    `${JSON.stringify({ pr: manifest.target.ref, event, partial, failing: failing.map((item) => item.id), time: (options.now?.() ?? new Date()).toISOString(), ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }) }, null, 2)}\n`,
+    `${JSON.stringify({ pr: manifest.target.ref, reviewId: manifest.reviewId, head: reviewedHead, round: roundBlock.round, event, partial, failing: failing.map((item) => item.id), time: (options.now?.() ?? new Date()).toISOString(), ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }) }, null, 2)}\n`,
   );
-  return { readiness, body, event, partial, posted: true };
+  // Flow 458: keryx's own record that it finished (and posted) this round, outside the repository (./round-registry.ts).
+  const registered = recordFinishedRound(packageDir, "publish");
+  return { readiness, body, event, partial, posted: true, ...(registered.error === undefined ? {} : { registryWarning: `round not recorded in the local round registry: ${registered.error}` }) };
 }

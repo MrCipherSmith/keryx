@@ -2,18 +2,14 @@
 name: review-frontend
 model_tier: standard
 description: "Use when a frontend review is requested, checking React component patterns, MobX state management (observer, actions, computed, reactions, lifecycle), View-Store boundaries, and TypeScript safety in changed frontend code. NOT for backend patterns, security vulnerabilities, performance bottlenecks, or cross-layer architecture."
-triggers:
-  - "frontend review"
-  - "component review"
-  - "ui review"
-  - "review React"
-  - "review components"
+triggers: ["frontend review", "component review", "ui review", "review React", "review components"]
 metadata:
   author: "MrCipherSmith"
   version: "1.1.0"
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
   stack_requires: "react,mobx"
+  overlap_group: "frontend"
 license: "MIT"
 ---
 
@@ -21,7 +17,7 @@ license: "MIT"
 
 ## Purpose
 
-Validates frontend-specific patterns in the changed code of the current branch. Covers React component correctness (observer wrapping, MVVM boundary, useEffect misuse, accessibility basics, key props), full MobX store patterns (structure, member ordering, accessibility modifiers, observable collections, reactions, async actions, bidirectional sync, lifecycle, API placement), and TypeScript safety. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
+Validates frontend-specific patterns in the changed code of the current branch. Covers React component correctness (observer wrapping, MVVM boundary, useEffect misuse, accessibility basics, key props), full MobX store patterns (structure, member ordering, accessibility modifiers, observable collections, reactions, async actions, bidirectional sync, lifecycle, API placement), and TypeScript safety. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
 
 This skill consolidates what was previously split between `code-style-review` (frontend parts) and `code-mobx-store-review`. It supersedes both for frontend changes.
 

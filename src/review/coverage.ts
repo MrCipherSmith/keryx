@@ -1,8 +1,11 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { NOT_REVIEW_PACKAGES } from "./round-record";
 import { extractStackRequiresField, parseStackRequires, scopeReviewerByStack, detectProjectStack } from "./stack";
-import { collectReviewers } from "./reviewers";
+import { collectReviewers, overlapGroupsOf, type ReviewerInventory } from "./reviewers";
+import { CORE_MANDATORY_REVIEWER_IDS } from "./jev-select";
+import { resolveProjectRoot } from "../lib/contained-path";
 import { isAttendedRun, operatorGateApplies, runProfileRefusal } from "./run-profile";
 import { confirmedDecision, decisionWriters, type OperatorDecisionKind, type OperatorDecisionSubject } from "./operator-decisions";
 import { pendingMutants } from "./mutate";
@@ -19,7 +22,11 @@ export const LIGHT_MAX_FILES = 5;
 export const LIGHT_MAX_CHANGED_LINES = 300;
 /** The light round's logic and testing reviewers; the conventions reviewer is picked from {@link LIGHT_CONVENTIONS_PREFERENCE}. */
 export const LIGHT_FIXED_REVIEWERS: readonly string[] = ["review-logic", "review-testing-practices"];
-/** Stack-aware choice, first one the stack filter kept wins: React/MobX stacks keep frontend-conventions, a backend stack keeps review-backend, anything else falls to clean-code. */
+/**
+ * Stack-aware choice, first one the stack filter kept wins: React/MobX stacks keep frontend-conventions, a backend stack
+ * keeps review-backend, anything else falls to clean-code. A pick that sits in an overlap group is raised to the group's
+ * top member when the roster holds it (React/MobX: review-frontend, see `BUNDLED_OVERLAP_GROUPS`).
+ */
 export const LIGHT_CONVENTIONS_PREFERENCE: readonly string[] = ["review-frontend-conventions", "review-backend", "review-clean-code"];
 
 export type RequiredSet = {
@@ -30,7 +37,37 @@ export type RequiredSet = {
   excluded: { reviewer: string; reason: string }[];
   /** False when no scope-A file list was recorded, so path-gated reviewers could not be ruled out. */
   filesKnown: boolean;
+  /** Supersedes and overlap removals that were NOT applied, and why (M6). Absent when there is nothing to say. */
+  notes?: string[] | undefined;
 };
+
+/**
+ * Roles no `supersedes` or overlap group ever removes (M6): the core mandatory reviewers and the regression reviewer.
+ * A reviewer — bundled or a project overlay — that claims to replace one of them is ignored for that claim.
+ */
+export const NEVER_SUPERSEDED: ReadonlySet<string> = new Set([...CORE_MANDATORY_REVIEWER_IDS, "review-regression"]);
+
+/** What the supersede and overlap rules need to know about the round. */
+export type SupersedeContext = {
+  /** The project root, to place a project overlay's directory against the changed files. */
+  root?: string | undefined;
+  /** The round's changed files (scope A), project-relative; undefined when not recorded. */
+  files?: readonly string[] | undefined;
+};
+
+/**
+ * Why a project overlay may not remove another reviewer this round, or undefined: the round changes the overlay itself
+ * (a file of its directory is in scope A), so a branch could add a reviewer that "supersedes" the security reviewer of
+ * its own review; or the changed files are not recorded, so that cannot be ruled out.
+ */
+function overlayChangedByRound(reviewer: { name: string; source: string; path?: string }, context: SupersedeContext): string | undefined {
+  if (reviewer.source !== "project-skill" || reviewer.path === undefined) return undefined;
+  if (context.files === undefined) return `${reviewer.name} is a project overlay and the round's changed files are not recorded, so it cannot be ruled out that this branch wrote it`;
+  const absolute = path.isAbsolute(reviewer.path) ? reviewer.path : path.resolve(context.root ?? process.cwd(), reviewer.path);
+  const dir = path.relative(context.root ?? process.cwd(), path.dirname(absolute)).split(path.sep).join("/");
+  const changed = context.files.find((file) => file === dir || file.startsWith(`${dir}/`));
+  return changed === undefined ? undefined : `${reviewer.name} is a project overlay this round changes (${changed})`;
+}
 
 /** Reviewers that are not part of a round's fan-out: they route, verify, or are opt-in. */
 const NOT_ROSTER = new Set([
@@ -239,6 +276,104 @@ export async function packageCoverageWarnings(packageDir: string): Promise<strin
   }
 }
 
+/**
+ * Drop the reviewers a selected reviewer `supersedes` (flow 458 AC6), recording each as excluded with the reason. Project
+ * reviewers are applied first, so an overlay that supersedes a bundled reviewer wins even when the bundled one declares
+ * the reverse; a reviewer already superseded supersedes nothing.
+ */
+export function applySupersedes(
+  required: readonly string[],
+  inventory: Pick<ReviewerInventory, "bundled" | "project">,
+  excluded: RequiredSet["excluded"],
+  context: SupersedeContext = {},
+  notes: string[] = [],
+): string[] {
+  const kept = new Set(required);
+  for (const reviewer of [...inventory.project, ...inventory.bundled]) {
+    if (!kept.has(reviewer.name)) continue;
+    const targets = (reviewer.supersedes ?? []).filter((target) => target !== reviewer.name && kept.has(target));
+    if (targets.length === 0) continue;
+    // M6: the core roles are never superseded, and an overlay this round may have written supersedes nothing.
+    const core = targets.filter((target) => NEVER_SUPERSEDED.has(target));
+    if (core.length > 0) notes.push(`${reviewer.name} supersedes ${core.join(", ")}: ignored, ${core.length === 1 ? "it is a core role" : "they are core roles"} that always run`);
+    const rest = targets.filter((target) => !NEVER_SUPERSEDED.has(target));
+    if (rest.length === 0) continue;
+    const changed = overlayChangedByRound(reviewer, context);
+    if (changed !== undefined) {
+      notes.push(`${reviewer.name} supersedes ${rest.join(", ")}: ignored, ${changed}`);
+      continue;
+    }
+    for (const target of rest) {
+      kept.delete(target);
+      excluded.push({ reviewer: target, reason: `superseded by ${reviewer.name}` });
+    }
+  }
+  return required.filter((name) => kept.has(name));
+}
+
+/**
+ * One reviewer per overlap group (flow 458 AC6): of the required members of a group, the most specific — project
+ * overlay, then bundled specific, then generic — stays, and a lower-ranked member is excluded when the kept one reads
+ * every line it would: the kept one has no path gate, or the scope-A files are known and each file the excluded one's
+ * gate matches is matched by the kept one's. A path-gated overlay that covers only part of the diff leaves the bundled
+ * member in place for the rest; slice routing then gives each slice one of them.
+ */
+export function applyOverlapGroups(
+  required: readonly string[],
+  inventory: Pick<ReviewerInventory, "bundled" | "project">,
+  files: readonly string[] | undefined,
+  excluded: RequiredSet["excluded"],
+  context: Omit<SupersedeContext, "files"> = {},
+  notes: string[] = [],
+): string[] {
+  const kept = new Set(required);
+  const byName = new Map([...inventory.project, ...inventory.bundled].map((reviewer) => [reviewer.name, reviewer] as const));
+  const projectGates = new Map(inventory.project.filter((r) => r.pathsSource !== "none" && r.paths.length > 0).map((r) => [r.name, r.paths.map(globToRegExp)]));
+  const gateOf = (name: string): ((file: string) => boolean) | undefined => {
+    const bundled = BUNDLED_PATH_GATES[name];
+    if (bundled !== undefined) return bundled;
+    const patterns = projectGates.get(name);
+    return patterns === undefined ? undefined : (file) => patterns.some((p) => p.test(file));
+  };
+  const covers = (winner: string, loser: string): boolean => {
+    const wide = gateOf(winner);
+    if (wide === undefined) return true;
+    if (files === undefined) return false;
+    const narrow = gateOf(loser);
+    return files.filter((file) => narrow === undefined || narrow(file)).every((file) => wide(file));
+  };
+  for (const [group, members] of Object.entries(overlapGroupsOf(inventory))) {
+    const present = members.filter((member) => kept.has(member));
+    const winner = present[0];
+    if (winner === undefined) continue;
+    const winnerReviewer = byName.get(winner);
+    const changed = winnerReviewer === undefined ? undefined : overlayChangedByRound(winnerReviewer, { ...context, files });
+    for (const member of present.slice(1)) {
+      if (!covers(winner, member)) continue;
+      // M6: a core role always runs, and an overlay this round may have written removes no one.
+      if (NEVER_SUPERSEDED.has(member)) {
+        notes.push(`overlap group ${group}: ${member} kept beside ${winner}, it is a core role that always runs`);
+        continue;
+      }
+      if (changed !== undefined) {
+        notes.push(`overlap group ${group}: ${member} kept beside ${winner}, ${changed}`);
+        continue;
+      }
+      kept.delete(member);
+      excluded.push({ reviewer: member, reason: `overlap group ${group}: ${winner} reads the same lines` });
+    }
+  }
+  return required.filter((name) => kept.has(name));
+}
+
+/** The light round's conventions reviewer: the first preference the roster holds, raised to its overlap group's top member when the roster holds that. */
+function lightConventionsReviewer(roster: readonly string[], inventory: Pick<ReviewerInventory, "bundled" | "project">): string | undefined {
+  const pick = LIGHT_CONVENTIONS_PREFERENCE.find((name) => roster.includes(name));
+  if (pick === undefined) return undefined;
+  const group = Object.values(overlapGroupsOf(inventory)).find((members) => members.includes(pick));
+  return group?.find((member) => roster.includes(member)) ?? pick;
+}
+
 export async function requiredReviewers(root: string, mode: ReviewMode, files: readonly string[] | undefined, options: RequiredOptions = {}): Promise<RequiredSet> {
   const inventory = await collectReviewers(root);
   const stack = await detectProjectStack(root);
@@ -258,12 +393,14 @@ export async function requiredReviewers(root: string, mode: ReviewMode, files: r
   }
   const filesKnown = files !== undefined;
   if (options.depth === "light") {
-    const conventions = LIGHT_CONVENTIONS_PREFERENCE.find((name) => roster.includes(name));
+    const conventions = lightConventionsReviewer(roster, inventory);
     const keep = new Set([...LIGHT_FIXED_REVIEWERS, ...(conventions === undefined ? [] : [conventions])]);
     const light = roster.filter((name) => keep.has(name));
     for (const name of roster) if (!keep.has(name)) excluded.push({ reviewer: name, reason: "light round: only logic, testing and the stack's conventions reviewer run" });
     for (const name of [REGRESSION, PR_CONTRACT]) if (inventory.bundled.some((r) => r.name === name)) excluded.push({ reviewer: name, reason: "light round: not part of the light set" });
-    return { mode, depth: "light", required: light.sort(), excluded, filesKnown };
+    const notes: string[] = [];
+    const kept = applySupersedes(light, inventory, excluded, { root, files }, notes).sort();
+    return { mode, depth: "light", required: kept, excluded, filesKnown, ...(notes.length === 0 ? {} : { notes }) };
   }
   const gated = (name: string): boolean | undefined => {
     if (!filesKnown) return undefined;
@@ -293,7 +430,9 @@ export async function requiredReviewers(root: string, mode: ReviewMode, files: r
     if (options.prContext === true) required.push(PR_CONTRACT);
     else excluded.push({ reviewer: PR_CONTRACT, reason: "no pr-context.md in the package: there is no PR body checklist to compare with the diff" });
   }
-  return { mode, depth: "full", required: required.sort(), excluded, filesKnown };
+  const notes: string[] = [];
+  const collapsed = applyOverlapGroups(applySupersedes(required, inventory, excluded, { root, files }, notes), inventory, files, excluded, { root }, notes).sort();
+  return { mode, depth: "full", required: collapsed, excluded, filesKnown, ...(notes.length === 0 ? {} : { notes }) };
 }
 
 export type CoverageOptions = {
@@ -324,7 +463,7 @@ export async function gitDiffStats(root: string, target: { ref: string; head: st
   try {
     assertGitRevision(target.ref);
     assertGitRevision(target.head);
-    const proc = Bun.spawn(["git", "diff", "--no-color", "-U20", "--end-of-options", `${target.ref}...${target.head}`], { cwd: root, stdout: "pipe", stderr: "pipe", timeout: 15_000, killSignal: "SIGKILL", maxBuffer: 8 * 1024 * 1024 });
+    const proc = Bun.spawn(["git", "diff", "--no-color", "-U20", "--end-of-options", `${target.ref}...${target.head}`, "--", ...NOT_REVIEW_PACKAGES], { cwd: root, stdout: "pipe", stderr: "pipe", timeout: 15_000, killSignal: "SIGKILL", maxBuffer: 8 * 1024 * 1024 });
     const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
     if (exitCode !== 0 || proc.signalCode !== null) return undefined;
     const scope = buildReviewScope(stdout);
@@ -490,13 +629,60 @@ async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions, ef
     depth: effective?.depth ?? "full",
   });
   const selected = new Set(Array.isArray(record.selected) ? record.selected.filter(text) : []);
+  // A deliberate skip (`ledger build --skip <reviewer> --reason`) accounts for a required reviewer only with its reason
+  // AND the operator's recorded decision (M5): `dispatch.skipped` is written by the agent's command, so the entry alone is
+  // never the operator's word.
+  const skips = dispatchSkips(record).filter((skip) => need.required.includes(skip.reviewer) && !selected.has(skip.reviewer));
+  const decided = await skipDecision(options.packageDir, skips.map((skip) => skip.reviewer));
+  if (decided.ok) for (const skip of skips) selected.add(skip.reviewer);
   const missing = need.required.filter((name) => !selected.has(name));
   if (!missing.length) return [];
+  if (!decided.ok) return [`dispatch.skipped is not accepted: ${decided.refusal}`];
   return [
     `dispatch covers ${need.required.length - missing.length} of ${need.required.length} reviewers that mode ${record.mode} requires; missing: ${missing.join(", ")}. ` +
       "Dispatch them, or record an operator override {operatorQuote, reason}; `keryx review required` prints the set" +
       (effective?.refused === undefined ? "" : `. The dispatch says depth light, but the full set applies: ${effective.refused}`),
   ];
+}
+
+/** A reviewer the operator chose not to run, with why: `dispatch.skipped` as `ledger build --skip --reason` writes it. */
+export type ReviewerSkip = { reviewer: string; reason: string };
+
+/**
+ * Whether the operator decided these skips (M5). A skip of a required reviewer is a smaller reviewer set, so it needs the
+ * same record an override does: a `reviewer-override` decision (the `review_override_reviewers` card or `keryx review
+ * override-reviewers` at a terminal) bound to the package head and shown at least these reviewers as left out. The
+ * reason typed after `--skip`, or a `dispatch.skipped` entry, is the agent's word and never enough on its own.
+ */
+export async function skipDecision(packageDir: string | undefined, skipped: readonly string[]): Promise<{ ok: true } | { ok: false; refusal: string }> {
+  if (skipped.length === 0) return { ok: true };
+  const writers = decisionWriters("reviewer-override", packageDir === undefined ? "<review-dir>" : path.relative(process.cwd(), packageDir) || ".");
+  if (packageDir === undefined) return { ok: false, refusal: `skipping ${skipped.join(", ")} needs the operator's decision recorded in the package: ${writers}` };
+  const { required } = await reviewersLeftOut(packageDir, undefined);
+  const outside = skipped.filter((name) => !required.includes(name));
+  if (outside.length > 0) return { ok: false, refusal: `${outside.join(", ")} cannot be skipped: no operator decision can name ${outside.length === 1 ? "it" : "them"} (not in the mode-all required set ${required.join(", ") || "none"}); run ${outside.length === 1 ? "it" : "them"}` };
+  const skip = new Set(skipped);
+  const now = await operatorDecisionSubject(packageDir, "reviewer-override", required.filter((name) => !skip.has(name)));
+  if ((await confirmedDecision(packageDir, "reviewer-override", now)) !== undefined) return { ok: true };
+  return { ok: false, refusal: `skipping ${skipped.join(", ")} narrows the reviewer set and needs the operator's decision for head ${now.head ?? "unknown"} leaving out ${now.items.join(", ") || "nothing"}: ${writers} with --selected naming every other required reviewer` };
+}
+
+/** The well-formed entries of `dispatch.skipped`; an entry without a reviewer or a reason is not a skip. */
+export function dispatchSkips(dispatch: unknown): ReviewerSkip[] {
+  const record = dispatch && typeof dispatch === "object" && !Array.isArray(dispatch) ? (dispatch as Record<string, unknown>) : undefined;
+  if (record === undefined || !Array.isArray(record.skipped)) return [];
+  const out: ReviewerSkip[] = [];
+  for (const entry of record.skipped) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const { reviewer, reason } = entry as Record<string, unknown>;
+    if (typeof reviewer === "string" && reviewer.trim() !== "" && typeof reason === "string" && reason.trim() !== "") out.push({ reviewer: reviewer.trim(), reason: reason.trim() });
+  }
+  return out;
+}
+
+/** The report line of one skip. */
+export function skipLine(skip: ReviewerSkip): string {
+  return `Not run: ${skip.reviewer} — ${skip.reason}`;
 }
 
 export async function packageScopeFiles(packageDir: string): Promise<string[] | undefined> {
@@ -508,7 +694,17 @@ export async function packageScopeFiles(packageDir: string): Promise<string[] | 
   }
 }
 
-/** `<root>/.metaproject/reviews/<id>` → `<root>`. */
+/**
+ * The project a package belongs to: the directory holding the nearest `.metaproject` above it. A package lives at
+ * `<root>/.metaproject/reviews/<id>` or, bound to a flow, at `<root>/.metaproject/flows/<dir>/reviews/<id>` — counting
+ * three levels up answered `.metaproject/flows` for the second. A package outside any `.metaproject` falls back to the
+ * project root found from it, and with none, to the old three levels up.
+ */
 export function projectRootOfPackage(packageDir: string): string {
-  return path.resolve(packageDir, "..", "..", "..");
+  const resolved = path.resolve(packageDir);
+  const parts = resolved.split(path.sep);
+  const at = parts.lastIndexOf(".metaproject");
+  if (at > 0) return parts.slice(0, at).join(path.sep) || path.sep;
+  const found = resolveProjectRoot(resolved);
+  return found !== resolved ? found : path.resolve(resolved, "..", "..", "..");
 }

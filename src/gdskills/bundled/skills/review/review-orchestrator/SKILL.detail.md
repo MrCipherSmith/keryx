@@ -687,6 +687,20 @@ sync as abandoned"* is a claim; the disposition is whether the branch it renamed
 is reachable and pinned. On a recorded round, two such commits asserted behaviour
 on lines no test could reach.
 
+### Delta rounds — what `review start` hands you
+
+`keryx review start` detects the round and writes `<package>/round.json` and `<package>/prior_findings.json`. It searches every source, because the earlier round may have run on another machine: the local package, git history (tracked package files), the PR's `keryx round` block, PR comments, and the flow's packages. `round.json` carries `round`, `source`, `sourcesTried`, `previous`, `mode`, `range`, `fixHunks`, `newHunks` and `carried`.
+
+| `mode` | `range` | Review |
+|---|---|---|
+| `first` | merge-base..head | A first round. `sourcesTried` records what was searched when nothing was found. |
+| `delta` | previous head..head | `fix` slices (a hunk that answers a prior finding): `review-logic`, `review-regression`, the authors of the attached findings and the verifier, each with its `prior_findings`. `new` slices: round 1, with the roles the slice names. Unchanged code: not re-reviewed. `carried` findings keep their dispositions. |
+| `fallback-first` | merge-base..head | The previous head is not an ancestor (force-push, rebase). Review the whole range with the prior findings attached. |
+
+A fix hunk still has a radius: enumerate what names the thing it changed (`review_context.scope.files`), as in any fix round. The attached findings are the contract: each leaves the round with a disposition, below.
+
+A reviewer on a FIX slice reports those dispositions itself: its `REVIEW_RESULT` carries `prior_dispositions: [{id, disposition}]` with one entry for every attached finding id (`disposition` is `closed`, `open`, `partial`, `regressed` or `withdrawn`), judged against the code. `keryx review ingest` reads the array into the ledger; an attached id with no entry stays undisposed.
+
 ### A fix is a change, and changes get reviewed
 
 The most expensive class in a multi-round review is **the defect the fix

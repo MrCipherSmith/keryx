@@ -2,7 +2,9 @@ import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
+import { readRoundRecord, renderRoundLine } from "./round-record";
 import { isEmptyOutput, isReviewerResult, parseReviewResult } from "./ledger";
+import { dispatchSkips, skipLine } from "./coverage";
 import { mergeVerifications, verificationClaims } from "./verification";
 import { readRunProfile } from "./run-profile";
 import { testsNotRunWarning } from "./tests-to-run";
@@ -65,8 +67,12 @@ export type InterimVerdict = {
   headline: string;
   /** How the round runs (`<package>/run-profile.json`): `attended (default)`, `unattended (--unattended)`, ...; undefined for a package without one. */
   runMode?: string | undefined;
+  /** Flow 458: `round N (source: …)` or `round 1 — no previous round found (sources tried: …)`, from round.json; undefined without one. */
+  round?: string | undefined;
   /** A warning when `tests-to-run.json` lists tests and no `keryx review verify-run` record exists: "N tests listed to run; none recorded as run". */
   testsNotRun?: string | undefined;
+  /** `Not run: <reviewer> — <reason>` for each reviewer `ledger build --skip` recorded as deliberately not run. */
+  notRun?: string[] | undefined;
 };
 
 const object = (value: unknown): Record<string, unknown> | undefined =>
@@ -241,7 +247,24 @@ export async function computeVerdict(packageDir: string, options: VerdictOptions
   const profile = readRunProfile(packageDir);
   const runMode = profile === undefined ? undefined : `${profile.mode} (${profile.declaredVia})`;
   const testsNotRun = testsNotRunWarning(packageDir);
-  return { source, counts, total, verified, unverified, refuted, dismissed, resolved, verifierClaims, rawDir, open, minors, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline, ...(runMode === undefined ? {} : { runMode }), ...(testsNotRun === undefined ? {} : { testsNotRun }) };
+  // A malformed round.json is refused by slice, ledger and complete; the verdict only reports, so it says so instead.
+  let round: string | undefined;
+  try {
+    const roundRecord = readRoundRecord(packageDir);
+    round = roundRecord === undefined ? undefined : renderRoundLine(roundRecord);
+  } catch (error) {
+    round = `round record unusable: ${error instanceof Error ? error.message : String(error)}`;
+  }
+  const dispatchRecord = object(object(await readJson(path.join(packageDir, "research.json")))?.dispatch);
+  // M6: reviewers the required set dropped as superseded or overlapping are named in the verdict, with what replaced them.
+  const superseded = (Array.isArray(dispatchRecord?.superseded) ? dispatchRecord.superseded : []).flatMap((entry) => {
+    const item = object(entry);
+    const reviewer = text(item?.reviewer);
+    const reason = text(item?.reason);
+    return reviewer === undefined || reason === undefined ? [] : [`excluded: ${reviewer} — ${reason}`];
+  });
+  const notRun = [...dispatchSkips(dispatchRecord).map(skipLine), ...superseded];
+  return { source, counts, total, verified, unverified, refuted, dismissed, resolved, verifierClaims, rawDir, open, minors, reportedReviewers: [...reported].sort(), pendingReviewers, pendingAmbiguous, unreadable: raws.unreadable, headline, ...(runMode === undefined ? {} : { runMode }), ...(testsNotRun === undefined ? {} : { testsNotRun }), ...(round === undefined ? {} : { round }), ...(notRun.length === 0 ? {} : { notRun }) };
 }
 
 function findingLine(finding: VerdictFinding): string {
@@ -250,6 +273,7 @@ function findingLine(finding: VerdictFinding): string {
 
 export function renderVerdict(verdict: InterimVerdict, reviewId: string): string {
   const lines = [`# Interim verdict: ${reviewId}`, "", `verdict: ${verdict.headline}`, `source: ${verdict.source}`];
+  if (verdict.round !== undefined) lines.push(verdict.round);
   if (verdict.runMode !== undefined) lines.push(`run mode: ${verdict.runMode}`);
   if (verdict.testsNotRun !== undefined) lines.push(`warning: ${verdict.testsNotRun}`);
   if (verdict.total === 0 && verdict.source !== "none") lines.push("findings: none");
@@ -262,6 +286,7 @@ export function renderVerdict(verdict: InterimVerdict, reviewId: string): string
   lines.push(verdict.pendingReviewers === undefined
     ? "reviewers not reported: unknown (the package does not record who was expected)"
     : `${verdict.pendingAmbiguous ? "reviewers with no findings or not reported" : "reviewers not reported"}: ${verdict.pendingReviewers.length === 0 ? "none" : verdict.pendingReviewers.join(", ")}`);
+  for (const line of verdict.notRun ?? []) lines.push(line);
   for (const file of verdict.unreadable) lines.push(`unreadable result: ${file}`);
   if (verdict.open.length > 0) {
     lines.push("", "## Open blockers and majors", "");

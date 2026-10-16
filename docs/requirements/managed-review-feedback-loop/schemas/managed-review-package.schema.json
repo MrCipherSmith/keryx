@@ -172,6 +172,18 @@
       "minimum": 1,
       "description": "Written by `keryx review start|attach` (flow 457): the operator-gate version the package was created with, also recorded in run-profile.json. A package carrying it is held to the operator gate, and is refused when its run-profile.json is missing."
     },
+    "roundRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["roundSha256", "priorFindingsSha256"],
+      "description": "Written by `keryx review start|attach` (flow 458) beside round.json: the sha256 of round.json and prior_findings.json as written (slice, ledger build and complete refuse a package whose files no longer match), the target's normalised key (pr:<owner/repo>#<n>, branch:<name> or range:<base>) and the base ref its merge-base was read from, so a later round finds this one however the target is spelled.",
+      "properties": {
+        "roundSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "priorFindingsSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "targetKey": { "type": "string", "minLength": 1 },
+        "targetBase": { "type": "string", "minLength": 1 }
+      }
+    },
     "readiness_waivers": {
       "type": "array",
       "description": "Readiness checklist items the operator waived in their own words.",

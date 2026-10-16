@@ -124,6 +124,8 @@ export type ManagedReviewManifest = {
    * Absent on ingest packages and on packages that predate the gate.
    */
   operatorGate?: number | undefined;
+  /** Flow 458: what `review start|attach` stamped beside round.json (see review/round-record.ts `RoundStamp`). */
+  roundRecord?: { roundSha256: string; priorFindingsSha256: string; targetKey?: string | undefined; targetBase?: string | undefined } | undefined;
   /**
    * Fields the ingest supplied rather than the reviewer authoring them.
    * Written only when something was repaired — see
@@ -412,6 +414,16 @@ export type StructuredReviewFinding = {
    */
   global_id?: string | undefined;
   reviewer: string;
+  /**
+   * Every reviewer that reported this finding, written only when ingest merged
+   * duplicates into it (see {@link module:review/dedupe}). `reviewer` stays the
+   * reviewer whose record is canonical and comes first here.
+   */
+  reported_by?: string[] | undefined;
+  /** The `global_id`s (or ids) the duplicate merge folded into this finding. */
+  merged_from?: string[] | undefined;
+  /** The problem statements of the absorbed findings that differ from this one's, so a merge loses no reviewer's words. */
+  merged_problems?: string[] | undefined;
   severity: ReviewFindingSeverity;
   problem: string;
   impact: string;
@@ -429,6 +441,8 @@ export type StructuredReviewFinding = {
   quote?: string | null | undefined;
   /** How {@link line} was arrived at. Present exactly when {@link quote} is. */
   locator?: ReviewFindingLocator | undefined;
+  /** True when {@link file} does not exist at the reviewed head; the finding is kept and listed in `scope.md`. */
+  path_missing?: boolean | undefined;
   symbol?: string | null | undefined;
   dedupe_key?: string | null | undefined;
   blocking_merge?: boolean | undefined;

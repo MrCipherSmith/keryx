@@ -390,10 +390,101 @@ export function shaMatchesHead(sha: string, headSha: string | null): boolean {
   return wanted === headSha || (wanted.length >= 7 && headSha.startsWith(wanted));
 }
 
+// ---------------------------------------------------------------------------
+// The keryx round block (flow 458): `<!-- keryx:round {json} -->` at the foot of what `review publish` posts
+// ---------------------------------------------------------------------------
+
+export const ROUND_BLOCK_VERSION = 1;
+const ROUND_BLOCK = /<!-- keryx:round (\{.*?\}) -->/g;
+
+export type RoundBlockFinding = {
+  id: string;
+  file?: string | undefined;
+  line?: number | undefined;
+  quoteSha256?: string | undefined;
+  symbol?: string | undefined;
+  severity: ReviewFindingSeverity;
+  status: string;
+};
+
+/** Only what the posted body already says: ids it names, locations it prints, quotes as hashes. */
+export type RoundBlock = {
+  v: typeof ROUND_BLOCK_VERSION;
+  round: number;
+  reviewId: string;
+  reviewedHead: string | null;
+  findings: RoundBlockFinding[];
+  /** Findings left out to keep the block small. Absent when none were. */
+  truncated?: number | undefined;
+};
+
+/** A round block as `comments collect` found it on the pull request. */
+export type CollectedRoundBlock = RoundBlock & { commentId: string; submittedAt: string; url: string };
+
+const SEVERITY_SET = new Set<string>(["blocker", "major", "minor", "info"]);
+
+function roundBlockFinding(value: unknown): RoundBlockFinding | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.id !== "string" || raw.id === "" || typeof raw.severity !== "string" || !SEVERITY_SET.has(raw.severity)) return null;
+  if (typeof raw.status !== "string") return null;
+  return {
+    id: raw.id,
+    ...(typeof raw.file === "string" ? { file: raw.file } : {}),
+    ...(typeof raw.line === "number" && Number.isInteger(raw.line) ? { line: raw.line } : {}),
+    ...(typeof raw.quoteSha256 === "string" && /^[0-9a-f]{64}$/.test(raw.quoteSha256) ? { quoteSha256: raw.quoteSha256 } : {}),
+    ...(typeof raw.symbol === "string" ? { symbol: raw.symbol } : {}),
+    severity: raw.severity as ReviewFindingSeverity,
+    status: raw.status,
+  };
+}
+
+/**
+ * Every well-formed keryx round block in a comment body, in order. A block that does not parse, or has the wrong
+ * version or shape, is skipped: a round block is a hint for the next round, never a reason to fail a collection.
+ */
+export function parseRoundBlocks(body: string): RoundBlock[] {
+  const blocks: RoundBlock[] = [];
+  for (const match of body.matchAll(ROUND_BLOCK)) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(match[1]!);
+    } catch {
+      continue;
+    }
+    if (typeof parsed !== "object" || parsed === null) continue;
+    const raw = parsed as Record<string, unknown>;
+    if (raw.v !== ROUND_BLOCK_VERSION || typeof raw.round !== "number" || !Number.isInteger(raw.round) || raw.round < 1) continue;
+    if (typeof raw.reviewId !== "string" || raw.reviewId === "" || !Array.isArray(raw.findings)) continue;
+    const head = typeof raw.reviewedHead === "string" && /^[0-9a-f]{7,64}$/i.test(raw.reviewedHead) ? raw.reviewedHead.toLowerCase() : null;
+    const findings = raw.findings.map(roundBlockFinding).filter((finding): finding is RoundBlockFinding => finding !== null);
+    blocks.push({
+      v: ROUND_BLOCK_VERSION,
+      round: raw.round,
+      reviewId: raw.reviewId,
+      reviewedHead: head,
+      findings,
+      ...(typeof raw.truncated === "number" && raw.truncated > 0 ? { truncated: raw.truncated } : {}),
+    });
+  }
+  return blocks;
+}
+
+/** The block as it is appended to a posted body. `<` and `>` are escaped so no value can close the HTML comment. */
+export function renderRoundBlock(block: RoundBlock): string {
+  const json = JSON.stringify(block).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
+  return `<!-- keryx:round ${json} -->`;
+}
+
 export type CollectPrCommentsResult = {
   /** The pull request itself: state, merge and head, read in the same pass. */
   pull: PullRequestSnapshot;
   comments: CollectedComment[];
+  /**
+   * Flow 458: the keryx round blocks found in OUR OWN comments, newest last. Those comments stay in `skipped` as
+   * self-authored and are never replied to; the block is read so the next `review start` can find the previous round.
+   */
+  roundBlocks: CollectedRoundBlock[];
   /** Everything the filter removed, with the reason. A silent filter reads as "nobody commented". */
   skipped: CommentSkip[];
   counts: {
@@ -468,9 +559,13 @@ export async function collectPrComments(input: CollectPrCommentsInput): Promise<
   }
 
   const self = normaliseLogin(input.self);
+  const roundBlocks: CollectedRoundBlock[] = [];
   const others = all.filter((comment) => {
     if (normaliseLogin(comment.author) !== self) {
       return true;
+    }
+    for (const block of parseRoundBlocks(comment.body)) {
+      roundBlocks.push({ ...block, commentId: comment.id, submittedAt: comment.submittedAt, url: comment.url });
     }
     skipped.push({
       id: comment.id,
@@ -525,6 +620,7 @@ export async function collectPrComments(input: CollectPrCommentsInput): Promise<
   return {
     pull: parsePullRequest(rawPull),
     comments,
+    roundBlocks: roundBlocks.sort((a, b) => (a.submittedAt < b.submittedAt ? -1 : a.submittedAt > b.submittedAt ? 1 : 0)),
     skipped,
     counts: {
       reviewComments: asArray(rawReviewComments).length,
@@ -1995,6 +2091,13 @@ export function renderPrCommentsMarkdown(input: {
   lines.push(
     `- collected: ${counts.collected} (reopened=${counts.reopened}, bot_authors=${counts.bots}, unclassified_severity=${counts.unclassified})`,
   );
+  const blocks = input.result.roundBlocks ?? [];
+  const latest = blocks.at(-1);
+  if (latest !== undefined) {
+    lines.push(
+      `- keryx round blocks in our own comments (read, never replied to): ${blocks.length}; latest round ${latest.round} (${latest.reviewId}) at ${latest.reviewedHead ?? "no head"}, ${latest.findings.length} finding(s)`,
+    );
+  }
   lines.push("");
   if (input.result.comments.length === 0) {
     lines.push("No unhandled comments this round.");

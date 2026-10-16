@@ -3,11 +3,13 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { coverageErrors, isAttendedRun, requiredReviewers } from "../review/coverage";
+import { recordOperatorDecision } from "../review/operator-decisions";
+import { coverageErrors, isAttendedRun, operatorDecisionSubject, requiredReviewers } from "../review/coverage";
 import type { RawFile } from "../review/ledger";
 import { pendingMutants } from "../review/mutate";
 import { runCoverage } from "./review-chunks";
-import { assignRawDispatch, definitionCandidates, isReviewerReply, loadRaws, readDrivers, runLedger } from "./review-ledger";
+import { assignRawDispatch, definitionCandidates, isReviewerReply, loadRaws, parseSkips, readDrivers, runLedger } from "./review-ledger";
+import { computeVerdict, renderVerdict } from "../review/verdict";
 
 describe("driver files and raw replies (flow 430 AC3, AC4)", () => {
   test("a rule file is found under definition, skill_path, or either key inside payload", () => {
@@ -238,7 +240,8 @@ describe("raw/ files through loadRaws and runLedger (flow 430 AC3, AC4)", () => 
       expect(loaded.raws.map((raw) => [raw.name, raw.result])).toEqual([["raw/review-logic.txt", undefined]]);
       const out = await build(pkg);
       expect(out.ready).toBe(false);
-      expect(out.gaps.map((gap) => gap.detail)).toContain("raw/review-logic.txt: no parseable REVIEW_RESULT block");
+      // The gap names what the reply lacks (flow 458 AC12), not only that it failed.
+      expect(out.gaps.map((gap) => gap.detail)).toContain("raw/review-logic.txt: no parseable REVIEW_RESULT block (the closest JSON object in the reply cannot be read as a reviewer result: missing reviewer, slices, findings)");
     } finally {
       await cleanup();
     }
@@ -342,6 +345,223 @@ describe("coverage from the slice manifest of a separate input directory (flow 4
     } finally {
       process.chdir(original);
       await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("ledger build --skip and flow-bound packages (flow 458 AC7)", () => {
+  type Out = { ready: boolean; gaps: Array<{ reviewer?: string; detail: string }>; blockers: string[]; ledger: { dispatch: Record<string, unknown> } };
+
+  async function packageAt(segments: readonly string[]): Promise<{ root: string; pkg: string; cleanup: () => Promise<void> }> {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-f458-ledger-"));
+    const pkg = path.join(root, ".metaproject", ...segments);
+    await mkdir(path.join(pkg, "raw"), { recursive: true });
+    await writeFile(path.join(pkg, "scope-files.json"), JSON.stringify({ files: ["src/a.ts"] }));
+    return { root, pkg, cleanup: () => rm(root, { recursive: true, force: true }) };
+  }
+
+  async function run(args: string[]): Promise<{ text: string }> {
+    const lines: string[] = [];
+    const log = console.log;
+    const exitCode = process.exitCode;
+    console.log = (...items: unknown[]) => void lines.push(items.join(" "));
+    try {
+      await runLedger(["build", ...args], { rejectUnknownFlags: () => undefined });
+    } finally {
+      console.log = log;
+      process.exitCode = exitCode;
+    }
+    return { text: lines.join("\n") };
+  }
+
+  test("a skip of a required reviewer needs the operator's recorded decision (M5); with it the skip leaves the selection as Not run", async () => {
+    const { root, pkg, cleanup } = await packageAt(["reviews", "pkg"]);
+    try {
+      const required = (await requiredReviewers(root, "all", ["src/a.ts"])).required;
+      const skipped = required.find((name) => name !== "review-logic")!;
+      // The agent's flag alone is refused, and names the card and the terminal command.
+      await expect(run([pkg, "--mode", "all", "--json", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).rejects.toThrow(/needs the operator's decision.*review_override_reviewers/s);
+      const subject = await operatorDecisionSubject(pkg, "reviewer-override", required.filter((name) => name !== skipped));
+      expect(subject.items).toEqual([skipped]);
+      await recordOperatorDecision(pkg, { kind: "reviewer-override", quote: "yes, skip it", reason: "hotfix", confirmedVia: "terminal", at: new Date().toISOString(), subject });
+      const out = JSON.parse((await run([pkg, "--mode", "all", "--json", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).text) as Out;
+      expect(out.ledger.dispatch.skipped).toEqual([{ reviewer: skipped, reason: "operator: no style pass on a hotfix" }]);
+      expect(out.ledger.dispatch.notRun).toContain(`Not run: ${skipped} — operator: no style pass on a hotfix`);
+      expect(out.ledger.dispatch.selected).not.toContain(skipped);
+      expect(out.gaps.some((gap) => gap.reviewer === skipped)).toBe(false);
+      expect(out.blockers.join("\n")).not.toContain(skipped);
+      // The gate on the dispatch: the skip counts with the package's recorded decision, never as a dispatch entry alone.
+      const dispatch = out.ledger.dispatch;
+      expect((await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"], packageDir: pkg })).join("\n")).not.toContain("missing");
+      expect((await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"] })).join("\n")).toContain("dispatch.skipped is not accepted");
+      expect((await coverageErrors({ mode: "all", selected: dispatch.selected }, { root, files: ["src/a.ts"], packageDir: pkg })).join("\n")).toContain(`missing: ${skipped}`);
+
+      const text = (await run([pkg, "--mode", "all", "--dry-run", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).text;
+      expect(text).toContain(`- Not run: ${skipped} — operator: no style pass on a hotfix`);
+      const verdict = await computeVerdict(pkg);
+      expect(verdict.notRun?.[0]).toBe(`Not run: ${skipped} — operator: no style pass on a hotfix`);
+      // M6: a reviewer the required set dropped by an overlap group or a supersede is named in the verdict, with why.
+      expect(verdict.notRun).toContain("excluded: review-frontend-conventions — overlap group frontend: review-frontend reads the same lines");
+      expect(renderVerdict(verdict, "pkg")).toContain(`Not run: ${skipped} — operator: no style pass on a hotfix`);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("a skip without a reason or a reason without a skip is refused; a skip of a reviewer the round does not require is only recorded", async () => {
+    expect(() => parseSkips(["--skip", "review-style"])).toThrow("needs --reason");
+    expect(() => parseSkips(["--reason", "why"])).toThrow("must follow");
+    expect(() => parseSkips(["--skip", "a", "--skip", "b", "--reason", "x"])).toThrow("has no --reason");
+    expect(() => parseSkips(["--skip", "a", "--reason", ""])).toThrow("needs a value");
+    expect(parseSkips(["--package", "p", "--skip", "a", "--reason", "x", "--skip", "b", "--reason", "y"])).toEqual([
+      { reviewer: "a", reason: "x" },
+      { reviewer: "b", reason: "y" },
+    ]);
+    const { pkg, cleanup } = await packageAt(["reviews", "pkg"]);
+    try {
+      const out = JSON.parse((await run([pkg, "--json", "--skip", "review-nonexistent", "--reason", "x"])).text) as Out;
+      expect(out.ledger.dispatch.notRun).toContain("Not run: review-nonexistent — x (not required this round)");
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("a flow-bound package resolves its project root, so the project's own reviewers are required", async () => {
+    const { root, pkg, cleanup } = await packageAt(["flows", "458-2026-10-16-x", "reviews", "2026-10-16-pr-1"]);
+    try {
+      const overlay = path.join(root, ".metaproject", "project-skills", "review", "acme-review");
+      await mkdir(overlay, { recursive: true });
+      await writeFile(path.join(overlay, "SKILL.md"), "---\nname: acme-review\ndescription: Use when reviewing acme code.\n---\n");
+      const out = JSON.parse((await run([pkg, "--mode", "all", "--json"])).text) as Out;
+      expect(out.ledger.dispatch.selected).toContain("acme-review");
+    } finally {
+      await cleanup();
+    }
+  });
+});
+
+describe("dispositions and the recorded model (flow 458 AC12)", () => {
+  type Out = { ready: boolean; gaps: Array<{ reviewer?: string; detail: string }>; ledger: { obligations: Array<Record<string, unknown>>; dispatch: { runs: Array<Record<string, unknown>> } } };
+  const REVIEW = { reviewer: "review-logic", status: "DONE", slices: ["S1"], findings: [{ id: "F1", problem: "p" }] };
+
+  async function pkgWith(extra: Record<string, string> = {}, driver: object = { reviewer: "review-logic", slices: ["S1"], result: "raw/review-logic.txt" }): Promise<{ pkg: string; cleanup: () => Promise<void> }> {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-f458-ledger-"));
+    const pkg = path.join(root, ".metaproject", "reviews", "pkg");
+    await mkdir(path.join(pkg, "raw"), { recursive: true });
+    await mkdir(path.join(pkg, "drivers"), { recursive: true });
+    await writeFile(path.join(pkg, "scope-files.json"), JSON.stringify({ files: ["src/a.ts"] }));
+    await writeFile(path.join(pkg, "raw", "review-logic.txt"), `REVIEW_RESULT: ${JSON.stringify(REVIEW)}\n`);
+    await writeFile(path.join(pkg, "drivers", "review-logic.json"), JSON.stringify(driver));
+    for (const [name, body] of Object.entries(extra)) await writeFile(path.join(pkg, name), body);
+    return { pkg, cleanup: () => rm(root, { recursive: true, force: true }) };
+  }
+
+  async function run(args: string[]): Promise<{ out?: Out; text: string; error?: string }> {
+    const lines: string[] = [];
+    const log = console.log;
+    const exitCode = process.exitCode;
+    console.log = (...a: unknown[]) => { lines.push(a.join(" ")); };
+    try {
+      await runLedger(["build", ...args], { rejectUnknownFlags: () => undefined });
+    } catch (error) {
+      return { text: "", error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      console.log = log;
+      process.exitCode = exitCode;
+    }
+    const text = lines.join("\n");
+    return { text, ...(args.includes("--json") ? { out: JSON.parse(text) as Out } : {}) };
+  }
+
+  const ID = "review-logic:F1";
+
+  test("every known wrapper key is normalised to the same dispositions", async () => {
+    const row = { id: ID, status: "refuted", evidence: "ran it", reason: "not reproducible" };
+    for (const wrapped of [[row], { dispositions: [row] }, { items: [row] }, { results: [row] }, { data: [row] }, { entries: [row] }, { data: { dispositions: [row] } }]) {
+      const { pkg, cleanup } = await pkgWith({ "dispositions.json": JSON.stringify(wrapped) });
+      try {
+        const { out } = await run([pkg, "--mode", "all", "--json", "--dispositions", path.join(pkg, "dispositions.json")]);
+        expect(out?.ledger.obligations.find((o) => o.id === ID)).toMatchObject({ status: "refuted", evidence: "ran it" });
+      } finally {
+        await cleanup();
+      }
+    }
+  });
+
+  test("a narrowed row without remains, an unknown status and a row without id are all refused in one message, nothing written", async () => {
+    const rows = [
+      { id: ID, status: "narrowed", evidence: "e", reason: "r" },
+      { id: "review-logic:F2", status: "maybe", evidence: "e", reason: "r" },
+      { status: "refuted", evidence: "e", reason: "r" },
+      "not an object",
+      { id: "review-logic:F3", status: "narrowed", evidence: "e", reason: "r", remains: "the null case" },
+    ];
+    const { pkg, cleanup } = await pkgWith({ "dispositions.json": JSON.stringify({ dispositions: rows }) });
+    try {
+      const { error } = await run([pkg, "--mode", "all", "--json", "--dispositions", path.join(pkg, "dispositions.json")]);
+      expect(error).toContain("4 bad row(s)");
+      expect(error).toContain(`row 1 (${ID}): narrowed needs "remains"`);
+      expect(error).toContain('row 2 (review-logic:F2): status "maybe" is not one of finding, refuted, out-of-scope, narrowed');
+      expect(error).toContain('row 3: no "id"');
+      expect(error).toContain("row 4: not an object");
+      expect(error).not.toContain("row 5");
+      expect(error).toContain("One schema per row");
+      expect(existsSync(path.join(pkg, "research.json"))).toBe(false);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("a dispositions input that is not a list, or not JSON, is refused by name", async () => {
+    const { pkg, cleanup } = await pkgWith({ "object.json": JSON.stringify({ note: "nothing here" }), "broken.json": "{" });
+    try {
+      expect((await run([pkg, "--mode", "all", "--dispositions", path.join(pkg, "object.json")])).error).toContain("not a list of dispositions");
+      expect((await run([pkg, "--mode", "all", "--dispositions", path.join(pkg, "broken.json")])).error).toContain("missing or not valid JSON");
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("the default input (the obligations of the last build) keeps its still-open rows without being refused", async () => {
+    const { pkg, cleanup } = await pkgWith();
+    try {
+      expect((await run([pkg, "--mode", "all", "--json"])).out?.ledger.obligations.find((o) => o.id === ID)?.status).toBe("unresolved");
+      // The second build reads research.json back, `unresolved` obligation included.
+      const again = await run([pkg, "--mode", "all", "--json"]);
+      expect(again.error).toBeUndefined();
+      expect(again.out?.ledger.obligations.find((o) => o.id === ID)?.status).toBe("unresolved");
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("the model a driver records is on the run and in the report; without one the report says model not recorded", async () => {
+    const withModel = await pkgWith({}, { reviewer: "review-logic", slices: ["S1"], result: "raw/review-logic.txt", model: "claude-sonnet-5-5" });
+    try {
+      const { out } = await run([withModel.pkg, "--mode", "all", "--json"]);
+      expect(out?.ledger.dispatch.runs.find((r) => r.reviewer === "review-logic")?.model).toBe("claude-sonnet-5-5");
+      expect((await run([withModel.pkg, "--mode", "all"])).text).toContain("review-logic claude-sonnet-5-5");
+    } finally {
+      await withModel.cleanup();
+    }
+    const without = await pkgWith();
+    try {
+      const { out } = await run([without.pkg, "--mode", "all", "--json"]);
+      expect(out?.ledger.dispatch.runs.find((r) => r.reviewer === "review-logic")).not.toHaveProperty("model");
+      expect((await run([without.pkg, "--mode", "all"])).text).toContain("review-logic model not recorded");
+    } finally {
+      await without.cleanup();
+    }
+  });
+
+  test("a result's own model wins over the driver's", async () => {
+    const { pkg, cleanup } = await pkgWith({}, { reviewer: "review-logic", slices: ["S1"], result: "raw/review-logic.txt", model: "from-driver" });
+    try {
+      await writeFile(path.join(pkg, "raw", "review-logic.txt"), `REVIEW_RESULT: ${JSON.stringify({ ...REVIEW, model: "from-result" })}\n`);
+      const { out } = await run([pkg, "--mode", "all", "--json"]);
+      expect(out?.ledger.dispatch.runs.find((r) => r.reviewer === "review-logic")?.model).toBe("from-result");
+    } finally {
+      await cleanup();
     }
   });
 });

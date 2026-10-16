@@ -4792,6 +4792,7 @@ keryx review severity-audit --package <review-dir> [--dry-run] [--json]
 keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir> [--self <login>] [--checks <gh-checks.json>] [--json]
 keryx review compare-reference --reference <report.md> --package <review-dir> [--input <dir>] [--json]
 keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--confirm --quote "<words>"] [--json]
+keryx review plan --target <pr-url|branch> [--ref <base>] [--head <sha>] [--host keryx-shell|claude-code|codex|other] [--memory-query "<query>"] [--unattended] [--json]
 keryx review plan-eval --diff <file|base..head> [--findings <file>] [--roles a,b] [--json]
 keryx review verdict <review-id-or-path> [--raw <dir>] [--json]
 keryx review confirm-plan --package <review-dir>                                     (terminal; card review_confirm_plan)
@@ -4804,10 +4805,11 @@ keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--
 keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
                           [--package <review-dir>] [--json|--brief] [--out <file>]
-keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes <n>] [--wave-bytes <n>] [--out <dir>] [--json]
+keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes <n>] [--wave-bytes <n>] [--out <dir> | --package <review-dir>] [--json]
 keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--package <review-dir>] [--json]
 keryx review retry-plan --manifest <file> [--result <file|->] [--reviewer <id>] [--slices a,b] [--covered a,b] [--next-wave]
                         [--state <file>] [--dry-run] [--json]
+keryx review next --package <review-dir> [--reviewers a,b] [--apply] [--json]
 keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff] [--findings <file>] [--dispositions <file>] [--out <file>] [--dry-run] [--json]
 keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
 keryx review layers status  --package <review-dir> [--json]
@@ -4880,6 +4882,7 @@ A package is bound to a pull request when it targets one or when its `--ref` is 
 | `severity-audit` | Check the severity of findings against what the mutation pass proved (`keryx review severity-audit --package <review-dir> [--dry-run] [--json]`). A finding that cites `mutant:<id>` in its `evidence` is raised to `major` when that mutant survived a recorded run on a file the review changed, no mutant in that file was `killed` or `timeout` in any recorded pass, and the finding was rated `minor`, `nit`, `info` or `low`; the change is recorded as `severity_audit`. A survivor in a file where another mutant was killed is a gap in covered code, and a survivor of kind `presentation` changes no behaviour: in both cases the severity is held, the finding gets `severity_audit.held` (`mutant`, `kind` `covered` or `presentation`, `evidence`, `reason`; a covered note names the kill count), and the command prints `[held]` and counts it apart (`<n> held (survivor does not show wrong behaviour)`); a mutant with no `kind`, and a record written before the field existed, reads as `behavior`. A cited mutant no run executed leaves the finding as it is, labelled `unproven`. It never deletes a finding, and it is separate from the verifier. |
 | `context-collect` | Collect what a reviewer cannot get from the diff (`keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir>`): every review comment in full, the round-1 intent, the CI status and the backend pins the pull request names, written to `pr-context.json` and `pr-context.md`. Comments by `--self` are left out. A pull-request review dispatches with `pr_context` set to the `.md`, and `dispatch-check --pr-context` refuses a payload without it. |
 | `estimate` | Print the plan's reviewer dispatches and minutes from the slice manifest and roles, and flag a plan over the threshold: `dispatch-check` and `ledger` refuse such a plan until the operator confirms it (`confirm-plan` or `estimate --confirm --quote` at a terminal, or the `review_confirm_plan` card in keryx shell). Limits: `routing.config.json` `reviewPlan.maxDispatches` (default 40) and `reviewPlan.maxMinutes` (default 90). |
+| `plan` | The round plan in one command, without dispatching (`keryx review plan --target <pr-url\|branch> [--ref <base>] [--head <sha>] [--host <host>] [--json]`): `review start` (which finds the previous round of the target in the local packages, git history, the PR's round block and comments, and the flow, and writes `round.json`), `scope`, `blast-radius --package`, `slice --package` (a delta round slices only prevHead..head; each slice is `kind: fix` with its `findingIds`, read deep by review-logic, review-regression, the reviewers that authored those findings and every role its own content routes, or `kind: new`, routed as in round 1), `required --depth auto --scope --package` and `estimate`. Writes `<review-dir>/plan.json` (round, slices by kind, roster, dispatches, minutes, `overThreshold`, `next`: `dispatch`, or confirm the plan with the `review_confirm_plan` card / `keryx review confirm-plan`) and prints a short summary. A fix slice is covered once every reviewer on its roster read it and every finding attached to it has a disposition (`closed`, `open`, `partial`, `regressed` or `withdrawn`, in the `prior_dispositions` of a finished result of that roster); findings carried over from the previous round keep their recorded disposition but cover no fix slice. A previous round is cut from only when it is ours and finished — a round block from our own login, or a package with completion evidence (published.json, a scopeReviewed ledger, a closed status) that no commit of merge-base..head added or changed; anything else is a full round with its findings as context. `--memory-query` and `--unattended` are passed to `review start`. |
 | `plan-eval` | Compare the old and the new slicing plan offline for a diff (`--diff <file\|base..head>`): dispatches, chunks, and, with `--findings`, whether every ground-truth blocker/major lands in a slice its reviewer or a deep pass reads. Writes nothing. |
 | `verdict` | Print the round's verdict as it stands: finding counts by severity, verified vs unverified (refuted excluded), open blockers and majors, and reviewers that have not reported. Reads the ingested `findings.json`, else the raw replies in `--raw <dir>` (default `<package>/raw`); writes `verdict-interim.md` into the package. |
 | `confirm-plan`, `waive-mutation`, `override-reviewers` | Record the operator's own decision (plan confirmation, mutation-pass waiver, smaller reviewer set) in the package. Asks at the terminal and is refused without a TTY; inside keryx shell the agent calls the `review_confirm_plan`, `review_waive_mutation` or `review_override_reviewers` card instead. |
@@ -5400,7 +5403,7 @@ it almost never costs a direct dependent.
 unaffordable *and* harmful — review quality decays as context grows, and an
 unbounded second scope makes later rounds worse than earlier ones.
 
-### `review slice`, `review dispatch-check`, `review retry-plan`, `review ledger`
+### `review slice`, `review dispatch-check`, `review retry-plan`, `review next`, `review ledger`
 
 A reviewer on a shell host cannot open a path, and one handed the whole diff
 spends its rounds reading. These three commands keep each reviewer's input small
@@ -5464,6 +5467,30 @@ manifest. `--dry-run` plans without writing; the exit code is 0 for every decisi
 Only the operator can accept a smaller set than that, with their own quote at
 `review complete`.
 
+`review next --package <review-dir>` answers the same question for the whole package at
+once, so the orchestrator runs it after each batch instead of polling `retry-plan` per
+reviewer (a Claude Code review of a 151-file PR made 132 such polls, mostly with no
+change). It reads the manifest and its routing, `raw/` (each reviewer's latest reply),
+the late results the drivers name and the retry state, and decides every reviewer with
+`retry-plan`'s own logic. Each dispatch lists the reviewer, `wave` (and `wavesLeft`), the
+slice ids and their absolute paths, the `model` the reviewer's driver or last reply
+recorded, the `result` path its reply goes to, and a reason: `missing` (no result for
+these slices), `retry` (an unfinished result, or questions to answer), `stalled` (nothing
+new was covered, so the open slices are re-cut at half the size), `escalated` (a
+major-or-worse finding re-opened a light slice deep and the reviewer now owns it). It
+prints `done` when nothing is left; a reviewer that is `not-run` is listed, never counted
+as a clean pass. It is read-only unless `--apply` is given (re-cut slice files, the
+escalated manifest, the retry state), and a reply it already counted is remembered by hash,
+so asking again spends no attempt. `--reviewers a,b` limits the answer; `--json` prints the
+whole result.
+
+Replies are read leniently where the strict rules found nothing: a fenced ```` ```json ````
+block, a bare object with prose before or after it, a JSON array of one reviewer's results
+(one per wave, merged: least finished status, union of slices and findings) and an object
+wrapped in `result`, `review_result`, `output`, `response` or `data`. A reply that holds
+several reviewers' results, disagreeing statuses, or a cut-off result is still refused, and
+the message names what is missing (`reviewer`, `status`, `slices`, `findings`).
+
 `NEEDS_CONTEXT` (or any result with an open `needs_context` list) is not a finished
 scope either. It prints decision `context` with the questions: answer them and
 re-dispatch the uncovered slices. Asking again with nothing new covered is `not-run`.
@@ -5486,8 +5513,11 @@ gate requires covered by its dispatched payloads, is a complete source-only run
 `incomplete` or `not-run`: the builder never declares a reviewer complete on its own
 word. Each raw finding becomes an obligation that is closed only by a matching
 canonical finding (same reviewer and id) or by a `--dispositions` entry
-`{id, status: finding|refuted|out-of-scope, evidence, reason, finding?}`; otherwise it
-stays `unresolved`. A reviewer's `follow_ups` (strings in its result) and each
+`{id, status: finding|refuted|out-of-scope|narrowed, evidence, reason, finding?, remains?}`; otherwise it
+stays `unresolved`. The file is a JSON array, or an object holding one under `dispositions`,
+`items`, `results`, `data`, `entries` or `obligations` (wrappers may nest); a row with no `id`,
+a `status` that closes nothing, or `narrowed` without `remains` refuses the whole build with the
+list of bad rows. A reviewer's `follow_ups` (strings in its result) and each
 `Parent follow-up: <text>` line after its last `REVIEW_RESULT` block are work handed
 back to the parent: each becomes an obligation `<reviewer>:fu<n>` that stays `unresolved`, and
 is a gap, until a `--dispositions` entry closes it (`narrowed` needs `remains`); a
@@ -5503,7 +5533,13 @@ using the gate's own validators; exit 1 when not ready, so
 `--out` (default `<package>/research.json`), `--dry-run`, `--json`.
 
 `drivers/<reviewer>.json` records one dispatch:
-`{"reviewer", "slices": [...], "result": "raw/<reviewer>.txt", "definition": "<path of the reviewer's SKILL.md>"}`.
+`{"reviewer", "slices": [...], "result": "raw/<reviewer>.txt", "definition": "<path of the reviewer's SKILL.md>", "model": "<model id>"}`.
+`review slice --package <review-dir>` writes one such file per reviewer and wave,
+`drivers/<reviewer>-w<n>.json`, with `slices` (ids), `slicePaths` (`{id, path, bytes}`, the
+path absolute), `wave`, `waves` and `result` (`raw/<reviewer>-w<n>.txt`); the dispatcher
+adds `model`, which a re-slice keeps. `model` (or the model in a reviewer's own result) is
+recorded on the reviewer's run in `research.json` and listed by `ledger build`
+(`models: review-logic <id>`); a reviewer with none reads `model not recorded`.
 The rule file is taken from `definition`, or from a `skill_path` at the top level or
 inside a `payload` object, whichever names a file that exists; a reviewer with none
 stays a named gap (`no resolved rule file`). Only reviewer replies belong in `raw/`.

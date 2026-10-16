@@ -25,7 +25,7 @@ license: "MIT"
 
 Focused style reviewer. Covers naming conventions, dead code, readability, DRY violations,
 import organization, comment quality, file length, cyclomatic complexity, and console noise.
-Never touches logic correctness, architecture, security, or performance. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
+Never touches logic correctness, architecture, security, or performance. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
 
 ---
 

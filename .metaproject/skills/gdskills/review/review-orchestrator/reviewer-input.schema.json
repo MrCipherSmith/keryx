@@ -181,6 +181,25 @@
       "default": false,
       "description": "True when the diff under review was produced to answer earlier findings. A fix round without the earlier findings is the failure this field exists to stop: the reviewer cannot tell whether a fix is complete when it does not know what the fix was answering."
     },
+    "allowed_tools": {
+      "type": "string",
+      "enum": ["read-only", "run-tests"],
+      "default": "read-only",
+      "description": "What the reviewer may do beyond reading. `read-only` (the default): read the diff and files, run no command. `run-tests`: at most one testing reviewer per round may run the tests, inside `exec_budget_s`. Verification commands go through the parent's `keryx review verify-run --timeout`."
+    },
+    "exec_budget_s": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Seconds of command time the reviewer may spend in total. 0 or absent with `allowed_tools: read-only`; a positive budget with `run-tests`."
+    },
+    "known_findings": {
+      "type": "array",
+      "description": "Findings already recorded by earlier waves of this round. Do not report them again; `keryx review ingest` merges duplicates.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
     "prior_findings": {
       "type": "array",
       "description": "Every finding from earlier rounds on this change, with what the fix claimed about each. Eleven rounds across two flows were dispatched without this, and twice in a row the fix repaired the site the finding named while leaving its siblings — which the NEXT round then found. A reviewer that can see the earlier finding and the claimed disposition can check the claim.",
@@ -225,6 +244,25 @@
           }
         },
         "additionalProperties": true
+      }
+    },
+    "known_findings": {
+      "type": "array",
+      "description": "Findings an EARLIER WAVE of this same round already reported, from `knownFindingsForWave(<package>)` in src/review/dedupe.ts: id plus the file/line/quote anchor, nothing else. A reviewer that would raise the same defect at the same site cites the known id in its evidence instead of re-reporting it; ingest merges whatever duplicates still arrive (same file, line within 3 or same quote, same mechanism) into one finding with the highest severity and `reported_by`. Optional; absent on the first wave.",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "global_id": { "type": ["string", "null"] },
+          "reviewer": { "type": "string" },
+          "severity": { "type": "string", "enum": ["blocker", "major", "minor", "info"] },
+          "file": { "type": ["string", "null"] },
+          "line": { "type": ["integer", "null"], "minimum": 1 },
+          "quote": { "type": ["string", "null"] },
+          "problem": { "type": "string" }
+        },
+        "additionalProperties": false
       }
     },
     "layers": {
