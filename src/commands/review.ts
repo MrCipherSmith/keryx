@@ -113,6 +113,7 @@ import { READINESS_ITEMS, computeReadiness, readinessDepthLines, recountRefusal,
 import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
 import { findPreviousRound, NOT_REVIEW_PACKAGES, skippedRound, type PriorRoundDeps } from "../review/prior-round";
 import { recordFinishedRound } from "../review/round-registry";
+import { carryPremiseDecisions } from "../review/premise-question";
 import { renderRoundLine, ROUND_FILE, writeRoundRecord } from "../review/round-record";
 // Flow 328, AC6: attach the latest CACHED check-ac result to a review
 // package. Minimal, additive — this hook never triggers a fresh Jev call
@@ -1097,6 +1098,11 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
           ...(forcedPrior === undefined ? {} : { forced: forcedPrior }),
         });
     await writeRoundRecord(result.path, detected.round, detected.priorFindings, detected.identity);
+    const previousPackage = detected.round.previous?.packagePath;
+    if (detected.round.mode === "delta" && previousPackage !== undefined && detected.round.carried.length > 0) {
+      const carriedAnswers = await carryPremiseDecisions(result.path, path.resolve(cwd, previousPackage), detected.round.carried.map((entry) => entry.findingId), previousPackage);
+      if (carriedAnswers.length > 0) console.log(`premise answers carried from ${previousPackage}: ${carriedAnswers.join(", ")}`);
+    }
     console.log(renderRoundLine(detected.round));
     for (const warning of detected.round.warnings ?? []) console.error(`warning: ${warning}`);
     console.log(

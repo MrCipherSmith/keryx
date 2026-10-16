@@ -3,6 +3,7 @@
 // facts and write the same records.
 
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
@@ -68,6 +69,35 @@ export async function findHeldFinding(packageDir: string, ref: string): Promise<
   };
   const digest = createHash("sha256").update(JSON.stringify([shown.key, shown.severity, shown.problem, shown.verdict, shown.question, shown.answered ?? ""])).digest("hex");
   return { ok: true, finding: { ...shown, subject, digest } };
+}
+
+/**
+ * Carry the operator's premise answers into a delta round's package (flow 459). Each finding the round carries from
+ * `previousDir` keeps the answer the operator gave there, recorded as carried from that package, so an upheld finding is
+ * not asked again. The answer travels only while the finding is still what it was shown: the previous record's subject
+ * (severity, verdict, problem digest) must match the decision's, and the new round's own finding is matched against that
+ * subject again when the decision is read, so a finding whose problem changed asks the operator afresh.
+ * Returns the finding keys whose answers were carried.
+ */
+export async function carryPremiseDecisions(packageDir: string, previousDir: string, carriedIds: readonly string[], carriedFrom: string): Promise<string[]> {
+  if (carriedIds.length === 0 || !existsSync(previousDir)) return [];
+  const previous = await readPremiseDecisions(previousDir);
+  if (previous.length === 0) return [];
+  const findings = await readJsonFileOr<unknown>(path.join(previousDir, FINDINGS_FILE), undefined);
+  const records = Array.isArray(findings) ? findings.map(obj).filter((entry): entry is Record<string, unknown> => entry !== undefined) : [];
+  const have = await readPremiseDecisions(packageDir);
+  const carried: string[] = [];
+  for (const record of records) {
+    const keys = [str(record["global_id"]), str(record["id"])].filter((key): key is string => key !== undefined);
+    if (!keys.some((key) => carriedIds.includes(key))) continue;
+    const decision = latestPremiseDecision(record, previous);
+    if (decision === undefined) continue;
+    if (have.some((entry) => entry.finding === decision.finding && entry.at === decision.at && entry.carriedFrom === carriedFrom)) continue;
+    const { kind: _kind, actor: _actor, ...input } = decision;
+    await recordPremiseDecision(packageDir, { ...input, carriedFrom });
+    carried.push(decision.finding);
+  }
+  return carried;
 }
 
 export type PremiseAnswer = {

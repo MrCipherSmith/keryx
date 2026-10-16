@@ -21,7 +21,7 @@ import {
 } from "./operator-decisions";
 import { applyPremiseDecision, applyPremiseDecisions, awaitingOperator, latestPremiseDecision, premiseHoldState } from "./premise";
 import { heldFinding, premiseAnswer, premiseAnswerInput } from "./premise-fixtures";
-import { answerPremiseQuestion, findHeldFinding } from "./premise-question";
+import { answerPremiseQuestion, carryPremiseDecisions, findHeldFinding } from "./premise-question";
 import { computeReadiness } from "./readiness";
 import { findingStatus } from "./round-record";
 import { computeVerdict } from "./verdict";
@@ -36,6 +36,49 @@ async function pkg(): Promise<string> {
   dirs.push(dir);
   return dir;
 }
+
+describe("carryPremiseDecisions (a delta round does not ask again)", () => {
+  async function previousWith(finding: Record<string, unknown>, answer: "uphold" | "dismiss" = "uphold"): Promise<string> {
+    const previous = await pkg();
+    await writeFile(path.join(previous, "findings.json"), JSON.stringify([finding]));
+    await recordPremiseDecision(previous, premiseAnswerInput(finding, { answer, reason: "keep it" }));
+    return previous;
+  }
+
+  test("an upheld answer lands in the new package as carried from the previous one, and the finding is not awaiting", async () => {
+    const finding = heldFinding();
+    const previous = await previousWith(finding);
+    const next = await pkg();
+    expect(await carryPremiseDecisions(next, previous, ["LY-003"], "reviews/r1")).toEqual(["r1#LY-003"]);
+    const [carried] = await readPremiseDecisions(next);
+    expect(carried).toMatchObject({ answer: "uphold", carriedFrom: "reviews/r1", actor: "operator", confirmedVia: "terminal" });
+    expect(premiseHoldState(finding, await readPremiseDecisions(next))).toBe("upheld");
+    expect(await carryPremiseDecisions(next, previous, ["LY-003"], "reviews/r1")).toEqual([]);
+    expect(await readPremiseDecisions(next)).toHaveLength(1);
+  });
+
+  test("a finding the round did not carry carries no answer", async () => {
+    const previous = await previousWith(heldFinding());
+    const next = await pkg();
+    expect(await carryPremiseDecisions(next, previous, ["LY-999"], "reviews/r1")).toEqual([]);
+    expect(await readPremiseDecisions(next)).toEqual([]);
+  });
+
+  test("a changed subject does not carry: the answer was given for another problem, and the new finding asks again", async () => {
+    const finding = heldFinding();
+    const previous = await pkg();
+    // The package holds an answer bound to a problem the finding no longer states.
+    await writeFile(path.join(previous, "findings.json"), JSON.stringify([{ ...finding, problem: "a different problem" }]));
+    await recordPremiseDecision(previous, premiseAnswerInput(finding, { answer: "uphold", reason: "keep it" }));
+    const next = await pkg();
+    expect(await carryPremiseDecisions(next, previous, ["LY-003"], "reviews/r1")).toEqual([]);
+    // And a carried answer never answers a finding whose problem changed in the new round.
+    const upheld = await previousWith(finding);
+    const copied = await pkg();
+    await carryPremiseDecisions(copied, upheld, ["LY-003"], "reviews/r1");
+    expect(premiseHoldState({ ...finding, problem: "rewritten in round 2" }, await readPremiseDecisions(copied))).toBe("awaiting");
+  });
+});
 
 type Disposition = { state: string; evidence: string } | undefined;
 const disposition = (finding: unknown): Disposition => (finding as { disposition?: Disposition }).disposition;

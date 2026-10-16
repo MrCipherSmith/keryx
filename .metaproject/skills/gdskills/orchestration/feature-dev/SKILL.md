@@ -113,7 +113,7 @@ Input:  codebase_path=<project_root>, scope=changed, base_branch=<base>
    - `git diff main...HEAD` — review the full diff
    - Check for: TODOs left behind, console.logs, hardcoded values
    - Verify all acceptance criteria from Phase 1 spec
-3. Fix any findings (max 2 review-fix cycles), never one `review-premise` holds: a held finding is neither fixable nor clean and blocks the cycle until answered; ask the operator about it as `review-orchestrator` "Wave D" says, and only an upheld one is fixed (unattended: stop and report the held list). Each next round is `keryx review start` or `keryx review plan` on the new head: the round comes from `round.json`; no own range, no whole-branch re-review (the `git diff main...HEAD` above is round 1 only).
+3. Fix any findings (max 2 review-fix cycles), never one `review-premise` holds: a held finding is neither fixable nor clean and blocks the cycle until answered; ask the operator about it as `review-orchestrator` "Wave D" says, and only an upheld one is fixed, with `premise_verdict` set on each `fix_context.review_feedback` item the judge ruled on and `premise_answer: "uphold"` on a held one the operator upheld (unattended: stop and report the held list). Each next round is `keryx review start` or `keryx review plan` on the new head: the round comes from `round.json`; no own range, no whole-branch re-review (the `git diff main...HEAD` above is round 1 only).
 4. Re-run `code-verifier` after any fixes
 
 ### Phase 8: DELIVER + CHANGE REPORT

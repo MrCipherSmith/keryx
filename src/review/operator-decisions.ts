@@ -78,6 +78,8 @@ export type PremiseQuestionDecision = {
   actor: string;
   confirmedVia: OperatorDecisionVia;
   subject: PremiseDecisionSubject;
+  /** Set when the answer was copied from an earlier round's package for a carried finding (flow 459): that package's path. */
+  carriedFrom?: string | undefined;
 };
 
 /** What a writer passes: the store fills in the kind and the actor, so both writers record the same convention. */
@@ -179,6 +181,7 @@ export async function recordPremiseDecision(
     actor: PREMISE_DECISION_ACTOR,
     confirmedVia: input.confirmedVia,
     subject: input.subject,
+    ...(input.carriedFrom === undefined ? {} : { carriedFrom: input.carriedFrom }),
   };
   if (!validPremise(kept)) {
     throw new Error("a premise decision needs the finding, an answer of uphold or dismiss, a reason, the operator's words, the time, how it was confirmed and the finding it was shown");
