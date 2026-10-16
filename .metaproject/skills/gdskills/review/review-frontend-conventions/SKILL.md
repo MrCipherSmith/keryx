@@ -21,6 +21,8 @@ metadata:
   version: "1.0.0"
   category: "review"
   stack_requires: "react,mobx"
+  overlap_group: "frontend"
+  overlap_rank: "generic"
 license: "MIT"
 ---
 

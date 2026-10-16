@@ -14,6 +14,7 @@ metadata:
   category: "review"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
   stack_requires: "react,mobx"
+  overlap_group: "frontend"
 license: "MIT"
 ---
 
