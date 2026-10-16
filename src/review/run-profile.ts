@@ -2,7 +2,8 @@
 //
 // - `operatorGate` stamps the package as created by a keryx that gates operator decisions (mutation waiver,
 //   reviewer-set override) on a card or a terminal. A package without the stamp predates the gate and keeps the
-//   old rules, so an old round still closes the way it was recorded.
+//   old rules, so an old round still closes the way it was recorded. The same stamp is written into manifest.json,
+//   so deleting this file does not turn the gate off: a stamped manifest without a run profile is refused.
 // - `mode` is attended unless the start said `--unattended`; an unattended round records "Not run: mutation pass"
 //   instead of being refused for it. The autonomous runner's environment is unattended whatever the file says.
 // - `host` is the agent host the round runs on; item 10 of the readiness checklist reads it.
@@ -81,8 +82,16 @@ export function buildRunProfile(input: {
   };
 }
 
-export async function writeRunProfile(packageDir: string, profile: RunProfile): Promise<void> {
+/**
+ * `review start|attach` writes the run profile and stamps the package manifest with the same operator-gate version,
+ * so the package's identity, not only a file beside it, records that it is gated.
+ */
+export async function writeRunProfile(packageDir: string, profile: RunProfile, options: { stampManifest?: boolean } = {}): Promise<void> {
   await writeFileAtomic(path.join(packageDir, RUN_PROFILE_FILE), `${JSON.stringify(profile, null, 2)}\n`);
+  if (options.stampManifest !== true) return;
+  const manifestFile = path.join(packageDir, "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestFile, "utf8")) as Record<string, unknown>;
+  await writeFileAtomic(manifestFile, `${JSON.stringify({ ...manifest, operatorGate: profile.operatorGate }, null, 2)}\n`);
 }
 
 /** The package's run profile, or undefined for a package created before it existed (or an unreadable one). */
@@ -107,10 +116,37 @@ export function readRunProfile(packageDir: string): RunProfile | undefined {
   }
 }
 
-/** Whether the package is held to the operator gate: created by a keryx that stamps it. */
+/**
+ * The operator-gate stamp `review start|attach` also writes into the package's manifest.json (flow 457, round-2 M1).
+ * The manifest is the package's identity, so a package cannot be made to look pre-457 by deleting run-profile.json.
+ */
+export function manifestOperatorGate(packageDir: string): number {
+  try {
+    const parsed = JSON.parse(readFileSync(path.join(packageDir, "manifest.json"), "utf8")) as { operatorGate?: unknown } | null;
+    return typeof parsed?.operatorGate === "number" ? parsed.operatorGate : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Whether the package is held to the operator gate: its manifest or its run profile carries the stamp. */
 export function operatorGateApplies(packageDir: string | undefined): boolean {
   if (packageDir === undefined) return false;
-  return (readRunProfile(packageDir)?.operatorGate ?? 0) >= OPERATOR_GATE_VERSION;
+  return Math.max(manifestOperatorGate(packageDir), readRunProfile(packageDir)?.operatorGate ?? 0) >= OPERATOR_GATE_VERSION;
+}
+
+/**
+ * A package whose manifest says it is gated but whose run-profile.json is missing or unreadable is refused: it is not a
+ * pre-457 package, it lost the record of how the round runs. Undefined when there is nothing to refuse.
+ */
+export function runProfileRefusal(packageDir: string | undefined): string | undefined {
+  if (packageDir === undefined || manifestOperatorGate(packageDir) < OPERATOR_GATE_VERSION) return undefined;
+  if (readRunProfile(packageDir) !== undefined) return undefined;
+  return (
+    `${path.join(packageDir, RUN_PROFILE_FILE)} is missing or unreadable, but the package manifest records that \`keryx review start|attach\` ` +
+    "created it with the operator gate. The run profile is not optional on such a package and is not read as a pre-457 package. " +
+    "Start a new round with `keryx review start` (or `attach`); do not delete or edit run-profile.json by hand"
+  );
 }
 
 /**

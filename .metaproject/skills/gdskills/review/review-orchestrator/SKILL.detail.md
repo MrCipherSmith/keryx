@@ -767,6 +767,11 @@ waive-mutation --package <review-dir> --reason "<why>"` in their terminal (it wr
 except `review start --unattended` and `keryx review run --autonomous`, which record `Not run: mutation
 pass` without asking.
 
+These operator gates (cards, terminal-only commands, plan confirmation, decision records) keep a
+cooperating agent from cutting corners and make every decision visible and attributable; they do not
+stop a hostile same-user agent, which can fake a pty or write the JSON records itself (the TM-03/TM-04
+boundary). The autonomous runner's mutation-gate exemption predates flow 457 and is kept on purpose.
+
 `keryx review mutate --cap <n>` runs the first `n` candidates and records `cap` and `not_reached`
 in `mutation-<n>.json`. The table then prints `Not run: N candidates` (and the report must carry
 that line, see `keryx review report-parity`). A candidate the cap left out is still pending, so it

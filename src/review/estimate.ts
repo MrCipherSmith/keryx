@@ -8,7 +8,7 @@ import path from "node:path";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr, readJsonObjectFile } from "../lib/json";
 import { packageHasBlastRadius, packageHasPrContext, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers, type RoundDepth } from "./coverage";
-import { operatorGateApplies } from "./run-profile";
+import { operatorGateApplies, runProfileRefusal } from "./run-profile";
 import { manifestSizeProblem, packWaves, waveBytesOf, type SliceManifest } from "./slice";
 import { ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph } from "./waves";
@@ -238,6 +238,8 @@ export function planGateRefusal(estimate: RoundEstimate, confirmed: boolean, pac
  */
 export async function packagePlanGate(packageDir: string, options: { manifest?: string | undefined; manifestValue?: SliceManifest | undefined } = {}): Promise<{ estimate: RoundEstimate; refusal: string | undefined }> {
   const estimate = await estimatePackage(packageDir, options);
+  const profileMissing = runProfileRefusal(packageDir);
+  if (profileMissing !== undefined) return { estimate, refusal: profileMissing };
   if (!operatorGateApplies(packageDir)) return { estimate, refusal: undefined };
   return { estimate, refusal: planGateRefusal(estimate, planConfirmed(packageDir, estimate), packageDir, readPlanConfirmation(packageDir)) };
 }

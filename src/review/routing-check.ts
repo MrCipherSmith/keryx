@@ -6,7 +6,7 @@
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { type SliceEntry, type SliceManifest, sliceSourceFromDiff } from "./slice";
+import { parseScopedDiff, type SliceEntry, type SliceManifest } from "./slice";
 import { routeSliceRegions } from "./slice-routing";
 
 export type NarrowedSlice = { id: string; missingRoles: string[]; depth?: { recorded: string; needed: "deep" } };
@@ -23,7 +23,9 @@ export function narrowedSlices(manifest: Pick<SliceManifest, "slices">, readText
       unreadable.push(entry.id);
       continue;
     }
-    const needed = routeSliceRegions(entry.id, sliceSourceFromDiff(text).regions, { changedFiles });
+    // Slice files are always written in the scoped format (like `routeSlices` reads them). Sniffing the format would let
+    // an added line that starts with `++ ` pass for a git header and route the slice as an empty unified diff.
+    const needed = routeSliceRegions(entry.id, parseScopedDiff(text), { changedFiles });
     const recorded = new Set(entry.roles ?? []);
     const missingRoles = needed.roles.filter((role) => !recorded.has(role));
     const shallow = needed.depth === "deep" && entry.depth !== "deep";
@@ -46,11 +48,12 @@ export function sliceTextReader(manifestDir: string): (entry: SliceEntry) => str
 }
 
 /**
- * `review complete`'s check: the package's slice manifest (its own, or the copy the ledger left), each slice's text read
- * next to it, in the package's slices/ or in the shared slice directory. A slice whose text is gone is not judged here:
- * the ledger, which needs the text for its content hash, already checked it.
+ * The package's slice-manifest check: its own manifest (or the copy the ledger left), each slice's text read next to it,
+ * in the package's slices/ or in the shared slice directory. `ledger build` runs it on the package beside the input
+ * directory's manifest. With `refuseUnreadable` (`review complete`), a slice the manifest lists whose text is gone is
+ * refused: its routing cannot be checked, so it is not taken on the manifest's word.
  */
-export function packageRoutingRefusal(packageDir: string, projectRoot: string): string | undefined {
+export function packageRoutingRefusal(packageDir: string, projectRoot: string, options: { refuseUnreadable?: boolean } = {}): string | undefined {
   const shared = path.join(projectRoot, ".metaproject", "data", "review", "slices");
   const own = path.join(packageDir, "slices");
   for (const [file, dirs] of [[path.join(own, "manifest.json"), [own]], [path.join(packageDir, "slice-manifest.json"), [own, shared]]] as const) {
@@ -63,8 +66,14 @@ export function packageRoutingRefusal(packageDir: string, projectRoot: string): 
     }
     if (manifest === undefined) continue;
     const readers = dirs.map((dir) => sliceTextReader(dir));
-    const { narrowed } = narrowedSlices(manifest, (entry) => readers.map((read) => read(entry)).find((text) => text !== undefined));
-    return routingRefusal(path.relative(projectRoot, file) || file, narrowed);
+    const { narrowed, unreadable } = narrowedSlices(manifest, (entry) => readers.map((read) => read(entry)).find((text) => text !== undefined));
+    const label = path.relative(projectRoot, file) || file;
+    const refusal = routingRefusal(label, narrowed);
+    if (refusal !== undefined || options.refuseUnreadable !== true || unreadable.length === 0) return refusal;
+    return (
+      `${label} lists ${unreadable.length} slice(s) whose text is missing (${unreadable.slice(0, 8).join(", ")}${unreadable.length > 8 ? ", …" : ""}), so their routing cannot be checked against their content. ` +
+      "Restore the slice files next to the manifest, or re-run `keryx review slice` and the round"
+    );
   }
   return undefined;
 }
