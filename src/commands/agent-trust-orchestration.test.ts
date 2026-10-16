@@ -748,8 +748,8 @@ test("AC4 (E8): the same question with relabelled options is asked again", async
     JSON.stringify({
       question: "Which branch?",
       options: [
-        { id: "yes", label: "Delete it", description: "" },
-        { id: "no", label: "Keep it", description: "" },
+        { id: "yes", label: "Alpha", description: "" },
+        { id: "no", label: "Beta", description: "" },
       ],
     }),
   );
