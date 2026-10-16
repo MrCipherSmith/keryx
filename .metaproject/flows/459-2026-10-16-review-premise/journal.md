@@ -38,3 +38,7 @@ Skills fix lane merged (0d38ea4d2): 33 upheld findings fixed or merged into thei
 ## 2026-10-16 — round 2 (delta c144874..f47ebb0)
 
 13 reviewer dispatches over the fix delta. Prior: 111 closed, 10 partial, 4 open (testing-practices findings that missed the round-1 fix), 0 regressed. New: 3 major (SEC2-001 operator-only guard case/nesting; RG2-001 decide-premise rewrite broke registry trust; LG2-001 read-only keryx-shell child has no git), 31 minor, 19 info. Premise judge: 33 upheld, 1 challenged (cardSafe import) — owner: uphold, moved to src/lib in this PR. Fix lane 3cb8ded48 closed all upheld and every partial/open prior except R2-002 (job-orchestrator rewrap vs ceiling) — owner: move reference text to a SKILL.detail.md.
+
+## 2026-10-16 — rounds 3–5 and re-plan (owner decision)
+
+Majors per round 18 → 3 → 1 → 0 → 0; minors 92 → 31 → 16 → 11 → ~6. Five review/fix attempts reached. The carry-forward of holds on a re-ingest without --premises churned for three rounds (RG2-004 → RG4-001 partial → SEC4-001/SEC5-001). Owner: change strategy — carry holds from the previous ingest's findings.json records only, never re-read agent-writable premises.json; fix the remaining minors with one implementer; verify with the authors of those findings only. Then merge and release 0.3.121.
