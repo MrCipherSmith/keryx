@@ -23,6 +23,7 @@ import {
 } from "./autonomous-profile";
 import { createEventTail, type Progress } from "./autonomous-progress";
 import { countFindings, validateSummary, writeSummary, type AutonomousSummary } from "./autonomous-summary";
+import { reviewsRoot } from "./package-location";
 import { ENV_REVIEW_SYSTEM } from "./review-system";
 import type { ManagedReviewManifest, ReviewPackageStatus } from "./types";
 
@@ -176,7 +177,7 @@ function sameTarget(manifest: ManagedReviewManifest, target: AutonomousTarget): 
 }
 
 function listPackages(cwd: string, target: AutonomousTarget): FoundPackage[] {
-  const root = path.join(cwd, ".metaproject", "reviews");
+  const root = reviewsRoot(cwd);
   if (!existsSync(root)) return [];
   const found: Array<FoundPackage & { at: number }> = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {

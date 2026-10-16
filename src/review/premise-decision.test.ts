@@ -126,6 +126,22 @@ describe("carryPremiseDecisions (a delta round does not ask again)", () => {
     expect(await carryPremiseDecisions(next, next, ["LY-003"], "reviews/r2", { projectRoot: root })).toEqual([]);
   });
 
+  test("a package under a flow's reviews root is a real package; one nested in it, one in a flows/reviews dir, or one reached by `..` outside the layout is not (review T4-003)", async () => {
+    const root = await pkg();
+    const manifestAt = async (...segments: string[]): Promise<string> => {
+      const dir = path.join(root, ...segments);
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(dir, "manifest.json"), "{}");
+      return dir;
+    };
+    const flowPackage = await manifestAt(".metaproject", "flows", "f1", "reviews", "r1");
+    expect(isReviewPackageDir(flowPackage, root)).toBe(true);
+    expect(isReviewPackageDir(await manifestAt(".metaproject", "flows", "f1", "reviews", "r1", "x"), root)).toBe(false);
+    expect(isReviewPackageDir(await manifestAt(".metaproject", "flows", "reviews", "r1"), root)).toBe(false);
+    await manifestAt("reviews", "r1");
+    expect(isReviewPackageDir(path.join(root, ".metaproject", "flows", "..", "..", "reviews", "r1"), root)).toBe(false);
+  });
+
   test("a forged record in the previous package is re-validated and not carried: incomplete, or for a finding that is not held", async () => {
     const finding = heldFinding();
     const unheld = heldFinding({ id: "LY-004", global_id: "r1#LY-004", premise: { verdict: "upheld", judge: "review-premise" } });

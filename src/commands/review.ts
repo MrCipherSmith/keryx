@@ -33,6 +33,7 @@ import {
   type ManagedReviewIngestInput,
 } from "../review/managed";
 import { parityLines, readReviewParity, renderParityReport } from "../review/parity";
+import { reviewsRoot } from "../review/package-location";
 import type { PrLookup, PrSnapshot } from "../review/complete-head-gate";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
@@ -3612,7 +3613,7 @@ async function readVerifications(source: string | undefined, reviewId: string | 
   }
   // Flow 457 (T7): a claim citing a `keryx review verify-run` record of its own finding, in the package this ingest
   // writes (`--review-id`), ran in the parent: execution. Without a review id no record can be bound to a package.
-  const packageDir = reviewId === undefined || !/^[\w.-]+$/.test(reviewId) ? undefined : path.join(resolveProjectRoot(process.cwd()), ".metaproject", "reviews", reviewId);
+  const packageDir = reviewId === undefined || !/^[\w.-]+$/.test(reviewId) ? undefined : path.join(reviewsRoot(resolveProjectRoot(process.cwd())), reviewId);
   return promoteParentExecutions(verificationClaims(parsed as VerificationSource), packageDir);
 }
 

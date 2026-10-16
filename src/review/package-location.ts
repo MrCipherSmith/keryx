@@ -1,6 +1,9 @@
-// Where a review package lives (review R3-ARCH-001): directly under `.metaproject/reviews/`, or under
-// `.metaproject/flows/<flow>/reviews/`. The ingest's allocation, the prior-round detector's globs and the
-// "is this a real package" check all read the layout from here, so a change to it is made once.
+// Where a review package lives (review R3-ARCH-001, R4-ARCH-001): directly under `.metaproject/reviews/`, or
+// under `.metaproject/flows/<flow>/reviews/`. The ingest's allocation, the prior-round detector (globs and disk
+// scan), the "is this a real package" check, the flow review gate, the loop detector, flow spend, the arbiter log,
+// the autonomous run and `review` commands that open a package by id take the layout from here. Not yet routed: the
+// TUI's flow readers (tui/jev-triage-command.ts, tui/conform-source.ts), the bot's package scan (bot/packages.ts)
+// and flow-move; and the pr-comments and bot caches, which sit under the reviews root but are not packages.
 
 import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";

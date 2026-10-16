@@ -195,6 +195,17 @@ describe("each source alone", () => {
     expect(priorFindings[0]).toMatchObject({ id: "F-3", status: "acted-on", disposition: "acted-on", source: "flow" });
   });
 
+  test("flow: a read that fails is reported as not consulted, and a package that is not ingested is named beside the rounds (review LG4-002)", async () => {
+    const failed = await findPreviousRound(TARGET, B, { cwd: root, github: offline, flowDir: "001-x", flowRounds: async () => Promise.reject(new Error("operator-deciſions.json looks like the store")) });
+    expect(failed.round.sourcesTried.find((attempt) => attempt.source === "flow")).toMatchObject({ result: "not-consulted", detail: expect.stringContaining("operator-deciſions.json") });
+    writePackage(".metaproject/flows/001-x/reviews/flow-r1", { reviewId: "flow-r1", head: A, ref: "feat/elsewhere" });
+    const good: ReviewRoundRecord = { reviewId: "flow-r1", dir: ".metaproject/flows/001-x/reviews/flow-r1", sortKey: "2026-10-01T00:00:00Z", ingested: true, problems: [], head: A, mode: "review-flow", coverage: [], findings: [], verification: null };
+    const bad: ReviewRoundRecord = { ...good, reviewId: "flow-r2", dir: ".metaproject/flows/001-x/reviews/flow-r2", ingested: false, problems: ["operator decisions cannot be read: look-alike"] };
+    const { round } = await findPreviousRound(TARGET, B, { cwd: root, github: offline, flowDir: "001-x", flowRounds: async () => [good, bad] });
+    expect(round).toMatchObject({ source: "flow", previous: { reviewId: "flow-r1" } });
+    expect(round.sourcesTried.find((attempt) => attempt.source === "flow")?.detail).toContain("skipped, not ingested: flow-r2 (operator decisions cannot be read: look-alike)");
+  });
+
   test("nothing anywhere: round 1, and the line names every source tried", async () => {
     const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
     expect(round).toMatchObject({ round: 1, source: "none", mode: "first", previous: null, fixHunks: [], carried: [] });

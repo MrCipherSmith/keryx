@@ -238,17 +238,29 @@ const DOWNGRADE_TARGETS: readonly ReviewFindingSeverity[] = ["major", "minor"];
 function normaliseCarriedPremise<T extends StructuredReviewFinding>(finding: T): T {
   const premise = finding.premise;
   if (premise === undefined) return finding;
-  const severityAgrees = premise.verdict === "downgraded" ? premise.severity === undefined || premise.severity === finding.severity : premise.severity === undefined && premise.original_severity === undefined;
+  const isDowngrade = premise.verdict === "downgraded";
+  const stray = !isDowngrade && carriesStraySeverity(premise);
+  const stale = isDowngrade && severityIsStale(premise, finding.severity);
   // Nothing to strip: the finding itself, so a carried record stays the very object it was.
-  if (premise.operator === undefined && severityAgrees) return finding;
+  if (premise.operator === undefined && !stray && !stale) return finding;
   const { operator: _operator, ...judgement } = premise;
-  if (premise.verdict !== "downgraded") return { ...finding, premise: withoutSeverities(judgement) };
-  if (severityAgrees) return { ...finding, premise: judgement };
+  if (!isDowngrade) return { ...finding, premise: withoutSeverities(judgement) };
+  if (!stale) return { ...finding, premise: judgement };
   if (!downgradeStillHolds(finding.severity, premise.original_severity)) {
     const { premise: _dropped, ...unjudged } = finding;
     return unjudged as T;
   }
   return { ...finding, premise: { ...judgement, severity: finding.severity } };
+}
+
+/** Whether a premise whose verdict is not `downgraded` carries a severity field, which only a downgrade may. */
+function carriesStraySeverity(premise: ReviewFindingPremise): boolean {
+  return premise.severity !== undefined || premise.original_severity !== undefined;
+}
+
+/** Whether a `downgraded` premise names a severity the finding no longer has. */
+function severityIsStale(premise: ReviewFindingPremise, severity: ReviewFindingSeverity): boolean {
+  return premise.severity !== undefined && premise.severity !== severity;
 }
 
 /** A judgement without the two severity fields only a `downgraded` verdict may carry. */
@@ -720,42 +732,72 @@ export type InheritedPremises = { ok: true; parsed: ParsedPremiseClaims } | { ok
  * An ingest without `--premises` over a package whose findings the judge held (review RG2-004). Ingesting without the
  * claims would silently return every held finding to the fix loop as an ordinary open finding, and readiness would
  * pass it as "no finding is held". So the package's stored claims (`stored`, the content of {@link PREMISES_FILE}) are
- * carried forward when they still hold what they held: every held claim still lands on a finding of `findings`, and
- * every finding the previous ingest recorded as held (`previousFindings`, its findings.json) is held again for the
- * same subject (severity, verdict, problem; {@link premiseSubjectOf}). Otherwise the ingest is refused, naming the
+ * carried forward when they still hold what they held: every finding the previous ingest recorded as held
+ * (`previousFindings`, its findings.json) is held again for the same subject (severity, verdict, problem;
+ * {@link premiseSubjectOf}), and no claim that applied then is rejected now. Otherwise the ingest is refused, naming the
  * findings, so the caller passes `--premises` with claims for what this round reports.
  *
- * Undefined when nothing was held: no stored claim holds a finding and no previous record was held.
+ * The carry is keyed on what the previous ingest applied, never on a stored claim's verdict word (review LG4-001,
+ * RG4-001): the stored file keeps the claims as received, rejected ones included, and a rejected claim never held
+ * anything. Undefined when the previous ingest held nothing, a first ingest (no findings.json) included: a first ingest
+ * without `--premises` holds nothing, whatever premises.json holds.
  */
 export function inheritedPremiseClaims<T extends StructuredReviewFinding>(findings: readonly T[], stored: unknown, previousFindings: unknown): InheritedPremises | undefined {
-  const previousHeld = (Array.isArray(previousFindings) ? previousFindings : []).filter(isRecord).filter((record) => isRecord(record.premise) && isHeldVerdict(record.premise.verdict));
-  let parsed: ParsedPremiseClaims | undefined;
-  let unreadable: string | undefined;
+  const previousHeld = heldRecords(previousFindings);
+  if (previousHeld.length === 0) return undefined;
+  const parsed = readStoredClaims(stored);
+  if (!parsed.ok) return refuseInheritance(parsed.why);
+  const trial = mergePremises(findings, parsed.claims);
+  const lost = new Set([...claimsNoLongerHeld(trial, appliedClaimNames(parsed.claims, previousHeld)), ...heldFindingsChanged(trial, previousHeld)]);
+  if (lost.size > 0) return refuseInheritance(`the stored claims no longer hold ${[...lost].join(", ")} as they did (the finding is gone, or its severity, verdict or problem changed)`);
+  return { ok: true, parsed: parsed.claims };
+}
+
+/** The records of a previous findings.json whose premise held them; none when there was no previous ingest. */
+function heldRecords(previousFindings: unknown): Loose[] {
+  if (!Array.isArray(previousFindings)) return [];
+  return previousFindings.filter(isRecord).filter((record) => isRecord(record.premise) && isHeldVerdict(record.premise.verdict));
+}
+
+/** The stored claims parsed, or why they cannot be carried: the file is gone, or it does not parse. */
+function readStoredClaims(stored: unknown): { ok: true; claims: ParsedPremiseClaims } | { ok: false; why: string } {
+  let claims: ParsedPremiseClaims | undefined;
   try {
-    parsed = parsePremiseClaims(stored);
+    claims = parsePremiseClaims(stored);
   } catch (error) {
-    unreadable = error instanceof Error ? error.message : String(error);
+    return { ok: false, why: `${PREMISES_FILE} cannot be read (${error instanceof Error ? error.message : String(error)})` };
   }
-  const heldClaims = (parsed?.claims ?? []).filter((claim) => !isMalformed(claim) && isHeldVerdict(claim.verdict));
-  if (previousHeld.length === 0 && heldClaims.length === 0) return undefined;
-  const refuse = (why: string): InheritedPremises => ({
-    ok: false,
-    refusal: `This package holds findings the premise judge held, and an ingest without --premises would silently return them to the fix loop: ${why}. Pass --premises <file> with the judge's claims for this round (${PREMISES_FILE}, or ${PREMISES_SUPERSEDED_FILE} from an earlier ingest, when they still apply). Nothing was written.`,
-  });
-  if (parsed === undefined) return refuse(unreadable === undefined ? `${PREMISES_FILE} is gone, so the holds cannot be carried` : `${PREMISES_FILE} cannot be read (${unreadable})`);
-  const trial = mergePremises(findings, parsed);
-  const lost = new Set<string>();
-  for (const claim of heldClaims) {
-    const name = claimName(claim);
-    if (trial.rejections.some((rejection) => rejection.finding === name && rejection.reason !== "already-judged")) lost.add(name);
-  }
+  return claims === undefined ? { ok: false, why: `${PREMISES_FILE} is gone, so the holds cannot be carried` } : { ok: true, claims };
+}
+
+/** The names of the held-verdict claims that applied at the previous ingest: each names a key of a record it held. */
+function appliedClaimNames(parsed: ParsedPremiseClaims, previousHeld: readonly Loose[]): string[] {
+  const heldKeys = new Set(previousHeld.flatMap(keysOf));
+  return parsed.claims.filter((claim) => !isMalformed(claim) && isHeldVerdict(claim.verdict)).map(claimName).filter((name) => heldKeys.has(name));
+}
+
+/** The applied claims the trial merge now rejects; `already-judged` is no loss (the finding keeps its carried premise). */
+function claimsNoLongerHeld<T>(trial: PremiseMergeResult<T>, applied: readonly string[]): string[] {
+  return applied.filter((name) => trial.rejections.some((rejection) => rejection.finding === name && rejection.reason !== "already-judged"));
+}
+
+/** The keys of previously held records that the trial merge does not hold again for the same subject. */
+function heldFindingsChanged<T>(trial: PremiseMergeResult<T>, previousHeld: readonly Loose[]): string[] {
+  const now = trial.findings.map((finding) => finding as unknown as Loose);
+  const changed: string[] = [];
   for (const record of previousHeld) {
     const key = keysOf(record)[0];
     if (key === undefined) continue;
-    const now: Loose | undefined = trial.findings.find((finding) => keysOf(finding as Loose).includes(key));
+    const current = now.find((finding) => keysOf(finding).includes(key));
     const subject = premiseSubjectOf(record);
-    if (now === undefined || subject === undefined || !sameSubject(subject, premiseSubjectOf(now))) lost.add(key);
+    if (current === undefined || subject === undefined || !sameSubject(subject, premiseSubjectOf(current))) changed.push(key);
   }
-  if (lost.size > 0) return refuse(`the stored claims no longer hold ${[...lost].join(", ")} as they did (the finding is gone, or its severity, verdict or problem changed)`);
-  return { ok: true, parsed };
+  return changed;
+}
+
+function refuseInheritance(why: string): InheritedPremises {
+  return {
+    ok: false,
+    refusal: `This package holds findings the premise judge held, and an ingest without --premises would silently return them to the fix loop: ${why}. Pass --premises <file> with the judge's claims for this round (${PREMISES_FILE}, or ${PREMISES_SUPERSEDED_FILE} from an earlier ingest, when they still apply). Nothing was written.`,
+  };
 }

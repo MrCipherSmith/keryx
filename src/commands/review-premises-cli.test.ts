@@ -79,6 +79,16 @@ test("a re-ingest without --premises carries the held claims forward while they 
   expect(lines.join("\n")).toContain("premise claims: carried forward");
 });
 
+test("a re-ingest without --premises is not refused over a stored held claim the first ingest rejected (review RG4-001)", async () => {
+  await writeFile(path.join(ROOT, "report.md"), REPORT);
+  const withTypo = { ...PREMISES, premises: [...PREMISES.premises, { ...PREMISES.premises[0], finding_id: "LY-999" }] };
+  await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(withTypo));
+  const dir = await ingest("2026-10-16-typo", ["--premises", "premises.json"]);
+  await ingest("2026-10-16-typo");
+  expect(process.exitCode).toBe(0);
+  expect((await readFindings(dir))[0]?.premise?.verdict).toBe("challenged");
+});
+
 test("a re-ingest without --premises whose held finding changed is refused, asks for --premises, and leaves the package as it was (review RG2-004)", async () => {
   await writeFile(path.join(ROOT, "report.md"), REPORT);
   await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));
