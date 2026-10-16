@@ -17,6 +17,8 @@ import { dispatchErrors } from "./dispatch";
 import { ORCHESTRATOR_LOG, memoryCalls, readToolLog } from "./layers-usage";
 import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED, ENV_REVIEW_CALLER_TOKEN } from "./orchestrator-log";
 import { readRunProfile } from "./run-profile";
+import { readPremiseDecisions, type PremiseQuestionDecision } from "./operator-decisions";
+import { awaitingOperator, premiseHoldState } from "./premise";
 import { packageParityWarnings } from "./parity";
 import { researchErrors } from "./research";
 import type { ConfirmedVia, ManagedReviewManifest, ReadinessWaiver } from "./types";
@@ -32,6 +34,7 @@ export const READINESS_ITEMS = [
   { number: 8, id: "report-names", title: "pending mutation candidates and parity warnings are named in the report" },
   { number: 9, id: "pr-files", title: "the changed-file count equals the PR's own file list" },
   { number: 10, id: "memory-outside-stage", title: "the orchestrator read memory only in its own memory stage" },
+  { number: 11, id: "premise-decisions", title: "every held finding has an operator decision" },
 ] as const;
 
 export type ReadinessItemId = (typeof READINESS_ITEMS)[number]["id"];
@@ -107,6 +110,8 @@ type Context = {
   report: string;
   research: Record<string, unknown> | undefined;
   findings: Array<Record<string, unknown>>;
+  /** The operator's answers to held findings (`premise-question` decisions). */
+  premiseDecisions: PremiseQuestionDecision[];
   /** True when the package carries the dispatch record (a package cut before it existed is not held to it). */
   dispatched: boolean;
 };
@@ -177,6 +182,22 @@ function verifierCheck(ctx: Context): Verdict {
   return bad(
     `${unverified.length} of ${heavy.length} blocker/major finding(s) carry no verification and the report does not state the count`,
     `run the verifier (review-verifier) on them, or add the line \`Not verified: ${unverified.length}\` to report.md`,
+  );
+}
+
+/**
+ * Flow 459. A finding the premise judge held (`challenged` / `owner-decision`) is a question for the operator, and a
+ * review with an unanswered question is not finished: it is neither fixed nor dismissed. The repair is the answer, not a
+ * waiver of the question.
+ */
+function premiseDecisionsCheck(ctx: Context): Verdict {
+  const held = ctx.findings.filter((finding) => premiseHoldState(finding, ctx.premiseDecisions) !== "none");
+  if (held.length === 0) return ok("no finding is held by the premise judge");
+  const awaiting = awaitingOperator(ctx.findings, ctx.premiseDecisions);
+  if (awaiting.length === 0) return ok(`${held.length} held finding(s), every one with an operator decision`);
+  return bad(
+    `${awaiting.length} of ${held.length} held finding(s) have no operator decision: ${some(awaiting)}`,
+    `ask the operator: in keryx shell call the review_decide_premise tool (a card); in a terminal run keryx review decide-premise --package ${ctx.arg} --finding <id> --answer uphold|dismiss --reason "<why>"`,
   );
 }
 
@@ -308,6 +329,7 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     report: (await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => "")) as string,
     research,
     findings: Array.isArray(findingsRaw) ? findingsRaw.map(record).filter((entry): entry is Record<string, unknown> => entry !== undefined) : [],
+    premiseDecisions: await readPremiseDecisions(packageDir),
     dispatched: manifest.artifacts.reviewerDispatch !== undefined || manifest.artifacts.research !== undefined,
   };
   const { files, radius } = await filesChecks(ctx);
@@ -322,6 +344,7 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     "report-names": await reportNamesCheck(ctx),
     "pr-files": await prFilesCheck(ctx, options),
     "memory-outside-stage": await memoryStageCheck(ctx),
+    "premise-decisions": premiseDecisionsCheck(ctx),
   };
   const waivers = new Map((manifest.readiness_waivers ?? []).map((waiver) => [waiver.item, waiver]));
   const items: ReadinessItem[] = READINESS_ITEMS.map((spec) => {

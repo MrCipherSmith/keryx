@@ -102,7 +102,7 @@ describe("the checklist on a package shaped like pr7932-r1 (AC1, AC2)", () => {
   test("is NOT READY with exactly the failing items, each naming the command that repairs it", async () => {
     const report = await computeReadiness(pkg);
     expect(report.verdict).toBe("NOT READY");
-    expect(report.items.map((item) => item.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(report.items.map((item) => item.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
     expect(ids(failingItems(report))).toEqual(["blast-radius", "reviewers", "verifier", "ledger", "coverage-md"]);
     for (const item of failingItems(report)) {
       expect(item.repair).toBeTruthy();
@@ -153,6 +153,39 @@ describe("the checklist on a package shaped like pr7932-r1 (AC1, AC2)", () => {
     const refusal = readinessRefusal(report, "complete the review");
     expect(refusal).toContain("5 failing item(s)");
     expect(refusal).toContain("--waive");
+  });
+});
+
+describe("premise-decisions: every held finding has an operator decision (flow 459, AC2)", () => {
+  const held = { id: "f-9", global_id: "pr7932-r1#f-9", severity: "major", title: "timeline pinned LTR", premise: { verdict: "challenged", judge: "review-premise", question: "mirror it?" } };
+  const item = async () => (await computeReadiness(pkg)).items.find((entry) => entry.id === "premise-decisions");
+
+  test("passes when nothing is held", async () => {
+    expect((await item())?.status).toBe("pass");
+  });
+
+  test("fails while a held finding has no decision, naming it and the command that records one", async () => {
+    writeJson("findings.json", [held]);
+    const result = await item();
+    expect(result?.status).toBe("fail");
+    expect(result?.evidence).toContain("pr7932-r1#f-9");
+    expect(result?.repair).toContain("decide-premise");
+  });
+
+  test("an owner-decision hold fails the same way, at any severity", async () => {
+    writeJson("findings.json", [{ ...held, severity: "minor", premise: { ...held.premise, verdict: "owner-decision", options: ["a", "b"] } }]);
+    expect((await item())?.status).toBe("fail");
+  });
+
+  test("passes once the package holds a premise-question decision for the finding", async () => {
+    writeJson("findings.json", [held]);
+    writeJson("operator-decisions.json", { schemaVersion: 1, decisions: [{ kind: "premise-question", finding: "pr7932-r1#f-9", answer: "dismiss", reason: "platforms do not mirror it", at: "2026-10-16T12:00:00Z", actor: "owner" }] });
+    expect((await item())?.status).toBe("pass");
+  });
+
+  test("a downgraded finding is not held", async () => {
+    writeJson("findings.json", [{ ...held, premise: { verdict: "downgraded", judge: "review-premise", severity: "minor", original_severity: "major" } }]);
+    expect((await item())?.status).toBe("pass");
   });
 });
 

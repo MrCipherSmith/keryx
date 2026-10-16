@@ -73,6 +73,7 @@ function overlayChangedByRound(reviewer: { name: string; source: string; path?: 
 const NOT_ROSTER = new Set([
   "review-orchestrator",
   "review-verifier",
+  "review-premise",
   "review-regression",
   "review-pr-contract",
   "review-pr-feedback",
