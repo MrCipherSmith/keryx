@@ -29,7 +29,8 @@ function skillFiles(skill: string): string[] {
   for (const root of SKILL_ROOTS) {
     const dir = path.join(root, skill);
     for (const name of readdirSync(dir)) {
-      if (name.startsWith("SKILL") && name.endsWith(".md")) {
+      // SKILL.detail.md is an overflow companion, not a build (reference text only).
+      if (name.startsWith("SKILL") && name.endsWith(".md") && name !== "SKILL.detail.md") {
         files.push(path.join(dir, name));
       }
     }

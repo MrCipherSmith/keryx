@@ -9,7 +9,7 @@
 // document an agent has to read whole. `bundled-eval.ts`'s `anatomy:length`
 // check (which reads this map) exists for one narrower reason: a skill that
 // grows past what it already was is a defect this sweep can catch and every
-// other check in that file cannot. Whether 2246 lines is the right size for
+// other check in that file cannot. Whether 2199 lines is the right size for
 // `job-orchestrator` is a question for a human editing that skill, not for
 // this file or the check that reads it.
 //
@@ -109,7 +109,7 @@ const CEILINGS_BY_KEY = {
   "orchestration/flow-orchestrator": 682,
   "orchestration/issue-analyzer": 373,
   "orchestration/job-documenter": 414,
-  "orchestration/job-orchestrator": 2226,
+  "orchestration/job-orchestrator": 2199,
   "orchestration/task-implementer": 662,
   "planning/autodoc-analyst": 180,
   "planning/autodoc-architect": 179,
