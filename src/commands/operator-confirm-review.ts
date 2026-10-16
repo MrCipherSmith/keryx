@@ -37,7 +37,7 @@ import type { PrLookup } from "../review/complete-head-gate";
 import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmSpec } from "./operator-confirm-tools";
 import { operatorDecisionSubject, reviewersLeftOut } from "../review/coverage";
 import { recordOperatorDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
-import { estimatePlan, planKeyOf, planOverThreshold, DEFAULT_PLAN_THRESHOLD, recordPlanConfirmation } from "../review/plan-confirmation";
+import { estimatePlan, planKeyOf, planOverThreshold, recordPlanConfirmation } from "../review/plan-confirmation";
 
 /** What the specs read outside the package: the PR tracker. Tests replace these; the defaults are the CLI's. */
 export interface ReviewConfirmSeams {
@@ -525,7 +525,7 @@ function confirmPlanSpec(): OperatorConfirmSpec<PlanPrepared> {
         const dir = await resolvePackage(ref, ctx.projectRoot);
         const estimate = await estimatePlan(dir);
         if (!planOverThreshold(estimate)) {
-          return { refusal: `The plan needs ${estimate.dispatches} dispatch(es), ${estimate.minutes.min}-${estimate.minutes.max} min: within the threshold (${DEFAULT_PLAN_THRESHOLD.dispatches} dispatches, ${DEFAULT_PLAN_THRESHOLD.minutes} min), so it runs without a confirmation.` };
+          return { refusal: `The plan needs ${estimate.dispatches} dispatch(es), ${estimate.minutes.min}-${estimate.minutes.max} min: within the threshold (${estimate.thresholds.maxDispatches} dispatches, ${estimate.thresholds.maxMinutes} min), so it runs without a confirmation.` };
         }
         const name = label(dir, ctx.projectRoot);
         return {
@@ -533,7 +533,7 @@ function confirmPlanSpec(): OperatorConfirmSpec<PlanPrepared> {
           lines: [
             `dispatches: ${estimate.dispatches} (${estimate.roles} roles, ${estimate.slices} slices, ${estimate.sequentialBatches} batch(es) one after another)`,
             `expected duration: ${estimate.minutes.min}-${estimate.minutes.max} min`,
-            `threshold: ${DEFAULT_PLAN_THRESHOLD.dispatches} dispatches or ${DEFAULT_PLAN_THRESHOLD.minutes} min`,
+            `threshold: ${estimate.thresholds.maxDispatches} dispatches or ${estimate.thresholds.maxMinutes} min (${estimate.overReasons.join("; ")})`,
             ...estimate.perRole.slice(0, LISTED_FILES).map((role) => `  ${cardSafe(role.role)}: ${role.slices} slice(s), ${role.waves} wave(s)`),
             "yes: this plan may run; a re-cut plan asks again",
           ],

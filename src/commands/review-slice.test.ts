@@ -221,8 +221,17 @@ test("slice writes the routing into the manifest: roles from content, review-log
 });
 
 test("retry-plan re-opens a light slice deep when a result reports a major finding on it", async () => {
-  const { ids } = await sliceOnce();
-  await writeFile(path.join(root, "major.json"), JSON.stringify({ reviewer: "review-logic", status: "DONE", slices: ids, findings: [{ id: "F-1", severity: "major", file: "src/m/a.ts" }] }), "utf8");
+  // Source code is always read deep, so the light slice here is a docs slice (security review B3).
+  const doc = "docs/guide.md";
+  const lines = Array.from({ length: 30 }, (_, n) => `+Step ${n}: read the guide.`);
+  await writeFile(path.join(root, "change.diff"), `diff --git a/${doc} b/${doc}\n--- a/${doc}\n+++ b/${doc}\n@@ -1,0 +1,30 @@\n${lines.join("\n")}\n`, "utf8");
+  await reviewCommand(["slice", "--diff", "change.diff", "--max-bytes", "30000", "--out", "out"]);
+  expect(process.exitCode).toBe(0);
+  const sliced = JSON.parse(await readFile(path.join(root, "out", "manifest.json"), "utf8")) as { slices: Array<{ id: string; depth?: string }> };
+  const ids = sliced.slices.map((entry) => entry.id);
+  expect(sliced.slices[0]!.depth).toBe("light");
+  logs = [];
+  await writeFile(path.join(root, "major.json"), JSON.stringify({ reviewer: "review-logic", status: "DONE", slices: ids, findings: [{ id: "F-1", severity: "major", file: doc }] }), "utf8");
   await reviewCommand(["retry-plan", "--manifest", "out/manifest.json", "--result", "major.json", "--json"]);
   expect(process.exitCode).toBe(0);
   expect(JSON.parse(logs.join("\n")).escalations).toEqual([{ slice: ids[0]!, finding: "F-1", severity: "major", by: "review-logic" }]);

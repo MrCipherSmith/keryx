@@ -12,6 +12,8 @@ import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
 import { MAX_RETRY_ROUNDS, type RetryState, type ReviewerResult, applyEscalations, emptyRetryState, planRetry, readSliceIds, scopeFingerprint } from "../review/retry-plan";
 import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceEntry, type SliceManifest, buildSlices, manifestSizeProblem, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
 import { packagePlanGate } from "../review/estimate";
+import { resolveActiveReview } from "../review/active-review";
+import { operatorGateApplies } from "../review/run-profile";
 import { commentRuleScopeConfig } from "../review/comment-rule";
 import { renderRoutingSummary, routeSlices, summarizeRouting } from "../review/slice-routing";
 import { defaultWaveBytes, detectReviewHost, HOST_WAVE_BYTES, parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
@@ -379,7 +381,16 @@ export async function runDispatchCheck(args: string[], deps: Pick<SliceDeps, "re
   const manifestSource = placed("--manifest");
   const rawMax = optionValue(args, "--max-bytes");
 
-  const packageDir = optionValue(args, "--package") === undefined ? undefined : resolvePackageDir(args);
+  // Security review minor: the plan gate needs the package. It is --package, else the package the manifest lives in;
+  // without either, an open review package (the active-review pointer) refuses the check instead of skipping its gate.
+  let packageDir = optionValue(args, "--package") === undefined ? undefined : resolvePackageDir(args);
+  if (packageDir === undefined && manifestSource !== undefined && manifestSource !== "-") packageDir = packageOfManifest(path.dirname(path.resolve(manifestSource)));
+  if (packageDir === undefined) {
+    const active = await resolveActiveReview(resolveProjectRoot(process.cwd()));
+    if (active !== undefined && operatorGateApplies(active.dir)) {
+      throw new Error(`dispatch-check needs --package: review package ${path.relative(process.cwd(), active.dir) || active.dir} is open, and its plan gate is checked against the package. Pass --package ${path.relative(process.cwd(), active.dir) || active.dir}.`);
+    }
+  }
   if (packageDir !== undefined) {
     // A dispatch starts from fresh layers: refresh them when the package has none for this head.
     const layers = await ensurePackageLayers(packageDir);
