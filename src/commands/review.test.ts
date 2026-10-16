@@ -921,6 +921,16 @@ test("`review tier` floors a blast-radius round at deep and names the rule that 
   expect(out).toContain("tier_resolution: discovered");
 });
 
+test("`review tier --premise` gives the review-premise judge the deep tier, even over a light verifier method", async () => {
+  await tier("--premise", "--verifier", "execution", "--findings", "1", "--diff-lines", "5", "--json");
+
+  expect(process.exitCode).toBe(0);
+  const model = modelBlock();
+  expect(model.tier).toBe("deep");
+  expect(model.tier_reasons).toContain("floor:premise-judge");
+  expect(model.model).toBe("demo-large");
+});
+
 test("`review tier --json` prints the model block a dispatch document carries", async () => {
   await tier("--findings", "2", "--diff-lines", "20", "--json");
 

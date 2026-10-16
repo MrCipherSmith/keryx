@@ -10,6 +10,8 @@ import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools"
 import { ensureChunkPlan } from "../review/chunks";
 import { readChunkEstimate } from "../review/chunks-estimate";
 import { computeCoverage, readCoverageWaiver } from "../review/coverage-complete";
+import { computeReadiness } from "../review/readiness";
+import { computeVerdict } from "../review/verdict";
 import type { PostResult, ReviewEvent } from "../review/publish";
 import { buildReviewConfirmSpecs, reviewConfirmSpecs } from "./operator-confirm-review";
 import { operatorConfirmTool, operatorConfirmToolNames } from "./operator-confirm-tools";
@@ -81,6 +83,7 @@ test("the review gates are registered and listed for the unattended refusal", ()
     "review_override_reviewers",
     "review_comments_reply",
     "review_confirm_plan",
+    "review_decide_premise",
   ]);
   for (const name of names) expect(operatorConfirmToolNames()).toContain(name);
 });
@@ -354,5 +357,85 @@ describe("review_waive_readiness", () => {
     expect(await ask(t, { package: pkg, item: "no-such-item" })).toEqual({ error: expect.stringContaining("not a readiness item") });
     await yes(t, { package: pkg, item: "verifier" });
     expect(await ask(t, { package: pkg, item: "verifier" })).toEqual({ error: expect.stringContaining("already waived") });
+  });
+});
+
+// Flow 459 (AC3): review_decide_premise, the operator's answer to a finding the premise judge held.
+describe("review_decide_premise", () => {
+  const held = {
+    id: "LY-003",
+    global_id: "pr7932-r1#LY-003",
+    reviewer: "review-layout",
+    severity: "major",
+    problem: "timeline pinned LTR",
+    premise: { verdict: "challenged", judge: "review-premise", question: "Should the timeline mirror?" },
+  };
+
+  function makePackage(findings: unknown[] = [held]): void {
+    put("manifest.json", {
+      schemaVersion: 1,
+      reviewId: "pr7932-r1",
+      mode: "review-flow",
+      status: "draft",
+      target: { kind: "pr", ref: PR },
+      artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
+      coverage: [],
+    });
+    put("findings.json", findings);
+  }
+  const readiness = async () => (await computeReadiness(pkg)).items.find((item) => item.id === "premise-decisions");
+
+  test("the card shows the finding and the judge's question; yes records the answer with confirmedVia and clears readiness", async () => {
+    makePackage();
+    expect((await readiness())?.status).toBe("fail");
+    const t = tool("review_decide_premise");
+    const result = await yes(t, { package: pkg, finding: "LY-003", answer: "dismiss", reason: "platforms do not mirror media controls" });
+    const text = result.card.join("\n");
+    expect(result.card[0]).toBe("Dismiss finding pr7932-r1#LY-003 in .metaproject/reviews/pr7932-r1 as incorrect?");
+    expect(text).toContain("finding: pr7932-r1#LY-003 (major): timeline pinned LTR");
+    expect(text).toContain("premise judge: challenged: Should the timeline mirror?");
+    expect(text).toContain("reason: platforms do not mirror media controls");
+    expect(result.isError).toBe(false);
+    expect(readJson("operator-decisions.json").decisions).toEqual([
+      { kind: "premise-question", finding: "pr7932-r1#LY-003", answer: "dismiss", reason: "platforms do not mirror media controls", at: NOW.toISOString(), actor: "operator", confirmedVia: "tui-card" },
+    ]);
+    expect((await readiness())?.status).toBe("pass");
+  });
+
+  test("uphold keeps the original severity and a remote yes is recorded as remote-card", async () => {
+    makePackage();
+    const t = tool("review_decide_premise");
+    const result = await yes(t, { package: pkg, finding: "pr7932-r1#LY-003", answer: "uphold", reason: "mirror it" }, "remote");
+    expect(result.card[0]).toBe("Uphold finding pr7932-r1#LY-003 in .metaproject/reviews/pr7932-r1 at major?");
+    expect(readJson("operator-decisions.json").decisions[0]).toMatchObject({ answer: "uphold", confirmedVia: "remote-card" });
+    expect((await computeVerdict(pkg)).open.map((entry) => [entry.id, entry.severity])).toEqual([["LY-003", "major"]]);
+  });
+
+  test("a no records nothing", async () => {
+    makePackage();
+    const t = tool("review_decide_premise");
+    t.confirmationDeclined!(asked(await ask(t, { package: pkg, finding: "LY-003", answer: "dismiss", reason: "r" })).token);
+    expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
+    expect((await readiness())?.status).toBe("fail");
+  });
+
+  test("an unknown finding, a finding that is not held, a missing reason and a bad answer are refusals", async () => {
+    makePackage([held, { ...held, id: "LY-004", global_id: "pr7932-r1#LY-004", premise: { verdict: "upheld", judge: "review-premise" } }]);
+    const t = tool("review_decide_premise");
+    expect(await ask(t, { package: pkg, finding: "LY-999", answer: "dismiss", reason: "r" })).toEqual({ error: expect.stringContaining("No finding") });
+    expect(await ask(t, { package: pkg, finding: "LY-004", answer: "dismiss", reason: "r" })).toEqual({ error: expect.stringContaining("not held") });
+    expect(await ask(t, { package: pkg, finding: "LY-003", answer: "dismiss" })).toEqual({ error: expect.stringContaining("reason is required") });
+    expect(await ask(t, { package: pkg, finding: "LY-003", answer: "maybe", reason: "r" })).toEqual({ error: expect.stringContaining("uphold") });
+  });
+
+  test("the answer is refused when the finding changed after the card was shown", async () => {
+    makePackage();
+    const t = tool("review_decide_premise");
+    const input = { package: pkg, finding: "LY-003", answer: "dismiss", reason: "r" };
+    const card = asked(await ask(t, input));
+    put("findings.json", [{ ...held, severity: "minor" }]);
+    const result = await t.invoke(input, { confirmationToken: card.token } as never);
+    expect(result.isError).toBe(true);
+    expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
   });
 });

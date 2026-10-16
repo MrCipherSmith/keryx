@@ -4740,6 +4740,7 @@ keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] 
                    [--memory-query "<query>"] [--automatic]
 keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--automatic]
                     [--verifications <file|->] [--verification-mode off|annotate|filter]
+                    [--premises <file|->]
                     [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                     [--refuted <file|->]
                     [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
@@ -4750,7 +4751,7 @@ keryx review budget [--spent <usd>] [--ceiling <usd>]
                     [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
 keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
                   [--findings <n>] [--diff-lines <n>]
-                  [--verifier execution|site-check|reasoning] [--security]
+                  [--verifier execution|site-check|reasoning] [--security] [--premise]
                   [--session-provider <id>] [--session-model <id>]
                   [--catalog <file|->] [--json]
 keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
@@ -4798,6 +4799,8 @@ keryx review verdict <review-id-or-path> [--raw <dir>] [--json]
 keryx review confirm-plan --package <review-dir>                                     (terminal; card review_confirm_plan)
 keryx review waive-mutation --package <review-dir> --reason "<why>"                  (terminal; card review_waive_mutation)
 keryx review override-reviewers --package <review-dir> --reason "<why>"              (terminal; card review_override_reviewers)
+keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason "<why>"
+                                                                                     (terminal; card review_decide_premise)
 keryx review verify-run --package <review-dir> --finding <id> [--timeout <s>] -- <command…>
 keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]
 keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>] [--json|--scoped-diff] [--append <file>]
@@ -4886,6 +4889,7 @@ A package is bound to a pull request when it targets one or when its `--ref` is 
 | `plan-eval` | Compare the old and the new slicing plan offline for a diff (`--diff <file\|base..head>`): dispatches, chunks, and, with `--findings`, whether every ground-truth blocker/major lands in a slice its reviewer or a deep pass reads. Writes nothing. |
 | `verdict` | Print the round's verdict as it stands: finding counts by severity, verified vs unverified (refuted excluded), open blockers and majors, and reviewers that have not reported. Reads the ingested `findings.json`, else the raw replies in `--raw <dir>` (default `<package>/raw`); writes `verdict-interim.md` into the package. |
 | `confirm-plan`, `waive-mutation`, `override-reviewers` | Record the operator's own decision (plan confirmation, mutation-pass waiver, smaller reviewer set) in the package. Asks at the terminal and is refused without a TTY; inside keryx shell the agent calls the `review_confirm_plan`, `review_waive_mutation` or `review_override_reviewers` card instead. |
+| `decide-premise` | Answer the premise question on a finding the `review-premise` judge held (`challenged` or `owner-decision`): `--answer uphold` returns it to kept at its original severity, `--answer dismiss` records it `dismissed-incorrect` with your `--reason` as the evidence. Refused for an unknown finding, a finding that is not held and a missing reason. Asks at the terminal and is refused without a TTY; inside keryx shell the agent calls the `review_decide_premise` card. |
 | `verify-run` | Run a verification command in the parent session and save its stdout, stderr and exit status to `<review-dir>/research-evidence/verify-<id>-<n>.txt`, for the verifier to cite as executed evidence. |
 | `compare-reference` | Compare a reference report's items with a package (`keryx review compare-reference --reference <report.md> --package <review-dir> [--input <dir>] [--json]`), per item: **A** the role that would find it was not run, **B** the role ran and nothing matches, **C** it was seen and lost after the answer (`--input` supplies the raw reviewer replies), **D** it was kept, with its severity, **E** the reference ran a mutant and this package has no mutation pass. |
 | `import` | The review-shaped spelling of `keryx skills import --module review`: same importer, same rules, module implied (`keryx review import --from <package-dir\|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]`). A tree of several packages is refused, with the candidate list, until `--only <glob>` (repeatable, matched against the package directory name as it is on disk; an empty value is an error) says which ones: every package in module `review` is dispatched as a reviewer. The package is written under the slug of its directory name, and two selected directories that slug to one destination are refused. A `deprecated: true` package is skipped in a tree import, a bundled name is skipped unless `--force`, and a reviewer with no path trigger — no `metadata.paths` and no glob in its description; a lone literal file path is not one — is imported with a `paths: none` warning. More warnings can follow a row: a `metadata.flags` entry dropped as not a flag; a flag that exactly one existing project reviewer carries, which becomes a family flag for both; and, on a `--force` overwrite, a family flag the new version drops that leaves one other reviewer its only carrier. A package directory with no letter or digit is refused, and so is any destination behind a symlink that resolves outside the project — before anything is written, `--dry-run` included. Also copies the `<dir>/<name>.mdc` rules the skills cite from the overlay's `rules/`: a rule the project lacks goes to `.metaproject/rules/<dir>/<name>.mdc`; one whose reference is already answered by a file with other content, or a `core/` rule keryx ships under the same name, goes to the reference's project slot `.metaproject/rules/project/<dir>/<name>.mdc` (statuses `differs`, `imported-project`; `core/x.mdc` → `rules/project/core/x.mdc`), which a reviewer's reference resolves to first. `rules/core` is rewritten by `keryx init`, `keryx update` and the legacy-profile `keryx skills install` (the manifest form with `--target keryx-shell` skips an existing file it did not record unless `--force`); `rules/project` is written by none of them. A file lying directly in `rules/project/` answers only a literal `project/<name>.mdc` citation. Re-run it over an existing import to fetch only the rules. The security gate runs on every `SKILL.md` and rule while the import is planned, `--dry-run` included: a secret is redacted and the row says so, and a file with a prompt-injection finding is `refused` (`would-refuse` on a dry run), writes nothing and leaves the rest of the import going, unless `--allow-flagged` is passed after you have read it (see [`skills import`](#skills)). That holds with the security module disabled too (the import runs the injection detector itself). A rule cited only by refused packages is not written (`skipped — cited only by a refused package`). A real run with any `refused` row prints every row and exits `1`; a dry run exits `0`. Undo with `keryx skills remove review/<name>`. |
@@ -6557,6 +6561,7 @@ entry point that removes that step.
 | `--diff-lines <n>` | Changed lines in the diff under review. `<= 3` findings **and** `<= 50` lines allow `light`. |
 | `--verifier <method>` | `execution`, `site-check` or `reasoning`. The first two allow `light`: the evidence comes from running something. An unrecognised method is refused, not ignored. |
 | `--security` | Any security finding in scope. Never below `standard`. |
+| `--premise` | The dispatch is the `review-premise` judge. Floors at `deep`, beating a `light` verifier method: the judge reasons about practice and intent instead of running something. |
 | `--session-provider <id>`, `--session-model <id>` | The session's own provider/model. Omitted, they come from `KERYX_SESSION_PROVIDER`/`KERYX_SESSION_MODEL`; with neither, the block is adaptive. |
 | `--from-shell-config` | Use the selection `keryx shell` persisted as the session. Off by default: it is `keryx shell`'s last choice, not the caller's model. |
 | `--catalog <file\|->` | The candidate set, in the `detectProviders()` shape `[{"name": …, "models": [ … ]}]`. Omitted, providers are detected live. |
@@ -6631,6 +6636,16 @@ arXiv:2310.01798) — so it was removed rather than improved.
 | `--verification-mode <mode>` | `off`, `annotate` (default), or `filter`. |
 | `--scope <scope.json>` | The **whole** `--json` output of `keryx review scope`, so the record carries what the pre-filter dropped and why. Handing over only its `counts` object is refused: eight integers carry no reason for any individual drop. |
 | `--tokens-in <n>`, `--tokens-out <n>` | What the round actually used. Recorded on the package; absent means **nobody reported**, which is not zero. |
+
+### Premise — `--premises`
+
+`ingest` also accepts the output of the `review-premise` skill, run after the verifier over the canonical findings. A finding can reproduce and still be no defect: the code may carry an explicit override, an exemption note or a sibling doing the same, and accepted platform practice may support it. The judge answers `upheld`, `downgraded`, `challenged` or `owner-decision` per finding. **The merge can only hold or lower.** It never adds a finding, raises a severity or edits a finding's text, and it never dismisses one: `challenged` and `owner-decision` hold the finding for the operator, who answers with `keryx review decide-premise`. A held finding is not an open blocker or major, is listed as "awaiting operator", and fails readiness and the flow review gate until it has an answer.
+
+Claims that name an unknown finding, come from the finding's own reporter, challenge without a cited intent signal or practice source, or hold without a question (an `owner-decision` without at least two options) are discarded whole and listed in `scope.md`. Accepted claims are stored in `research-evidence/premises.json` and on each finding record.
+
+| Flag | Description |
+|---|---|
+| `--premises <file\|->` | The judge's result: the bare `{judge, model?, premises}` object, or a reply or report holding it in one fenced ` ```json keryx:premises ` block. A bare array is refused: it names no judge. |
 
 ### A finding points at the code it quotes
 

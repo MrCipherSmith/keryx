@@ -16,6 +16,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createFlowService } from "./service";
+import { runOperatorCommand } from "../commands/review-operator";
 import { recordPremiseDecision } from "../review/operator-decisions";
 import {
   EXTERNAL_COMMENT_COVERAGE_REVIEWERS,
@@ -1629,6 +1630,23 @@ test("flow 459 — a dismiss decision in the package clears the hold and the gat
 
   await recordPremiseDecision(packageDir, { kind: "premise-question", finding: "round-1#LY-003", answer: "dismiss", reason: "platforms do not mirror media controls", at: "2026-10-16T12:00:00Z", actor: "owner" });
 
+  expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("pass");
+});
+
+test("flow 459 — the decision `keryx review decide-premise` writes clears the hold and the gate passes", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service);
+  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [heldFinding()] });
+  expect(latestFindingStates(await readReviewRounds(ROOT, dir)).map((finding) => findingVerdict(finding).terminal)).toEqual([false]);
+
+  const code = await runOperatorCommand(
+    "decide-premise",
+    ["--package", packageDir, "--finding", "LY-003", "--answer", "dismiss", "--reason", "platforms do not mirror media controls"],
+    { isTerminal: () => true, ask: async () => "agreed", cwd: ROOT, log: () => undefined },
+  );
+
+  expect(code).toBe(0);
   expect(reviewOf((await service.complete({ cwd: ROOT, id })).gates).status).toBe("pass");
 });
 

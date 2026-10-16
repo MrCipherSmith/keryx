@@ -25,6 +25,7 @@ import {
   completeManagedReview,
   createManagedReviewPackage,
   getManagedReviewStatus,
+  parseEmbeddedPremises,
   resolveGitHead,
   resolveReviewPackagePath,
   upsertPreFilterScopeBlock,
@@ -562,6 +563,7 @@ const TIER_FLAGS = [
   "--diff-lines",
   "--verifier",
   "--security",
+  "--premise",
   "--session-provider",
   "--session-model",
   "--from-shell-config",
@@ -1644,6 +1646,7 @@ function tierSignalsFromArgs(args: string[]): TierSignals {
     diffLines: parseNonNegativeInteger(optionValue(args, "--diff-lines"), "--diff-lines"),
     forcedStrategyChange: args.includes("--forced-strategy-change"),
     hasSecurityFinding: args.includes("--security"),
+    premiseJudge: args.includes("--premise"),
   };
 }
 
@@ -3615,15 +3618,8 @@ async function readPremises(source: string | undefined): Promise<ManagedReviewIn
     return undefined;
   }
   const raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (error) {
-    // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
-    throw new Error(
-      `--premises ${source} is not JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`,
-    );
-  }
+  // The bare object, or a report / judge reply holding one fenced `keryx:premises` block.
+  const parsed = parseEmbeddedPremises(raw, `--premises ${source}`);
   parsePremiseClaims(parsed);
   return parsed as ManagedReviewInput["premises"];
 }
@@ -4256,7 +4252,8 @@ unverified (refuted excluded), open blockers and majors, and the reviewers that 
 not reported. Reads the ingested round (findings.json) when there is one, else the raw
 reviewer results in --raw <dir> (default <package>/raw, where every host keeps them; the shared
 .metaproject/data/review/raw is read only when passed explicitly, since it holds other rounds' replies). Verifier results in research-evidence/verifications.json are applied
-first, so a refuted finding is excluded; a finding whose disposition is acted-on is not open. Works before ledger, mutation and complete. Writes
+first, so a refuted finding is excluded; premise results in research-evidence/premises.json hold a challenged finding
+out of the open counts ("awaiting operator") until keryx review decide-premise answers it; a finding whose disposition is acted-on is not open. Works before ledger, mutation and complete. Writes
 verdict-interim.md into the package. A package with no findings says so and exits 0.
 `);
 }
@@ -4646,13 +4643,13 @@ function printTierHelp(): void {
 
   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
                     [--findings <n>] [--diff-lines <n>]
-                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security]
+                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security] [--premise]
                     [--session-provider <id>] [--session-model <id>]
                     [--from-shell-config] [--catalog <file|->] [--json]
 
 Computes the dispatch model block from signals the orchestrator already holds.
-There is no --tier flag. Base tier is standard. --scope blast-radius and
---forced-strategy-change floor at deep. --fix-attempt >= 2 raises one tier.
+There is no --tier flag. Base tier is standard. --scope blast-radius,
+--forced-strategy-change and --premise (the dispatch is review-premise) floor at deep. --fix-attempt >= 2 raises one tier.
 A small diff, or verifier execution/site-check, may allow light. --security
 never goes below standard. Reviewer name is not a signal.
 
@@ -4807,6 +4804,7 @@ ${GRAPH_TIMEOUT_HELP}`);
 function printIngestHelp(): void {
   console.log(`keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--research <ledger.json>]
                     [--review-id <id>] [--automatic] [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
+                    [--premises <file|->]
                     [--scope <scope.json>] [--blast-radius <blast-radius.json>] [--cross-family-review <file|->]
                     [--refuted <file|->] [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                     [--tokens-in <n>] [--tokens-out <n>] [--parallel <n>] [--outstanding <n>]
@@ -4884,6 +4882,8 @@ Usage:
   keryx review waive-mutation --package <dir> --reason "<why>"       (terminal; card review_waive_mutation)
   keryx review override-reviewers --package <dir> --reason "<why>"   (terminal; card review_override_reviewers)
   keryx review confirm-plan --package <dir>                          (terminal; card review_confirm_plan)
+  keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<why>"
+                                                                     (terminal; card review_decide_premise)
   keryx review verify-run --package <dir> --finding <id> -- <command…>
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--research <ledger.json>] [--review-id <id>] [--automatic]
@@ -5023,7 +5023,7 @@ Usage:
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
                     [--findings <n>] [--diff-lines <n>]
-                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security]
+                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security] [--premise]
                     [--session-provider <id>] [--session-model <id>]
                     [--catalog <file|->] [--json]
 ${COMMENTS_USAGE}
@@ -5287,6 +5287,10 @@ verification (attach/start/ingest):
   --verification-mode defaults to \`${DEFAULT_VERIFICATION_MODE}\`: verdicts are recorded and
   NOTHING is removed, so the drop rate is measured before it bites. Only
   \`filter\` removes a refuted finding.
+  --premises takes what review-premise returned: the bare \`{ judge, model?, premises }\`
+  object, or a reply / report holding it in one \`\`\`json keryx:premises block. The merge is
+  DELETE-ONLY too: it holds a challenged finding for the operator (never dismisses it) and can
+  only lower a severity. The operator answers with \`keryx review decide-premise\`.
   --scope takes the WHOLE \`keryx review scope --json\` document — counts and the
   per-drop reasons — so the package records what the pre-filter dropped and why.
   Omitted, a \`## Pre-filter scope\` block already in the package's scope.md is
@@ -5349,7 +5353,7 @@ tier:
   The \`model\` block a dispatch document carries, COMPUTED — run this instead of
   working the tier out by hand. The signals are ones the orchestrator already
   holds: --scope, --fix-attempt, --forced-strategy-change, --findings,
-  --diff-lines, --verifier and --security. Prints the tier, the ordered rule ids
+  --diff-lines, --verifier, --security and --premise (the review-premise judge: deep). Prints the tier, the ordered rule ids
   that produced it, the resolved provider/model, \`tier_resolution\`, and what was
   on the table when it resolved; --json prints the block alone.
   NO MODEL NAME EXISTS IN THIS COMMAND. The session's provider/model come from

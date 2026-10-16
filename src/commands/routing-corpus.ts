@@ -221,8 +221,8 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
  * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 334;
-export const RANK1_TOTAL = 337;
+export const RANK1_FIRST = 338;
+export const RANK1_TOTAL = 341;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -731,6 +731,19 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
     negatives: [
       { prompt: "run lint and the tests and the type-check before I call this done", owner: "code-verifier" },
+      { prompt: "review my code", owner: "review-orchestrator" },
+    ],
+  },
+  {
+    skill: "review-premise",
+    positives: [
+      "judge the premise of these findings before anyone fixes them",
+      "is this standard practice, or is the finding itself wrong",
+      "does this finding hold up, or is the code doing it deliberately, judge the premise before the fix loop acts on it",
+      "the code overrides this on purpose and a sibling does the same, so is the finding a defect at all",
+    ],
+    negatives: [
+      { prompt: "check these findings before they get reported", owner: "review-verifier" },
       { prompt: "review my code", owner: "review-orchestrator" },
     ],
   },

@@ -200,7 +200,7 @@ function isBunTest(command: string): boolean {
 }
 
 /** Flags of `review start|attach|ingest` that read a file the model names. */
-const CREATE_PATH_FLAGS = ["--research", "--report", "--refuted", "--verifications"] as const;
+const CREATE_PATH_FLAGS = ["--research", "--report", "--refuted", "--verifications", "--premises"] as const;
 
 /** What an approved `apply_patch` may write inside the package: data, never anything runnable. */
 const PACKAGE_DATA_EXTENSIONS: ReadonlySet<string> = new Set([".md", ".json", ".jsonl", ".txt"]);
