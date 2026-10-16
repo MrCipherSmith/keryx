@@ -172,6 +172,7 @@ import { createTierRankHost, type TierRankHost } from "../harness/routing/tier-r
 import { TEST_FILE_RE } from "../testing/selection";
 import { isVerificationMode, verificationClaims } from "../review/verification";
 import { writeVerdict } from "../review/verdict";
+import { parsePremiseClaims } from "../review/premise";
 import {
   buildReplyPass,
   collectPrComments,
@@ -329,6 +330,7 @@ export const CREATE_FLAGS = [
   "--reviewers",
   "--report",
   "--verifications",
+  "--premises",
   "--research",
   "--verification-mode",
   "--scope",
@@ -1047,6 +1049,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     reportPath: optionValue(args, "--report"),
     refuted: await readRefuted(optionValue(args, "--refuted")),
     verifications: await readVerifications(optionValue(args, "--verifications"), optionValue(args, "--review-id")),
+    premises: await readPremises(optionValue(args, "--premises")),
     research: optionValue(args, "--research") ? JSON.parse(await readFile(path.resolve(cwd, optionValue(args, "--research")!), "utf8")) : undefined,
     verificationMode: parseVerificationMode(optionValue(args, "--verification-mode")),
     scope: await readScope(optionValue(args, "--scope")),
@@ -3604,6 +3607,28 @@ async function readVerifications(source: string | undefined, reviewId: string | 
 }
 
 /**
+ * `review-premise`'s own output (flow 459): `{ judge, model?, premises: [...] }`, read from a file or stdin. The shape is
+ * checked here so a malformed file refuses the ingest before anything is written; the per-claim rules run in the merge.
+ */
+async function readPremises(source: string | undefined): Promise<ManagedReviewInput["premises"]> {
+  if (source === undefined) {
+    return undefined;
+  }
+  const raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
+    throw new Error(
+      `--premises ${source} is not JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`,
+    );
+  }
+  parsePremiseClaims(parsed);
+  return parsed as ManagedReviewInput["premises"];
+}
+
+/**
  * The pre-filter stage, from `keryx review scope --json` — WHOLE.
  *
  * It used to take the eight counts and discard `drops`, and that discard is what
@@ -4862,7 +4887,7 @@ Usage:
   keryx review verify-run --package <dir> --finding <id> -- <command…>
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--research <ledger.json>] [--review-id <id>] [--automatic]
-                      [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
+                      [--verifications <file|->] [--premises <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
                       [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                       [--cross-family-review <file|->]
                     [--refuted <file|->]

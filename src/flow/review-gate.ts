@@ -1,5 +1,7 @@
 import { packageRecordsCoverage } from "../review/coverage-complete";
 import { packageResearchErrors } from "../review/research";
+import { premiseDecisionFor, readPremiseDecisions } from "../review/operator-decisions";
+import { isHeldVerdict } from "../review/premise";
 /**
  * The review gate (flow 204, AC5-AC7 / specification §2).
  *
@@ -253,6 +255,11 @@ export type GateFinding = {
       }
     | undefined;
   /**
+   * What the premise judge found (flow 459), and the operator's answer when there is one: from the record's own
+   * `premise.operator` or from the package's `premise-question` decisions, whichever is present.
+   */
+  premise?: { verdict?: string | undefined; operatorAnswer?: string | undefined } | undefined;
+  /**
    * `external` when the finding came from a comment somebody else left on the PR
    * (specification §3.1 / AC9).
    *
@@ -301,6 +308,15 @@ export type ReviewRoundRecord = {
   findings: GateFinding[];
   /** Parsed out of `scope.md`. `null` when the round recorded none. */
   verification: VerificationStats | null;
+  /** Flow 459: the premise check's stage counts out of `scope.md`; `null` when the round recorded none. Absent on a hand-built record. */
+  premise?: PremiseStats | null | undefined;
+};
+
+export type PremiseStats = {
+  claimsReceived: number | null;
+  claimsApplied: number | null;
+  claimsRejected: number | null;
+  held: number | null;
 };
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -317,6 +333,7 @@ function toGateFinding(raw: unknown, round: string, index: number): GateFinding 
   const record = readRecord(raw) ?? {};
   const disposition = readRecord(record["disposition"]);
   const verification = readRecord(record["verification"]);
+  const premise = readRecord(record["premise"]);
   return {
     id: readString(record["id"]) ?? `#${index + 1}`,
     globalId: readString(record["global_id"]),
@@ -344,6 +361,9 @@ function toGateFinding(raw: unknown, round: string, index: number): GateFinding 
             verifier: readString(verification["verifier"]),
           },
         }
+      : {}),
+    ...(premise
+      ? { premise: { verdict: readString(premise["verdict"]), operatorAnswer: readString(readRecord(premise["operator"])?.["answer"]) } }
       : {}),
     ...(readString(record["source"]) ? { source: readString(record["source"]) } : {}),
     ...(readRecord(record["external_ref"]) ? { externalRef: readRecord(record["external_ref"]) as Record<string, unknown> } : {}),
@@ -376,6 +396,28 @@ export function parseVerificationStats(scopeMarkdown: string): VerificationStats
     findingsRetained: matchNumber(scopeMarkdown, "findings_retained"),
     findingsRemoved: matchNumber(scopeMarkdown, "findings_removed_by_verifier"),
   };
+}
+
+/** The `## Premise check` counts out of `scope.md`; `null` when the block is not there (no premise judge ran). */
+export function parsePremiseStats(scopeMarkdown: string): PremiseStats | null {
+  if (matchLine(scopeMarkdown, "premise_claims_received") === null) {
+    return null;
+  }
+  return {
+    claimsReceived: matchNumber(scopeMarkdown, "premise_claims_received"),
+    claimsApplied: matchNumber(scopeMarkdown, "premise_claims_applied"),
+    claimsRejected: matchNumber(scopeMarkdown, "premise_claims_rejected"),
+    held: matchNumber(scopeMarkdown, "premise_held"),
+  };
+}
+
+/** `awaiting`: held with no operator answer (blocks, at any severity); `dismissed`: the operator dismissed it; otherwise `none`. */
+function premiseGateState(finding: GateFinding): "none" | "awaiting" | "dismissed" {
+  if (!isHeldVerdict(finding.premise?.verdict)) {
+    return "none";
+  }
+  const answer = finding.premise?.operatorAnswer;
+  return answer === "dismiss" ? "dismissed" : answer === "uphold" ? "none" : "awaiting";
 }
 
 function matchLine(text: string, key: string): string | null {
@@ -457,13 +499,27 @@ export async function readReviewRounds(cwd: string, flowDir: string): Promise<Re
       mode: readString(manifest?.["mode"]) ?? null,
       coverage,
       findings: Array.isArray(rawFindings)
-        ? rawFindings.map((item, index) => toGateFinding(item, reviewId, index))
+        ? withPremiseAnswers(rawFindings.map((item, index) => toGateFinding(item, reviewId, index)), await readPremiseDecisions(packageDir))
         : [],
       verification: scope === null ? null : parseVerificationStats(scope),
+      premise: scope === null ? null : parsePremiseStats(scope),
     });
   }
   rounds.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0));
   return rounds;
+}
+
+/** Put the operator's recorded answer on the held findings it names, so the gate reads one shape whichever store holds it. */
+function withPremiseAnswers(findings: GateFinding[], decisions: Awaited<ReturnType<typeof readPremiseDecisions>>): GateFinding[] {
+  if (decisions.length === 0) {
+    return findings;
+  }
+  return findings.map((finding) => {
+    const decision = premiseDecisionFor(decisions, finding.globalId, finding.id);
+    return decision === undefined || finding.premise === undefined
+      ? finding
+      : { ...finding, premise: { ...finding.premise, operatorAnswer: decision.answer } };
+  });
 }
 
 async function readJson(file: string): Promise<unknown> {
@@ -613,6 +669,22 @@ function shasIn(text: string | undefined): string[] {
  * this also inherits that floor without restating it.
  */
 export function findingVerdict(finding: GateFinding): FindingVerdict {
+  // Flow 459. A finding the premise judge held is a question, and it stays open until the operator answers it. The
+  // answer `dismiss` is the operator's own decision (`keryx review decide-premise`), which is what the
+  // `dismissed-incorrect` disposition it records would otherwise need a verifier verdict to justify; `uphold` falls
+  // through to the ordinary rules at the finding's original severity.
+  const hold = premiseGateState(finding);
+  if (hold === "awaiting") {
+    return {
+      terminal: false,
+      reason:
+        "held by the premise judge and awaiting an operator decision — answer it with " +
+        "`keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason \"<why>\"`",
+    };
+  }
+  if (hold === "dismissed") {
+    return { terminal: true, kind: "dismissed" };
+  }
   const state = finding.disposition?.state;
   const evidence = finding.disposition?.evidence;
   if (state === undefined || state === "unknown") {
@@ -1363,7 +1435,9 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
     });
   } else {
     const states = latestFindingStates(rounds);
-    const blocking = states.filter((finding) => blocksAtFloor(finding.severity, config.severityFloor));
+    // A held finding blocks at ANY severity: it is a question the operator has not answered, and a `minor` question
+    // left unanswered is still an unanswered question (flow 459).
+    const blocking = states.filter((finding) => blocksAtFloor(finding.severity, config.severityFloor) || premiseGateState(finding) === "awaiting");
     const open = blocking.flatMap((finding) => {
       const verdict = findingVerdict(finding);
       return verdict.terminal

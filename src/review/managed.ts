@@ -51,6 +51,7 @@ import {
 } from "./filter-stats";
 import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
 import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
+import { PREMISES_FILE, mergePremises, parsePremiseClaims, renderPremiseMarkdown } from "./premise";
 import { repairMechanicalOmissions, type FindingRepair } from "./repair";
 import { writeReviewNotes, type ReviewNoteResult } from "./review-notes";
 import {
@@ -261,6 +262,8 @@ export async function createManagedReviewPackage(
   input: ManagedReviewIngestInput,
 ): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord; duplicates: DuplicateMerge[] }> {
   const at = (input.now ?? new Date()).toISOString();
+  // Parsed first: a premise file of the wrong shape refuses the ingest before a package is allocated.
+  const premiseClaims = parsePremiseClaims(input.premises);
   const flowMatch = await resolvePackageFlow(input);
   const { reviewId, packageDir } = await allocatePackage(input, flowMatch, at);
   const coverage = normalizeCoverage(input.coverage, input.reviewers);
@@ -353,7 +356,15 @@ export async function createManagedReviewPackage(
   // does not spend a reviewer's reading budget. See {@link mergeDuplicates}.
   const deduped = mergeDuplicates(scopeB.retained);
 
-  const findingsCap = applyFindingsCap(deduped.findings, {
+  // Flow 459. The premise judge, which can only hold or lower. It runs over the CANONICAL findings, after the
+  // duplicate merge (so a claim names the one record that survives) and before the cap (so a downgraded severity
+  // is the one the cap and every later reader sees). External findings are in the set: they may be challenged,
+  // which makes them a question for the operator and never a dismissal. A carried finding keeps its premise.
+  const premised = mergePremises([...deduped.findings, ...scoped.external], premiseClaims);
+  const premisedInternal = premised.findings.slice(0, deduped.findings.length);
+  const premisedExternal = premised.findings.slice(deduped.findings.length);
+
+  const findingsCap = applyFindingsCap(premisedInternal, {
     limit: input.maxFindingsPerReviewer,
   });
 
@@ -365,7 +376,7 @@ export async function createManagedReviewPackage(
   const roundDismissed = fromRefutedSource(input.refuted, reviewers, flowMatch !== null);
   const findings = [
     ...findingsCap.retained,
-    ...scoped.external,
+    ...premisedExternal,
     ...fromVerifierRefutations(verification.refuted),
     ...roundDismissed,
   ];
@@ -485,12 +496,18 @@ export async function createManagedReviewPackage(
   await mkdir(packageDir, { recursive: true });
   await writeFileAtomic(path.join(packageDir, "research.json"), `${JSON.stringify(input.research ?? PENDING_RESEARCH, null, 2)}\n`);
   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+  if (input.premises !== undefined) {
+    // The claims as received, rejected ones included: the record of what the judge said, which readers of a
+    // package without `findings.json` (the interim verdict) re-apply.
+    await mkdir(path.join(packageDir, "research-evidence"), { recursive: true });
+    await writeFileAtomic(path.join(packageDir, PREMISES_FILE), `${JSON.stringify(input.premises, null, 2)}\n`);
+  }
   if (input.scope?.files !== undefined) {
     await writeFileAtomic(path.join(packageDir, "scope-files.json"), `${JSON.stringify({ version: 1, files: input.scope.files, ...(typeof input.scope.counts?.changedLinesRetained === "number" ? { changedLines: input.scope.counts.changedLinesRetained } : {}) }, null, 2)}\n`);
   }
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
-    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats, findings) +
+    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats, findings, renderPremiseMarkdown({ counts: premised.counts, rejections: premised.rejections, findings })) +
       renderDuplicatesMarkdown(deduped.merges),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
@@ -530,6 +547,8 @@ export async function createManagedReviewPackage(
     verification: verification.counts,
     verificationRejections: verification.rejections,
     verificationCaps: verification.caps,
+    premise: premised.counts,
+    premiseRejections: premised.rejections,
     caps,
     filterStats,
     reviewNotes,
@@ -1543,6 +1562,11 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   if (finding.verification !== undefined) {
     record.verification = finding.verification;
   }
+  // Flow 459, same rule: written only when a premise judge actually ruled. A held finding without this field would
+  // read as an ordinary open one, so the projection must not drop it.
+  if (finding.premise !== undefined) {
+    record.premise = finding.premise;
+  }
   // Same rule again, and this one is not cosmetic: `source` is what makes the
   // verifier unable to refute a comment (AC10), keeps the findings cap off it
   // (AC9), and keeps the completion gate closed while it is unanswered (AC5). A
@@ -2433,6 +2457,7 @@ function renderScope(
   scopeBScreen: ScopeBScreenRecord = { source: "none", scopeBFindings: 0 },
   filterStats?: ReviewFilterStats | undefined,
   allFindings: readonly StructuredReviewFinding[] = [],
+  premiseBlock = "",
 ): string {
   const preFilter: ReviewScopeCountsLike | undefined = input.scope?.counts ?? input.scopeCounts;
   const drops: readonly ReviewScopeDropLike[] | undefined = input.scope?.drops;
@@ -2457,7 +2482,7 @@ ${renderStageCountsMarkdown({
 ${renderCapsMarkdown(caps)}
 ${renderScopeBScreenMarkdown(scopeBScreen)}${
     filterStats === undefined ? "" : `\n${renderFilterStatsMarkdown(filterStats)}`
-  }${renderExternalReclaimsMarkdown(externalReclaims)}${renderPathMissingMarkdown(allFindings)}`;
+  }${renderExternalReclaimsMarkdown(externalReclaims)}${renderPathMissingMarkdown(allFindings)}${premiseBlock}`;
   return carriedPreFilter === undefined ? head : `${head.trimEnd()}\n\n${carriedPreFilter}\n`;
 }
 

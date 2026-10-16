@@ -57,6 +57,8 @@ export type ReviewFixtureFinding = {
   dedupe_key?: string;
   disposition?: { state: string; evidence?: string };
   verification?: { verdict: string; method?: string; evidence?: string; verifier?: string };
+  /** Flow 459: what the premise judge found, as `findings.json` records it. */
+  premise?: Record<string, unknown>;
   source?: string;
   external_ref?: Record<string, unknown>;
 };
@@ -136,6 +138,7 @@ export async function writeReviewPackage(options: ReviewFixtureOptions): Promise
       ...(finding.file === undefined ? {} : { file: finding.file }),
       ...(finding.disposition === undefined ? {} : { disposition: finding.disposition }),
       ...(finding.verification === undefined ? {} : { verification: finding.verification }),
+      ...(finding.premise === undefined ? {} : { premise: finding.premise }),
       ...(finding.source === undefined ? {} : { source: finding.source }),
       ...(finding.external_ref === undefined ? {} : { external_ref: finding.external_ref }),
     }));
