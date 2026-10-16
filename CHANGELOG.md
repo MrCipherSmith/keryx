@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+- **The model can no longer forge an operator's answer.** Remembered `ask_user` answers live in session notes under `answer.<hash>`, and `slate_note` accepted any key, so a model could write a note that a later `ask_user` replayed as "Already answered by the operator". The `answer.` namespace is now reserved for the harness: a model's `slate_note` that writes or deletes such a key is refused.
+- **An irreversible question is never answered from memory.** The replay used to skip only questions flagged `irreversible` or tagged with an `action`; it now applies the decision journal's own test (the project's irreversible terms and patterns over the question and every option), so "Run git reset --hard?" is asked every time.
+- **A remembered answer belongs to its options.** The stored answer is keyed on the question and its sorted option ids, so the same words with different choices are asked again, and a stored pick whose id is not among the current options is never replayed.
+- **`/sessions` and `/rewind` are refused while a turn runs**, like `/new`, `/clear` and `/resume`. Queued, either would have replaced the session under the questions queued after it.
+- **A subagent the provider rate-limits is no longer reported as completed.** A child runs without same-round recovery, so a 429 or overloaded answer ended its turn with no text and `spawn_subagent` called it `Completed`. It is now an error whose first line is `STATUS: RATE_LIMITED` (with the provider's `retry-after` when given), the signal the review orchestrator halves its wave on.
+- **Unattended trust-mode runs get no plan follow-through nudges.** A trigger dispatch in `trust` mode no longer has "items remain" turns pushed into it; both dispatchers set it off and the agent loop no longer defaults it on for an unattended run.
+
 ## [0.3.118] - 2026-10-15
 
 ### Added
