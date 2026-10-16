@@ -12,6 +12,7 @@ import { validateAgainstSchemaObject } from "../contracts/validator";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { resolveProjectRoot } from "../lib/contained-path";
+import { revisionOperand } from "../lib/git-revision";
 import { clearActiveReview } from "./active-review";
 import { flowsRoot, listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
 import type { FlowState } from "../flow/types";
@@ -134,15 +135,51 @@ export async function resolveGitHead(cwd: string): Promise<string | null> {
  * Keeping the network call out of here is what lets this function run in every
  * test without one.
  */
-export async function resolveTargetHead(input: ManagedReviewInput): Promise<string | null> {
+export async function resolveTargetHead(input: ManagedReviewInput, packageDir?: string): Promise<string | null> {
   const declared = input.target.head;
   if (typeof declared === "string" && declared.trim() !== "") {
     return declared.trim();
+  }
+  // Flow 458 AC7. Ingest into a package that already exists (`review ingest --review-id <id>` after `review start`)
+  // records the round against the head that package was opened for, not whatever the checkout moved to since: the
+  // reviewers read that commit. A head this checkout does not have is refused rather than replaced, because every
+  // quote is located at it and the completion gate compares it with the PR.
+  if (packageDir !== undefined) {
+    const recorded = await recordedPackageHead(packageDir);
+    if (recorded !== undefined) {
+      if (!(await commitExists(input.cwd, recorded))) {
+        throw new Error(
+          `Cannot ingest into ${path.relative(input.cwd, packageDir) || packageDir}: its manifest records head ${recorded.slice(0, 12)}, and that commit is not in this checkout (\`git cat-file -e ${recorded.slice(0, 12)}^{commit}\` fails). Fetch it (\`git fetch origin ${recorded}\` or the PR branch) and ingest again, or pass --head <sha> to name the commit this round really ran against.`,
+        );
+      }
+      return recorded;
+    }
   }
   return (input.resolveHead ?? ((args) => resolveGitHead(args.cwd)))({
     cwd: input.cwd,
     target: input.target,
   });
+}
+
+/** `manifest.target.head` of an existing package, or undefined when there is no package or it records none. */
+async function recordedPackageHead(packageDir: string): Promise<string | undefined> {
+  try {
+    const manifest = JSON.parse(await readFile(path.join(packageDir, "manifest.json"), "utf8")) as { target?: { head?: unknown } };
+    const head = manifest.target?.head;
+    return typeof head === "string" && /^[0-9a-f]{7,40}$/i.test(head.trim()) ? head.trim().toLowerCase() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether `sha` names a commit in the repository at `cwd`. */
+async function commitExists(cwd: string, sha: string): Promise<boolean> {
+  try {
+    const proc = Bun.spawn(["git", "cat-file", "-e", ...revisionOperand(`${sha}^{commit}`)], { cwd, stdout: "ignore", stderr: "ignore", stdin: "ignore" });
+    return (await proc.exited) === 0;
+  } catch {
+    return false;
+  }
 }
 
 /** {@link ManagedReviewTarget} with the resolved head folded in. */
@@ -244,7 +281,7 @@ export async function createManagedReviewPackage(
   // Resolved HERE rather than beside `buildManifest`, because the locator needs
   // it: a round is a claim about a commit, and its findings are located at that
   // commit rather than against whatever the tree currently holds.
-  const head = await resolveTargetHead(input);
+  const head = await resolveTargetHead(input, packageDir);
 
   // The line becomes a derived fact here, BEFORE anything downstream reads it:
   // the verifier cites a finding, the cap reports one by site, `scope.md` lists

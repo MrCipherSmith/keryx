@@ -384,7 +384,7 @@ describe("ledger build --skip and flow-bound packages (flow 458 AC7)", () => {
       expect(out.gaps.some((gap) => gap.reviewer === skipped)).toBe(false);
       expect(out.blockers.join("\n")).not.toContain(skipped);
       // The gate on the dispatch alone: accepted with the skip, refused without it.
-      const dispatch = { ...out.ledger.dispatch, override: undefined };
+      const dispatch = out.ledger.dispatch;
       expect((await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"] })).join("\n")).not.toContain("missing");
       expect((await coverageErrors({ mode: "all", selected: dispatch.selected }, { root, files: ["src/a.ts"] })).join("\n")).toContain(`missing: ${skipped}`);
 
