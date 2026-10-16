@@ -126,7 +126,11 @@ export async function reviewNext(input: { packageDir: string; reviewers?: readon
       const { plan } = evaluation;
       state = withProcessed(plan.state, reviewer, reply !== undefined && !counted ? reply.hash : undefined);
       if (plan.decision === "not-run") { notRun.push({ reviewer, reason: plan.reason }); continue; }
-      if (plan.wave.length === 0) continue;
+      if (plan.wave.length === 0) {
+        // A reviewer of the package that has no reply and no slice to be handed did no work: it is owed, not done.
+        if (reply === undefined && requiredSlices(manifest, reviewer).length === 0) notRun.push({ reviewer, reason: "no reply recorded and no slice routed to it, so it never ran" });
+        continue;
+      }
       const status = String(reply?.result.status ?? "").toUpperCase();
       const owned = newlyOwned.get(reviewer)!;
       const reason: NextReason = reply === undefined ? "missing"

@@ -330,11 +330,15 @@ export function parseReviewResult(raw: string): ParsedResult | undefined {
   if (labelled !== undefined) return labelled.result ?? lenientReviewResult(raw.slice(labelled.at));
   const marked = afterMarker(raw)?.result;
   if (marked !== undefined) return marked;
-  // A JSON list of results (one per wave) is merged, not read as its last object.
+  // A reply that looks cut off gives no result, whatever complete list or object stands before the cut: the lost part may
+  // hold findings (`[{DONE, slices:[s1]}]` followed by a cut-off `{…findings:[{"id":"F1"…` must not read as DONE).
+  const { truncated } = topLevelObjects(raw);
+  if (truncated) return undefined;
+  // A JSON list of results (one per wave) is merged, not read as its last object. A list beside a bare reviewer result, or
+  // a bare result that merely has a `waves` field, is not a list reply (`holdsResultList` says so): the strict reader judges it.
   if (holdsResultList(raw)) return lenientReviewResult(raw);
   const strict = scannedResult(raw);
   if (strict !== undefined) return strict;
-  if (topLevelObjects(raw).truncated) return undefined;
   return lenientReviewResult(raw);
 }
 

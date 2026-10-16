@@ -33,7 +33,7 @@ export function narrowedSlices(manifest: Pick<SliceManifest, "slices">, readText
     const backedFix = fixClaimBacked(entry, fix);
     // A second-look slice (unchanged code, one more pass) is read by logic and security-code only: the round must back the
     // claim, and then the narrower roster is the right one. An unbacked claim is judged as a new slice.
-    const backedSecondLook = secondLookClaimBacked(entry, fix);
+    const backedSecondLook = secondLookClaimBacked(entry, fix, text);
     const roles = backedSecondLook ? [...SECOND_LOOK_ROLES] : backedFix ? [...new Set([...needed.roles, ...expectedFixRoles(entry, fix!)])] : needed.roles;
     const recorded = new Set(entry.roles ?? []);
     const missingRoles = roles.filter((role) => !recorded.has(role)).sort();

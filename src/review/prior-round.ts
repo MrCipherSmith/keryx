@@ -321,6 +321,8 @@ export async function resolveBase(git: GitRunner, target: PriorRoundTarget, head
     if (ref === undefined || ref === "" || ref.startsWith("-")) continue;
     const sha = await mergeBaseOf(git, ref, head);
     if (sha === null) continue;
+    // An explicit base is kept even when it gives an empty range: the caller warns, it is never silently replaced.
+    if (ref === target.base) return { ref, sha };
     if (!head.toLowerCase().startsWith(sha.toLowerCase()) && !sha.toLowerCase().startsWith(head.toLowerCase())) return { ref, sha };
     empty ??= { ref, sha };
   }
@@ -768,8 +770,9 @@ export async function splitDelta(
 export async function weakReasons(git: GitRunner, previous: RoundCandidate, base: { ref: string; sha: string }): Promise<string[]> {
   const reasons: string[] = [];
   if (previous.completed !== undefined && !previous.completed.ok) reasons.push(`not completed (${previous.completed.why})`);
-  reasons.push(...(previous.weak ?? []));
+  reasons.push(...(previous.weak ?? ["no package record of the round's coverage (only a published block or flow record was found)"]));
   const was = previous.prevMergeBase;
+  if (was === null) reasons.push("it recorded no merge-base, so the scope it reviewed is unknown");
   if (typeof was === "string" && was.toLowerCase() !== base.sha.toLowerCase() && !(await isAncestor(git, was, base.sha))) {
     reasons.push(`it reviewed a scope narrower than the current merge-base..head (its merge-base ${was.slice(0, 12)} is not ${base.sha.slice(0, 12)} or older)`);
   }

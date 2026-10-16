@@ -34,8 +34,10 @@ describe("subtractHunks", () => {
 });
 
 describe("previousRoundFacts", () => {
-  test("a ledger that ran says whether coverage was complete; an empty ingest ledger says nothing", () => {
-    expect(previousRoundFacts({ version: 1, scopeReviewed: false, obligations: [] }, undefined).weak).toEqual([]);
+  test("only a ledger that ran and proved coverage is not weak; an empty ingest ledger proves nothing", () => {
+    expect(previousRoundFacts({ version: 1, scopeReviewed: false, obligations: [] }, undefined).weak[0]).toContain("no ledger dispatch block");
+    expect(previousRoundFacts({ scopeReviewed: true, dispatch: { runs: [] } }, undefined).weak).toEqual([]);
+    expect(previousRoundFacts({ dispatch: { runs: [] } }, undefined).weak[0]).toContain("unproven");
     expect(previousRoundFacts({ scopeReviewed: false, dispatch: { runs: [] } }, undefined).weak[0]).toContain("coverage incomplete");
     expect(previousRoundFacts({ scopeReviewed: true, dispatch: { skipped: [{ reviewer: "review-security-code", reason: "x" }] } }, undefined).weak[0]).toContain("review-security-code");
     expect(previousRoundFacts({ scopeReviewed: true, dispatch: { notRun: ["Not run: mutation (light round)"] } }, undefined).weak).toEqual([]);
@@ -90,8 +92,21 @@ describe("a delta round's second look, on a throwaway repository", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  test("unchanged code of merge-base..head becomes second-look hunks; the delta stays new", async () => {
+  const GOOD_LEDGER = { "research.json": { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: { runs: [] } }, "round.json": { v: 1, round: 1, mergeBase: undefined } };
+
+  test("a previous round with no ledger dispatch block, or an unproven scopeReviewed, or a null merge-base, is weak", async () => {
     writePackage("r1", {});
+    const none = await findPreviousRound(TARGET, head, { cwd: root, github: offline, registry: [] });
+    expect(none.round.weakPrevious).toContain("no ledger dispatch block");
+    expect(none.round.secondLookHunks).toBeUndefined();
+    const git2 = defaultGitRunner(root);
+    const resolved = (await resolveBase(git2, TARGET, head))!;
+    const candidate = { source: "local-package", reviewId: "r1", reviewedHead: reviewed, round: 1, at: 0, findings: [], completed: { ok: true, why: "x" }, weak: [], prevMergeBase: null } as RoundCandidate;
+    expect((await weakReasons(git2, candidate, resolved))[0]).toContain("no merge-base");
+  });
+
+  test("unchanged code of merge-base..head becomes second-look hunks; the delta stays new", async () => {
+    writePackage("r1", GOOD_LEDGER);
     const { round } = await findPreviousRound(TARGET, head, { cwd: root, github: offline, registry: [] });
     expect(round).toMatchObject({ mode: "delta", range: { base: reviewed, head }, mergeBase: base });
     expect(round.newHunks.map((h) => [h.file, h.startLine, h.endLine])).toEqual([["src/a/a.ts", 190, 190]]);
@@ -112,7 +127,7 @@ describe("a delta round's second look, on a throwaway repository", () => {
   });
 
   test("a previous round that reviewed a narrower scope (its merge-base is not this one or older) is weak", async () => {
-    const candidate = { source: "local-package", reviewId: "r1", reviewedHead: reviewed, round: 1, at: 0, findings: [], completed: { ok: true, why: "x" }, prevMergeBase: head } as RoundCandidate;
+    const candidate = { source: "local-package", reviewId: "r1", reviewedHead: reviewed, round: 1, at: 0, findings: [], completed: { ok: true, why: "x" }, weak: [], prevMergeBase: head } as RoundCandidate;
     const git2 = defaultGitRunner(root);
     const resolved = (await resolveBase(git2, TARGET, head))!;
     // head is a descendant of the current merge-base, so it is not "this one or older".
@@ -122,7 +137,7 @@ describe("a delta round's second look, on a throwaway repository", () => {
   });
 
   test("review slice cuts second-look slices apart from the delta: kind, roster, one sequence of ids", async () => {
-    writePackage("r1", {});
+    writePackage("r1", GOOD_LEDGER);
     const { round, priorFindings } = await findPreviousRound(TARGET, head, { cwd: root, github: offline, registry: [] });
     const record: RoundRecord = round;
     const pkg = path.join(root, ".metaproject/reviews/r2");
@@ -265,7 +280,7 @@ describe("second-look slices in the plan arithmetic", () => {
     expect(tagged[0]).toMatchObject({ kind: "second-look", roles: ["review-logic", "review-security-code"], depth: "deep" });
     expect(tagged[0]?.audit).toBeUndefined();
     expect(tagged[0]?.risk?.why.join(" ")).toContain("second look: unchanged since round 1");
-    expect(secondLookClaimBacked({ kind: "second-look", files: ["a.ts"] }, undefined)).toBe(false);
+    expect(secondLookClaimBacked({ kind: "second-look", files: ["a.ts"] }, undefined, "")).toBe(false);
   });
 
   test("renumberSlices keeps one slice-NN sequence", () => {

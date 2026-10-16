@@ -21,8 +21,9 @@ export async function packageReviewers(packageDir: string, manifest: SliceManife
     const depth = (await packageRoundDepth(packageDir))?.depth;
     const required = await requiredReviewers(root, "all", files, { blastRadius: await packageHasBlastRadius(packageDir), prContext: packageHasPrContext(packageDir), depth });
     for (const reviewer of required.required) names.add(reviewer);
-  } catch {
-    // The project's reviewer rules are unreadable here: the drivers and the manifest's routing still name who owes work.
+  } catch (error) {
+    // Not swallowed: a reviewer set computed without the project's rules would silently drop the reviewers they require.
+    throw new Error(`the required reviewers of ${packageDir} could not be read (${error instanceof Error ? error.message : String(error)}); fix the reviewer rules and re-run`, { cause: error });
   }
   if (manifest !== undefined) {
     for (const reviewer of fixSliceRoles(manifest)) names.add(reviewer);
@@ -58,7 +59,8 @@ export async function writeWaveDrivers(input: { packageDir: string; manifest: Sl
   for (const reviewer of [...input.reviewers].sort()) {
     const graph = sliceGraph(manifest, reviewer);
     const open = graph.open(requiredSlices(manifest, reviewer), new Set());
-    const waves = packWaves(open, waveBytesOf(manifest));
+    // A dispatch carries one kind (fix, second-look, new), as the estimate counts: waves are packed per kind.
+    const waves = (["fix", "second-look", "new"] as const).flatMap((kind) => packWaves(open.filter((entry) => (entry.kind === "fix" ? "fix" : entry.kind === "second-look" ? "second-look" : "new") === kind), waveBytesOf(manifest)));
     const definition = DEFINITION_CANDIDATES(reviewer).find((candidate) => existsSync(path.resolve(root, candidate)));
     for (const [at, wave] of waves.entries()) {
       const number = at + 1;
