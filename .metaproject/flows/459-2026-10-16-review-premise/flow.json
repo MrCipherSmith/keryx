@@ -1,0 +1,292 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "459",
+  "slug": "review-premise",
+  "title": "Review findings get an independent premise check before anyone acts on them",
+  "status": "in-progress",
+  "createdAt": "2026-10-16T11:39:19.756Z",
+  "updatedAt": "2026-10-16T11:45:29.707Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8b96e54ec840d4f339a17d0c511de0c55363a201171a96e8bfbd0a976b69a648",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the lane tasks in plan.md"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the lane tasks in plan.md"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the lane tasks in plan.md"
+    },
+    {
+      "id": "T5",
+      "title": "L1 code core: premise claims, delete-only merge, held findings in verdict/readiness/gate/dedupe",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "L2 operator + CLI: premise-question decision, decide-premise card, flags, tier, catalog, docs",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Live eval: #7849 fixture + #992/#1005 controls",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "PR review round(s) clean",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "CHANGELOG, release 0.3.121",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-16T11:39:19.756Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-16T11:45:27.901Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-16T11:45:28.049Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-16T11:45:28.198Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-16T11:45:28.346Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-16T11:45:28.496Z",
+      "event": "task-added",
+      "detail": "T5: L1 code core: premise claims, delete-only merge, held findings in verdict/readiness/gate/dedupe"
+    },
+    {
+      "at": "2026-10-16T11:45:28.644Z",
+      "event": "task-added",
+      "detail": "T6: L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators"
+    },
+    {
+      "at": "2026-10-16T11:45:28.799Z",
+      "event": "task-added",
+      "detail": "T7: L2 operator + CLI: premise-question decision, decide-premise card, flags, tier, catalog, docs"
+    },
+    {
+      "at": "2026-10-16T11:45:28.947Z",
+      "event": "task-added",
+      "detail": "T8: Live eval: #7849 fixture + #992/#1005 controls"
+    },
+    {
+      "at": "2026-10-16T11:45:29.103Z",
+      "event": "task-added",
+      "detail": "T9: PR review round(s) clean"
+    },
+    {
+      "at": "2026-10-16T11:45:29.253Z",
+      "event": "task-added",
+      "detail": "T10: CHANGELOG, release 0.3.121"
+    },
+    {
+      "at": "2026-10-16T11:45:29.556Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-16T11:45:29.707Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/premise.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/verdict.test.ts src/review/readiness.test.ts src/flow/review-gate.test.ts src/review/dedupe.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/review/premise-decision.test.ts src/commands/review-operator-cli.test.ts src/commands/operator-confirm-review-tools.test.ts"
+    },
+    "AC4": {
+      "kind": "invariant",
+      "check": "bun test src/gdskills/ src/review/coverage.test.ts src/commands/skills.bundled-verify.test.ts"
+    },
+    "AC5": {
+      "kind": "invariant",
+      "check": "bun test src/gdskills/review-skills-iron-laws.test.ts src/gdskills/"
+    },
+    "AC6": {
+      "kind": "invariant",
+      "check": "bun test src/gdskills/"
+    },
+    "AC7": {
+      "kind": "judged"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "npm view @mrciphersmith/keryx version"
+    }
+  }
+}

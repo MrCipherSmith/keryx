@@ -1,0 +1,15 @@
+# Flow Journal
+
+- 2026-10-16T11:39:19.756Z - flow created
+- 2026-10-16T11:45:27.901Z - task-done: T1: Collect remaining context
+- 2026-10-16T11:45:28.049Z - task-done: T2: Implement per plan
+- 2026-10-16T11:45:28.198Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-16T11:45:28.346Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-16T11:45:28.496Z - task-added: T5: L1 code core: premise claims, delete-only merge, held findings in verdict/readiness/gate/dedupe
+- 2026-10-16T11:45:28.644Z - task-added: T6: L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators
+- 2026-10-16T11:45:28.799Z - task-added: T7: L2 operator + CLI: premise-question decision, decide-premise card, flags, tier, catalog, docs
+- 2026-10-16T11:45:28.947Z - task-added: T8: Live eval: #7849 fixture + #992/#1005 controls
+- 2026-10-16T11:45:29.103Z - task-added: T9: PR review round(s) clean
+- 2026-10-16T11:45:29.253Z - task-added: T10: CHANGELOG, release 0.3.121
+- 2026-10-16T11:45:29.556Z - frozen: 8 criteria; checksum recorded
+- 2026-10-16T11:45:29.707Z - started
