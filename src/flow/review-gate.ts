@@ -57,7 +57,7 @@ import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { findingIdentities } from "../review/loop";
 import { prCommentsStatePath, readPrCommentState, unansweredComments } from "../review/pr-comments";
-import { flowsRoot } from "./store";
+import { flowReviewsRoot } from "../review/package-location";
 import type { FlowState, TrackerAdapter } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -457,7 +457,7 @@ function matchNumber(text: string, key: string): number | null {
  * module this flow does not own.
  */
 export async function readReviewRounds(cwd: string, flowDir: string): Promise<ReviewRoundRecord[]> {
-  const reviewsDir = path.join(flowsRoot(cwd), flowDir, "reviews");
+  const reviewsDir = flowReviewsRoot(cwd, flowDir);
   if (!(await pathExists(reviewsDir))) {
     return [];
   }
@@ -502,6 +502,7 @@ export async function readReviewRounds(cwd: string, flowDir: string): Promise<Re
     // records none of it; the coverage-completeness gate decides open rounds that kept the record.
     const completeness = readString(manifest?.["status"]) !== "closed" && (await packageRecordsCoverage(packageDir));
     problems.push(...await packageResearchErrors(packageDir, manifest?.["artifacts"], rawFindings, { completeness }));
+    const findings = Array.isArray(rawFindings) ? await findingsWithHolds(rawFindings.map((item, index) => toGateFinding(item, reviewId, index)), packageDir, problems) : [];
     rounds.push({
       reviewId,
       dir: path.relative(cwd, packageDir),
@@ -511,13 +512,27 @@ export async function readReviewRounds(cwd: string, flowDir: string): Promise<Re
       head: readString(target?.["head"]) ?? null,
       mode: readString(manifest?.["mode"]) ?? null,
       coverage,
-      findings: Array.isArray(rawFindings) ? await withPremiseHolds(rawFindings.map((item, index) => toGateFinding(item, reviewId, index)), packageDir) : [],
+      findings,
       verification: scope === null ? null : parseVerificationStats(scope),
       premise: scope === null ? null : parsePremiseStats(scope),
     });
   }
   rounds.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0));
   return rounds;
+}
+
+/**
+ * {@link withPremiseHolds}, with a decisions store that cannot be read (a name a case-insensitive filesystem may fold
+ * onto it, review LG4-002) turned into a named problem of the package, as every other per-package read failure here is:
+ * the round is not ingested, and the gate names the package and why instead of escaping. The findings keep no hold.
+ */
+async function findingsWithHolds(findings: GateFinding[], packageDir: string, problems: string[]): Promise<GateFinding[]> {
+  try {
+    return await withPremiseHolds(findings, packageDir);
+  } catch (error) {
+    problems.push(`operator decisions cannot be read: ${error instanceof Error ? error.message : String(error)}`);
+    return findings;
+  }
 }
 
 /**

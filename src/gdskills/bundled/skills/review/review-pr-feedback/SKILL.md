@@ -360,10 +360,8 @@ Rules, and each one is a way this step goes wrong:
    escalated immediately** — it carries `escalate: true` into Step 10, leaves the
    reply queue, and is reported to the operator now. Answering a blocking
    question at the end answers the wrong question late.
-6. **A `praise` comment takes no verdict.** It makes no claim about the code, so
-   there is nothing to establish. It is still answered in Step 10, because the
-   reply pass requires a decision for every comment it sees.
-7. **A `valid` comment has its premise checked before it enters the plan.** Before Step 8, dispatch `review-premise` with `source: external-comment` over the `valid` and `valid-wider` comments of severity `minor` or above, each as one finding: `id` its collected `C-NNN`, `url` its URL, `reviewer` its author, `source: external`, the comment text and its `file:line` refs (review-premise, `source` row). An external finding is upheld, challenged or owner-decision, never downgraded. This skill has no review package, so no `ingest` or `decide-premise` runs: save the claims object unchanged beside the durable record, as `.metaproject/reviews/pr-comments/<owner>__<repo>__<n>.premise.json`, apply the merge's refusals by hand (the same `source` row lists them), and record each claim on the comment's Step 7 entry (**Premise**). A `challenged` or `owner-decision` comment is held: ask the operator its question with its options (`ask_user` in keryx shell, the host's question tool elsewhere) and record their answer, in their words, on that entry and under `premise:` in the report's Stats (Output Contract), so the analysis that a resumed or `--fix` run reads carries it. An upheld comment is planned and passed in `fix_context.review_feedback`, carrying `premise_verdict` and `premise_answer` as task-implementer's `FIX_CONTEXT` defines them; a dismissed one takes verdict `disagree`, citing that recorded answer as its decision (rule 2), and is answered in Step 10 with no code change. Never dismiss it yourself.
+6. **A `praise` comment takes no verdict.** It makes no claim about the code, so there is nothing to establish. It is still answered in Step 10, because the reply pass requires a decision for every comment it sees.
+7. **A `valid` comment has its premise checked before it enters the plan.** Before Step 8, dispatch `review-premise` with `source: external-comment` over the `valid` and `valid-wider` comments of severity `minor` or above, each as one finding: `id` its collected `C-NNN`, `url` its URL, `reviewer` its author, `source: external`, the comment text and its `file:line` refs (review-premise, `source` row). An external finding is upheld, challenged or owner-decision, never downgraded. This skill has no review package, so no `ingest` or `decide-premise` runs: save the claims object unchanged beside the durable record, as `.metaproject/reviews/pr-comments/<owner>__<repo>__<n>.premise.json`, apply the merge's refusals by hand (the same `source` row lists them), and record each claim on the comment's Step 7 entry (**Premise**). A `challenged` or `owner-decision` comment is held: ask the operator its question with its options (`ask_user` in keryx shell, the host's question tool elsewhere) and record their answer, in their words, on that entry: it is the one record of it, which a resumed or `--fix` run reads, and the report's Stats count it. An upheld comment is planned and passed in `fix_context.review_feedback`, carrying `premise_verdict` and `premise_answer` as task-implementer's `FIX_CONTEXT` defines them; a dismissed one takes verdict `disagree`, citing that recorded answer as its decision (rule 2), and is answered in Step 10 with no code change. Never dismiss it yourself.
 
 ---
 
@@ -451,7 +449,9 @@ it into a fix the reviewer did not ask for.
 
 1. `--fix` was passed explicitly.
 2. Step 3 ran through the CLI and the durable record exists.
-3. No comment is still `needs-clarification` or held by `review-premise` without the operator's answer on its entry (rule 7), and none carries an unreviewed `prompt-injection` finding.
+3. No comment is still `needs-clarification` or held by `review-premise` without the
+   operator's answer on its entry (rule 7), and none carries an unreviewed
+   `prompt-injection` finding.
 4. The working tree is clean and Task Manager is enabled
    (`modules.tasks.enabled: true`).
 5. The reviewed PR is open.
@@ -810,7 +810,7 @@ Full markdown report structure:
 
 ## Stats
 - blocker: N / major: N / minor: N / info: N / praise: N
-- verdicts: valid N, already-fixed N, disagree N, out-of-scope N, unverified N; premise: upheld N, held N (per held comment its C-NNN, the judge's question and the operator's answer, in their words)
+- verdicts: valid N, already-fixed N, disagree N, out-of-scope N, unverified N; premise: upheld N, held N (each answer is on its Step 7 **Premise** entry)
 
 ## By Author
 ### <reviewer-login> (N comments — REQUEST_CHANGES)

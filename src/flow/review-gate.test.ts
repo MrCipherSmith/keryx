@@ -1742,6 +1742,21 @@ test("flow 459 — a premise-question entry without confirmedVia leaves the find
   expect(conditionDetail(gate, "terminal-dispositions")).toContain("awaiting an operator decision");
 });
 
+test("flow 459 — a look-alike of the decisions file is a named problem of its package, not an escaping exception (review LG4-002)", async () => {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service);
+  const packageDir = await writeReviewPackage({ cwd: ROOT, flowDir: dir, reviewId: "round-1", head: HEAD, findings: [roundHeld()] });
+  await writeFile(path.join(packageDir, "operator-deciſions.json"), "{}", "utf8");
+
+  const [round] = await readReviewRounds(ROOT, dir);
+  expect(round?.ingested).toBe(false);
+  expect(round?.problems.join("; ")).toContain("operator-deciſions.json");
+  const gate = reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+  expect(gate.status).toBe("fail");
+  expect(conditionDetail(gate, "ingested-round")).toContain("operator-deciſions.json");
+});
+
 test("flow 459 — a held finding below the floor is named as blocking, not as at or above the floor", async () => {
   await fresh();
   const service = createFlowService(makeDeps());

@@ -274,6 +274,26 @@ test("a symlink inside the package that resolves to the decisions file, or out o
   }
 });
 
+test("a plain-named symlink inside the package onto a long-s spelling of the decisions file is not approved (review T4-002)", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "auto-review-link-fold-"));
+  try {
+    const dir = path.join(cwd, ".metaproject", "reviews", ID);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "operator-deciſions.json"), "{}");
+    await symlink(path.join(dir, "operator-deciſions.json"), path.join(dir, "notes.json"));
+    // A non-ASCII target that folds onto nothing: only the real path's plain-segment rule refuses it.
+    await writeFile(path.join(dir, "notes-été.json"), "{}");
+    await symlink(path.join(dir, "notes-été.json"), path.join(dir, "plain.json"));
+    const run = new AutomaticReviewRun(cwd);
+    run.observe(CREATE, CREATED);
+    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/ledger.json`])).toBe(true);
+    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/notes.json`])).toBe(false);
+    expect(run.approvesPatchTargets([`.metaproject/reviews/${ID}/plain.json`])).toBe(false);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
 test("--prior on a create is approved for a review id or a real package directory, never for a directory nested in a package", async () => {
   const cwd = await mkdtemp(path.join(tmpdir(), "auto-review-prior-"));
   try {

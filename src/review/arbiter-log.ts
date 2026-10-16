@@ -7,6 +7,7 @@
 
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { reviewsRoot } from "./package-location";
 
 /** Set by the runner on the child shell: where this run's arbiter log goes. */
 export const ENV_ARBITER_LOG = "KERYX_ARBITER_LOG";
@@ -86,7 +87,7 @@ export function readArbiterLog(file: string): ArbiterLogRecord[] {
  * review is under way. `undefined` when none is open.
  */
 export function openReviewPackageDir(cwd: string): string | undefined {
-  const root = path.join(cwd, ".metaproject", "reviews");
+  const root = reviewsRoot(cwd);
   if (!existsSync(root)) return undefined;
   let best: { dir: string; at: number } | undefined;
   for (const entry of readdirSync(root, { withFileTypes: true })) {

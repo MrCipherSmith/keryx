@@ -36,7 +36,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { readReviewRounds, type ReviewRoundRecord } from "../flow/review-gate";
-import { REVIEW_PACKAGE_MANIFEST_GLOBS } from "./package-location";
+import { flowsRoot } from "../flow/store";
+import { REVIEW_PACKAGE_MANIFEST_GLOBS, flowReviewsRoot, reviewsRoot } from "./package-location";
 import { collectPrComments, createGhPort, type CollectedComment, type CollectedRoundBlock } from "./pr-comments";
 import { mentionsFindingId } from "./publish";
 import { readRoundRegistryReport, registryVouches, repoIdentity, type RoundRegistryEntry } from "./round-registry";
@@ -412,10 +413,10 @@ function packageDirs(cwd: string): string[] {
     if (!existsSync(root)) return;
     for (const entry of readdirSync(root, { withFileTypes: true })) if (entry.isDirectory()) dirs.push(path.join(root, entry.name));
   };
-  add(path.join(cwd, ".metaproject", "reviews"));
-  const flows = path.join(cwd, ".metaproject", "flows");
+  add(reviewsRoot(cwd));
+  const flows = flowsRoot(cwd);
   if (existsSync(flows)) {
-    for (const entry of readdirSync(flows, { withFileTypes: true })) if (entry.isDirectory()) add(path.join(flows, entry.name, "reviews"));
+    for (const entry of readdirSync(flows, { withFileTypes: true })) if (entry.isDirectory()) add(flowReviewsRoot(cwd, entry.name));
   }
   return dirs;
 }
@@ -887,8 +888,20 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
     if (deps.flowDir === undefined) {
       tried.push({ source: "flow", result: "not-consulted", detail: "the package is not bound to a flow" });
     } else {
-      const rounds = await (deps.flowRounds ?? readReviewRounds)(deps.cwd, deps.flowDir).catch(() => [] as ReviewRoundRecord[]);
-      await record("flow", exclude(flowCandidates(rounds, deps.cwd)).filter((candidate) => !known.has(candidate.reviewId)), `no reviewed round in flow ${deps.flowDir}`);
+      // Review LG4-002: a read that fails is reported, not read as "no round", and a package that is not ingested is
+      // named beside the result, so one unreadable package never silently hides the flow's rounds.
+      const read = await (deps.flowRounds ?? readReviewRounds)(deps.cwd, deps.flowDir).then(
+        (rounds) => ({ rounds }),
+        (error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }),
+      );
+      if ("error" in read) {
+        tried.push({ source: "flow", result: "not-consulted", detail: `the rounds of flow ${deps.flowDir} could not be read (${read.error})` });
+      } else {
+        await record("flow", exclude(flowCandidates(read.rounds, deps.cwd)).filter((candidate) => !known.has(candidate.reviewId)), `no reviewed round in flow ${deps.flowDir}`);
+        const skipped = read.rounds.filter((round) => !round.ingested);
+        const flow = tried.at(-1);
+        if (skipped.length > 0 && flow?.source === "flow") flow.detail = `${flow.detail}; skipped, not ingested: ${skipped.map((round) => `${round.reviewId} (${round.problems.join("; ")})`).join(", ")}`;
+      }
     }
   }
 

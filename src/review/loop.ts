@@ -89,7 +89,8 @@
 
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import { flowsRoot, readFlow, resolveFlowDir } from "../flow/store";
+import { readFlow, resolveFlowDir } from "../flow/store";
+import { flowReviewsRoot } from "./package-location";
 import { pathExists } from "../lib/fs";
 import type { ManagedReviewManifest, StructuredReviewFinding } from "./types";
 
@@ -482,7 +483,7 @@ class KeyGroups {
  */
 export async function readFlowReviewRounds(cwd: string, flowRef: string): Promise<ReviewRound[]> {
   const dir = await resolveFlowDir(cwd, flowRef);
-  const reviewsDir = path.join(flowsRoot(cwd), dir, "reviews");
+  const reviewsDir = flowReviewsRoot(cwd, dir);
   if (!(await pathExists(reviewsDir))) {
     return [];
   }

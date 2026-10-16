@@ -1162,7 +1162,7 @@ keryx review ingest --report <path/to/review-report.md> --ref <feature-branch> \
 An unrecognised option is **refused, not ignored** — a silently dropped flag writes
 nothing and still reports success. `--refuted` carries findings this round raised and
 then dismissed; without it the package keeps only the survivors of an unlogged triage.
-Without `--premises` a first ingest holds nothing: a finding the judge challenged goes to the fixer.
+A first ingest without `--premises` holds nothing; a re-ingest carries earlier holds.
 
 **Findings are the canonical shape.** One vocabulary, everywhere in this skill:
 
