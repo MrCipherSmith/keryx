@@ -24,3 +24,13 @@
 ## 2026-10-16 — AC7 owner decision
 
 Live eval rerun on #992 after the downgrade fix: 3 upheld, F-009 downgraded to minor with cited intent and practice (still in the fix loop), F-012 held as an operator question. Owner (question tool, this session): "Принять как есть" — downgrades need cited evidence and stop at minor (commit 80a16d021); disputed findings are held for the operator. premise-eval.json carries the rerun.
+
+## 2026-10-16 — round 1 premise decisions (owner, question tool)
+
+Round 1 of PR #1043: 39 reviewer dispatches, 168 findings (18 major, 92 minor, 56 info); review-premise (Opus, 3 judges) over the 110 at minor or above: 95 upheld, 4 downgraded with cited evidence, 10 held.
+- ARCH-5, CC-1 (split premise.ts): dismiss — keep the verifier's layout.
+- CC-6, F-007 (shared record guard): dismiss for this PR — separate task.
+- RG8-002 (readiness item 11 waivable): uphold — refuse the waiver for `premise-decisions`.
+- clean-code-w5 F-001, style-w4 STY-003, regression-skills RG-003, style-skills F-006, style-w8 F-009: dismiss, the judge's reasons stand.
+- core-boundaries-w1 F-003 (owner-decision): the AC7 owner decision is now journaled and premise-eval.json carries the rerun.
+Skills fix lane merged (0d38ea4d2): 33 upheld findings fixed or merged into their cluster.
