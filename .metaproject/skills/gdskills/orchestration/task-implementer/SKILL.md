@@ -98,7 +98,7 @@ For a description-based task, omit `issue_number` and issue references in commit
 
 ```
 FIX_CONTEXT:
-  review_feedback:      structured findings from reviewer (id, file, line, severity, message, suggested_fix)
+  review_feedback:      structured findings from reviewer (id, file, line, severity, message, suggested_fix); never a finding review-premise holds for the operator
   original_task_ids:    the tasks that introduced the findings (array)
   iteration:            fix iteration number, 1..3 — the same repair bound as 5.4
 ```

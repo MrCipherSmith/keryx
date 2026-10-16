@@ -144,6 +144,7 @@
       "properties": {
         "review_feedback": {
           "type": "array",
+          "description": "Findings to fix. Never carries a finding held by review-premise (verdict challenged or owner-decision) until the operator upholds it with `keryx review decide-premise`; the caller filters held findings out before dispatch.",
           "items": {
             "type": "object",
             "additionalProperties": false,

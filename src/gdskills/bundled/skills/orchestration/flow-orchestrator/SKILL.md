@@ -264,17 +264,8 @@ Tasks are the mechanism for this. `keryx flow complete` runs a `tasks` gate over
 
 Know the gate's exact scope, because for years this file claimed a gate that did not exist and 24 completed flows shipped with an open task:
 
-- the gate is **opt-in per flow package**, keyed on `gates.tasks` in
-  `flow.json`, which `keryx flow init` writes for every flow it creates. A
-  package created before the gate landed does not carry the flag, and for it
-  the gate reports `skipped` and blocks nothing;
-- a task fails the gate when its status is not `done`; when its disposition is
-  `failed`; when its disposition is `blocked` (terminal, but the work did not
-  happen — and the harness emits this disposition on its own for a run that
-  ended blocked); when its disposition is `skipped` with no recorded reason; or
-  when its disposition is a value this build does not recognise. An
-  unrecognised disposition FAILS rather than falling through: a gate whose
-  default for the unknown case is "pass" is not a gate;
+- the gate is **opt-in per flow package**, keyed on `gates.tasks` in `flow.json`, which `keryx flow init` writes for every flow it creates. A package created before the gate landed does not carry the flag, and for it the gate reports `skipped` and blocks nothing;
+- a task fails the gate when its status is not `done`; when its disposition is `failed`; when its disposition is `blocked` (terminal, but the work did not happen — and the harness emits this disposition on its own for a run that ended blocked); when its disposition is `skipped` with no recorded reason; or when its disposition is a value this build does not recognise. An unrecognised disposition FAILS rather than falling through: a gate whose default for the unknown case is "pass" is not a gate;
 - to close a task as deliberately not needed, record why:
 
   ```bash
@@ -282,6 +273,8 @@ Know the gate's exact scope, because for years this file claimed a gate that did
   ```
 
 Read the `tasks` line in the `flow complete` output. If it says `skipped`, the gate did not run and the task list is yours to verify by hand.
+
+**A flow whose source is a finding** — a follow-up issue filed from a review, or an external review comment — is a premise to check, not a settled requirement. Before `flow freeze`, dispatch `review-premise` on that finding (its claim, file, quote and the code it names); on `challenged` or `owner-decision` ask the operator its question with its options (card `review_decide_premise` in keryx shell, the question tool elsewhere), journal the answer, and plan only what the operator upholds.
 
 Then freeze and start (`--yes`: the operator already answered the kinds question, so the freeze must not prompt):
 
@@ -444,6 +437,7 @@ Before accepting implementation:
 6. If findings require code changes, run a fix round through `task-implementer`, recorded as a flow fix task:
    - **Scope freeze.** A fix round fixes the round's findings and nothing else. Hardening, refactors or new cells a fix suggests go to the operator as a question (as in step 4); never grow scope inside a fix round.
    - **Red probes → ONE implementer.** When reviewers left red probes (failing tests or commands on the findings), pass them as `test_case_specs` to one `task-implementer` dispatch — no separate `tests-creator` task. `tests-creator` runs only for a new contract no probe covers.
+   - **A held finding is not fixed.** A finding `review-premise` held (`challenged` or `owner-decision`) never goes into `fix_context.review_feedback`: ask the operator its question with its options (card `review_decide_premise` in keryx shell, the question tool elsewhere) and record the answer with `keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<their words>"`; only an upheld finding enters a fix round. A dispatched run leaves it held and journals it.
    - **`suggested_fix` is a hypothesis.** Pass each finding's `id` and `suggested_fix` in `fix_context.review_feedback`; the implementer reproduces the finding (red), checks the suggestion against the state × event matrix, then fixes (task-implementer 1.3). Journal every `suggested_fix diverged` / `did not reproduce` note it returns.
 7. Close the skill-learning loop (see `rules/core/skill-lifecycle.mdc`). Collect
    the `skill_drift` fields from task-implementer results and the
@@ -686,6 +680,7 @@ Stop and re-read this skill if you are thinking:
 | "Verification is described in the plan, so it will happen." | A verification step in the plan is a task, not a sentence. If it is not a task with a status, nothing records whether it ran, and the flow reaches `implemented` with an unrun gate. |
 | "The review fan-out is cheap, so the budget check can wait." | `keryx review budget --spent … --outstanding …` gates the fan-out, and `review-orchestrator` runs inline in this same main session, where keryx cannot see the in-flight subagents; declare them with `--outstanding`. Skipping the check means the cap bounds nothing. |
 | "The reviewer wrote the fix; applying it is the fastest close." | A `suggested_fix` is a hypothesis. Most majors in a long fix loop are introduced by fixes: reproduce the finding red, check the suggestion against the state × event matrix, then fix (Phase 3 step 6). |
+| "The finding came from a review, so its premise is settled." | A finding can reproduce and still not be a defect. Never pass a held finding in `fix_context.review_feedback`; ask the operator and record it with `review decide-premise` (Phase 3 step 6); a flow sourced from a finding runs `review-premise` before freeze (Phase 1). |
 | "While I'm in this code, the fix round can also harden the empty state." | Scope freeze: a fix round fixes findings. New hardening is an operator decision at the first-green gate or as an explicit question, never silent growth. |
 | "The implementer journaled its UX choice, so it is decided." | A `behavior_changes` entry with `needs_operator: true` is decided by the operator, asked with options before the result is accepted (Phase 2). A journal line decides nothing. |
 | "I'll set the verification kind later." | An `unclassified` criterion cannot become data afterwards without a recorded rewrite: `keryx flow ac update <id> --criterion ACn --text "…" --reason "<why>"`. Put the `[verify: …]` marker on every criterion before `flow freeze`. |

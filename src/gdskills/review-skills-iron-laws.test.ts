@@ -53,6 +53,8 @@ const EXEMPT: Record<string, string> = {
     "reports on other people's findings rather than raising its own, so it has no finding of its own for these laws to govern. It applies the same discipline where it does own the output — Step 8 is one plan item per class, never one per occurrence — but over comments and plan items, not over findings",
   "review-verifier":
     "checks findings raised by other reviewers and can only DELETE — it cannot add a finding, raise a severity, or change a finding's text, enforced in src/review/verification.ts — so there is no finding of its own to hold to the laws",
+  "review-premise":
+    "judges the premise of findings raised by other reviewers and can only lower, hold or leave them — it cannot add a finding, raise a severity, or change a finding's text (flow 459) — so there is no finding of its own to hold to the laws; law 4 is the question it asks of every finding it judges",
 };
 
 function read(name: string): string {
@@ -72,7 +74,7 @@ function normalise(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-/** The three laws, taken from the canonical block. No literal lives in this file. */
+/** The shared laws, taken from the canonical block. No literal lives in this file. */
 function canonicalLaws(): string[] {
   const text = read(CANONICAL);
   const start = text.indexOf(SHARED_HEADING);
@@ -124,15 +126,16 @@ describe("the canonical severity rubric exists and is the only one", () => {
   });
 });
 
-describe("the three shared laws are derived from the canonical block", () => {
+describe("the four shared laws are derived from the canonical block", () => {
   const laws = canonicalLaws();
 
-  test("the canonical block yields exactly three laws", () => {
+  test("the canonical block yields exactly four laws", () => {
     // If this ever reads 0, every assertion below passes vacuously.
-    expect(laws.length).toBe(3);
+    // Law 4 (flow 459): a deliberate choice is read before it is called a defect.
+    expect(laws.length).toBe(4);
   });
 
-  test("the canonical laws still say the three things AC3 named", () => {
+  test("the canonical laws still say the things AC3 (laws 1-3) and flow 459 AC5 (law 4) named", () => {
     // The semantic floor. One file, so rewording costs one edit here — not
     // fourteen. Each concept is matched by the term it cannot lose without
     // becoming a different rule, with the plausible synonyms allowed.
@@ -149,6 +152,17 @@ describe("the three shared laws are derived from the canonical block", () => {
         name: "group repeats into one finding",
         matches: (l) => /(one finding|once)/i.test(l) && /(site|occurrence|repeat|class)/i.test(l),
       },
+      {
+        // Flow 459: a timeline pinned LTR on purpose (an explicit override, an
+        // exemption note, a sibling doing the same) was reported as a defect and
+        // fixed against platform practice. The law cannot lose either half.
+        name: "a deliberate choice is read before it is called a defect; a rule is checked against platform practice",
+        matches: (l) =>
+          /deliberate/i.test(l) &&
+          /(override|suppression|exemption)/i.test(l) &&
+          /platform practice/i.test(l) &&
+          /exception/i.test(l),
+      },
     ];
     // Every concept is covered, and no two concepts collapse onto the same law —
     // which is what deleting one law and duplicating another would look like.
@@ -157,7 +171,7 @@ describe("the three shared laws are derived from the canonical block", () => {
     expect(new Set(claimed).size).toBe(concepts.length);
   });
 
-  test("the security-only law is not among the shared three", () => {
+  test("the security-only law is not among the shared four", () => {
     // AC3: the attack-vector law does not generalise. A style reviewer has no
     // attacker, and a preamble that reads as noise is a preamble that gets skipped.
     for (const law of laws) expect(law).not.toMatch(/attack vector/i);
@@ -196,7 +210,7 @@ describe("every reviewer carries the shared laws", () => {
     expect(unheaded).toEqual([]);
   });
 
-  test("the fourth law stays in review-security-code and only there", () => {
+  test("the security-specific law stays in review-security-code and only there", () => {
     const carriers = reviewerSkills().filter((name) =>
       read(name).includes("### Security-specific law"),
     );

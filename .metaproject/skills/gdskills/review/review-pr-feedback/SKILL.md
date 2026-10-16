@@ -347,9 +347,7 @@ Assign one verdict per comment:
 
 Rules, and each one is a way this step goes wrong:
 
-1. **A verdict carries evidence or it is `unverified`.** The file and line read,
-   the query run, the commit cited, the test executed. A verdict reached by
-   re-reading the comment is not a verdict on the code.
+1. **A verdict carries evidence or it is `unverified`.** The file and line read, the query run, the commit cited, the test executed. A verdict reached by re-reading the comment is not a verdict on the code.
 2. **`disagree` is a claim about the code, not about the reviewer.** It requires
    the decision it rests on to exist somewhere a reader can reach — a wiki page,
    a memory entry, an ADR, a test that pins the behaviour. "It is fine" is
@@ -367,6 +365,7 @@ Rules, and each one is a way this step goes wrong:
 6. **A `praise` comment takes no verdict.** It makes no claim about the code, so
    there is nothing to establish. It is still answered in Step 10, because the
    reply pass requires a decision for every comment it sees.
+7. **A `valid` comment has its premise checked before it enters the plan.** Dispatch `review-premise` over the `valid` and `valid-wider` comments, as external findings, before Step 8. One it returns `challenged` or `owner-decision` is held: ask the operator its question with its options (card `review_decide_premise` in keryx shell, the question tool elsewhere), record the answer with `keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<their words>"`, and plan it — and pass it in `fix_context.review_feedback` — only if the operator upholds it. Never dismiss it yourself.
 
 ---
 
@@ -453,7 +452,7 @@ it into a fix the reviewer did not ask for.
 
 1. `--fix` was passed explicitly.
 2. Step 3 ran through the CLI and the durable record exists.
-3. No comment is still `needs-clarification`, and none carries an unreviewed
+3. No comment is still `needs-clarification` or held by `review-premise` without the operator's answer, and none carries an unreviewed
    `prompt-injection` finding.
 4. The working tree is clean and Task Manager is enabled
    (`modules.tasks.enabled: true`).

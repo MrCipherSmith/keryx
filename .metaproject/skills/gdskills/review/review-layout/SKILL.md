@@ -119,6 +119,10 @@ name instead.
       LTR is toward the end in RTL. State both.
 - [ ] A physical gradient, shadow, or transform in a component that otherwise uses
       logical properties does **not** flip. Name the direction it points in each.
+- [ ] Some surfaces do **not** mirror, by platform practice (Material Bidirectionality,
+      Apple HIG): media and playback controls and their progress indicator, timelines,
+      numbers, code, phone numbers, and a chart's time axis unless the product decides
+      otherwise. A forced `dir="ltr"` on such a surface is expected, not a defect.
 - [ ] Text length differs by locale. A component sized by its own labels renders
       **different geometry for identical data** across locales. Measure with the
       longest real translation in the catalog, never the English one.
@@ -146,15 +150,10 @@ name instead.
 
 ### Shared laws (every reviewer)
 
-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
-   name the input, call, or condition that reaches the code, you have an
-   observation, not a finding. Report it as `info` and say what would settle it.
-2. **Never flag the theoretical.** The path you describe must exist in the code
-   under review. Do not report a safe API because it could be misused, or a
-   pattern because it is often wrong elsewhere.
-3. **One finding per class, not one per occurrence.** When the same shape appears
-   at several sites, report it once and list every site. Ten findings that are one
-   finding hide the other nine problems.
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
+4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
 
 Severity levels are defined once, in `review-orchestrator/SKILL.md` →
 **Severity (canonical)**. This reviewer keeps no rubric of its own; below is only

@@ -291,6 +291,17 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Fall back to confirming the class_scope sites exist; reasoning alone is capped at unverifiable.",
     "Emit one verdict per finding checked; never add a finding, raise a severity, or edit a finding's text.",
   ]),
+  // Flow 459: a finding can reproduce and still be wrong — a deliberate choice
+  // (an explicit override, an exemption, a sibling doing the same) reported
+  // against platform practice. The verifier asks "does it reproduce"; this
+  // judge asks "is it a defect at all", on the deep tier, and can only lower
+  // or hold a finding for the operator.
+  skill("review-premise", "review", ["recommended", "full"], "Judge each finding's premise — intent, accepted practice, consistency, fix soundness — before anyone acts on it; delete-only.", [
+    "Read the finding's bare claim and the code before the reviewer's argument.",
+    "Ask intent, accepted practice, consistency and fix soundness; cite an intent signal or practice source for challenged.",
+    "Hold challenged and owner-decision findings for the operator with a question; never dismiss one yourself.",
+    "Never add a finding, raise a severity, or edit a finding's text; run nothing beyond git log, blame and show.",
+  ]),
   skill("review-jev-risk", "review", ["recommended", "full"], "Risk map of a diff's hunks — deterministic facts plus one Jev noul per risk dimension, ranked, with a routing hint for security/concurrency.", [
     "Score every retained hunk on security, data/migration, public-API, concurrency, and error-handling.",
     "Emit a finding only above threshold and with no nearby test; severity capped at info/minor.",
