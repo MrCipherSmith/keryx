@@ -477,6 +477,14 @@ describe("AC16: tier assignment is deterministic from signals the orchestrator h
     expect(assignTier({ verifierMethod: "reasoning" }).tier).toBe("standard");
   });
 
+  test("the premise judge floors at deep, beating every downgrade (flow 459)", () => {
+    expect(assignTier({ premiseJudge: true })).toEqual({ tier: "deep", reasons: ["base:standard", "floor:premise-judge"] });
+    const out = assignTier({ premiseJudge: true, verifierMethod: "execution", findingCount: 1, diffLines: 5 });
+    expect(out.tier).toBe("deep");
+    expect(out.reasons).toEqual(["base:standard", "light:verifier-execution", "floor:premise-judge"]);
+    expect(assignTier({ premiseJudge: false }).tier).toBe("standard");
+  });
+
   test("a security finding never runs below standard", () => {
     const out = assignTier({ verifierMethod: "execution", hasSecurityFinding: true });
     expect(out.tier).toBe("standard");

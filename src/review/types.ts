@@ -3,6 +3,9 @@
 // result types live there because they describe what the merge does, not what a
 // finding is.
 import type { VerificationCap, VerificationCounts, VerificationRejection } from "./verification";
+// Type-only for the same reason as the verification types above.
+import type { PremiseCounts, PremiseRejection } from "./premise";
+import type { PremiseQuestionDecision } from "./operator-decisions";
 // Type-only for the same reason, in the other direction: `review/caps` imports
 // `ReviewFindingSeverity` from here as a type, and this imports the caps record
 // as a type. Both are erased, so neither is a runtime cycle.
@@ -378,6 +381,89 @@ export type VerificationMode = (typeof VERIFICATION_MODES)[number];
 /** The default, asserted by a test rather than by this comment. */
 export const DEFAULT_VERIFICATION_MODE: VerificationMode = "annotate";
 
+// ---------------------------------------------------------------------------
+// Premise (flow 459)
+// ---------------------------------------------------------------------------
+
+/**
+ * What an independent premise check found when it asked whether the finding's
+ * REQUEST (change this behaviour, restructure that) is right, as opposed to
+ * whether its facts hold, which is the verifier's question.
+ *
+ * - `upheld` — the premise stands; nothing changes.
+ * - `downgraded` — the premise stands at a lower severity; the judge's severity is canonical.
+ * - `challenged` — intent signals or accepted practice argue against the premise.
+ * - `owner-decision` — the premise is a product choice nobody but the operator can make.
+ *
+ * The last two HOLD the finding: it is not counted as an open blocker or major, is not
+ * handed to a fixer, and waits for an operator decision. Nothing here dismisses a
+ * finding; only the operator does.
+ */
+export const PREMISE_VERDICTS = ["upheld", "downgraded", "challenged", "owner-decision"] as const;
+export type PremiseVerdict = (typeof PREMISE_VERDICTS)[number];
+
+/** The verdicts that hold a finding for the operator. */
+export const HELD_PREMISE_VERDICTS = ["challenged", "owner-decision"] as const;
+
+/** A fact in the code or history that says the flagged shape is a deliberate choice. */
+export type PremiseIntentSignal = { ref: string; says: string };
+/** A guideline, idiom or convention the premise runs against. */
+export type PremisePracticeSource = { name: string; says: string };
+
+/**
+ * What the operator answered to a held finding, as applied to the record: the fields of the `premise-question`
+ * decision it came from. The decision in the package's decisions store is the answer; this copy is its audit trail.
+ */
+export type PremiseOperatorAnswer = Pick<PremiseQuestionDecision, "answer" | "reason" | "quote" | "at" | "actor" | "confirmedVia">;
+
+/**
+ * One premise judgement, as it is recorded on the finding. `severity` is present for
+ * `downgraded` only and is then ALSO the finding's own severity; `original_severity`
+ * keeps what the reviewer reported.
+ */
+export type ReviewFindingPremise = {
+  verdict: PremiseVerdict;
+  judge: string;
+  model?: string | undefined;
+  severity?: ReviewFindingSeverity | undefined;
+  original_severity?: ReviewFindingSeverity | undefined;
+  intent_signals?: PremiseIntentSignal[] | undefined;
+  practice_sources?: PremisePracticeSource[] | undefined;
+  reasoning?: string | undefined;
+  question?: string | undefined;
+  options?: string[] | undefined;
+  /**
+   * Written when the operator's answer is applied to the record (`keryx review decide-premise`, the
+   * `review_decide_premise` card). An audit trail only: the answer counts from the package's decisions store, and
+   * ingest strips this field from any finding it receives.
+   */
+  operator?: PremiseOperatorAnswer | undefined;
+};
+
+/**
+ * A premise claim as it arrives, before anything is checked. The index signature lets a
+ * claim carrying a property the judge has no authority over reach the merge and be
+ * rejected by name.
+ */
+export type PremiseClaimInput = {
+  finding_id?: string | undefined;
+  verdict?: string | undefined;
+  severity?: string | undefined;
+  intent_signals?: unknown;
+  practice_sources?: unknown;
+  reasoning?: unknown;
+  question?: unknown;
+  options?: unknown;
+  [key: string]: unknown;
+};
+
+/** The shape a premise judge returns: a bare object naming the judge. */
+export type PremiseSource = {
+  judge?: string | undefined;
+  model?: string | undefined;
+  premises: readonly PremiseClaimInput[];
+};
+
 /**
  * One finding, in exactly the shape `review-finding.schema.json` accepts.
  *
@@ -477,6 +563,12 @@ export type StructuredReviewFinding = {
    * would be an invitation to fill in the one field they are forbidden to fill.
    */
   verification?: ReviewFindingVerification | undefined;
+  /**
+   * What the premise judge found (flow 459). Absent means nobody judged the premise.
+   * Declared in `review-finding.schema.json` and NOT in the reviewer-side schema, for the
+   * verifier's reason: the reviewer that raised a finding may not judge its own premise.
+   */
+  premise?: ReviewFindingPremise | undefined;
   /**
    * Who raised this: one of our reviewers, or somebody on the pull request.
    *
@@ -602,6 +694,12 @@ export type ManagedReviewInput = {
   verifications?: readonly VerificationClaimInput[] | undefined;
   /** Defaults to {@link DEFAULT_VERIFICATION_MODE}. */
   verificationMode?: VerificationMode | undefined;
+  /**
+   * What `review-premise` returned (flow 459). Typed loosely for the verifier's reason: the
+   * merge is delete-only and must be able to receive, and visibly reject, a claim that
+   * tried to carry something it may not.
+   */
+  premises?: PremiseSource | undefined;
   /**
    * The §5.4 decision this round ran under, from
    * `keryx providers cross-family --json` (flow 209, AC2).
@@ -785,6 +883,11 @@ export type ManagedReviewPackageResult = {
   verification: VerificationCounts;
   verificationRejections: readonly VerificationRejection[];
   verificationCaps: readonly VerificationCap[];
+  /** Flow 459. Present on every package, whether or not a premise judge ran. */
+  premise: PremiseCounts;
+  premiseRejections: readonly PremiseRejection[];
+  /** Set when an ingest without `--premises` carried the previous findings.json's holds forward (review RG2-004). */
+  premisesCarriedForward?: true | undefined;
   /**
    * What the findings, spend and concurrency caps did (flow 203 AC5–AC7, AC10).
    *

@@ -24,7 +24,7 @@ license: "MIT"
 # Review — Flow Graph Abstractions
 
 Reviewer for reusable ReactFlow/graph integration layers. Use it when a repository has a shared
-graph surface consumed by domain modules. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
+graph surface consumed by domain modules. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
 
 ---
 
@@ -83,15 +83,10 @@ baseline.
 
 ### Shared laws (every reviewer)
 
-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
-   name the input, call, or condition that reaches the code, you have an
-   observation, not a finding. Report it as `info` and say what would settle it.
-2. **Never flag the theoretical.** The path you describe must exist in the code
-   under review. Do not report a safe API because it could be misused, or a
-   pattern because it is often wrong elsewhere.
-3. **One finding per class, not one per occurrence.** When the same shape appears
-   at several sites, report it once and list every site. Ten findings that are one
-   finding hide the other nine problems.
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
+4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
 
 Severity levels are defined once, in `review-orchestrator/SKILL.md` →
 **Severity (canonical)**. This reviewer does not restate them: `blocker` is the

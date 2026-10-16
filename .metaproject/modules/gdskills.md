@@ -117,6 +117,7 @@ Native bundled Metaproject working skills and orchestrators.
 - `review-style`: Review naming, readability, duplication, dead code, and maintainability.
 - `review-testing-practices`: Review test structure, coverage quality, determinism, and repository test conventions.
 - `review-verifier`: Verify reported findings by executing a check that fails if the finding is real; delete-only.
+- `review-premise`: Judge each finding's premise — intent, accepted practice, consistency, fix soundness — before anyone acts on it; delete-only.
 
 ## Commands
 

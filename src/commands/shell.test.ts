@@ -878,6 +878,7 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "review_chunks_answer",
     "review_comments_reply",
     "review_confirm_plan",
+    "review_decide_premise",
     "review_override_reviewers",
     "review_publish",
     "review_waive_coverage",

@@ -36,7 +36,7 @@ in progress, so it never makes the agent continue on its own, which is what make
 |---|---|---|
 | `job-orchestrator` | the step ids `keryx job status <name> --json` reports — `analyze`, `context`, `prepare`, `tests-creator`, `implement`, `sanity-check`, `verify`, `review`, `security`, `fix`, `verify-post-fix`, `perf-check`, `report`, `pr`, `deploy` | `keryx job status <name>` (read it, never retype it) |
 | `flow-orchestrator` | the Flow's task ids `T1..Tn` | `keryx flow status <id>` / the Flow's `tasks.md` |
-| `review-orchestrator` | `step-0` … `step-14`, from its own numbered checklist | its Workflow section |
+| `review-orchestrator` | `step-0` … `step-14` and `step-10b`, from its own numbered checklist | its Workflow section |
 
 An id that exists only in the session plan is drift by construction: the operator
 cannot reconcile it with the CLI, and a resumed run cannot match it. If a

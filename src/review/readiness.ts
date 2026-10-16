@@ -17,6 +17,9 @@ import { dispatchErrors } from "./dispatch";
 import { ORCHESTRATOR_LOG, memoryCalls, readToolLog } from "./layers-usage";
 import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED, ENV_REVIEW_CALLER_TOKEN } from "./orchestrator-log";
 import { readRunProfile } from "./run-profile";
+import type { PremiseQuestionDecision } from "./operator-decisions";
+import { awaitingOperator, premiseHoldState } from "./premise";
+import { premiseRecords } from "./verdict";
 import { packageParityWarnings } from "./parity";
 import { researchErrors } from "./research";
 import type { ConfirmedVia, ManagedReviewManifest, ReadinessWaiver } from "./types";
@@ -32,6 +35,7 @@ export const READINESS_ITEMS = [
   { number: 8, id: "report-names", title: "pending mutation candidates and parity warnings are named in the report" },
   { number: 9, id: "pr-files", title: "the changed-file count equals the PR's own file list" },
   { number: 10, id: "memory-outside-stage", title: "the orchestrator read memory only in its own memory stage" },
+  { number: 11, id: "premise-decisions", title: "every held finding has an operator decision" },
 ] as const;
 
 export type ReadinessItemId = (typeof READINESS_ITEMS)[number]["id"];
@@ -107,6 +111,11 @@ type Context = {
   report: string;
   research: Record<string, unknown> | undefined;
   findings: Array<Record<string, unknown>>;
+  /**
+   * The records the premise check reads, exactly as the verdict reads them (findings.json once ingested, raw results with
+   * premises.json before), and the operator's answers to held findings (`premise-question` decisions).
+   */
+  premise: { records: Array<Record<string, unknown>>; decisions: PremiseQuestionDecision[]; ingested: boolean };
   /** True when the package carries the dispatch record (a package cut before it existed is not held to it). */
   dispatched: boolean;
 };
@@ -179,6 +188,33 @@ function verifierCheck(ctx: Context): Verdict {
     `run the verifier (review-verifier) on them, or add the line \`Not verified: ${unverified.length}\` to report.md`,
   );
 }
+
+/**
+ * Flow 459. A finding the premise judge held (`challenged` / `owner-decision`) is a question for the operator, and a
+ * review with an unanswered question is not finished: it is neither fixed nor dismissed. The repair is the answer, not a
+ * waiver of the question.
+ */
+function premiseDecisionsCheck(ctx: Context): Verdict {
+  const { records, decisions } = ctx.premise;
+  const held = records.filter((finding) => premiseHoldState(finding, decisions) !== "none");
+  if (held.length === 0) return ok("no finding is held by the premise judge");
+  const awaiting = awaitingOperator(records, decisions);
+  if (awaiting.length === 0) return ok(`${held.length} held finding(s), every one with an operator decision`);
+  const evidence = `${awaiting.length} of ${held.length} held finding(s) have no operator decision: ${some(awaiting)}`;
+  // Before an ingest the held records come from raw results and premises.json, and the answer commands read
+  // findings.json only (review F-002): the first repair is the ingest.
+  if (!ctx.premise.ingested) {
+    return bad(`${evidence} (not ingested yet)`, `ingest the round with its premise results first (\`keryx review ingest ... --premises ${ctx.arg}/research-evidence/premises.json\`), then ask the operator to answer each held finding`);
+  }
+  return bad(
+    evidence,
+    `ask the operator: in keryx shell call the review_decide_premise tool (a card); in a terminal run keryx review decide-premise --package ${ctx.arg} --finding <id> --answer uphold|dismiss --reason "<why>"`,
+  );
+}
+
+/** Why `premise-decisions` is never waived (shared by `waiveReadiness` and the `review_waive_readiness` card). */
+export const PREMISE_DECISIONS_NOT_WAIVABLE =
+  "premise-decisions cannot be waived in the operator's own words. A held finding needs its own answer: run `keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason \"<why>\"`, or in keryx shell call the review_decide_premise tool (the operator answers a card).";
 
 function ledgerCheck(ctx: Context): Verdict {
   if (!ctx.dispatched) return ok("this package predates the research ledger");
@@ -308,6 +344,7 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     report: (await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => "")) as string,
     research,
     findings: Array.isArray(findingsRaw) ? findingsRaw.map(record).filter((entry): entry is Record<string, unknown> => entry !== undefined) : [],
+    premise: await premiseRecords(packageDir),
     dispatched: manifest.artifacts.reviewerDispatch !== undefined || manifest.artifacts.research !== undefined,
   };
   const { files, radius } = await filesChecks(ctx);
@@ -322,6 +359,7 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     "report-names": await reportNamesCheck(ctx),
     "pr-files": await prFilesCheck(ctx, options),
     "memory-outside-stage": await memoryStageCheck(ctx),
+    "premise-decisions": premiseDecisionsCheck(ctx),
   };
   const waivers = new Map((manifest.readiness_waivers ?? []).map((waiver) => [waiver.item, waiver]));
   const items: ReadinessItem[] = READINESS_ITEMS.map((spec) => {
@@ -413,6 +451,9 @@ async function writePartialHeader(packageDir: string, waivers: readonly Readines
 /**
  * Waives the named failing items in the operator's own words: written into the manifest and into the first lines of
  * report.md. A quote that is a flag name, a one-word "ok" or too short is refused, as the coverage waiver does.
+ * `premise-decisions` (item 11) is the one item that cannot be waived: a held finding needs its own answer
+ * (`keryx review decide-premise` / the `review_decide_premise` card), which says uphold or dismiss for that finding; a
+ * blanket quote would let every held finding through unanswered.
  */
 export async function waiveReadiness(packageDir: string, selectors: readonly string[], operatorQuote: string, options: ReadinessOptions & { now?: Date; confirmedVia?: ConfirmedVia } = {}): Promise<ReadinessWaiver[]> {
   const quote = operatorQuote.replace(/-{0,2}waive/gi, "").trim();
@@ -424,6 +465,9 @@ export async function waiveReadiness(packageDir: string, selectors: readonly str
     if (id === undefined) throw new Error(`--waive: "${selector}" is not a readiness item. Items: ${READINESS_ITEMS.map((item) => `${item.number} ${item.id}`).join(", ")}.`);
     return id;
   });
+  if (ids.includes("premise-decisions")) {
+    throw new Error(`--waive: ${PREMISE_DECISIONS_NOT_WAIVABLE}`);
+  }
   const report = await computeReadiness(packageDir, options);
   const notFailing = ids.filter((id) => report.items.find((item) => item.id === id)?.status === "pass");
   if (notFailing.length > 0) throw new Error(`--waive: ${notFailing.join(", ")} already pass${notFailing.length === 1 ? "es" : ""}; there is nothing to waive.`);

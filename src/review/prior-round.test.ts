@@ -37,6 +37,9 @@ import {
   type RoundRegistryEntry,
 } from "./round-registry";
 import { computeVerdict, renderVerdict } from "./verdict";
+import { readPremiseDecisions, recordPremiseDecision } from "./operator-decisions";
+import { heldFinding, premiseAnswerInput } from "./premise-fixtures";
+import { answerPremiseQuestion, carryPremiseDecisions, findHeldFinding } from "./premise-question";
 
 const PR = "https://github.com/acme/app/pull/7";
 const TARGET = { kind: "pr", ref: PR };
@@ -190,6 +193,29 @@ describe("each source alone", () => {
     const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline, flowDir: "001-x", flowRounds: async () => [record] });
     expect(round).toMatchObject({ round: 2, source: "flow", mode: "delta", previous: { reviewId: "flow-r1" } });
     expect(priorFindings[0]).toMatchObject({ id: "F-3", status: "acted-on", disposition: "acted-on", source: "flow" });
+  });
+
+  test("flow: a read that fails is reported as not consulted, and a package that is not ingested is named beside the rounds (review LG4-002)", async () => {
+    const failed = await findPreviousRound(TARGET, B, { cwd: root, github: offline, flowDir: "001-x", flowRounds: async () => Promise.reject(new Error("operator-deciſions.json looks like the store")) });
+    expect(failed.round.sourcesTried.find((attempt) => attempt.source === "flow")).toMatchObject({ result: "not-consulted", detail: expect.stringContaining("operator-deciſions.json") });
+    writePackage(".metaproject/flows/001-x/reviews/flow-r1", { reviewId: "flow-r1", head: A, ref: "feat/elsewhere" });
+    const good: ReviewRoundRecord = { reviewId: "flow-r1", dir: ".metaproject/flows/001-x/reviews/flow-r1", sortKey: "2026-10-01T00:00:00Z", ingested: true, problems: [], head: A, mode: "review-flow", coverage: [], findings: [], verification: null };
+    const bad: ReviewRoundRecord = { ...good, reviewId: "flow-r2", dir: ".metaproject/flows/001-x/reviews/flow-r2", ingested: false, problems: ["operator decisions cannot be read: look-alike"] };
+    const { round } = await findPreviousRound(TARGET, B, { cwd: root, github: offline, flowDir: "001-x", flowRounds: async () => [good, bad] });
+    expect(round).toMatchObject({ source: "flow", previous: { reviewId: "flow-r1" } });
+    expect(round.sourcesTried.find((attempt) => attempt.source === "flow")?.detail).toContain("skipped, not ingested: flow-r2 (operator decisions cannot be read: look-alike)");
+  });
+
+  test("flow: the package being started is never named as a skipped round (review LG5-001, RG5-001)", async () => {
+    writePackage(".metaproject/flows/001-x/reviews/flow-r1", { reviewId: "flow-r1", head: A, ref: "feat/elsewhere" });
+    const good: ReviewRoundRecord = { reviewId: "flow-r1", dir: ".metaproject/flows/001-x/reviews/flow-r1", sortKey: "2026-10-01T00:00:00Z", ingested: true, problems: [], head: A, mode: "review-flow", coverage: [], findings: [], verification: null };
+    const starting: ReviewRoundRecord = { ...good, reviewId: "flow-r3", dir: ".metaproject/flows/001-x/reviews/flow-r3", ingested: false, problems: ["research scope census is incomplete"] };
+    const { round } = await findPreviousRound(TARGET, B, { cwd: root, github: offline, flowDir: "001-x", excludeReviewId: "flow-r3", flowRounds: async () => [good, starting] });
+    expect(round).toMatchObject({ source: "flow", previous: { reviewId: "flow-r1" } });
+    const detail = round.sourcesTried.find((attempt) => attempt.source === "flow")?.detail ?? "";
+    expect(detail).toContain("flow-r1");
+    expect(detail).not.toContain("flow-r3");
+    expect(detail).not.toContain("skipped");
   });
 
   test("nothing anywhere: round 1, and the line names every source tried", async () => {
@@ -424,6 +450,49 @@ describe("trust: a round is cut only from a previous round this pipeline ran (B1
       expect((await findPreviousRound(TARGET, head, flowDeps(registry))).round.mode).toBe("fallback-first");
     });
 
+    test("an operator's premise answer rewrites findings.json and re-records the round: the next round is still a delta and carries the answer (review RG2-001)", async () => {
+      const dataDir = mkdtempSync(path.join(tmpdir(), "keryx-round-registry-"));
+      try {
+        const held = heldFinding({ id: "LY-003", global_id: "flow-r1#LY-003", file: "src/a.ts", line: 15 });
+        writePackage(flowDir, { reviewId: "flow-r1", head: A, findings: [held] });
+        const packageDir = path.join(root, flowDir);
+        expect(recordFinishedRound(packageDir, "ingest", { cwd: root, dir: dataDir }).error).toBeUndefined();
+        const lookup = await findHeldFinding(packageDir, "LY-003");
+        if (!lookup.ok) throw new Error(lookup.refusal);
+        const warnings: string[] = [];
+        await answerPremiseQuestion(packageDir, { finding: lookup.finding, answer: "uphold", reason: "mirror it", quote: "yes, uphold", at: "2026-10-16T12:00:00Z", confirmedVia: "terminal" }, { cwd: root, dir: dataDir, warn: (line) => warnings.push(line) });
+        expect(warnings).toEqual([]);
+        const registry = readRoundRegistry(repoIdentity(root), dataDir);
+        expect(registry.map((entry) => entry.event)).toEqual(["ingest", "decide-premise"]);
+        // keryx commits the answered package on the PR branch, then the fix lands.
+        commit("flow: review round 1", Object.fromEntries(["manifest.json", "findings.json", "operator-decisions.json"].map((name) => [`${flowDir}/${name}`, readFileSync(path.join(packageDir, name), "utf8")])));
+        const head = commit("fix", { "src/a.ts": lines(20).replace("line 5\n", "line 5 fixed\n") });
+        const { round } = await findPreviousRound(TARGET, head, flowDeps(registry));
+        expect(round).toMatchObject({ mode: "delta", previous: { reviewId: "flow-r1" } });
+        expect(round.carried.map((entry) => entry.findingId)).toContain("LY-003");
+        const next = path.join(root, ".metaproject", "reviews", "flow-r2");
+        mkdirSync(next, { recursive: true });
+        const carried = await carryPremiseDecisions(next, packageDir, round.carried.map((entry) => entry.findingId), flowDir, { projectRoot: root });
+        expect(carried).toEqual(["flow-r1#LY-003"]);
+      } finally {
+        rmSync(dataDir, { recursive: true, force: true });
+      }
+    });
+
+    test("an answer to a package the registry never vouched for does not make it vouched", async () => {
+      const dataDir = mkdtempSync(path.join(tmpdir(), "keryx-round-registry-"));
+      try {
+        writePackage(flowDir, { reviewId: "flow-r1", head: A, findings: [heldFinding({ global_id: "flow-r1#LY-003" })] });
+        const packageDir = path.join(root, flowDir);
+        const lookup = await findHeldFinding(packageDir, "LY-003");
+        if (!lookup.ok) throw new Error(lookup.refusal);
+        await answerPremiseQuestion(packageDir, { finding: lookup.finding, answer: "dismiss", reason: "r", quote: "dismiss", at: "2026-10-16T12:00:00Z", confirmedVia: "terminal" }, { cwd: root, dir: dataDir });
+        expect(readRoundRegistry(repoIdentity(root), dataDir)).toEqual([]);
+      } finally {
+        rmSync(dataDir, { recursive: true, force: true });
+      }
+    });
+
     test("the registry compacts to the newest entry per package past 512 KB, and a read over the cap warns", () => {
       const dataDir = mkdtempSync(path.join(tmpdir(), "keryx-round-registry-"));
       try {
@@ -602,6 +671,19 @@ describe("keryx review start writes the round record", () => {
     expect(roundRecordTampered(dir)).toBeUndefined();
     writeFileSync(path.join(dir, "prior_findings.json"), "[]\n");
     expect(roundRecordTampered(dir)).toContain("prior_findings.json");
+  }, 60_000);
+
+  test("review start carries the operator's premise answer into the delta round's package (review T2-001)", async () => {
+    prepare();
+    const held = heldFinding({ id: "F-1", global_id: "r-old#F-1", reviewer: "review-logic", file: "src/a.ts", line: 15 });
+    writePackage(".metaproject/reviews/r-old", { reviewId: "r-old", head: A, findings: [held] });
+    const previous = path.join(root, ".metaproject", "reviews", "r-old");
+    await recordPremiseDecision(previous, premiseAnswerInput(held, { answer: "uphold", reason: "keep it" }));
+    const { output, dir } = await start(["--review-id", "r-carry"]);
+    expect(readRoundRecord(dir)).toMatchObject({ mode: "delta", previous: { reviewId: "r-old" } });
+    expect(output).toContain("premise answers carried from .metaproject/reviews/r-old: r-old#F-1");
+    const [carried] = await readPremiseDecisions(dir);
+    expect(carried).toMatchObject({ finding: "r-old#F-1", answer: "uphold", carriedFrom: ".metaproject/reviews/r-old" });
   }, 60_000);
 
   test("a malformed round.json is refused, not read leniently", () => {

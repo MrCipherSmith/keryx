@@ -651,7 +651,7 @@ certifies the flow is the one that checked the least.
 
 ## Readiness — the checklist behind `completed` and behind publishing
 
-`keryx review readiness <review-id-or-path> [--json]` reads the package and prints ten items, READY or NOT READY, each with the evidence and the command that repairs it. It writes nothing, and exits non-zero when the verdict is NOT READY. Only item 9 reaches GitHub (the PR's own file list); the TUI and `review status` read the package alone.
+`keryx review readiness <review-id-or-path> [--json]` reads the package and prints eleven items, READY or NOT READY, each with the evidence and the command that repairs it. It writes nothing, and exits non-zero when the verdict is NOT READY. Only item 9 reaches GitHub (the PR's own file list); the TUI and `review status` read the package alone.
 
 1. `files-covered` — every changed file is in a wave or carries a recorded waiver.
 2. `blast-radius` — no file the blast radius cut is left unreviewed. A cut radius writes `chunks.json`; run `keryx review chunks plan`, `estimate`, `next`/`record`, `merge`. In an unattended run every wave runs without a question, up to the 25-pass ceiling; in an interactive run the operator is asked once: in keryx shell call `review_chunks_answer` (a card, never a terminal); elsewhere the operator runs `keryx review chunks estimate --package <dir> --answer yes --quote "<their words>"` in their terminal; unattended, record Not run.
@@ -663,8 +663,9 @@ certifies the flow is the one that checked the least.
 8. `report-names` — pending mutation candidates and parity warnings are named in the report.
 9. `pr-files` — the changed-file count equals the PR's own file list. A recount more than 3x the recorded scope is refused: it came from the wrong base. Recount with `keryx review blast-radius --package <ref> --changed <the PR's files>`.
 10. `memory-outside-stage` — the orchestrator read memory only in its memory stage ("Clean context" above). Outside keryx shell it reads "not observable on this host" unless this session's keryx calls carry the caller token `keryx review start` printed.
+11. `premise-decisions` — every finding `review-premise` held (`challenged` or `owner-decision`) has an operator decision: in keryx shell the card `review_decide_premise`; elsewhere the operator runs `keryx review decide-premise --package <dir> --finding <global_id> --answer uphold|dismiss --reason "<why>"` in their terminal (SKILL.md "Wave D"). Not waivable: each held finding needs its own answer, and `review_waive_readiness` / `--waive` refuse this item.
 
-`keryx review complete` refuses status `completed` while any item fails. A failing item is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you run `keryx review complete`. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
+`keryx review complete` refuses status `completed` while any item fails. A failing item other than `premise-decisions` is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you run `keryx review complete`. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
 
 ## Fix rounds — dispositions, regressions, withdrawal
 
@@ -917,3 +918,25 @@ Default budget guidance:
 | medium | <= 20 files or <= 2,000 changed lines | `light` | per-domain filtered diff |
 | large | > 20 files or > 2,000 changed lines | ask `full` | staged waves by domain |
 | high-risk | auth/API/core/security/data migrations | ask `full` | staged waves, verifier included |
+
+## Everything written to GitHub is brief
+
+One rule, applied to every outward surface: **PR bodies, PR comments, review
+replies, issue comments, and commit messages going to a PR.**
+
+- Lead with the conclusion. No preamble, no restating the question, no apology,
+  no summary of the flow.
+- Say what changed and where. **Link, do not paste.**
+- The reasoning, the evidence, the rejected alternatives and the round history live
+  in the flow package — `journal.md`, `context.md`, the review artifacts — which is
+  durable, searchable, and costs a reader nothing to skip.
+- A GitHub artifact that needs more than a short paragraph is a signal that the
+  detail belongs in the flow with a link out, **not** that the paragraph should
+  grow.
+- No orchestrator-written PR comment or reply exceeds two sentences without
+  carrying a link to the artifact holding the detail. The reply pass enforces
+  this; for anything else you write outward, hold yourself to it.
+
+This is deliberately asymmetric: **verbose in the flow, terse on GitHub.** The
+flow is written for whoever resumes the work; GitHub is read by someone who did
+not ask for our reasoning and is reading between other tasks.

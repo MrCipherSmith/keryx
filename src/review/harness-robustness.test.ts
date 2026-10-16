@@ -19,6 +19,7 @@ import { coverageErrors, requiredReviewers } from "./coverage";
 import { HOST_WAVE_BYTES, defaultWaveBytes, detectReviewHost } from "./host-profile";
 import { confirmedDecision, recordOperatorDecision } from "./operator-decisions";
 import { recordProcessCall, startOrchestratorLog } from "./orchestrator-log";
+import { createManagedReviewPackage } from "./managed";
 import { planConfirmed, recordPlanConfirmation, type PlanNumbers } from "./plan-confirmation";
 import { computeReadiness, renderReadiness } from "./readiness";
 import { publishReview } from "./publish";
@@ -501,6 +502,56 @@ describe("row 4: verification commands run in the parent", () => {
     expect(promoteParentExecutions([{ ...claims[0]!, evidence: "see research-evidence/verify-f-1-1.txt" }], pkg)[0]!.method).toBe("reasoning");
     expect(promoteParentExecutions(claims, other)[0]!.method).toBe("execution");
     expect(promoteParentExecutions(claims, undefined)[0]!.method).toBe("reasoning");
+  });
+
+  describe("ingest binds verify-run records to the package it writes (review LG5-002, LG6-002, SEC6-001)", () => {
+    const FLOW_DIR = "001-2026-10-16-x";
+    const FINDING = { id: "F-001", reviewer: "review-logic", severity: "minor" as const, problem: "p", impact: "i", suggested_fix: "f", evidence: "src/a.ts:1", confidence: "high" as const };
+    const ok = async () => ({ exitCode: 0, stdout: "", stderr: "", timedOut: false });
+    let cwd: string;
+    beforeEach(() => {
+      cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-verify-bind-")));
+      const flowRoot = path.join(cwd, ".metaproject", "flows", FLOW_DIR);
+      mkdirSync(flowRoot, { recursive: true });
+      writeFileSync(
+        path.join(flowRoot, "flow.json"),
+        JSON.stringify({ schemaVersion: 2, id: "001", slug: "x", title: "x", status: "in-progress", createdAt: NOW.toISOString(), updatedAt: NOW.toISOString(), source: { type: "description", ref: null }, acChecksum: null, acConfirmed: {}, pr: { url: null }, tasks: [], history: [] }),
+      );
+    });
+    afterEach(() => rmSync(cwd, { recursive: true, force: true }));
+    const flowPackage = (reviewId: string): string => path.join(cwd, ".metaproject", "flows", FLOW_DIR, "reviews", reviewId);
+    const standalonePackage = (reviewId: string): string => path.join(cwd, ".metaproject", "reviews", reviewId);
+    const claimCiting = (file: string) => ({ finding: "F-001", verdict: "confirmed" as const, method: "reasoning" as const, evidence: `see research-evidence/${path.basename(file)}`, verifier: "review-verifier" });
+    const flowIngest = (reviewId: string, verifications: ReturnType<typeof claimCiting>[]) =>
+      createManagedReviewPackage({ cwd, mode: "ingest", reviewId, flowId: "001", target: { kind: "report", ref: "report.md" }, reportText: "# Round\n", findings: [FINDING], verifications, now: NOW });
+    const methodOf = (dir: string): unknown => (JSON.parse(readFileSync(path.join(dir, "findings.json"), "utf8")) as Array<{ verification?: { method?: string } }>)[0]?.verification?.method;
+
+    test("a flow-bound ingest promotes its own package's records", async () => {
+      mkdirSync(flowPackage("flow-r1"), { recursive: true });
+      const run = await verifyRun({ packageDir: flowPackage("flow-r1"), finding: "F-001", argv: ["true"], cwd, runner: ok });
+      const result = await flowIngest("flow-r1", [claimCiting(run.file)]);
+      expect(path.join(cwd, result.path)).toBe(flowPackage("flow-r1"));
+      expect(methodOf(flowPackage("flow-r1"))).toBe("execution");
+    });
+
+    test("a standalone package of the same id never promotes a flow-bound ingest's claim", async () => {
+      mkdirSync(standalonePackage("flow-r2"), { recursive: true });
+      writeFileSync(path.join(standalonePackage("flow-r2"), "manifest.json"), "{}");
+      const run = await verifyRun({ packageDir: standalonePackage("flow-r2"), finding: "F-001", argv: ["true"], cwd, runner: ok });
+      await flowIngest("flow-r2", [claimCiting(run.file)]);
+      expect(methodOf(flowPackage("flow-r2"))).toBe("reasoning");
+    });
+
+    test("an id that also names a standalone package does not block the flow package's re-ingest (review LG7-001)", async () => {
+      mkdirSync(standalonePackage("flow-r3"), { recursive: true });
+      writeFileSync(path.join(standalonePackage("flow-r3"), "manifest.json"), "{}");
+      mkdirSync(flowPackage("flow-r3"), { recursive: true });
+      const run = await verifyRun({ packageDir: flowPackage("flow-r3"), finding: "F-001", argv: ["true"], cwd, runner: ok });
+      await flowIngest("flow-r3", [claimCiting(run.file)]);
+      await flowIngest("flow-r3", [claimCiting(run.file)]);
+      expect(methodOf(flowPackage("flow-r3"))).toBe("execution");
+      expect(existsSync(path.join(standalonePackage("flow-r3"), "findings.json"))).toBe(false);
+    });
   });
 
   test("a timed-out command is killed with its whole process group (security review M7)", async () => {

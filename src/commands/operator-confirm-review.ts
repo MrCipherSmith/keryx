@@ -15,6 +15,9 @@
 //   review_comments_reply      keryx review comments reply --final                     -> commentsReplyPass
 //   review_confirm_plan        keryx review confirm-plan --package                     -> recordPlanConfirmation
 //
+// Flow 459 adds one more: review_decide_premise (keryx review decide-premise --package --finding --answer --reason ->
+// recordPremiseDecision), the operator's answer to a finding the premise judge held.
+//
 // The waiver tools record the waiver only. Closing the review is still `keryx review complete`, which finds the waiver in
 // the package and passes the gate; the CLI flags record the waiver and close in one run.
 //
@@ -23,7 +26,7 @@
 
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
-import { cardSafe } from "../trigger/schedules";
+import { cardSafe } from "../lib/card-safe";
 import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/service";
 import { placeReviewPath } from "../lib/review-path-flags";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
@@ -32,11 +35,12 @@ import { answerChunkEstimate, chunkModeOf, estimateChunkRun, recordChunkEstimate
 import { computeCoverage, recordCoverageWaiver } from "../review/coverage-complete";
 import { resolveReviewPackagePath } from "../review/managed";
 import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
-import { computeReadiness, readinessItemId, waiveReadiness, type ReadinessOptions } from "../review/readiness";
+import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, readinessItemId, waiveReadiness, type ReadinessOptions } from "../review/readiness";
 import type { PrLookup } from "../review/complete-head-gate";
 import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmSpec } from "./operator-confirm-tools";
 import { operatorDecisionSubject, reviewersLeftOut } from "../review/coverage";
 import { recordOperatorDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
+import { answerPremiseQuestion, findHeldFinding } from "../review/premise-question";
 import { estimatePlan, planKeyOf, planOverThreshold, recordPlanConfirmation } from "../review/plan-confirmation";
 
 /** What the specs read outside the package: the PR tracker. Tests replace these; the defaults are the CLI's. */
@@ -299,7 +303,7 @@ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<Read
       "Same effect as `keryx review complete --waive <item>`: records the waiver (the operator's yes, the time) in the manifest and the report header; run `keryx review complete` afterwards to close the review.",
     inputSchema: {
       type: "object",
-      properties: { package: packageSchema, item: { type: "string", description: "The readiness item: its number (1-10) or id, e.g. head or pr-files." } },
+      properties: { package: packageSchema, item: { type: "string", description: "The readiness item: its number (1-11) or id, e.g. head or pr-files. Item 11 (premise-decisions) is never waived: each held finding is answered with review_decide_premise." } },
       required: ["package", "item"],
       additionalProperties: false,
     },
@@ -311,6 +315,8 @@ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<Read
       try {
         const id = readinessItemId(selector);
         if (id === undefined) return { refusal: `"${selector}" is not a readiness item.` };
+        // Refused before the card is drawn (review RG2-003): waiveReadiness refuses it anyway, after the operator's yes.
+        if (id === "premise-decisions") return { refusal: PREMISE_DECISIONS_NOT_WAIVABLE };
         const dir = await resolvePackage(ref, ctx.projectRoot);
         const report = await computeReadiness(dir, readiness());
         const item = report.items.find((entry) => entry.id === id);
@@ -554,6 +560,81 @@ function confirmPlanSpec(): OperatorConfirmSpec<PlanPrepared> {
   };
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// 9. review_decide_premise (flow 459)
+
+/** `digest` is the shown finding's (see `HeldFinding.digest`): apply records only while the finding still reads the same. */
+type PremisePrepared = { dir: string; finding: string; answer: "uphold" | "dismiss"; reason: string; digest: string };
+
+function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
+  return {
+    name: "review_decide_premise",
+    description:
+      "Record the operator's answer to a finding the premise judge held (verdict challenged or owner-decision): uphold keeps it at its original severity, dismiss records it dismissed-incorrect with the reason as evidence. " +
+      "Pass the review package, the finding (its global_id or id), the answer you are asking for and the reason. Same effect as `keryx review decide-premise` at a terminal. A held finding never goes to a fixer before this is answered.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        package: packageSchema,
+        finding: { type: "string", description: "The held finding: its global_id or id." },
+        answer: { type: "string", enum: ["uphold", "dismiss"], description: "The answer to record if the operator confirms." },
+        reason: { type: "string", description: "Why, in a sentence the operator will read." },
+      },
+      required: ["package", "finding", "answer", "reason"],
+      additionalProperties: false,
+    },
+    async buildCard(input, ctx): Promise<OperatorCardResult<PremisePrepared>> {
+      const ref = packageRef(input);
+      const reason = reasonOf(input);
+      const finding = typeof input["finding"] === "string" ? input["finding"].trim() : "";
+      const answer = input["answer"];
+      if (ref === undefined) return { refusal: "package is required" };
+      if (finding === "") return { refusal: "finding is required" };
+      if (answer !== "uphold" && answer !== "dismiss") return { refusal: 'answer must be "uphold" or "dismiss"' };
+      if (reason === undefined) return { refusal: "reason is required" };
+      try {
+        const dir = await resolvePackage(ref, ctx.projectRoot);
+        const held = await findHeldFinding(dir, finding);
+        if (!held.ok) return { refusal: held.refusal };
+        const found = held.finding;
+        const name = label(dir, ctx.projectRoot);
+        return {
+          title: answer === "uphold" ? `Uphold finding ${cardSafe(found.key)} in ${name} at ${cardSafe(found.severity)}?` : `Dismiss finding ${cardSafe(found.key)} in ${name} as incorrect?`,
+          lines: [
+            `finding: ${cardSafe(found.key)} (${cardSafe(found.severity)}): ${cardSafe(found.problem)}`,
+            `premise judge: ${cardSafe(found.verdict)}: ${cardSafe(found.question)}`,
+            ...(found.answered === undefined ? [] : [`already answered: ${found.answered}; this answer replaces it`]),
+            `reason: ${cardSafe(reason)}`,
+            answer === "uphold"
+              ? `yes: the finding is kept at ${cardSafe(found.severity)} and goes to the fixer again`
+              : "yes: the finding is recorded dismissed-incorrect with your reason as the evidence",
+          ],
+          subject: `package ${name}, finding ${cardSafe(found.key)}`,
+          prepared: { dir, finding: found.key, answer, reason, digest: found.digest },
+        };
+      } catch (error) {
+        return failed(error);
+      }
+    },
+    async apply(_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+      if (prepared === undefined) return { output: "review_decide_premise: nothing prepared for this card", isError: true };
+      // Everything the card showed (the problem, the judge's question, an earlier answer, the severity and the verdict),
+      // compared as one digest: a change to any of them after the card was drawn needs the operator again.
+      const again = await findHeldFinding(prepared.dir, prepared.finding);
+      if (!again.ok || again.finding.digest !== prepared.digest) {
+        return { output: "The finding changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+      }
+      const warnings: string[] = [];
+      await answerPremiseQuestion(
+        prepared.dir,
+        { finding: again.finding, answer: prepared.answer, reason: prepared.reason, quote: confirmation.quote, at: confirmation.at, confirmedVia: confirmation.confirmedVia },
+        { cwd: ctx.projectRoot, warn: (line) => warnings.push(`warning: ${line}`) },
+      );
+      return { output: [`premise question on ${prepared.finding} answered ${prepared.answer} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json and findings.json`, ...warnings].join("\n") };
+    },
+  };
+}
+
 /** The specs with the tracker seams a test replaces; `reviewConfirmSpecs()` is this with the CLI's defaults. */
 export function buildReviewConfirmSpecs(seams: ReviewConfirmSeams = {}): readonly OperatorConfirmSpec[] {
   return [
@@ -565,6 +646,7 @@ export function buildReviewConfirmSpecs(seams: ReviewConfirmSeams = {}): readonl
     decisionSpec("reviewer-override"),
     replySpec(),
     confirmPlanSpec(),
+    decidePremiseSpec(),
   ] as readonly OperatorConfirmSpec[];
 }
 

@@ -1343,6 +1343,11 @@ export interface TierSignals {
    * reviewer (`review-security-code`). The caller derives it; this stays pure.
    */
   readonly hasSecurityFinding?: boolean | undefined;
+  /**
+   * The dispatch is the premise judge (`review-premise`, flow 459). It reasons about practice and intent rather than
+   * running something, so it floors at `deep`: the opposite of the verifier's execution/site-check downgrade.
+   */
+  readonly premiseJudge?: boolean | undefined;
 }
 
 /** A tier plus the ordered rule ids that produced it. */
@@ -1380,8 +1385,8 @@ function raiseOne(tier: ModelTier): ModelTier {
  *
  *   1. base `standard`
  *   2. downgrades to `light`, which are PERMISSIONS ("allow light"), not commands
- *   3. floors — `blast-radius` and a forced strategy change raise to `deep` and
- *      therefore beat any downgrade above them
+ *   3. floors — `blast-radius`, a forced strategy change and the premise judge
+ *      (flow 459) raise to `deep` and therefore beat any downgrade above them
  *   4. a repeated fix attempt raises one tier
  *   5. the security floor, applied last, so nothing below it can slip through
  *
@@ -1416,6 +1421,10 @@ export function assignTier(signals: TierSignals): TierAssignment {
   if (signals.forcedStrategyChange === true) {
     tier = atLeast(tier, "deep");
     reasons.push("floor:forced-strategy-change");
+  }
+  if (signals.premiseJudge === true) {
+    tier = atLeast(tier, "deep");
+    reasons.push("floor:premise-judge");
   }
 
   // 4 - repeated attempt at the same finding.

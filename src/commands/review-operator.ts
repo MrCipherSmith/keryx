@@ -3,9 +3,10 @@
 //   keryx review waive-mutation      --package <dir> --reason "<why>"     (TTY; card: review_waive_mutation)
 //   keryx review override-reviewers  --package <dir> --reason "<why>"     (TTY; card: review_override_reviewers)
 //   keryx review confirm-plan        --package <dir>                      (TTY; card: review_confirm_plan)
+//   keryx review decide-premise      --package <dir> --finding <id> --answer uphold|dismiss --reason "<why>"  (TTY; card: review_decide_premise)
 //   keryx review verify-run          --package <dir> --finding <id> [--timeout <s>] -- <command…>
 //
-// The first three record the operator's own decision, so each asks at the terminal and refuses when stdin or stdout
+// The first four record the operator's own decision, so each asks at the terminal and refuses when stdin or stdout
 // is not a TTY: an agent's shell cannot answer for the operator. verify-run only runs a command and saves its output.
 
 import { createInterface } from "node:readline/promises";
@@ -13,10 +14,12 @@ import { optionValue } from "../lib/args";
 import { operatorDecisionSubject } from "../review/coverage";
 import { recordOperatorDecision, type OperatorDecisionKind } from "../review/operator-decisions";
 import { estimatePlan, recordPlanConfirmation } from "../review/plan-confirmation";
+import { answerPremiseQuestion, findHeldFinding } from "../review/premise-question";
 import { verifyRun } from "../review/verify-run";
+import { cardSafe } from "../lib/card-safe";
 import { resolvePackageDir } from "./review-layers";
 
-export const OPERATOR_COMMANDS = ["waive-mutation", "override-reviewers", "confirm-plan", "verify-run"] as const;
+export const OPERATOR_COMMANDS = ["waive-mutation", "override-reviewers", "confirm-plan", "decide-premise", "verify-run"] as const;
 export type OperatorCommand = (typeof OPERATOR_COMMANDS)[number];
 
 export type OperatorCommandSeams = {
@@ -31,6 +34,7 @@ const CARD: Record<Exclude<OperatorCommand, "verify-run">, string> = {
   "waive-mutation": "review_waive_mutation",
   "override-reviewers": "review_override_reviewers",
   "confirm-plan": "review_confirm_plan",
+  "decide-premise": "review_decide_premise",
 };
 
 export function printOperatorCommandHelp(command: OperatorCommand): void {
@@ -50,6 +54,14 @@ In keryx shell the review_override_reviewers tool asks the same as a card.`,
 Shows the plan's dispatches and minutes (\`keryx review estimate\`) and records the operator's yes in
 <review-dir>/plan-confirmation.json for exactly this plan. Asks at the terminal; refused without a TTY. In
 keryx shell the review_confirm_plan tool asks the same as a card.`,
+    "decide-premise": `keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason "<why>"
+
+Answers the premise question on a finding the premise judge held (verdict challenged or owner-decision) and
+records it in <review-dir>/operator-decisions.json, with your typed words, and on the finding in findings.json
+(so the next round and the published round block read the answer too). uphold returns the finding to kept at its original
+severity; dismiss records it dismissed-incorrect with your reason as the evidence. Refused for an unknown
+finding, a finding that is not held, or a missing reason. Asks at the terminal; refused without a TTY. In
+keryx shell the review_decide_premise tool asks the same as a card.`,
     "verify-run": `keryx review verify-run --package <review-dir> --finding <id> [--timeout <seconds>] -- <command…>
 
 Runs a verification command in this (the parent's) session and saves its stdout, stderr and exit status to
@@ -121,6 +133,30 @@ export async function runOperatorCommand(command: OperatorCommand, args: string[
 
   const reason = optionValue(own, "--reason");
   if (reason === undefined || reason.trim() === "") throw new Error(`Missing --reason "<why>". See \`keryx review ${command} --help\`.`);
+
+  if (command === "decide-premise") {
+    const ref = optionValue(own, "--finding");
+    if (ref === undefined || ref.trim() === "") throw new Error("Missing --finding <id>. See `keryx review decide-premise --help`.");
+    const answerArg = optionValue(own, "--answer");
+    if (answerArg !== "uphold" && answerArg !== "dismiss") throw new Error("--answer must be uphold or dismiss. See `keryx review decide-premise --help`.");
+    const held = await findHeldFinding(packageDir, ref);
+    if (!held.ok) throw new Error(held.refusal);
+    const finding = held.finding;
+    // The finding's problem and the judge's question are model-written: cleaned as the card cleans them, so neither can
+    // draw a line of its own into the prompt, and the effect is printed last where nothing after it can overwrite it.
+    const effect = answerArg === "uphold" ? `keep it at ${cardSafe(finding.severity)}` : "dismiss it as incorrect";
+    const question =
+      `Premise question on ${cardSafe(finding.key)} (${cardSafe(finding.severity)}: ${cardSafe(finding.problem)}; judge ${cardSafe(finding.verdict)}: ${cardSafe(finding.question)})` +
+      `${finding.answered === undefined ? "" : `; already answered ${finding.answered}, this answer replaces it`}; reason: ${cardSafe(reason.trim())}. Answer: ${effect}?`;
+    const answer = (await ask(`${question} Type your own words to confirm, or nothing to decline: `)).trim();
+    if (answer === "" || /^n(o)?$/i.test(answer)) {
+      log("not confirmed; nothing was recorded");
+      return 1;
+    }
+    await answerPremiseQuestion(packageDir, { finding, answer: answerArg, reason: reason.trim(), quote: answer, at, confirmedVia: "terminal" }, { cwd, warn: (line) => log(`warning: ${line}`) });
+    log(`premise-question ${answerArg} recorded for ${finding.key} (terminal, ${at}) in operator-decisions.json and findings.json`);
+    return 0;
+  }
   const kind: OperatorDecisionKind = command === "waive-mutation" ? "mutation-waiver" : "reviewer-override";
   const selectedArg = optionValue(own, "--selected");
   const selected = selectedArg === undefined ? undefined : selectedArg.split(",").map((item) => item.trim()).filter(Boolean);

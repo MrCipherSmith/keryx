@@ -36,6 +36,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { readReviewRounds, type ReviewRoundRecord } from "../flow/review-gate";
+import { flowsRoot } from "../flow/store";
+import { REVIEW_PACKAGE_MANIFEST_GLOBS, flowReviewsRoot, reviewsRoot } from "./package-location";
 import { collectPrComments, createGhPort, type CollectedComment, type CollectedRoundBlock } from "./pr-comments";
 import { mentionsFindingId } from "./publish";
 import { readRoundRegistryReport, registryVouches, repoIdentity, type RoundRegistryEntry } from "./round-registry";
@@ -125,7 +127,6 @@ export type RoundCandidate = {
 
 export type PriorRoundResult = { round: RoundRecord; priorFindings: PriorFinding[]; identity: { targetKey: string; targetBase?: string | undefined } };
 
-const PACKAGE_GLOBS = [".metaproject/reviews/*/manifest.json", ".metaproject/flows/*/reviews/*/manifest.json"];
 /** How far back the git-history source reads. */
 export const HISTORY_DAYS = 180;
 
@@ -412,10 +413,10 @@ function packageDirs(cwd: string): string[] {
     if (!existsSync(root)) return;
     for (const entry of readdirSync(root, { withFileTypes: true })) if (entry.isDirectory()) dirs.push(path.join(root, entry.name));
   };
-  add(path.join(cwd, ".metaproject", "reviews"));
-  const flows = path.join(cwd, ".metaproject", "flows");
+  add(reviewsRoot(cwd));
+  const flows = flowsRoot(cwd);
   if (existsSync(flows)) {
-    for (const entry of readdirSync(flows, { withFileTypes: true })) if (entry.isDirectory()) add(path.join(flows, entry.name, "reviews"));
+    for (const entry of readdirSync(flows, { withFileTypes: true })) if (entry.isDirectory()) add(flowReviewsRoot(cwd, entry.name));
   }
   return dirs;
 }
@@ -470,7 +471,7 @@ type HistoryEntry = { commit: string; at: number; manifestPath: string };
 /** Read from the local branches, and the target's base branch (a resolved base ref, never dash-leading) when given. */
 async function historyEntries(git: GitRunner, limit: number, baseRef: string | undefined): Promise<HistoryEntry[]> {
   const base = baseRef === undefined || baseRef.startsWith("-") ? [] : [baseRef];
-  const log = await git(["log", "--branches", `--since=${HISTORY_DAYS} days ago`, `-n${limit}`, "--format=%x01%H %ct", "--name-only", "--end-of-options", ...base, "--", ...PACKAGE_GLOBS]);
+  const log = await git(["log", "--branches", `--since=${HISTORY_DAYS} days ago`, `-n${limit}`, "--format=%x01%H %ct", "--name-only", "--end-of-options", ...base, "--", ...REVIEW_PACKAGE_MANIFEST_GLOBS]);
   if (log.exitCode !== 0) return [];
   const seen = new Set<string>();
   const entries: HistoryEntry[] = [];
@@ -856,7 +857,8 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
       tried.push(source === found.source ? { source, result: "found", detail: `forced by --prior ${deps.forced}` } : { source, result: "not-consulted", detail: "--prior given" });
     }
   } else {
-    const record = async (source: SearchedSource, list: RoundCandidate[], none: string): Promise<RoundCandidate[]> => {
+    /** Check `list` against the branch line and record the attempt; `note` is appended to its detail. */
+    const record = async (source: SearchedSource, list: RoundCandidate[], none: string, note = ""): Promise<RoundCandidate[]> => {
       const found: RoundCandidate[] = [];
       const off: string[] = [];
       for (const candidate of list) {
@@ -865,7 +867,7 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
       }
       candidates.push(...found);
       const offLine = off.length === 0 ? "" : `; ${off.length} branch package(s) not on this branch line: ${off.join(", ")}`;
-      tried.push({ source, result: found.length > 0 ? "found" : "none", detail: `${found.length > 0 ? `${found.length} round(s): ${found.map((c) => c.reviewId).join(", ")}` : none}${offLine}` });
+      tried.push({ source, result: found.length > 0 ? "found" : "none", detail: `${found.length > 0 ? `${found.length} round(s): ${found.map((c) => c.reviewId).join(", ")}` : none}${offLine}${note}` });
       return found;
     };
     const local = await record("local-package", exclude(localPackageCandidates(deps.cwd, target, targetKey)), "no package for this target in this checkout");
@@ -887,8 +889,20 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
     if (deps.flowDir === undefined) {
       tried.push({ source: "flow", result: "not-consulted", detail: "the package is not bound to a flow" });
     } else {
-      const rounds = await (deps.flowRounds ?? readReviewRounds)(deps.cwd, deps.flowDir).catch(() => [] as ReviewRoundRecord[]);
-      await record("flow", exclude(flowCandidates(rounds, deps.cwd)).filter((candidate) => !known.has(candidate.reviewId)), `no reviewed round in flow ${deps.flowDir}`);
+      // Review LG4-002: a read that fails is reported, not read as "no round", and a package that is not ingested is
+      // named beside the result, so one unreadable package never silently hides the flow's rounds.
+      const read = await (deps.flowRounds ?? readReviewRounds)(deps.cwd, deps.flowDir).then(
+        (rounds) => ({ rounds }),
+        (error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }),
+      );
+      if ("error" in read) {
+        tried.push({ source: "flow", result: "not-consulted", detail: `the rounds of flow ${deps.flowDir} could not be read (${read.error})` });
+      } else {
+        // The package being started (excludeReviewId) is not an earlier round, so it is never named as skipped (review LG5-001).
+        const skipped = read.rounds.filter((round) => !round.ingested && round.reviewId !== deps.excludeReviewId);
+        const note = skipped.length === 0 ? "" : `; skipped, not ingested: ${skipped.map((round) => `${round.reviewId} (${round.problems.join("; ")})`).join(", ")}`;
+        await record("flow", exclude(flowCandidates(read.rounds, deps.cwd)).filter((candidate) => !known.has(candidate.reviewId)), `no reviewed round in flow ${deps.flowDir}`, note);
+      }
     }
   }
 

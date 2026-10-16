@@ -25,7 +25,7 @@ license: "MIT"
 
 Focused style reviewer. Covers naming conventions, dead code, readability, DRY violations,
 import organization, comment quality, file length, cyclomatic complexity, and console noise.
-Never touches logic correctness, architecture, security, or performance. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
+Never touches logic correctness, architecture, security, or performance. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`, except the read-only `git log`, `git blame` and `git show` where its host gives a read-only child git (keryx shell does not: there the payload supplies the history).
 
 ---
 
@@ -66,7 +66,7 @@ Run that script to determine `BASE_SHA` before collecting the diff.
 
 Only review code changed in scope. Do not flag style issues in lines outside the diff.
 
-**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text: a read-only child has no shell, so run no git command and never rebuild the diff. Only with none supplied, collect it:
+**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff. A choice's history (law 4) is read with `git log`, `git blame` and `git show` only where the host gives a read-only child git; on keryx shell a read-only child has no shell and no git tool, so read the `git log -L`/`git blame` excerpts the payload supplies, or say the history was not read. Only with none supplied, collect it:
 ```bash
 git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
 # explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
@@ -195,15 +195,10 @@ Do not flag DRY violations for code outside the diff even if legacy duplication 
 
 ### Shared laws (every reviewer)
 
-1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot
-   name the input, call, or condition that reaches the code, you have an
-   observation, not a finding. Report it as `info` and say what would settle it.
-2. **Never flag the theoretical.** The path you describe must exist in the code
-   under review. Do not report a safe API because it could be misused, or a
-   pattern because it is often wrong elsewhere.
-3. **One finding per class, not one per occurrence.** When the same shape appears
-   at several sites, report it once and list every site. Ten findings that are one
-   finding hide the other nine problems.
+1. **A claim of runtime harm with no reproducible path is `info`.** If you cannot name the input, call, or condition that reaches the code, you have an observation, not a finding. Report it as `info` and say what would settle it.
+2. **Never flag the theoretical.** The path you describe must exist in the code under review. Do not report a safe API because it could be misused, or a pattern because it is often wrong elsewhere.
+3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
+4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
 
 Severity levels are defined once, in `review-orchestrator/SKILL.md` →
 **Severity (canonical)**. This reviewer does not restate them: `blocker` is the

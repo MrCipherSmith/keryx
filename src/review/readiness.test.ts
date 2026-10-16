@@ -10,7 +10,8 @@ import path from "node:path";
 import { reviewCommand } from "../commands/review";
 import { CHUNK_REVIEWER, ensureChunkPlan, recordChunk } from "./chunks";
 import { CALLER_UNATTRIBUTED, recordLogStart, recordOrchestratorCall } from "./orchestrator-log";
-import { computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
+import { downgradedPremise, heldFinding, premiseAnswer } from "./premise-fixtures";
+import { READINESS_ITEMS, computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
 
 let root: string;
 let pkg: string;
@@ -102,7 +103,7 @@ describe("the checklist on a package shaped like pr7932-r1 (AC1, AC2)", () => {
   test("is NOT READY with exactly the failing items, each naming the command that repairs it", async () => {
     const report = await computeReadiness(pkg);
     expect(report.verdict).toBe("NOT READY");
-    expect(report.items.map((item) => item.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(report.items.map((item) => item.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
     expect(ids(failingItems(report))).toEqual(["blast-radius", "reviewers", "verifier", "ledger", "coverage-md"]);
     for (const item of failingItems(report)) {
       expect(item.repair).toBeTruthy();
@@ -153,6 +154,62 @@ describe("the checklist on a package shaped like pr7932-r1 (AC1, AC2)", () => {
     const refusal = readinessRefusal(report, "complete the review");
     expect(refusal).toContain("5 failing item(s)");
     expect(refusal).toContain("--waive");
+  });
+});
+
+describe("premise-decisions: every held finding has an operator decision (flow 459, AC2)", () => {
+  const held = heldFinding({ id: "f-9", global_id: "pr7932-r1#f-9" });
+  const item = async () => (await computeReadiness(pkg)).items.find((entry) => entry.id === "premise-decisions");
+
+  test("passes when nothing is held", async () => {
+    expect((await item())?.status).toBe("pass");
+  });
+
+  test("fails while a held finding has no decision, naming it and the command that records one", async () => {
+    writeJson("findings.json", [held]);
+    const result = await item();
+    expect(result?.status).toBe("fail");
+    expect(result?.evidence).toContain("pr7932-r1#f-9");
+    expect(result?.repair).toContain("decide-premise");
+  });
+
+  test("an owner-decision hold fails the same way, at any severity", async () => {
+    writeJson("findings.json", [{ ...held, severity: "minor", premise: { ...(held.premise as object), verdict: "owner-decision", options: ["a", "b"] } }]);
+    expect((await item())?.status).toBe("fail");
+  });
+
+  test("passes once the package holds a premise-question decision for the finding", async () => {
+    writeJson("findings.json", [held]);
+    writeJson("operator-decisions.json", { schemaVersion: 1, decisions: [premiseAnswer(held)] });
+    expect((await item())?.status).toBe("pass");
+  });
+
+  test("a hand-written entry without how it was confirmed is not a decision: the item stays failing", async () => {
+    writeJson("findings.json", [held]);
+    const { confirmedVia: _via, ...unconfirmed } = premiseAnswer(held);
+    writeJson("operator-decisions.json", { schemaVersion: 1, decisions: [unconfirmed] });
+    expect((await item())?.status).toBe("fail");
+  });
+
+  test("a held finding acted on is not waiting for the operator; one an agent marked dismissed still is (review SEC2-002)", async () => {
+    writeJson("findings.json", [{ ...held, disposition: { state: "acted-on", evidence: "fixed in abc1234" } }]);
+    expect((await item())?.status).toBe("pass");
+    writeJson("findings.json", [{ ...held, disposition: { state: "dismissed-out-of-scope", evidence: "not in this PR" } }]);
+    expect((await item())?.status).toBe("fail");
+  });
+
+  test("the item cannot be waived in the operator's words; the refusal names the repair and nothing is written", async () => {
+    writeJson("findings.json", [held]);
+    const before = readFileSync(path.join(pkg, "manifest.json"), "utf8");
+    const attempt = waiveReadiness(pkg, ["premise-decisions"], "the operator said it is fine to ship these");
+    await expect(attempt).rejects.toThrow(/decide-premise/);
+    await expect(waiveReadiness(pkg, [String(READINESS_ITEMS.find((entry) => entry.id === "premise-decisions")?.number)], "the operator said it is fine to ship these")).rejects.toThrow(/review_decide_premise/);
+    expect(readFileSync(path.join(pkg, "manifest.json"), "utf8")).toBe(before);
+  });
+
+  test("a downgraded finding is not held", async () => {
+    writeJson("findings.json", [{ ...held, severity: "minor", premise: downgradedPremise("major", "minor") }]);
+    expect((await item())?.status).toBe("pass");
   });
 });
 

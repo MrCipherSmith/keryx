@@ -25,6 +25,7 @@ import {
   completeManagedReview,
   createManagedReviewPackage,
   getManagedReviewStatus,
+  parseEmbeddedPremises,
   resolveGitHead,
   resolveReviewPackagePath,
   upsertPreFilterScopeBlock,
@@ -65,7 +66,6 @@ import { ENV_REVIEW_CALLER_TOKEN, startOrchestratorLog } from "../review/orchest
 import { parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
 import { defaultBundledReviewRoot, renderSkillDrift, reviewSkillDrift } from "../review/skill-drift";
 import { buildRunProfile, runProfileRefusal, unattendedStartRefusal, writeRunProfile } from "../review/run-profile";
-import { promoteParentExecutions } from "../review/verify-run";
 import { packageRoutingRefusal } from "../review/routing-check";
 import { OPERATOR_COMMANDS, printOperatorCommandHelp, runOperatorCommand, type OperatorCommand } from "./review-operator";
 import { printChunksHelp, printCoverageHelp, runChunks, runCoverage } from "./review-chunks";
@@ -112,6 +112,7 @@ import { READINESS_ITEMS, computeReadiness, readinessDepthLines, recountRefusal,
 import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
 import { findPreviousRound, NOT_REVIEW_PACKAGES, skippedRound, type PriorRoundDeps } from "../review/prior-round";
 import { recordFinishedRound } from "../review/round-registry";
+import { carryPremiseDecisions } from "../review/premise-question";
 import { renderRoundLine, ROUND_FILE, writeRoundRecord } from "../review/round-record";
 // Flow 328, AC6: attach the latest CACHED check-ac result to a review
 // package. Minimal, additive — this hook never triggers a fresh Jev call
@@ -172,6 +173,7 @@ import { createTierRankHost, type TierRankHost } from "../harness/routing/tier-r
 import { TEST_FILE_RE } from "../testing/selection";
 import { isVerificationMode, verificationClaims } from "../review/verification";
 import { writeVerdict } from "../review/verdict";
+import { parsePremiseClaims } from "../review/premise";
 import {
   buildReplyPass,
   collectPrComments,
@@ -329,6 +331,7 @@ export const CREATE_FLAGS = [
   "--reviewers",
   "--report",
   "--verifications",
+  "--premises",
   "--research",
   "--verification-mode",
   "--scope",
@@ -560,6 +563,7 @@ const TIER_FLAGS = [
   "--diff-lines",
   "--verifier",
   "--security",
+  "--premise",
   "--session-provider",
   "--session-model",
   "--from-shell-config",
@@ -1046,7 +1050,8 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     reviewers,
     reportPath: optionValue(args, "--report"),
     refuted: await readRefuted(optionValue(args, "--refuted")),
-    verifications: await readVerifications(optionValue(args, "--verifications"), optionValue(args, "--review-id")),
+    verifications: await readVerifications(optionValue(args, "--verifications")),
+    premises: await readPremises(optionValue(args, "--premises")),
     research: optionValue(args, "--research") ? JSON.parse(await readFile(path.resolve(cwd, optionValue(args, "--research")!), "utf8")) : undefined,
     verificationMode: parseVerificationMode(optionValue(args, "--verification-mode")),
     scope: await readScope(optionValue(args, "--scope")),
@@ -1073,6 +1078,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
   console.log(`status: ${result.manifest.status}`);
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
+  if (result.premisesCarriedForward === true) console.log("premise claims: carried forward, the holds from this package's previous findings.json (no --premises given; the held findings are unchanged)");
   if (mode !== "ingest") {
     const profile = buildRunProfile({ unattended: args.includes("--unattended"), host: hostArg });
     await writeRunProfile(result.path, profile, { stampManifest: true });
@@ -1092,6 +1098,11 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
           ...(forcedPrior === undefined ? {} : { forced: forcedPrior }),
         });
     await writeRoundRecord(result.path, detected.round, detected.priorFindings, detected.identity);
+    const previousPackage = detected.round.previous?.packagePath;
+    if (detected.round.mode === "delta" && previousPackage !== undefined && detected.round.carried.length > 0) {
+      const carriedAnswers = await carryPremiseDecisions(result.path, path.resolve(cwd, previousPackage), detected.round.carried.map((entry) => entry.findingId), previousPackage, { projectRoot: cwd });
+      if (carriedAnswers.length > 0) console.log(`premise answers carried from ${previousPackage}: ${carriedAnswers.join(", ")}`);
+    }
     console.log(renderRoundLine(detected.round));
     for (const warning of detected.round.warnings ?? []) console.error(`warning: ${warning}`);
     console.log(
@@ -1641,6 +1652,7 @@ function tierSignalsFromArgs(args: string[]): TierSignals {
     diffLines: parseNonNegativeInteger(optionValue(args, "--diff-lines"), "--diff-lines"),
     forcedStrategyChange: args.includes("--forced-strategy-change"),
     hasSecurityFinding: args.includes("--security"),
+    premiseJudge: args.includes("--premise"),
   };
 }
 
@@ -3583,7 +3595,7 @@ async function readRefuted(source: string | undefined): Promise<ReviewFindingsSo
  * payload loses fields, and the loss is what made the recorded corpus
  * unmeasurable.
  */
-async function readVerifications(source: string | undefined, reviewId: string | undefined): Promise<ManagedReviewInput["verifications"]> {
+async function readVerifications(source: string | undefined): Promise<ManagedReviewInput["verifications"]> {
   if (source === undefined) {
     return undefined;
   }
@@ -3597,10 +3609,31 @@ async function readVerifications(source: string | undefined, reviewId: string | 
       `--verifications ${source} is not JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`,
     );
   }
-  // Flow 457 (T7): a claim citing a `keryx review verify-run` record of its own finding, in the package this ingest
-  // writes (`--review-id`), ran in the parent: execution. Without a review id no record can be bound to a package.
-  const packageDir = reviewId === undefined || !/^[\w.-]+$/.test(reviewId) ? undefined : path.join(resolveProjectRoot(process.cwd()), ".metaproject", "reviews", reviewId);
-  return promoteParentExecutions(verificationClaims(parsed as VerificationSource), packageDir);
+  // Flow 457 (T7): a claim citing a `keryx review verify-run` record of its own finding ran in the parent and is
+  // recorded as execution. That promotion happens in the ingest, against the package directory it allocates, so the
+  // records come only from the package this ingest writes (review LG6-002, SEC6-001).
+  return verificationClaims(parsed as VerificationSource);
+}
+
+/**
+ * `review-premise`'s own output (flow 459): `{ judge, model?, premises: [...] }`, read from a file or stdin. The shape is
+ * checked here so a malformed file refuses the ingest before anything is written; the per-claim rules run in the merge.
+ */
+async function readPremises(source: string | undefined): Promise<ManagedReviewInput["premises"]> {
+  if (source === undefined) {
+    return undefined;
+  }
+  let raw: string;
+  try {
+    raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
+  } catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- the public message names the file and the reason, not the raw caught value.
+    throw new Error(`--premises ${source}: the file could not be read (${error instanceof Error && "code" in error ? String((error as NodeJS.ErrnoException).code) : "unreadable"}). Nothing was ingested.`);
+  }
+  // The bare object, or a report / judge reply holding one fenced `keryx:premises` block.
+  const parsed = parseEmbeddedPremises(raw, `--premises ${source}`);
+  parsePremiseClaims(parsed);
+  return parsed as ManagedReviewInput["premises"];
 }
 
 /**
@@ -4231,7 +4264,8 @@ unverified (refuted excluded), open blockers and majors, and the reviewers that 
 not reported. Reads the ingested round (findings.json) when there is one, else the raw
 reviewer results in --raw <dir> (default <package>/raw, where every host keeps them; the shared
 .metaproject/data/review/raw is read only when passed explicitly, since it holds other rounds' replies). Verifier results in research-evidence/verifications.json are applied
-first, so a refuted finding is excluded; a finding whose disposition is acted-on is not open. Works before ledger, mutation and complete. Writes
+first, so a refuted finding is excluded; premise results in research-evidence/premises.json hold a challenged finding
+out of the open counts ("awaiting operator") until keryx review decide-premise answers it; a finding whose disposition is acted-on is not open. Works before ledger, mutation and complete. Writes
 verdict-interim.md into the package. A package with no findings says so and exits 0.
 `);
 }
@@ -4621,13 +4655,13 @@ function printTierHelp(): void {
 
   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
                     [--findings <n>] [--diff-lines <n>]
-                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security]
+                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security] [--premise]
                     [--session-provider <id>] [--session-model <id>]
                     [--from-shell-config] [--catalog <file|->] [--json]
 
 Computes the dispatch model block from signals the orchestrator already holds.
-There is no --tier flag. Base tier is standard. --scope blast-radius and
---forced-strategy-change floor at deep. --fix-attempt >= 2 raises one tier.
+There is no --tier flag. Base tier is standard. --scope blast-radius,
+--forced-strategy-change and --premise (the dispatch is review-premise) floor at deep. --fix-attempt >= 2 raises one tier.
 A small diff, or verifier execution/site-check, may allow light. --security
 never goes below standard. Reviewer name is not a signal.
 
@@ -4782,6 +4816,7 @@ ${GRAPH_TIMEOUT_HELP}`);
 function printIngestHelp(): void {
   console.log(`keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--research <ledger.json>]
                     [--review-id <id>] [--automatic] [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
+                    [--premises <file|->]
                     [--scope <scope.json>] [--blast-radius <blast-radius.json>] [--cross-family-review <file|->]
                     [--refuted <file|->] [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                     [--tokens-in <n>] [--tokens-out <n>] [--parallel <n>] [--outstanding <n>]
@@ -4859,10 +4894,12 @@ Usage:
   keryx review waive-mutation --package <dir> --reason "<why>"       (terminal; card review_waive_mutation)
   keryx review override-reviewers --package <dir> --reason "<why>"   (terminal; card review_override_reviewers)
   keryx review confirm-plan --package <dir>                          (terminal; card review_confirm_plan)
+  keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<why>"
+                                                                     (terminal; card review_decide_premise)
   keryx review verify-run --package <dir> --finding <id> -- <command…>
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--research <ledger.json>] [--review-id <id>] [--automatic]
-                      [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
+                      [--verifications <file|->] [--premises <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
                       [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                       [--cross-family-review <file|->]
                     [--refuted <file|->]
@@ -4998,7 +5035,7 @@ Usage:
                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
                     [--findings <n>] [--diff-lines <n>]
-                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security]
+                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security] [--premise]
                     [--session-provider <id>] [--session-model <id>]
                     [--catalog <file|->] [--json]
 ${COMMENTS_USAGE}
@@ -5262,6 +5299,12 @@ verification (attach/start/ingest):
   --verification-mode defaults to \`${DEFAULT_VERIFICATION_MODE}\`: verdicts are recorded and
   NOTHING is removed, so the drop rate is measured before it bites. Only
   \`filter\` removes a refuted finding.
+  --premises takes what review-premise returned: the bare \`{ judge, model?, premises }\`
+  object, or a reply / report holding it in one \`\`\`json keryx:premises block. The merge is
+  DELETE-ONLY too: it holds a challenged finding for the operator (never dismisses it) and can
+  only lower a severity. The operator answers with \`keryx review decide-premise\`. A re-ingest
+  without --premises over a package the judge held carries each hold from the previous
+  findings.json to the same unchanged finding, and is refused otherwise.
   --scope takes the WHOLE \`keryx review scope --json\` document — counts and the
   per-drop reasons — so the package records what the pre-filter dropped and why.
   Omitted, a \`## Pre-filter scope\` block already in the package's scope.md is
@@ -5324,7 +5367,7 @@ tier:
   The \`model\` block a dispatch document carries, COMPUTED — run this instead of
   working the tier out by hand. The signals are ones the orchestrator already
   holds: --scope, --fix-attempt, --forced-strategy-change, --findings,
-  --diff-lines, --verifier and --security. Prints the tier, the ordered rule ids
+  --diff-lines, --verifier, --security and --premise (the review-premise judge: deep). Prints the tier, the ordered rule ids
   that produced it, the resolved provider/model, \`tier_resolution\`, and what was
   on the table when it resolved; --json prints the block alone.
   NO MODEL NAME EXISTS IN THIS COMMAND. The session's provider/model come from

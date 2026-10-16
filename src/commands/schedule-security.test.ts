@@ -28,7 +28,8 @@ import { installTriggerHooks, isHookableTriggerEntry } from "../trigger/hooks";
 import { installSchedule, planInstall, type CommandResult, type ScheduleHost } from "../trigger/install";
 import { readTriggerRuns, type TriggerRunRecord } from "../trigger/record";
 import { scheduleKeyPath } from "../trigger/schedule-key";
-import { cardSafe, draftSchedule } from "../trigger/schedules";
+import { cardSafe } from "../lib/card-safe";
+import { draftSchedule } from "../trigger/schedules";
 import { addConfirmedSchedule } from "../trigger/store";
 
 // --- shared fixtures -------------------------------------------------------------

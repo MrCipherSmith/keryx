@@ -123,6 +123,79 @@ describe("mergeDuplicates", () => {
     expect(renderDuplicatesMarkdown(merges)).toContain("the confirmed minor outranks the unconfirmed blocker of review-regression (F-002)");
   });
 
+  test("a premise judge's downgraded severity is canonical over a higher re-statement (flow 459)", () => {
+    const { findings, merges } = mergeDuplicates([
+      finding({ severity: "minor", premise: { verdict: "downgraded", judge: "review-premise", severity: "minor", original_severity: "major" } }),
+      finding({ id: "F-002", reviewer: "review-regression", severity: "major", class_scope: { sites: ["src/retry.ts:10"], enumeration_method: "rg" } }),
+    ]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.severity).toBe("minor");
+    expect(findings[0]?.premise?.verdict).toBe("downgraded");
+    expect(merges[0]?.severityRule).toBe("premise");
+    expect(merges[0]?.outranked).toEqual({ severity: "major", reviewer: "review-regression", id: "F-002" });
+    expect(renderDuplicatesMarkdown(merges)).toContain("severity downgraded by the premise judge");
+    expect(renderDuplicatesMarkdown(merges)).toContain("the judge's minor outranks the major of review-regression (F-002)");
+  });
+
+  test("a premise judge's downgrade outranks a verifier's confirmation of a higher severity (review testing F-005)", () => {
+    const { findings, merges } = mergeDuplicates([
+      finding({ id: "F-002", reviewer: "review-regression", severity: "major", line: 12, problem: "attempt counter is never reset after success in the retry loop", class_scope: { sites: ["src/retry.ts:10"], enumeration_method: "rg" }, verification: { verdict: "confirmed", method: "execution", evidence: "test red", verifier: "review-verifier" } }),
+      finding({ severity: "minor", premise: { verdict: "downgraded", judge: "review-premise", severity: "minor", original_severity: "major", practice_sources: [{ name: "n", says: "s" }] } }),
+    ]);
+    expect(findings).toHaveLength(1);
+    expect(merges[0]?.severityRule).toBe("premise");
+    expect(findings[0]?.severity).toBe("minor");
+    expect(findings[0]?.premise?.verdict).toBe("downgraded");
+  });
+
+  for (const verdict of ["challenged", "owner-decision"] as const) {
+    test(`a ${verdict} finding is never merged into a non-held duplicate, in either order, nor with another held one (flow 459)`, () => {
+      const premise = { verdict, judge: "review-premise", question: "q", ...(verdict === "owner-decision" ? { options: ["a", "b"] } : {}) };
+      const held = finding({ premise });
+      const plain = finding({ id: "F-002", reviewer: "review-regression", line: 12, problem: "attempt counter is never reset after success in the retry loop" });
+      for (const input of [[held, plain], [plain, held]]) {
+        const { findings, merges } = mergeDuplicates(input);
+        expect(merges).toEqual([]);
+        expect(findings).toHaveLength(2);
+        expect(findings.find((entry) => entry.premise !== undefined)?.premise?.verdict).toBe(verdict);
+        expect(findings.find((entry) => entry.premise === undefined)?.id).toBe("F-002");
+      }
+      const both = mergeDuplicates([held, { ...plain, premise }]);
+      expect(both.merges).toEqual([]);
+      expect(both.findings).toHaveLength(2);
+    });
+  }
+
+  test("a finding with an upheld premise merges like any other and keeps the canonical record's premise (flow 459)", () => {
+    const { findings } = mergeDuplicates([
+      finding({ premise: { verdict: "upheld", judge: "review-premise" } }),
+      finding({ id: "F-002", reviewer: "review-regression", line: 12, problem: "attempt counter is never reset after success in the retry loop" }),
+    ]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.premise?.verdict).toBe("upheld");
+  });
+
+  test("a premise on the ABSORBED member survives a merge into a re-statement at the same severity (flow 459)", () => {
+    const { findings, merges } = mergeDuplicates([
+      finding({ severity: "major", premise: { verdict: "upheld", judge: "review-premise" } }),
+      finding({ id: "F-002", reviewer: "review-regression", severity: "major", confidence: "high", line: 12, problem: "attempt counter is never reset after success in the retry loop", class_scope: { sites: ["src/retry.ts:10"], enumeration_method: "rg" } }),
+    ]);
+    expect(findings).toHaveLength(1);
+    expect(merges[0]?.kept).toBe("F-002");
+    expect(findings[0]?.premise).toEqual({ verdict: "upheld", judge: "review-premise" });
+  });
+
+  test("a judgement of a major does not move onto a blocker re-statement: the blocker stays unjudged (review RG2-002)", () => {
+    const { findings, merges } = mergeDuplicates([
+      finding({ severity: "major", premise: { verdict: "upheld", judge: "review-premise" } }),
+      finding({ id: "F-002", reviewer: "review-regression", severity: "blocker", line: 12, problem: "attempt counter is never reset after success in the retry loop" }),
+    ]);
+    expect(findings).toHaveLength(1);
+    expect(merges[0]?.kept).toBe("F-002");
+    expect(findings[0]?.severity).toBe("blocker");
+    expect(findings[0]?.premise).toBeUndefined();
+  });
+
   test("the absorbed finding's problem statement is kept in merged_problems", () => {
     const { findings } = mergeDuplicates([
       finding({ global_id: "r#F-001" }),

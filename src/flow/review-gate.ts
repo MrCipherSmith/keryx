@@ -1,5 +1,7 @@
 import { packageRecordsCoverage } from "../review/coverage-complete";
 import { packageResearchErrors } from "../review/research";
+import { readPremiseDecisions, type PremiseQuestionDecision } from "../review/operator-decisions";
+import { premiseHoldState, type PremiseHoldState } from "../review/premise";
 /**
  * The review gate (flow 204, AC5-AC7 / specification §2).
  *
@@ -55,7 +57,7 @@ import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { findingIdentities } from "../review/loop";
 import { prCommentsStatePath, readPrCommentState, unansweredComments } from "../review/pr-comments";
-import { flowsRoot } from "./store";
+import { flowReviewsRoot } from "../review/package-location";
 import type { FlowState, TrackerAdapter } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -253,6 +255,12 @@ export type GateFinding = {
       }
     | undefined;
   /**
+   * What the premise judge found (flow 459), and where the finding stands against it (`premiseHoldState`): `hold` is
+   * computed from the package's `premise-question` decisions when the round is read. The record's own
+   * `premise.operator` is never read: a finding record is not where an operator's answer comes from.
+   */
+  premise?: { verdict?: string | undefined; hold?: PremiseHoldState | undefined } | undefined;
+  /**
    * `external` when the finding came from a comment somebody else left on the PR
    * (specification §3.1 / AC9).
    *
@@ -301,6 +309,15 @@ export type ReviewRoundRecord = {
   findings: GateFinding[];
   /** Parsed out of `scope.md`. `null` when the round recorded none. */
   verification: VerificationStats | null;
+  /** Flow 459: the premise check's stage counts out of `scope.md`; `null` when the round recorded none. Absent on a hand-built record. */
+  premise?: PremiseStats | null | undefined;
+};
+
+export type PremiseStats = {
+  claimsReceived: number | null;
+  claimsApplied: number | null;
+  claimsRejected: number | null;
+  held: number | null;
 };
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -317,6 +334,7 @@ function toGateFinding(raw: unknown, round: string, index: number): GateFinding 
   const record = readRecord(raw) ?? {};
   const disposition = readRecord(record["disposition"]);
   const verification = readRecord(record["verification"]);
+  const premise = readRecord(record["premise"]);
   return {
     id: readString(record["id"]) ?? `#${index + 1}`,
     globalId: readString(record["global_id"]),
@@ -345,6 +363,7 @@ function toGateFinding(raw: unknown, round: string, index: number): GateFinding 
           },
         }
       : {}),
+    ...(premise ? { premise: { verdict: readString(premise["verdict"]) } } : {}),
     ...(readString(record["source"]) ? { source: readString(record["source"]) } : {}),
     ...(readRecord(record["external_ref"]) ? { externalRef: readRecord(record["external_ref"]) as Record<string, unknown> } : {}),
     round,
@@ -378,6 +397,42 @@ export function parseVerificationStats(scopeMarkdown: string): VerificationStats
   };
 }
 
+/** The `## Premise check` counts out of `scope.md`; `null` when the block is not there (no premise judge ran). */
+export function parsePremiseStats(scopeMarkdown: string): PremiseStats | null {
+  if (matchLine(scopeMarkdown, "premise_claims_received") === null) {
+    return null;
+  }
+  return {
+    claimsReceived: matchNumber(scopeMarkdown, "premise_claims_received"),
+    claimsApplied: matchNumber(scopeMarkdown, "premise_claims_applied"),
+    claimsRejected: matchNumber(scopeMarkdown, "premise_claims_rejected"),
+    held: matchNumber(scopeMarkdown, "premise_held"),
+  };
+}
+
+/** The fields of a gate finding that `premiseHoldState` reads, in the record's own shape. */
+function holdRecord(finding: GateFinding): Record<string, unknown> {
+  return {
+    id: finding.id,
+    ...(finding.globalId === undefined ? {} : { global_id: finding.globalId }),
+    severity: finding.severity,
+    ...(finding.problem === undefined ? {} : { problem: finding.problem }),
+    ...(finding.premise === undefined ? {} : { premise: { verdict: finding.premise.verdict } }),
+    ...(finding.disposition === undefined ? {} : { disposition: finding.disposition }),
+    ...(finding.verification === undefined ? {} : { verification: finding.verification }),
+  };
+}
+
+/**
+ * `awaiting`: held with no operator answer (blocks, at any severity); `dismissed`: the operator dismissed it; otherwise
+ * `none`. The rule is `premiseHoldState`'s, shared with the verdict and readiness; a finding built without a `hold`
+ * (by hand, in a test) is read with no decisions.
+ */
+function premiseGateState(finding: GateFinding): "none" | "awaiting" | "dismissed" {
+  const hold = finding.premise?.hold ?? premiseHoldState(holdRecord(finding));
+  return hold === "awaiting" || hold === "dismissed" ? hold : "none";
+}
+
 function matchLine(text: string, key: string): string | null {
   const match = new RegExp(`^${key}:\\s*(.+)$`, "m").exec(text);
   return match?.[1]?.trim() ?? null;
@@ -402,7 +457,7 @@ function matchNumber(text: string, key: string): number | null {
  * module this flow does not own.
  */
 export async function readReviewRounds(cwd: string, flowDir: string): Promise<ReviewRoundRecord[]> {
-  const reviewsDir = path.join(flowsRoot(cwd), flowDir, "reviews");
+  const reviewsDir = flowReviewsRoot(cwd, flowDir);
   if (!(await pathExists(reviewsDir))) {
     return [];
   }
@@ -447,6 +502,7 @@ export async function readReviewRounds(cwd: string, flowDir: string): Promise<Re
     // records none of it; the coverage-completeness gate decides open rounds that kept the record.
     const completeness = readString(manifest?.["status"]) !== "closed" && (await packageRecordsCoverage(packageDir));
     problems.push(...await packageResearchErrors(packageDir, manifest?.["artifacts"], rawFindings, { completeness }));
+    const findings = Array.isArray(rawFindings) ? await findingsWithHolds(rawFindings.map((item, index) => toGateFinding(item, reviewId, index)), packageDir, problems) : [];
     rounds.push({
       reviewId,
       dir: path.relative(cwd, packageDir),
@@ -456,14 +512,41 @@ export async function readReviewRounds(cwd: string, flowDir: string): Promise<Re
       head: readString(target?.["head"]) ?? null,
       mode: readString(manifest?.["mode"]) ?? null,
       coverage,
-      findings: Array.isArray(rawFindings)
-        ? rawFindings.map((item, index) => toGateFinding(item, reviewId, index))
-        : [],
+      findings,
       verification: scope === null ? null : parseVerificationStats(scope),
+      premise: scope === null ? null : parsePremiseStats(scope),
     });
   }
   rounds.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0));
   return rounds;
+}
+
+/**
+ * {@link withPremiseHolds}, with a decisions store that cannot be read (a name a case-insensitive filesystem may fold
+ * onto it, review LG4-002) turned into a named problem of the package, as every other per-package read failure here is:
+ * the round is not ingested, and the gate names the package and why instead of escaping. The findings keep no hold.
+ */
+async function findingsWithHolds(findings: GateFinding[], packageDir: string, problems: string[]): Promise<GateFinding[]> {
+  try {
+    return await withPremiseHolds(findings, packageDir);
+  } catch (error) {
+    problems.push(`operator decisions cannot be read: ${error instanceof Error ? error.message : String(error)}`);
+    return findings;
+  }
+}
+
+/**
+ * Where each judged finding stands against its premise, from the package's `premise-question` decisions. The decisions
+ * file is read only when some finding carries a premise.
+ */
+async function withPremiseHolds(findings: GateFinding[], packageDir: string): Promise<GateFinding[]> {
+  if (!findings.some((finding) => finding.premise !== undefined)) {
+    return findings;
+  }
+  const decisions: PremiseQuestionDecision[] = await readPremiseDecisions(packageDir);
+  return findings.map((finding) =>
+    finding.premise === undefined ? finding : { ...finding, premise: { ...finding.premise, hold: premiseHoldState(holdRecord(finding), decisions) } },
+  );
 }
 
 async function readJson(file: string): Promise<unknown> {
@@ -613,6 +696,22 @@ function shasIn(text: string | undefined): string[] {
  * this also inherits that floor without restating it.
  */
 export function findingVerdict(finding: GateFinding): FindingVerdict {
+  // Flow 459. A finding the premise judge held is a question, and it stays open until the operator answers it. The
+  // answer `dismiss` is the operator's own decision (`keryx review decide-premise`), which is what the
+  // `dismissed-incorrect` disposition it records would otherwise need a verifier verdict to justify; `uphold` falls
+  // through to the ordinary rules at the finding's original severity.
+  const hold = premiseGateState(finding);
+  if (hold === "awaiting") {
+    return {
+      terminal: false,
+      reason:
+        "held by the premise judge and awaiting an operator decision — answer it with " +
+        "`keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason \"<why>\"`",
+    };
+  }
+  if (hold === "dismissed") {
+    return { terminal: true, kind: "dismissed" };
+  }
   const state = finding.disposition?.state;
   const evidence = finding.disposition?.evidence;
   if (state === undefined || state === "unknown") {
@@ -1363,7 +1462,11 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
     });
   } else {
     const states = latestFindingStates(rounds);
-    const blocking = states.filter((finding) => blocksAtFloor(finding.severity, config.severityFloor));
+    // A held finding blocks at ANY severity: it is a question the operator has not answered, and a `minor` question
+    // left unanswered is still an unanswered question (flow 459).
+    const atFloor = states.filter((finding) => blocksAtFloor(finding.severity, config.severityFloor));
+    const heldBelow = states.filter((finding) => !blocksAtFloor(finding.severity, config.severityFloor) && premiseGateState(finding) === "awaiting");
+    const blocking = [...atFloor, ...heldBelow];
     const open = blocking.flatMap((finding) => {
       const verdict = findingVerdict(finding);
       return verdict.terminal
@@ -1376,15 +1479,16 @@ export function evaluateReviewGate(input: ReviewGateInput): ReviewGateVerdict {
             id: "terminal-dispositions",
             status: "pass",
             detail:
-              `${blocking.length} finding(s) at or above \`${config.severityFloor}\` across ${ingested.length} ` +
+              `${atFloor.length} finding(s) at or above \`${config.severityFloor}\` across ${ingested.length} ` +
               `ingested round(s), every one terminal with the evidence its disposition requires ` +
-              `(${states.length - blocking.length} below the floor, not blocking)`,
+              `(${states.length - atFloor.length} below the floor, not blocking)`,
           }
         : {
             id: "terminal-dispositions",
             status: "violated",
             detail:
-              `${open.length} finding(s) at or above \`${config.severityFloor}\` are not terminal: ` +
+              `${open.length} blocking finding(s) are not terminal (at or above \`${config.severityFloor}\`, or held by the ` +
+              `premise judge at any severity): ` +
               open.join(" | "),
           },
     );

@@ -115,6 +115,69 @@
         "description": "Reasoning alone produces no new evidence, so it can never reach `confirmed` (AC7). It cannot reach `refuted` either, and that extension is deliberate: `refuted` is the only verdict with a destructive consequence, so granting it to the weakest method would reinstate review-strict with the sign flipped. Anything checkable is `site-check` or `execution`; `reasoning` is what is left when nothing was run."
       }
     },
+    "premise": {
+      "title": "What the premise judge found when it asked whether this finding's request is right",
+      "description": "Flow 459. Declared HERE and deliberately NOT in the bundled reviewer-finding.schema.json, on the same basis as `verification`: the reviewer that raised a finding is the one actor that may not judge its premise. The verifier asks whether the facts hold; the premise judge asks whether the request is right (an explicit override, an exemption, a sibling doing the same and accepted platform practice are all evidence that a flagged shape is a deliberate choice). `challenged` and `owner-decision` HOLD the finding: it is not an open blocker or major and is not passed to a fixer until the operator answers. The judge is delete-only: it never adds a finding, never raises a severity and never edits the finding's text; `downgraded` carries a strictly lower `severity` (`major` or `minor`: a downgrade stops at the fix-loop threshold), which is then also the finding's own. One source of truth each: the finding's own `severity` wins over a `premise.severity` that disagrees (ingest aligns them), and the operator's answer is the `premise-question` decision in the package's operator-decisions.json; `premise.operator` is only its audit trail on the record, and ingest strips it from any finding it receives. The schema states the per-verdict fields below; that a downgrade is STRICTLY lower than the original is checked in code (src/review/premise.ts). Absent means nobody judged.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verdict", "judge"],
+      "properties": {
+        "verdict": { "type": "string", "enum": ["upheld", "downgraded", "challenged", "owner-decision"] },
+        "judge": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "severity": { "type": "string", "enum": ["major", "minor"], "description": "`downgraded` only: the lower severity, also the finding's own. Never `info`: a downgrade stops at `minor`, the fix-loop threshold." },
+        "original_severity": { "type": "string", "enum": ["blocker", "major"], "description": "`downgraded` only: what the reviewer reported." },
+        "intent_signals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ref", "says"],
+            "properties": { "ref": { "type": "string", "minLength": 1 }, "says": { "type": "string", "minLength": 1 } }
+          }
+        },
+        "practice_sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "says"],
+            "properties": { "name": { "type": "string", "minLength": 1 }, "says": { "type": "string", "minLength": 1 } }
+          }
+        },
+        "reasoning": { "type": "string" },
+        "question": { "type": "string", "minLength": 1, "description": "`challenged` and `owner-decision`: what the operator is asked." },
+        "options": { "type": "array", "minItems": 2, "items": { "type": "string", "minLength": 1 } },
+        "operator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["answer", "reason", "at", "actor"],
+          "description": "The operator's answer once applied to the record (`keryx review decide-premise`, the `review_decide_premise` card). An audit trail: the answer counts only from the package's operator-decisions.json, and ingest strips this field from input findings.",
+          "properties": {
+            "answer": { "type": "string", "enum": ["uphold", "dismiss"] },
+            "reason": { "type": "string", "minLength": 1 },
+            "quote": { "type": "string", "minLength": 1, "description": "The operator's own words: what they typed at the terminal, or the card text they said yes to." },
+            "at": { "type": "string", "minLength": 1 },
+            "actor": { "type": "string", "minLength": 1 },
+            "confirmedVia": { "type": "string", "enum": ["tui-card", "remote-card", "terminal"] }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["verdict"], "properties": { "verdict": { "const": "downgraded" } } },
+          "then": { "required": ["severity", "original_severity"] }
+        },
+        {
+          "if": { "required": ["verdict"], "properties": { "verdict": { "enum": ["challenged", "owner-decision"] } } },
+          "then": { "required": ["question"] }
+        },
+        {
+          "if": { "required": ["verdict"], "properties": { "verdict": { "const": "owner-decision" } } },
+          "then": { "required": ["options"] }
+        }
+      ]
+    },
     "severity": { "type": "string", "enum": ["blocker", "major", "minor", "info"] },
     "repo": {
       "type": ["string", "null"],

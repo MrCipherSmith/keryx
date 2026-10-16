@@ -30,18 +30,22 @@
  *
  * Never merged: external findings (each one owes its own reply), findings that
  * already carry a disposition (a carried or dismissed record is not this round's
- * report), and findings a verifier refuted (the refutation is a measurement).
+ * report), findings a verifier refuted (the refutation is a measurement), and
+ * findings held by a premise judgement (the operator's question stays visible).
  *
  * ## Severity
  *
  * The highest of the merged findings — unless a verifier confirmed any of them,
  * in which case the highest CONFIRMED severity is canonical: the verifier ran
  * something against that claim at that severity, and the unconfirmed
- * re-statements do not outrank it.
+ * re-statements do not outrank it. A premise judge's downgrade outranks both: the
+ * downgraded severity is the finding's severity, and a re-statement at the
+ * original one does not raise it again.
  */
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { isHeldVerdict } from "./premise";
 import { REVIEW_FINDING_SEVERITIES, type ReviewFindingSeverity, type StructuredReviewFinding } from "./types";
 
 /** Located lines this far apart (inclusive) are the same place. */
@@ -56,8 +60,8 @@ export type DuplicateMerge = {
   absorbed: string[];
   reportedBy: string[];
   severity: ReviewFindingSeverity;
-  /** `max` over all reporters, or `verified` when a confirmed verdict decided it. */
-  severityRule: "max" | "verified";
+  /** `max` over all reporters, `verified` when a confirmed verdict decided it, or `premise` when a judge's downgrade did. */
+  severityRule: "max" | "verified" | "premise";
   /** Severities the reporters gave, in reporter order, so drift stays visible. */
   reportedSeverities: ReviewFindingSeverity[];
   /**
@@ -152,6 +156,9 @@ function mergeable(finding: StructuredReviewFinding): boolean {
     finding.source !== "external" &&
     finding.disposition === undefined &&
     finding.verification?.verdict !== "refuted" &&
+    // Flow 459: a finding held for the operator stays its own record. Folding it into a non-held duplicate would
+    // either hide the question or carry a hold onto a finding nobody asked about, silently.
+    !isHeldVerdict(finding.premise?.verdict) &&
     normalisePath(finding.file) !== null
   );
 }
@@ -270,10 +277,36 @@ function bestOf<T extends StructuredReviewFinding>(candidates: readonly T[]): T 
   )[0] as T;
 }
 
+type SeverityRule = DuplicateMerge["severityRule"];
+
+/** How scope.md names each rule, and how it words a member the rule outranked. */
+const SEVERITY_RULE_LABEL: Record<SeverityRule, string> = {
+  max: "highest reported severity",
+  verified: "verifier-confirmed severity",
+  premise: "severity downgraded by the premise judge",
+};
+const OUTRANKED_WORDS: Record<SeverityRule, { kept: string; other: string }> = {
+  max: { kept: "the", other: "the" },
+  verified: { kept: "the confirmed", other: "the unconfirmed" },
+  premise: { kept: "the judge's", other: "the" },
+};
+
+/**
+ * Which members decide the canonical severity, most authoritative first. A premise judge's downgrade (flow 459) is the
+ * severity the finding has, not one more report to take the maximum of: without it a re-statement of the same defect at
+ * its original severity would raise it again. Then a verifier's confirmation, then the highest report.
+ */
+function severityRuleOf<T extends StructuredReviewFinding>(members: readonly T[]): { rule: SeverityRule; decides: (member: T) => boolean } {
+  const rules: Array<{ rule: SeverityRule; decides: (member: T) => boolean }> = [
+    { rule: "premise", decides: (member) => member.premise?.verdict === "downgraded" },
+    { rule: "verified", decides: (member) => member.verification?.verdict === "confirmed" },
+  ];
+  return rules.find((candidate) => members.some(candidate.decides)) ?? { rule: "max", decides: () => true };
+}
+
 function mergeCluster<T extends StructuredReviewFinding>(members: readonly T[]): { finding: T; record: DuplicateMerge } {
-  const confirmed = members.filter((member) => member.verification?.verdict === "confirmed");
-  const severityRule: DuplicateMerge["severityRule"] = confirmed.length > 0 ? "verified" : "max";
-  const canonical = bestOf(confirmed.length > 0 ? confirmed : members);
+  const { rule: severityRule, decides } = severityRuleOf(members);
+  const canonical = bestOf(members.filter(decides));
   const others = members.filter((member) => member !== canonical);
 
   const reportedBy: string[] = [];
@@ -318,6 +351,15 @@ function mergeCluster<T extends StructuredReviewFinding>(members: readonly T[]):
     merged_from: mergedFrom,
     ...(mergedProblems.length === 0 ? {} : { merged_problems: mergedProblems }),
   };
+  // A carried premise survives the merge (review LG8-003): the canonical record is chosen by severity, and a premise
+  // on an absorbed member would otherwise vanish, so the finding would read as unjudged and be judged again. It moves
+  // only onto a canonical at the severity it was judged at (review RG2-002): a judgement of a `major` says nothing about
+  // a `blocker` re-statement, and a premised record is skipped by the delta judge, so the blocker would never be judged.
+  // A `downgraded` premise is already the canonical's own (severityRuleOf), so this reaches only the other verdicts.
+  const carriedPremise = canonical.premise ?? others.find((member) => member.premise !== undefined && member.severity === canonical.severity)?.premise;
+  if (carriedPremise !== undefined) {
+    finding.premise = carriedPremise;
+  }
   if (members.some((member) => member.blocking_merge === true)) {
     finding.blocking_merge = true;
   }
@@ -333,7 +375,7 @@ function mergeCluster<T extends StructuredReviewFinding>(members: readonly T[]):
     }
   }
 
-  const higher = severityRule === "verified" ? others.filter((member) => member.verification?.verdict !== "confirmed" && rank(member.severity) > rank(canonical.severity)) : [];
+  const higher = severityRule === "max" ? [] : others.filter((member) => !decides(member) && rank(member.severity) > rank(canonical.severity));
   const top = higher.length === 0 ? undefined : bestOf(higher);
   return {
     finding,
@@ -394,11 +436,11 @@ export function renderDuplicatesMarkdown(merges: readonly DuplicateMerge[]): str
   if (merges.length === 0) {
     return "";
   }
-  const rows = merges.map(
-    (merge) =>
-      `- ${merge.kept} kept (${merge.severity}, ${merge.severityRule === "verified" ? "verifier-confirmed severity" : "highest reported severity"}); absorbed ${merge.absorbed.join(", ")}; reported by ${merge.reportedBy.join(", ")}; reported severities ${merge.reportedSeverities.join("/")}${
-        merge.outranked === undefined ? "" : `; the confirmed ${merge.severity} outranks the unconfirmed ${merge.outranked.severity} of ${merge.outranked.reviewer} (${merge.outranked.id})`
-      }`,
-  );
+  const rows = merges.map((merge) => {
+    const words = OUTRANKED_WORDS[merge.severityRule];
+    const outranked =
+      merge.outranked === undefined ? "" : `; ${words.kept} ${merge.severity} outranks ${words.other} ${merge.outranked.severity} of ${merge.outranked.reviewer} (${merge.outranked.id})`;
+    return `- ${merge.kept} kept (${merge.severity}, ${SEVERITY_RULE_LABEL[merge.severityRule]}); absorbed ${merge.absorbed.join(", ")}; reported by ${merge.reportedBy.join(", ")}; reported severities ${merge.reportedSeverities.join("/")}${outranked}`;
+  });
   return `\n## Duplicates merged\n\n${rows.join("\n")}\n`;
 }

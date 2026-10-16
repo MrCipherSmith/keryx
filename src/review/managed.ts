@@ -9,14 +9,14 @@ import { roundRecordTampered } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
 import { PENDING_RESEARCH, packageResearchErrors } from "./research";
 import { computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
-import { lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { clearActiveReview } from "./active-review";
-import { flowsRoot, listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
+import { listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
 import type { FlowState } from "../flow/types";
 import {
   mergeVerifications,
@@ -51,6 +51,10 @@ import {
 } from "./filter-stats";
 import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
 import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
+import { flowReviewsRoot, reviewsRoot } from "./package-location";
+import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaims, previousFindingsUnreadable, renderPremiseMarkdown } from "./premise";
+import { promoteParentExecutions } from "./verify-run";
+import { withOperatorDecisionsLock } from "./operator-decisions";
 import { repairMechanicalOmissions, type FindingRepair } from "./repair";
 import { writeReviewNotes, type ReviewNoteResult } from "./review-notes";
 import {
@@ -80,13 +84,12 @@ import {
   type ReviewScopeCountsLike,
   type ReviewScopeDropLike,
   type StructuredReviewFinding,
+  type VerificationClaimInput,
 } from "./types";
 
 const REQUIRED_ARTIFACTS = ["scope", "coverage", "report", "findings", "learning", "decisions"] as const;
 
-export function reviewsRoot(cwd: string): string {
-  return path.join(cwd, ".metaproject", "reviews");
-}
+export { reviewsRoot } from "./package-location";
 
 /**
  * `git rev-parse HEAD` in `cwd`, or `null` when there is no checkout to ask.
@@ -261,8 +264,12 @@ export async function createManagedReviewPackage(
   input: ManagedReviewIngestInput,
 ): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord; duplicates: DuplicateMerge[] }> {
   const at = (input.now ?? new Date()).toISOString();
+  // Parsed first: a premise file of the wrong shape refuses the ingest before a package is allocated.
+  const premiseClaims = parsePremiseClaims(input.premises);
   const flowMatch = await resolvePackageFlow(input);
   const { reviewId, packageDir } = await allocatePackage(input, flowMatch, at);
+  // Before anything is written: an id that names packages in two places refuses here (review LG6-002, SEC6-001).
+  const verifications = await ownPackageVerifications(input, packageDir);
   const coverage = normalizeCoverage(input.coverage, input.reviewers);
   const report = await readReport(input);
   const reviewers = coverage.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
@@ -303,7 +310,7 @@ export async function createManagedReviewPackage(
   // release — nothing is removed and a `refuted` verdict is recorded on a finding
   // that is still reported, so the drop rate is a measured number before it costs
   // a real finding.
-  const merged = mergeVerifications(reported, input.verifications ?? [], {
+  const merged = mergeVerifications(reported, verifications, {
     mode: input.verificationMode ?? DEFAULT_VERIFICATION_MODE,
   });
 
@@ -353,7 +360,23 @@ export async function createManagedReviewPackage(
   // does not spend a reviewer's reading budget. See {@link mergeDuplicates}.
   const deduped = mergeDuplicates(scopeB.retained);
 
-  const findingsCap = applyFindingsCap(deduped.findings, {
+  // Flow 459. The premise judge, which can only hold or lower. It runs over the CANONICAL findings, after the
+  // duplicate merge (so a claim names the one record that survives) and before the cap (so a downgraded severity
+  // is the one the cap and every later reader sees). External findings are in the set: they may be challenged,
+  // which makes them a question for the operator and never a dismissal. A carried finding keeps its premise.
+  // One merge over both sets (a claim may name either, and two claims on one finding must meet to cancel), then split
+  // by what each finding IS rather than by position.
+  const premiseSet = [...deduped.findings, ...scoped.external];
+  // Review RG2-004: an ingest without --premises over a package the judge held re-applies each hold of the previous
+  // findings.json, as a claim under the merge's rules, to the same, unchanged finding, and is refused otherwise; it
+  // never silently drops a hold, and an unreadable findings.json refuses rather than reading as "nothing held" (LG6-001).
+  const carriedHolds = premiseClaims === undefined ? carriedPremiseHolds(premiseSet, await readPreviousFindings(packageDir)) : undefined;
+  if (carriedHolds?.ok === false) throw new Error(carriedHolds.refusal);
+  const premised = mergePremises(carriedHolds?.ok === true ? carriedHolds.findings : premiseSet, premiseClaims);
+  const premisedInternal = premised.findings.filter((finding) => finding.source !== "external");
+  const premisedExternal = premised.findings.filter((finding) => finding.source === "external");
+
+  const findingsCap = applyFindingsCap(premisedInternal, {
     limit: input.maxFindingsPerReviewer,
   });
 
@@ -365,7 +388,7 @@ export async function createManagedReviewPackage(
   const roundDismissed = fromRefutedSource(input.refuted, reviewers, flowMatch !== null);
   const findings = [
     ...findingsCap.retained,
-    ...scoped.external,
+    ...premisedExternal,
     ...fromVerifierRefutations(verification.refuted),
     ...roundDismissed,
   ];
@@ -485,20 +508,41 @@ export async function createManagedReviewPackage(
   await mkdir(packageDir, { recursive: true });
   await writeFileAtomic(path.join(packageDir, "research.json"), `${JSON.stringify(input.research ?? PENDING_RESEARCH, null, 2)}\n`);
   await writeFileAtomic(path.join(packageDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+  if (input.premises !== undefined) {
+    // The claims as received, rejected ones included: the record of what the judge said. Only a package without an
+    // ingested round re-applies it (the interim verdict over raw results); findings.json is the record after ingest.
+    await mkdir(path.join(packageDir, "research-evidence"), { recursive: true });
+    await writeFileAtomic(path.join(packageDir, PREMISES_FILE), `${JSON.stringify(input.premises, null, 2)}\n`);
+  } else if (carriedHolds === undefined && (await pathExists(path.join(packageDir, PREMISES_FILE)))) {
+    // An ingest without --premises that carried no hold keeps the judge's record, moved aside (review RG2-004): the
+    // verdict never re-applies claims to an ingested round, so the file at its own name would only mislead a reader
+    // into thinking this ingest applied them. When holds were carried it stays where it is, untouched: the holds came
+    // from the previous findings.json, not from this file, which may predate them or be gone (review SEC6-002).
+    await rename(path.join(packageDir, PREMISES_FILE), path.join(packageDir, PREMISES_SUPERSEDED_FILE));
+  }
   if (input.scope?.files !== undefined) {
     await writeFileAtomic(path.join(packageDir, "scope-files.json"), `${JSON.stringify({ version: 1, files: input.scope.files, ...(typeof input.scope.counts?.changedLinesRetained === "number" ? { changedLines: input.scope.counts.changedLinesRetained } : {}) }, null, 2)}\n`);
   }
+  const premiseBlock = renderPremiseMarkdown({
+    counts: premised.counts,
+    rejections: premised.rejections,
+    findings,
+    ...(carriedHolds?.ok === true && carriedHolds.carried > 0 ? { carried: { holds: carriedHolds.carried, judges: carriedHolds.judges } } : {}),
+  });
   await writeFileAtomic(
     path.join(packageDir, "scope.md"),
-    renderScope(input, flowMatch, at, verification, carried, caps, externalReclaims, scopeB.record, filterStats, findings) +
+    renderScope(input, flowMatch, at, verification, carried, caps, { externalReclaims, scopeBScreen: scopeB.record, filterStats, allFindings: findings }) +
+      premiseBlock +
       renderDuplicatesMarkdown(deduped.merges),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
-  await writeFileAtomic(
+  // Under the decisions lock, like every other findings.json writer: a premise answer to a re-ingested package
+  // rewrites the same file.
+  await withOperatorDecisionsLock(packageDir, () => writeFileAtomic(
     path.join(packageDir, "findings.json"),
     `${JSON.stringify(findings.map(toContractFinding), null, 2)}\n`,
-  );
+  ));
   await writeFileAtomic(path.join(packageDir, "learning.md"), renderLearning(findings));
   await writeFileAtomic(path.join(packageDir, "decisions.md"), renderDecisions(findings));
   // Last, and only once the package is complete. See {@link persistScreenRadius}.
@@ -530,6 +574,9 @@ export async function createManagedReviewPackage(
     verification: verification.counts,
     verificationRejections: verification.rejections,
     verificationCaps: verification.caps,
+    premise: premised.counts,
+    premiseRejections: premised.rejections,
+    ...(carriedHolds?.ok === true ? { premisesCarriedForward: true as const } : {}),
     caps,
     filterStats,
     reviewNotes,
@@ -1076,7 +1123,7 @@ function packagePath(
   flowMatch: FlowMatchResult | null,
 ): string {
   if ((mode === "attach-review" || mode === "ingest") && flowMatch) {
-    return path.join(flowsRoot(cwd), flowMatch.dir, "reviews", reviewId);
+    return path.join(flowReviewsRoot(cwd, flowMatch.dir), reviewId);
   }
   if (mode === "attach-review") {
     throw new Error("attach-review requires an explicit or matched flow");
@@ -1543,6 +1590,11 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   if (finding.verification !== undefined) {
     record.verification = finding.verification;
   }
+  // Flow 459, same rule: written only when a premise judge actually ruled. A held finding without this field would
+  // read as an ordinary open one, so the projection must not drop it.
+  if (finding.premise !== undefined) {
+    record.premise = finding.premise;
+  }
   // Same rule again, and this one is not cosmetic: `source` is what makes the
   // verifier unable to refute a comment (AC10), keeps the findings cap off it
   // (AC9), and keeps the completion gate closed while it is unanswered (AC5). A
@@ -1715,8 +1767,19 @@ function refutedClassification(state: FindingDispositionState): FindingClassific
   return state === "dismissed-incorrect" ? "false_positive" : "out_of_scope";
 }
 
-/** Write the recorded outcomes into `findings.json`, or refuse and write nothing. */
+/**
+ * Write the recorded outcomes into `findings.json`, or refuse and write nothing. The read-modify-write runs under the
+ * package's decisions lock, the one a premise answer holds while it rewrites findings.json (review F-001/HL2-002): an
+ * answer and a disposition that overlap both land.
+ */
 async function recordDispositions(
+  packageDir: string,
+  records: readonly FindingDispositionRecord[],
+): Promise<void> {
+  await withOperatorDecisionsLock(packageDir, () => recordDispositionsLocked(packageDir, records));
+}
+
+async function recordDispositionsLocked(
   packageDir: string,
   records: readonly FindingDispositionRecord[],
 ): Promise<void> {
@@ -1820,7 +1883,20 @@ async function recordDispositions(
  * ordinary result of nesting one under a list item — invisible, and an invisible
  * block is a silent fall-through to the prose parser rather than an error.
  */
-const EMBEDDED_FINDINGS_FENCE = /^ {0,3}(`{3,}|~{3,})[^\n]*\bkeryx:findings\b[^\n]*$/gm;
+function embeddedFence(tag: "findings" | "premises"): RegExp {
+  return new RegExp("^ {0,3}(`{3,}|~{3,})[^\\n]*\\bkeryx:" + tag + "\\b[^\\n]*$", "gm");
+}
+
+/**
+ * The body of the one `keryx:<tag>` block in `text`, or undefined when there is none. More than one throws, worded by
+ * `tooMany` from the blocks' character offsets: keeping the first would silently drop every block after it.
+ */
+function singleEmbeddedBlock(text: string, tag: "findings" | "premises", tooMany: (offsets: number[]) => string): string | undefined {
+  const fences = [...text.matchAll(embeddedFence(tag))];
+  if (fences.length > 1) throw new Error(tooMany(fences.map((fence) => fence.index ?? 0)));
+  const fence = fences[0];
+  return fence === undefined ? undefined : embeddedBlockBody(text, fence);
+}
 
 /**
  * The one `keryx:findings` block in a report, or null when there is none.
@@ -1831,32 +1907,18 @@ const EMBEDDED_FINDINGS_FENCE = /^ {0,3}(`{3,}|~{3,})[^\n]*\bkeryx:findings\b[^\
  * carries the structured array its author expected to be read.
  */
 export function parseEmbeddedFindings(report: string, reportLabel: string): ReviewFindingsSource | null {
-  const fences = [...report.matchAll(EMBEDDED_FINDINGS_FENCE)];
-  if (fences.length === 0) {
+  // An orchestrator that concatenates one block per reviewer produces several, and the non-global match used to keep
+  // the first and drop the rest: a report visibly holding findings ingested as zero.
+  const body = singleEmbeddedBlock(
+    report,
+    "findings",
+    (offsets) =>
+      `${reportLabel} carries ${offsets.length} keryx:findings blocks (at character ${offsets.join(" and ")}); exactly one is allowed. Concatenating one block per reviewer drops every block after the first — merge them into a single array.`,
+  );
+  if (body === undefined) {
     return null;
   }
-  if (fences.length > 1) {
-    // An orchestrator that concatenates one block per reviewer produces exactly
-    // this, and the non-global match silently kept the first and dropped the
-    // rest — a report visibly holding findings ingested as zero.
-    throw new Error(
-      `${reportLabel} carries ${fences.length} keryx:findings blocks (at character ${fences
-        .map((fence) => String(fence.index ?? 0))
-        .join(" and ")}); exactly one is allowed. Concatenating one block per reviewer drops every block after the first — merge them into a single array.`,
-    );
-  }
-  const fence = fences[0] as RegExpExecArray;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(embeddedBlockBody(report, fence)) as unknown;
-  } catch (error) {
-    // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
-    throw new Error(
-      `${reportLabel} carries a keryx:findings block that is not valid JSON: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-  }
+  const parsed = parseJsonBody(body, (detail) => `${reportLabel} carries a keryx:findings block that is not valid JSON: ${detail}`);
   if (!Array.isArray(parsed) && !isReviewerResult(parsed)) {
     // Named for what it is. Passing a non-array through produced a schema
     // failure about missing `id`/`impact`/`evidence`, which sends the reader
@@ -1868,6 +1930,28 @@ export function parseEmbeddedFindings(report: string, reportLabel: string): Revi
     );
   }
   return parsed as ReviewFindingsSource;
+}
+
+/**
+ * `--premises` input (flow 459): the bare `{ judge, model?, premises }` object, or a report / judge reply that carries it
+ * in one fenced `keryx:premises` block (what the review-premise skill prints). Anything else throws, and a block that is
+ * present but not valid JSON is an error, never a silent fall-through. The parsed value is not shape-checked here.
+ */
+export function parseEmbeddedPremises(text: string, label: string): unknown {
+  const body = singleEmbeddedBlock(text, "premises", (offsets) => `${label} carries ${offsets.length} keryx:premises blocks; exactly one is allowed. Nothing was merged.`);
+  return body === undefined
+    ? parseJsonBody(text, (detail) => `${label} is neither JSON nor a report with a keryx:premises block: ${detail}. Nothing was merged.`)
+    : parseJsonBody(body, (detail) => `${label} carries a keryx:premises block that is not valid JSON: ${detail}. Nothing was merged.`);
+}
+
+/** `JSON.parse(body)`, or an error worded by `message` from the parser's own detail (never the raw caught value). */
+function parseJsonBody(body: string, message: (detail: string) => string): unknown {
+  try {
+    return JSON.parse(body) as unknown;
+  } catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
+    throw new Error(message(error instanceof Error ? error.message : String(error)));
+  }
 }
 
 /** The text between an opening fence and its closing fence of the same marker. */
@@ -2403,6 +2487,14 @@ async function readPreFilterScopeBlock(packageDir: string): Promise<string | und
   return extractPreFilterScopeBlock(await readFile(scopePath, "utf8")) ?? undefined;
 }
 
+/** The optional blocks of scope.md, by name. */
+type ScopeExtras = {
+  externalReclaims?: readonly ExternalReclaim[] | undefined;
+  scopeBScreen?: ScopeBScreenRecord | undefined;
+  filterStats?: ReviewFilterStats | undefined;
+  allFindings?: readonly StructuredReviewFinding[] | undefined;
+};
+
 /**
  * `scope.md`: what this review looked at, and what each stage removed (AC5/AC11).
  *
@@ -2429,11 +2521,9 @@ function renderScope(
   verification: VerificationMergeResult<NormalizedReviewFinding>,
   carriedPreFilter: string | undefined,
   caps: ReviewCapsRecord,
-  externalReclaims: readonly ExternalReclaim[] = [],
-  scopeBScreen: ScopeBScreenRecord = { source: "none", scopeBFindings: 0 },
-  filterStats?: ReviewFilterStats | undefined,
-  allFindings: readonly StructuredReviewFinding[] = [],
+  extras: ScopeExtras = {},
 ): string {
+  const { externalReclaims = [], scopeBScreen = { source: "none", scopeBFindings: 0 }, filterStats, allFindings = [] } = extras;
   const preFilter: ReviewScopeCountsLike | undefined = input.scope?.counts ?? input.scopeCounts;
   const drops: readonly ReviewScopeDropLike[] | undefined = input.scope?.drops;
   const head = `# Review Scope
@@ -2706,24 +2796,72 @@ export async function resolveReviewPackagePath(cwd: string, ref: string): Promis
     return path.dirname(absolute);
   }
 
+  const [first] = await reviewPackagesNamed(cwd, ref);
+  if (first !== undefined) {
+    return first;
+  }
+  throw new Error(`Managed review package not found: ${ref}`);
+}
+
+/**
+ * Every package a review id names, in the order {@link resolveReviewPackagePath} prefers them: the standalone one (a
+ * directory with a manifest.json under the reviews root), then each flow's directory of that name, in flow order. The
+ * one lookup of a package by id; more than one entry means the id is ambiguous.
+ */
+async function reviewPackagesNamed(cwd: string, ref: string): Promise<string[]> {
+  const found: string[] = [];
   const standalone = path.join(reviewsRoot(cwd), ref);
   if (await pathExists(path.join(standalone, "manifest.json"))) {
-    return standalone;
+    found.push(standalone);
   }
-
   for (const flowDir of await listFlowDirs(cwd)) {
-    const reviewsDir = path.join(flowsRoot(cwd), flowDir, "reviews");
+    const reviewsDir = flowReviewsRoot(cwd, flowDir);
     if (!(await pathExists(reviewsDir))) {
       continue;
     }
     for (const entry of await readdir(reviewsDir, { withFileTypes: true })) {
       if (entry.isDirectory() && entry.name === ref) {
-        return path.join(reviewsDir, entry.name);
+        found.push(path.join(reviewsDir, entry.name));
       }
     }
   }
+  return found;
+}
 
-  throw new Error(`Managed review package not found: ${ref}`);
+/**
+ * The ingest's verification claims, with each one citing a `keryx review verify-run` record of its own finding in THIS
+ * ingest's package promoted to `execution` (flow 457 T7). The records are read only from `packageDir`, the directory
+ * the ingest writes (review LG6-002, SEC6-001): a package of the same id elsewhere never promotes a claim, so a
+ * duplicate id elsewhere needs no refusal here (review LG7-001, SEC7-001).
+ */
+async function ownPackageVerifications(input: ManagedReviewInput, packageDir: string): Promise<VerificationClaimInput[]> {
+  const claims = input.verifications ?? [];
+  if (claims.length === 0) {
+    return [];
+  }
+  return promoteParentExecutions(claims, packageDir);
+}
+
+/**
+ * The previous ingest's findings.json, for the hold carry (review LG6-001): `undefined` when there is none (a first
+ * ingest), parsed JSON otherwise. One that exists but cannot be read or parsed refuses the ingest, since reading it as
+ * "nothing held" would drop every hold it recorded.
+ */
+async function readPreviousFindings(packageDir: string): Promise<unknown> {
+  let text: string;
+  try {
+    text = await readFile(path.join(packageDir, "findings.json"), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return undefined;
+    }
+    throw new Error(previousFindingsUnreadable((error as NodeJS.ErrnoException).code ?? "the file could not be read"), { cause: error });
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch (error) {
+    throw new Error(previousFindingsUnreadable(`it is not JSON (${error instanceof Error ? error.message : String(error)})`), { cause: error });
+  }
 }
 
 async function loadDocpackSchema(cwd: string): Promise<Record<string, unknown> | null> {

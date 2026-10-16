@@ -45,6 +45,7 @@ import { addConfirmedSchedule, removeStoredSchedule, setScheduleEnabled, trigger
 import { configDirInsideProjectReason, scheduleKeyPath } from "./schedule-key";
 import { pinGrantedBinary, resolvesInsideProject, type BinaryPin } from "./granted-binary";
 import { verifyStoredSchedule } from "./schedule-verify";
+import { cardSafe } from "../lib/card-safe";
 
 /** Shown on the card whenever the shell gets the host network. Kept in step with trigger-dispatch's NETWORK_ON_WARNING. */
 export const FULL_NETWORK_CARD_WARNING =
@@ -399,24 +400,6 @@ function renderCard(input: {
     `signing key: ${scheduleKeyPath()} (outside the project; the installed timer is pinned to it)`,
     "the machine must be on; a missed run is caught up once at the next boot/wake (systemd Persistent=true, launchd) — never by cron",
   ].map(cardSafe);
-}
-
-/**
- * Flow 295 (F7): the card shows text the MODEL supplied (prompt, name, repos, provider,
- * model). A line of it must never be able to draw a fake line of the card. So ANSI escape
- * sequences, C0/C1 controls and bidi overrides are removed, and a newline is shown as a
- * visible ⏎ instead of starting a new line.
- */
-export function cardSafe(text: string): string {
-  return text
-    // eslint-disable-next-line no-control-regex -- matching control characters is the point (flow 295 F7/installer)
-    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
-    // eslint-disable-next-line no-control-regex -- matching control characters is the point (flow 295 F7/installer)
-    .replace(/\u001b[\]P^_][\s\S]*?(?:\u0007|\u001b\\)/g, "")
-    .replace(/\r\n|\r|\n/g, " ⏎ ")
-    // eslint-disable-next-line no-control-regex -- matching control characters is the point (flow 295 F7/installer)
-    .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
-    .replace(/\t/g, " ");
 }
 
 export interface CreateResult {

@@ -5,7 +5,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
-import { flowsRoot } from "../flow/store";
+import { flowReviewsRoot } from "../review/package-location";
 import { openReservations, readTriggerRuns, type TriggerRunRecord, type TriggerRunsRead } from "../trigger/record";
 import type { ManagedReviewManifest } from "../review/types";
 import type { FlowDispatch, FlowDispatchRun, FlowOpenReservation, FlowReviewSpend, ProjectTriggerSpend } from "./types";
@@ -18,7 +18,7 @@ import type { FlowDispatch, FlowDispatchRun, FlowOpenReservation, FlowReviewSpen
  * report refuse to run.
  */
 export async function readFlowReviewManifests(cwd: string, flowDir: string): Promise<ManagedReviewManifest[]> {
-  const reviewsDir = path.join(flowsRoot(cwd), flowDir, "reviews");
+  const reviewsDir = flowReviewsRoot(cwd, flowDir);
   if (!(await pathExists(reviewsDir))) {
     return [];
   }
