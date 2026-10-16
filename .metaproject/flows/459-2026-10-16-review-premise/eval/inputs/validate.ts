@@ -1,7 +1,7 @@
 // usage: bun validate.ts <claims.json> <findings.json>
 // claims.json may be the raw judge output (markdown with a ```json keryx:premises block) or bare JSON.
 import { readFileSync } from "node:fs";
-import { parsePremiseClaims, mergePremises } from "/Users/Goodea/goodea/keryx/.claude/worktrees/blissful-poitras-27beb5/src/review/premise";
+import { parsePremiseClaims, mergePremises } from "../../../../../src/review/premise";
 
 const [claimsPath, findingsPath] = process.argv.slice(2);
 let text = readFileSync(claimsPath!, "utf8");

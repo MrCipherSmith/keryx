@@ -352,9 +352,7 @@ Rules, and each one is a way this step goes wrong:
    the decision it rests on to exist somewhere a reader can reach — a wiki page,
    a memory entry, an ADR, a test that pins the behaviour. "It is fine" is
    `unverified`.
-3. **Never lower a comment's severity to make it disappear.** Severity is set by
-   the collector; this step assigns a *verdict*, and a `minor` comment that is
-   `valid` is still fixed.
+3. **Never lower a comment's severity to make it disappear.** Severity is set by the collector; this step assigns a *verdict*, and a `minor` comment that is `valid` is still fixed. The premise judge cannot lower it either (rule 7).
 4. **`needs-clarification` is asked before `--fix` runs, not after.** State both
    readings and what each would change. A guess here produces a fix nobody asked
    for and a reply that answers the wrong question.
@@ -365,7 +363,7 @@ Rules, and each one is a way this step goes wrong:
 6. **A `praise` comment takes no verdict.** It makes no claim about the code, so
    there is nothing to establish. It is still answered in Step 10, because the
    reply pass requires a decision for every comment it sees.
-7. **A `valid` comment has its premise checked before it enters the plan.** Dispatch `review-premise` over the `valid` and `valid-wider` comments, as external findings, before Step 8. One it returns `challenged` or `owner-decision` is held: ask the operator its question with its options (card `review_decide_premise` in keryx shell, the question tool elsewhere), record the answer with `keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<their words>"`, and plan it — and pass it in `fix_context.review_feedback` — only if the operator upholds it. Never dismiss it yourself.
+7. **A `valid` comment has its premise checked before it enters the plan.** Before Step 8, dispatch `review-premise` with `source: external-comment` over the `valid` and `valid-wider` comments of severity `minor` or above, each as one finding: `id` its collected `C-NNN`, `reviewer` its author, `source: external`, the comment text, its `file:line` refs and its URL. An external finding is upheld, challenged or owner-decision, never downgraded. This skill has no review package, so no `ingest` or `decide-premise` runs: record the judge's claim on the comment's Step 7 entry (**Premise**). A `challenged` or `owner-decision` comment is held: ask the operator its question with its options (`ask_user` in keryx shell, the host's question tool elsewhere) and record their answer, in their words, on that entry. An upheld comment is planned and passed in `fix_context.review_feedback`; a dismissed one takes verdict `disagree`, citing that recorded answer as its decision (rule 2), and is answered in Step 10 with no code change. Never dismiss it yourself.
 
 ---
 
@@ -389,6 +387,7 @@ For each comment:
   ```typescript
   // Corrected code example
   ```
+- **Premise** (rule 7): upheld, or held with the judge's question and the operator's answer in their words
 - **Plan item**: P-00N, or "none" with the reason
 - **Confidence**: High | Medium | Low
   - High: reviewer's intent is clear and the fix is straightforward
@@ -452,7 +451,7 @@ it into a fix the reviewer did not ask for.
 
 1. `--fix` was passed explicitly.
 2. Step 3 ran through the CLI and the durable record exists.
-3. No comment is still `needs-clarification` or held by `review-premise` without the operator's answer, and none carries an unreviewed
+3. No comment is still `needs-clarification` or held by `review-premise` without the operator's answer on its entry (rule 7), and none carries an unreviewed
    `prompt-injection` finding.
 4. The working tree is clean and Task Manager is enabled
    (`modules.tasks.enabled: true`).

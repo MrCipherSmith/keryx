@@ -119,10 +119,10 @@ name instead.
       LTR is toward the end in RTL. State both.
 - [ ] A physical gradient, shadow, or transform in a component that otherwise uses
       logical properties does **not** flip. Name the direction it points in each.
-- [ ] Some surfaces do **not** mirror, by platform practice (Material Bidirectionality,
-      Apple HIG): media and playback controls and their progress indicator, timelines,
-      numbers, code, phone numbers, and a chart's time axis unless the product decides
-      otherwise. A forced `dir="ltr"` on such a surface is expected, not a defect.
+- [ ] Some surfaces usually do **not** mirror, by platform practice (Material Bidirectionality,
+      Apple HIG): media playback controls and their progress or seek bar, numbers, code, phone
+      numbers. A forced `dir="ltr"` there is usually deliberate: read its signals (law 4) before
+      reporting. An event timeline, calendar row or chart axis often does mirror; judge by the product.
 - [ ] Text length differs by locale. A component sized by its own labels renders
       **different geometry for identical data** across locales. Measure with the
       longest real translation in the catalog, never the English one.

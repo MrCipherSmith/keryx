@@ -26,7 +26,7 @@ license: "MIT"
 
 Focused backend reviewer covering NestJS patterns, REST API design, database access patterns,
 and TypeScript correctness for service-layer code. This skill does NOT duplicate security or
-performance checks — those belong to `review-security-code` and `review-performance`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
+performance checks — those belong to `review-security-code` and `review-performance`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
 
 ---
 
@@ -65,7 +65,7 @@ Run that script to determine `BASE_SHA` before collecting the diff.
 
 Only review files changed in scope. Do not comment on legacy code outside the diff.
 
-**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text: a read-only child has no shell, so run no git command and never rebuild the diff. Only with none supplied, collect it:
+**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff; the only git commands a read-only child runs are `git log`, `git blame` and `git show`, to read a choice's history (law 4). Only with none supplied, collect it:
 ```bash
 git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
 # explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"

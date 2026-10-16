@@ -62,9 +62,9 @@ judgement on it; the claim and the code read first let you see what the reviewer
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `findings` | array | yes | Canonical findings (`review-finding.schema.json`), each with its id, `reviewer`, `severity`, `file`, `quote`, `problem`, `suggested_fix`. In a delta round, only findings with no carried premise. |
+| `findings` | array | yes | Canonical findings (`review-finding.schema.json`), each with its `global_id` (your claim's `finding_id` whenever reviewer-local ids can collide) or id, `reviewer`, `severity`, `source` (`external` marks a PR comment), `file`, `quote`, `problem`, `suggested_fix`. In a delta round, only findings with no carried premise. |
 | `judge` | string | yes | Your own name. Recorded on the claims file. |
-| `source` | string | no | `round` (default), `follow-up-issue` or `external-comment`: where the findings came from. |
+| `source` | string | no | `round` (default), `follow-up-issue` or `external-comment`: where the findings came from. The last two have no review package: each finding is the issue or comment text as `problem`, its `file:line` refs as `file`/`line` with the code there as `quote`, the issue or comment URL as `id`, its author as `reviewer` and the severity it states (else `minor`). The caller saves your claims as `<flow-dir>/premise/<n>.json` and journals the operator's answer; no `ingest` or `decide-premise` runs, so the caller applies the merge's rules (cited challenge, no downgrade of an external) by hand. |
 | `branch` / `base_sha` | string | no | So `git log` and `git blame` read the change under review. |
 
 ## The four questions
@@ -90,7 +90,7 @@ judgement on it; the claim and the code read first let you see what the reviewer
 | Verdict | Meaning | Must carry |
 |---|---|---|
 | `upheld` | The premise stands; the finding goes on unchanged. | — |
-| `downgraded` | A defect, but intent or practice shows it is smaller than reported. | `severity`, strictly lower and never below `minor`, and ≥1 `intent_signals` or `practice_sources` |
+| `downgraded` | A defect, but intent or practice shows it is smaller than reported. Never for a `minor` or an external finding: hold those with `challenged` or `owner-decision` instead. | `severity`, strictly lower and never below `minor`, and ≥1 `intent_signals` or `practice_sources` |
 | `challenged` | Evidence says it is not a defect. | ≥1 `intent_signals` or `practice_sources`, and a `question` |
 | `owner-decision` | A product choice the code cannot settle either way. | a `question` and ≥2 `options` |
 
@@ -108,9 +108,9 @@ signal and no practice source against it is upheld.
 | **Never judge your own finding.** | The merge rejects a judge equal to the reporter (`self-judgement`). |
 | **Claim first, argument second.** | The case passed two reviews that read the fix's argument and never the premise. |
 | **`challenged` cites.** Each intent signal names its `ref` (`file:line` or a SHA) and what it says; each practice source names the guideline and section precisely enough to look up. | An uncited challenge is rejected and the finding stays as reported. Never invent a quote. |
-| **Never re-grade by the rubric.** Severity is the reviewer's and the verifier's call; a test gap, a surviving mutant or a minor stays as reported unless intent or practice shrinks it. | An uncited downgrade is rejected (`downgrade-without-evidence`). Minors matter: a finding you weaken is one nobody fixes. |
-| **Read-only.** Run nothing but `git log`, `git blame` and `git show`, and read files. | Executing is the verifier's job; this judgement is about meaning. |
-| **An external finding is held, never dismissed.** | A human asked; the operator answers them. |
+| **Never re-grade by the rubric.** Severity is the reviewer's and the verifier's call; a test gap or a surviving mutant stays as reported unless intent or practice shrinks it, and a minor is upheld or challenged, never downgraded. | An uncited downgrade is rejected (`downgrade-without-evidence`). Minors matter: a finding you weaken is one nobody fixes. |
+| **Read-only.** Run nothing but `git log`, `git blame` and `git show`, the history commands `allowed_tools: read-only` allows every reviewer, and read files. | Executing is the verifier's job; this judgement is about meaning. |
+| **An external finding is held, never dismissed or downgraded.** Upheld, challenged or owner-decision only. | A human asked; the operator answers them. The merge rejects a downgrade of one (`external-downgrade`). |
 
 ## Output Contract
 
@@ -132,7 +132,7 @@ Then one premise claims object. The orchestrator saves it unchanged as the file
   "model": "<model id>",
   "premises": [
     {
-      "finding_id": "LY-003",
+      "finding_id": "2026-10-16-review-pr-42#LY-003",
       "verdict": "challenged",
       "intent_signals": [
         { "ref": "src/player/TimelineSlider.tsx:150", "says": "explicit dir=\"ltr\" on the timeline root" },

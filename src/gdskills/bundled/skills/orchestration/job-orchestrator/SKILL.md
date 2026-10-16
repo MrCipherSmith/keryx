@@ -988,8 +988,7 @@ never-bundled `code-review` 4-agent skill — are gone. They emitted prose into 
 transcript and nothing else, which is precisely the failure the managed pipeline
 replaced.
 
-A pull request driven by this orchestrator has to pass the completion gate shipped in
-0.2.71. Its five conditions are what 2.6 and 2.7 are built to satisfy:
+A pull request driven by this orchestrator has to pass the completion gate shipped in 0.2.71. Its conditions are what 2.6 and 2.7 are built to satisfy:
 
 | Gate condition | Satisfied by |
 |---|---|
@@ -998,6 +997,7 @@ A pull request driven by this orchestrator has to pass the completion gate shipp
 | scope B is recorded when a scope-B reviewer ran | `keryx review blast-radius --json` → `review ingest --blast-radius` (2.6.1) |
 | no inbound PR comment is unanswered | `keryx review comments collect` every round, `… reply --final` once (2.6.2) |
 | verification stats exist | `review-verifier` dispatched, passed as `--verifications` (2.6.1) |
+| no held finding lacks an operator decision | `review-premise` (Wave D) claims passed as `--premises`; each held finding asked as `review-orchestrator` "Wave D" says (2.6.1) |
 
 #### 2.6.0 Review Scope Selection
 
@@ -1134,15 +1134,9 @@ is_fix_round:      <true on any round after the first; the round, its range and 
 pr_comments:       { enabled: <true when a PR exists> }
 ```
 
-It emits the unified report AND the fenced ```json keryx:findings``` block, and runs
-`review-verifier` (Wave C) over the consolidated findings, returning its verification
-claims as a file path.
+It emits the unified report AND the fenced ```json keryx:findings``` block, runs `review-verifier` (Wave C) and then `review-premise` (Wave D) over the consolidated findings, and returns the verification claims and the premise claims as file paths.
 
-**Step 7 — verification is part of the round, not an extra.** `review-orchestrator`
-dispatches `review-verifier` in Wave C over the consolidated findings. The verifier
-**runs something** and can only delete — it never raises a severity, adds a finding,
-or rewrites one, and it never verifies a finding raised by the same reviewer. Its
-claims are merged by the CLI, not by hand.
+**Step 7 — verification and the premise check are part of the round, not extras.** `review-orchestrator` dispatches `review-verifier` in Wave C over the consolidated findings. The verifier **runs something** and can only delete — it never raises a severity, adds a finding, or rewrites one, and it never verifies a finding raised by the same reviewer. After it, `review-premise` (Wave D) judges whether each finding is a defect at all: it can lower a severity or hold a finding for the operator, never add one. Both claim sets are merged by the CLI, not by hand.
 
 **Step 8 — ingest the round.** This is what makes it citable.
 
@@ -1152,13 +1146,11 @@ keryx review ingest --report <path/to/review-report.md> --ref <feature-branch> \
   --scope <JOBS_ROOT>/<job-name>/scope.json \
   --blast-radius <JOBS_ROOT>/<job-name>/blast-radius.json \
   --verifications <path/to/verifications.json> --verification-mode annotate \
-  --refuted <path/to/refuted.json> \
+  --premises <path/to/premises.json> --refuted <path/to/refuted.json> \
   --spent <usd-so-far> --outstanding <subagents in flight>
 ```
 
-An unrecognised option is **refused, not ignored** — a silently dropped flag writes
-nothing and still reports success. `--refuted` carries findings this round raised and
-then dismissed; without it the package keeps only the survivors of an unlogged triage.
+An unrecognised option is **refused, not ignored** — a silently dropped flag writes nothing and still reports success. `--refuted` carries findings this round raised and then dismissed; without it the package keeps only the survivors of an unlogged triage. Without `--premises` nothing is held, and a finding the judge challenged goes to the fixer.
 
 **Findings are the canonical shape.** One vocabulary, everywhere in this skill:
 
@@ -1174,8 +1166,12 @@ then dismissed; without it the package keeps only the survivors of an unlogged t
 
 **Classify:**
 ```
-NEEDS_FIX = count(blocker) > 0 OR count(major) > 0
+HELD      = findings review-premise holds (challenged / owner-decision) with no operator decision
+OPEN      = blocker + major findings not in HELD
+NEEDS_FIX = count(OPEN) > 0
 ```
+
+A HELD finding is neither fixable nor clean: it never enters a fix prompt, and it blocks the job until answered. Ask the operator about each one as `review-orchestrator` "Wave D" says; an upheld one rejoins OPEN at its severity, a dismissed one carries `dismissed-incorrect` from the operator's decision. Unattended: stop and report the HELD list; never let the loop end reading clean while HELD is non-empty.
 
 **Document:** record the report in the job package too, so the job and the review
 record point at each other:
@@ -1265,18 +1261,12 @@ cumulative ever-correct is **0.847**
 ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Other agent tools
 hardcode the same bound (`max_reflections = 3`).
 
-The bound is a ceiling, not a target. Repetition ends the loop earlier and
-**regardless of remaining iterations** — a counter cannot tell "converging
-slowly" from "stuck", and an agent emitting the identical failing output three
-times spends the whole budget before anything notices.
+The bound is a ceiling, not a target. Repetition ends the loop earlier and **regardless of remaining iterations** — a counter cannot tell "converging slowly" from "stuck", and an agent emitting the identical failing output three times spends the whole budget before anything notices.
 
-**A finding leaves this loop by being dispositioned, never by being absent.** The
-previous version of this section recomputed "unresolved" as whatever the next round
-still reported — so a finding the next reviewer simply did not look at was recorded as
-fixed. That is absence-as-evidence, and the completion gate refuses it.
+**A finding leaves this loop by being dispositioned, never by being absent.** The previous version of this section recomputed "unresolved" as whatever the next round still reported — so a finding the next reviewer simply did not look at was recorded as fixed. That is absence-as-evidence, and the completion gate refuses it.
 
 ```
-UNRESOLVED_FINDINGS = all blocker + major findings from step 2.6, never one review-premise holds   # held (challenged/owner-decision): ask the operator its question with its options (card `review_decide_premise` in keryx shell, the question tool elsewhere), record it with `keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<their words>"`; only an upheld one enters the fix prompt
+UNRESOLVED_FINDINGS = OPEN from step 2.6          # never a HELD finding (Classify, 2.6.1)
 PREVIOUS_REVIEW_OUTPUT = <the ingested report from step 2.6>
 
 FOR iteration in [1, 2, 3]:
@@ -1306,7 +1296,7 @@ FOR iteration in [1, 2, 3]:
        keryx review ingest  --report <new-report> --ref <feature-branch> --head <new-head> \
                             --scope scope.json --blast-radius blast-radius.json \
                             --verifications <file> --premises <file> --refuted <file> --outstanding <n>
-  6. Recompute NEEDS_FIX from the ingested findings
+  6. Recompute HELD, OPEN and NEEDS_FIX from the ingested findings; a new HELD finding is asked about as in Classify
   7. Record what became of each finding raised in the PREVIOUS round — every one of
      them, before the next iteration starts:
 
@@ -1320,9 +1310,8 @@ FOR iteration in [1, 2, 3]:
      must cite where the outcome is written down. A recorded state and its citation
      cannot be overwritten by a later close — record a correction as a new round.
      Closing with no dispositions leaves every finding reading `unknown`, which means
-     "nobody wrote down what happened".
-  8. UNRESOLVED_FINDINGS = the blocker + major findings of the NEW round that are
-     still without a terminal disposition and not held by review-premise
+     "nobody wrote down what happened". A HELD finding gets no disposition here: it waits for the operator.
+  8. UNRESOLVED_FINDINGS = the OPEN findings of the NEW round still without a terminal disposition
 
   9. STUCK CHECK — runs before the next iteration and ignores the budget:
      IF any finding identity is in UNRESOLVED_FINDINGS for the SECOND iteration
@@ -1351,6 +1340,8 @@ IF still NEEDS_FIX after max iterations, or the stuck check broke the loop:
   steps. Give every surviving finding a disposition (dismissed-wont-fix or
   dismissed-deprioritised, with evidence) rather than leaving it `unknown`
   → continue to VERIFY (2.8)
+
+IF HELD is non-empty when the loop ends: ask the operator (Classify); unattended, stop and report the HELD list
 ```
 
 `comments reply` **refuses without `--final`**: replying per round turns one review
