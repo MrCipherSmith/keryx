@@ -114,10 +114,10 @@ describe("the memory-outside-stage item on every surface", () => {
     return root;
   }
 
-  test("the checklist has ten items and the depth block, /review readiness and the sidebar name the failing one", async () => {
+  test("the checklist has eleven items (premise-decisions joined in flow 459) and the depth block, /review readiness and the sidebar name the failing one", async () => {
     const root = await withStrayRead();
     const rows = await loadReviewDepth(root);
-    expect(rows[0]?.readiness?.items).toHaveLength(10);
+    expect(rows[0]?.readiness?.items).toHaveLength(11);
     expect(rows[0]?.readiness?.items.find((item) => item.id === "memory-outside-stage")?.status).toBe("fail");
     expect(formatReviewDepthLines(rows).join("\n")).toContain("memory-outside-stage:");
     expect(renderReviewReadinessText(rows)).toContain("10. [FAIL  ] memory-outside-stage");
