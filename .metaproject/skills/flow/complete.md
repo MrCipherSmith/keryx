@@ -33,6 +33,10 @@ whose status is `implemented`.
    signature.
 4. Gates fail -> flow auto-returns to in-progress with fix notes:
    - small fixes: run a fix agent, then re-run the review/fix loop from step 2;
+     the next review round is just `keryx review start` on the new head - it
+     detects the round and reviews the delta (fix changes with a small roster
+     and the prior findings, new changes as round 1); never pass a whole-branch
+     range or `--all` per round;
    - large fixes: describe what is wrong in the journal and relaunch the
      implementor/orchestrator against the updated plan.
    - a flow left stuck in `completing` (a crash or an interrupted attempt,
