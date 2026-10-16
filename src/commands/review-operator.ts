@@ -10,6 +10,7 @@
 
 import { createInterface } from "node:readline/promises";
 import { optionValue } from "../lib/args";
+import { operatorDecisionSubject } from "../review/coverage";
 import { recordOperatorDecision, type OperatorDecisionKind } from "../review/operator-decisions";
 import { estimatePlan, recordPlanConfirmation } from "../review/plan-confirmation";
 import { verifyRun } from "../review/verify-run";
@@ -39,7 +40,7 @@ export function printOperatorCommandHelp(command: OperatorCommand): void {
 Records the operator's waiver of the mutation pass in <review-dir>/operator-decisions.json: the review may
 record \`Not run: mutation pass\` with unrun mutants. Asks at the terminal; refused without a TTY. In keryx
 shell the review_waive_mutation tool asks the same as a card.`,
-    "override-reviewers": `keryx review override-reviewers --package <review-dir> --reason "<why>"
+    "override-reviewers": `keryx review override-reviewers --package <review-dir> --reason "<why>" [--selected a,b]
 
 Records the operator's decision to run a smaller reviewer set than \`keryx review required\` names (an
 override or mode diff) in <review-dir>/operator-decisions.json. Asks at the terminal; refused without a TTY.
@@ -121,13 +122,18 @@ export async function runOperatorCommand(command: OperatorCommand, args: string[
   const reason = optionValue(own, "--reason");
   if (reason === undefined || reason.trim() === "") throw new Error(`Missing --reason "<why>". See \`keryx review ${command} --help\`.`);
   const kind: OperatorDecisionKind = command === "waive-mutation" ? "mutation-waiver" : "reviewer-override";
-  const question = command === "waive-mutation" ? `Waive the mutation pass for ${packageDir} (${reason.trim()})?` : `Run a smaller reviewer set than required for ${packageDir} (${reason.trim()})?`;
+  const selectedArg = optionValue(own, "--selected");
+  const selected = selectedArg === undefined ? undefined : selectedArg.split(",").map((item) => item.trim()).filter(Boolean);
+  // Security review M4: the record binds to what this question shows (head, mutant ids or reviewers left out).
+  const subject = await operatorDecisionSubject(packageDir, kind, kind === "mutation-waiver" ? undefined : selected);
+  const shown = `head ${subject.head ?? "not recorded"}; ${kind === "mutation-waiver" ? "unrun mutants" : "reviewers left out"}: ${subject.items.join(", ") || "none"}`;
+  const question = command === "waive-mutation" ? `Waive the mutation pass for ${packageDir} (${reason.trim()}; ${shown})?` : `Run a smaller reviewer set than required for ${packageDir} (${reason.trim()}; ${shown})?`;
   const answer = (await ask(`${question} Type your own words to confirm, or nothing to decline: `)).trim();
   if (answer === "" || /^n(o)?$/i.test(answer)) {
     log("not confirmed; nothing was recorded");
     return 1;
   }
-  await recordOperatorDecision(packageDir, { kind, quote: answer, reason: reason.trim(), confirmedVia: "terminal", at });
+  await recordOperatorDecision(packageDir, { kind, quote: answer, reason: reason.trim(), confirmedVia: "terminal", at, subject });
   log(`${kind} recorded (terminal, ${at}) in operator-decisions.json`);
   return 0;
 }

@@ -300,6 +300,39 @@ describe("row 8: mutation waiver and reviewer-set override need a card or a term
     expect((await confirmedDecision(pkg, "reviewer-override"))?.quote).toContain(": yes");
   });
 
+  test("security review M4: a mutation waiver binds to the mutants and the head the card showed", async () => {
+    manifest();
+    put("manifest.json", { ...JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8")), target: { kind: "pr", ref: "https://github.com/o/r/pull/7", head: "aaaaaaa" } });
+    const selected = await gated();
+    put("research-evidence/mutants.json", { mutants: [{ id: "m1", file: "src/a.ts", anchor: "a", replacement: "b" }] });
+    const dispatch = { mode: "all", selected };
+    expect((await yes("review_waive_mutation", { package: pkg, reason: "slow suite" })).isError).toBe(false);
+    expect((await confirmedDecision(pkg, "mutation-waiver"))?.subject).toEqual({ head: "aaaaaaa", items: ["m1"] });
+    expect(await coverageErrors(dispatch, { root, packageDir: pkg, pendingMutants: 1, attended: true })).toEqual([]);
+    // A new mutant is not covered by the waiver the operator saw.
+    put("research-evidence/mutants.json", { mutants: [{ id: "m1", file: "src/a.ts", anchor: "a", replacement: "b" }, { id: "m2", file: "src/a.ts", anchor: "a", replacement: "c" }] });
+    const more = (await coverageErrors(dispatch, { root, packageDir: pkg, pendingMutants: 2, attended: true })).join(" ");
+    expect(more).toContain("does not cover this");
+    expect(more).toContain("m1, m2");
+    // Nor does a new head.
+    put("research-evidence/mutants.json", { mutants: [{ id: "m1", file: "src/a.ts", anchor: "a", replacement: "b" }] });
+    put("manifest.json", { ...JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8")), target: { kind: "pr", ref: "https://github.com/o/r/pull/7", head: "bbbbbbb" } });
+    expect((await coverageErrors(dispatch, { root, packageDir: pkg, pendingMutants: 1, attended: true })).join(" ")).toContain("now the head is bbbbbbb");
+  });
+
+  test("security review M4: an override binds to the reviewers the card showed as left out; a hand-written unbound record covers nothing", async () => {
+    const required = await gated();
+    expect(required.length).toBeGreaterThan(2);
+    const keep = required.slice(0, required.length - 1);
+    expect((await yes("review_override_reviewers", { package: pkg, reason: "docs-only", selected: keep })).isError).toBe(false);
+    expect(await coverageErrors({ mode: "all", selected: keep, override: { operatorQuote: "q", reason: "r" } }, { root, packageDir: pkg })).toEqual([]);
+    const fewer = (await coverageErrors({ mode: "all", selected: keep.slice(0, 1), override: { operatorQuote: "q", reason: "r" } }, { root, packageDir: pkg })).join(" ");
+    expect(fewer).toContain("review_override_reviewers");
+    rmSync(path.join(pkg, "operator-decisions.json"));
+    await recordOperatorDecision(pkg, { kind: "reviewer-override", quote: "x: yes", reason: "y", confirmedVia: "tui-card", at: NOW.toISOString() });
+    expect((await coverageErrors({ mode: "all", selected: keep, override: { operatorQuote: "q", reason: "r" } }, { root, packageDir: pkg })).join(" ")).toContain("not bound to a head");
+  });
+
   test("a package created before the gate keeps the old rule: the dispatch quote stands", async () => {
     const selected = (await requiredReviewers(root, "all", undefined)).required;
     const dispatch = { mode: "all", selected, mutationWaiver: { operatorQuote: "operator said skip", reason: "legacy" } };
