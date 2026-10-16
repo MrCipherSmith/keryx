@@ -28,7 +28,7 @@ license: "MIT"
 
 # Review — Testing Practices
 
-Reviewer for local testing discipline. Read project test guides first when present, then apply the neutral baseline below. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs the tests only when its payload's `allowed_tools` says `run-tests`, within `exec_budget_s`; otherwise it runs no command.
+Reviewer for local testing discipline. Read project test guides first when present, then apply the neutral baseline below. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs the tests only when its payload's `allowed_tools` says `run-tests`, within `exec_budget_s`; otherwise it runs no command but the read-only `git log`, `git blame` and `git show`.
 
 ---
 

@@ -26,7 +26,7 @@ license: "MIT"
 
 Reviewer for frontend repository conventions that are more specific than generic React/MobX
 correctness. Use it alongside `review-frontend`, `review-style`, `review-performance`, and
-`review-logic`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
+`review-logic`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
 
 Before reviewing, read the nearest project guide files if they exist: root `CLAUDE.md`,
 `AGENTS.md`, `.junie/guidelines.md`, `ARCHITECTURE.md`, and module-level `CLAUDE.md` files.

@@ -28,7 +28,7 @@ license: "MIT"
 
 Specialized reviewer for **code that will run under significant concurrent load**.
 Focuses on correctness under concurrency, resource contention, back-pressure, failure
-modes at scale, and distributed systems invariants — not general performance profiling. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
+modes at scale, and distributed systems invariants — not general performance profiling. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command but the read-only `git log`, `git blame` and `git show` unless its payload's `allowed_tools` says `run-tests`.
 
 Reviews only changes introduced in the current branch (merge-base to HEAD).
 
@@ -71,7 +71,7 @@ See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
 Review scope: **changes introduced in the current branch since merge-base only**.
 Pre-existing problems in unchanged lines are out of scope unless the diff makes them worse.
 
-**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text: a read-only child has no shell, so run no git command and never rebuild the diff. Only with none supplied, collect it:
+**Supplied text first.** When the payload carries `slices`, `context_files`, `diff` or `file_contents`, review exactly that text and never rebuild the diff; the only git commands a read-only child runs are `git log`, `git blame` and `git show`, to read a choice's history (law 4). Only with none supplied, collect it:
 ```bash
 git diff --name-status "${BASE_SHA}" && git diff "${BASE_SHA}" && git ls-files --others --exclude-standard
 # explicit range: <FROM_SHA>..<TO_SHA> in place of "${BASE_SHA}"
