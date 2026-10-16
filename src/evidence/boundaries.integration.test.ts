@@ -1,9 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { validateAgainstSchema } from "../contracts/validator";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createSession, persistHistory } from "../session/store";
+import { projectSessionsDir } from "../session/paths";
+import { readEvidenceArchive } from "./sources";
 import { createEvidenceRuntime } from "./runtime";
 import { createAutomaticEvidenceRecall } from "./automatic";
 import { OpenAiProvider } from "../harness/provider/openai/openai-provider";
@@ -149,12 +151,34 @@ test("real archive owner revocation survives runtime restart and derived clear",
         expect(JSON.stringify(denied)).not.toContain("quartz archived decision");
       } finally { await writeFile(summaryPath, originalSummary); }
       expect((await invokeTool()).items[0]?.text).toBe("quartz archived decision");
+      const scanner = async (text: string) => ({ code: "ok" as const, text, redaction: "not-needed" as const });
+      const readFrom = (projectRoot: string) => readEvidenceArchive({ projectRoot, dataDir, sessionId: session.summary.id,
+        sessionArchives: true, maxSourceBytes: 1024 * 1024, scanner });
+      const projectMismatch = { code: "source-unavailable", diagnostics: ["source-denied"] };
+      expect((await readFrom(root)).code).toBe("ok");
+      try {
+        await writeFile(summaryPath, JSON.stringify({ ...JSON.parse(originalSummary.toString()), projectPath: other }));
+        expect(await readFrom(root)).toEqual(projectMismatch);
+      } finally { await writeFile(summaryPath, originalSummary); }
+      expect((await readFrom(root)).code).toBe("ok");
+      const foreignSessions = projectSessionsDir(await realpath(other), dataDir);
+      const foreignCopy = path.join(foreignSessions, session.summary.id);
+      try {
+        await mkdir(foreignSessions, { recursive: true });
+        await cp(session.dir, foreignCopy, { recursive: true });
+        expect(await readFrom(other)).toEqual(projectMismatch);
+      } finally { await rm(foreignCopy, { recursive: true, force: true }); }
       const foreignProjectResult = await invokeTool(other);
       expect(foreignProjectResult.items).toEqual([]);
       expect(JSON.stringify(foreignProjectResult)).not.toContain("quartz archived decision");
     } finally { await rm(other, { recursive: true, force: true }); }
 
-    const runtime = loaded.runtime;
+    const currentRuntime = () => {
+      if (!loaded.ok) throw Error("fixture runtime unavailable");
+      return loaded.runtime;
+    };
+    const firstRuntime = currentRuntime();
+    const searched: object[] = [];
     const bodies: string[] = [];
     const provider = new OpenAiProvider({ grant: { network: true, apiKey: "synthetic" }, fetch: (async (_url, init) => {
       bodies.push(String(init?.body));
@@ -164,7 +188,11 @@ test("real archive owner revocation survives runtime restart and derived clear",
       automaticEvidence: async (query, reserveBytes, signal) => createAutomaticEvidenceRecall({
         projectRoot: root, config: { ...config, automatic: true }, query, reserveBytes,
         ...(signal === undefined ? {} : { signal }),
-        search: async (q, handoff, abort) => { await runtime.searchPublic(q, handoff, abort); },
+        search: async (q, handoff, abort) => {
+          const active = currentRuntime();
+          searched.push(active);
+          await active.searchPublic(q, handoff, abort);
+        },
       }),
     });
     await runAgentTurn(collectingIo().io, deps, [], "quartz");
@@ -178,7 +206,7 @@ test("real archive owner revocation survives runtime restart and derived clear",
         signal: controller.signal,
         search: async (q, handoff, abort) => {
           retrievals++;
-          await runtime.searchPublic(q, result => {
+          await currentRuntime().searchPublic(q, result => {
             handoffs++;
             controller.abort();
             handoff(result);
@@ -212,6 +240,10 @@ test("real archive owner revocation survives runtime restart and derived clear",
     expect((await loaded.runtime.searchPublic("quartz", value => value)).items).toEqual([]);
     await runAgentTurn(collectingIo().io, deps, [], "quartz");
     expect(bodies).toHaveLength(4);
+    expect(searched.slice(0, 2).every(runtime => runtime === firstRuntime)).toBe(true);
+    expect(searched).toHaveLength(3);
+    expect(searched[2]).toBe(loaded.runtime);
+    expect(searched[2]).not.toBe(firstRuntime);
     expect(bodies[3]).not.toContain("historical-evidence");
     expect(bodies[3]).not.toContain("quartz archived decision");
     expect(await readFile(archive)).toEqual(bytes);

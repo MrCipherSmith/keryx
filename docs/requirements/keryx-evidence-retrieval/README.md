@@ -1,17 +1,24 @@
 # Keryx Evidence Retrieval
-Version: 0.1.0
+Version: 0.2.0
 
 ## Purpose and status
 Implementation package for a separate **Evidence Retrieval Layer (ERL)**:
 semantic discovery over raw evidence, exact visible-context exclusion, incremental
-indexing. **P0 and explicit lexical P1 are implemented; P2–P5 remain pending.**
+indexing. **Code for P0–P4 is on the PR #1022 branch; acceptance is not complete.**
 CLI supports `evidence index/search/status/clear/maintenance`; the interactive
-shell exposes read-only `evidence_search`. Enabled hybrid mode and automatic
-recall currently fail explicitly before source access, rather than silently using
-lexical retrieval. They are reserved for P2 and P4 respectively.
+shell exposes read-only `evidence_search`; opt-in automatic recall (lexical) is
+wired into the agent turn and is off by default. Enabled `hybrid` mode fails with
+`hybrid-owner-unavailable` because no approved embedding owner is wired, rather
+than silently using lexical retrieval. Exact visible-context exclusion needs the
+adapter to expose its serialized request; only the OpenAI adapter does, others
+report unknown. Incremental indexing code exists and is not measured.
 Session revocation is a trusted owner API backed by the durable ledger and reader
 drain; no archive-deletion command or ACP `session/delete` workflow was added.
-Benefits have not yet been benchmarked; whole-flow acceptance remains pending.
+Benefits have not been benchmarked: T12 (AC9) is open, the T13 independent review
+is a reduced static assessment, and there is no TUI surface for the feature yet.
+See [current evidence](current-evidence.md#acceptance-status). Rollout decision:
+pending operator.
+Operator guide: `docs/docs/guides/evidence-retrieval.md`.
 
 ## Document index
 - [PRD](prd.md)

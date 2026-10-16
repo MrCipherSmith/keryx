@@ -18,7 +18,7 @@ carrying the measurement that found it and the reason it was not done then.
 > push and nothing else, and 0.2.89–0.2.93 were never tagged. The
 > whole `keryx-mcp-servers` programme reached npm in 0.2.94._
 >
-> - **0.29.20**: [Keryx Evidence Retrieval](keryx-evidence-retrieval/README.md) — **spec ready, runtime not implemented**. Separate untrusted raw-evidence lane, independent hybrid discovery, exact final-request visibility and incremental atomic indexes; implementation phases P0–P5.
+> - **0.29.20**: [Keryx Evidence Retrieval](keryx-evidence-retrieval/README.md) — **P0–P4 code on PR #1022 (draft), acceptance open**: hybrid is gated (no embedding owner wired), paired evaluation T12/AC9 is not done, review T13 is a reduced static assessment, rollout decision pending operator. Separate untrusted raw-evidence lane, independent hybrid discovery, exact final-request visibility and incremental atomic indexes; implementation phases P0–P5.
 >
 > - **0.29.19**: `keryx-antigravity-agent` — Google's Antigravity CLI (`agy`)
 >   as a third line-stream external agent, **implemented read-only** (flow

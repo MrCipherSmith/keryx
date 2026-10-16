@@ -108,6 +108,17 @@ test("incremental archive validates input and global budgets even when all recor
   expect(() => incrementalArchiveEvidence({ ...source, records: [{ ...row, trustedAsPolicy: true } as unknown as ArchiveRecord] }, previous)).toThrow();
 });
 
+test("4 MiB single-line archive record is fully reused with full-build parity", () => {
+  const text = "a".repeat(4 * 1024 * 1024);
+  const row = { ...record(text, 0), endByte: Buffer.byteLength(text) + 100 };
+  const previous = chunkArchiveEvidence({ ...source, records: [row] });
+  expect(previous.length).toBeGreaterThanOrEqual(10000);
+  const input = { ...source, versionHash: hash("single-line-append"), records: [row] };
+  const result = incrementalArchiveEvidence(input, previous);
+  expect(result.reusedChunks).toBe(previous.length);
+  expect(result.chunks).toEqual(chunkArchiveEvidence(input));
+});
+
 test("large multiline archive reuse preserves line offsets and full-build parity", () => {
   const text = ("π".repeat(199) + "\n").repeat(2048);
   const row = { ...record(text, 0), endByte: Buffer.byteLength(text) + 100 };

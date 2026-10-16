@@ -47,10 +47,12 @@ test("session owner revokes archive evidence through the durable lifecycle", asy
 });
 test("persist then cancel then drain, never deliver revoked excerpts", async () => {
   const store = openEvidenceStorage(await fixture()), lifecycle = createEvidenceLifecycle(store), reader = lifecycle.beginReader(source);
-  let done = false; const pending = lifecycle.revokeAndDrain(source).then(() => { done = true; });
+  const events: string[] = []; const pending = lifecycle.revokeAndDrain(source).then(() => { events.push("drained"); });
   expect(reader.signal.aborted).toBe(true); expect(store.read("ledger.json", 65536)).toBeDefined();
-  expect(() => reader.deliver(() => "old excerpt")).toThrow(); await Bun.sleep(10); expect(done).toBe(false);
-  reader.close(); await pending; expect(done).toBe(true); lifecycle.close(); store.close();
+  expect(() => reader.deliver(() => "old excerpt")).toThrow();
+  expect(store.pinReaders(true)).toBeUndefined();
+  await new Promise<void>(resolve => setImmediate(resolve)); events.push("reader-closing");
+  reader.close(); await pending; expect(events).toEqual(["reader-closing", "drained"]); lifecycle.close(); store.close();
 });
 test("independent handles recheck ledger and observe foreign reader pins", async () => {
   const root = await fixture(), a = openEvidenceStorage(root), b = openEvidenceStorage(root);

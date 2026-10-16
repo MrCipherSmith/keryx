@@ -36,11 +36,12 @@ test("clear persists cancellation before waiting for a foreign reader pin", asyn
   const f = await fixture(), otherStore = openEvidenceStorage(f.root), other = createEvidenceLifecycle(otherStore);
   const reader = other.beginReader(scope);
   try {
-    let done = false; const clearing = f.clearing.clearDerived().then(() => { done = true; });
+    const events: string[] = []; const clearing = f.clearing.clearDerived().then(() => { events.push("cleared"); });
     expect(() => reader.checkpoint()).toThrow();
     expect(() => other.beginReader(scope)).toThrow();
-    await Bun.sleep(10); expect(done).toBe(false);
-    reader.close(); await clearing; expect(done).toBe(true);
+    expect(f.store.pinReaders(true)).toBeUndefined();
+    await new Promise<void>(resolve => setImmediate(resolve)); events.push("reader-closing");
+    reader.close(); await clearing; expect(events).toEqual(["reader-closing", "cleared"]);
     const fresh = other.beginReader(scope); fresh.close();
   } finally { reader.close(); other.close(); otherStore.close(); f.close(); }
 });

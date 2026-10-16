@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, writeFile, rm, readdir } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createEvidenceRuntime } from "./runtime";
 import type { EvidenceEmbeddingOptions } from "./embedding-builder";
+import { snapshotTree } from "./tree-snapshot.fixture";
 const scanner = async (text: string) => ({ code: "ok" as const, text, redaction: "not-needed" as const });
 test("runtime hybrid discovers semantic-only evidence without query cache writes", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "erl-runtime-hybrid-"));
@@ -28,14 +29,15 @@ test("runtime hybrid discovers semantic-only evidence without query cache writes
     if (!created.ok) throw Error(created.diagnostics.join(","));
     expect((await created.runtime.buildConfiguredFiles()).code).toBe("ok");
     const directory = path.join(root, ".metaproject/evidence");
-    const before = (await readdir(directory)).sort();
+    const before = await snapshotTree(directory);
+    expect(Object.keys(before).length).toBeGreaterThan(0);
     const result = await created.runtime.searchPublic("fruit garden", value => value);
     expect(result.code).toBe("ok");
     expect(result.items[0]?.text).toBe("orchard apple");
     expect(result.diagnostics).toEqual([]);
     expect(purposes).toEqual(["corpus", "query"]);
     expect(calls).toEqual([["orchard apple"], ["fruit garden"]]);
-    expect((await readdir(directory)).sort()).toEqual(before);
+    expect(await snapshotTree(directory)).toEqual(before);
     created.runtime.close();
     for (const change of [{ model: "other" }, { revision: "2" }, { dimensions: 3 }]) {
       const reopened = await createEvidenceRuntime({ projectRoot: root,
@@ -50,7 +52,7 @@ test("runtime hybrid discovers semantic-only evidence without query cache writes
         expect(incompatible.items).toEqual([]);
         expect(incompatible.diagnostics).toEqual(["index-incompatible"]);
         expect(calls.length).toBe(beforeCalls);
-        expect((await readdir(directory)).sort()).toEqual(before);
+        expect(await snapshotTree(directory)).toEqual(before);
       } finally { reopened.runtime.close(); }
     }
   } finally { if (created.ok) created.runtime.close(); await rm(root, { recursive: true, force: true }); }
