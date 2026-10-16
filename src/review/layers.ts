@@ -288,7 +288,7 @@ export async function resolveLayersBase(
     // a base only when it is an ancestor of the head; otherwise the diff would run backwards over later commits.
     const commit = target.kind === "branch" ? null : await resolveCommit(input.projectRoot, target.ref, deps);
     if (usable(commit)) {
-      const ancestor = await deps.git(input.projectRoot, ["merge-base", "--is-ancestor", commit, prHead]);
+      const ancestor = await deps.git(input.projectRoot, ["merge-base", "--is-ancestor", "--end-of-options", commit, prHead]);
       if (ancestor !== null) return { base: commit, source: "target-ref" };
       deps.warn(`layers: target ref ${target.ref} (${commit.slice(0, 12)}) is not an ancestor of the head ${prHead.slice(0, 12)}; not used as the base.`);
     }

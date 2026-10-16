@@ -1025,7 +1025,7 @@ export function workingTreeSourceReader(cwd: string, base?: string): SourceReade
  */
 export function diffOldSide(cwd: string, base: string, head: string): string {
   if (base.startsWith("-") || head.startsWith("-")) return base;
-  return gitText(cwd, ["merge-base", base, head])?.trim() || base;
+  return gitText(cwd, ["merge-base", "--end-of-options", base, head])?.trim() || base;
 }
 
 /**
