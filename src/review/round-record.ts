@@ -339,15 +339,16 @@ export type SliceKind = "fix" | "new" | "second-look";
 
 /**
  * What a finished package says about how thoroughly it read its scope: the reasons it was weak (none: no evidence of
- * weakness) and the merge-base its round.json recorded. Only a ledger that ran says anything: an ingest's research.json is
- * an empty ledger, evidence neither way.
+ * weakness) and the merge-base its round.json recorded. A package with no ledger dispatch block, or whose ledger does not
+ * say scopeReviewed, proves no coverage and counts as weak (the second look is cheap; trusting an unproven round is not).
  */
 export function previousRoundFacts(research: unknown, round: unknown): { weak: string[]; mergeBase: string | null | undefined } {
   const weak: string[] = [];
   const ledger = record(research);
   const dispatch = record(ledger?.dispatch);
+  if (dispatch === undefined) weak.push("no ledger dispatch block: nothing shows the round's coverage");
+  else if (ledger?.scopeReviewed !== true) weak.push("coverage incomplete or unproven (the ledger's scopeReviewed is not true: uncovered slices or unfinished reviewers)");
   if (dispatch !== undefined) {
-    if (ledger?.scopeReviewed === false) weak.push("coverage incomplete (the ledger's scopeReviewed is false: uncovered slices or unfinished reviewers)");
     const skipped = Array.isArray(dispatch.skipped) ? dispatch.skipped.map((entry) => record(entry)?.reviewer).filter((name): name is string => typeof name === "string") : [];
     if (skipped.length > 0) weak.push(`required reviewers skipped (${skipped.join(", ")})`);
     const notRun = (Array.isArray(dispatch.notRun) ? dispatch.notRun : []).filter((line): line is string => typeof line === "string" && !/^Not run: mutation \(light round\)/.test(line));

@@ -110,10 +110,25 @@ export function expectedFixRoles(entry: Pick<SliceEntry, "findingIds">, context:
  * Whether the round backs a manifest entry's claim to be a second-look slice: a delta round that recorded second-look
  * hunks in one of its files. A slice that only says `second-look` is routed as a new slice, so the tag cannot narrow its roster.
  */
-export function secondLookClaimBacked(entry: Pick<SliceEntry, "kind" | "files">, context: FixContext | undefined): boolean {
+export function secondLookClaimBacked(entry: Pick<SliceEntry, "kind" | "files">, context: FixContext | undefined, text: string): boolean {
   if (entry.kind !== "second-look" || context === undefined || !isDeltaRound(context.round)) return false;
   const hunks = context.round.secondLookHunks ?? [];
-  return entry.files.some((file) => hunks.some((hunk) => hunk.file === file));
+  if (hunks.length === 0) return false;
+  // By the slice's own text, not its file list: every changed line must lie in a second-look hunk (and so in no fix or new
+  // hunk, which the round keeps disjoint from them). A new slice tagged second-look in a file that merely has unchanged
+  // lines elsewhere is judged as new.
+  let changed = 0;
+  for (const region of parseScopedDiff(text)) {
+    let line = region.startLine;
+    for (const entryLine of region.text.split("\n")) {
+      if (entryLine.startsWith("+") || entryLine.startsWith("-")) {
+        changed += 1;
+        if (!hunks.some((hunk) => hunk.file === region.path && line >= hunk.startLine && line <= hunk.endLine)) return false;
+      }
+      if (!entryLine.startsWith("-")) line += 1;
+    }
+  }
+  return changed > 0;
 }
 
 /** Roles that own at least one original fix or second-look slice of the manifest (they join the round's required set). */

@@ -282,6 +282,8 @@ describe("the FIX / NEW split of a delta round", () => {
         finding("F-4", { file: "src/new.ts", line: 1 }),
       ],
     });
+    // A round with proven coverage: only then is its unchanged code a second look rather than a full re-read.
+    write(".metaproject/reviews/r1/research.json", JSON.stringify({ version: 1, scopeReviewed: true, obligations: [], dispatch: { runs: [] } }));
     const base = lines(20).replace("line 5\n", "line five\n");
     commit("insert above", { "src/a.ts": base.replace("line 2\n", "line 2\nextra a\nextra b\n") });
     commit("fix F-1", { "src/a.ts": base.replace("line 2\n", "line 2\nextra a\nextra b\n").replace("line 12\n", "line 12 fixed\n") });

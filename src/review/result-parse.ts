@@ -96,6 +96,10 @@ export function mergeResults(items: ReadonlyArray<ParsedResult & { status: strin
   if (items.length === 1) return items[0]!;
   const reviewers = new Set(items.map((item) => item.reviewer).filter((name): name is string => typeof name === "string" && name !== ""));
   if (reviewers.size > 1) return undefined;
+  // Named and unnamed items do not mix: an unnamed result would inflate the named reviewer's coverage. Merge items of one
+  // explicit reviewer, or all-unnamed items (the driver names the reviewer).
+  const named = items.filter((item) => typeof item.reviewer === "string" && item.reviewer !== "").length;
+  if (named > 0 && named < items.length) return undefined;
   const worst = items.reduce((best, item) => (rankOf(item.status) > rankOf(best.status) ? item : best));
   const slices: unknown[] = [];
   const seenSlices = new Set<string>();
@@ -141,7 +145,11 @@ function candidateGroups(raw: string): Array<Array<ParsedResult & { status: stri
 
 /** Whether a top-level JSON array (or a `results`-style list) of the reply holds reviewer results: the reply is a list, not one result. */
 export function holdsResultList(raw: string): boolean {
-  return embeddedValues(raw).some((value) => (Array.isArray(value) || (isObject(value) && RESULT_LIST_KEYS.some((key) => Array.isArray(value[key])))) && resultsIn(value).length > 0);
+  // A bare reviewer result is a result even when it has a `waves` / `results` field: it is not a list. And a reply with a
+  // bare reviewer object standing beside a list (a sample array, then the real result) is the strict reader's to judge.
+  const values = embeddedValues(raw);
+  if (values.some(qualifies)) return false;
+  return values.some((value) => (Array.isArray(value) || (isObject(value) && !qualifies(value) && RESULT_LIST_KEYS.some((key) => Array.isArray(value[key])))) && resultsIn(value).length > 0);
 }
 
 /**
