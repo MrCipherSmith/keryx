@@ -16,7 +16,7 @@ import { loadSchema, validateJson } from "../gdskills/contracts";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { clearActiveReview } from "./active-review";
-import { flowsRoot, listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
+import { listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
 import type { FlowState } from "../flow/types";
 import {
   mergeVerifications,
@@ -51,7 +51,9 @@ import {
 } from "./filter-stats";
 import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
 import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
-import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, mergePremises, parsePremiseClaims, renderPremiseMarkdown } from "./premise";
+import { flowReviewsRoot, reviewsRoot } from "./package-location";
+import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, inheritedPremiseClaims, mergePremises, parsePremiseClaims, renderPremiseMarkdown } from "./premise";
+import { readJsonFileOr } from "../lib/json";
 import { withOperatorDecisionsLock } from "./operator-decisions";
 import { repairMechanicalOmissions, type FindingRepair } from "./repair";
 import { writeReviewNotes, type ReviewNoteResult } from "./review-notes";
@@ -86,9 +88,7 @@ import {
 
 const REQUIRED_ARTIFACTS = ["scope", "coverage", "report", "findings", "learning", "decisions"] as const;
 
-export function reviewsRoot(cwd: string): string {
-  return path.join(cwd, ".metaproject", "reviews");
-}
+export { reviewsRoot } from "./package-location";
 
 /**
  * `git rev-parse HEAD` in `cwd`, or `null` when there is no checkout to ask.
@@ -363,7 +363,15 @@ export async function createManagedReviewPackage(
   // which makes them a question for the operator and never a dismissal. A carried finding keeps its premise.
   // One merge over both sets (a claim may name either, and two claims on one finding must meet to cancel), then split
   // by what each finding IS rather than by position.
-  const premised = mergePremises([...deduped.findings, ...scoped.external], premiseClaims);
+  const premiseSet = [...deduped.findings, ...scoped.external];
+  // Review RG2-004: an ingest without --premises over a package the judge held carries the stored claims forward while
+  // they still hold the same findings, and is refused otherwise; it never silently drops a hold.
+  const inherited =
+    premiseClaims === undefined
+      ? inheritedPremiseClaims(premiseSet, await readJsonFileOr<unknown>(path.join(packageDir, PREMISES_FILE), undefined), await readJsonFileOr<unknown>(path.join(packageDir, "findings.json"), undefined))
+      : undefined;
+  if (inherited?.ok === false) throw new Error(inherited.refusal);
+  const premised = mergePremises(premiseSet, premiseClaims ?? inherited?.parsed);
   const premisedInternal = premised.findings.filter((finding) => finding.source !== "external");
   const premisedExternal = premised.findings.filter((finding) => finding.source === "external");
 
@@ -504,7 +512,7 @@ export async function createManagedReviewPackage(
     // ingested round re-applies it (the interim verdict over raw results); findings.json is the record after ingest.
     await mkdir(path.join(packageDir, "research-evidence"), { recursive: true });
     await writeFileAtomic(path.join(packageDir, PREMISES_FILE), `${JSON.stringify(input.premises, null, 2)}\n`);
-  } else if (await pathExists(path.join(packageDir, PREMISES_FILE))) {
+  } else if (inherited === undefined && (await pathExists(path.join(packageDir, PREMISES_FILE)))) {
     // An ingest without --premises keeps the judge's record, moved aside (review RG2-004): the verdict never re-applies
     // claims to an ingested round, so the file at its own name would only mislead a reader into thinking this ingest
     // carried them.
@@ -561,6 +569,7 @@ export async function createManagedReviewPackage(
     verificationCaps: verification.caps,
     premise: premised.counts,
     premiseRejections: premised.rejections,
+    ...(inherited?.ok === true ? { premisesCarriedForward: true as const } : {}),
     caps,
     filterStats,
     reviewNotes,
@@ -1107,7 +1116,7 @@ function packagePath(
   flowMatch: FlowMatchResult | null,
 ): string {
   if ((mode === "attach-review" || mode === "ingest") && flowMatch) {
-    return path.join(flowsRoot(cwd), flowMatch.dir, "reviews", reviewId);
+    return path.join(flowReviewsRoot(cwd, flowMatch.dir), reviewId);
   }
   if (mode === "attach-review") {
     throw new Error("attach-review requires an explicit or matched flow");
@@ -2786,7 +2795,7 @@ export async function resolveReviewPackagePath(cwd: string, ref: string): Promis
   }
 
   for (const flowDir of await listFlowDirs(cwd)) {
-    const reviewsDir = path.join(flowsRoot(cwd), flowDir, "reviews");
+    const reviewsDir = flowReviewsRoot(cwd, flowDir);
     if (!(await pathExists(reviewsDir))) {
       continue;
     }

@@ -6,7 +6,7 @@
 // readiness, the round-to-round carry).
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -14,14 +14,17 @@ import {
   OPERATOR_DECISION_KINDS,
   PREMISE_DECISION_KIND,
   decisionWriters,
+  foldFileName,
   readOperatorDecisions,
   readPremiseDecisions,
   recordOperatorDecision,
   recordPremiseDecision,
+  recordPremiseDecisionAfter,
 } from "./operator-decisions";
 import { applyPremiseDecision, applyPremiseDecisions, awaitingOperator, latestPremiseDecision, premiseHoldState } from "./premise";
 import { heldFinding, premiseAnswer, premiseAnswerInput } from "./premise-fixtures";
-import { answerPremiseQuestion, carryPremiseDecisions, findHeldFinding, isReviewPackageDir } from "./premise-question";
+import { isReviewPackageDir } from "./package-location";
+import { answerPremiseQuestion, carryPremiseDecisions, findHeldFinding } from "./premise-question";
 import { computeReadiness } from "./readiness";
 import { findingStatus } from "./round-record";
 import { computeVerdict } from "./verdict";
@@ -304,6 +307,37 @@ describe("the decision store", () => {
     expect(await readOperatorDecisions(dir)).toHaveLength(4);
   });
 
+  test("folds a file name the way a case-insensitive filesystem may compare it (review SEC3-001)", () => {
+    for (const name of ["operator-deciſions.json", "operator-decısions.json", "OPERATOR-DECISIONS.JSON", "ｏperator-decisions.json", "operator-decisions.json".normalize("NFD")]) {
+      expect(foldFileName(name)).toBe("operator-decisions.json");
+    }
+    expect(foldFileName(".operator-decisions.locK")).toBe(".operator-decisions.lock");
+    expect(foldFileName("operator-décisions.json")).toBe(foldFileName("operator-décisions.json"));
+  });
+
+  test("the store is read by its exact name only: a planted look-alike alone is not the store (review SEC3-001)", async () => {
+    const dir = await pkg();
+    const lookalike = path.join(dir, "operator-deciſions.json");
+    await writeFile(lookalike, JSON.stringify({ schemaVersion: 1, decisions: [premiseAnswer()] }));
+    // Whether the volume folds the two names or not, the agent's file is never read as the operator's decisions.
+    await expect(readPremiseDecisions(dir)).rejects.toThrow(/may read as operator-decisions\.json/);
+    await expect(recordPremiseDecision(dir, premiseAnswerInput())).rejects.toThrow(/remove the look-alike/);
+    expect(JSON.parse(await readFile(lookalike, "utf8"))).toEqual({ schemaVersion: 1, decisions: [premiseAnswer()] });
+  });
+
+  test("a look-alike next to the real store refuses every read and write until it is removed (review SEC3-001)", async () => {
+    const dir = await pkg();
+    await recordPremiseDecision(dir, premiseAnswerInput());
+    // Full-width o: NFKC folds it onto the store's name; no common filesystem treats the two as one file, so both exist.
+    const lookalike = path.join(dir, "ｏperator-decisions.json");
+    await writeFile(lookalike, JSON.stringify({ schemaVersion: 1, decisions: [premiseAnswer(heldFinding(), { answer: "uphold" })] }));
+    await expect(readPremiseDecisions(dir)).rejects.toThrow(/ｏperator-decisions\.json/);
+    await expect(readOperatorDecisions(dir)).rejects.toThrow(/look-alike/);
+    await expect(recordPremiseDecision(dir, premiseAnswerInput(heldFinding(), { answer: "uphold" }))).rejects.toThrow(/look-alike/);
+    await rm(lookalike);
+    expect((await readPremiseDecisions(dir)).map((entry) => entry.answer)).toEqual(["dismiss"]);
+  });
+
   test("a premise record is never read as a gate decision, even with the fields of one", async () => {
     const dir = await pkg();
     await writeFile(
@@ -346,8 +380,33 @@ describe("findHeldFinding: the hold is the finding record's, never a raw claim",
     if (!lookup.ok) throw new Error(lookup.refusal);
     // A directory where the decisions file should be: the append fails after findings.json was rewritten.
     await mkdir(path.join(dir, OPERATOR_DECISIONS_FILE));
+    const inodeBefore = (await stat(path.join(dir, "findings.json"))).ino;
     await expect(answerPremiseQuestion(dir, { finding: lookup.finding, answer: "dismiss", reason: "r", quote: "dismiss it", at: "2026-10-16T12:00:00Z", confirmedVia: "terminal" })).rejects.toThrow();
+    // The rewrite did happen (an atomic write replaces the file, so the inode is new) and was then undone.
+    expect((await stat(path.join(dir, "findings.json"))).ino).not.toBe(inodeBefore);
     expect(await readFile(path.join(dir, "findings.json"), "utf8")).toBe(original);
+    // And the decision itself was not recorded: the store still holds no answer, so the finding is still awaiting.
+    await rm(path.join(dir, OPERATOR_DECISIONS_FILE), { recursive: true });
+    expect(await readPremiseDecisions(dir)).toEqual([]);
+    expect(premiseHoldState(heldFinding(), await readPremiseDecisions(dir))).toBe("awaiting");
+  });
+
+  test("an append that fails runs the undo of the step before it, and returns no applied value", async () => {
+    const dir = await pkg();
+    await mkdir(path.join(dir, OPERATOR_DECISIONS_FILE));
+    const steps: string[] = [];
+    await expect(
+      recordPremiseDecisionAfter(dir, premiseAnswerInput(), async () => {
+        steps.push("applied");
+        return { undo: async () => void steps.push("undone"), value: true };
+      }),
+    ).rejects.toThrow();
+    expect(steps).toEqual(["applied", "undone"]);
+    await rm(path.join(dir, OPERATOR_DECISIONS_FILE), { recursive: true });
+    const landed = await recordPremiseDecisionAfter(dir, premiseAnswerInput(), async () => ({ undo: async () => void steps.push("wrong"), value: 7 }));
+    expect(landed.applied).toBe(7);
+    expect(steps).toEqual(["applied", "undone"]);
+    expect(await readPremiseDecisions(dir)).toHaveLength(1);
   });
 
   test("shows the answered state and a digest that changes with what was shown", async () => {

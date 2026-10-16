@@ -8,7 +8,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
-import { readPremiseDecisions, recordPremiseDecision, type OperatorDecisionVia, type PremiseDecisionSubject, type PremiseQuestionDecision } from "./operator-decisions";
+import { readPremiseDecisions, recordPremiseDecision, recordPremiseDecisionAfter, type AppliedFirst, type OperatorDecisionVia, type PremiseDecisionSubject, type PremiseQuestionDecision } from "./operator-decisions";
+import { isReviewPackageDir } from "./package-location";
 import { applyPremiseDecision, isHeldVerdict, latestPremiseDecision, premiseHoldState, premiseSubjectOf } from "./premise";
 import { recordFinishedRound, registryVouchesPackage } from "./round-registry";
 
@@ -71,26 +72,6 @@ export async function findHeldFinding(packageDir: string, ref: string): Promise<
   };
   const digest = createHash("sha256").update(JSON.stringify([shown.key, shown.severity, shown.problem, shown.verdict, shown.question, shown.answered ?? ""])).digest("hex");
   return { ok: true, finding: { ...shown, subject, digest } };
-}
-
-/**
- * Whether `dir` is a real review package of the checkout at `projectRoot` (review SEC2-001): a directory holding a
- * manifest.json whose real path sits directly under `.metaproject/reviews/` or `.metaproject/flows/<flow>/reviews/`.
- * A directory nested inside a package, or a symlink into one, is not: an agent can write such a directory (apply_patch
- * into the bound package is approved), and `--prior` accepts any directory with a manifest.
- */
-export function isReviewPackageDir(dir: string, projectRoot: string): boolean {
-  let real: string;
-  let root: string;
-  try {
-    real = realpathSync(dir);
-    root = realpathSync(projectRoot);
-  } catch {
-    return false;
-  }
-  if (!existsSync(path.join(real, "manifest.json"))) return false;
-  const parent = path.relative(path.join(root, ".metaproject"), path.dirname(real)).split(path.sep);
-  return (parent.length === 1 && parent[0] === "reviews") || (parent.length === 3 && parent[0] === "flows" && parent[1] !== ".." && parent[2] === "reviews");
 }
 
 /**
@@ -173,43 +154,48 @@ const registryPlace = (registry: RegistryOptions): { cwd?: string; dir?: string 
  * answer never makes the registry vouch for a package it did not vouch for already.
  */
 export async function answerPremiseQuestion(packageDir: string, input: PremiseAnswer, registry: RegistryOptions = {}): Promise<PremiseQuestionDecision> {
-  const file = path.join(packageDir, FINDINGS_FILE);
-  let rerecord = false;
-  const decision = await recordPremiseDecision(
+  const { decision, applied: vouched } = await recordPremiseDecisionAfter(
     packageDir,
     { finding: input.finding.key, answer: input.answer, reason: input.reason, quote: input.quote, at: input.at, confirmedVia: input.confirmedVia, subject: input.finding.subject },
-    async (kept) => {
-      const before = await readFile(file, "utf8").catch(() => undefined);
-      let findings: unknown;
-      try {
-        findings = before === undefined ? undefined : JSON.parse(before);
-      } catch {
-        findings = undefined;
-      }
-      if (before === undefined || !Array.isArray(findings)) return undefined;
-      let changed = false;
-      const next = findings.map((entry) => {
-        const record = obj(entry);
-        if (record === undefined || latestPremiseDecision(record, [kept]) === undefined) return entry;
-        const applied = applyPremiseDecision(record, kept);
-        changed ||= applied !== record;
-        return applied;
-      });
-      if (!changed) return undefined;
-      const vouched = registryVouchesPackage(packageDir, registryPlace(registry));
-      await writeFileAtomic(file, `${JSON.stringify(next, null, 2)}\n`);
-      rerecord = vouched;
-      return async () => {
-        rerecord = false;
-        await writeFileAtomic(file, before);
-      };
-    },
+    (kept) => applyAnswerToFindings(packageDir, kept, registry),
   );
-  if (rerecord) {
-    const recorded = recordFinishedRound(packageDir, "decide-premise", registryPlace(registry));
-    const problem = recorded.error ?? recorded.skipped;
-    if (problem !== undefined) registry.warn?.(`the answer is recorded, but the local round registry was not updated (${problem}): the next round of this package runs full`);
-    if (recorded.warning !== undefined) registry.warn?.(recorded.warning);
-  }
+  if (vouched === true) reRecordRegistry(packageDir, registry);
   return decision;
+}
+
+/**
+ * Writes `kept` onto the finding records it answers in findings.json. Its value is whether the registry vouched for the
+ * package before the write; undefined (nothing to undo) when findings.json is missing, unparseable or holds no record
+ * the answer changes.
+ */
+async function applyAnswerToFindings(packageDir: string, kept: PremiseQuestionDecision, registry: RegistryOptions): Promise<AppliedFirst<boolean> | undefined> {
+  const file = path.join(packageDir, FINDINGS_FILE);
+  const before = await readFile(file, "utf8").catch(() => undefined);
+  let findings: unknown;
+  try {
+    findings = before === undefined ? undefined : JSON.parse(before);
+  } catch {
+    findings = undefined;
+  }
+  if (before === undefined || !Array.isArray(findings)) return undefined;
+  let changed = false;
+  const next = findings.map((entry) => {
+    const record = obj(entry);
+    if (record === undefined || latestPremiseDecision(record, [kept]) === undefined) return entry;
+    const applied = applyPremiseDecision(record, kept);
+    changed ||= applied !== record;
+    return applied;
+  });
+  if (!changed) return undefined;
+  const vouched = registryVouchesPackage(packageDir, registryPlace(registry));
+  await writeFileAtomic(file, `${JSON.stringify(next, null, 2)}\n`);
+  return { undo: () => writeFileAtomic(file, before), value: vouched };
+}
+
+/** Records the round again after an answer changed findings.json, which the registry hashes; a failure is a warning. */
+function reRecordRegistry(packageDir: string, registry: RegistryOptions): void {
+  const recorded = recordFinishedRound(packageDir, "decide-premise", registryPlace(registry));
+  const problem = recorded.error ?? recorded.skipped;
+  if (problem !== undefined) registry.warn?.(`the answer is recorded, but the local round registry was not updated (${problem}): the next round of this package runs full`);
+  if (recorded.warning !== undefined) registry.warn?.(recorded.warning);
 }

@@ -63,13 +63,51 @@ test("ingest --premises reaches the merge: the finding carries the premise and t
   expect(JSON.parse(await readFile(path.join(dir, PREMISES_FILE), "utf8"))).toEqual(PREMISES);
 });
 
-test("a re-ingest without --premises keeps the earlier claims file, moved aside, not deleted (review RG2-004)", async () => {
+type HeldRecord = { premise?: { verdict: string } };
+const readFindings = async (dir: string): Promise<HeldRecord[]> => JSON.parse(await readFile(path.join(dir, "findings.json"), "utf8")) as HeldRecord[];
+
+test("a re-ingest without --premises carries the held claims forward while they still hold the same finding (review RG2-004)", async () => {
   await writeFile(path.join(ROOT, "report.md"), REPORT);
   await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));
   const dir = await ingest("2026-10-16-reingest", ["--premises", "premises.json"]);
+  const lines: string[] = [];
+  console.log = (...args: unknown[]) => void lines.push(args.map(String).join(" "));
   await ingest("2026-10-16-reingest");
+  expect(process.exitCode).toBe(0);
+  expect((await readFindings(dir))[0]?.premise?.verdict).toBe("challenged");
+  expect(JSON.parse(await readFile(path.join(dir, PREMISES_FILE), "utf8"))).toEqual(PREMISES);
+  expect(lines.join("\n")).toContain("premise claims: carried forward");
+});
+
+test("a re-ingest without --premises whose held finding changed is refused, asks for --premises, and leaves the package as it was (review RG2-004)", async () => {
+  await writeFile(path.join(ROOT, "report.md"), REPORT);
+  await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));
+  const dir = await ingest("2026-10-16-changed", ["--premises", "premises.json"]);
+  const before = await readFile(path.join(dir, "findings.json"), "utf8");
+  await writeFile(path.join(ROOT, "report.md"), REPORT.replace("timeline pinned LTR", "timeline pinned LTR in every locale"));
+  const errors: string[] = [];
+  const realError = console.error;
+  console.error = (...args: unknown[]) => void errors.push(args.map(String).join(" "));
+  try {
+    await ingest("2026-10-16-changed");
+  } finally {
+    console.error = realError;
+  }
+  expect(process.exitCode).not.toBe(0);
+  expect(errors.join("\n")).toContain("Pass --premises <file>");
+  expect(errors.join("\n")).toContain("2026-10-16-changed#LY-003");
+  expect(await readFile(path.join(dir, "findings.json"), "utf8")).toBe(before);
+  expect(existsSync(path.join(dir, PREMISES_FILE))).toBe(true);
+});
+
+test("a re-ingest without --premises over claims that held nothing moves the claims file aside, not deleted", async () => {
+  await writeFile(path.join(ROOT, "report.md"), REPORT);
+  const upheld = { judge: "review-premise", premises: [{ finding_id: "LY-003", verdict: "upheld" }] };
+  await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(upheld));
+  const dir = await ingest("2026-10-16-upheld", ["--premises", "premises.json"]);
+  await ingest("2026-10-16-upheld");
   expect(existsSync(path.join(dir, PREMISES_FILE))).toBe(false);
-  expect(JSON.parse(await readFile(path.join(dir, PREMISES_SUPERSEDED_FILE), "utf8"))).toEqual(PREMISES);
+  expect(JSON.parse(await readFile(path.join(dir, PREMISES_SUPERSEDED_FILE), "utf8"))).toEqual(upheld);
 });
 
 test("--premises naming a missing file refuses the ingest, says which file, and writes no package", async () => {

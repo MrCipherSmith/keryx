@@ -1079,6 +1079,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
   console.log(`status: ${result.manifest.status}`);
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
+  if (result.premisesCarriedForward === true) console.log("premise claims: carried forward from this package's research-evidence/premises.json (no --premises given; the held findings still match them)");
   if (mode !== "ingest") {
     const profile = buildRunProfile({ unattended: args.includes("--unattended"), host: hostArg });
     await writeRunProfile(result.path, profile, { stampManifest: true });
@@ -5302,7 +5303,9 @@ verification (attach/start/ingest):
   --premises takes what review-premise returned: the bare \`{ judge, model?, premises }\`
   object, or a reply / report holding it in one \`\`\`json keryx:premises block. The merge is
   DELETE-ONLY too: it holds a challenged finding for the operator (never dismisses it) and can
-  only lower a severity. The operator answers with \`keryx review decide-premise\`.
+  only lower a severity. The operator answers with \`keryx review decide-premise\`. A re-ingest
+  without --premises over a package the judge held re-applies its stored claims while they still
+  hold the same findings, and is refused otherwise.
   --scope takes the WHOLE \`keryx review scope --json\` document — counts and the
   per-drop reasons — so the package records what the pre-filter dropped and why.
   Omitted, a \`## Pre-filter scope\` block already in the package's scope.md is

@@ -37,7 +37,8 @@ import {
   type RoundRegistryEntry,
 } from "./round-registry";
 import { computeVerdict, renderVerdict } from "./verdict";
-import { heldFinding } from "./premise-fixtures";
+import { readPremiseDecisions, recordPremiseDecision } from "./operator-decisions";
+import { heldFinding, premiseAnswerInput } from "./premise-fixtures";
 import { answerPremiseQuestion, carryPremiseDecisions, findHeldFinding } from "./premise-question";
 
 const PR = "https://github.com/acme/app/pull/7";
@@ -647,6 +648,19 @@ describe("keryx review start writes the round record", () => {
     expect(roundRecordTampered(dir)).toBeUndefined();
     writeFileSync(path.join(dir, "prior_findings.json"), "[]\n");
     expect(roundRecordTampered(dir)).toContain("prior_findings.json");
+  }, 60_000);
+
+  test("review start carries the operator's premise answer into the delta round's package (review T2-001)", async () => {
+    prepare();
+    const held = heldFinding({ id: "F-1", global_id: "r-old#F-1", reviewer: "review-logic", file: "src/a.ts", line: 15 });
+    writePackage(".metaproject/reviews/r-old", { reviewId: "r-old", head: A, findings: [held] });
+    const previous = path.join(root, ".metaproject", "reviews", "r-old");
+    await recordPremiseDecision(previous, premiseAnswerInput(held, { answer: "uphold", reason: "keep it" }));
+    const { output, dir } = await start(["--review-id", "r-carry"]);
+    expect(readRoundRecord(dir)).toMatchObject({ mode: "delta", previous: { reviewId: "r-old" } });
+    expect(output).toContain("premise answers carried from .metaproject/reviews/r-old: r-old#F-1");
+    const [carried] = await readPremiseDecisions(dir);
+    expect(carried).toMatchObject({ finding: "r-old#F-1", answer: "uphold", carriedFrom: ".metaproject/reviews/r-old" });
   }, 60_000);
 
   test("a malformed round.json is refused, not read leniently", () => {

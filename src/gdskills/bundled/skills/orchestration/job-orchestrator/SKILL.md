@@ -1162,8 +1162,7 @@ keryx review ingest --report <path/to/review-report.md> --ref <feature-branch> \
 An unrecognised option is **refused, not ignored** — a silently dropped flag writes
 nothing and still reports success. `--refuted` carries findings this round raised and
 then dismissed; without it the package keeps only the survivors of an unlogged triage.
-Without `--premises` nothing is held, and a finding the judge challenged goes to the
-fixer.
+Without `--premises` a first ingest holds nothing: a finding the judge challenged goes to the fixer.
 
 **Findings are the canonical shape.** One vocabulary, everywhere in this skill:
 
@@ -1272,17 +1271,17 @@ with evidence, not silence.
 Only runs if NEEDS_FIX is true. Default max: **3 iterations** (`max_review_iterations`).
 
 Three is the self-fix bound `task-implementer` and this skill share
-(`flow-orchestrator`'s review bound is five, by operator decision). *"The first three to
-four repair iterations account for most achievable gains"*
-([arXiv:2607.05197](https://arxiv.org/abs/2607.05197)); correctness falls
-**0.820 -> 0.673** across two forced revisions while cumulative ever-correct is
-**0.847** ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Other agent tools
+(`flow-orchestrator`'s review bound is five, by operator decision). *"The first three to four repair iterations account for
+most achievable gains"* ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197));
+correctness falls **0.820 -> 0.673** across two forced revisions while
+cumulative ever-correct is **0.847**
+([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Other agent tools
 hardcode the same bound (`max_reflections = 3`).
 
-The bound is a ceiling, not a target. Repetition ends the loop earlier and **regardless
-of remaining iterations** — a counter cannot tell "converging slowly" from "stuck", and
-an agent emitting the identical failing output three times spends the whole budget
-before anything notices.
+The bound is a ceiling, not a target. Repetition ends the loop earlier and
+**regardless of remaining iterations** — a counter cannot tell "converging
+slowly" from "stuck", and an agent emitting the identical failing output three
+times spends the whole budget before anything notices.
 
 **A finding leaves this loop by being dispositioned, never by being absent.** The
 previous version of this section recomputed "unresolved" as whatever the next round

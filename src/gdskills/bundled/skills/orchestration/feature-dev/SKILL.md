@@ -48,8 +48,8 @@ End-to-end feature development workflow from idea to merge-ready PR.
    - **Acceptance criteria**: testable bullet points
    - **Approach**: which files will change, key design decisions
    - **Test strategy**: framework, which scenarios will be covered
-4. **Save spec** to `.feature-spec.md` in project root (add to .gitignore if not already)
-5. **Get user confirmation before proceeding**
+   - **Premise** (only for an input sourced from a finding, with no flow): the review-premise claims object and the operator's answer, in their words
+4. **Save spec** to `.feature-spec.md` in project root (add to .gitignore if not already), then **get user confirmation before proceeding**
 
 ### Phase 2: DESIGN
 

@@ -36,6 +36,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { readReviewRounds, type ReviewRoundRecord } from "../flow/review-gate";
+import { REVIEW_PACKAGE_MANIFEST_GLOBS } from "./package-location";
 import { collectPrComments, createGhPort, type CollectedComment, type CollectedRoundBlock } from "./pr-comments";
 import { mentionsFindingId } from "./publish";
 import { readRoundRegistryReport, registryVouches, repoIdentity, type RoundRegistryEntry } from "./round-registry";
@@ -125,7 +126,6 @@ export type RoundCandidate = {
 
 export type PriorRoundResult = { round: RoundRecord; priorFindings: PriorFinding[]; identity: { targetKey: string; targetBase?: string | undefined } };
 
-const PACKAGE_GLOBS = [".metaproject/reviews/*/manifest.json", ".metaproject/flows/*/reviews/*/manifest.json"];
 /** How far back the git-history source reads. */
 export const HISTORY_DAYS = 180;
 
@@ -470,7 +470,7 @@ type HistoryEntry = { commit: string; at: number; manifestPath: string };
 /** Read from the local branches, and the target's base branch (a resolved base ref, never dash-leading) when given. */
 async function historyEntries(git: GitRunner, limit: number, baseRef: string | undefined): Promise<HistoryEntry[]> {
   const base = baseRef === undefined || baseRef.startsWith("-") ? [] : [baseRef];
-  const log = await git(["log", "--branches", `--since=${HISTORY_DAYS} days ago`, `-n${limit}`, "--format=%x01%H %ct", "--name-only", "--end-of-options", ...base, "--", ...PACKAGE_GLOBS]);
+  const log = await git(["log", "--branches", `--since=${HISTORY_DAYS} days ago`, `-n${limit}`, "--format=%x01%H %ct", "--name-only", "--end-of-options", ...base, "--", ...REVIEW_PACKAGE_MANIFEST_GLOBS]);
   if (log.exitCode !== 0) return [];
   const seen = new Set<string>();
   const entries: HistoryEntry[] = [];
