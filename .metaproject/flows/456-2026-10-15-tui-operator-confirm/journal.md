@@ -28,3 +28,6 @@ Fix lanes A (review), B (other), C (framework/TUI/remote/docs) dispatched.
 - 2026-10-15T19:00:19.298Z - task-attempt: T9: started (attempt 1) — review round 1: 0 blocker, 2 major; fix lanes A/B/C
 - 2026-10-15T19:08:25.752Z - task-done: T9: Verify + review round + PR
 - 2026-10-15T21:37:03.108Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1034 (warning: PR is not a draft)
+- 2026-10-16T06:05:46.408Z - task-done: T10: Patch release after merge
+- 2026-10-16T06:05:46.562Z - ac-confirmed: AC9: npm latest 0.3.119 (tag v0.3.119, PR #1039) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-16: released in @mrciphersmith/keryx 0.3.119 (PR #1039, tag v0.3.119). Owner live check open.
