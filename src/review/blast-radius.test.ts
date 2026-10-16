@@ -852,6 +852,28 @@ describe("the symbol radius records non-consumers as reasoned omissions (flow 45
       expect(testsToRunLine({ testsToRun: radius.testsToRun ?? [] })).toBe("2 tests exercise the changed code — run them: src/core.test.ts src/uses-alpha.test.ts");
     });
 
+    test("a hub-damped test stays on the run list (flow 457 review M1)", () => {
+      const sources: Record<string, string> = { "src/hub.ts": "export function t(key: string): string {\n  return key;\n}\n" };
+      for (let index = 0; index < 400; index += 1) sources[`src/c${index}.ts`] = `import { t } from "./hub";\nexport const v${index} = t("k");\n`;
+      sources["src/c0.test.ts"] = 'import { v0 } from "./c0";\ntest("v0", () => v0);\n';
+      const edges = Object.entries(sources).flatMap(([from, source]) => {
+        const match = /from "\.\/([^"]+)"/.exec(source);
+        return match === null ? [] : [{ id: from, from, to: `src/${match[1]}.ts`, kind: "imports" as const, specifier: `./${match[1]}` }];
+      });
+      const radius = computeBlastRadius({
+        graph: { nodes: Object.keys(sources).map((path) => ({ id: path, kind: "file" as const, path, language: "typescript" as const })), edges },
+        changedFiles: ["src/hub.ts"],
+        symbols: {
+          read: { head: (file: string) => sources[file] },
+          diff: new Map([["src/hub.ts", { path: "src/hub.ts", oldPath: "src/hub.ts", hunks: [{ oldStart: 2, oldLines: 1, newStart: 2, newLines: 1 }] }]]),
+        },
+        config: { includeRelatedTests: false, maxFiles: 1000 },
+      });
+      expect(radius.files).toHaveLength(400);
+      expect(radius.dropped.find((drop) => drop.file === "src/c0.test.ts")?.reason).toBe("hub-damped");
+      expect(radius.testsToRun).toEqual([{ file: "src/c0.test.ts", reason: "graph-consumer", symbols: [], via: "src/hub.ts" }]);
+    });
+
     test("the plain file walk keeps tests in the reviewed set and has no run list", () => {
       const radius = computeBlastRadius({ graph: testGraph, changedFiles: ["src/core.ts"], config: { includeRelatedTests: false } });
       expect(radius.files.some((entry) => entry.file === "src/core.test.ts")).toBe(true);

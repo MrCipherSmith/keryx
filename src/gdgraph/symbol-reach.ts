@@ -20,7 +20,9 @@
 //   expanded nodes of `min(1, log2(2 + HUB_FREE_FAN_IN) / log2(2 + fanIn))`,
 //   i.e. `1/log2(2 + fanIn)` scaled so a node with at most HUB_FREE_FAN_IN
 //   importers costs nothing. A relevant importer under HUB_WEIGHT_CUTOFF is
-//   recorded as damped, not walked.
+//   recorded as damped, not walked. A direct (hop 1) importer of a changed
+//   file is never damped: it is judged, and kept when it consumes a changed
+//   name; damping only limits the walk beyond it.
 //
 // Whenever the names cannot be known the walk falls back to the plain file
 // edge (every importer is relevant, names `*`): a file that is not JS/TS, a
@@ -49,12 +51,62 @@ const JS_TS = /\.(?:[cm]?[jt]sx?)$/i;
 export type DiffHunk = { oldStart: number; oldLines: number; newStart: number; newLines: number };
 export type FileDiff = { path: string; oldPath: string; hunks: DiffHunk[] };
 
+/**
+ * Counts the body lines of the hunk being read, so a content line that starts with `--- ` or `+++ ` (a removed
+ * `-- comment` or an added `++ x`) is never read as a file header. Header lines are parsed only while no hunk body
+ * is open. Shared with `review/text-links.ts`.
+ */
+export class HunkBodyTracker {
+  private oldLeft = 0;
+  private newLeft = 0;
+
+  /** True when `line` is a body line of the open hunk (and consumes it). */
+  consume(line: string): boolean {
+    if (this.oldLeft <= 0 && this.newLeft <= 0) return false;
+    // A body line starts with ' ', '+', '-' or '\'; anything else (`diff --git`, `@@`, a truncated hunk) ends the body.
+    if (line !== "" && !/^[ +\-\\]/.test(line)) {
+      this.reset();
+      return false;
+    }
+    if (line.startsWith("\\")) return true; // "\ No newline at end of file"
+    if (line.startsWith("-")) this.oldLeft -= 1;
+    else if (line.startsWith("+")) this.newLeft -= 1;
+    else {
+      this.oldLeft -= 1;
+      this.newLeft -= 1;
+    }
+    return true;
+  }
+
+  /** Opens a hunk body from its `@@` header; returns the parsed hunk, or undefined when `line` is not one. */
+  open(line: string): DiffHunk | undefined {
+    const match = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
+    if (match === null) return undefined;
+    const hunk = {
+      oldStart: Number(match[1]),
+      oldLines: match[2] === undefined ? 1 : Number(match[2]),
+      newStart: Number(match[3]),
+      newLines: match[4] === undefined ? 1 : Number(match[4]),
+    };
+    this.oldLeft = hunk.oldLines;
+    this.newLeft = hunk.newLines;
+    return hunk;
+  }
+
+  reset(): void {
+    this.oldLeft = 0;
+    this.newLeft = 0;
+  }
+}
+
 /** Unified diff text to per-file hunks, keyed by the head path. Deleted files are skipped. */
 export function parseDiffHunks(diff: string): Map<string, FileDiff> {
   const files = new Map<string, FileDiff>();
   let oldPath: string | undefined;
   let current: FileDiff | undefined;
+  const body = new HunkBodyTracker();
   for (const line of diff.split("\n")) {
+    if (body.consume(line)) continue;
     if (line.startsWith("diff --git ")) {
       oldPath = undefined;
       current = undefined;
@@ -76,15 +128,8 @@ export function parseDiffHunks(diff: string): Map<string, FileDiff> {
       files.set(head, current);
       continue;
     }
-    const match = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
-    if (match !== null && current !== undefined) {
-      current.hunks.push({
-        oldStart: Number(match[1]),
-        oldLines: match[2] === undefined ? 1 : Number(match[2]),
-        newStart: Number(match[3]),
-        newLines: match[4] === undefined ? 1 : Number(match[4]),
-      });
-    }
+    const hunk = body.open(line);
+    if (hunk !== undefined && current !== undefined) current.hunks.push(hunk);
   }
   return files;
 }
@@ -875,7 +920,9 @@ export function computeSymbolReach(input: SymbolReachInput): SymbolReachResult {
       const path = [importer, ...item.path];
       const hop = item.hop + 1;
       const importerFanIn = fanIn.get(importer) ?? 0;
-      if (weight < cutoff) {
+      // A direct consumer of a changed file (hop 1, also behind a barrel) is never damped: relevance decides, so a
+      // caller of the changed function in an i18n-like hub stays in. Damping only limits the walk beyond it.
+      if (weight < cutoff && item.hop > 0) {
         if (!changed.has(importer) && !reached.has(importer) && !omitted.has(importer)) {
           omitted.set(importer, {
             file: importer,
@@ -972,11 +1019,23 @@ export function workingTreeSourceReader(cwd: string, base?: string): SourceReade
 }
 
 /**
- * Reads sources at `head` (and `base`) from git. When the checkout's HEAD is
- * `head`, a file without uncommitted changes is read from disk instead, which
- * is the same bytes without a process per file.
+ * The commit the old side of `git diff base...head` is: `git merge-base base head`. The hunk line numbers of a
+ * three-dot diff count lines at that commit, not at `base`, which may have moved on since the branch forked. Falls back
+ * to `base` itself when there is no merge base (unrelated histories, a revision git cannot resolve).
+ */
+export function diffOldSide(cwd: string, base: string, head: string): string {
+  if (base.startsWith("-") || head.startsWith("-")) return base;
+  return gitText(cwd, ["merge-base", base, head])?.trim() || base;
+}
+
+/**
+ * Reads sources at `head` (and the old side of `base...head`) from git. The base text is read at
+ * `git merge-base base head`, the commit the three-dot diff's hunks are numbered against. When the checkout's HEAD is
+ * `head`, a file without uncommitted changes is read from disk instead, which is the same bytes without a process per
+ * file.
  */
 export function gitSourceReader(cwd: string, head: string, base?: string): SourceReader {
+  const oldSide = base === undefined ? undefined : diffOldSide(cwd, base, head);
   const checkoutHead = gitText(cwd, ["rev-parse", "HEAD"])?.trim();
   const headFull = gitText(cwd, ["rev-parse", "--verify", "--quiet", "--end-of-options", `${head}^{commit}`])?.trim();
   const fromDisk = checkoutHead !== undefined && checkoutHead === headFull;
@@ -1005,6 +1064,6 @@ export function gitSourceReader(cwd: string, head: string, base?: string): Sourc
   };
   return {
     head: (file) => at(head, file, fromDisk),
-    ...(base === undefined ? {} : { base: (file: string) => at(base, file, false) }),
+    ...(oldSide === undefined ? {} : { base: (file: string) => at(oldSide, file, false) }),
   };
 }

@@ -619,6 +619,10 @@ export function computeBlastRadius(input: {
   }
   for (const drop of [...reasoned.values()].sort(rankOrder)) {
     if (classifyPath(drop.file, config.scope) !== null) continue;
+    // A hub-damped test is not read, but it still exercises the change: it stays on the run list.
+    if (testsAsRunList && drop.reason === "hub-damped" && TEST_FILE_RE.test(drop.file)) {
+      testsToRun.push({ file: drop.file, reason: "graph-consumer", symbols: [], via: drop.via });
+    }
     dropped.push(drop);
   }
 
