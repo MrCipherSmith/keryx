@@ -21,7 +21,7 @@ All three claims files parse and merge with `parsePremiseClaims` + `mergePremise
 - The headline case works: F1 is held with cited intent and practice, and no real or truth finding is challenged or held (AC7 as worded is met).
 - Strictly (a downgrade of a truth finding is a miss) three of the seven #992/#1005 truth findings were downgraded. All three are test-coverage-gap findings (surviving mutants, no runtime defect) that the judge re-graded minor using the canonical severity rubric. It never held them, so none would be blocked from a fix loop; they only drop out of the major count. Whether that is a defect is an owner call: the downgrade is rubric-consistent, but it is outside the premise-judge's brief (is it a defect at all).
 
-Files: `judge-*.raw.md` (raw outputs), `premise-eval.json`, `validate-*.json`, `inputs/` (findings, validate.ts, fixture.bundle: `git clone` it to reproduce the repo).
+Files: `judge-*.raw.md` (raw outputs), `premise-eval.json`, `validate-*.json`, `inputs/` (findings, validate.ts, fixture.patch: `git init fixture && git -C fixture am <path>/fixture.patch` rebuilds the repo with its three commits).
 Caveats: the truth findings carry no `title`; the #1005/#992 checkouts contain round-1 review packages (as any real repo would); fixture findings were authored by the evaluator.
 
 ## Rerun on #992 after the fix (commit f41a21612)

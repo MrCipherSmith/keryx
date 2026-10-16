@@ -11,7 +11,7 @@
    "subagent_tokens": 70419,
    "tool_uses": 7,
    "duration_ms": 41853,
-   "repo": "synthetic fixture (inputs/fixture.bundle, head e503a37)",
+   "repo": "synthetic fixture (inputs/fixture.patch, head e503a37)",
    "raw": "judge-fixture.raw.md",
    "validation": "validate-fixture.json",
    "rejections": 0
