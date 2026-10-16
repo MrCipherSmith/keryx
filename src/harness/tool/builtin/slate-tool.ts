@@ -17,6 +17,7 @@
 import {
   appendSeed,
   isSlateSeedKind,
+  modelNotesOf,
   readSlate,
   SEED_TEXT_MAX_LENGTH,
   SLATE_SEED_KINDS,
@@ -82,7 +83,7 @@ export function slateReadTool(cwd: string, getSessionDir: () => string | undefin
               course,
               seeds: slate?.seeds ?? [],
               workspaceId: slate?.workspaceId,
-              ...(slate?.notes !== undefined && Object.keys(slate.notes).length > 0 ? { notes: slate.notes } : {}),
+              ...(Object.keys(modelNotesOf(slate?.notes) ?? {}).length > 0 ? { notes: modelNotesOf(slate?.notes) } : {}),
               ...(slate?.trail !== undefined && slate.trail.length > 0
                 ? { trail: { count: slate.trail.length, latest: slate.trail.slice(-SLATE_READ_TRAIL_LATEST) } }
                 : {}),

@@ -98,11 +98,12 @@ export function workspaceCreateTool(cwd: string, getSessionDir?: () => string | 
         const dir = getSessionDir?.();
         if (dir !== undefined) {
           try {
+            // Only the binding changes: every other field (Notes, Trail, answers, child dispatches) is kept.
             await writeSlate(dir, (prev) => ({
+              ...(prev ?? {}),
               anchors: prev?.anchors ?? { root: "", touched: [] },
               course: prev?.course ?? {},
               seeds: prev?.seeds ?? [],
-              ...(prev !== undefined ? { workspaceId: prev.workspaceId } : {}),
               workspaceId: workspace.id,
             }));
           } catch {

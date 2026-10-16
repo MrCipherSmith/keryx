@@ -63,7 +63,8 @@ import {
   type SubmittedResult,
 } from "../harness/tool/builtin/submit-result-tool";
 import type { McpRuntime } from "../mcp-servers/runtime";
-import { parseAskUserInput, selfAnswerAskUser, type AskUserFn } from "../harness/tool/builtin/ask-user-tool";
+import { parseAskUserInput, selfAnswerAskUser, type AskUserFn, type AskUserRequest } from "../harness/tool/builtin/ask-user-tool";
+import { isIrreversible, loadDecisionsConfig } from "../decisions/service";
 import { askFloor } from "../review/arbiter-floor";
 import type { JobRegistry, TaskCompletion } from "../harness/tool/builtin/background-job-registry";
 import type { BusInbox } from "../bus/inbox";
@@ -585,7 +586,7 @@ export interface AgentDeps {
    * message and force another round when the model stops early with work still
    * open (capped at MAX_PLAN_FOLLOW_THROUGHS per turn; a blocked item or a
    * nudge that moved nothing stops it). Flow 418: left unset it defaults ON in
-   * `trust` mode; an explicit `false` keeps it off. `/goal`'s own `--auto`
+   * `trust` mode, except for a subagent or an `unattended` run; an explicit `false` keeps it off. `/goal`'s own `--auto`
    * continuation loop (`goal-command.ts`) is independent of this flag and is
    * unaffected either way.
    */
@@ -1027,6 +1028,19 @@ export interface RunAgentTurnResult {
    * non-empty list into their own crash/outcome classification.
    */
   caughtToolErrors?: CaughtToolError[];
+  /**
+   * The turn ended because the provider refused its request for load (a rate limit or an overloaded
+   * endpoint) and nothing retried it: a run without same-round recovery, which is every subagent child.
+   * `retryAfterMs` is the provider's own hint, when it gave one. The subagent dispatcher reports such a
+   * child as `STATUS: RATE_LIMITED`, the signal the review orchestrator halves its wave on.
+   */
+  rateLimited?: { retryAfterMs?: number };
+}
+
+/** The `rateLimited` result for a turn that ended on `error`, or nothing when the error was not a load refusal. */
+function rateLimitedResult(error: NormalizedError | undefined): Pick<RunAgentTurnResult, "rateLimited"> {
+  if (error === undefined || (error.kind !== "rate_limit" && error.kind !== "overloaded")) return {};
+  return { rateLimited: error.retryAfterMs !== undefined && Number.isFinite(error.retryAfterMs) ? { retryAfterMs: error.retryAfterMs } : {} };
 }
 
 /** One tool call whose `invoke`/`requestApproval` callback threw, caught by {@link runAgentTurnCore}'s own defensive boundary. See {@link RunAgentTurnResult.caughtToolErrors}. */
@@ -1073,10 +1087,13 @@ export const MAX_PLAN_FOLLOW_THROUGHS = 8;
  * every configured provider/local-model combination (a lightly-provisioned
  * local Ollama endpoint, for instance, has none of it, and a burst of
  * concurrent children hammering it at once is a self-inflicted outage, not a
- * speedup). A low single-digit ceiling still gives real wall-clock savings
- * over the old fully-sequential dispatch for the common "review these N
- * things" fan-out, while staying safe as the default for an unknown
- * provider. Overridable per run via {@link AgentDeps.maxSubagentConcurrency}.
+ * speedup). Ten matches the review orchestrator's full wave
+ * (`MAX_REVIEWERS_PER_WAVE_FULL`). A child runs without same-round recovery, so
+ * a provider that pushes back on the burst is not retried inside the child:
+ * the child's turn ends with `RunAgentTurnResult.rateLimited`, and
+ * `spawn_subagent` reports it as `STATUS: RATE_LIMITED`, which is what makes
+ * the orchestrator halve its wave and honour `retry-after`. Overridable per run
+ * via {@link AgentDeps.maxSubagentConcurrency}.
  */
 export const DEFAULT_MAX_SUBAGENT_CONCURRENCY = 10;
 
@@ -2576,46 +2593,77 @@ function selfAnsweredQuestion(
   return { question, label: option.label, result };
 }
 
-function askUserQuestion(call: PendingCall): string | undefined {
-  const question = parseToolInput(call.input).question;
-  return call.name === "ask_user" && typeof question === "string" ? question : undefined;
+/** A well-formed `ask_user` call's request, or undefined (another tool, or input the tool itself will reject). */
+function askUserRequest(call: PendingCall): AskUserRequest | undefined {
+  if (call.name !== "ask_user") return undefined;
+  const parsed = parseAskUserInput(parseToolInput(call.input));
+  return parsed.ok ? parsed.request : undefined;
 }
 
-/** An irreversible decision is asked every time; the stored answer is for ordinary questions only. */
-function isIrreversibleAsk(call: PendingCall): boolean {
-  const input = parseToolInput(call.input);
-  return input.irreversible === true || (typeof input.action === "string" && input.action.trim().length > 0);
+/**
+ * An irreversible decision is asked every time; the stored answer is for ordinary questions only. The same test the
+ * decision journal applies: a caller's own flag or action tag, else the project's irreversible terms and patterns
+ * matched against the question and every option.
+ */
+async function isIrreversibleAsk(request: AskUserRequest, cwd: string): Promise<boolean> {
+  if (request.irreversible === true || (request.action !== undefined && request.action.trim().length > 0)) return true;
+  const config = await loadDecisionsConfig(cwd);
+  return isIrreversible(config.irreversible, request.question, request.action, request.options);
+}
+
+/** The request and the session dir when the question's answer may be stored or replayed. */
+async function replayableAsk(
+  call: PendingCall,
+  options: RunAgentTurnOptions,
+): Promise<{ request: AskUserRequest; dir: string } | undefined> {
+  const request = askUserRequest(call);
+  const dir = liveSessionDir(options);
+  const session = options.slateSession;
+  if (request === undefined || dir === undefined || session?.opened !== true) return undefined;
+  if (await isIrreversibleAsk(request, session.cwd)) return undefined;
+  return { request, dir };
+}
+
+/**
+ * Whether an `ask_user` answer in this turn may have been chosen by something other than the operator: an
+ * automatic review's own answerer, review-auto (the arbiter and the recommended-option shortcut behind
+ * `journaledAskUser`), or an autonomous answers file. Such an answer is never recorded, so it can never be
+ * replayed as the operator's.
+ */
+function automaticAnswererActive(reviewRun: AutomaticReviewRun | undefined): boolean {
+  return (
+    reviewRun !== undefined ||
+    reviewAutoActive() ||
+    process.env.KERYX_REVIEW_AUTO_ANSWER === "1" ||
+    (process.env[ENV_AUTONOMOUS_ANSWERS_FILE] ?? "").length > 0
+  );
 }
 
 /** The operator's earlier answer to this same question, when the session slate is open and still ours. */
 async function storedAskUserAnswer(call: PendingCall, options: RunAgentTurnOptions): Promise<string | undefined> {
-  const question = askUserQuestion(call);
-  const dir = liveSessionDir(options);
-  if (question === undefined || dir === undefined || options.slateSession?.opened !== true || isIrreversibleAsk(call)) {
-    return undefined;
-  }
   try {
-    const answer = await findStoredAnswer(dir, question);
+    const ask = await replayableAsk(call, options);
+    if (ask === undefined) return undefined;
+    const answer = await findStoredAnswer(ask.dir, ask.request.question, ask.request.options);
     return answer === undefined ? undefined : `Already answered by the operator earlier in this session (no new prompt shown): ${answer}`;
   } catch {
     return undefined;
   }
 }
 
-/** Keep a real operator answer as a Note keyed by the question; bookkeeping never changes the tool result. */
+/** Keep a real operator answer keyed by the question and its options; bookkeeping never changes the tool result. */
 async function rememberAskUserAnswer(
   call: PendingCall,
   result: InteractiveToolResult,
   options: RunAgentTurnOptions,
   ts: string,
+  reviewRun: AutomaticReviewRun | undefined,
 ): Promise<void> {
-  const question = askUserQuestion(call);
-  const dir = liveSessionDir(options);
-  if (question === undefined || dir === undefined || options.slateSession?.opened !== true || isIrreversibleAsk(call) || result.isError === true) {
-    return;
-  }
+  if (result.isError === true || automaticAnswererActive(reviewRun)) return;
   try {
-    await rememberAnswer(dir, question, result.output, ts);
+    const ask = await replayableAsk(call, options);
+    if (ask === undefined) return;
+    await rememberAnswer(ask.dir, ask.request.question, ask.request.options, result.output, ts);
   } catch {
     // a full shelf or a closed slate just means the question may be asked again
   }
@@ -3652,6 +3700,8 @@ async function runAgentTurnCore(
     // Flow 387 T6: the round's normalized provider error, held back (not yet
     // printed) when it is a context overflow that may still be recovered.
     let pendingOverflowError: NormalizedError | undefined;
+    // The provider error the round's final attempt ended on, read after the attempt loop.
+    let roundError: NormalizedError | undefined;
 
     let recoveryAttempt = 0;
     for (;;) {
@@ -3855,6 +3905,7 @@ async function runAgentTurnCore(
         }
       }
       attemptComplete = !errored;
+      roundError = attemptError;
       break;
     }
 
@@ -3953,7 +4004,7 @@ async function runAgentTurnCore(
         }
         system(formatProviderErrorMessage(pendingOverflowError));
       }
-      return {};
+      return rateLimitedResult(roundError);
     }
     overflowRetried = false;
     if (calls.length === 0) {
@@ -4126,8 +4177,11 @@ async function runAgentTurnCore(
       // model's own text reply, with nothing injected into `history`.
       // Flow 418: in `trust` it defaults on, bounded by MAX_PLAN_FOLLOW_THROUGHS
       // per turn; it also stops on a blocked item or a nudge that moved nothing.
+      // An unattended run (a trigger dispatch) never gets it by default, whatever its entry's mode:
+      // like the larger round limits, it is for an operator at the keyboard.
       const followThroughOn =
-        deps.planFollowThrough ?? (subagentBudget === undefined && io.permissionMode?.() === "trust");
+        deps.planFollowThrough ??
+        (subagentBudget === undefined && deps.unattended !== true && io.permissionMode?.() === "trust");
       const planHasBlocker = currentPlan?.items.some((item) => item.status === "blocked") ?? false;
       if (
         followThroughOn &&
@@ -4506,7 +4560,7 @@ async function runAgentTurnCore(
         }
       }
       if (precomputedResult === undefined && storedAnswer === undefined && selfAnswered === undefined) {
-        await rememberAskUserAnswer(call, result, options, now());
+        await rememberAskUserAnswer(call, result, options, now(), reviewRun);
       }
       io.onToolResult?.(call.name, result);
       tracePhase(`tool ${call.name} result shown`);
