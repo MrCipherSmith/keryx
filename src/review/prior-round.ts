@@ -857,7 +857,8 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
       tried.push(source === found.source ? { source, result: "found", detail: `forced by --prior ${deps.forced}` } : { source, result: "not-consulted", detail: "--prior given" });
     }
   } else {
-    const record = async (source: SearchedSource, list: RoundCandidate[], none: string): Promise<RoundCandidate[]> => {
+    /** Check `list` against the branch line and record the attempt; `note` is appended to its detail. */
+    const record = async (source: SearchedSource, list: RoundCandidate[], none: string, note = ""): Promise<RoundCandidate[]> => {
       const found: RoundCandidate[] = [];
       const off: string[] = [];
       for (const candidate of list) {
@@ -866,7 +867,7 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
       }
       candidates.push(...found);
       const offLine = off.length === 0 ? "" : `; ${off.length} branch package(s) not on this branch line: ${off.join(", ")}`;
-      tried.push({ source, result: found.length > 0 ? "found" : "none", detail: `${found.length > 0 ? `${found.length} round(s): ${found.map((c) => c.reviewId).join(", ")}` : none}${offLine}` });
+      tried.push({ source, result: found.length > 0 ? "found" : "none", detail: `${found.length > 0 ? `${found.length} round(s): ${found.map((c) => c.reviewId).join(", ")}` : none}${offLine}${note}` });
       return found;
     };
     const local = await record("local-package", exclude(localPackageCandidates(deps.cwd, target, targetKey)), "no package for this target in this checkout");
@@ -897,10 +898,10 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
       if ("error" in read) {
         tried.push({ source: "flow", result: "not-consulted", detail: `the rounds of flow ${deps.flowDir} could not be read (${read.error})` });
       } else {
-        await record("flow", exclude(flowCandidates(read.rounds, deps.cwd)).filter((candidate) => !known.has(candidate.reviewId)), `no reviewed round in flow ${deps.flowDir}`);
-        const skipped = read.rounds.filter((round) => !round.ingested);
-        const flow = tried.at(-1);
-        if (skipped.length > 0 && flow?.source === "flow") flow.detail = `${flow.detail}; skipped, not ingested: ${skipped.map((round) => `${round.reviewId} (${round.problems.join("; ")})`).join(", ")}`;
+        // The package being started (excludeReviewId) is not an earlier round, so it is never named as skipped (review LG5-001).
+        const skipped = read.rounds.filter((round) => !round.ingested && round.reviewId !== deps.excludeReviewId);
+        const note = skipped.length === 0 ? "" : `; skipped, not ingested: ${skipped.map((round) => `${round.reviewId} (${round.problems.join("; ")})`).join(", ")}`;
+        await record("flow", exclude(flowCandidates(read.rounds, deps.cwd)).filter((candidate) => !known.has(candidate.reviewId)), `no reviewed round in flow ${deps.flowDir}`, note);
       }
     }
   }

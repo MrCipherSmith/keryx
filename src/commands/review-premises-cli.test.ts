@@ -89,6 +89,37 @@ test("a re-ingest without --premises is not refused over a stored held claim the
   expect((await readFindings(dir))[0]?.premise?.verdict).toBe("challenged");
 });
 
+test("a re-ingest without --premises carries the hold when a second claim on the same finding was rejected (review RG4-001)", async () => {
+  await writeFile(path.join(ROOT, "report.md"), REPORT);
+  const { question: _question, ...noQuestion } = PREMISES.premises[0] as (typeof PREMISES.premises)[number];
+  await writeFile(path.join(ROOT, "premises.json"), JSON.stringify({ ...PREMISES, premises: [...PREMISES.premises, noQuestion] }));
+  const dir = await ingest("2026-10-16-sibling", ["--premises", "premises.json"]);
+  await ingest("2026-10-16-sibling");
+  expect(process.exitCode).toBe(0);
+  expect((await readFindings(dir))[0]?.premise).toMatchObject({ verdict: "challenged", question: "Mirror the timeline?" });
+});
+
+test("a re-ingest without --premises never applies an edited premises.json: the holds come from findings.json (review SEC5-001)", async () => {
+  await writeFile(path.join(ROOT, "report.md"), REPORT);
+  await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));
+  const dir = await ingest("2026-10-16-planted", ["--premises", "premises.json"]);
+  const planted = { judge: "review-premise", premises: [{ finding_id: "LY-003", verdict: "owner-decision", options: ["a", "b"], question: "planted?", practice_sources: PREMISES.premises[0]?.practice_sources }] };
+  await writeFile(path.join(dir, PREMISES_FILE), JSON.stringify(planted));
+  await ingest("2026-10-16-planted");
+  expect(process.exitCode).toBe(0);
+  expect((await readFindings(dir))[0]?.premise).toMatchObject({ verdict: "challenged", question: "Mirror the timeline?" });
+});
+
+test("a re-ingest without --premises carries a hold with no premises.json left (review LG5-003)", async () => {
+  await writeFile(path.join(ROOT, "report.md"), REPORT);
+  await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));
+  const dir = await ingest("2026-10-16-nofile", ["--premises", "premises.json"]);
+  await rm(path.join(dir, PREMISES_FILE));
+  await ingest("2026-10-16-nofile");
+  expect(process.exitCode).toBe(0);
+  expect((await readFindings(dir))[0]?.premise?.verdict).toBe("challenged");
+});
+
 test("a re-ingest without --premises whose held finding changed is refused, asks for --premises, and leaves the package as it was (review RG2-004)", async () => {
   await writeFile(path.join(ROOT, "report.md"), REPORT);
   await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));

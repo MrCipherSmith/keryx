@@ -33,7 +33,7 @@ import {
   type ManagedReviewIngestInput,
 } from "../review/managed";
 import { parityLines, readReviewParity, renderParityReport } from "../review/parity";
-import { reviewsRoot } from "../review/package-location";
+import { packageDirById } from "../review/package-location";
 import type { PrLookup, PrSnapshot } from "../review/complete-head-gate";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
@@ -1080,7 +1080,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
   console.log(`status: ${result.manifest.status}`);
   console.log(`path: ${result.path}`);
   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
-  if (result.premisesCarriedForward === true) console.log("premise claims: carried forward from this package's research-evidence/premises.json (no --premises given; the held findings still match them)");
+  if (result.premisesCarriedForward === true) console.log("premise claims: carried forward, the holds from this package's previous findings.json (no --premises given; the held findings are unchanged)");
   if (mode !== "ingest") {
     const profile = buildRunProfile({ unattended: args.includes("--unattended"), host: hostArg });
     await writeRunProfile(result.path, profile, { stampManifest: true });
@@ -3612,8 +3612,9 @@ async function readVerifications(source: string | undefined, reviewId: string | 
     );
   }
   // Flow 457 (T7): a claim citing a `keryx review verify-run` record of its own finding, in the package this ingest
-  // writes (`--review-id`), ran in the parent: execution. Without a review id no record can be bound to a package.
-  const packageDir = reviewId === undefined || !/^[\w.-]+$/.test(reviewId) ? undefined : path.join(reviewsRoot(resolveProjectRoot(process.cwd())), reviewId);
+  // writes (`--review-id`, under the reviews root or a flow's), ran in the parent: execution. Without a review id no
+  // record can be bound to a package.
+  const packageDir = reviewId === undefined || !/^[\w.-]+$/.test(reviewId) ? undefined : packageDirById(resolveProjectRoot(process.cwd()), reviewId);
   return promoteParentExecutions(verificationClaims(parsed as VerificationSource), packageDir);
 }
 
@@ -5305,8 +5306,8 @@ verification (attach/start/ingest):
   object, or a reply / report holding it in one \`\`\`json keryx:premises block. The merge is
   DELETE-ONLY too: it holds a challenged finding for the operator (never dismisses it) and can
   only lower a severity. The operator answers with \`keryx review decide-premise\`. A re-ingest
-  without --premises over a package the judge held re-applies its stored claims while they still
-  hold the same findings, and is refused otherwise.
+  without --premises over a package the judge held carries each hold from the previous
+  findings.json to the same unchanged finding, and is refused otherwise.
   --scope takes the WHOLE \`keryx review scope --json\` document — counts and the
   per-drop reasons — so the package records what the pre-filter dropped and why.
   Omitted, a \`## Pre-filter scope\` block already in the package's scope.md is

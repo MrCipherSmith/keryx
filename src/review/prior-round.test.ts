@@ -206,6 +206,18 @@ describe("each source alone", () => {
     expect(round.sourcesTried.find((attempt) => attempt.source === "flow")?.detail).toContain("skipped, not ingested: flow-r2 (operator decisions cannot be read: look-alike)");
   });
 
+  test("flow: the package being started is never named as a skipped round (review LG5-001, RG5-001)", async () => {
+    writePackage(".metaproject/flows/001-x/reviews/flow-r1", { reviewId: "flow-r1", head: A, ref: "feat/elsewhere" });
+    const good: ReviewRoundRecord = { reviewId: "flow-r1", dir: ".metaproject/flows/001-x/reviews/flow-r1", sortKey: "2026-10-01T00:00:00Z", ingested: true, problems: [], head: A, mode: "review-flow", coverage: [], findings: [], verification: null };
+    const starting: ReviewRoundRecord = { ...good, reviewId: "flow-r3", dir: ".metaproject/flows/001-x/reviews/flow-r3", ingested: false, problems: ["research scope census is incomplete"] };
+    const { round } = await findPreviousRound(TARGET, B, { cwd: root, github: offline, flowDir: "001-x", excludeReviewId: "flow-r3", flowRounds: async () => [good, starting] });
+    expect(round).toMatchObject({ source: "flow", previous: { reviewId: "flow-r1" } });
+    const detail = round.sourcesTried.find((attempt) => attempt.source === "flow")?.detail ?? "";
+    expect(detail).toContain("flow-r1");
+    expect(detail).not.toContain("flow-r3");
+    expect(detail).not.toContain("skipped");
+  });
+
   test("nothing anywhere: round 1, and the line names every source tried", async () => {
     const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
     expect(round).toMatchObject({ round: 1, source: "none", mode: "first", previous: null, fixHunks: [], carried: [] });

@@ -19,6 +19,7 @@ import { coverageErrors, requiredReviewers } from "./coverage";
 import { HOST_WAVE_BYTES, defaultWaveBytes, detectReviewHost } from "./host-profile";
 import { confirmedDecision, recordOperatorDecision } from "./operator-decisions";
 import { recordProcessCall, startOrchestratorLog } from "./orchestrator-log";
+import { packageDirById } from "./package-location";
 import { planConfirmed, recordPlanConfirmation, type PlanNumbers } from "./plan-confirmation";
 import { computeReadiness, renderReadiness } from "./readiness";
 import { publishReview } from "./publish";
@@ -501,6 +502,16 @@ describe("row 4: verification commands run in the parent", () => {
     expect(promoteParentExecutions([{ ...claims[0]!, evidence: "see research-evidence/verify-f-1-1.txt" }], pkg)[0]!.method).toBe("reasoning");
     expect(promoteParentExecutions(claims, other)[0]!.method).toBe("execution");
     expect(promoteParentExecutions(claims, undefined)[0]!.method).toBe("reasoning");
+  });
+
+  test("a flow-bound package is found by its review id, so its verify-run records are execution (review LG5-002)", async () => {
+    const flowPkg = path.join(root, ".metaproject", "flows", "001-x", "reviews", "flow-r1");
+    mkdirSync(flowPkg, { recursive: true });
+    await verifyRun({ packageDir: flowPkg, finding: "f-1", argv: ["true"], cwd: root, runner: async () => ({ exitCode: 0, stdout: "", stderr: "", timedOut: false }) });
+    expect(packageDirById(root, "flow-r1")).toBe(flowPkg);
+    const claims = [{ finding: "f-1", verdict: "confirmed" as const, method: "reasoning" as const, evidence: "see research-evidence/verify-f-1-1.txt", verifier: "review-verifier" }];
+    expect(promoteParentExecutions(claims, packageDirById(root, "flow-r1"))[0]!.method).toBe("execution");
+    expect(packageDirById(root, "not-yet")).toBe(path.join(root, ".metaproject", "reviews", "not-yet"));
   });
 
   test("a timed-out command is killed with its whole process group (security review M7)", async () => {
