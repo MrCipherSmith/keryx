@@ -24,7 +24,7 @@ license: "MIT"
 # Review — Flow Graph Abstractions
 
 Reviewer for reusable ReactFlow/graph integration layers. Use it when a repository has a shared
-graph surface consumed by domain modules. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
+graph surface consumed by domain modules. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
 
 ---
 

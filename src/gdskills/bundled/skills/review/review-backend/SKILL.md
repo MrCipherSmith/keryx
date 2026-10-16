@@ -26,7 +26,7 @@ license: "MIT"
 
 Focused backend reviewer covering NestJS patterns, REST API design, database access patterns,
 and TypeScript correctness for service-layer code. This skill does NOT duplicate security or
-performance checks — those belong to `review-security-code` and `review-performance`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
+performance checks — those belong to `review-security-code` and `review-performance`. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
 
 ---
 

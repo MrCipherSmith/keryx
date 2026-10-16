@@ -21,7 +21,7 @@ license: "MIT"
 
 ## Purpose
 
-Finds real, code-level performance problems introduced in the changed code of the current branch. Covers N+1 database queries, unnecessary React re-renders, missing memoization in hot paths, memory leaks, large bundle imports, synchronous blocking in async contexts, missing pagination, and redundant API calls. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
+Finds real, code-level performance problems introduced in the changed code of the current branch. Covers N+1 database queries, unnecessary React re-renders, missing memoization in hot paths, memory leaks, large bundle imports, synchronous blocking in async contexts, missing pagination, and redundant API calls. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
 
 This skill focuses on **measurable or high-likelihood bottlenecks** only. Premature optimization, hypothetical slowness, and style preferences are out of scope.
 

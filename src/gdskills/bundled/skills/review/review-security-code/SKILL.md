@@ -23,7 +23,7 @@ license: "MIT"
 
 ## Purpose
 
-Finds exploitable security vulnerabilities introduced in the changed code of the current branch. Covers injection, auth/authz gaps, IDOR, secrets, insecure crypto, CSRF, path traversal, and framework-specific patterns (NestJS, React). Produces findings with explicit attack vectors and concrete fixes. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs.
+Finds exploitable security vulnerabilities introduced in the changed code of the current branch. Covers injection, auth/authz gaps, IDOR, secrets, insecure crypto, CSRF, path traversal, and framework-specific patterns (NestJS, React). Produces findings with explicit attack vectors and concrete fixes. Its inputs are the reviewer payload only; session memory and earlier conversation are not inputs. It runs no command unless its payload's `allowed_tools` says `run-tests`.
 
 This skill covers **code-level security only**. It does NOT audit npm/bun dependency trees, Docker configurations, or deployment surfaces — use `security-audit` for those.
 

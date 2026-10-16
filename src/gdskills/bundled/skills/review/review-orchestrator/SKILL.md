@@ -27,7 +27,7 @@ license: "MIT"
 1. **Can it spawn?** The round needs a subagent-spawn tool (`Agent`, `spawn_subagent` or the host's equivalent) and depth budget left: Claude Code nests subagents at most 3 deep, and at the limit `Agent` is withheld. A host with no spawn tool at all (Codex and other AGENTS.md hosts) does not stop here and does not review alone: it runs the round through the autonomous runner, `keryx review run --autonomous --target pr --ref <pull request URL>` (no pull request: `--target branch --ref <base> [--head <commit>]`), and relays its verdict and exit code (see "Hosts"). Only a session that has spent the depth budget (a nested subagent) stops; its whole output is this line, with no tool calls and no review of your own:
    `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
 2. **Is a round needed?** List the files with `git diff --name-status --no-renames <base>...HEAD`, so a rename shows both paths. A diff where EVERY file is prose or machine-written data ends here with one line, `round not needed: <reason>`, and no reviewer. Prose is exactly: README or CHANGELOG at any depth; CONTRIBUTING, LICENSE, SECURITY or CODE_OF_CONDUCT at the top level; and under `docs/`, `.metaproject/wiki`, `.metaproject/reviews` or a flow's `journal.md`, a file with extension md, rst or adoc whose name holds a lowercase letter (an all-uppercase name such as AGENT or WARP is steering by convention). Machine-written data is a file under `coverage/` or `__generated__/` with extension lcov, info or map only; json, txt, html and md there are code. Steering is code wherever it sits, `docs/` included: a directory (singular or plural) named agent, skill, command, rule, prompt, instruction, persona, steering or hook, any path segment starting with a dot (`.claude`, `.cursorrules`, `.mcp.json`), a file name starting with SKILL, AGENT, CLAUDE, GEMINI, QWEN, CODEX, WARP, CRUSH, JULES, KNOWLEDGE, GUIDELINES, CONVENTIONS or copilot-instructions, ending in .local, .override, .instructions, .prompt, .agent or .chatmode before the extension, or containing prompt, instruction or system. A flow's `description.md`, `acceptance-criteria.md` and `tasks/` are gate inputs, so they are code. Every other file counts as code too, including lockfiles, committed `dist/` output, CI, auth, migrations, config JSON, and any path with `..`, a backslash, a leading `./` or `//`. `classifyRoundNeed` in `src/review/round-need.ts` is the tested reference of this rule; the host executes this text, and nothing in the CLI calls the function yet. `--all`, an explicit reviewer list or a gating round forces a round.
-3. **Round ceiling.** 5 rounds (`REVIEW_ROUND_CAP`) over the same `merge-base..HEAD`. Past it: interactive, ask the operator; unattended, `STATUS: BLOCKED round_cap`.
+3. **Round ceiling.** 5 rounds (`REVIEW_ROUND_CAP`) over the same change. Past it: interactive, ask the operator; unattended, `STATUS: BLOCKED round_cap`.
 4. **PR state, shown before dispatch.** On a PR target read its state (merged, approved, CI) and tell the operator the risk that it merges before the round ends: a verdict ready at minute 55 and held to minute 119 lost the race to the merge. Depth and the estimate need the package and the slice manifest, so they come later: after `review scope`, `review start` and `review slice`, before the first reviewer starts ("Round plan" steps 5-6; `SKILL.detail.md` § "Preflight 4").
 
 ## Hosts — the same round, different tools
@@ -48,8 +48,8 @@ license: "MIT"
 
 ## Round plan — the order on every host
 
-1. `keryx review scope --ref <base> --json > .metaproject/data/review/scope.json` (Step 3).
-2. `keryx review start --target <kind> --ref <ref> --scope .metaproject/data/review/scope.json --memory-query "<query>" --host <host>`, plus `--unattended` when nobody is at the keyboard.
+1. `keryx review plan --target <pr-url|branch> [--ref <base>] [--head <sha>] --host <host> [--memory-query "<query>"] [--unattended]` is the one command: it runs start, scope (Step 3), blast-radius (Step 3b), slice, required and estimate, writes `<package>/plan.json` and dispatches nothing. Read the round first (Step 1a), then dispatch from step 7.
+2. Without `plan`, run those stages one by one in this order: `keryx review scope --ref <base> --json > .metaproject/data/review/scope.json`, then `keryx review start --target <kind> --ref <ref> --scope .metaproject/data/review/scope.json --memory-query "<query>" --host <host>` (plus `--unattended` when nobody is at the keyboard); `start` searches every prior-round source (local package, git history, the PR's keryx round block, PR comments, flow) and writes `round.json`.
 3. `keryx review blast-radius --ref <base> --package <package> --json > blast-radius.json` (Step 3b). Reasoned omissions (`unrelated-symbol`, `hub-damped`, `text-hub`, `test-consumer`) are context, not scope; only cap drops become chunks. Run the tests in `<package>/tests-to-run.json` with the command the radius prints, instead of reading them, and hand the output to the reviewers as context.
 4. `keryx review slice --ref <base> --package <package> --host <host>`: each slice carries `roles`, `depth` (deep or light) and `audit`.
 5. `keryx review required --mode all --scope .metaproject/data/review/scope.json --depth auto --package <package>`.
@@ -106,6 +106,7 @@ Publish this checklist with `plan_set` under the ids `step-0`…`step-14` once, 
 ## How to spawn (Steps 8 and 10)
 
 - One `Agent` call per reviewer, all calls of a wave in a single message, so the wave runs in parallel.
+- Reviewers are read-only: they read the diff and the files and run no command. Only you (through `keryx review verify-run --timeout <seconds>`), the verifier and at most one testing reviewer run commands, inside a time budget. Each payload carries `allowed_tools` (`read-only` or `run-tests`) and `exec_budget_s`.
 - Use the reviewer's exact `subagent_type`. If the runtime has no such type, use `general-purpose` and name the reviewer's `SKILL.md` path in the prompt. Neither available: that reviewer is `BLOCKED`.
 - Prompts carry pointers, not pasted files — the diff, the SHAs, the PR, the schema paths — and never paraphrase a contract. On keryx shell the slices travel in `context_files` instead (below). Run `keryx review dispatch-check --payload <file> --manifest <package>/slices/manifest.json --package <package>` on every payload before a mass dispatch; it fails `REVIEWER_INPUT_PATH_MISSING` on a missing `skill_path` or `context_doc`.
 - A reply is a result only if it starts with a `STATUS:` line and carries a `REVIEW_RESULT` block matching `reviewer-finding.schema.json`; anything else is `BLOCKED`. The one exception: a reply or dispatch error of `STATUS: RATE_LIMITED` is handled by the Rate limits rule under Control, never marked `BLOCKED`.
@@ -696,49 +697,15 @@ record `model_assignment: adaptive` with the model you chose.
 
 ### Fix round check (Step 1a)
 
-A **fix round** is any review of work produced to answer earlier findings. Set
-`is_fix_round: true` on every reviewer input, and populate `prior_findings` with
-the earlier findings and the disposition the fix claimed for each.
+`keryx review start` (or `keryx review plan`) decides the round; you never pick a range. `<package>/round.json` says round N, the mode (`first`, `delta`, `fallback-first`), the source that found the previous round and the `range`; `<package>/prior_findings.json` holds the earlier findings. "Round 1 — no previous round found (sources tried …)" is a valid outcome: review as a first round and say which sources were tried.
 
-**The Jev edit guard is a FIX-phase tool, not a review-round tool.** `keryx review jev-edit-guard` (a separate feature) is the recommended Jev step during the FIX phase itself — run by the author's agent as it applies fixes, before this round re-reviews them. This skill never runs it; it is not part of review-orchestrator's own dispatch.
+- **`delta` round.** A FIX slice (`kind: fix`, a hunk that answers a prior finding) gets `review-logic`, `review-regression`, the authors of the findings attached to it and the verifier. Set `is_fix_round: true` and attach those findings as `prior_findings` on each of those reviewer inputs. A NEW slice (`kind: new`) is reviewed as round 1, with the roles its slice names. Unchanged code is not re-reviewed, and carried findings keep their dispositions.
+- **`fallback-first` round** (force-push or rebase: the previous head is not an ancestor). Review `merge-base..head` in full, with the prior findings attached.
+- **Every attached prior finding leaves the round with a disposition** — `closed`, `open`, `partial`, `regressed` or `withdrawn` — one line each in the report before the new findings, checked against the code and not the commit message. A fix is new code: the report carries a `## Regressions the fixes introduced` section. A finding this round disproves is withdrawn at the top of the report with its evidence. Table, recorded shapes and rationale: `SKILL.detail.md` § "Fix rounds — dispositions, regressions, withdrawal".
+- **Duplicates.** `keryx review ingest` merges duplicate findings; later waves receive `known_findings` and do not report them again.
+- **Enumerate what NAMES the thing the fix changed.** For each guard, instruction, message, refusal or helper a fix hunk touched, find its callers and the text that recommends it, and record the result in `review_context.scope.files`. On PR #216 a round corrected one operator instruction of four and silently broke the other three, because nothing looked. A round that searched and found nothing is a different fact from one that never searched; only the recorded list tells them apart.
 
-**Nothing refuses a dispatch that omits them.** `reviewer-input.schema.json`
-states the rule and no production TypeScript loads that schema; reviewer
-dispatch is an action the host agent takes, not a `keryx` invocation, so there
-is no point at which a malformed dispatch could be rejected. `reviewer-input` is
-also absent from the `CONTRACTS` registry (`src/gdskills/contracts.ts`), so
-`keryx skills contracts validate` cannot be pointed at it either.
-
-So this is a requirement on you, unenforced, and the only evidence it was met is
-the `prior_findings` array the reviewer actually receives. A reviewer that cannot
-see what the fix was answering cannot tell whether the fix is complete.
-
-Two scope rules apply, and they exist because breaking them is what produced
-seven rounds on PR #215 and four on PR #216:
-
-1. **Review `merge-base..HEAD`, never the fix commit alone.** Narrowing to the
-   newest commit is the intuitive move and it is wrong: it hides the blast
-   radius. A fix that changes a guard, an instruction, a refusal or a helper
-   makes every *other* site that names it wrong, and those sites are outside the
-   fix commit by construction.
-
-2. **Enumerate what NAMES the thing the fix changed.** For each guard,
-   instruction, message, refusal or helper the fix touched, grep for its callers
-   and for the text that recommends it, and record the result in
-   `review_context.scope.files`. On PR #216 a round corrected one operator
-   instruction of four; the correction silently broke the other three, and
-   nothing looked for them because nothing was asked to.
-
-Recording the enumeration matters as much as doing it: a round that searched and
-found nothing is a different fact from a round that never searched, and only the
-recorded list distinguishes them.
-
-Every prior finding leaves the round with a disposition — `closed`, `open`, `partial`,
-`regressed` or `withdrawn` — one line each in the report before the new findings, checked against
-the code and not the commit message. A fix is new code: scope A includes it, and the report carries
-a `## Regressions the fixes introduced` section. A finding this round disproves is withdrawn at the
-top of the report with its evidence. The table, recorded shapes and rationale:
-`SKILL.detail.md` § "Fix rounds — dispositions, regressions, withdrawal".
+**The Jev edit guard is a FIX-phase tool.** `keryx review jev-edit-guard` runs in the author's agent while it applies fixes; this skill never runs it. Nothing refuses a dispatch that omits them (the `prior_findings`): `reviewer-input.schema.json` states the rule, no production code loads it, and the `prior_findings` array a reviewer receives is the only evidence it was met.
 
 ### Step 2: Determine Review Mode
 

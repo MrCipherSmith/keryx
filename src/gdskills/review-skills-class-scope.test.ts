@@ -69,9 +69,10 @@ describe("the orchestrator collects context and records rounds", () => {
     expect(skill).toContain("### Memory (required)");
   });
 
-  test("a fix round is scoped to the branch, not to the fix commit", () => {
+  test("a fix round takes its round from `review start`, not from its own range", () => {
     expect(skill).toContain("is_fix_round");
-    expect(skill).toMatch(/merge-base\.\.HEAD`?, never the fix commit alone/);
+    expect(skill).toMatch(/you never pick a range/);
+    expect(skill).toMatch(/`fallback-first` round/);
     // The second half — enumerating what NAMES the changed thing — is the part
     // that would have caught one instruction of four.
     expect(skill).toMatch(/Enumerate what NAMES the thing the fix changed/);
