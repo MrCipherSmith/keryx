@@ -19,7 +19,7 @@
 import type { NormalizedMessage } from "../harness/provider/types";
 import { redactSensitiveText } from "../security/service";
 import { estimateTokens } from "../gdgraph/service";
-import { renderAnchorsBlock, type Slate, type SlateNote, type TrailEntry } from "./slate";
+import { modelNotesOf, renderAnchorsBlock, type Slate, type SlateNote, type TrailEntry } from "./slate";
 
 /** Token budget for the Trail digest in the frame. */
 export const FRAME_TRAIL_TOKENS = 2500;
@@ -92,7 +92,8 @@ function renderNotes(notes: Record<string, SlateNote>, opts: FrameOptions): stri
  * The memory section's text, or `undefined` when the slate has neither Notes nor a Trail. Pure.
  */
 export function renderMemoryFrame(slate: Pick<Slate, "notes" | "trail">, opts: FrameOptions): string | undefined {
-  const notes = slate.notes ?? {};
+  // A legacy answer note is the harness's record, not the model's memory, and is never shown.
+  const notes = modelNotesOf(slate.notes) ?? {};
   const trail = slate.trail ?? [];
   const hasNotes = Object.keys(notes).length > 0;
   if (!hasNotes && trail.length === 0) {

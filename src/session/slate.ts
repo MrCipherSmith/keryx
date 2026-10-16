@@ -142,6 +142,19 @@ export type Slate = {
    * legacy slate. Never a Seed, never part of a workspace proposal.
    */
   notes?: Record<string, SlateNote>;
+  /**
+   * The operator's answers to `ask_user` questions, keyed by `answer.<hash>` of the question and its options.
+   * Harness-only: no model tool reads or writes this field, it is never shown in the request, and it does not
+   * count against the Notes budget. Capped at {@link MAX_STORED_ANSWERS}; the oldest answer is evicted first.
+   */
+  answers?: Record<string, SlateAnswer>;
+};
+
+/** One recorded operator answer. `source` is always the operator: answers chosen by anything else are not stored. */
+export type SlateAnswer = {
+  text: string;
+  ts: string;
+  source: "operator";
 };
 
 /** One tool call, as the harness saw it (flow 393). */
@@ -174,14 +187,23 @@ export const NOTE_MAX_CHARS = 2000;
 export const NOTES_MAX_TOKENS = 8000;
 export const NOTE_KEY_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 /**
- * Prefix of the harness-only notes that hold an operator's answer to an `ask_user` question. The harness replays
- * such a note as "already answered by the operator", so only the harness may write or delete one.
+ * Prefix of the keys of recorded operator answers ({@link Slate.answers}). Notes may not use it: an older build kept
+ * the answers among the Notes under this prefix, so a note with such a key is a legacy answer (or a forgery of
+ * one) and is dropped wherever the Notes are written or carried.
  */
 export const ASK_ANSWER_NOTE_PREFIX = "answer.";
+/** At most this many operator answers are kept; recording one more evicts the oldest. */
+export const MAX_STORED_ANSWERS = 32;
 
-/** Whether a note key is in a namespace only the harness may write (any letter case). */
+/** Whether a note key is in the reserved answer namespace (any letter case). */
 export function isReservedNoteKey(key: string): boolean {
   return key.toLowerCase().startsWith(ASK_ANSWER_NOTE_PREFIX);
+}
+
+/** `notes` without any reserved-namespace key, or undefined when nothing is left of an absent shelf. */
+export function modelNotesOf(notes: Record<string, SlateNote> | undefined): Record<string, SlateNote> | undefined {
+  if (notes === undefined) return undefined;
+  return Object.fromEntries(Object.entries(notes).filter(([key]) => !isReservedNoteKey(key)));
 }
 
 /** A `slate_note` write that was refused; `message` is shown to the model verbatim. */
@@ -235,14 +257,20 @@ export async function readSlate(dir: string): Promise<Slate | undefined> {
   }
 }
 
-/** The part of a slate that is the model's working memory and must outlive a re-open of the same session. */
-export type WorkingMemoryCarry = { trail?: TrailEntry[]; notes?: Record<string, SlateNote> };
+/** The part of a slate that is the conversation's working memory and must outlive a re-open of the same session. */
+export type WorkingMemoryCarry = {
+  trail?: TrailEntry[];
+  notes?: Record<string, SlateNote>;
+  answers?: Record<string, SlateAnswer>;
+};
 
-/** `trail` and `notes` of `slate`, only the ones it has. */
+/** `trail`, `notes` and `answers` of `slate`, only the ones it has. Legacy answer notes are not carried. */
 export function workingMemoryOf(slate: Slate | undefined): WorkingMemoryCarry {
+  const notes = modelNotesOf(slate?.notes);
   return {
     ...(slate?.trail !== undefined ? { trail: slate.trail } : {}),
-    ...(slate?.notes !== undefined ? { notes: slate.notes } : {}),
+    ...(notes !== undefined ? { notes } : {}),
+    ...(slate?.answers !== undefined ? { answers: slate.answers } : {}),
   };
 }
 
@@ -264,7 +292,7 @@ export async function readArchivedWorkingMemory(dir: string): Promise<WorkingMem
       try {
         const slate = JSON.parse(await readFile(path.join(archiveDir, n), "utf8")) as Slate;
         const carry = workingMemoryOf(slate);
-        if (carry.trail !== undefined || carry.notes !== undefined) return carry;
+        if (carry.trail !== undefined || carry.notes !== undefined || carry.answers !== undefined) return carry;
       } catch {
         // An unreadable archive entry is skipped; the next newest one may hold the memory.
       }
@@ -467,14 +495,13 @@ export async function writeNote(
   key: string,
   text: string | undefined,
   ts: string,
-  writer: { harness?: boolean } = {},
 ): Promise<{ slate: Slate; stored?: SlateNote; truncated: boolean; deleted: boolean }> {
   if (!NOTE_KEY_PATTERN.test(key)) {
     throw new SlateNoteRefusedError(
       `invalid note key ${JSON.stringify(key.slice(0, 40))}: use 1-64 characters from A-Z a-z 0-9 . _ -`,
     );
   }
-  if (isReservedNoteKey(key) && writer.harness !== true) {
+  if (isReservedNoteKey(key)) {
     throw new SlateNoteRefusedError(
       `note keys starting with "${ASK_ANSWER_NOTE_PREFIX}" are reserved for the operator's recorded answers; choose another key`,
     );
@@ -486,7 +513,9 @@ export async function writeNote(
     if (prev === undefined) {
       throw new SlateNoteRefusedError("no open slate in this session, so there is nowhere to keep a note");
     }
-    const notes = { ...(prev.notes ?? {}) };
+    // A legacy answer note (an older build kept answers here) is dropped on any write: it is never replayed,
+    // the model cannot delete it, and it must not hold the shelf's budget.
+    const notes = { ...(modelNotesOf(prev.notes) ?? {}) };
     if (text === undefined) {
       deleted = key in notes;
       delete notes[key];
@@ -512,6 +541,30 @@ export async function writeNote(
     return { ...prev, notes };
   });
   return { slate, ...(stored !== undefined ? { stored } : {}), truncated, deleted };
+}
+
+/**
+ * Record an operator answer in {@link Slate.answers} (harness-only). The text is redacted and cut to
+ * {@link NOTE_MAX_CHARS}; past {@link MAX_STORED_ANSWERS} the oldest answers are evicted. Returns the stored
+ * answer, or undefined when no slate is open.
+ */
+export async function writeAnswer(dir: string, key: string, text: string, ts: string): Promise<SlateAnswer | undefined> {
+  if (!isReservedNoteKey(key) || !NOTE_KEY_PATTERN.test(key)) throw new Error(`invalid answer key ${JSON.stringify(key.slice(0, 40))}`);
+  let stored: SlateAnswer | undefined;
+  try {
+    await writeSlate(dir, (prev) => {
+      if (prev === undefined) throw new SlateNoteRefusedError("no open slate");
+      stored = { text: redactSensitiveText(text).slice(0, NOTE_MAX_CHARS), ts, source: "operator" };
+      const others = Object.entries(prev.answers ?? {}).filter(([k]) => k !== key);
+      others.sort(([, a], [, b]) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+      const kept = others.slice(Math.max(0, others.length - (MAX_STORED_ANSWERS - 1)));
+      return { ...prev, answers: { ...Object.fromEntries(kept), [key]: stored } };
+    });
+  } catch (error) {
+    if (error instanceof SlateNoteRefusedError) return undefined;
+    throw error;
+  }
+  return stored;
 }
 
 /**

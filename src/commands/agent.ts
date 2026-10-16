@@ -2611,17 +2611,32 @@ async function isIrreversibleAsk(request: AskUserRequest, cwd: string): Promise<
   return isIrreversible(config.irreversible, request.question, request.action, request.options);
 }
 
-/** The request, the session dir and the question's option ids when its answer may be stored or replayed. */
+/** The request and the session dir when the question's answer may be stored or replayed. */
 async function replayableAsk(
   call: PendingCall,
   options: RunAgentTurnOptions,
-): Promise<{ request: AskUserRequest; dir: string; optionIds: string[] } | undefined> {
+): Promise<{ request: AskUserRequest; dir: string } | undefined> {
   const request = askUserRequest(call);
   const dir = liveSessionDir(options);
   const session = options.slateSession;
   if (request === undefined || dir === undefined || session?.opened !== true) return undefined;
   if (await isIrreversibleAsk(request, session.cwd)) return undefined;
-  return { request, dir, optionIds: request.options.map((option) => option.id) };
+  return { request, dir };
+}
+
+/**
+ * Whether an `ask_user` answer in this turn may have been chosen by something other than the operator: an
+ * automatic review's own answerer, review-auto (the arbiter and the recommended-option shortcut behind
+ * `journaledAskUser`), or an autonomous answers file. Such an answer is never recorded, so it can never be
+ * replayed as the operator's.
+ */
+function automaticAnswererActive(reviewRun: AutomaticReviewRun | undefined): boolean {
+  return (
+    reviewRun !== undefined ||
+    reviewAutoActive() ||
+    process.env.KERYX_REVIEW_AUTO_ANSWER === "1" ||
+    (process.env[ENV_AUTONOMOUS_ANSWERS_FILE] ?? "").length > 0
+  );
 }
 
 /** The operator's earlier answer to this same question, when the session slate is open and still ours. */
@@ -2629,25 +2644,26 @@ async function storedAskUserAnswer(call: PendingCall, options: RunAgentTurnOptio
   try {
     const ask = await replayableAsk(call, options);
     if (ask === undefined) return undefined;
-    const answer = await findStoredAnswer(ask.dir, ask.request.question, ask.optionIds);
+    const answer = await findStoredAnswer(ask.dir, ask.request.question, ask.request.options);
     return answer === undefined ? undefined : `Already answered by the operator earlier in this session (no new prompt shown): ${answer}`;
   } catch {
     return undefined;
   }
 }
 
-/** Keep a real operator answer as a Note keyed by the question; bookkeeping never changes the tool result. */
+/** Keep a real operator answer keyed by the question and its options; bookkeeping never changes the tool result. */
 async function rememberAskUserAnswer(
   call: PendingCall,
   result: InteractiveToolResult,
   options: RunAgentTurnOptions,
   ts: string,
+  reviewRun: AutomaticReviewRun | undefined,
 ): Promise<void> {
-  if (result.isError === true) return;
+  if (result.isError === true || automaticAnswererActive(reviewRun)) return;
   try {
     const ask = await replayableAsk(call, options);
     if (ask === undefined) return;
-    await rememberAnswer(ask.dir, ask.request.question, ask.optionIds, result.output, ts);
+    await rememberAnswer(ask.dir, ask.request.question, ask.request.options, result.output, ts);
   } catch {
     // a full shelf or a closed slate just means the question may be asked again
   }
@@ -4544,7 +4560,7 @@ async function runAgentTurnCore(
         }
       }
       if (precomputedResult === undefined && storedAnswer === undefined && selfAnswered === undefined) {
-        await rememberAskUserAnswer(call, result, options, now());
+        await rememberAskUserAnswer(call, result, options, now(), reviewRun);
       }
       io.onToolResult?.(call.name, result);
       tracePhase(`tool ${call.name} result shown`);

@@ -613,6 +613,11 @@ test("AC3 (E10): an unattended trust-mode run (a trigger dispatch) gets no plan 
 
 // AC4
 
+const YES_NO = [
+  { id: "yes", label: "Yes" },
+  { id: "no", label: "No" },
+];
+
 function askRound(id: string, question: string, extra: Record<string, unknown> = {}): Script {
   return callRound(
     id,
@@ -656,9 +661,9 @@ test("AC4: the same question asked twice is prompted once and the second answer 
     slateSession,
   );
   expect(prompts).toEqual(["Which branch should I review?"]);
-  const key = askAnswerNoteKey("Which branch should I review?", ["yes", "no"]);
+  const key = askAnswerNoteKey("Which branch should I review?", YES_NO);
   expect(key).toBeDefined();
-  expect((await readSlate(dir))?.notes?.[key as string]?.text).toContain('User selected id="yes"');
+  expect((await readSlate(dir))?.answers?.[key as string]?.text).toContain('User selected id="yes"');
   const results = history.filter((m) => m.role === "tool").map((m) => m.content);
   expect(results).toHaveLength(2);
   expect(results[1]).toContain("Already answered by the operator");
@@ -675,7 +680,7 @@ test("AC4: with the slate not opened nothing is stored or reused", async () => {
   const { dir, slateSession } = await askFixture(false);
   const { prompts } = await runAsks([askRound("q1", "Which branch?"), askRound("q2", "Which branch?")], slateSession);
   expect(prompts).toEqual(["Which branch?", "Which branch?"]);
-  expect((await readSlate(dir))?.notes).toBeUndefined();
+  expect((await readSlate(dir))?.answers).toBeUndefined();
 });
 
 test("AC4: an irreversible or action question is asked every time and never stored", async () => {
@@ -690,7 +695,7 @@ test("AC4: an irreversible or action question is asked every time and never stor
     slateSession,
   );
   expect(prompts).toHaveLength(4);
-  expect((await readSlate(dir))?.notes).toBeUndefined();
+  expect((await readSlate(dir))?.answers).toBeUndefined();
 });
 
 test("AC4 (E1): a question the decision journal reads as irreversible is asked every time without a flag or tag", async () => {
@@ -700,7 +705,7 @@ test("AC4 (E1): a question the decision journal reads as irreversible is asked e
     slateSession,
   );
   expect(prompts).toHaveLength(2);
-  expect((await readSlate(dir))?.notes).toBeUndefined();
+  expect((await readSlate(dir))?.answers).toBeUndefined();
 });
 
 test("AC4 (E8): the same words with a different set of options are a new question", async () => {
@@ -720,10 +725,42 @@ test("AC4 (E8): the same words with a different set of options are a new questio
   expect(prompts).toEqual(["Which branch should I review?", "Which branch should I review?"]);
 });
 
+test("AC4: an answer picked while an automatic answerer is active is never stored or replayed as the operator's", async () => {
+  const prev = process.env.KERYX_REVIEW_AUTO_ANSWER;
+  process.env.KERYX_REVIEW_AUTO_ANSWER = "1";
+  try {
+    const { dir, slateSession } = await askFixture();
+    const { prompts, history } = await runAsks([askRound("q1", "Which branch?"), askRound("q2", "Which branch?")], slateSession);
+    expect(prompts).toEqual(["Which branch?", "Which branch?"]);
+    expect((await readSlate(dir))?.answers).toBeUndefined();
+    expect(history.filter((m) => m.role === "tool").some((m) => m.content.includes("Already answered by the operator"))).toBe(false);
+  } finally {
+    if (prev === undefined) delete process.env.KERYX_REVIEW_AUTO_ANSWER;
+    else process.env.KERYX_REVIEW_AUTO_ANSWER = prev;
+  }
+});
+
+test("AC4 (E8): the same question with relabelled options is asked again", async () => {
+  const { slateSession } = await askFixture();
+  const relabelled = callRound(
+    "q2",
+    "ask_user",
+    JSON.stringify({
+      question: "Which branch?",
+      options: [
+        { id: "yes", label: "Delete it", description: "" },
+        { id: "no", label: "Keep it", description: "" },
+      ],
+    }),
+  );
+  const { prompts } = await runAsks([askRound("q1", "Which branch?"), relabelled], slateSession);
+  expect(prompts).toEqual(["Which branch?", "Which branch?"]);
+});
+
 test("AC4 (E12): the model cannot forge an operator answer through slate_note", async () => {
   const { dir, slateSession } = await askFixture();
   const question = "Which branch should I review?";
-  const key = askAnswerNoteKey(question, ["yes", "no"]) as string;
+  const key = askAnswerNoteKey(question, YES_NO) as string;
   const forged = callRound(
     "n1",
     "slate_note",
@@ -761,7 +798,7 @@ test("AC4: a cancelled question is not stored, so it can be asked again", async 
   );
   await runAgentTurn(ioWith("trust"), deps, [], "go", { slateSession });
   expect(prompts).toHaveLength(2);
-  expect(Object.keys((await readSlate(dir))?.notes ?? {})).toHaveLength(1);
+  expect(Object.keys((await readSlate(dir))?.answers ?? {})).toHaveLength(1);
 });
 
 // AC10
