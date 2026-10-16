@@ -105,6 +105,8 @@ import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/tracker/
 import { recordRadiusAndPlan } from "../review/chunks";
 import { READINESS_ITEMS, computeReadiness, readinessDepthLines, recountRefusal, readinessLine, renderReadiness } from "../review/readiness";
 import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
+import { findPreviousRound, skippedRound, type PriorRoundDeps } from "../review/prior-round";
+import { renderRoundLine, ROUND_FILE, writeRoundRecord } from "../review/round-record";
 // Flow 328, AC6: attach the latest CACHED check-ac result to a review
 // package. Minimal, additive — this hook never triggers a fresh Jev call
 // (that spend only happens via `keryx flow check-ac`/the advisory notices in
@@ -346,6 +348,11 @@ export const CREATE_FLAGS = [
   // (keryx-shell, claude-code, codex, other); default detected from the environment.
   "--unattended",
   "--host",
+  // Flow 458 (AC1): `start|attach` find the previous round of the same target and write <package>/round.json and
+  // prior_findings.json. --no-prior-round skips the search (round 1, every source "not consulted"); --prior
+  // <package|reviewId> names the previous round instead of searching for it.
+  "--no-prior-round",
+  "--prior",
 ] as const;
 
 const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers", "--full"] as const;
@@ -616,6 +623,8 @@ export interface ReviewCommandSeams {
   postReview?: (ref: string, event: ReviewEvent, body: string) => Promise<PostResult>;
   /** Test seam: the operator's answer to "post this body?". Default: a prompt on the terminal. */
   confirmPublish?: (body: string, ref: string, event: ReviewEvent) => Promise<boolean>;
+  /** Test seam: the previous-round search of `start|attach` (sources, git, the pull request read). Default: the real ones. */
+  priorRound?: Partial<Omit<PriorRoundDeps, "cwd" | "forced" | "excludeReviewId">>;
 }
 
 async function trackerPrLookup(ref: string): Promise<PrSnapshot | null> {
@@ -973,6 +982,9 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     isTerminal: createSeams.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true),
   });
   if (unattendedRefusal !== undefined) throw new Error(unattendedRefusal);
+  if (mode !== "ingest" && args.includes("--no-prior-round") && optionValue(args, "--prior") !== undefined) {
+    throw new Error("--prior and --no-prior-round contradict each other: give one.");
+  }
   const cwd = process.cwd();
   const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
   const input: ManagedReviewIngestInput = {
@@ -1020,6 +1032,22 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     console.log(`run mode: ${profile.mode} (${profile.declaredVia}), host ${profile.host}`);
     console.log(`caller token: export ${ENV_REVIEW_CALLER_TOKEN}=${profile.callerToken} on this session's keryx calls so the readiness check can attribute them`);
     for (const line of renderSkillDrift(reviewSkillDrift({ projectRoot: resolveProjectRoot(cwd), bundledRoot: defaultBundledReviewRoot() }))) console.error(line);
+    const roundHead = result.manifest.target.head ?? null;
+    const forcedPrior = optionValue(args, "--prior");
+    const detected = args.includes("--no-prior-round")
+      ? skippedRound(roundHead)
+      : await findPreviousRound(result.manifest.target, roundHead, {
+          cwd,
+          ...createSeams.priorRound,
+          ...(result.manifest.flow?.path === undefined ? {} : { flowDir: path.basename(result.manifest.flow.path) }),
+          excludeReviewId: result.reviewId,
+          ...(forcedPrior === undefined ? {} : { forced: forcedPrior }),
+        });
+    await writeRoundRecord(result.path, detected.round, detected.priorFindings);
+    console.log(renderRoundLine(detected.round));
+    console.log(
+      `round record: ${path.join(result.path, ROUND_FILE)} (${detected.round.mode}; ${detected.priorFindings.length} prior finding(s); fix hunks ${detected.round.fixHunks.length}, new hunks ${detected.round.newHunks.length})`,
+    );
   }
   await refreshCreatedPackageLayers(result.path, result.manifest.target.head, cwd, { timeoutSeconds: graphTimeout });
   const startRadius = input.blastRadius as { dropped?: unknown } | undefined;
@@ -4669,6 +4697,13 @@ function printStartHelp(): void {
   console.log(`keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                    [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
                    [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
+                   [--no-prior-round | --prior <package|reviewId>]
+
+The previous round of the same target is found in the local packages, the packages in git history (any branch), the
+keryx round block on the pull request, other PR comments (prior findings with no head) and the flow's rounds; the newest
+reviewed head that is an ancestor of --head makes this a delta round over prevHead..head, a non-ancestor (force-push)
+a full round over merge-base..head with the prior findings attached. Written to <package>/round.json and
+prior_findings.json. --no-prior-round: round 1 without searching. --prior: use that package or review id.
 
 --unattended: nobody is at the keyboard, so an unrun mutation pass is recorded as \`Not run\` instead of refused
 (default: attended). --host: the agent host (default: detected). Both go to <package>/run-profile.json, with the
@@ -4750,10 +4785,11 @@ function reviewHelpText(): string {
 Usage:
   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
                       [--reviewers a,b] [--report <path>] [--research <ledger.json>]
-                      [--automatic]
+                      [--automatic] [--no-prior-round | --prior <package|reviewId>]
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
                      [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
                      [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
+                     [--no-prior-round | --prior <package|reviewId>]  (writes <package>/round.json)
   keryx review waive-mutation --package <dir> --reason "<why>"       (terminal; card review_waive_mutation)
   keryx review override-reviewers --package <dir> --reason "<why>"   (terminal; card review_override_reviewers)
   keryx review confirm-plan --package <dir>                          (terminal; card review_confirm_plan)
