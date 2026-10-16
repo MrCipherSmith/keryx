@@ -11,7 +11,7 @@
   "title": "Review findings get an independent premise check before anyone acts on them",
   "status": "in-progress",
   "createdAt": "2026-10-16T11:39:19.756Z",
-  "updatedAt": "2026-10-16T12:04:21.666Z",
+  "updatedAt": "2026-10-16T12:09:31.742Z",
   "source": {
     "type": "description",
     "ref": null
@@ -100,7 +100,7 @@
       "id": "T5",
       "title": "L1 code core: premise claims, delete-only merge, held findings in verdict/readiness/gate/dedupe",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -114,7 +114,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
@@ -146,8 +147,14 @@
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-16T12:09:31.742Z",
+            "outcome": "started",
+            "detail": "459-T7 sonnet worktree lane L2"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -282,6 +289,16 @@
       "at": "2026-10-16T12:04:21.666Z",
       "event": "task-done",
       "detail": "T6: L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators"
+    },
+    {
+      "at": "2026-10-16T12:09:31.586Z",
+      "event": "task-done",
+      "detail": "T5: L1 code core: premise claims, delete-only merge, held findings in verdict/readiness/gate/dedupe"
+    },
+    {
+      "at": "2026-10-16T12:09:31.742Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 459-T7 sonnet worktree lane L2"
     }
   ],
   "acKinds": {

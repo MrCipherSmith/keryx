@@ -16,3 +16,5 @@
 - 2026-10-16T11:46:27.181Z - task-attempt: T5: started (attempt 1) — 459-T5 sonnet worktree lane L1
 - 2026-10-16T11:46:27.335Z - task-attempt: T6: started (attempt 1) — 459-T6 opus worktree lane L3
 - 2026-10-16T12:04:21.666Z - task-done: T6: L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators
+- 2026-10-16T12:09:31.586Z - task-done: T5: L1 code core: premise claims, delete-only merge, held findings in verdict/readiness/gate/dedupe
+- 2026-10-16T12:09:31.742Z - task-attempt: T7: started (attempt 1) — 459-T7 sonnet worktree lane L2
