@@ -63,6 +63,39 @@ test("ingest --premises reaches the merge: the finding carries the premise and t
   expect(JSON.parse(await readFile(path.join(dir, PREMISES_FILE), "utf8"))).toEqual(PREMISES);
 });
 
+test("flow 460: --premises is repeatable — files merge with their own judges, and a disagreement across files applies neither", async () => {
+  const report = REPORT.replace(
+    JSON.stringify([{ id: "LY-003", reviewer: "review-layout", severity: "minor", problem: "timeline pinned LTR", impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" }]),
+    JSON.stringify([
+      { id: "LY-003", reviewer: "review-layout", severity: "minor", problem: "timeline pinned LTR", impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" },
+      { id: "LG-001", reviewer: "review-logic", severity: "minor", problem: "retry counter never resets", impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" },
+    ]),
+  );
+  await writeFile(path.join(ROOT, "report.md"), report);
+  const code = { judge: "review-premise-code", premises: [{ finding_id: "LG-001", verdict: "upheld" }, { finding_id: "LY-003", verdict: "upheld" }] };
+  const rest = { judge: "review-premise-rest", premises: [PREMISES.premises[0]] };
+  await writeFile(path.join(ROOT, "code.json"), JSON.stringify(code));
+  await writeFile(path.join(ROOT, "rest.json"), JSON.stringify(rest));
+  const dir = await ingest("2026-10-17-premises-many", ["--premises", "code.json", "--premises", "rest.json"]);
+  const findings = JSON.parse(await readFile(path.join(dir, "findings.json"), "utf8")) as Array<{ id: string; premise?: { verdict: string; judge: string } }>;
+  // LG-001: judged by one file only, with that file's judge.
+  expect(findings.find((finding) => finding.id === "LG-001")?.premise).toMatchObject({ verdict: "upheld", judge: "review-premise-code" });
+  // LY-003: upheld in one file, challenged in the other — a conflict, so neither is applied.
+  expect(findings.find((finding) => finding.id === "LY-003")?.premise).toBeUndefined();
+  const scope = await readFile(path.join(dir, "scope.md"), "utf8");
+  expect(scope).toContain("duplicate-claim");
+  expect(scope).toContain("premise files name this finding and do not agree");
+  // The claims are kept as received, one entry per file.
+  expect(JSON.parse(await readFile(path.join(dir, PREMISES_FILE), "utf8"))).toEqual([code, rest]);
+  // The package's own record round-trips (RG-002): a re-ingest with --premises <that file> reads the list, as the verdict does.
+  await writeFile(path.join(ROOT, "kept.json"), await readFile(path.join(dir, PREMISES_FILE), "utf8"));
+  const again = await ingest("2026-10-17-premises-many", ["--premises", "kept.json"]);
+  expect(process.exitCode ?? 0).toBe(0);
+  const reread = JSON.parse(await readFile(path.join(again, "findings.json"), "utf8")) as Array<{ id: string; premise?: { verdict: string; judge: string } }>;
+  expect(reread.find((finding) => finding.id === "LG-001")?.premise).toMatchObject({ verdict: "upheld", judge: "review-premise-code" });
+  expect(JSON.parse(await readFile(path.join(again, PREMISES_FILE), "utf8"))).toEqual([code, rest]);
+});
+
 type HeldRecord = { premise?: { verdict: string } };
 const readFindings = async (dir: string): Promise<HeldRecord[]> => JSON.parse(await readFile(path.join(dir, "findings.json"), "utf8")) as HeldRecord[];
 

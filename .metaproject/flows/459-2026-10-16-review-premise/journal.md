@@ -42,3 +42,14 @@ Skills fix lane merged (0d38ea4d2): 33 upheld findings fixed or merged into thei
 ## 2026-10-16 — rounds 3–5 and re-plan (owner decision)
 
 Majors per round 18 → 3 → 1 → 0 → 0; minors 92 → 31 → 16 → 11 → ~6. Five review/fix attempts reached. The carry-forward of holds on a re-ingest without --premises churned for three rounds (RG2-004 → RG4-001 partial → SEC4-001/SEC5-001). Owner: change strategy — carry holds from the previous ingest's findings.json records only, never re-read agent-writable premises.json; fix the remaining minors with one implementer; verify with the authors of those findings only. Then merge and release 0.3.121.
+- 2026-10-17T03:52:19.397Z - task-done: T9: PR review round(s) clean
+- 2026-10-17T03:52:19.549Z - task-done: T10: CHANGELOG, release 0.3.121
+- 2026-10-17T03:52:31.561Z - ac-confirmed: AC1: exec bun test src/review/premise.test.ts: 71 pass 0 fail (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:31.719Z - ac-confirmed: AC2: exec bun test verdict readiness review-gate dedupe: 150 pass 0 fail (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:31.877Z - ac-confirmed: AC3: exec bun test premise-decision, review-operator-cli, operator-confirm-review-tools: 83 pass 0 fail (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:32.038Z - ac-confirmed: AC4: invariant bun test src/gdskills/ (8000 pass, 1 unrelated environmental fail in install.test.ts) + coverage.test.ts & skills.bundled-verify.test.ts 61 pass 0 fail (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:32.196Z - ac-confirmed: AC5: invariant bun test review-skills-iron-laws.test.ts 18 pass 0 fail; src/gdskills/ 8000 pass, 1 unrelated environmental fail (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:32.356Z - ac-confirmed: AC6: invariant bun test src/gdskills/: 8000 pass, 1 unrelated environmental fail (install.test.ts read-only dir EACCES) (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:32.516Z - ac-confirmed: AC7: judged: .metaproject/flows/459-2026-10-16-review-premise/eval/README.md and owner decision in journal.md (Принять как есть) (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:32.680Z - ac-confirmed: AC8: exec npm view @mrciphersmith/keryx version -> 0.3.121 (PR #1044) (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:38.074Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1043 (warning: PR is not a draft)

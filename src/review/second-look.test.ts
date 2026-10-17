@@ -8,12 +8,14 @@ import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
-import { renumberSlices, secondLookSource } from "../commands/review-slice";
+import { secondLookSource } from "../commands/review-slice";
+import { deltaRoundCut, renumberSlices } from "./round-cut";
 import { emptyRangeWarning, findPreviousRound, resolveBase, subtractHunks, defaultGitRunner, weakReasons, type PriorRoundDeps, type RoundCandidate } from "./prior-round";
 import { previousRoundFacts, type RoundRecord } from "./round-record";
 import { estimateRound } from "./estimate";
-import { fixSliceRoles, secondLookClaimBacked, splitCounts, tagSecondLookSlices } from "./round-split";
+import { fixSliceRoles, partitionRegionsBySecondLook, secondLookClaimBacked, splitCounts, tagSecondLookSlices } from "./round-split";
 import { narrowedSlices } from "./routing-check";
+import type { ScopedRegion } from "./scope";
 import type { SliceEntry, SliceManifest } from "./slice";
 
 const PR = "https://github.com/acme/app/pull/7";
@@ -175,6 +177,44 @@ describe("a delta round's second look, on a throwaway repository", () => {
     expect(fixSliceRoles(manifest)).toEqual(expect.arrayContaining(["review-logic", "review-security-code"]));
   });
 
+  test("flow 460: a second-look hunk sharing a git region with the delta is cut to its own lines, and ledger build accepts the slicer's output", async () => {
+    // The next fix lands at line 13, three lines from round 1's line 10: in merge-base..head both sit in one -U3 region.
+    const near = commit("fix near round 1", { "src/a/a.ts": replaceLine(replaceLine(replaceLine(lines(200), 10, "export const l10 = 100; // round 1"), 13, "export const l13 = 700; // near fix"), 190, "export const l190 = 500; // the fix") });
+    writePackage("r1", GOOD_LEDGER);
+    const { round, priorFindings } = await findPreviousRound(TARGET, near, { cwd: root, github: offline, registry: [] });
+    expect(round.secondLookHunks?.find((h) => h.file === "src/a/a.ts")).toMatchObject({ startLine: 10, endLine: 10 });
+    const pkg = path.join(root, ".metaproject/reviews/r2");
+    write(".metaproject/reviews/r2/manifest.json", JSON.stringify({ schemaVersion: 1, reviewId: "r2", target: { kind: "pr", ref: PR, head: near } }));
+    write(".metaproject/reviews/r2/round.json", `${JSON.stringify(round)}\n`);
+    write(".metaproject/reviews/r2/prior_findings.json", `${JSON.stringify(priorFindings)}\n`);
+    write(".metaproject/reviews/r2/scope-files.json", JSON.stringify({ files: ["src/a/a.ts", "src/c/c.ts"] }));
+    mkdirSync(path.join(pkg, "raw"), { recursive: true });
+    process.chdir(root);
+    const log = console.log;
+    const err = console.error;
+    const exitCode = process.exitCode;
+    console.log = () => {};
+    console.error = () => {};
+    try {
+      await reviewCommand(["slice", "--package", pkg, "--head", near, "--max-bytes", "100000"]);
+      const manifest = JSON.parse(await readFile(path.join(pkg, "slices", "manifest.json"), "utf8")) as SliceManifest;
+      const text = (entry: SliceEntry): string => readFileSync(path.join(pkg, "slices", entry.path), "utf8");
+      const secondLook = manifest.slices.filter((slice) => slice.kind === "second-look");
+      expect(secondLook.map(text).join("\n")).toContain("// round 1");
+      expect(secondLook.map(text).join("\n")).not.toContain("// near fix");
+      // The near fix is read once, by the delta cut, not again beside the second look.
+      expect(manifest.slices.filter((slice) => text(slice).includes("+export const l13 = 700; // near fix"))).toHaveLength(1);
+      expect(narrowedSlices(manifest, text, { round, prior: priorFindings }).narrowed).toEqual([]);
+      // `ledger build` runs the same routing check on the package and must not refuse the slicer's own output.
+      const { runLedger } = await import("../commands/review-ledger");
+      await runLedger(["build", pkg, "--mode", "all", "--json"], { rejectUnknownFlags: () => undefined });
+    } finally {
+      console.log = log;
+      console.error = err;
+      process.exitCode = exitCode;
+    }
+  });
+
   test("secondLookSource keeps only the regions overlapping the second-look hunks", async () => {
     process.chdir(root);
     const source = await secondLookSource({ range: { base: reviewed, head }, mergeBase: base, secondLookHunks: [{ file: "src/c/c.ts", startLine: 1, endLine: 6 }] }, 3, undefined);
@@ -246,6 +286,50 @@ describe("a delta round's second look, on a throwaway repository", () => {
     expect(files.some((file) => file.startsWith(".metaproject/"))).toBe(false);
     expect(manifest.omissions.some((omission) => omission.path.startsWith(".metaproject/"))).toBe(false);
     expect(files).toContain("src/a/a.ts");
+  });
+});
+
+describe("second-look slices are cut to their hunks (flow 460)", () => {
+  const record: RoundRecord = {
+    v: 1, round: 2, source: "local-package", sourcesTried: [], previous: { reviewId: "r1", reviewedHead: "a".repeat(40) }, mode: "delta",
+    range: { base: "a".repeat(40), head: "b".repeat(40) }, mergeBase: "c".repeat(40), carried: [],
+    fixHunks: [], newHunks: [{ file: "src/x/x.ts", startLine: 5, endLine: 5 }], secondLookHunks: [{ file: "src/x/x.ts", startLine: 2, endLine: 3 }],
+  };
+  // One git region of merge-base..head: lines 2-3 are second look, line 5 is in the delta (a new hunk), and a removal
+  // before line 7 plus the added line 8 lie in no hunk at all.
+  const body = [" c1", "+export const sl2 = 2;", "+export const sl3 = 3;", " c4", "+export const new5 = 5;", " c6", "-export const gone = 0;", " c7", "+export const other8 = 8;", " c9"].join("\n");
+  const region: ScopedRegion = { path: "src/x/x.ts", startLine: 1, endLine: 9, changedLines: 5, contextTruncated: false, text: body };
+
+  test("partitionRegionsBySecondLook keeps only hunk lines on the second-look side and drops what the delta carries", () => {
+    const parts = partitionRegionsBySecondLook([region], record.secondLookHunks!, record.newHunks);
+    const look = parts.secondLook.map((piece) => piece.text).join("\n");
+    const outside = parts.outside.map((piece) => piece.text).join("\n");
+    expect(look).toContain("sl2");
+    expect(look).toContain("sl3");
+    expect(look).not.toMatch(/new5|gone|other8/);
+    expect(outside).toContain("-export const gone");
+    expect(outside).toContain("+export const other8");
+    expect(outside).not.toMatch(/sl2|sl3|new5/);
+    // A region touching no second-look hunk is not this cut's business.
+    expect(partitionRegionsBySecondLook([{ ...region, path: "src/y.ts" }], record.secondLookHunks!, [])).toEqual({ secondLook: [], outside: [] });
+  });
+
+  test("deltaRoundCut over such a region: the routing check reports nothing narrowed", () => {
+    const parts = partitionRegionsBySecondLook([region], record.secondLookHunks!, record.newHunks);
+    const cut = deltaRoundCut({
+      source: { source: "scoped-diff", regions: [], drops: [] },
+      delta: record,
+      prior: [],
+      sizes: { maxBytes: 100_000, waveBytes: 100_000 },
+      routing: { head: "h" },
+      secondLook: { source: "scoped-diff", regions: parts.secondLook, drops: [], outside: parts.outside },
+    });
+    expect(cut.slices.map((slice) => slice.kind).sort()).toEqual(["new", "second-look"]);
+    expect(cut.slices.find((slice) => slice.kind === "new")!.text).toContain("other8");
+    const byId = new Map(cut.slices.map((slice) => [slice.id, slice.text]));
+    expect(narrowedSlices({ slices: cut.slices }, (entry) => byId.get(entry.id), { round: record, prior: [] }).narrowed).toEqual([]);
+    // The whole region tagged second-look — what the slicer used to emit — is not backed by the round.
+    expect(secondLookClaimBacked({ kind: "second-look", files: ["src/x/x.ts"] }, { round: record, prior: [] }, `--- src/x/x.ts\n@@ 1,9 @@\n${body}`)).toBe(false);
   });
 });
 

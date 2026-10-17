@@ -37,6 +37,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { readReviewRounds, type ReviewRoundRecord } from "../flow/review-gate";
 import { flowsRoot } from "../flow/store";
+import { defaultGitRunner, emptyRangeWarning, mergeBaseOf, resolveBase, type GitResult, type GitRunner } from "./git-base";
 import { REVIEW_PACKAGE_MANIFEST_GLOBS, flowReviewsRoot, reviewsRoot } from "./package-location";
 import { collectPrComments, createGhPort, type CollectedComment, type CollectedRoundBlock } from "./pr-comments";
 import { mentionsFindingId } from "./publish";
@@ -63,9 +64,8 @@ import {
   type SourceAttempt,
 } from "./round-record";
 
-export type GitResult = { stdout: string; exitCode: number };
-/** Runs `git <args>` in `cwd`, with `input` on stdin when given. Never throws: a failure is a non-zero exit. */
-export type GitRunner = (args: string[], options?: { input?: string }) => Promise<GitResult>;
+export type { GitResult, GitRunner };
+export { defaultGitRunner, emptyRangeWarning, resolveBase };
 
 export type GithubLookup =
   | { status: "consulted"; blocks: CollectedRoundBlock[]; comments: CollectedComment[] }
@@ -263,23 +263,6 @@ const toPosix = (file: string): string => file.split(path.sep).join("/");
 // git
 // ---------------------------------------------------------------------------
 
-export function defaultGitRunner(cwd: string): GitRunner {
-  return async (args, options = {}) => {
-    try {
-      const proc = Bun.spawn(["git", ...args], {
-        cwd,
-        stdin: options.input === undefined ? "ignore" : new TextEncoder().encode(options.input),
-        stdout: "pipe",
-        stderr: "ignore",
-      });
-      const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-      return { stdout, exitCode };
-    } catch {
-      return { stdout: "", exitCode: 127 };
-    }
-  };
-}
-
 /** `git cat-file --batch` over `<rev>:<path>` specs: one process for any number of reads. Missing objects are absent. */
 async function catFiles(git: GitRunner, specs: readonly string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
@@ -312,30 +295,6 @@ async function distance(git: GitRunner, from: string, head: string): Promise<num
   return result.exitCode === 0 && Number.isFinite(count) ? count : Number.MAX_SAFE_INTEGER;
 }
 
-/** The base ref a target's merge-base is read from, and that merge-base: the first of --base, origin/main, main, origin/master, master that resolves. */
-export async function resolveBase(git: GitRunner, target: PriorRoundTarget, head: string): Promise<{ ref: string; sha: string } | null> {
-  // The recorded base (--base / `review plan --ref` / the manifest's target base) comes first. A merged pull request's
-  // merge-base with origin/main is its own head (an empty range), so a candidate that gives an empty range yields to the
-  // next one; when every candidate is empty the first is returned and the caller warns loudly (`emptyRangeWarning`).
-  let empty: { ref: string; sha: string } | null = null;
-  for (const ref of [target.base, "origin/main", "main", "origin/master", "master"]) {
-    if (ref === undefined || ref === "" || ref.startsWith("-")) continue;
-    const sha = await mergeBaseOf(git, ref, head);
-    if (sha === null) continue;
-    // An explicit base is kept even when it gives an empty range: the caller warns, it is never silently replaced.
-    if (ref === target.base) return { ref, sha };
-    if (!head.toLowerCase().startsWith(sha.toLowerCase()) && !sha.toLowerCase().startsWith(head.toLowerCase())) return { ref, sha };
-    empty ??= { ref, sha };
-  }
-  return empty;
-}
-
-/** The loud warning for a round whose range is empty: base and head are the same commit (typically a merged pull request read against its own target branch). */
-export function emptyRangeWarning(base: { ref: string; sha: string } | null, head: string | null): string | undefined {
-  if (base === null || head === null || !(head.toLowerCase().startsWith(base.sha.toLowerCase()) || base.sha.toLowerCase().startsWith(head.toLowerCase()))) return undefined;
-  return `empty review range: base ${base.ref} (${base.sha.slice(0, 12)}) equals head ${head.slice(0, 12)}, so there is nothing to slice. A merged pull request's merge-base with its target branch is its own head: pass the pull request's recorded base (\`review start --base <sha|ref>\`, \`review plan --ref <base>\`) or review an unmerged head.`;
-}
-
 /** New-side hunks of `from` with every line `remove` covers cut out: what `from` holds that `remove` does not. */
 export function subtractHunks(from: readonly RoundHunk[], remove: readonly RoundHunk[]): RoundHunk[] {
   const out: RoundHunk[] = [];
@@ -354,13 +313,6 @@ export function subtractHunks(from: readonly RoundHunk[], remove: readonly Round
     for (const [startLine, endLine] of pieces) out.push({ file: hunk.file, startLine, endLine });
   }
   return out;
-}
-
-async function mergeBaseOf(git: GitRunner, ref: string, head: string): Promise<string | null> {
-  if (ref.startsWith("-") || head.startsWith("-")) return null;
-  const result = await git(["merge-base", "--end-of-options", ref, head]);
-  const sha = result.stdout.trim();
-  return result.exitCode === 0 && SHA.test(sha) ? sha : null;
 }
 
 /**

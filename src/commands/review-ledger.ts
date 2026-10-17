@@ -4,16 +4,19 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
-import { DISPATCH_KNOWN_ROLES, skipDecision, skipLine, type ReviewerSkip, packageChangedLines, packageRoundDepth, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
+import { DISPATCH_KNOWN_ROLES, skipDecision, skipLine, type ReviewerSkip, packageRoundDepth, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
 import { SLICE_MANIFEST_COPY } from "../review/coverage-complete";
 import { readToolLog } from "../review/layers-usage";
-import { pendingMutants } from "../review/mutate";
+import { packageHasMutationRecord } from "../review/mutate";
+import { hashedDisplayIdMessage, hashedDisplayIds } from "../review/display-id";
+import { INGEST_SCREENED_FILE, ingestScreenedOf } from "../review/research";
 import { DISPOSITION_SCHEMA, normalizeDispositions, type LedgerGap, type RawFile, buildLedger, explainUnparsedResult, followUpsOf, isEmptyOutput, isReviewerResult, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
 import { type DriverFile, type DriverRecords, type ReplyNames, definitionCandidates, readDrivers, readJson } from "../review/driver-read";
 import { type RetryState, applyEscalations, emptyRetryState, escalationsFor, scopeFingerprint } from "../review/retry-plan";
 import { narrowedSlices, packageRoutingRefusal, routingRefusal, sliceTextReader } from "../review/routing-check";
-import { fixContextOf, fixSliceRoles } from "../review/round-split";
+import { fixContextOf, manifestRosterRoles } from "../review/round-split";
 import { readRoundRecord, roundRecordTampered } from "../review/round-record";
+import { type UsageTotals, splitUsage, usageTotalsLine } from "../review/dispatch-usage";
 import { type SliceManifest, manifestSizeProblem } from "../review/slice";
 import { packagePlanGate } from "../review/estimate";
 
@@ -40,13 +43,27 @@ Per required reviewer: the latest raw result decides. DONE / DONE_WITH_CONCERNS 
 needs_context and every slice its path gate requires covered by its dispatched payloads is a
 complete run (source-only, executionRequired false); anything else — NEEDS_CONTEXT, BLOCKED,
 INCOMPLETE, missing slices, no result — stays incomplete or not-run, never declared complete.
-Each raw finding becomes an obligation, closed only by a matching canonical finding or a
-valid --dispositions entry ({id, status finding|refuted|out-of-scope|narrowed, evidence, reason,
-finding?, remains? — required for narrowed: what of the finding still stands}; default: the obligations already in research.json).
+Each raw finding becomes an obligation <raw stem>:<id> (raw/review-logic-w1.txt finding F-001 is
+review-logic-w1:F-001), closed only by a matching canonical finding or a valid --dispositions entry
+(default: the obligations already in research.json). Every entry needs id, status (finding|refuted|
+out-of-scope|narrowed), evidence and reason; status finding links to exactly one canonical finding
+(global_id or id) — "finding" may be omitted, and then it is the canonical finding whose id is the
+entry's id, else the one the raw finding already resolves to; status narrowed also needs remains
+(what of the finding still stands).
+With no entry, a raw finding closes by itself when the canonical findings hold it: the same reviewer
+and id, a canonical id equal to the obligation id, or a survivor whose merged_from lists it (review
+ingest merged it as a duplicate); one review ingest screened out of findings.json (scope B, recorded in
+research-evidence/ingest-screened.json) closes out-of-scope with the screen's reason.
+Finding ids hold no "#" (the global_id separator, <reviewId>#<id>): canonical findings with one are refused.
 --dispositions is a JSON array, or an object holding one under dispositions, items, results, data, entries or
 obligations; a row with no id, an unknown status or a narrowed row without remains refuses the build with the list of bad rows.
-Each reviewer's model (drivers/*.json "model", or "model" in its result) is listed after READY / NOT READY; none reads "model not recorded". scopeReviewed and rawReconciled
-are true only when established.
+Each reviewer's model (drivers/*.json "model", or "model" in its result) is listed after READY / NOT READY; none reads "model not recorded".
+scopeReviewed and rawReconciled are true only when established.
+
+Token spend: a raw file may end with a \`KERYX_USAGE {"tokens_in":N,"tokens_out":M,"model":"…"}\` line (keryx shell's
+spawn_subagent writes it; another host appends it from its own agent result), or the result may carry "usage". Only the
+usage lines that end the file count; a \`KERYX_USAGE_OTHER\` line there is one more dispatch saved to the same path.
+Each run's usage and the round's total (research.json "usage") are recorded; a dispatch without one is counted unknown, never 0.
 
 --skip <reviewer> --reason "<why>" (repeatable, each --skip followed by its --reason) records a
 required reviewer the operator deliberately did not run: it leaves the dispatch selection, is
@@ -105,7 +122,10 @@ export async function loadRaws(inputDir: string, replies: ReplyNames): Promise<{
     // `Parent follow-up:` lines below the block join the result's own `follow_ups`; a result with neither is left as parsed.
     const followUps = result === undefined ? [] : followUpsOf(result, body);
     const merged = result === undefined || followUps.length === 0 ? result : { ...result, follow_ups: followUps };
-    raws.push({ name: `raw/${name}`, hash: sha(body), mtimeMs: (await stat(file)).mtimeMs, empty: isEmptyOutput(body), ...(merged === undefined ? { diagnosis: explainUnparsedResult(body) } : { result: merged }) });
+    // Flow 460: the dispatch's token use, from the `KERYX_USAGE` line the host appended (absent: unknown), and the other
+    // dispatches a re-dispatch to the same path recorded (`KERYX_USAGE_OTHER`); `reply` is the body without them.
+    const { body: reply, usage, others } = splitUsage(body);
+    raws.push({ name: `raw/${name}`, hash: sha(body), mtimeMs: (await stat(file)).mtimeMs, empty: isEmptyOutput(body), ...(merged === undefined ? { diagnosis: explainUnparsedResult(reply) } : { result: merged }), ...(usage === undefined ? {} : { usage }), ...(others === undefined ? {} : { otherUsage: others }) });
   }
   return { raws, ignored, setAside };
 }
@@ -170,11 +190,23 @@ export function parseSkips(args: readonly string[]): ReviewerSkip[] {
   return skips as ReviewerSkip[];
 }
 
-export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: string[], out: string, ignored: string[], dryRun = false, notRun: readonly string[] = [], models: ReadonlyArray<{ reviewer: string; model?: string | undefined }> = []): string {
+/** What the ledger report prints beside the verdict, the gaps and the gate's blockers. */
+export type LedgerReportExtras = {
+  /** True for `--dry-run`: research.json "would be written". */
+  dryRun?: boolean | undefined;
+  /** `Not run: <reviewer> — <why>` lines. */
+  notRun?: readonly string[] | undefined;
+  models?: ReadonlyArray<{ reviewer: string; model?: string | undefined }> | undefined;
+  usage?: UsageTotals | undefined;
+};
+
+export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: string[], out: string, ignored: string[], extras: LedgerReportExtras = {}): string {
+  const { dryRun = false, notRun = [], models = [], usage } = extras;
   const verb = dryRun ? "would be written" : "written";
   const lines = [ready ? `READY: ${out} ${verb} and satisfies the completion gate.` : `NOT READY: ${out} ${verb}, but the completion gate would refuse it.`];
   for (const line of notRun) lines.push(`- ${line}`);
   if (models.length > 0) lines.push(`models: ${models.map((entry) => `${entry.reviewer} ${entry.model ?? "model not recorded"}`).join(", ")}`);
+  if (usage !== undefined) lines.push(usageTotalsLine(usage));
   for (const gap of gaps) lines.push(`- gap${gap.reviewer ? ` [${gap.reviewer}]` : ""}: ${gap.detail}\n    next: ${gap.next}`);
   const waves = gaps.filter((gap) => gap.reviewer !== undefined && gap.waves !== undefined && gap.waves > 0);
   if (waves.length > 0) lines.push(`remaining waves: ${waves.map((gap) => `${gap.reviewer} ${gap.waves}`).join(", ")}`);
@@ -242,7 +274,11 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     if (hash === undefined) delete entry.contentHash;
     else entry.contentHash = hash;
   }
-  const canonical = (await readJson<Array<Record<string, unknown>>>(path.resolve(optionValue(rest, "--findings") ?? path.join(packageDir, "findings.json")))) ?? [];
+  const findingsSource = optionValue(rest, "--findings") ?? path.join(packageDir, "findings.json");
+  const canonical = (await readJson<Array<Record<string, unknown>>>(path.resolve(findingsSource))) ?? [];
+  // Flow 460: a display id holding "#" is refused here, where the canonical findings are first read, not at ingest.
+  const hashed = hashedDisplayIds(Array.isArray(canonical) ? canonical.map((finding) => finding?.id) : []);
+  if (hashed.length > 0) throw new Error(`ledger build refused: ${hashedDisplayIdMessage(hashed, findingsSource)} Nothing was built.`);
   const out = path.resolve(optionValue(rest, "--out") ?? path.join(packageDir, "research.json"));
   const dispositionSource = optionValue(rest, "--dispositions");
   const given = await readJson<unknown>(path.resolve(dispositionSource ?? out));
@@ -259,7 +295,7 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   const { payloadSlices, payloadDispatchCounts, ruleFiles, toolLogs: toolLogPaths, models, assignments, replies, dropped } = await readDrivers(inputDir, root);
   // A delta round's fix slices are read by their own roster (flow 458): the reviewers that authored the findings they answer
   // join the round even when no changed path asks for them, and each slice kind is held to its own roster below.
-  const selected = [...new Set([...required.required, ...(manifest === undefined ? [] : fixSliceRoles(manifest))])].sort();
+  const selected = [...new Set([...required.required, ...(manifest === undefined ? [] : manifestRosterRoles(manifest))])].sort();
   // M5: skipping a reviewer the round requires is a smaller reviewer set, the operator's decision (card or terminal), never
   // the agent's flag alone. A skip of a reviewer the round does not require changes nothing and is only recorded.
   const skipped = parseSkips(rest).map((skip) => (selected.includes(skip.reviewer) ? skip : { ...skip, reason: `${skip.reason} (not required this round)` }));
@@ -285,6 +321,9 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   if (plan.refusal !== undefined) throw new Error(`ledger build refused: ${plan.refusal}`);
   const toolLogs: Record<string, string | undefined> = {};
   for (const reviewer of selected) toolLogs[reviewer] = await readToolLog(inputDir, reviewer, toolLogPaths[reviewer]);
+  // Flow 460: the findings `review ingest` screened out of findings.json, closed out-of-scope with the screen's reason.
+  const screenedFile = path.join(packageDir, INGEST_SCREENED_FILE);
+  const screened = ingestScreenedOf(await readJson<unknown>(screenedFile));
   const { ledger, gaps } = buildLedger({
     dispatchRoles: await knownDispatchRoles(out, replies.reviewers),
     mode,
@@ -302,20 +341,24 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     canonical,
     dispositions,
     manifestPath: path.relative(process.cwd(), manifestPath),
+    mutationRecorded: await packageHasMutationRecord(packageDir),
     skipped,
     superseded: required.excluded.filter((entry) => entry.reason.startsWith("superseded by ") || entry.reason.startsWith("overlap group ")),
     supersedeNotes: required.notes,
+    screened,
+    screenedEvidence: path.relative(packageDir, screenedFile),
   });
   for (const driver of dropped) {
     gaps.push({ reviewer: driver.reviewer, detail: `drivers/${driver.file}: ${driver.unusable} slice entr${driver.unusable === 1 ? "y" : "ies"} without a usable id; none of this dispatch's slices counts as handed to ${driver.reviewer}`, next: `give every entry in drivers/${driver.file} an id string, or an object with an id` });
   }
   if (setAside.length > 0) ledger.setAside = setAside;
-  const blockers = await ledgerBlockers(ledger, canonical, { root, packageDir, files, changedLines: await packageChangedLines(packageDir), blastRadius, pendingMutants: (await pendingMutants(packageDir)).length });
+  // The package's own coverage options (packageCoverageErrors), as review complete and review readiness read them.
+  const blockers = await ledgerBlockers(ledger, canonical, { root, packageDir, files });
   const ready = blockers.length === 0;
   if (!rest.includes("--dry-run")) {
     await writeFileAtomic(out, `${JSON.stringify(ledger, null, 2)}\n`);
     if (manifest !== undefined && path.resolve(packageDir) !== inputDir) await writeFileAtomic(path.join(packageDir, SLICE_MANIFEST_COPY), `${JSON.stringify(manifest, null, 2)}\n`);
   }
-  console.log(rest.includes("--json") ? JSON.stringify({ ready, out, gaps, blockers, ignored, ledger }, null, 2) : renderLedgerReport(ready, gaps, blockers, path.relative(process.cwd(), out) || out, ignored, rest.includes("--dry-run"), skipped.map(skipLine), modelsOf(ledger.dispatch.runs)));
+  console.log(rest.includes("--json") ? JSON.stringify({ ready, out, gaps, blockers, ignored, ledger }, null, 2) : renderLedgerReport(ready, gaps, blockers, path.relative(process.cwd(), out) || out, ignored, { dryRun: rest.includes("--dry-run"), notRun: skipped.map(skipLine), models: modelsOf(ledger.dispatch.runs), usage: ledger.usage }));
   if (!ready) process.exitCode = 1;
 }

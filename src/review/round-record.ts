@@ -5,9 +5,21 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
+import { asRecord as record } from "./record";
 
 /** The round's code: everything but committed review packages, which record a review rather than being reviewed. Every diff a review slices goes through this pathspec. */
 export const NOT_REVIEW_PACKAGES = [".", ":(exclude).metaproject/reviews", ":(exclude,glob).metaproject/flows/*/reviews/**"];
+
+/**
+ * NOT_REVIEW_PACKAGES for a diff run at the repository top level when the project root sits at `projectDir` (a path
+ * relative to that top level, "" for the top level itself). The exclusion stays anchored at the project root the round
+ * is sliced at, so the coverage gate's light recheck and the slicer count the same files: a source file under some other
+ * directory's `.metaproject/reviews/` is reviewed and counted, never silently dropped from the size check.
+ */
+export function notReviewPackagesAt(projectDir: string): string[] {
+  const prefix = projectDir === "" || projectDir === "." ? "" : `${projectDir.split(path.sep).join("/").replace(/\/+$/, "")}/`;
+  return [".", `:(exclude)${prefix}.metaproject/reviews`, `:(exclude,glob)${prefix}.metaproject/flows/*/reviews/**`];
+}
 
 export const ROUND_FILE = "round.json";
 export const PRIOR_FINDINGS_FILE = "prior_findings.json";
@@ -73,9 +85,6 @@ export type PriorFinding = {
 export function quoteSha256(quote: string): string {
   return createHash("sha256").update(quote.replace(/\s+/g, " ").trim()).digest("hex");
 }
-
-const record = (value: unknown): Record<string, unknown> | undefined =>
-  value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
 
 /** What became of a finding, in one word: `open`, a disposition state, or `refuted`. */
 export function findingStatus(finding: unknown): string {
@@ -150,7 +159,7 @@ export const MANIFEST_IDENTITY_FIELDS = ["schemaVersion", "reviewId", "mode", "t
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value !== null && typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>).filter(([, item]) => item !== undefined).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const entries = Object.entries(value).filter(([, item]) => item !== undefined).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
     return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(",")}}`;
   }
   return JSON.stringify(value);

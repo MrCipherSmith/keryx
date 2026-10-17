@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type JsonSchema, validateJson } from "../gdskills/contracts";
+import { DISPLAY_ID_FORM, displayIdHasHash } from "./display-id";
 import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, byteLength, manifestSizeProblem, waveBytesOf } from "./slice";
 
 export type DispatchCheckCode =
@@ -13,7 +14,8 @@ export type DispatchCheckCode =
   | "REVIEWER_INPUT_NO_PR_CONTEXT"
   | "REVIEWER_INPUT_PATH_MISSING"
   | "REVIEWER_INPUT_MANIFEST_UNSIZED"
-  | "REVIEWER_INPUT_PLAN_UNCONFIRMED";
+  | "REVIEWER_INPUT_PLAN_UNCONFIRMED"
+  | "REVIEWER_INPUT_ID_FORM";
 
 export type DispatchCheckError = {
   code: DispatchCheckCode;
@@ -71,6 +73,16 @@ export type CheckDispatchOptions = {
   plan?: { refusal: string | undefined };
 };
 
+/** The finding ids a payload hands its reviewer, with where each sits: `known_findings[].id`, `prior_findings[].finding.id`. */
+function findingIdsOf(payload: unknown): Array<{ field: "known_findings" | "prior_findings"; at: number; id: unknown }> {
+  if (!isRecord(payload)) return [];
+  const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+  return [
+    ...list(payload.known_findings).map((entry, at) => ({ field: "known_findings" as const, at, id: isRecord(entry) ? entry.id : undefined })),
+    ...list(payload.prior_findings).map((entry, at) => ({ field: "prior_findings" as const, at, id: isRecord(entry) && isRecord(entry.finding) ? entry.finding.id : undefined })),
+  ];
+}
+
 /**
  * Refuse a reviewer payload that a bounded reviewer cannot finish.
  *
@@ -111,6 +123,13 @@ export async function checkDispatch(payloads: readonly unknown[], options: Check
             message: `${field} ${value} does not exist; the reviewer would be rejected at dispatch. Fix the path or omit the field`,
           });
         }
+      }
+    }
+    // Flow 460: a finding handed to the reviewer is named by a display id it will echo back; one holding "#" would
+    // only fail at ingest, after the whole round, when its global_id is minted.
+    for (const { field, at, id } of findingIdsOf(payload)) {
+      if (displayIdHasHash(id)) {
+        errors.push({ code: "REVIEWER_INPUT_ID_FORM", reviewer, path: `$.${field}[${at}]`, message: `finding id "${id}": ${DISPLAY_ID_FORM}` });
       }
     }
     if (options.prContext !== undefined) {

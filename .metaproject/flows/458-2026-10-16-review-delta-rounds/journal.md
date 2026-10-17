@@ -24,3 +24,18 @@
 - 2026-10-16T09:07:35.340Z - ac-updated: AC12: "(new)" -> "Claude Code run lessons (vantage-frontend #7956, 0.3.118): one command `keryx review next --package <dir>` returns the next dispatches for the whole package (all reviewers, missing slices, waves) so no per-reviewer retry-plan polling is needed; reviewer results are parsed leniently (fenced JSON, a list of results, trailing prose) with a precise error when unusable; `review slice --package` writes one driver per reviewer x wave with absolute slice paths; dispositions have one schema (wrapper keys normalised, `remains` required for narrowed) validated at ledger build; a finding whose file does not exist at the reviewed head is flagged at ingest; drivers and raw results record the reviewer model. Tests per item. [verify: exec `bun test src/review/review-next.test.ts src/review/result-parse.test.ts`]" (owner: include the #7956 Claude Code run lessons in flow 458 before the release)
 - 2026-10-16T09:07:35.483Z - task-added: T13: L4: review next, lenient result parse, drivers, disposition schema, path check, model record
 - 2026-10-16T09:37:26.325Z - task-done: T13: L4: review next, lenient result parse, drivers, disposition schema, path check, model record
+- 2026-10-17T03:52:19.058Z - task-done: T11: Live eval round 2 on a multi-round PR
+- 2026-10-17T03:52:19.235Z - task-done: T12: Release
+- 2026-10-17T03:52:29.635Z - ac-confirmed: AC1: exec bun test src/review/prior-round.test.ts: 43 pass 0 fail (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:29.792Z - ac-confirmed: AC2: exec bun test src/review/publish.test.ts src/review/pr-comments.test.ts: 113 pass 0 fail (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:29.950Z - ac-confirmed: AC3: exec bun test prior-round + round-split: 70 pass 0 fail (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:30.111Z - ac-confirmed: AC4: exec bun test round-split ledger readiness: 170 pass 0 fail (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:30.277Z - ac-confirmed: AC5: exec bun test src/review/dedupe.test.ts: 21 pass 0 fail (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:30.435Z - ac-confirmed: AC6: exec bun test coverage + slice-routing: 75 pass 0 fail (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:30.595Z - ac-confirmed: AC7: exec bun test ledger, review-ledger, managed: 218 pass 0 fail (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:30.754Z - ac-confirmed: AC8: exec bun test src/commands/review-plan.test.ts: 8 pass 0 fail (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:30.912Z - ac-confirmed: AC9: invariant bun test src/gdskills/: 8000 pass, 1 fail (install.test.ts read-only rules/core EACCES test, environmental, install.ts untouched by this flow) (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:31.071Z - ac-confirmed: AC10: judged: .metaproject/flows/458-2026-10-16-review-delta-rounds/eval/README.md (delta vs full on #1005/#992; owner chose the cheap second look) (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:31.235Z - ac-confirmed: AC11: exec npm view @mrciphersmith/keryx version -> 0.3.121 (>= 0.3.120 release, PR #1042); CI green on merged PR #1041 (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:31.399Z - ac-confirmed: AC12: exec bun test review-next + result-parse: 26 pass 0 fail (signed: MrCipherSmith [stated])
+- 2026-10-17T03:52:35.487Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1041 (warning: PR is not a draft)

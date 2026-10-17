@@ -35,7 +35,7 @@ import { answerChunkEstimate, chunkModeOf, estimateChunkRun, recordChunkEstimate
 import { computeCoverage, recordCoverageWaiver } from "../review/coverage-complete";
 import { resolveReviewPackagePath } from "../review/managed";
 import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
-import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, readinessItemId, waiveReadiness, type ReadinessOptions } from "../review/readiness";
+import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, READINESS_ITEMS, readinessItemId, waiveReadiness, type ReadinessOptions } from "../review/readiness";
 import type { PrLookup } from "../review/complete-head-gate";
 import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmSpec } from "./operator-confirm-tools";
 import { operatorDecisionSubject, reviewersLeftOut } from "../review/coverage";
@@ -303,7 +303,7 @@ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<Read
       "Same effect as `keryx review complete --waive <item>`: records the waiver (the operator's yes, the time) in the manifest and the report header; run `keryx review complete` afterwards to close the review.",
     inputSchema: {
       type: "object",
-      properties: { package: packageSchema, item: { type: "string", description: "The readiness item: its number (1-11) or id, e.g. head or pr-files. Item 11 (premise-decisions) is never waived: each held finding is answered with review_decide_premise." } },
+      properties: { package: packageSchema, item: { type: "string", description: `The readiness item: its number (1-${READINESS_ITEMS.length}) or id, e.g. head, pr-files or quotes-located. Item ${READINESS_ITEMS.find((entry) => entry.id === "premise-decisions")?.number ?? "premise-decisions"} (premise-decisions) is never waived: each held finding is answered with review_decide_premise.` } },
       required: ["package", "item"],
       additionalProperties: false,
     },

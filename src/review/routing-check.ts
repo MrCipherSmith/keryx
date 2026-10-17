@@ -28,13 +28,15 @@ export function narrowedSlices(manifest: Pick<SliceManifest, "slices">, readText
     // an added line that starts with `++ ` pass for a git header and route the slice as an empty unified diff.
     const needed = routeSliceRegions(entry.id, parseScopedDiff(text), { changedFiles });
     // A fix slice of a delta round (flow 458) must have the fix roster (computed with the function `review slice` routes
-    // with) AND everything its own content routes as a round-1 slice (M3), and a deep read. The round must back the claim;
-    // one it does not back is judged as a new slice.
-    const backedFix = fixClaimBacked(entry, fix);
+    // with) united with the content roles of its own changed lines (458 M3: a fix that spawns a process keeps
+    // review-security-code), and a deep read. The round must back the claim by the slice's text — every changed line in a
+    // fix hunk (flow 460 L6) — so the fix roster never covers new code; a claim it does not back is judged as a new slice
+    // (round-1 routing).
+    const backedFix = fixClaimBacked(entry, fix, text);
     // A second-look slice (unchanged code, one more pass) is read by logic and security-code only: the round must back the
     // claim, and then the narrower roster is the right one. An unbacked claim is judged as a new slice.
     const backedSecondLook = secondLookClaimBacked(entry, fix, text);
-    const roles = backedSecondLook ? [...SECOND_LOOK_ROLES] : backedFix ? [...new Set([...needed.roles, ...expectedFixRoles(entry, fix!)])] : needed.roles;
+    const roles = backedSecondLook ? [...SECOND_LOOK_ROLES] : backedFix ? expectedFixRoles(entry, fix!, text) : needed.roles;
     const recorded = new Set(entry.roles ?? []);
     const missingRoles = roles.filter((role) => !recorded.has(role)).sort();
     const shallow = (backedFix || backedSecondLook || needed.depth === "deep") && entry.depth !== "deep";

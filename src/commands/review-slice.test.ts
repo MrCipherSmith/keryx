@@ -1,11 +1,14 @@
 // Command-level behaviour of `keryx review slice` and `retry-plan` (flow 441 AC17, closing D-02).
 // Flow 427 AC2 and AC5 name this file as their verify command; the parser itself is covered in src/review/ledger.test.ts.
 
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "./review";
+import { deltaRoundCut } from "../review/round-cut";
+import type { RoundRecord } from "../review/round-record";
+import type { ScopedRegion } from "../review/scope";
 
 const ORIGINAL_CWD = process.cwd();
 const realError = console.error;
@@ -192,6 +195,19 @@ test("retry-plan --package: a late result counts the slices it reported, not the
   expect(plan.collectedLate).toBe(1);
 });
 
+test("retry-plan --package: a late DONE result that names no slices covers none (flow 460 D, same rule as the ledger)", async () => {
+  const { ids } = await sliceOnce();
+  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", findings: [] })}\n`);
+  let plan = JSON.parse(await nextWave());
+  expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
+  expect(plan.collectedLate).toBe(0);
+  // A finished reply whose inputs_unreadable names a mandatory input covers nothing either.
+  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", summary: "reviewed the diff only", inputs_unreadable: ["payload"], slices: ids })}\n`);
+  plan = JSON.parse(await nextWave());
+  expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
+  expect(plan.collectedLate).toBe(0);
+});
+
 test("retry-plan --package: a late result for a different scope fingerprint covers nothing", async () => {
   const { ids } = await sliceOnce();
   await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", scopeFingerprint: "stale", slices: ids })}\n`);
@@ -240,4 +256,30 @@ test("retry-plan re-opens a light slice deep when a result reports a major findi
   expect(slice.depth).toBe("deep");
   expect(slice.roles).toContain("review-security-code");
   expect(slice.escalated).toEqual({ by: "review-logic", finding: "F-1" });
+});
+
+describe("a delta round's cut (deltaRoundCut, flow 460 round 2)", () => {
+  const round = (fixHunks: RoundRecord["fixHunks"]): RoundRecord => ({
+    v: 1, round: 2, source: "local-package", sourcesTried: [], previous: { reviewId: "r1", reviewedHead: "a".repeat(40) }, mode: "delta",
+    range: { base: "a".repeat(40), head: "b".repeat(40) }, fixHunks, newHunks: [], carried: [],
+  });
+  const lines = (prefix: string, from: number, count: number): string => Array.from({ length: count }, (_, i) => `+"${prefix}${from + i}": "${"x".repeat(1_000)}",`).join("\n");
+  const region = (file: string, startLine: number, count: number, prefix: string): ScopedRegion => ({ path: file, startLine, endLine: startLine + count - 1, changedLines: count, contextTruncated: false, text: lines(prefix, startLine, count) });
+  const cut = (regions: ScopedRegion[], fixHunks: RoundRecord["fixHunks"]) =>
+    deltaRoundCut({ source: { source: "scoped-diff", regions, drops: [] }, delta: round(fixHunks), prior: [], sizes: { maxBytes: 150_000, waveBytes: 150_000 }, routing: { head: "h" }, secondLook: undefined });
+
+  test("a json file over the large-json bound is judged on its whole diff: omitted once, with its full size, never also sliced (LG-005)", () => {
+    // 2 x 60 KB: each part is under 100 KB, the file is over it. The first part answers a finding, the second is new.
+    const result = cut([region("data/big.json", 1, 60, "a"), region("data/big.json", 200, 60, "b")], [{ file: "data/big.json", startLine: 1, endLine: 60, findingIds: ["F1"] }]);
+    expect(result.slices.filter((slice) => slice.files.includes("data/big.json"))).toEqual([]);
+    const omitted = result.omissions.filter((omission) => omission.path === "data/big.json");
+    expect(omitted).toHaveLength(1);
+    expect(omitted[0]!.bytes).toBeGreaterThan(100_000);
+  });
+
+  test("a round whose every change is a fix of an omitted file is not an empty range: the omission is what the guard sees (LG-004)", () => {
+    const result = cut([region("data/big.json", 1, 120, "a")], [{ file: "data/big.json", startLine: 1, endLine: 120, findingIds: ["F1"] }]);
+    expect(result.slices).toEqual([]);
+    expect(result.omissions.map((omission) => omission.path)).toEqual(["data/big.json"]);
+  });
 });

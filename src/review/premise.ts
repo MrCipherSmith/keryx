@@ -26,6 +26,7 @@
 
 import { createHash } from "node:crypto";
 import { actorKey } from "./verification";
+import { DISPLAY_ID_FORM, displayIdHasHash } from "./display-id";
 import {
   HELD_PREMISE_VERDICTS,
   PREMISE_VERDICTS,
@@ -145,9 +146,11 @@ const ELLIPSIS = "...";
  * because it names no judge, and the never-judge-your-own-finding rule cannot be checked against nobody.
  */
 export function parsePremiseClaims(source: unknown): ParsedPremiseClaims | undefined {
-  if (source === undefined) {
-    return undefined;
-  }
+  return source === undefined ? undefined : parseOnePremiseResult(source);
+}
+
+/** One premise result, read as {@link parsePremiseClaims} reads it; a value that is not one throws. */
+function parseOnePremiseResult(source: unknown): ParsedPremiseClaims {
   if (!isRecord(source)) {
     throw new Error(
       "A premise result must be an object `{ judge, model?, premises: [...] }`, not an array or a bare value. Nothing was merged.",
@@ -170,6 +173,34 @@ export function parsePremiseClaims(source: unknown): ParsedPremiseClaims | undef
     ...(present(source.model) ? { model: source.model.trim() } : {}),
     claims,
   };
+}
+
+/**
+ * One or several premise results (`review ingest --premises` is repeatable, flow 460): an array whose every entry is a
+ * `{ judge, model?, premises }` object is several files, each keeping its own judge; anything else is one file, read by
+ * {@link parsePremiseClaims} (so a bare array of claims is still refused for naming no judge).
+ */
+export function parsePremiseClaimSets(source: unknown): ParsedPremiseClaims[] | undefined {
+  if (source === undefined) {
+    return undefined;
+  }
+  if (Array.isArray(source) && source.length > 0 && source.every((entry) => isRecord(entry) && "premises" in entry)) {
+    return source.map(parseOnePremiseResult);
+  }
+  return [parseOnePremiseResult(source)];
+}
+
+/** Several parsed premise results rather than one (`Array.isArray` does not narrow a readonly union). */
+function isClaimSetList(value: ParsedPremiseClaims | readonly ParsedPremiseClaims[]): value is readonly ParsedPremiseClaims[] {
+  return Array.isArray(value);
+}
+
+/**
+ * Flow 460: why a claim id holding `#` named nothing. `#` is the global_id separator (`<reviewId>#<id>`), so a display id
+ * may not contain it: a judge shown `review-logic-w1#F-001` as a display id names a key ingest can never mint.
+ */
+export function hashInDisplayIdDetail(id: string): string {
+  return `"${id}" contains "#" but is no global_id of this round: ${DISPLAY_ID_FORM}; name the finding by its display id, or by its full global_id.`;
 }
 
 export function isPremiseVerdict(value: unknown): value is PremiseVerdict {
@@ -206,7 +237,7 @@ function claimName(claim: PremiseClaimInput): string {
 function mergedKeyNames(key: string, id: string): boolean {
   if (key === id) return true;
   const hash = key.lastIndexOf("#");
-  return hash >= 0 && !id.includes("#") && key.slice(hash + 1) === id;
+  return hash >= 0 && !displayIdHasHash(id) && key.slice(hash + 1) === id;
 }
 
 /**
@@ -293,7 +324,13 @@ function signalList<V extends Record<string, string>>(value: unknown, field: str
   return { ok: true, value: out };
 }
 
-type Accepted<T> = { finding: T; premise: ReviewFindingPremise };
+type Accepted<T> = {
+  finding: T;
+  premise: ReviewFindingPremise;
+  /** The finding_id the claim named, and which premise file it came from (its index). */
+  named: string;
+  file: number;
+};
 
 /**
  * Apply premise claims to findings, deleting nothing and adding nothing.
@@ -304,14 +341,17 @@ type Accepted<T> = { finding: T; premise: ReviewFindingPremise };
  */
 export function mergePremises<T extends StructuredReviewFinding>(
   findings: readonly T[],
-  parsed: ParsedPremiseClaims | undefined,
+  parsedInput: ParsedPremiseClaims | readonly ParsedPremiseClaims[] | undefined,
 ): PremiseMergeResult<T> {
-  const claims = parsed?.claims ?? [];
-  const judge = parsed?.judge;
+  // Several premise files (flow 460) are one merge: each claim keeps its own file's judge and model.
+  const sets: readonly ParsedPremiseClaims[] = parsedInput === undefined ? [] : isClaimSetList(parsedInput) ? parsedInput : [parsedInput];
+  const claims = sets.flatMap((parsed, file) => parsed.claims.map((claim) => ({ claim, parsed, file })));
+  const judges = [...new Set(sets.map((parsed) => parsed.judge).filter((judge): judge is string => judge !== undefined))];
   const rejections: PremiseRejection[] = [];
   const accepted = new Map<string, Array<Accepted<T>>>();
 
-  for (const claim of claims) {
+  for (const { claim, parsed, file } of claims) {
+    const judge = parsed.judge;
     const name = claimName(claim);
     const reject = (reason: PremiseRejectionReason, detail: string): void => {
       rejections.push({ finding: name, reason, detail });
@@ -336,7 +376,12 @@ export function mergePremises<T extends StructuredReviewFinding>(
 
     const matches = claimTargets(findings, claim.finding_id);
     if (matches.length === 0) {
-      reject("unknown-finding", "this round reported no such finding. A premise judge cannot introduce one.");
+      reject(
+        "unknown-finding",
+        displayIdHasHash(claim.finding_id)
+          ? `this round reported no such finding: ${hashInDisplayIdDetail(claim.finding_id)}`
+          : "this round reported no such finding. A premise judge cannot introduce one.",
+      );
       continue;
     }
     if (matches.length > 1) {
@@ -450,7 +495,7 @@ export function mergePremises<T extends StructuredReviewFinding>(
     const premise: ReviewFindingPremise = {
       verdict,
       judge,
-      ...(parsed?.model === undefined ? {} : { model: parsed.model }),
+      ...(parsed.model === undefined ? {} : { model: parsed.model }),
       ...(severity === undefined ? {} : { severity, original_severity: target.severity }),
       ...(signals.value === undefined || signals.value.length === 0 ? {} : { intent_signals: signals.value }),
       ...(sources.value === undefined || sources.value.length === 0 ? {} : { practice_sources: sources.value }),
@@ -459,22 +504,32 @@ export function mergePremises<T extends StructuredReviewFinding>(
       ...(options === undefined ? {} : { options }),
     };
     const key = target.global_id ?? target.id;
-    accepted.set(key, [...(accepted.get(key) ?? []), { finding: target, premise }]);
+    accepted.set(key, [...(accepted.get(key) ?? []), { finding: target, premise, named: name, file }]);
   }
 
   // A finding claimed twice keeps neither claim. Taking the first would let claim order decide whether a
   // finding is held, and the safe resolution of a conflict is the one that holds nothing.
+  //
+  // Flow 460, two cases where no order decides anything because the claims say the same thing: the judge judged a
+  // surviving finding and the duplicate ingest folded into it (different names, one record), or two premise files
+  // judged the same finding. When every such claim carries the same verdict (and, for `downgraded`, the same severity)
+  // the verdict is applied once. Claims that differ, or one file naming one key twice, stay `duplicate-claim`.
   const applied = new Map<string, ReviewFindingPremise>();
   let appliedClaims = 0;
   for (const [key, group] of accepted) {
-    if (group.length === 1) {
-      applied.set(key, (group[0] as Accepted<T>).premise);
-      appliedClaims += 1;
+    if (group.length === 1 || agreeingClaims(group)) {
+      applied.set(key, preferredClaim(group, key).premise);
+      appliedClaims += group.length;
       continue;
     }
+    const files = new Set(group.map((entry) => entry.file)).size;
+    const detail =
+      files > 1
+        ? `${group.length} claims from ${files} premise files name this finding and do not agree. None is applied: file order must not decide whether it is held.`
+        : `${group.length} claims name this finding. None is applied: claim order must not decide whether it is held.`;
     // One row per discarded claim: `claims = applied + rejected` counts every claim.
     for (let index = 0; index < group.length; index += 1) {
-      rejections.push({ finding: key, reason: "duplicate-claim", detail: `${group.length} claims name this finding. None is applied: claim order must not decide whether it is held.` });
+      rejections.push({ finding: key, reason: "duplicate-claim", detail });
     }
   }
 
@@ -488,7 +543,7 @@ export function mergePremises<T extends StructuredReviewFinding>(
   });
 
   const counts: PremiseCounts = {
-    ...(judge === undefined ? {} : { judge }),
+    ...(judges.length === 0 ? {} : { judge: judges.join(", ") }),
     claims: claims.length,
     applied: appliedClaims,
     rejected: rejections.length,
@@ -508,6 +563,22 @@ export function mergePremises<T extends StructuredReviewFinding>(
   }
   counts.held = counts.challenged + counts.ownerDecision;
   return { findings: out, rejections, counts };
+}
+
+/**
+ * Whether several claims on one finding say the same thing and none repeats another: no (file, name) pair twice, and
+ * one verdict and one severity across them.
+ */
+function agreeingClaims<T>(group: ReadonlyArray<Accepted<T>>): boolean {
+  const sources = new Set(group.map((entry) => `${entry.file}:${entry.named}`));
+  if (sources.size !== group.length) return false;
+  const [head] = group;
+  return group.every((entry) => entry.premise.verdict === head?.premise.verdict && entry.premise.severity === head?.premise.severity);
+}
+
+/** The claim whose judgement is recorded: one naming the finding by its own key, else the first received. */
+function preferredClaim<T extends StructuredReviewFinding>(group: ReadonlyArray<Accepted<T>>, key: string): Accepted<T> {
+  return group.find((entry) => entry.named === key || entry.named === entry.finding.id) ?? (group[0] as Accepted<T>);
 }
 
 // ---------------------------------------------------------------------------

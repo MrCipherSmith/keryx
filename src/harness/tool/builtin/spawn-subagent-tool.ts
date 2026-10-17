@@ -10,7 +10,7 @@
 import { tracePhase } from "../../../lib/phase-trace";
 import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
-import { lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -23,6 +23,7 @@ import { createMetaprojectAdapter } from "../metaproject-adapter";
 import { RemainingBudgetLedger } from "../../child/ledger";
 import { DEFAULT_MAX_PASSES } from "../../../review/chunks-estimate";
 import { describeReviewWave, resolveReviewWave } from "../../../review/wave-key";
+import { type DispatchUsage, NO_TEXT_PLACEHOLDER, formatOtherUsageLine, formatRecordLine, isEmptyBody, splitUsage } from "../../../review/dispatch-usage";
 import { spawnSubagent, foldChildSummary } from "../../child/orchestrate";
 import type { SubagentContext } from "../../child/orchestrate";
 import type { HookRuntime } from "../../hooks";
@@ -303,10 +304,14 @@ export async function resolveSaveResultPath(
   return { ok: true, abs };
 }
 
-/** Write a child's full final text to the path `resolveSaveResultPath` approved. */
-async function saveChildResult(abs: string, text: string): Promise<string | undefined> {
+/** `value` when it is a finite number, else undefined: narrows without a cast. */
+const finiteNumber = (value: unknown): number | undefined => (typeof value === "number" && Number.isFinite(value) ? value : undefined);
+
+/** Write `text`, newline-terminated, to the path `resolveSaveResultPath` approved; a symlink put there since is refused. */
+async function writeRecordFile(abs: string, text: string): Promise<string | undefined> {
   try {
     await mkdir(path.dirname(abs), { recursive: true });
+    if ((await lstat(abs).catch(() => undefined))?.isSymbolicLink() === true) return "the path is now a symbolic link";
     await writeFile(abs, text.endsWith("\n") ? text : `${text}\n`, "utf8");
     return undefined;
   } catch (err) {
@@ -314,16 +319,85 @@ async function saveChildResult(abs: string, text: string): Promise<string | unde
   }
 }
 
+/** What one dispatch leaves at `save_result_to`: its text (empty when it wrote none) and its usage, when measured. */
+export type DispatchRecord = {
+  text: string;
+  /** True only for a child that completed with text: its record replaces whatever is at the path. */
+  final: boolean;
+  usage?: DispatchUsage | undefined;
+};
+
 /**
- * Write a timed-out child's partial text. A file already at the target with content (a complete result from an earlier
- * dispatch of the same slice) is never overwritten by a partial one (security review minor): the partial goes next to
- * it as `<target>.partial`, which no raw-result reader picks up. Returns where it went, or the error.
+ * Where a dispatch record went. `kept` names the earlier record that stayed the file's reply when only this dispatch's
+ * usage was added: a `complete` result, or a `partial` one kept over a dispatch that produced no text. `replaced` names a
+ * `partial` earlier record this dispatch's text replaced.
  */
-export async function saveTimedOutPartial(abs: string, text: string): Promise<{ saved: string } | { error: string }> {
-  const existing = await readFile(abs, "utf8").catch(() => "");
-  const target = existing.trim() === "" ? abs : `${abs}.partial`;
-  const error = await saveChildResult(target, text);
-  return error === undefined ? { saved: target } : { error };
+export type DispatchRecordSave = { kept?: "complete" | "partial"; replaced?: "partial" } | { error: string };
+
+/** The save in flight per absolute path: a save reads, then writes, the file, so two saves to one path run one after the other. */
+const recordSaves = new Map<string, Promise<DispatchRecordSave>>();
+
+/**
+ * Save one dispatch's record at `save_result_to` (flow 460, H). Every exit of a child goes through here: a completed
+ * reply, a child stopped, timed out, refused for load or failed with partial text, and one that ended with no text
+ * (saved as NO_TEXT_PLACEHOLDER, which every reader treats as an empty reply).
+ * - A file already at the path is another dispatch of the same slice. Its usage is never lost: it is carried into the
+ *   new record as a `KERYX_USAGE_OTHER` line, so the round's spend counts every paid dispatch.
+ * - A final record replaces what is there. A non-final one is saved with its line marked `incomplete`, and whether the
+ *   earlier record is a complete result is read from its content: a record with a reply and no `incomplete` mark is
+ *   complete and is kept (security review minor), with this dispatch's usage added and its modification time left as it
+ *   was. A later partial with text replaces an earlier partial (the retry ran longer); a dispatch with no text never
+ *   replaces earlier text.
+ * - Saves to one path are serialised in this process (read-modify-write under a per-path chain), so two children saving
+ *   to one path in one turn never write from the same stale read.
+ * Usage lines inside the child's own text are dropped, so only the harness states usage.
+ */
+export function saveDispatchRecord(abs: string, record: DispatchRecord): Promise<DispatchRecordSave> {
+  const save = (recordSaves.get(abs) ?? Promise.resolve<DispatchRecordSave>({})).then(
+    () => saveDispatchRecordNow(abs, record),
+    () => saveDispatchRecordNow(abs, record),
+  );
+  recordSaves.set(abs, save);
+  const release = (): void => {
+    if (recordSaves.get(abs) === save) recordSaves.delete(abs);
+  };
+  void save.then(release, release);
+  return save;
+}
+
+async function saveDispatchRecordNow(abs: string, record: DispatchRecord): Promise<DispatchRecordSave> {
+  const existing = await readFile(abs, "utf8").catch(() => undefined);
+  const prior = existing === undefined ? undefined : splitUsage(existing);
+  const body = splitUsage(record.text).body.trim();
+  const ownLine = formatRecordLine(record.usage, { incomplete: !record.final });
+  const priorHasReply = prior !== undefined && !isEmptyBody(prior.body);
+  const priorComplete = priorHasReply && prior.incomplete !== true;
+  if (prior !== undefined && priorHasReply && !record.final && (priorComplete || isEmptyBody(body))) {
+    // The earlier reply stays the file's, under its own line; this dispatch joins the others.
+    const others = [...(prior.others ?? []), record.usage].map(formatOtherUsageLine);
+    const priorLine = formatRecordLine(prior.usage, { incomplete: !priorComplete });
+    const before = await stat(abs).catch(() => undefined);
+    const error = await writeRecordFile(abs, [prior.body, ...others, ...(priorLine === undefined ? [] : [priorLine])].join("\n"));
+    if (error !== undefined) return { error };
+    if (before !== undefined) await utimes(abs, before.atime, before.mtime).catch(() => undefined);
+    return { kept: priorComplete ? "complete" : "partial" };
+  }
+  // A blank file with no usage line records no dispatch (nothing ran into it), so it adds no `unknown` one.
+  const priorRan = prior !== undefined && (prior.body.trim() !== "" || prior.usage !== undefined || prior.others !== undefined || prior.incomplete === true);
+  const others = priorRan ? [...(prior.others ?? []), prior.usage].map(formatOtherUsageLine) : [];
+  const error = await writeRecordFile(abs, [body === "" ? NO_TEXT_PLACEHOLDER : body, ...others, ...(ownLine === undefined ? [] : [ownLine])].join("\n"));
+  if (error !== undefined) return { error };
+  return priorHasReply && !priorComplete ? { replaced: "partial" } : {};
+}
+
+/** The line the parent reads about a saved record: where `what` went, or which earlier record was kept or replaced. */
+export function recordSaveNote(saved: DispatchRecordSave | undefined, what: string, savePath: string, options: { quietWhenSaved?: boolean } = {}): string {
+  if (saved === undefined) return "";
+  if ("error" in saved) return `\n[${what} could NOT be saved to ${savePath}: ${saved.error}]`;
+  if (saved.kept === "complete") return `\n[the complete result an earlier dispatch saved to ${savePath} was kept; this dispatch's ${what} was not written over it, only its usage was added]`;
+  if (saved.kept === "partial") return `\n[the partial result an earlier dispatch saved to ${savePath} was kept, because this dispatch produced no text; only its usage was added]`;
+  if (saved.replaced === "partial") return `\n[${what} saved to ${savePath}, replacing the partial result an earlier dispatch left there (its usage is kept)]`;
+  return options.quietWhenSaved === true ? "" : `\n[${what} saved to ${savePath}]`;
 }
 
 /**
@@ -1895,6 +1969,20 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
 
       let assistant = "";
       let closed = false;
+      // Flow 460 (H): the child's token use, summed over its provider requests; written into `save_result_to` as a
+      // `KERYX_USAGE` line so `review ledger build` can state the round's spend. Unknown (no line) when nothing reported.
+      const childUsage = { tokens_in: 0, tokens_out: 0, known: false };
+      const measuredUsage = (options: { partial?: boolean } = {}): DispatchUsage | undefined =>
+        childUsage.known ? { tokens_in: childUsage.tokens_in, tokens_out: childUsage.tokens_out, model: `${runModel.provider}/${runModel.model}`, ...(options.partial === true ? { partial: true as const } : {}) } : undefined;
+      /** Whether this dispatch's record is already written: a later throw must not save (and count) the same dispatch twice. */
+      let recordSaved = false;
+      /** Save this dispatch's record at `save_result_to` (saveDispatchRecord), when the parent asked for one. */
+      const saveRecord = async (text: string, options: { final: boolean; partial?: boolean }): Promise<DispatchRecordSave | undefined> => {
+        if (saveTarget.abs === undefined) return undefined;
+        const saved = await saveDispatchRecord(saveTarget.abs, { text, final: options.final, usage: measuredUsage(options) });
+        recordSaved = true;
+        return saved;
+      };
       // AC6 (flow 352 audit): `internalAbort` is triggered by THIS function's
       // own reasons (the deadline below, the catch block's cleanup) exactly
       // as `childAbort` always was; `composed` additionally aborts when the
@@ -1907,6 +1995,17 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       const io: AgentIO = {
         write: (s) => {
           assistant += s;
+        },
+        // Summed per usage_update: every adapter emits one per provider request (anthropic on message_delta, openai on
+        // response.completed, openai-compat on the trailing usage chunk, gemini once before model_end, fake on finish),
+        // so the sum is the child's total over its requests, not a cumulative count added twice.
+        onUsage: (usage) => {
+          const tokensIn = finiteNumber(usage.inputTokens);
+          const tokensOut = finiteNumber(usage.outputTokens);
+          if (tokensIn === undefined && tokensOut === undefined) return;
+          childUsage.tokens_in += tokensIn ?? 0;
+          childUsage.tokens_out += tokensOut ?? 0;
+          childUsage.known = true;
         },
         onAssistantText: (text) => {
           assistant = text;
@@ -2162,6 +2261,16 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           });
         }
       };
+      /**
+       * The epilogue every exit that does not complete shares: the fleet row marked failed with `detail`, the slate
+       * folded as incomplete and cleaned up, and the SubagentStop hook fired with `outcome`. `withModel` adds the
+       * child's model to the fleet row (the exits that know the run reached the provider).
+       */
+      const failChild = async (detail: string, outcome: string, options: { withModel?: boolean } = {}): Promise<void> => {
+        emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail, ...(options.withModel === true ? { model: `${runModel.provider}/${runModel.model}` } : {}), task });
+        await foldChildSlateAndCleanup("incomplete");
+        await fireSubagentStop(outcome);
+      };
 
       try {
         const history: import("../../provider/types").NormalizedMessage[] = [];
@@ -2215,9 +2324,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             });
             composed.dispose();
             releaseBudget();
-            emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "timeout", task });
-            await foldChildSlateAndCleanup("incomplete");
-            await fireSubagentStop("Timeout");
+            await failChild("timeout", "Timeout");
             // AC3 (flow 352 audit): this is child-authored free text same as
             // every other exit path's summary/submitted-result — an abandoned
             // child can still have written instruction-shaped prose before the
@@ -2226,16 +2333,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             const partial = assistant.trim();
             const foldedPartial = partial.length > 0 ? foldChildSummary(partial).text : "";
             // Flow 457 (T7, audit row 14): the parent parses the saved file, never the bounded tool output, so a
-            // child that ran out of time still leaves everything it wrote in `save_result_to`.
-            const partialSaved = saveTarget.abs === undefined || partial.length === 0 ? undefined : await saveTimedOutPartial(saveTarget.abs, partial);
-            const partialSaveNote =
-              partialSaved === undefined
-                ? ""
-                : "error" in partialSaved
-                  ? `\n[partial result could NOT be saved to ${String(input.save_result_to)}]`
-                  : partialSaved.saved === saveTarget.abs
-                    ? `\n[partial result saved to ${String(input.save_result_to)}]`
-                    : `\n[partial result saved to ${String(input.save_result_to)}.partial; the complete result already at ${String(input.save_result_to)} was kept]`;
+            // child that ran out of time still leaves everything it wrote in `save_result_to`. Flow 460 (H): a child
+            // that wrote nothing still leaves the placeholder, so its dispatch is counted; the usage line is marked
+            // partial, because the request in flight at the deadline had not reported its tokens yet.
+            const partialSaved = await saveRecord(partial, { final: false, partial: true });
+            const partialSaveNote = recordSaveNote(partialSaved, partial.length > 0 ? "partial result" : "empty result", String(input.save_result_to), { quietWhenSaved: partial.length === 0 });
             return {
               status: "Timeout",
               output:
@@ -2256,39 +2358,36 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         closed = true;
         composed.dispose();
         releaseBudget();
-        const raw =
+        const childText =
           assistant.trim().length > 0
             ? assistant.trim()
             : history
                 .filter((m) => m.role === "assistant")
                 .map((m) => m.content)
                 .join("\n")
-                .trim() || "(subagent produced no text)";
+                .trim();
+        // Decided once, here, from the child's text; the placeholder below is only what a no-text child is shown and saved as.
+        const producedNoText = childText === "";
+        const raw = producedNoText ? NO_TEXT_PLACEHOLDER : childText;
         const folded = foldChildSummary(raw);
         // E5: a child the provider refused for load ended with no result of its own. It is not
         // "Completed"; its first line is the harness signal the review orchestrator halves its wave on.
         if (turnResult?.rateLimited !== undefined) {
-          emitFleetEvent({
-            kind: "upsert",
-            id: workerId,
-            label,
-            status: "failed",
-            detail: "rate-limited",
-            model: `${runModel.provider}/${runModel.model}`,
-            task,
-          });
-          await foldChildSlateAndCleanup("incomplete");
-          await fireSubagentStop("Error");
+          await failChild("rate-limited", "Error", { withModel: true });
+          // A refused child left no result, but it was dispatched and the requests before the refusal were paid for: it
+          // leaves an empty record with its usage (unknown when the provider reported none), so the requeued dispatch adds
+          // to it instead of hiding it, and the round counts it.
+          const refusedSaved = await saveRecord("", { final: false });
           // Earlier rounds may have produced text before the refusal: hand it back (quarantined, bounded) so the
           // parent keeps that context when it requeues the task.
-          const hadText = raw !== "(subagent produced no text)";
-          const earlier = hadText ? boundSummary(folded.text) : undefined;
+          const earlier = producedNoText ? undefined : boundSummary(folded.text);
           return {
             status: "Error",
             isError: true,
             output:
               `${rateLimitedStatusLine(turnResult.rateLimited.retryAfterMs)}\nsubagent ${label} (${workerId}) via ${runModel.provider}/${runModel.model}: the provider refused the request for load (rate limit or overloaded); nothing was retried inside the child.` +
-              (earlier === undefined ? "" : `\n--- output before the refusal ---\n${earlier}`),
+              (earlier === undefined ? "" : `\n--- output before the refusal ---\n${earlier}`) +
+              recordSaveNote(refusedSaved, "usage record", String(input.save_result_to), { quietWhenSaved: true }),
             ...(earlier === undefined ? {} : { partial: earlier }),
           };
         }
@@ -2297,6 +2396,26 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // of D2a's two internal reasons FIRST. No new detection here; this
         // only labels what `finishReason` (D2a) already computed.
         const status = subagentStatusForFinishReason(turnResult?.finishReason);
+        // Flow 460 E: a child that ended with no text and submitted nothing produced no result. It is an
+        // error outcome, never "Completed" with a placeholder summary the parent could read as success.
+        if (status === "Completed" && producedNoText && turnResult?.submittedResult === undefined) {
+          await failChild("empty-reply", "Error", { withModel: true });
+          // Flow 460 (H): the empty dispatch was paid for, so `save_result_to` still records it (the placeholder, which
+          // every reader treats as empty, and the usage line), never over a complete result already there.
+          const emptySaved = await saveRecord("", { final: false });
+          const emptySaveNote = recordSaveNote(emptySaved, "empty result", String(input.save_result_to), { quietWhenSaved: true });
+          // PRD R9: advice for the parent model only. A read-only child changed nothing, so one more dispatch is safe; a
+          // general child may already have edited files or run commands before it ended, so a blind re-dispatch is not.
+          const advice =
+            mode === "read_only"
+              ? "treat the task as not done: re-dispatch it once, and if it ends empty again, report it as not run instead of dispatching it a third time."
+              : "treat the task as not done, but it may have changed files or run commands before it ended: inspect the working tree before re-dispatching it, and do not re-dispatch it more than once.";
+          return {
+            status: "Error",
+            isError: true,
+            output: `subagent ${label} (${workerId}) via ${runModel.provider}/${runModel.model} ended with no text and submitted no result; ${advice}${emptySaveNote}`,
+          };
+        }
         // PRD R9 guard: `status` is advisory for the PARENT MODEL's own
         // judgment only — do not add auto-retry/auto-extend logic here keyed
         // off it.
@@ -2321,10 +2440,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           (advisoryToolCalls === undefined ? "" : `calls~${advisoryToolCalls}(advisory) `) +
           `runtime≤${spawned.reservation.maxRuntimeMs}ms children=${ledger.childCount}\n` +
           (tierRecord === undefined ? "" : `${tierRecord}\n`);
-        const saveNote =
-          saveTarget.abs === undefined
-            ? ""
-            : `\n[full result ${(await saveChildResult(saveTarget.abs, raw)) === undefined ? "saved to" : "could NOT be saved to"} ${String(input.save_result_to)}]`;
+        // Only a completed child with text is final: a stopped one, or one with no text, never replaces a complete result.
+        const saveNote = recordSaveNote(await saveRecord(producedNoText ? "" : childText, { final: status === "Completed" && !producedNoText }), "full result", String(input.save_result_to));
         if (status === "Completed") {
           return { status, isError, output: `${header}--- summary ---\n${boundSummary(folded.text)}${saveNote}` };
         }
@@ -2359,17 +2476,16 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         composed.dispose();
         releaseBudget(); // a failed child must not hold the parent's budget either
         const msg = cause instanceof Error ? cause.message : String(cause);
-        emitFleetEvent({
-          kind: "upsert",
-          id: workerId,
-          label,
-          status: "failed",
-          detail: "error",
-          task,
-        });
-        await foldChildSlateAndCleanup("incomplete");
-        await fireSubagentStop("Error");
-        return { status: "Error", output: `subagent ${label} failed: ${msg}`, isError: true };
+        await failChild("error", "Error");
+        // The failed dispatch still ran: it leaves what it wrote and its usage so far, so the round counts it. The request in
+        // flight when it threw had not reported its tokens (the usage line is marked partial, as on a timeout), and the text is
+        // a partial, never written over a complete result. A record this dispatch already wrote stays the only one.
+        const failedText = assistant.trim();
+        const failedSaved = recordSaved
+          ? undefined
+          : await saveRecord(failedText, { final: false, partial: true }).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
+        const failedSaveNote = recordSaveNote(failedSaved, failedText.length > 0 ? "partial result" : "empty result", String(input.save_result_to), { quietWhenSaved: failedText.length === 0 });
+        return { status: "Error", output: `subagent ${label} failed: ${msg}${failedSaveNote}`, isError: true };
       }
       } catch (cause) {
         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "setup-error", task });

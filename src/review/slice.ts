@@ -409,6 +409,32 @@ export function validateWaveBytes(value: number, maxBytes: number): number {
 }
 
 /**
+ * The ledger omissions of a set of regions, judged per file over ALL of that file's regions — the same judgement
+ * `buildSlices` makes. A caller that cuts one source into several `buildSlices` calls (a delta round's fix and new
+ * regions) classifies here first, so a large json is judged on its whole diff and recorded once with its full size.
+ */
+export function ledgerOmissions(regions: readonly ScopedRegion[]): SliceOmission[] {
+  const omissions: SliceOmission[] = [];
+  for (const [filePath, fileRegions] of regionsByFile(regions)) {
+    const bytes = sectionsBytes(fileRegions.map(regionSection));
+    const ledger = classifyLedger(filePath, bytes);
+    if (ledger !== null) omissions.push({ path: filePath, reason: ledger.reason, detail: ledger.detail, bytes });
+  }
+  return omissions;
+}
+
+/** Regions grouped by file, in first-seen order; each file's list grows in place (linear in the regions). */
+function regionsByFile(regions: readonly ScopedRegion[]): Map<string, ScopedRegion[]> {
+  const byFile = new Map<string, ScopedRegion[]>();
+  for (const region of regions) {
+    const list = byFile.get(region.path);
+    if (list === undefined) byFile.set(region.path, [region]);
+    else list.push(region);
+  }
+  return byFile;
+}
+
+/**
  * Cut scope A into slices of at most `maxBytes` each.
  *
  * Domains keep their files together; a domain larger than the ceiling is cut by
@@ -424,15 +450,7 @@ export function buildSlices(
   const prefix = options.prefix ?? "slice";
   const dir = options.dir === undefined || options.dir === "" ? "" : `${options.dir.replace(/\/+$/, "")}/`;
 
-  const byFile = new Map<string, ScopedRegion[]>();
-  for (const region of source.regions) {
-    const list = byFile.get(region.path);
-    if (list === undefined) {
-      byFile.set(region.path, [region]);
-    } else {
-      list.push(region);
-    }
-  }
+  const byFile = regionsByFile(source.regions);
 
   const omissions: SliceOmission[] = [];
   for (const drop of source.drops) {

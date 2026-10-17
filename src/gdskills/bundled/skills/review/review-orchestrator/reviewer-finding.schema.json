@@ -82,7 +82,7 @@
             "minimum": 1
           },
           "quote": {
-            "description": "The code this finding is about, copied verbatim out of `file`. A few lines is enough — it is matched against the file at the round's head, exactly first and then with whitespace collapsed. A quote that appears in more than one place is recorded as `unlocatable` rather than anchored to the first hit, so quote enough to be unambiguous.",
+            "description": "The code this finding is about, copied verbatim out of `file`. A few lines is enough — it is matched against the file at the round's head, exactly first, then with whitespace collapsed, then (a one-line quote of at least 12 characters) as an exact substring of exactly one line; a shorter fragment must be a whole line. A quote that appears in more than one place is recorded as `unlocatable` rather than anchored to the first hit, so quote enough to be unambiguous.",
             "type": [
               "string",
               "null"
@@ -182,6 +182,15 @@
       "type": "array",
       "items": {
         "type": "string"
+      }
+    },
+    "inputs_unreadable": {
+      "title": "Mandatory inputs the reviewer could not read",
+      "description": "Name each mandatory input of the dispatch the reviewer could not read: pr_context.json, this schema, a context file, the payload, the slice manifest. Empty or absent when it read them all. A DONE or DONE_WITH_CONCERNS result that names any is not a finished run for `ledger build` or `retry-plan`. Only this field is read for it, never the summary's wording.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
       }
     },
     "follow_ups": {

@@ -84,6 +84,13 @@ if (process.env.KERYX_HOOKS === undefined) {
   process.env.KERYX_HOOKS = "off";
 }
 
+// `keryx review start|attach|ingest` of a pull request target asks `gh pr view` for the PR's own base (flow 460). A test that
+// reaches it without the `prBase` seam would run a real `gh` against GitHub (up to 15 s offline); off by default here. A test of
+// the real reader sets `KERYX_REVIEW_PR_BASE` to something else around a stand-in `gh` on PATH (src/commands/review-pr-base.test.ts).
+if (process.env.KERYX_REVIEW_PR_BASE === undefined) {
+  process.env.KERYX_REVIEW_PR_BASE = "off";
+}
+
 // Sweep the roots left by earlier runs.
 //
 // Without this every `bun test` left a directory behind — 23 had accumulated on

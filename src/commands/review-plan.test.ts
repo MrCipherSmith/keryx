@@ -1,5 +1,6 @@
 // Flow 458 AC8: `keryx review plan` runs the round's planning steps in order, writes plan.json and never dispatches.
 // The steps are replaced by a fake that leaves the files the real ones leave; the plan's own reading of them is real.
+// The real steps end to end, in a real git repository, are in review-plan.e2e.test.ts.
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync } from "node:fs";

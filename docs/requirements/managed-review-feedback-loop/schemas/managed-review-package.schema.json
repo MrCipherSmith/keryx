@@ -49,6 +49,10 @@
         "base": {
           "type": "string"
         },
+        "prBase": {
+          "type": "string",
+          "description": "A pull request's own base (origin/<baseRefName>, read with gh at review start) when --base named another; the light recheck measures against it too."
+        },
         "head": {
           "type": "string"
         }
@@ -249,6 +253,11 @@
         },
         "dropped_findings_cap": {
           "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "merged_duplicates": {
+          "description": "Records the duplicate merge folded into a surviving finding (flow 460). Not a drop; counted so that total minus the finding-stage drops minus merged_duplicates equals retained. Absent on records written before it, read as 0.",
+          "type": "integer",
           "minimum": 0
         },
         "retained": {

@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Added
+- **Token spend per review dispatch.** A reviewer's saved result may end with a `KERYX_USAGE {tokens_in, tokens_out, model, by: "host"}` line (keryx shell's spawn_subagent writes it; other hosts append it from their agent result; counts without the host mark are reported as stated by the reviewer, not measured); `ledger build` records usage per run, research.json and report.md state the round's total, and a dispatch with no usage is counted as unknown, never 0.
+- Readiness item 12 `quotes-located` names findings whose quote could not be placed at the reviewed head.
+
+### Fixed
+- **Readiness and complete agree.** Readiness item 3 runs the same coverage gate `review complete` runs. A light round's diff is recomputed at the repository top level against `target.base` (fallback origin/main, main, …) instead of `git diff <PR URL>...<head>`, which always failed and forced the full reviewer set; a package under a subdirectory's `.metaproject/reviews` works; a git failure names cwd, base and head.
+- A confirmed `reviewer-override` decision (card or `keryx review override-reviewers`) now lets `review complete` pass; it no longer needs a dispatch `override` field nothing wrote.
+- The shell's review-gate nudge names this session's review: the active-review pointer and packages started in the session (including under a subdirectory) come first, and an open package from before the session is never named.
+- A child subagent that ends with no text returns an error, not `Completed`; a DONE reply without `slices` under a slice manifest is not scope coverage; a reply saying it could not read a mandatory input is incomplete.
+- research.json lists "Not run: mutation (light round)" only when no mutation pass was recorded; an ingest with research lists the reviewers that ran in coverage.md and the manifest instead of `review-orchestrator`.
+- **`review ingest` no longer refuses a round for an unplaceable quote.** A finding whose quote is absent or matches several places is kept unanchored and flagged `quote_unlocated` (never relocated by similarity); the round is recorded, so the next `review plan` after a fix plans a delta round.
+- **A quote that is part of one line is placed.** A one-line quote of at least 12 characters that is an exact substring of exactly one line now anchors to it (`locator.method: substring`), after the exact and whitespace-collapsed passes; it used to be `quote_unlocated`. The reviewer-facing `quote` description says so.
+- **`review ingest --premises` is repeatable.** Duplicate claims for one finding are merged: agreeing claims collapse, disagreeing claims are dropped and listed as `duplicate-claim` in scope.md. A finding id may not hold `#`.
+- **A fix slice holds only fix lines and gets the fix roster.** `review plan` partitions a delta round so a FIX slice holds the hunks that touch a finding and is read by `review-logic`, `review-regression`, the findings' authors, `review-security-code` when a security finding is attached, the roles its own changed lines route by content (e.g. `review-security-code` for a fix that spawns a process), and the verifier. `filter_stats` gains `merged_duplicates`, and `total - drops - merged_duplicates = retained`.
+- **The shell's review gate reads the commands a session ran as a shell would split them.** A redirection (`2>&1`, `>&2`, `&>log`) is no longer a command separator, a pipe into `tee`/`head`/`grep` keeps the command on its left, and keryx is recognised however it is run (`npx keryx`, `bunx keryx`, `bun src/cli.ts`, a path to `keryx`). So `cd sub && keryx review start --pr N 2>&1` names the package under `sub`, and a `keryx review` command run in a subdirectory makes it a scanned root. A review id is matched against the package's directory name only, never the `reviewId` a committed manifest claims.
+- **A retry's partial result is no longer lost.** spawn_subagent marks a non-final save `"incomplete":true`; a later partial with text replaces an earlier partial, only a complete earlier result is kept, the parent is told which, saves to one path are serialised, and a failed or rate-limited child (usage unknown) still records its dispatch.
+- **The light recheck measures the widest diff.** It takes the files and the changed lines of the recorded base, the pull request's own base (read with gh at `review start`, recorded as `target.base` when no `--base` is given, else as `target.prBase`) and the default base, each dimension at its widest; a project reached through a symlink still excludes its review packages.
+- **A light round dispatches the security reviewer slice routing names.** A slice routed to `review-security-code` (process, argv, git, input-derived path, env or network code) adds it to the round's drivers, plan.json, `review required` and `ledger build`, whatever the depth.
+
 ## [0.3.121] - 2026-10-16
 
 ### Added

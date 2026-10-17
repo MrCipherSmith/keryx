@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import { createManagedReviewPackage } from "./managed";
-import { PREMISES_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaims, renderPremiseMarkdown, type PremiseRejectionReason } from "./premise";
+import { PREMISES_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaimSets, parsePremiseClaims, renderPremiseMarkdown, type PremiseRejectionReason } from "./premise";
 import { downgradedPremise, heldPremise } from "./premise-fixtures";
 import { PREMISE_VERDICTS, type PremiseClaimInput, type StructuredReviewFinding } from "./types";
 
@@ -303,9 +303,56 @@ describe("rejections, each of which leaves the finding as it was", () => {
     const result = mergePremises([canonical], parsed([claim({ finding_id: "2026-10-16-round#FE-001", verdict: "challenged", question: "q", practice_sources: [SOURCE] })]));
     expect(result.rejections).toEqual([]);
     expect(first(result).premise?.verdict).toBe("challenged");
-    // Two claims landing on the survivor (one by its own key, one by an absorbed key) cancel, as any duplicate does.
-    const both = mergePremises([canonical], parsed([claim(), claim({ finding_id: "2026-10-16-round#FE-001" })]));
+    // Flow 460: two claims landing on the survivor (one by its own key, one by an absorbed key) with the SAME verdict
+    // say one thing, and it is applied once, from the claim that named the survivor.
+    const agree = mergePremises([canonical], parsed([claim({ finding_id: "2026-10-16-round#FE-001", reasoning: "absorbed" }), claim({ reasoning: "survivor" })]));
+    expect(agree.rejections).toEqual([]);
+    expect(first(agree).premise).toMatchObject({ verdict: "upheld", reasoning: "survivor" });
+    expect(agree.counts).toMatchObject({ claims: 2, applied: 2, rejected: 0, upheld: 1 });
+    // Differing verdicts still cancel, as any duplicate does.
+    const both = mergePremises([canonical], parsed([claim(), claim({ finding_id: "2026-10-16-round#FE-001", verdict: "challenged", question: "q", practice_sources: [SOURCE] })]));
     expect(reasons(both)).toEqual(["duplicate-claim", "duplicate-claim"]);
+    // So does a downgrade to different severities.
+    const blocker = finding({ severity: "blocker", merged_from: ["2026-10-16-round#FE-001"] });
+    const severities = mergePremises([blocker], parsed([claim({ verdict: "downgraded", severity: "major", practice_sources: [SOURCE] }), claim({ finding_id: "FE-001", verdict: "downgraded", severity: "minor", practice_sources: [SOURCE] })]));
+    expect(reasons(severities)).toEqual(["duplicate-claim", "duplicate-claim"]);
+    // One file naming one key twice is still a duplicate, agreeing or not.
+    expect(reasons(mergePremises([canonical], parsed([claim(), claim()])))).toEqual(["duplicate-claim", "duplicate-claim"]);
+  });
+
+  test("several premise files (flow 460): each claim keeps its file's judge; agreement applies once, conflict applies neither", () => {
+    const sibling = finding({ id: "LY-004", global_id: GID_4, reviewer: "review-logic" });
+    const files = [
+      { judge: "judge-a", model: "m-a", claims: [claim({ finding_id: GID_4 }), claim()] },
+      { judge: "judge-b", claims: [claim({ reasoning: "same verdict" })] },
+    ];
+    const result = mergePremises([finding(), sibling], files);
+    expect(result.rejections).toEqual([]);
+    expect((result.findings[1] as StructuredReviewFinding).premise).toEqual({ verdict: "upheld", judge: "judge-a", model: "m-a" });
+    expect(first(result).premise?.judge).toBe("judge-a");
+    expect(result.counts).toMatchObject({ judge: "judge-a, judge-b", claims: 3, applied: 3, rejected: 0 });
+    // A file whose judge raised the finding is refused for that file only.
+    const self = mergePremises([finding()], [{ judge: "review-layout", claims: [claim()] }, { judge: "judge-b", claims: [] }]);
+    expect(reasons(self)).toEqual(["self-judgement"]);
+    // A conflicting claim across files is a duplicate-claim, naming the files.
+    const conflict = mergePremises([finding()], [files[1] as { judge: string; claims: PremiseClaimInput[] }, { judge: "judge-c", claims: [claim({ verdict: "challenged", question: "q", practice_sources: [SOURCE] })] }]);
+    expect(reasons(conflict)).toEqual(["duplicate-claim", "duplicate-claim"]);
+    expect(conflict.rejections[0]?.detail).toContain("2 premise files");
+    expect(first(conflict).premise).toBeUndefined();
+  });
+
+  test("parsePremiseClaimSets: a list of claims files is several files; a bare claim array is still refused", () => {
+    expect(parsePremiseClaimSets([{ judge: "a", premises: [] }, { judge: "b", premises: [claim()] }])?.map((set) => set.judge)).toEqual(["a", "b"]);
+    expect(parsePremiseClaimSets({ judge: "a", premises: [] })).toEqual([{ judge: "a", claims: [] }]);
+    expect(parsePremiseClaimSets(undefined)).toBeUndefined();
+    expect(() => parsePremiseClaimSets([claim()])).toThrow("not an array");
+  });
+
+  test("a claim naming a display id with '#' is unknown and says which id form ingest needs (flow 460)", () => {
+    const result = mergePremises([finding({ id: "review-layout-w1:F-001", global_id: "2026-10-16-round#review-layout-w1:F-001" })], parsed([claim({ finding_id: "review-layout-w1#F-001" })]));
+    expect(reasons(result)).toEqual(["unknown-finding"]);
+    expect(result.rejections[0]?.detail).toContain('contains "#"');
+    expect(result.rejections[0]?.detail).toContain("display id");
   });
 
   test("a claim naming the BARE id of an absorbed finding resolves too: the judge runs before ingest mints global_ids (review LG8-002)", () => {

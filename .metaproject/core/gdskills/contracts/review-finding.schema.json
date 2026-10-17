@@ -192,7 +192,7 @@
     },
     "quote": {
       "title": "The code this finding is about, copied verbatim out of `file`",
-      "description": "What replaces asking the model for a line number: a model is poor at counting lines and good at repeating text it has just read. The quote is matched against `file` at the round's head — exactly first, then with whitespace collapsed, then not at all. A quote that matches in more than one place is `unlocatable` rather than anchored to the first hit, because choosing among them would be a guess wearing a line number. Absent for a finding that is about the round rather than a site.",
+      "description": "What replaces asking the model for a line number: a model is poor at counting lines and good at repeating text it has just read. The quote is matched against `file` at the round's head — exactly first, then with whitespace collapsed, then (a one-line quote of at least 12 characters, MIN_SUBSTRING_QUOTE_CHARS) as an exact substring of exactly one line, then not at all; a shorter fragment must be a whole line. A quote that matches in more than one place is `unlocatable` rather than anchored to the first hit, because choosing among them would be a guess wearing a line number. Absent for a finding that is about the round rather than a site.",
       "type": ["string", "null"]
     },
     "locator": {
@@ -203,7 +203,7 @@
       "required": ["state"],
       "properties": {
         "state": { "type": "string", "enum": ["derived", "unlocatable"] },
-        "method": { "type": "string", "enum": ["exact", "whitespace-normalised"] },
+        "method": { "type": "string", "enum": ["exact", "whitespace-normalised", "substring"] },
         "reason": { "type": ["string", "null"] },
         "reported_line": { "type": ["integer", "null"], "minimum": 1 }
       },
@@ -221,6 +221,18 @@
     "path_missing": {
       "type": "boolean",
       "description": "Written, as true, only by `review ingest` when `file` does not exist at the round's reviewed head (a cat-file existence check of `<head>:<file>`). The finding is kept, never dropped, and is listed in scope.md: a finding that cites a path nobody can open is the reviewer's claim, not a located site."
+    },
+    "quote_unlocated": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason"],
+      "description": "Written only by `review ingest` when `quote` was checked against `file` at the round's reviewed head and is absent from it (`absent`) or matches more than one place (`ambiguous`, with the matched lines in `candidate_lines`, bounded by the scan). The finding is kept with `line` null, never relocated by similarity or proximity, listed in scope.md and by readiness item `quotes-located`; the round is recorded rather than refused. It is the machine-readable outcome of the same check that writes `locator` (`state: unlocatable`, its `reason` the prose of it): ingest writes both from one result and recomputes both on every ingest, so they never disagree. Gates and readers branch on this flag; `locator` is the record of how the line was or was not derived.",
+      "properties": {
+        "reason": { "type": "string", "enum": ["absent", "ambiguous"] },
+        "candidate_lines": { "type": "array", "maxItems": 50000, "items": { "type": "integer", "minimum": 1 } }
+      },
+      "if": { "properties": { "reason": { "const": "absent" } }, "required": ["reason"] },
+      "then": { "not": { "required": ["candidate_lines"] } }
     },
     "symbol": { "type": ["string", "null"] },
     "problem": { "type": "string" },

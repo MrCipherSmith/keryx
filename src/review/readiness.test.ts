@@ -11,6 +11,9 @@ import { reviewCommand } from "../commands/review";
 import { CHUNK_REVIEWER, ensureChunkPlan, recordChunk } from "./chunks";
 import { CALLER_UNATTRIBUTED, recordLogStart, recordOrchestratorCall } from "./orchestrator-log";
 import { downgradedPremise, heldFinding, premiseAnswer } from "./premise-fixtures";
+import { commitFiles, git, initRepo } from "./git-fixture.test-helpers";
+import { packageCoverageErrors } from "./research";
+import { COVERAGE_MD_MARK } from "./coverage-md";
 import { READINESS_ITEMS, computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
 
 let root: string;
@@ -103,7 +106,7 @@ describe("the checklist on a package shaped like pr7932-r1 (AC1, AC2)", () => {
   test("is NOT READY with exactly the failing items, each naming the command that repairs it", async () => {
     const report = await computeReadiness(pkg);
     expect(report.verdict).toBe("NOT READY");
-    expect(report.items.map((item) => item.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(report.items.map((item) => item.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     expect(ids(failingItems(report))).toEqual(["blast-radius", "reviewers", "verifier", "ledger", "coverage-md"]);
     for (const item of failingItems(report)) {
       expect(item.repair).toBeTruthy();
@@ -210,6 +213,40 @@ describe("premise-decisions: every held finding has an operator decision (flow 4
   test("a downgraded finding is not held", async () => {
     writeJson("findings.json", [{ ...held, severity: "minor", premise: downgradedPremise("major", "minor") }]);
     expect((await item())?.status).toBe("pass");
+  });
+});
+
+describe("quotes-located: an open finding whose quote ingest could not place does not pass silently (flow 460, AC6)", () => {
+  const item = async () => (await computeReadiness(pkg)).items.find((entry) => entry.id === "quotes-located");
+  const unplaced = (over: object = {}) => ({ id: "f-4", global_id: "pr7932-r1#f-4", severity: "minor", file: "src/a.ts", line: null, quote: "x", quote_unlocated: { reason: "ambiguous", candidate_lines: [3, 9] }, ...over });
+
+  test("passes when every quote was placed", async () => {
+    expect((await item())?.status).toBe("pass");
+  });
+
+  test("fails while an unplaced finding is open, naming it, the reason and the candidate lines, with a waivable repair", async () => {
+    writeJson("findings.json", [unplaced(), { id: "f-5", global_id: "pr7932-r1#f-5", file: "src/b.ts", quote_unlocated: { reason: "absent" } }]);
+    const result = await item();
+    expect(result?.status).toBe("fail");
+    expect(result?.evidence).toContain("pr7932-r1#f-4 (src/a.ts: ambiguous lines 3, 9)");
+    expect(result?.evidence).toContain("pr7932-r1#f-5 (src/b.ts: absent)");
+    expect(result?.repair).toContain("--waive quotes-located");
+    await waiveReadiness(pkg, ["quotes-located"], "the operator accepts the unplaced quote for this round");
+    expect((await item())?.status).toBe("waived");
+  });
+
+  test("passes once the finding has a disposition, still naming it", async () => {
+    writeJson("findings.json", [unplaced({ disposition: { state: "acted-on", evidence: "fixed in abc1234" } })]);
+    const result = await item();
+    expect(result?.status).toBe("pass");
+    expect(result?.evidence).toContain("pr7932-r1#f-4");
+  });
+
+  test("a made-up disposition state answers nothing, and the evidence names it as invalid", async () => {
+    writeJson("findings.json", [unplaced({ disposition: { state: "todo" } })]);
+    const result = await item();
+    expect(result?.status).toBe("fail");
+    expect(result?.evidence).toContain('pr7932-r1#f-4 ("todo")');
   });
 });
 
@@ -324,7 +361,8 @@ describe("a waiver is the operator's own words (AC3)", () => {
   test("items are named by number or by id", () => {
     expect(readinessItemId("5")).toBe("ledger");
     expect(readinessItemId("Ledger")).toBe("ledger");
-    expect(readinessItemId("12")).toBeUndefined();
+    expect(readinessItemId("12")).toBe("quotes-located");
+    expect(readinessItemId("13")).toBeUndefined();
   });
 });
 
@@ -536,5 +574,131 @@ describe("a delta round's fix slice (flow 458 AC4)", () => {
     fixOnly(["slice-01"]);
     const covered = (await computeReadiness(pkg)).items.find((item) => item.id === "files-covered");
     expect(covered?.status).toBe("pass");
+  });
+});
+
+describe("item 3 runs the coverage gate review complete runs (flow 460 AC1)", () => {
+  const two = ["src/a.ts", "src/b.ts"];
+  const LIGHT = ["review-clean-code", "review-logic", "review-testing-practices"];
+
+  /** A repository with the light set installed, main plus a PR branch; returns the PR head. */
+  function repo(extra: Record<string, string>): string {
+    mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+    writeFileSync(path.join(root, ".metaproject", "metaproject.json"), JSON.stringify({ modules: { gdskills: {} } }));
+    for (const name of ["review-orchestrator", "review-verifier", "review-architecture", "review-style", "review-core-boundaries", ...LIGHT]) {
+      const dir = path.join(root, ".metaproject", "skills", "gdskills", "review", name);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: Use when testing ${name}.\n---\n`);
+    }
+    initRepo(root);
+    commitFiles(root, { "src/a.ts": "export const a = 1;\n", "src/b.ts": "export const b = 1;\n" }, "base");
+    git(root, "checkout", "-q", "-b", "pr");
+    const head = commitFiles(root, { "src/a.ts": "export const a = 2;\n", "src/b.ts": "export const b = 2;\n", ...extra }, "pr change");
+    git(root, "checkout", "-q", "main");
+    return head;
+  }
+
+  /** A light round's package for `head`: the light set dispatched, ran and on disk. */
+  function lightPackage(head: string): void {
+    const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
+    writeJson("manifest.json", { ...manifest, target: { ...manifest.target, base: "main", head } });
+    writeJson("scope-files.json", { version: 1, files: two, changedLines: 4 });
+    writeBlastRadius(two, []);
+    writeJson("research.json", {
+      version: 1,
+      scopeReviewed: true,
+      rawReconciled: true,
+      obligations: [],
+      dispatch: { version: 1, mode: "all", depth: "light", selected: LIGHT, unresolvedRules: [], runs: LIGHT.map((name) => run(name, { coveredSlices: [] })) },
+    });
+    for (const name of LIGHT) writeFileSync(path.join(pkg, "raw", `${name}.txt`), "reply");
+  }
+
+  const item3 = async () => (await computeReadiness(pkg)).items.find((item) => item.id === "reviewers");
+
+  test("a light 2-file PR round: item 3 passes and complete's coverage gate accepts it", async () => {
+    lightPackage(repo({}));
+    expect(await packageCoverageErrors(pkg, JSON.parse(readFileSync(path.join(pkg, "research.json"), "utf8")).dispatch)).toEqual([]);
+    expect((await item3())?.status).toBe("pass");
+  });
+
+  test("when complete would refuse on coverage, item 3 fails with the same refusal", async () => {
+    lightPackage(repo({ "src/core/store.ts": "export const s = 1;\n" }));
+    const refusal = await packageCoverageErrors(pkg, JSON.parse(readFileSync(path.join(pkg, "research.json"), "utf8")).dispatch);
+    expect(refusal.join("\n")).toContain("review-core-boundaries");
+    const item = await item3();
+    expect(item?.status).toBe("fail");
+    for (const error of refusal) expect(item?.evidence).toContain(error);
+    expect(item?.repair).toContain("coverage gate");
+  });
+
+  test("a closed post-460 package keeps its recorded decision: item 3 never re-derives depth from live git or config", async () => {
+    lightPackage(repo({}));
+    writeFileSync(path.join(pkg, "coverage.md"), `# Reviewer Coverage\n\n${COVERAGE_MD_MARK}\n\n${LIGHT.map((name) => `reviewer: ${name}\nstatus: run\nreason: x`).join("\n\n")}\n`);
+    const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
+    writeJson("manifest.json", { ...manifest, status: "closed" });
+    // The live state now refuses: the repository is gone, so the light recheck cannot resolve its diff.
+    rmSync(path.join(root, ".git"), { recursive: true, force: true });
+    const item = await item3();
+    expect(item?.status).toBe("pass");
+    expect(item?.evidence).toContain("recorded decision stands");
+    expect(item?.evidence).toContain("depth light");
+    // Reopened, the same package is held to the live gate again.
+    writeJson("manifest.json", { ...manifest, status: "draft" });
+    expect((await item3())?.status).toBe("fail");
+  });
+});
+
+describe("flow 460 F: coverage.md names what the dispatch record ran", () => {
+  test("a coverage.md that lists a stand-in instead of the dispatched reviewers fails item 6, and listing them passes", async () => {
+    writeResearch("repaired");
+    writeCoverageMd({ "review-orchestrator": "run" });
+    const stale = (await computeReadiness(pkg)).items.find((item) => item.id === "coverage-md")!;
+    expect(stale.status).toBe("fail");
+    expect(stale.evidence).toContain("omits");
+    expect(stale.evidence).toContain("review-logic");
+    writeCoverageMd(Object.fromEntries(REVIEWERS.map((name) => [name, "run"])));
+    expect((await computeReadiness(pkg)).items.find((item) => item.id === "coverage-md")!.status).toBe("pass");
+  });
+
+  test("an omission and an unfinished reviewer listed as run are both named in one verdict", async () => {
+    writeResearch("broken");
+    writeCoverageMd({ "review-security-code": "run" });
+    const item = (await computeReadiness(pkg)).items.find((entry) => entry.id === "coverage-md")!;
+    expect(item.status).toBe("fail");
+    expect(item.evidence).toContain("omits");
+    expect(item.evidence).toContain('lists review-security-code as "run"');
+  });
+
+  test("the repair names the cause: an ingest with --reviewers writes the list as given and fails again", async () => {
+    writeResearch("repaired");
+    writeCoverageMd({ "review-logic": "run" });
+    const item = (await computeReadiness(pkg)).items.find((entry) => entry.id === "coverage-md")!;
+    expect(item.status).toBe("fail");
+    expect(item.repair).toContain("without --reviewers or --coverage");
+  });
+
+  /** The package as `review complete` left it before flow 460: closed, its coverage.md naming the stand-in. */
+  function closedBefore460(): void {
+    writeResearch("repaired");
+    for (const name of REVIEWERS) writeFileSync(path.join(pkg, "raw", `${name}.txt`), "reply");
+    writeCoverageMd({ "review-orchestrator": "run" });
+    const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
+    writeJson("manifest.json", { ...manifest, status: "closed" });
+  }
+
+  test("a package closed before flow 460 keeps its recorded close: item 6 does not hold its coverage.md to the omission check", async () => {
+    closedBefore460();
+    const report = await computeReadiness(pkg);
+    expect(report.items.find((item) => item.id === "coverage-md")!.status).toBe("pass");
+    expect(report.items.find((item) => item.id === "reviewers")!.evidence).toContain("recorded decision stands");
+  });
+
+  test("a closed package whose coverage.md carries the flow 460 mark is still held to the omission check", async () => {
+    closedBefore460();
+    writeFileSync(path.join(pkg, "coverage.md"), `# Reviewer Coverage\n\n${COVERAGE_MD_MARK}\n\nreviewer: review-orchestrator\nstatus: run\nreason: x\n`);
+    const item = (await computeReadiness(pkg)).items.find((entry) => entry.id === "coverage-md")!;
+    expect(item.status).toBe("fail");
+    expect(item.evidence).toContain("omits");
   });
 });

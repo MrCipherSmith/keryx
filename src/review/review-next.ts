@@ -96,7 +96,7 @@ export async function reviewNext(input: { packageDir: string; reviewers?: readon
   let fingerprint: string | undefined;
   try { fingerprint = scopeFingerprint(manifest, (entry) => readFileSync(path.resolve(sliceDir, entry.path), "utf8")); } catch { fingerprint = undefined; }
   const currentState = fingerprint !== undefined && state.scopeFingerprint === fingerprint;
-  const reviewers = [...(input.reviewers ?? (await packageReviewers(packageDir, manifest)))].sort();
+  const reviewers = [...(input.reviewers ?? (await packageReviewers(packageDir, manifest, { withDrivers: true })))].sort();
   const latest = await latestResults(packageDir, driverOf);
 
   // Escalations first: a major finding on a light slice re-opens it deep for every core role, whoever reported it.

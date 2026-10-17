@@ -29,7 +29,7 @@ Usage:
                      [--memory-query "<query>"]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--verifications <file|->] [--verification-mode off|annotate|filter]
-                      [--premises <file|->]
+                      [--premises <file|->]...
                       [--scope <scope.json>] [--refuted <file|->]
                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                       [--parallel <n>] [--outstanding <n>]
@@ -644,7 +644,7 @@ status: draft
 target: report round6-review.md
 flow: none
 coverage: 1
-filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 dismissed_by_round=not-measured retained=3
+filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 merged_duplicates=0 dismissed_by_round=not-measured retained=3
   low_confidence: not measured — this pipeline has no confidence threshold …
   scope_b: not measured — no blast-radius record reached this ingest …
 ```
@@ -653,9 +653,10 @@ filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=
 same numbers `scope.md` shows a person, in a form something else can check.
 `not-measured` is not `0`: it means that stage did not run, and the reason is
 printed underneath. `status` exits **1** when the numbers do not add up (`total`
-minus the measured finding-stage drops must equal `retained`) or when a count is
-absent with no reason recorded, so a stage that starts dropping findings without
-counting them is caught on the next status call rather than a release later.
+minus the measured finding-stage drops and `merged_duplicates` must equal
+`retained`) or when a count is absent with no reason recorded, so a stage that
+starts dropping findings without counting them is caught on the next status call
+rather than a release later.
 
 `dropped_prefilter` counts diff material — whole files and change blocks removed
 before anyone read them — so it is deliberately not summed with the rest.
@@ -822,7 +823,7 @@ visible to the log. Four things the automatic log does not do:
 - **Evidence level.** A report carries one line, `Evidence level: static only — did not run: <what>` or `Evidence level: ran — <what ran>`, and `complete` refuses a report without it. A package ingested before the field existed completes with a warning.
 - **Citations.** When a dismissal's rebuttal cites a rule or document, `review ingest` looks the path up in the tree (at the reviewed commit and as it stands) and, if it is not there, adds a `citation not found: <path>` line to the finding's evidence. The finding is never deleted.
 - **Narrowed.** A research obligation may close as `narrowed` with a `remains` text ("what is still open"). It counts as closed only with that text, and the report keeps it under "Refuted and narrowed" with its evidence.
-- **Locators at the SHA.** `review ingest` reads each finding's quote at its `path` at the reviewed SHA, not from the working tree, and refuses the ingest, naming the finding, when it does not resolve there. The report links the blob at that SHA.
+- **Locators at the SHA.** `review ingest` reads each finding's quote at its `path` at the reviewed SHA, not from the working tree. A quote absent from that file, or in it more than once, does not refuse the round (flow 460): the finding is kept with no line, never relocated by similarity, flagged `quote_unlocated` (with the candidate lines when ambiguous), listed in scope.md, and readiness item `quotes-located` fails until it has a disposition or the operator waives it. The ingest still refuses, naming the finding, a quote it could not check at all: the commit is not in the checkout, no file is named, or a size bound stopped the match. The report links the blob at that SHA.
 
 ### The one dismissal that teaches something
 
@@ -953,7 +954,7 @@ status: draft
 target: report round6-review.md
 flow: none
 coverage: 1
-filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 dismissed_by_round=not-measured retained=3
+filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 merged_duplicates=0 dismissed_by_round=not-measured retained=3
   low_confidence: not measured — this pipeline has no confidence threshold …
   scope_b: not measured — no blast-radius record reached this ingest …
 ```
@@ -962,9 +963,10 @@ filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=
 same numbers `scope.md` shows a person, in a form something else can check.
 `not-measured` is not `0`: it means that stage did not run, and the reason is
 printed underneath. `status` exits **1** when the numbers do not add up (`total`
-minus the measured finding-stage drops must equal `retained`) or when a count is
-absent with no reason recorded, so a stage that starts dropping findings without
-counting them is caught on the next status call rather than a release later.
+minus the measured finding-stage drops and `merged_duplicates` must equal
+`retained`) or when a count is absent with no reason recorded, so a stage that
+starts dropping findings without counting them is caught on the next status call
+rather than a release later.
 
 `dropped_prefilter` counts diff material — whole files and change blocks removed
 before anyone read them — so it is deliberately not summed with the rest.

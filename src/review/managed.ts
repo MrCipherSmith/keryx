@@ -7,7 +7,9 @@ import { packageCoverageWarnings } from "./coverage";
 import { packageParityWarnings } from "./parity";
 import { roundRecordTampered } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
-import { PENDING_RESEARCH, packageResearchErrors } from "./research";
+import { withSpendSection } from "./dispatch-usage";
+import { renderCoverageMd } from "./coverage-md";
+import { INGEST_SCREENED_FILE, PENDING_RESEARCH, dispatchRuns, packageResearchErrors, type DispatchRun, type IngestScreened } from "./research";
 import { computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
@@ -50,9 +52,10 @@ import {
   type ReviewFilterStats,
 } from "./filter-stats";
 import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
+import { hashedDisplayIdMessage, hashedDisplayIds } from "./display-id";
 import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
-import { flowReviewsRoot, reviewsRoot } from "./package-location";
-import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaims, previousFindingsUnreadable, renderPremiseMarkdown } from "./premise";
+import { flowReviewsRoot, readManifestHead, reviewsRoot } from "./package-location";
+import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaimSets, previousFindingsUnreadable, renderPremiseMarkdown } from "./premise";
 import { promoteParentExecutions } from "./verify-run";
 import { withOperatorDecisionsLock } from "./operator-decisions";
 import { repairMechanicalOmissions, type FindingRepair } from "./repair";
@@ -265,15 +268,15 @@ export async function createManagedReviewPackage(
 ): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord; duplicates: DuplicateMerge[] }> {
   const at = (input.now ?? new Date()).toISOString();
   // Parsed first: a premise file of the wrong shape refuses the ingest before a package is allocated.
-  const premiseClaims = parsePremiseClaims(input.premises);
+  const premiseClaims = parsePremiseClaimSets(input.premises);
   const flowMatch = await resolvePackageFlow(input);
   const { reviewId, packageDir } = await allocatePackage(input, flowMatch, at);
   // Before anything is written: an id that names packages in two places refuses here (review LG6-002, SEC6-001).
   const verifications = await ownPackageVerifications(input, packageDir);
-  const coverage = normalizeCoverage(input.coverage, input.reviewers);
+  const coverage = normalizeCoverage(input.coverage, input.reviewers, dispatchRuns(input.research));
   const report = await readReport(input);
-  const reviewers = coverage.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
-  const reported = await normalizeFindings({
+  const reviewers = attributionReviewers(input);
+  const { findings: reported, from: findingsFrom } = await normalizeFindings({
     report,
     reportLabel: reportLabel(input),
     mode: input.mode,
@@ -281,6 +284,7 @@ export async function createManagedReviewPackage(
     source: input.findings,
     reviewers,
   });
+  refuseUnacceptableRound(input, report, findingsFrom, reported);
   // Typing, filled in; judgement, still refused. Runs BEFORE `assignGlobalIds`,
   // because a finding with no `id` mints the key `<reviewId>#undefined` and five
   // of them then collide on it — which is how a round was lost to a field the
@@ -440,6 +444,7 @@ export async function createManagedReviewPackage(
     findingsCap: { counts: findingsCap.counts, drops: findingsCap.drops },
     externalRetained: scoped.external.length,
     ...(input.refuted === undefined ? {} : { roundDismissed: roundDismissed.length }),
+    duplicatesMerged: deduped.merges.reduce((sum, merge) => sum + merge.absorbed.length, 0),
   });
   const manifest = buildManifest({
     input,
@@ -512,7 +517,10 @@ export async function createManagedReviewPackage(
     // The claims as received, rejected ones included: the record of what the judge said. Only a package without an
     // ingested round re-applies it (the interim verdict over raw results); findings.json is the record after ingest.
     await mkdir(path.join(packageDir, "research-evidence"), { recursive: true });
-    await writeFileAtomic(path.join(packageDir, PREMISES_FILE), `${JSON.stringify(input.premises, null, 2)}\n`);
+    // One result is written as the judge's object, several as their list; both read back through parsePremiseClaimSets
+    // (the verdict, and `review ingest --premises <this file>`).
+    const record = Array.isArray(input.premises) && input.premises.length === 1 ? input.premises[0] : input.premises;
+    await writeFileAtomic(path.join(packageDir, PREMISES_FILE), `${JSON.stringify(record, null, 2)}\n`);
   } else if (carriedHolds === undefined && (await pathExists(path.join(packageDir, PREMISES_FILE)))) {
     // An ingest without --premises that carried no hold keeps the judge's record, moved aside (review RG2-004): the
     // verdict never re-applies claims to an ingested round, so the file at its own name would only mislead a reader
@@ -536,13 +544,19 @@ export async function createManagedReviewPackage(
       renderDuplicatesMarkdown(deduped.merges),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
-  await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
+  // Flow 460: the round's token spend, as research.json states it (unknown dispatches counted, never 0); a re-ingest
+  // replaces the section a report already holds.
+  await writeFileAtomic(path.join(packageDir, "report.md"), withSpendSection(renderReport(report, input.mode), input.research));
   // Under the decisions lock, like every other findings.json writer: a premise answer to a re-ingested package
   // rewrites the same file.
   await withOperatorDecisionsLock(packageDir, () => writeFileAtomic(
     path.join(packageDir, "findings.json"),
     `${JSON.stringify(findings.map(toContractFinding), null, 2)}\n`,
   ));
+  // Flow 460: what the scope-B screen kept out of findings.json, for `review ledger build` to close. Rewritten on every
+  // ingest (empty when nothing was screened), so a re-ingest never leaves an earlier screen's record behind.
+  await mkdir(path.join(packageDir, "research-evidence"), { recursive: true });
+  await writeFileAtomic(path.join(packageDir, INGEST_SCREENED_FILE), `${JSON.stringify({ version: 1, screened: screenedRecord(scopeB.record) }, null, 2)}\n`);
   await writeFileAtomic(path.join(packageDir, "learning.md"), renderLearning(findings));
   await writeFileAtomic(path.join(packageDir, "decisions.md"), renderDecisions(findings));
   // Last, and only once the package is complete. See {@link persistScreenRadius}.
@@ -664,6 +678,15 @@ async function screenScopeBFindings(
     },
     resolved,
   };
+}
+
+/** The scope-B rejections as {@link INGEST_SCREENED_FILE} records them. */
+function screenedRecord(record: ScopeBScreenRecord): IngestScreened[] {
+  return (record.screen?.rejected ?? []).flatMap((rejection): IngestScreened[] => {
+    const finding = rejection.finding;
+    if (typeof finding.id !== "string" || finding.id === "") return [];
+    return [{ id: finding.id, ...(typeof finding.global_id === "string" ? { global_id: finding.global_id } : {}), ...(typeof finding.reviewer === "string" ? { reviewer: finding.reviewer } : {}), rule: rejection.rule, detail: rejection.detail }];
+  });
 }
 
 type ResolvedScreenRadius = {
@@ -1192,20 +1215,55 @@ function buildManifest(args: {
   return manifest;
 }
 
-function normalizeCoverage(
-  coverage: ReviewCoverageEntry[] | undefined,
-  reviewers: string[] | undefined,
-): ReviewCoverageEntry[] {
+/**
+ * Flow 460 F: the reviewers a research record says were dispatched (its typed `dispatch.runs`), with the status each
+ * ended in. With a research record and no explicit `--reviewers`, coverage lists these rather than a stand-in
+ * orchestrator that never reviewed.
+ */
+function coverageFromResearch(runs: readonly DispatchRun[]): ReviewCoverageEntry[] {
+  const seen = new Set<string>();
+  const entries: ReviewCoverageEntry[] = [];
+  for (const { reviewer, status, routedOut, notRunReason, executionReason } of runs) {
+    if (seen.has(reviewer)) continue;
+    seen.add(reviewer);
+    // A routed-out role is recorded complete but was never dispatched: coverage.md says so rather than "dispatched".
+    if (status === "complete" && routedOut === true) entries.push({ reviewer, status: "run", reason: "routed out: slice routing gave this role no slice, so it was not dispatched" });
+    else if (status === "complete") entries.push({ reviewer, status: "run", reason: "dispatched; the research ledger records it complete" });
+    else if (status === "incomplete") entries.push({ reviewer, status: "needs_context", reason: `dispatched; the research ledger records it incomplete${executionReason === undefined ? "" : ` (${executionReason})`}` });
+    else if (status === "not-run" || status === undefined) entries.push({ reviewer, status: "failed", reason: `not run: ${notRunReason ?? "the research ledger records no result"}` });
+    // A status the ledger never writes (a typo, a hand edit) is not a "not run": it says what was found.
+    else entries.push({ reviewer, status: "failed", reason: `unrecognised status "${status}" in the research ledger; re-run \`keryx review ledger build\`` });
+  }
+  return entries;
+}
+
+/**
+ * The reviewer a finding with no reviewer of its own is attributed to, when the operator named none. It becomes coverage's
+ * one entry only when there is nothing better to list: no --coverage, no --reviewers and no dispatch record.
+ */
+const ATTRIBUTION_FALLBACK = "review-orchestrator";
+
+/** coverage.md's entries: --coverage as given, else the dispatch record (no --reviewers), else the named reviewers, else the fallback. */
+function normalizeCoverage(coverage: ReviewCoverageEntry[] | undefined, reviewers: string[] | undefined, runs: readonly DispatchRun[]): ReviewCoverageEntry[] {
   if (coverage && coverage.length > 0) {
     return coverage;
   }
-  const selected = reviewers && reviewers.length > 0 ? reviewers : ["review-orchestrator"];
+  const named = reviewers !== undefined && reviewers.length > 0;
+  if (!named) {
+    const fromResearch = coverageFromResearch(runs);
+    if (fromResearch.length > 0) return fromResearch;
+  }
+  const selected = named ? reviewers : [ATTRIBUTION_FALLBACK];
   return selected.map((reviewer) => ({
     reviewer,
     status: "run",
     reason: "selected for managed review package",
   }));
 }
+
+/** The report `review start` writes before any reviewer has run: a placeholder, never a round's result. */
+const STUB_REPORT_LINE = "No reviewer findings recorded yet.";
+const STUB_REPORT = `# Managed Review Report\n\n${STUB_REPORT_LINE}\n`;
 
 async function readReport(input: ManagedReviewInput): Promise<string> {
   if (input.reportText !== undefined) {
@@ -1223,7 +1281,7 @@ async function readReport(input: ManagedReviewInput): Promise<string> {
   if (input.mode === "ingest") {
     throw new Error("ingest requires --report or reportText");
   }
-  return `# Managed Review Report\n\nNo reviewer findings recorded yet.\n`;
+  return STUB_REPORT;
 }
 
 /** How to name the report in an error, so a refusal says which file to open. */
@@ -1260,9 +1318,9 @@ type NormalizeFindingsArgs = {
  * lossless by a better regex, which is why the structured array is taken from
  * the producer and the parser is demoted to reading what is already on disk.
  */
-async function normalizeFindings(args: NormalizeFindingsArgs): Promise<NormalizedReviewFinding[]> {
+async function normalizeFindings(args: NormalizeFindingsArgs): Promise<{ findings: NormalizedReviewFinding[]; from: "input" | "block" | "prose" }> {
   if (args.source !== undefined) {
-    return triage(fromStructuredSource(args.source, args.reviewers), args);
+    return { findings: triage(fromStructuredSource(args.source, args.reviewers), args), from: "input" };
   }
   // PRESENCE, not the parsed value. Branching on the value cannot tell "no
   // block" from "a block holding null", and both then fell through to the prose
@@ -1270,9 +1328,52 @@ async function normalizeFindings(args: NormalizeFindingsArgs): Promise<Normalize
   // prevent. `parseEmbeddedFindings` returns null only when no fence is there.
   const structured = parseEmbeddedFindings(args.report, args.reportLabel);
   if (structured !== null) {
-    return triage(fromStructuredSource(structured, args.reviewers), args);
+    return { findings: triage(fromStructuredSource(structured, args.reviewers), args), from: "block" };
   }
-  return triage(parseLegacyReport(args.report, args.reviewers), args);
+  return { findings: triage(parseLegacyReport(args.report, args.reviewers), args), from: "prose" };
+}
+
+/**
+ * The reviewers a finding that names none is attributed to: what the operator gave (--coverage entries that ran, else
+ * --reviewers), else the orchestrator — never the research record, where one finished reviewer must not absorb the
+ * orchestrator's findings.
+ */
+function attributionReviewers(input: ManagedReviewInput): string[] {
+  if (input.coverage !== undefined && input.coverage.length > 0) return input.coverage.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
+  return input.reviewers !== undefined && input.reviewers.length > 0 ? [...input.reviewers] : [ATTRIBUTION_FALLBACK];
+}
+
+/**
+ * Flow 460: the round refusals that run before anything is located, verified, merged or written — a stub report, and a
+ * display id holding `#` (which would mint a global_id the schema refuses, after the whole round was processed).
+ */
+function refuseUnacceptableRound(input: ManagedReviewInput, report: string, from: "input" | "block" | "prose", findings: readonly { id?: unknown }[]): void {
+  refuseStubReport(input, report, from, findings.length);
+  const hashed = hashedDisplayIds(findings.map((finding) => finding.id));
+  if (hashed.length > 0) {
+    throw new Error(`Refusing to ingest: ${hashedDisplayIdMessage(hashed, from === "input" ? "--findings" : reportLabel(input))} Nothing was written.`);
+  }
+}
+
+/** Whether a report's text is a stub: empty, or the placeholder `review start` writes (whatever surrounds it). */
+export function isStubReportText(report: string): boolean {
+  const text = report.trim();
+  return text === "" || text.includes(STUB_REPORT_LINE);
+}
+
+/**
+ * Flow 460: `review ingest` of a stub — an empty report, or the placeholder `review start` writes into a package before
+ * any reviewer ran — that carries no `keryx:findings` block and no finding, with no `--findings` either, is not a clean
+ * round: ingesting it would record a reviewed round that found nothing. Refused before anything is written. A round
+ * that really found nothing says so in its own report, or with an empty block. (A prose report of an older round that
+ * found nothing is not a stub and still ingests.)
+ */
+function refuseStubReport(input: ManagedReviewInput, report: string, from: "input" | "block" | "prose", findings: number): void {
+  if (input.mode !== "ingest" || from !== "prose" || findings > 0) return;
+  if (!isStubReportText(report)) return;
+  throw new Error(
+    `Refusing to ingest ${reportLabel(input)}: it is ${report.trim() === "" ? "empty" : `the placeholder \`review start\` writes ("${STUB_REPORT_LINE}")`}, with no \`\`\`json keryx:findings block and no finding, so it is a stub, not a round's report. Point --report at the consolidated report (with its keryx:findings block), pass --findings <file>, or, for a round that found nothing, add an empty block (\`\`\`json keryx:findings / [] / \`\`\`). Nothing was written.`,
+  );
 }
 
 function triage(
@@ -1338,6 +1439,8 @@ async function anchorFindings(
         });
   for (const finding of findings) {
     const locator = await locateFinding(finding, read);
+    // Recomputed on every ingest: a flag carried in from a previous round describes a check that is re-made here.
+    delete finding.quote_unlocated;
     if (locator === undefined) {
       // No quote, so nothing was checked — and a locator carried in from a
       // previous round describes a check that did not happen this time. Round
@@ -1365,6 +1468,14 @@ async function anchorFindings(
       reason: locator.reason,
       ...(locator.reported_line === undefined ? {} : { reported_line: locator.reported_line }),
     };
+    // Flow 460: a quote that is absent from its file, or in it more than once, is kept unanchored and flagged, never
+    // relocated by similarity or proximity. The flag is what scope.md and readiness item `quotes-located` read.
+    if (finding.source !== "external" && (locator.kind === "absent" || locator.kind === "ambiguous")) {
+      finding.quote_unlocated = {
+        reason: locator.kind,
+        ...(locator.kind === "ambiguous" && locator.candidates !== undefined ? { candidate_lines: [...locator.candidates] } : {}),
+      };
+    }
   }
 }
 
@@ -1409,12 +1520,32 @@ function renderPathMissingMarkdown(findings: readonly StructuredReviewFinding[])
   return `\n## Paths missing at the reviewed head\n\n${missing.length} finding(s) cite a file that does not exist at the reviewed head. They are kept, flagged \`path_missing\` in findings.json; check the path before acting on them.\n\n${lines.join("\n")}\n`;
 }
 
+/** `## Quotes not located at the reviewed head`: the findings flagged `quote_unlocated`, or an empty string when there are none. */
+function renderQuoteUnlocatedMarkdown(findings: readonly StructuredReviewFinding[]): string {
+  const unlocated = findings.filter((finding) => finding.quote_unlocated !== undefined);
+  if (unlocated.length === 0) return "";
+  const lines = unlocated.map((finding) => `- ${finding.global_id ?? finding.id} (${finding.reviewer}): ${finding.file ?? "(no file)"}: ${quoteUnlocatedText(finding.quote_unlocated)}`);
+  return `\n## Quotes not located at the reviewed head\n\n${unlocated.length} finding(s) quote code that could not be placed in their file. They are kept with no line (never relocated by similarity), flagged \`quote_unlocated\` in findings.json, and readiness item \`quotes-located\` lists them until each has a disposition or the operator waives it.\n\n${lines.join("\n")}\n`;
+}
+
+/** "absent from the file" / "ambiguous (candidate lines 2, 10)". */
+export function quoteUnlocatedText(flag: StructuredReviewFinding["quote_unlocated"]): string {
+  if (flag === undefined) return "";
+  if (flag.reason === "absent") return "the quote is absent from the file";
+  const candidates = flag.candidate_lines ?? [];
+  return `the quote is ambiguous${candidates.length === 0 ? "" : ` (candidate lines ${candidates.join(", ")}, and the scan stopped there)`}`;
+}
+
 /**
  * A round is a claim about a commit. Where the commit is known and an internal
- * finding's quote is not at its `path:line` there, the finding cites something the
- * reviewer did not read at that SHA — refuse the ingest and name each one, rather
- * than record a locator that points nowhere. Findings the round already dismissed,
- * external comments and findings without a quote are not asked to resolve.
+ * finding's quote could not be CHECKED there, refuse the ingest and name each one.
+ * Flow 460: a quote that was checked and is absent from its file, or in it more than
+ * once, is not refused any more: it is kept unanchored and flagged `quote_unlocated`
+ * (see {@link anchorFindings}), so one bad quote no longer costs the whole round.
+ * What still refuses is what could not be checked at all: the commit is not in this
+ * checkout, the finding quotes code but names no file, or a size bound stopped the
+ * match. Findings the round already dismissed, external comments and findings
+ * without a quote are not asked to resolve.
  */
 function refuseUnresolvedLocators(
   findings: ReadonlyArray<StructuredReviewFinding & { summary: string }>,
@@ -1426,7 +1557,11 @@ function refuseUnresolvedLocators(
   }
   const unresolved = findings.filter(
     (finding) =>
-      finding.source !== "external" && finding.disposition === undefined && finding.locator?.state === "unlocatable" && finding.path_missing !== true,
+      finding.source !== "external" &&
+      finding.disposition === undefined &&
+      finding.locator?.state === "unlocatable" &&
+      finding.path_missing !== true &&
+      finding.quote_unlocated === undefined,
   );
   if (unresolved.length === 0) {
     return;
@@ -1437,7 +1572,7 @@ function refuseUnresolvedLocators(
     return `  - ${finding.id ?? finding.summary} (${finding.file}${line === null ? "" : `:${line}`}): ${locator?.reason ?? ""}`;
   });
   throw new Error(
-    `Cannot ingest review; ${unresolved.length} finding(s) cite a quote that does not resolve at the reviewed SHA ${head.slice(0, 12)}:\n${lines.join("\n")}\nCauses: the quote is not in the file at that commit, appears in it more than once, or the file or the commit is not in this checkout (check \`git cat-file -e ${head.slice(0, 12)}\`). Re-quote one distinct line from \`git show ${head.slice(0, 7)}:<path>\` or dismiss the finding with evidence.`,
+    `Cannot ingest review; ${unresolved.length} finding(s) cite a quote that could not be checked at the reviewed SHA ${head.slice(0, 12)}:\n${lines.join("\n")}\nCauses: the commit is not in this checkout (check \`git cat-file -e ${head.slice(0, 12)}\`), the finding quotes code but names no file, or a size bound stopped the match. (A quote that is absent from its file or in it more than once is not refused: it is kept, flagged quote_unlocated.) Re-quote one distinct line from \`git show ${head.slice(0, 7)}:<path>\` or dismiss the finding with evidence.`,
   );
 }
 
@@ -1552,6 +1687,9 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   }
   if (finding.path_missing === true) {
     record.path_missing = true;
+  }
+  if (finding.quote_unlocated !== undefined) {
+    record.quote_unlocated = finding.quote_unlocated;
   }
   if (finding.symbol !== undefined) {
     record.symbol = finding.symbol;
@@ -2547,7 +2685,7 @@ ${renderStageCountsMarkdown({
 ${renderCapsMarkdown(caps)}
 ${renderScopeBScreenMarkdown(scopeBScreen)}${
     filterStats === undefined ? "" : `\n${renderFilterStatsMarkdown(filterStats)}`
-  }${renderExternalReclaimsMarkdown(externalReclaims)}${renderPathMissingMarkdown(allFindings)}`;
+  }${renderExternalReclaimsMarkdown(externalReclaims)}${renderPathMissingMarkdown(allFindings)}${renderQuoteUnlocatedMarkdown(allFindings)}`;
   return carriedPreFilter === undefined ? head : `${head.trimEnd()}\n\n${carriedPreFilter}\n`;
 }
 
@@ -2621,10 +2759,7 @@ ${rows}
 }
 
 function renderCoverage(coverage: ReviewCoverageEntry[]): string {
-  return `# Reviewer Coverage
-
-${coverage.map((entry) => `reviewer: ${entry.reviewer}\nstatus: ${entry.status}\nreason: ${entry.reason}`).join("\n\n")}
-`;
+  return renderCoverageMd(coverage);
 }
 
 function renderReport(report: string, mode: ManagedReviewMode): string {
@@ -2732,10 +2867,19 @@ async function allocatePackage(
   at: string,
 ): Promise<{ reviewId: string; packageDir: string }> {
   if (input.reviewId !== undefined) {
-    return {
-      reviewId: input.reviewId,
-      packageDir: packagePath(input.cwd, input.mode, input.reviewId, flowMatch),
-    };
+    const packageDir = packagePath(input.cwd, input.mode, input.reviewId, flowMatch);
+    // Flow 460: `review ingest --flow <id> --review-id <id>` of a package `review start` opened under the reviews root
+    // binds THAT package to the flow (the manifest records `flow`) instead of opening a second, empty-handed one in the
+    // flow's directory; a re-ingest of a package already bound to that flow stays there. A package of that id already
+    // in the flow's directory is ingested into as before, and a reviews-root directory that is neither is not touched.
+    if (input.mode === "ingest" && flowMatch !== null) {
+      const standalone = path.join(reviewsRoot(input.cwd), input.reviewId);
+      const recorded = await readManifestHead(standalone);
+      if (!(await pathExists(packageDir)) && (recorded?.mode === "review-flow" || recorded?.flowId === flowMatch.id)) {
+        return { reviewId: input.reviewId, packageDir: standalone };
+      }
+    }
+    return { reviewId: input.reviewId, packageDir };
   }
   const base = defaultReviewId(input.mode, input.target.kind, input.target.ref, at);
   for (let round = 1; round <= MAX_SAME_DAY_ROUNDS; round += 1) {

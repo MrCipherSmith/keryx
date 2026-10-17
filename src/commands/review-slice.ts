@@ -10,7 +10,7 @@ import { layersSummaryLine } from "../review/layers-view";
 import { ensurePackageLayers, resolvePackageDir } from "./review-layers";
 import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
 import { MAX_RETRY_ROUNDS, type ReviewerResult } from "../review/retry-plan";
-import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceManifest, buildSlices, manifestSizeProblem, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
+import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceManifest, manifestSizeProblem, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
 import { packagePlanGate } from "../review/estimate";
 import { packageReviewers, writeWaveDrivers } from "../review/wave-drivers";
 import { RETRY_STATE_NAME, UnreadableInput, commitRetryPlan, evaluateRetry, packageOfManifest, readJsonSource, wholeFileResult, writeSliceFiles } from "../review/retry-eval";
@@ -19,10 +19,11 @@ export { packageOfManifest };
 import { resolveActiveReview } from "../review/active-review";
 import { operatorGateApplies } from "../review/run-profile";
 import { commentRuleScopeConfig } from "../review/comment-rule";
-import { renderRoutingSummary, routeSlices, summarizeRouting } from "../review/slice-routing";
+import { type RoutingOptions, renderRoutingSummary, summarizeRouting } from "../review/slice-routing";
 import { NOT_REVIEW_PACKAGES } from "../review/prior-round";
 import { readPriorFindings, readRoundRecord, roundRecordTampered, type RoundRecord } from "../review/round-record";
-import { classifyDeltaSlices, isDeltaRound, regionInSecondLook, splitCounts, tagSecondLookSlices } from "../review/round-split";
+import { isDeltaRound, partitionRegionsBySecondLook, splitCounts } from "../review/round-split";
+import { type SecondLookSource, deltaRoundCut, firstRoundCut } from "../review/round-cut";
 import { defaultWaveBytes, detectReviewHost, HOST_WAVE_BYTES, parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
 
 /** The diff-fetching and flag helpers `review.ts` owns, passed in so this file does not import its caller. */
@@ -96,9 +97,13 @@ generated. A deterministic 10-15% of light slices (hash of --head, default HEAD,
 the slice id; none below 4 light slices) run deep as an audit sample (\`audit: true\`).
 
 In a delta round (the package's round.json, written by \`review start\`, names a previous
-round at an ancestor head) only the round's range prevHead..head is cut. A slice holding a
-fix hunk is \`kind: "fix"\` with its \`findingIds\`, read deep by review-logic, review-regression,
-the reviewers that authored those findings AND every role its own content routes as above;
+round at an ancestor head) only the round's range prevHead..head is cut. The changed lines
+that lie in a fix hunk (round.json \`fixHunks\`: a hunk over a prior finding's located lines,
+or in a commit naming it) are cut apart from every other changed line, even in the same file.
+A slice of fix lines is \`kind: "fix"\` with its \`findingIds\`, read deep by review-logic,
+review-regression, the reviewers that authored those findings, review-security-code when
+one is a security finding, and the content roles its own changed lines route (a fix that
+spawns a process or builds a git argv keeps review-security-code; no deep round-1 roster);
 every other slice is \`kind: "new"\` and routed as above. The delta diff takes the same context,
 exclusions and pre-filters as a round-1 cut and is never larger than merge-base..head (when it
 would be, merge-base..head is cut instead, still split fix/new). Code of merge-base..head that did not change since the previous round gets one more
@@ -116,7 +121,10 @@ retry-plan and the ledger look for them), else ${DEFAULT_SLICE_DIR} (shared by e
 Manifest paths are relative to the manifest. Put each slice's TEXT in the
 reviewer prompt; then \`keryx review dispatch-check\` the payload.
 
-With --package it also writes <review-dir>/drivers/<reviewer>-w<n>.json for every reviewer x wave:
+With --package it also writes <review-dir>/drivers/<reviewer>-w<n>.json for every reviewer of the
+round's roster (the required set plus the fix and second-look slice roles; a role routing gave a
+slice but the roster does not run gets none) x wave, exactly the dispatches \`review estimate\` and
+plan.json count:
 the slice ids (slices), their ABSOLUTE paths (slicePaths), the wave, the file the reply goes to
 (result: raw/<reviewer>-w<n>.txt) and the reviewer's rule file (definition) when one exists. The
 dispatcher adds "model"; a re-slice keeps it. \`keryx review next --package <review-dir>\` then lists
@@ -230,25 +238,24 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const rawWave = optionValue(args, "--wave-bytes");
   const waveBytes = validateWaveBytes(rawWave === undefined ? defaultWaveBytes(host, maxBytes) : Number(rawWave), maxBytes);
   const scopeConfig = { contextLines, ...(await commentRuleScopeConfig(process.cwd())) };
-  const built = buildSlices(sliceSourceFromDiff(diff, scopeConfig), { maxBytes, waveBytes });
-  // Cheap second look: code of merge-base..head unchanged since the previous round, cut apart from the delta so each slice has one kind.
-  const secondLook = delta === undefined ? undefined : await secondLookSource(delta, contextLines, scopeConfig);
-  const secondBuilt = secondLook === undefined ? undefined : buildSlices(secondLook, { maxBytes, waveBytes });
+  const source = sliceSourceFromDiff(diff, scopeConfig);
   // Routing: each slice gets the roles its content needs and a depth by risk; the manifest carries both.
   const head = optionValue(args, "--head") ?? delta?.range.head ?? (await currentHead()) ?? "no-head";
   const reachFile = placed("--reach");
   const jevFile = placed("--jev-scores");
-  const routed = routeSlices(built.slices, {
+  const routing: RoutingOptions = {
     head,
     ...(reachFile === undefined ? {} : { reach: await readNumberMap(reachFile, "--reach") }),
     ...(jevFile === undefined ? {} : { jevScores: await readNumberMap(jevFile, "--jev-scores") }),
-  });
-  const classified = delta === undefined ? routed : classifyDeltaSlices(routed, delta, readPriorFindings(packageFlag!));
-  const second = secondBuilt === undefined || delta === undefined ? [] : tagSecondLookSlices(routeSlices(secondBuilt.slices, { head }), delta.round - 1);
-  const slices = second.length === 0 ? classified : renumberSlices([...classified, ...second]);
-  const omissions = [...built.manifest.omissions, ...(secondBuilt?.manifest.omissions ?? []).filter((omission) => !built.manifest.omissions.some((known) => known.path === omission.path))];
+  };
+  const sizes = { maxBytes, waveBytes };
+  const cut =
+    delta === undefined
+      ? firstRoundCut(source, sizes, routing)
+      : deltaRoundCut({ source, delta, prior: readPriorFindings(packageFlag!), sizes, routing, secondLook: await secondLookSource(delta, contextLines, scopeConfig) });
+  const { slices, omissions } = cut;
   const totals = {
-    ...built.manifest.totals,
+    ...cut.totals,
     slices: slices.length,
     bytes: slices.reduce((total, slice) => total + slice.bytes, 0),
     files: new Set(slices.flatMap((slice) => slice.files)).size,
@@ -256,12 +263,13 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
     omittedBytes: omissions.reduce((total, omission) => total + omission.bytes, 0),
   };
   // An empty range is refused, not planned: a merged pull request read against its own target branch (base == head) cuts no
-  // slice at all, and `next: dispatch` over zero slices would look like a clean review.
-  if (slices.length === 0 && diffFile === undefined && built.manifest.omissions.length === 0 && (delta !== undefined || round !== undefined || ref !== undefined)) {
+  // slice at all, and `next: dispatch` over zero slices would look like a clean review. A range whose every file was omitted
+  // (every cut's omissions count, fix and second-look included) is not empty: it says what was left out and why.
+  if (slices.length === 0 && diffFile === undefined && omissions.length === 0 && (delta !== undefined || round !== undefined || ref !== undefined)) {
     const base = delta?.range.base ?? round?.range.base ?? ref;
     throw new Error(`review slice refused: empty review range${base === undefined || base === null ? "" : `: base ${String(base).slice(0, 12)} equals head or changes nothing`} (${head === "no-head" ? "no head" : head.slice(0, 12)}); there is nothing to slice. For a merged pull request pass its recorded base (\`review start --base <sha|ref>\` / \`review plan --ref <base>\`).`);
   }
-  const manifest = { ...built.manifest, host, waveBytes, omissions, totals, slices: slices.map(({ text: _text, ...entry }) => entry) };
+  const manifest = { ...cut.manifest, host, waveBytes, omissions, totals, slices: slices.map(({ text: _text, ...entry }) => entry) };
 
   // Placed after the diff is fetched, which can take long: the directory is judged where it is now, right before it is written.
   const packageOut = optionValue(args, "--out") === undefined ? placed("--package") : undefined;
@@ -287,7 +295,7 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   console.log(renderSliceSummary(manifest));
   console.log(renderRoutingSummary(summarizeRouting(manifest.slices)));
   const split = delta === undefined ? undefined : splitCounts(manifest);
-  if (delta !== undefined && split !== undefined) console.log(`round ${delta.round} delta ${delta.range.base!.slice(0, 12)}..${delta.range.head!.slice(0, 12)}: ${split.fix} fix slice(s) (logic, regression, finding authors), ${split.new} new slice(s)${split.secondLook === undefined ? "" : `, ${split.secondLook} second-look slice(s) (unchanged since round ${delta.round - 1}; logic and security-code read them once)`}`);
+  if (delta !== undefined && split !== undefined) console.log(`round ${delta.round} delta ${delta.range.base!.slice(0, 12)}..${delta.range.head!.slice(0, 12)}: ${split.fix} fix slice(s) (logic, regression, finding authors, the fix lines' content roles), ${split.new} new slice(s)${split.secondLook === undefined ? "" : `, ${split.secondLook} second-look slice(s) (unchanged since round ${delta.round - 1}; logic and security-code read them once)`}`);
   console.log(`\nmanifest: ${manifestPath}`);
   if (packageOut !== undefined) console.log(`drivers: ${drivers.length} written to ${path.join(packageOut, "drivers")} (one per reviewer x wave; \`keryx review next --package <dir>\` lists what is left)`);
 }
@@ -320,30 +328,24 @@ export async function deltaSliceDiff(
   };
 }
 
-/** Renumber slices `slice-NN` in order, so ids and file names stay one sequence after two cuts are joined. */
-export function renumberSlices<T extends { id: string; path: string }>(slices: readonly T[]): T[] {
-  const width = Math.max(2, String(slices.length).length);
-  return slices.map((slice, index) => {
-    const id = `slice-${String(index + 1).padStart(width, "0")}`;
-    return { ...slice, id, path: `${id}.diff` };
-  });
-}
-
 /**
  * The regions of merge-base..head that the delta round does not cover and the previous round already read (the round's
- * `secondLookHunks`), cut with the same context and pre-filters as every other cut. Undefined when the round has none.
+ * `secondLookHunks`), cut with the same context and pre-filters as every other cut. A git region that merely touches a
+ * hunk is cut to the hunk's own lines (`partitionRegionsBySecondLook`, the predicate the routing check judges by), and
+ * its other changed lines that the delta cut does not already carry are returned as `outside`, to be sliced as new.
+ * Undefined when the round has none.
  */
 export async function secondLookSource(
-  round: Pick<RoundRecord, "range" | "mergeBase" | "secondLookHunks">,
+  round: Pick<RoundRecord, "range" | "mergeBase" | "secondLookHunks"> & Partial<Pick<RoundRecord, "fixHunks" | "newHunks">>,
   contextLines: number,
   config: Parameters<typeof sliceSourceFromDiff>[1],
   rangeDiff: (base: string, head: string, contextLines: number) => Promise<string> = gitRangeDiff,
-): Promise<ReturnType<typeof sliceSourceFromDiff> | undefined> {
+): Promise<SecondLookSource | undefined> {
   const hunks = round.secondLookHunks ?? [];
   if (hunks.length === 0 || round.mergeBase === undefined || round.mergeBase === null) return undefined;
   const source = sliceSourceFromDiff(await rangeDiff(round.mergeBase, round.range.head!, contextLines), config);
-  const regions = source.regions.filter((region) => regionInSecondLook(region, hunks));
-  return regions.length === 0 ? undefined : { ...source, regions };
+  const parts = partitionRegionsBySecondLook(source.regions, hunks, [...(round.fixHunks ?? []), ...(round.newHunks ?? [])]);
+  return parts.secondLook.length === 0 && parts.outside.length === 0 ? undefined : { ...source, regions: parts.secondLook, outside: parts.outside };
 }
 
 /** `git diff <base> <head>` of a delta round, without committed review packages (the same pathspec the round's hunks were cut with). */

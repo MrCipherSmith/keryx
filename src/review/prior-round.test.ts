@@ -640,13 +640,13 @@ describe("keryx review start writes the round record", () => {
     writeFileSync(path.join(schemas, "managed-review-package.schema.json"), readFileSync(SCHEMA, "utf8"));
   }
 
-  async function start(args: string[]): Promise<{ output: string; dir: string }> {
+  async function start(args: string[], prBase: (ref: string) => Promise<string | undefined> = async () => undefined): Promise<{ output: string; dir: string }> {
     process.chdir(root);
     const logged: string[] = [];
     const original = console.log;
     console.log = (...parts: unknown[]) => void logged.push(parts.join(" "));
     try {
-      await reviewCommand(["start", "--target", "pr", "--ref", PR, "--head", B, ...args], { isTerminal: () => false, priorRound: { github: offline } });
+      await reviewCommand(["start", "--target", "pr", "--ref", PR, "--head", B, ...args], { isTerminal: () => false, priorRound: { github: offline }, prBase });
     } finally {
       console.log = original;
     }
@@ -671,6 +671,25 @@ describe("keryx review start writes the round record", () => {
     expect(roundRecordTampered(dir)).toBeUndefined();
     writeFileSync(path.join(dir, "prior_findings.json"), "[]\n");
     expect(roundRecordTampered(dir)).toContain("prior_findings.json");
+  }, 60_000);
+
+  test("a pull request started without --base records its own base; beside a --base it is kept as prBase (review F-004, SEC-001)", async () => {
+    prepare();
+    const asked: string[] = [];
+    const prBase = async (ref: string): Promise<string | undefined> => {
+      asked.push(ref);
+      return "origin/develop";
+    };
+    const target = (dir: string): Record<string, unknown> => JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8")).target;
+    const plain = await start(["--review-id", "r-pr-base", "--no-prior-round"], prBase);
+    expect(asked).toEqual([PR]);
+    expect(target(plain.dir)).toMatchObject({ base: "origin/develop" });
+    expect(target(plain.dir).prBase).toBeUndefined();
+    const given = await start(["--review-id", "r-given-base", "--no-prior-round", "--base", A], prBase);
+    expect(target(given.dir)).toMatchObject({ base: A, prBase: "origin/develop" });
+    // gh unavailable: nothing is invented, the defaults apply later.
+    const offlineStart = await start(["--review-id", "r-no-gh", "--no-prior-round"]);
+    expect(target(offlineStart.dir).base).toBeUndefined();
   }, 60_000);
 
   test("review start carries the operator's premise answer into the delta round's package (review T2-001)", async () => {

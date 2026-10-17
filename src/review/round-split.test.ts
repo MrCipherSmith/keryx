@@ -2,7 +2,7 @@
 // estimate and the ledger count both kinds, each against its own roster.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -12,10 +12,11 @@ import { computeCoverage } from "./coverage-complete";
 import { estimateRound } from "./estimate";
 import { buildLedger, type LedgerInputs, type RawFile } from "./ledger";
 import { type PriorFinding, type RoundRecord } from "./round-record";
-import { classifyDeltaSlices, expectedFixRoles, fixClaimBacked, fixRosterRoles, fixSliceCoverage, fixSliceRoles, isDeltaRound, priorDispositionsOf, splitCounts } from "./round-split";
+import { classifyDeltaSlices, expectedFixRoles, fixClaimBacked, fixContentRoles, fixRosterRoles, fixSliceCoverage, fixSliceRoles, isDeltaRound, manifestRosterRoles, isSecurityFinding, partitionRegionsByFix, priorDispositionsOf, splitCounts } from "./round-split";
 import { narrowedSlices } from "./routing-check";
-import { parseScopedDiff, type SliceEntry, type SliceManifest } from "./slice";
-import { routeSliceRegions } from "./slice-routing";
+import type { ScopedRegion } from "./scope";
+import { buildSlices, parseScopedDiff, type SliceEntry, type SliceManifest } from "./slice";
+import { routeSliceRegions, routeSlices } from "./slice-routing";
 import { requiredSlices } from "./waves";
 
 const prior = (id: string, reviewer: string, file = "src/a/a.ts"): PriorFinding => ({ id, reviewer, severity: "major", file, line: 10, problem: "p", status: "open", source: "local-package" });
@@ -48,6 +49,100 @@ describe("fix roster", () => {
     expect(fixRosterRoles(["F3"], PRIOR)).toEqual(["review-logic", "review-regression"]);
   });
 
+  test("a security finding brings the code-level security reviewer, whoever authored it", () => {
+    const traversal: PriorFinding = { ...prior("L1", "review-logic"), problem: "a user path escapes the root (path traversal)" };
+    const secId: PriorFinding = { ...prior("review-style-w1:SEC-002", "review-style"), problem: "p" };
+    const plain: PriorFinding = { ...prior("L2", "review-logic"), problem: "off by one in the loop" };
+    expect(isSecurityFinding(traversal)).toBe(true);
+    expect(isSecurityFinding(secId)).toBe(true);
+    expect(isSecurityFinding(plain)).toBe(false);
+    expect(fixRosterRoles(["L1"], [traversal])).toEqual(["review-logic", "review-regression", "review-security-code"]);
+    expect(fixRosterRoles(["review-style-w1:SEC-002"], [secId])).toEqual(["review-logic", "review-regression", "review-security-code", "review-style"]);
+    expect(fixRosterRoles(["L2"], [plain])).toEqual(["review-logic", "review-regression"]);
+  });
+
+  test("security classes a non-security reviewer names in other words still count; a literal next to its own stem is gone (SEC-002)", () => {
+    for (const problem of ["builds a shell string from the ref", "spawns git with a user-controlled argv", "a symlink lets the write escape the package", "TOCTOU between stat and open", "a ReDoS on a crafted ref", "prototype pollution through the merged JSON", "unsanitized input reaches the SQL", "the secret leaks into the log", "deserialization of untrusted YAML"]) {
+      expect(isSecurityFinding({ id: "L9", reviewer: "review-logic", problem })).toBe(true);
+    }
+    for (const problem of ["off by one in the loop", "the execution id is not unique", "a memory leak in the cache", "keryx shell prints the wrong path"]) {
+      expect(isSecurityFinding({ id: "L9", reviewer: "review-logic", problem })).toBe(false);
+    }
+  });
+});
+
+describe("fix slice content roles (flow 458 M3, restored in 460 round 2)", () => {
+  test("a fix whose own lines spawn a process or build a git argv brings review-security-code; plain fix lines bring nothing", () => {
+    expect(fixContentRoles(region("src/a/a.ts", 10, 10, "+  return Bun.spawn(cmd);"))).toContain("review-security-code");
+    expect(fixContentRoles(region("src/a/a.ts", 10, 10, "+  await runGit(cwd, [\"diff\", ref]);"))).toContain("review-security-code");
+    expect(fixContentRoles(region("src/a/a.ts", 10, 10, "+  return total + 1;"))).toEqual([]);
+    // Content roles only, not the deep roster of the file: no backend, frontend or style reviewer.
+    const roles = fixContentRoles(region("src/a/a.ts", 10, 10, "+  return Bun.spawn(cmd);"));
+    expect(roles.some((role) => ["review-backend", "review-frontend", "review-style"].includes(role))).toBe(false);
+  });
+});
+
+describe("partitionRegionsByFix (flow 460 L6)", () => {
+  const scoped = (file: string, startLine: number, body: string): ScopedRegion => {
+    const lines = body.split("\n");
+    return { path: file, startLine, endLine: startLine + lines.filter((line) => !line.startsWith("-")).length - 1, changedLines: lines.filter((line) => /^[+-]/.test(line)).length, contextTruncated: false, text: body };
+  };
+  const hunks = [{ file: "src/a/a.ts", startLine: 10, endLine: 10, findingIds: ["F1"] }];
+
+  test("a region holding a fix change and an unrelated new change is cut between them; context is shared", () => {
+    // Lines 8..16: the fix replaces line 10, a new line is added at 14.
+    const body = [" l8", " l9", "-old10", "+fix10", " l11", " l12", " l13", "+new14", " l15", " l16"].join("\n");
+    const { fix, other } = partitionRegionsByFix([scoped("src/a/a.ts", 8, body)], hunks);
+    expect(fix).toHaveLength(1);
+    expect(other).toHaveLength(1);
+    expect(fix[0]).toMatchObject({ path: "src/a/a.ts", startLine: 8, changedLines: 2 });
+    expect(fix[0]!.text).toContain("+fix10");
+    expect(fix[0]!.text).not.toContain("+new14");
+    expect(other[0]!.text).toContain("+new14");
+    expect(other[0]!.text).not.toContain("fix10");
+    // The two pieces cover the region's lines exactly once, in order.
+    expect(`${fix[0]!.text}\n${other[0]!.text}`).toBe(body);
+    expect(other[0]!.startLine).toBe(fix[0]!.endLine + 1);
+    expect(other[0]!.endLine).toBe(16);
+  });
+
+  test("each piece of a cut region says its context is truncated: the neighbour kept part of the window (LG-002)", () => {
+    const body = [" l8", " l9", "-old10", "+fix10", " l11", " l12", " l13", "+new14", " l15", " l16"].join("\n");
+    const { fix, other } = partitionRegionsByFix([scoped("src/a/a.ts", 8, body)], hunks);
+    expect(fix[0]!.contextTruncated).toBe(true);
+    expect(other[0]!.contextTruncated).toBe(true);
+    expect(partitionRegionsByFix([scoped("src/a/a.ts", 9, " l9\n+fix10\n l11")], hunks).fix[0]!.contextTruncated).toBe(false);
+  });
+
+  test("a large mixed region is labelled in linear time and every line lands in exactly one piece", () => {
+    const many = Array.from({ length: 20_000 }, (_, i) => (i % 2 === 0 ? `+n${i}` : ` c${i}`));
+    const body = [" l9", "+fix10", ...many].join("\n");
+    const { fix, other } = partitionRegionsByFix([scoped("src/a/a.ts", 9, body)], hunks);
+    expect([...fix, ...other].map((piece) => piece.text).join("\n")).toBe(body);
+    expect(fix).toHaveLength(1);
+  });
+
+  test("a region of only fix lines, or only new lines, is kept whole; another file's change is new", () => {
+    const onlyFix = scoped("src/a/a.ts", 9, " l9\n+fix10\n l11");
+    const onlyNew = scoped("src/a/a.ts", 20, " l20\n+new21");
+    const elsewhere = scoped("src/b/b.ts", 9, " l9\n+x10");
+    expect(partitionRegionsByFix([onlyFix, onlyNew, elsewhere], hunks)).toEqual({ fix: [onlyFix], other: [onlyNew, elsewhere] });
+  });
+
+  test("a pure deletion right after a fix hunk's line counts as in it (git records it at the line before)", () => {
+    const deletion = scoped("src/a/a.ts", 10, " l10\n-gone");
+    expect(partitionRegionsByFix([deletion], hunks).fix).toEqual([deletion]);
+  });
+
+  test("a deletion one line past the hunk, or before its start, is new (TP-006): the tolerance is one line, on one side", () => {
+    const past = scoped("src/a/a.ts", 11, " l11\n-gone");
+    expect(partitionRegionsByFix([past], hunks)).toEqual({ fix: [], other: [past] });
+    const before = scoped("src/a/a.ts", 8, " l8\n-gone\n l9");
+    expect(partitionRegionsByFix([before], hunks)).toEqual({ fix: [], other: [before] });
+  });
+});
+
+describe("delta round", () => {
   test("only a delta round with both ends of its range splits", () => {
     expect(isDeltaRound(round())).toBe(true);
     expect(isDeltaRound(round({ mode: "first" }))).toBe(false);
@@ -72,29 +167,43 @@ describe("classifyDeltaSlices", () => {
     ...extra,
   });
 
-  test("a slice holding a fix hunk region is fix with its findings and the fix roster; every other slice is new and keeps its routing", () => {
+  test("a fix slice whose own line spawns a process gets review-security-code although no finding it answers is a security one (458 M3)", () => {
+    const [fix] = classifyDeltaSlices([entry("slice-01", ["src/a/a.ts"], region("src/a/a.ts", 10, 10, "+  return Bun.spawn(cmd);"))], round({ fixHunks: [{ file: "src/a/a.ts", startLine: 10, endLine: 10, findingIds: ["F2"] }] }), PRIOR);
+    expect(fix).toMatchObject({ kind: "fix", findingIds: ["F2"] });
+    expect(fix!.roles).toEqual(expect.arrayContaining(["review-architecture", "review-logic", "review-regression", "review-security-code"]));
+    expect(fix!.roles).not.toContain("review-style");
+  });
+
+  test("a slice whose changed lines all lie in fix hunks is fix with exactly the fix roster; every other slice is new and keeps its routing", () => {
     const slices = [
-      entry("slice-01", ["src/a/a.ts"], region("src/a/a.ts", 7, 13)),
+      entry("slice-01", ["src/a/a.ts"], region("src/a/a.ts", 10, 10)),
       entry("slice-02", ["src/c/c.ts"], region("src/c/c.ts", 1, 3)),
     ];
     const [fix, fresh] = classifyDeltaSlices(slices, round(), PRIOR);
-    // The fix roster joined by the slice's own round-1 routing (M2/M3): nothing its content needs is dropped.
-    expect(fix).toMatchObject({ kind: "fix", findingIds: ["F1"], roles: ["review-logic", "review-performance", "review-regression", "review-security-code", "review-style"], depth: "deep" });
+    // Flow 460 L6: no union with the slice's round-1 routing — style and performance do not ride along on a fix slice.
+    expect(fix).toMatchObject({ kind: "fix", findingIds: ["F1"], roles: ["review-logic", "review-regression", "review-security-code"], depth: "deep" });
     expect(fresh).toMatchObject({ kind: "new", roles: ["review-logic", "review-style", "review-performance"], depth: "light" });
     expect(fresh?.findingIds).toBeUndefined();
   });
 
-  test("a region that does not reach the fix hunk's lines leaves the slice new; the audit mark of a fix slice is dropped", () => {
+  test("a region whose changed lines miss the fix hunk leaves the slice new, even when its context spans it; the audit mark of a fix slice is dropped", () => {
     const [outside] = classifyDeltaSlices([entry("slice-01", ["src/a/a.ts"], region("src/a/a.ts", 40, 45))], round(), PRIOR);
     expect(outside?.kind).toBe("new");
-    const [audited] = classifyDeltaSlices([entry("slice-01", ["src/a/a.ts"], region("src/a/a.ts", 8, 12), { audit: true, escalated: { by: "x", finding: "y" } })], round(), PRIOR);
+    const [spanning] = classifyDeltaSlices([entry("slice-01", ["src/a/a.ts"], region("src/a/a.ts", 7, 13, "+const x = 1;\n a\n b\n c\n d"))], round(), PRIOR);
+    expect(spanning?.kind).toBe("new");
+    const [audited] = classifyDeltaSlices([entry("slice-01", ["src/a/a.ts"], region("src/a/a.ts", 10, 10), { audit: true, escalated: { by: "x", finding: "y" } })], round(), PRIOR);
     expect(audited?.kind).toBe("fix");
     expect(audited?.audit).toBeUndefined();
     expect(audited?.escalated).toBeUndefined();
   });
 
+  test("a slice mixing a fix line with a new line is new: its new line is owed round-1 routing", () => {
+    const [mixed] = classifyDeltaSlices([entry("slice-01", ["src/a/a.ts"], region("src/a/a.ts", 9, 11, " a\n+const fix = 1;\n+const fresh = 2;"))], round(), PRIOR);
+    expect(mixed).toMatchObject({ kind: "new", roles: ["review-logic", "review-style", "review-performance"], depth: "light" });
+  });
+
   test("a retry piece is left as it is", () => {
-    const [piece] = classifyDeltaSlices([entry("r1-x-01", ["src/a/a.ts"], region("src/a/a.ts", 8, 12), { retryOf: ["slice-01"] })], round(), PRIOR);
+    const [piece] = classifyDeltaSlices([entry("r1-x-01", ["src/a/a.ts"], region("src/a/a.ts", 10, 10), { retryOf: ["slice-01"] })], round(), PRIOR);
     expect(piece?.kind).toBeUndefined();
   });
 });
@@ -125,6 +234,17 @@ describe("fix slices in the manifest", () => {
     expect(splitCounts(manifest([plain(newSlice)]))).toBeUndefined();
   });
 
+  test("a slice routed to the security reviewer adds it to the roster in a light round too; another routed role does not (SEC-R3-001)", () => {
+    // A light round's required set is path-only: a new slice that spawns a process is routed to review-security-code by
+    // its content, and the roster (drivers, plan.json, ledger) must dispatch it.
+    const light = manifest([{ ...plain(newSlice), roles: ["review-logic", "review-security-code", "review-backend"] }]);
+    expect(manifestRosterRoles(light)).toEqual(["review-security-code"]);
+    expect(estimateRound(["review-logic", ...manifestRosterRoles(light)], light).perRole.find((r) => r.role === "review-security-code")?.waves).toBe(1);
+    // A retry piece adds nothing of its own; the fix roster is still part of it.
+    expect(manifestRosterRoles(manifest([{ ...plain(newSlice), id: "r1", roles: ["review-security-code"], retryOf: ["slice-02"] }]))).toEqual([]);
+    expect(manifestRosterRoles(m)).toEqual(fixSliceRoles(m));
+  });
+
   test("estimate counts both kinds: a dispatch carries one kind, and the split is reported", () => {
     const estimate = estimateRound(["review-logic", "review-regression", "review-security-code", "review-style"], m);
     expect(estimate.split).toEqual({ fix: { slices: 1, dispatches: 3 }, new: { slices: 1, dispatches: 2 } });
@@ -141,39 +261,102 @@ describe("fix slices in the manifest", () => {
   });
 });
 
+describe("a #1045-shaped fix delta (flow 460 L6)", () => {
+  // Round 2 of a TypeScript CLI pull request: 33 fix hunks over 12 source files answering findings of 10 round-1 authors,
+  // each fix line code the round-1 router would send to many roles (fs, spawn, exports, loops).
+  const AUTHORS = ["review-architecture", "review-clean-code", "review-core-boundaries", "review-highload", "review-logic", "review-performance", "review-regression", "review-security-code", "review-style", "review-testing-practices"];
+  const files = Array.from({ length: 12 }, (_, i) => `src/review/mod${i}.ts`);
+  const fixHunks = files.flatMap((file, f) => [0, 1, 2].map((h) => ({ file, startLine: 20 + h * 40, endLine: 21 + h * 40, findingIds: [`${AUTHORS[(f * 3 + h) % AUTHORS.length]}-w1:F-${f}-${h}`] }))).slice(0, 33);
+  const prior33: PriorFinding[] = fixHunks.map((hunk) => ({ ...prior(hunk.findingIds[0]!, hunk.findingIds[0]!.split("-w1:")[0]!, hunk.file), line: hunk.startLine, problem: "p" }));
+  const regions: ScopedRegion[] = fixHunks.map((hunk) => ({
+    path: hunk.file,
+    startLine: hunk.startLine - 3,
+    endLine: hunk.endLine + 3,
+    changedLines: 4,
+    contextTruncated: false,
+    text: [" a", " b", " c", "-  old();", "-  old2();", `+  export async function f${hunk.startLine}(dir: string) { const out = readFileSync(path.join(dir, name)); while (true) { await Promise.all([spawn(cmd)]); } }`, "+  return out.sort();", " d", " e", " f"].join("\n"),
+  }));
+  const ROUND1_ROSTER = AUTHORS;
+
+  test("its fix slices carry exactly the fix roster, no backend or frontend reviewer joins, and the plan stays under 40 dispatches", () => {
+    const deltaRound = round({ fixHunks });
+    const parts = partitionRegionsByFix(regions, fixHunks);
+    expect(parts.other).toEqual([]);
+    const built = buildSlices({ source: "scoped-diff", regions: parts.fix, drops: [] }, { maxBytes: 150_000, waveBytes: 150_000 });
+    const classified = classifyDeltaSlices(routeSlices(built.slices, { head: "h" }), deltaRound, prior33);
+    expect(classified.every((s) => s.kind === "fix")).toBe(true);
+    // The fix roster united with the fix lines' own content roles (458 M3): never the deep round-1 roster.
+    for (const s of classified) expect(s.roles).toEqual([...new Set([...fixRosterRoles(s.findingIds ?? [], prior33), ...fixContentRoles(s.text)])].sort());
+    // What round-1 routing would have given the same slices (the old union): wider than the fix roster.
+    const contentRoles = new Set(routeSlices(built.slices, { head: "h" }).flatMap((s) => s.roles ?? []));
+    expect(contentRoles.has("review-backend") || contentRoles.has("review-frontend")).toBe(true);
+    const manifest: SliceManifest = { ...built.manifest, slices: classified.map(({ text: _text, ...entry }) => entry) };
+    const roster = [...new Set([...ROUND1_ROSTER, ...fixSliceRoles(manifest)])].sort();
+    expect(roster).not.toContain("review-backend");
+    expect(roster).not.toContain("review-frontend");
+    const estimate = estimateRound(roster, manifest);
+    expect(estimate.split?.fix.slices).toBe(classified.length);
+    expect(estimate.split?.new).toEqual({ slices: 0, dispatches: 0 });
+    expect(estimate.dispatches).toBeLessThanOrEqual(40);
+    expect(estimate.overThreshold).toBe(false);
+  });
+});
+
 describe("routing check accepts fix rosters", () => {
-  const text = region("src/a/a.ts", 8, 12, "+eval(userInput);\n+child_process.exec(cmd);");
-  const slice = (extra: Partial<SliceEntry>): SliceEntry => ({ id: "slice-01", path: "slice-01.diff", bytes: 100, files: ["src/a/a.ts"], domain: "src/a", split: "domain", kind: "fix", findingIds: ["F1"], ...extra });
-  const context = { round: round(), prior: PRIOR };
+  // The fix hunk covers lines 10-11 and names F1 (security-code) and F2 (architecture).
+  const text = region("src/a/a.ts", 10, 11, "+eval(userInput);\n+child_process.exec(cmd);");
+  const slice = (extra: Partial<SliceEntry>): SliceEntry => ({ id: "slice-01", path: "slice-01.diff", bytes: 100, files: ["src/a/a.ts"], domain: "src/a", split: "domain", kind: "fix", findingIds: ["F1", "F2"], ...extra });
+  const context = { round: round({ fixHunks: [{ file: "src/a/a.ts", startLine: 10, endLine: 11, findingIds: ["F1", "F2"] }] }), prior: PRIOR };
   const read = () => text;
 
   const contentRoles = routeSliceRegions("slice-01", parseScopedDiff(text), { changedFiles: ["src/a/a.ts"] }).roles;
+  const FIX_ROSTER = ["review-architecture", "review-logic", "review-regression", "review-security-code"];
 
-  test("a fix slice is held to the fix roster AND its content's round-1 routing (M3): the fix roster alone is narrowed", () => {
-    const fixOnly = slice({ roles: expectedFixRoles({ findingIds: ["F1"] }, context), depth: "deep" });
-    const missing = contentRoles.filter((role) => !fixOnly.roles!.includes(role));
-    expect(missing.length).toBeGreaterThan(0);
-    expect(narrowedSlices({ slices: [fixOnly] }, read, context).narrowed).toEqual([{ id: "slice-01", missingRoles: missing.sort() }]);
-    const union = slice({ roles: [...new Set([...contentRoles, ...expectedFixRoles({ findingIds: ["F1"] }, context)])], depth: "deep" });
-    expect(narrowedSlices({ slices: [union] }, read, context).narrowed).toEqual([]);
+  test("a backed fix slice is held to the fix roster plus its content roles (flow 460 L6, 458 M3): the deep round-1 roster is not owed", () => {
+    expect(expectedFixRoles({ findingIds: ["F1", "F2"] }, context, text)).toEqual(FIX_ROSTER);
+    // The content would route more roles as a round-1 slice; a fix slice needs none of them.
+    expect(contentRoles.some((role) => !FIX_ROSTER.includes(role))).toBe(true);
+    const fixOnly = slice({ roles: FIX_ROSTER, depth: "deep" });
+    expect(narrowedSlices({ slices: [fixOnly] }, read, context).narrowed).toEqual([]);
     // A fix slice is read deep.
-    expect(narrowedSlices({ slices: [{ ...union, depth: "light" }] }, read, context).narrowed).toEqual([{ id: "slice-01", missingRoles: [], depth: { recorded: "light", needed: "deep" } }]);
+    expect(narrowedSlices({ slices: [{ ...fixOnly, depth: "light" }] }, read, context).narrowed).toEqual([{ id: "slice-01", missingRoles: [], depth: { recorded: "light", needed: "deep" } }]);
   });
 
-  test("a fix slice missing an author of its finding is narrowed", () => {
-    const fix = slice({ roles: [...new Set([...contentRoles, "review-logic", "review-regression"])].filter((role) => role !== "review-security-code"), depth: "deep" });
+  test("a fix slice whose content routes review-security-code is narrowed without it, although its findings are not security ones", () => {
+    const spawnText = region("src/a/a.ts", 10, 10, "+  return Bun.spawn(cmd);");
+    const ctx = { round: round({ fixHunks: [{ file: "src/a/a.ts", startLine: 10, endLine: 10, findingIds: ["F2"] }] }), prior: PRIOR };
+    const entryOf = (roles: string[]): SliceEntry => ({ id: "slice-01", path: "slice-01.diff", bytes: 100, files: ["src/a/a.ts"], domain: "src/a", split: "domain", kind: "fix", findingIds: ["F2"], roles, depth: "deep" });
+    expect(expectedFixRoles({ findingIds: ["F2"] }, ctx, spawnText)).toContain("review-security-code");
+    expect(narrowedSlices({ slices: [entryOf(["review-architecture", "review-logic", "review-regression"])] }, () => spawnText, ctx).narrowed).toEqual([{ id: "slice-01", missingRoles: ["review-security-code"] }]);
+    expect(narrowedSlices({ slices: [entryOf(expectedFixRoles({ findingIds: ["F2"] }, ctx, spawnText))] }, () => spawnText, ctx).narrowed).toEqual([]);
+  });
+
+  test("a fix slice missing an author of its finding is narrowed, also when the manifest dropped that finding's id", () => {
+    const fix = slice({ roles: FIX_ROSTER.filter((role) => role !== "review-security-code"), depth: "deep" });
     expect(narrowedSlices({ slices: [fix] }, read, context).narrowed).toEqual([{ id: "slice-01", missingRoles: ["review-security-code"] }]);
+    // F2 dropped from the manifest: the text still touches F2's hunk, so its author is still owed.
+    const dropped = slice({ findingIds: ["F1"], roles: ["review-logic", "review-regression", "review-security-code"], depth: "deep" });
+    expect(narrowedSlices({ slices: [dropped] }, read, context).narrowed).toEqual([{ id: "slice-01", missingRoles: ["review-architecture"] }]);
   });
 
-  test("tagging a slice fix does not narrow it: the round must back the claim", () => {
-    expect(fixClaimBacked(slice({}), context)).toBe(true);
-    expect(fixClaimBacked(slice({ findingIds: ["F7"] }), context)).toBe(false);
-    expect(fixClaimBacked(slice({ files: ["src/z/z.ts"] }), context)).toBe(false);
-    expect(fixClaimBacked(slice({ findingIds: [] }), context)).toBe(false);
-    expect(fixClaimBacked(slice({}), { round: round({ mode: "first" }), prior: PRIOR })).toBe(false);
-    expect(fixClaimBacked(slice({}), undefined)).toBe(false);
+  test("tagging a slice fix does not narrow it: the round must back the claim, line by line", () => {
+    expect(fixClaimBacked(slice({}), context, text)).toBe(true);
+    expect(fixClaimBacked(slice({ findingIds: ["F7"] }), context, text)).toBe(false);
+    expect(fixClaimBacked(slice({ files: ["src/z/z.ts"] }), context, text)).toBe(false);
+    expect(fixClaimBacked(slice({ findingIds: [] }), context, text)).toBe(false);
+    expect(fixClaimBacked(slice({}), { round: round({ mode: "first" }), prior: PRIOR }, text)).toBe(false);
+    expect(fixClaimBacked(slice({}), undefined, text)).toBe(false);
     const forged = slice({ findingIds: ["F7"], roles: ["review-logic", "review-regression"], depth: "deep" });
     expect(narrowedSlices({ slices: [forged] }, read, context).narrowed.length).toBe(1);
+  });
+
+  test("a slice tagged fix that carries a new line is judged as a new slice: the fix roster alone is narrowed", () => {
+    const withNew = region("src/a/a.ts", 10, 12, "+eval(userInput);\n+child_process.exec(cmd);\n+export function fresh() { return spawn(cmd); }");
+    expect(fixClaimBacked(slice({}), context, withNew)).toBe(false);
+    const needed = routeSliceRegions("slice-01", parseScopedDiff(withNew), { changedFiles: ["src/a/a.ts"] }).roles;
+    const narrowed = narrowedSlices({ slices: [slice({ roles: FIX_ROSTER, depth: "deep" })] }, () => withNew, context).narrowed;
+    expect(narrowed).toEqual([{ id: "slice-01", missingRoles: needed.filter((role) => !FIX_ROSTER.includes(role)).sort() }]);
+    expect(narrowed[0]!.missingRoles.length).toBeGreaterThan(0);
   });
 
   test("a new slice is still held to round-1 routing", () => {
@@ -367,6 +550,37 @@ describe("review slice in a delta round", () => {
     expect([...new Set(slices.flatMap((s) => s.files))].sort()).toEqual(["src/a/a.ts", "src/c/c.ts"]);
   });
 
+  test("a fix hunk and an unrelated new hunk of the same file: one fix slice with the fix roster, one new slice with round-1 roles (flow 460 L6)", async () => {
+    const a = (await readFile(path.join(repo, "src/a/a.ts"), "utf8")).split("\n");
+    a[13] = "export function fresh(cmd: string[]) { return Bun.spawn(cmd); }";
+    await writeFile(path.join(repo, "src/a/a.ts"), a.join("\n"));
+    git("add", "-A");
+    git("commit", "-q", "-m", "a new function next to the fix");
+    const head2 = git("rev-parse", "HEAD");
+    const pkg = await writeRound({ range: { base, head: head2 }, fixHunks: [{ file: "src/a/a.ts", startLine: 10, endLine: 10, findingIds: ["F2"] }], newHunks: [{ file: "src/a/a.ts", startLine: 14, endLine: 14 }, { file: "src/c/c.ts", startLine: 4, endLine: 8 }] });
+    await reviewCommand(["slice", "--package", pkg, "--max-bytes", "100000", "--head", head2]);
+    expect(process.exitCode).toBe(0);
+    const { slices } = await manifestOf(pkg);
+    const fixes = slices.filter((s) => s.kind === "fix");
+    expect(fixes).toHaveLength(1);
+    // The fix roster: logic, regression, F2's author; the fix line's own content (an export) routes architecture, F2's
+    // author already. The deep round-1 roster of the file does not ride along.
+    expect(fixes[0]).toMatchObject({ files: ["src/a/a.ts"], findingIds: ["F2"], depth: "deep", roles: ["review-architecture", "review-logic", "review-regression"] });
+    const fixText = await readFile(path.join(pkg, "slices", fixes[0]!.path), "utf8");
+    expect(fixText).toContain("a9 = 99");
+    expect(fixText).not.toContain("Bun.spawn");
+    // The new function in the same file is in a new slice, routed as in round 1: the spawn brings security-code.
+    const freshA = slices.find((s) => s.kind === "new" && s.files.includes("src/a/a.ts"));
+    expect(freshA).toBeDefined();
+    const freshText = await readFile(path.join(pkg, "slices", freshA!.path), "utf8");
+    expect(freshText).toContain("Bun.spawn");
+    expect(freshText).not.toContain("+export const a9 = 99");
+    expect(freshA!.roles).toEqual(routeSliceRegions(freshA!.id, parseScopedDiff(freshText), { changedFiles: ["src/a/a.ts", "src/c/c.ts"] }).roles);
+    expect(freshA!.roles).toEqual(expect.arrayContaining(["review-logic", "review-security-code"]));
+    // The routing check accepts the manifest as written.
+    expect(narrowedSlices({ slices }, (entry) => readFileSync(path.join(pkg, "slices", entry.path), "utf8"), { round: JSON.parse(await readFile(path.join(pkg, "round.json"), "utf8")) as RoundRecord, prior: PRIOR }).narrowed).toEqual([]);
+  });
+
   test("a delta slice never exceeds the round-1 slice of the same head under the same exclusions", async () => {
     // Round 1 reviewed `prev`, which added a large block the fix then removed: prev..head carries every removed line,
     // merge-base..head does not. The delta is cut from merge-base..head then, still split fix/new.
@@ -384,7 +598,21 @@ describe("review slice in a delta round", () => {
     const fullDir = path.join(repo, "full-slices");
     await reviewCommand(["slice", "--out", fullDir, "--ref", base, "--max-bytes", "100000", "--head", fixed]);
     const full = JSON.parse(await readFile(path.join(fullDir, "manifest.json"), "utf8")) as SliceManifest;
-    expect(delta.totals.bytes).toBeLessThanOrEqual(full.totals.bytes);
+    // Bytes of the diff lines read, without section headers: the fix/new cut (flow 460 L6) may split one window into two
+    // sections, which repeats a header but never a line of the diff. A header is a `--- path` line directly followed by
+    // its `@@ a,b @@` line (the scoped format's section structure), so a removed `-- comment` line still counts.
+    const bodyBytes = async (dir: string, m: SliceManifest): Promise<number> => {
+      let bytes = 0;
+      for (const s of m.slices) {
+        const lines = (await readFile(path.join(dir, s.path), "utf8")).split("\n");
+        lines.forEach((line, index) => {
+          const header = /^@@ \d+,\d+ @@$/.test(line) || (line.startsWith("--- ") && /^@@ \d+,\d+ @@$/.test(lines[index + 1] ?? ""));
+          if (line !== "" && !header) bytes += Buffer.byteLength(line) + 1;
+        });
+      }
+      return bytes;
+    };
+    expect(await bodyBytes(path.join(pkg, "slices"), delta)).toBeLessThanOrEqual(await bodyBytes(fullDir, full));
     expect(delta.slices.some((slice) => slice.kind === "fix")).toBe(true);
 
     // The ordinary case: a small fix on top of round 1 is cut from prev..head, smaller than the whole branch.

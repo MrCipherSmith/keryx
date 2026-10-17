@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { closeSync, openSync } from "node:fs";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import path, { join } from "node:path";
-import { optionValue } from "../lib/args";
+import { optionValue, optionValues } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
 import { assertGitRevision, revisionOperand } from "../lib/git-revision";
 // Through the security facade, not `security/redact` directly — same
@@ -44,7 +44,7 @@ import { DEPTH_REQUESTS, ROUND_DEPTH_FILE, decideRoundDepth, packageChangedLines
 import { CONFIRM_PLAN_TOOL, estimatePackage, planConfirmationFor, planConfirmed, renderEstimate, writePlanConfirmation } from "../review/estimate";
 import { readJsonFileOr } from "../lib/json";
 import type { SliceManifest } from "../review/slice";
-import { fixSliceRoles } from "../review/round-split";
+import { manifestRosterRoles } from "../review/round-split";
 import { printPlanHelp, runPlan } from "./review-plan";
 import { printPlanEvalHelp, runPlanEval } from "./review-plan-eval";
 import { FIRST_FILES } from "../review/coverage-complete";
@@ -173,7 +173,7 @@ import { createTierRankHost, type TierRankHost } from "../harness/routing/tier-r
 import { TEST_FILE_RE } from "../testing/selection";
 import { isVerificationMode, verificationClaims } from "../review/verification";
 import { writeVerdict } from "../review/verdict";
-import { parsePremiseClaims } from "../review/premise";
+import { parsePremiseClaimSets } from "../review/premise";
 import {
   buildReplyPass,
   collectPrComments,
@@ -228,6 +228,7 @@ import {
   type FindingDispositionState,
   type ManagedReviewInput,
   type ManagedReviewMode,
+  type PremiseSource,
   type ReviewFindingsSource,
   type ReviewScopeRecordLike,
   type ReviewTargetKind,
@@ -639,6 +640,33 @@ export interface ReviewCommandSeams {
   confirmPublish?: (body: string, ref: string, event: ReviewEvent) => Promise<boolean>;
   /** Test seam: the previous-round search of `start|attach` (sources, git, the pull request read). Default: the real ones. */
   priorRound?: Partial<Omit<PriorRoundDeps, "cwd" | "forced" | "excludeReviewId">>;
+  /** Test seam: a pull request's own base ref for `start|attach|ingest` of a PR target. Default: `gh pr view` (see ghPrBase). */
+  prBase?: (ref: string) => Promise<string | undefined>;
+}
+
+/** At most this long is spent asking gh for a pull request's base; a slower answer is no answer. */
+const PR_BASE_TIMEOUT_MS = 15_000;
+
+/** `origin/<name>` for the branch name `gh` printed; undefined when it is not a plain branch name (an option, a range, empty). */
+export function prBaseRef(output: string): string | undefined {
+  const name = output.trim();
+  return /^[A-Za-z0-9._/-]{1,200}$/.test(name) && !name.startsWith("-") && !name.includes("..") ? `origin/${name}` : undefined;
+}
+
+/**
+ * The pull request's own base as a ref git can resolve (`origin/<baseRefName>`), read with `gh pr view`; undefined when gh
+ * is missing, signed out or offline, or names something that is not a branch name. Never throws.
+ */
+export async function ghPrBase(ref: string): Promise<string | undefined> {
+  // `KERYX_REVIEW_PR_BASE=off` skips the lookup (the test runner sets it; an offline operator may too).
+  if (process.env.KERYX_REVIEW_PR_BASE === "off" || ref.startsWith("-") || Bun.which("gh") === null) return undefined;
+  try {
+    const proc = Bun.spawn(["gh", "pr", "view", ref, "--json", "baseRefName", "--jq", ".baseRefName"], { stdin: "ignore", stdout: "pipe", stderr: "ignore", timeout: PR_BASE_TIMEOUT_MS, killSignal: "SIGKILL" });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    return exitCode === 0 ? prBaseRef(stdout) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function trackerPrLookup(ref: string): Promise<PrSnapshot | null> {
@@ -693,7 +721,7 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       return;
     }
     if (command === "ingest") {
-      await runCreate("ingest", args.slice(1));
+      await runCreate("ingest", args.slice(1), seams);
       return;
     }
     if (command === "scope") {
@@ -1039,10 +1067,18 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
   }
   const cwd = process.cwd();
   const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
+  // Recorded on the target (flow 460): the coverage gate's light recheck diffs against `target.base` before any default.
+  // A pull request started without --base records its own base, read from GitHub, so a PR into another branch than main is
+  // measured against that branch (review F-004); beside a --base, the PR's base is kept as `prBase`, which the recheck
+  // also measures, so a --base the starter chose cannot narrow the diff (SEC-001).
+  const givenBase = optionValue(args, "--base")?.trim() || undefined;
+  const prBase = targetKind === "pr" ? await (createSeams.prBase ?? ghPrBase)(targetRef) : undefined;
+  const base = givenBase ?? prBase;
+  const keptPrBase = givenBase !== undefined && prBase !== undefined && prBase !== givenBase ? prBase : undefined;
   const input: ManagedReviewIngestInput = {
     cwd,
     mode,
-    target: { kind: targetKind, ref: targetRef, ...(head === undefined ? {} : { head }) },
+    target: { kind: targetKind, ref: targetRef, ...(base === undefined ? {} : { base }), ...(keptPrBase === undefined ? {} : { prBase: keptPrBase }), ...(head === undefined ? {} : { head }) },
     flowId: optionValue(args, "--flow"),
     reviewId: optionValue(args, "--review-id"),
     ...(args.includes(AUTOMATIC_REVIEW_FLAG) ? { automatic: true } : {}),
@@ -1051,7 +1087,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     reportPath: optionValue(args, "--report"),
     refuted: await readRefuted(optionValue(args, "--refuted")),
     verifications: await readVerifications(optionValue(args, "--verifications")),
-    premises: await readPremises(optionValue(args, "--premises")),
+    premises: await readPremises(optionValues(args, "--premises")),
     research: optionValue(args, "--research") ? JSON.parse(await readFile(path.resolve(cwd, optionValue(args, "--research")!), "utf8")) : undefined,
     verificationMode: parseVerificationMode(optionValue(args, "--verification-mode")),
     scope: await readScope(optionValue(args, "--scope")),
@@ -3336,7 +3372,7 @@ async function runRequired(args: string[]): Promise<void> {
   });
   // A delta round's fix slices are read by the reviewers that authored the findings they answer (flow 458): they join the set.
   const sliceManifest = packageDir === undefined ? undefined : await readJsonFileOr<SliceManifest | undefined>(path.join(packageDir, "slices", "manifest.json"), undefined);
-  const fixRoles = sliceManifest !== undefined && Array.isArray(sliceManifest.slices) ? fixSliceRoles(sliceManifest).filter((role) => !baseSet.required.includes(role)) : [];
+  const fixRoles = sliceManifest !== undefined && Array.isArray(sliceManifest.slices) ? manifestRosterRoles(sliceManifest).filter((role) => !baseSet.required.includes(role)) : [];
   const set = fixRoles.length === 0 ? baseSet : { ...baseSet, required: [...baseSet.required, ...fixRoles].sort() };
   if (packageDir !== undefined) {
     // The one write: `ledger build` reads the round's depth back from the package.
@@ -3619,10 +3655,27 @@ async function readVerifications(source: string | undefined): Promise<ManagedRev
  * `review-premise`'s own output (flow 459): `{ judge, model?, premises: [...] }`, read from a file or stdin. The shape is
  * checked here so a malformed file refuses the ingest before anything is written; the per-claim rules run in the merge.
  */
-async function readPremises(source: string | undefined): Promise<ManagedReviewInput["premises"]> {
-  if (source === undefined) {
+async function readPremises(sources: readonly string[]): Promise<PremiseSource[] | undefined> {
+  if (sources.length === 0) {
     return undefined;
   }
+  // Flow 460: --premises is repeatable. Every file is read the same way and the result is always a list of premise
+  // results, each with its own judge, merged by the ingest as one set of claims (a conflicting claim across files is a
+  // duplicate-claim).
+  if (sources.filter((source) => source === "-").length > 1) {
+    throw new Error("--premises - (stdin) may be given once. Nothing was ingested.");
+  }
+  const files: PremiseSource[] = [];
+  for (const source of sources) files.push(...(await readPremiseFile(source)));
+  return files;
+}
+
+/**
+ * One --premises file as premise results: a judge's `{ judge, model?, premises }` object, a report holding one fenced
+ * `keryx:premises` block, or a package's own research-evidence/premises.json — which a multi-file ingest writes as a list
+ * of results, so it is read with the same reader the verdict uses (`parsePremiseClaimSets`) and can be passed back.
+ */
+async function readPremiseFile(source: string): Promise<PremiseSource[]> {
   let raw: string;
   try {
     raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
@@ -3631,9 +3684,16 @@ async function readPremises(source: string | undefined): Promise<ManagedReviewIn
     throw new Error(`--premises ${source}: the file could not be read (${error instanceof Error && "code" in error ? String((error as NodeJS.ErrnoException).code) : "unreadable"}). Nothing was ingested.`);
   }
   // The bare object, or a report / judge reply holding one fenced `keryx:premises` block.
-  const parsed = parseEmbeddedPremises(raw, `--premises ${source}`);
-  parsePremiseClaims(parsed);
-  return parsed as ManagedReviewInput["premises"];
+  const parsed: unknown = parseEmbeddedPremises(raw, `--premises ${source}`);
+  // Validates every result; throws on anything that is not one result or a list of results, so the filter drops nothing.
+  parsePremiseClaimSets(parsed);
+  const results: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+  return results.filter(isPremiseSource);
+}
+
+/** A premise result: an object with a `premises` list (parsePremiseClaimSets has checked the rest). */
+function isPremiseSource(value: unknown): value is PremiseSource {
+  return typeof value === "object" && value !== null && "premises" in value && Array.isArray(value.premises);
 }
 
 /**
@@ -4816,7 +4876,7 @@ ${GRAPH_TIMEOUT_HELP}`);
 function printIngestHelp(): void {
   console.log(`keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--research <ledger.json>]
                     [--review-id <id>] [--automatic] [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
-                    [--premises <file|->]
+                    [--premises <file|->]...
                     [--scope <scope.json>] [--blast-radius <blast-radius.json>] [--cross-family-review <file|->]
                     [--refuted <file|->] [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                     [--tokens-in <n>] [--tokens-out <n>] [--parallel <n>] [--outstanding <n>]
@@ -4899,7 +4959,7 @@ Usage:
   keryx review verify-run --package <dir> --finding <id> -- <command…>
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--research <ledger.json>] [--review-id <id>] [--automatic]
-                      [--verifications <file|->] [--premises <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
+                      [--verifications <file|->] [--premises <file|->]... [--verification-mode ${VERIFICATION_MODES.join("|")}]
                       [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                       [--cross-family-review <file|->]
                     [--refuted <file|->]
@@ -5305,6 +5365,11 @@ verification (attach/start/ingest):
   only lower a severity. The operator answers with \`keryx review decide-premise\`. A re-ingest
   without --premises over a package the judge held carries each hold from the previous
   findings.json to the same unchanged finding, and is refused otherwise.
+  --premises is repeatable (one file per judge dispatch): the files are merged as one set of
+  claims, each keeping its own judge. Two claims on one finding that agree (the same verdict,
+  across files, or on a finding and the duplicate ingest folded into it) apply once; claims that
+  disagree apply neither (duplicate-claim). A finding id holds no "#": that is the global_id
+  separator (<reviewId>#<id>).
   --scope takes the WHOLE \`keryx review scope --json\` document — counts and the
   per-drop reasons — so the package records what the pre-filter dropped and why.
   Omitted, a \`## Pre-filter scope\` block already in the package's scope.md is

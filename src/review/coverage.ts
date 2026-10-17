@@ -1,7 +1,9 @@
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import { NOT_REVIEW_PACKAGES } from "./round-record";
+import { DEFAULT_BASE_CANDIDATES, defaultGitRunner, emptyRangeWarning, resolveBase } from "./git-base";
+import { notReviewPackagesAt } from "./round-record";
+import { asRecord } from "./record";
 import { extractStackRequiresField, parseStackRequires, scopeReviewerByStack, detectProjectStack } from "./stack";
 import { collectReviewers, overlapGroupsOf, type ReviewerInventory } from "./reviewers";
 import { CORE_MANDATORY_REVIEWER_IDS } from "./jev-select";
@@ -260,8 +262,8 @@ function dispatchKnowsRole(dispatch: Record<string, unknown>, role: string): boo
 
 /** Warnings the coverage gate does not refuse for: `review-pr-contract` not run on a package that predates the role. */
 export function coverageWarnings(dispatch: unknown, options: Pick<CoverageOptions, "prContext">): string[] {
-  if (!dispatch || typeof dispatch !== "object" || Array.isArray(dispatch)) return [];
-  const record = dispatch as Record<string, unknown>;
+  const record = asRecord(dispatch);
+  if (record === undefined) return [];
   if (options.prContext !== true || dispatchKnowsRole(record, PR_CONTRACT)) return [];
   const selected = Array.isArray(record.selected) ? record.selected : [];
   return selected.includes(PR_CONTRACT) ? [] : [`${PR_CONTRACT} not run (package predates the role)`];
@@ -459,27 +461,165 @@ export type CoverageOptions = {
   diffStats?: (() => Promise<{ files: string[]; changedLines: number } | undefined>) | undefined;
 };
 
-/** The files and retained changed lines of `ref...head`, from one `git diff`; undefined when git cannot answer. */
-export async function gitDiffStats(root: string, target: { ref: string; head: string }): Promise<{ files: string[]; changedLines: number } | undefined> {
+type DiffStats = { files: string[]; changedLines: number };
+
+/** One `git diff base...head` at `cwd`: the stats, or why git could not answer. */
+async function gitDiffAt(cwd: string, base: string, head: string, pathspec: readonly string[]): Promise<DiffStats | { error: string }> {
   try {
-    assertGitRevision(target.ref);
-    assertGitRevision(target.head);
-    const proc = Bun.spawn(["git", "diff", "--no-color", "-U20", "--end-of-options", `${target.ref}...${target.head}`, "--", ...NOT_REVIEW_PACKAGES], { cwd: root, stdout: "pipe", stderr: "pipe", timeout: 15_000, killSignal: "SIGKILL", maxBuffer: 8 * 1024 * 1024 });
-    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-    if (exitCode !== 0 || proc.signalCode !== null) return undefined;
+    assertGitRevision(base);
+    assertGitRevision(head);
+    const proc = Bun.spawn(["git", "diff", "--no-color", "-U20", "--end-of-options", `${base}...${head}`, "--", ...pathspec], { cwd, stdout: "pipe", stderr: "pipe", timeout: GIT_TIMEOUT_MS, killSignal: "SIGKILL", maxBuffer: 8 * 1024 * 1024 });
+    const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+    if (proc.signalCode !== null) return { error: `git was stopped (${proc.signalCode})` };
+    if (exitCode !== 0) return { error: stderr.trim().split("\n")[0] || `git exited ${exitCode}` };
     const scope = buildReviewScope(stdout);
     return { files: scope.files, changedLines: scope.counts.changedLinesRetained };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/** At most this many entries are kept in each per-process cache below; the oldest goes first. */
+const GIT_CACHE_ENTRIES = 64;
+/**
+ * How long a cached git answer is trusted. The gate runs inside the long-lived keryx shell, where the process outlives
+ * many commands, checkouts and worktree moves; a short life keeps one command (readiness then complete, a panel refresh)
+ * paying for git once without an answer outliving the checkout it was read from. It also bounds a pending entry: one
+ * older than this is recomputed rather than awaited.
+ */
+const GIT_CACHE_TTL_MS = 30_000;
+/** Every git call of the light recheck is killed after this long (SIGKILL) and reads as a failure. */
+const GIT_TIMEOUT_MS = 15_000;
+
+/**
+ * Remembers `compute(arg)` for {@link GIT_CACHE_TTL_MS}, keyed by `keyOf(arg)`, at most GIT_CACHE_ENTRIES keys; a value
+ * `keep` rejects is not remembered. The arguments travel typed; the key is only a key.
+ */
+function processCache<A, T>(compute: (arg: A) => Promise<T>, keep: (value: T) => boolean, keyOf: (arg: A) => string): (arg: A) => Promise<T> {
+  const cache = new Map<string, { at: number; value: Promise<T> }>();
+  return (arg) => {
+    const key = keyOf(arg);
+    const hit = cache.get(key);
+    if (hit !== undefined && Date.now() - hit.at <= GIT_CACHE_TTL_MS) return hit.value;
+    cache.delete(key);
+    const entry = { at: Date.now(), value: compute(arg) };
+    entry.value = entry.value.then((value) => {
+      if (!keep(value) && cache.get(key) === entry) cache.delete(key);
+      return value;
+    });
+    cache.set(key, entry);
+    if (cache.size > GIT_CACHE_ENTRIES) cache.delete(cache.keys().next().value as string);
+    return entry.value;
+  };
+}
+
+/** The repository top level that holds `dir`, or undefined when it is not inside a git work tree. Cached briefly per directory (see GIT_CACHE_TTL_MS). */
+const gitTopLevel = processCache(uncachedGitTopLevel, (top) => top !== undefined, (dir) => dir);
+
+async function uncachedGitTopLevel(dir: string): Promise<string | undefined> {
+  try {
+    const proc = Bun.spawn(["git", "rev-parse", "--show-toplevel"], { cwd: dir, stdout: "pipe", stderr: "ignore", timeout: GIT_TIMEOUT_MS, killSignal: "SIGKILL" });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    const top = stdout.trim();
+    return exitCode === 0 && top !== "" ? top : undefined;
   } catch {
     return undefined;
   }
 }
 
-async function packageDiffStats(options: CoverageOptions): Promise<{ files: string[]; changedLines: number } | undefined> {
-  if (options.diffStats !== undefined) return options.diffStats();
-  if (options.packageDir === undefined) return undefined;
-  const manifest = await readFile(path.join(options.packageDir, "manifest.json"), "utf8").then((t) => JSON.parse(t)).catch(() => undefined);
-  const { ref, head } = manifest?.target ?? {};
-  return typeof ref === "string" && typeof head === "string" ? gitDiffStats(options.root, { ref, head }) : undefined;
+const UNRESOLVED = "the diff could not be resolved from git to confirm the size";
+
+/**
+ * The scope the package's target names, recomputed from git (flow 460). The base is resolved for every target kind —
+ * never the target's own ref, which for a branch target is the head itself — by `resolveBase` (git-base.ts, as `review
+ * plan` reads it): the recorded `target.base`, else the first of origin/main, main, origin/master, master that resolves.
+ * A recorded base can only widen the check: it is supplied by whoever started the round, so when the default base gives
+ * a larger diff, that one is measured (a `--base head~1` on a large pull request cannot make it look small). Git runs at
+ * the repository top level of the package — the scope's files are repository paths, and a package can sit under a
+ * subdirectory's `.metaproject` — with the review packages of the project root excluded (the slicer's exclusion). A range
+ * that resolves empty (base equals head, as for a merged pull request with no recorded base) is not a small diff: it
+ * refuses with the empty-range warning, so the full set applies until a base is given. A refusal names the directory,
+ * the base and the head. A successful result is remembered briefly (see processCache).
+ */
+async function packageDiffStats(options: CoverageOptions): Promise<DiffStats | { error: string }> {
+  if (options.diffStats !== undefined) return (await options.diffStats()) ?? { error: UNRESOLVED };
+  if (options.packageDir === undefined) return { error: UNRESOLVED };
+  const target = await readPackageTarget(options.packageDir);
+  if (target.head === undefined) return { error: `${UNRESOLVED}: the package manifest records no target head (cwd ${options.packageDir}, base ${target.recordedBase ?? "unresolved"}, head unrecorded)` };
+  // The spread narrows `head` to a string for the request type.
+  return packageDiffStatsCached({ packageDir: options.packageDir, root: options.root, target: { ...target, head: target.head } });
+}
+
+/**
+ * The target fields the light recheck reads from the package manifest: the base the round was started with (`--base`,
+ * else the pull request's own base as `review start` read it), the pull request's base when it was read beside a
+ * `--base` (`prBase`), and the head.
+ */
+type PackageTarget = { recordedBase?: string | undefined; prBase?: string | undefined; head?: string | undefined };
+type DiffRequest = { packageDir: string; root: string; target: PackageTarget & { head: string } };
+
+async function readPackageTarget(packageDir: string): Promise<PackageTarget> {
+  const manifest: unknown = await readFile(path.join(packageDir, "manifest.json"), "utf8").then((t): unknown => JSON.parse(t)).catch(() => undefined);
+  const target = asRecord(asRecord(manifest)?.target) ?? {};
+  const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() !== "" ? v.trim() : undefined);
+  return { recordedBase: str(target.base), prBase: str(target.prBase), head: str(target.head) };
+}
+
+// The key holds the package, root and target, not the bases' resolved shas: a base ref that moves within the cache's TTL is
+// read as it stood at the first computation (a successful result is remembered only briefly, see processCache).
+const packageDiffStatsCached = processCache(diffOfTarget, (value) => !("error" in value), (request: DiffRequest) => JSON.stringify([request.packageDir, request.root, request.target]));
+
+/**
+ * The bases the diff runs against, in order of preference: the recorded base (or, without one, the pull request's own
+ * base, then the default base) first; then the pull request's base and the default base when they resolve to another
+ * merge-base, so the widest is measured — a `--base` the starter chose cannot narrow the diff, even in a repository with
+ * no main/master ref. An empty range on the first is a refusal.
+ */
+async function resolveDiffBases(cwd: string, target: DiffRequest["target"]): Promise<{ bases: string[] } | { error: string }> {
+  const git = defaultGitRunner(cwd, { timeoutMs: GIT_TIMEOUT_MS });
+  // resolveBase falls back to the defaults when the given base does not resolve: only the given base itself counts here.
+  const exactly = (base: string | undefined) => (base === undefined ? Promise.resolve(null) : resolveBase(git, { base }, target.head).then((found) => (found?.ref === base ? found : null)));
+  const [recorded, prBase, fallback] = await Promise.all([exactly(target.recordedBase), exactly(target.prBase), resolveBase(git, {}, target.head)]);
+  const primary = recorded ?? prBase ?? fallback;
+  if (primary === null) return { error: `no base resolves (tried ${[target.recordedBase, target.prBase, ...DEFAULT_BASE_CANDIDATES].filter(Boolean).join(", ")})` };
+  const empty = emptyRangeWarning(primary, target.head);
+  if (empty !== undefined) return { error: empty };
+  const seen = new Set([primary.sha]);
+  const wider: string[] = [];
+  for (const other of [prBase, fallback]) {
+    if (other === null || seen.has(other.sha) || emptyRangeWarning(other, target.head) !== undefined) continue;
+    seen.add(other.sha);
+    wider.push(other.ref);
+  }
+  return { bases: [primary.ref, ...wider] };
+}
+
+/** The widest of several diffs, per dimension: every file any of them changes, and the most changed lines any of them counts. */
+export function widestDiff(diffs: readonly DiffStats[]): DiffStats {
+  return { files: [...new Set(diffs.flatMap((diff) => diff.files))], changedLines: Math.max(0, ...diffs.map((diff) => diff.changedLines)) };
+}
+
+async function diffOfTarget({ packageDir, root, target }: DiffRequest): Promise<DiffStats | { error: string }> {
+  const cwd = (await gitTopLevel(packageDir)) ?? (await gitTopLevel(root));
+  const where = (base: string | undefined): string => `cwd ${cwd ?? packageDir}, base ${base ?? "unresolved"}, head ${target.head}`;
+  if (cwd === undefined) return { error: `${UNRESOLVED}: the package is not inside a git work tree (${where(target.recordedBase)})` };
+  const resolved = await resolveDiffBases(cwd, target);
+  if ("error" in resolved) return { error: `${UNRESOLVED}: ${resolved.error} (${where(target.recordedBase)})` };
+  // git prints its top level with symlinks resolved: the project root is resolved the same way, or a project reached
+  // through a symlink (macOS /tmp -> /private/tmp) yields a `../..` pathspec that excludes no review package.
+  const realRoot = await realpath(path.resolve(root)).catch(() => path.resolve(root));
+  const pathspec = notReviewPackagesAt(path.relative(cwd, realRoot));
+  // At most three bases, each a full diff: they run side by side, and the first failure in base order is the one reported.
+  const results = await Promise.all(resolved.bases.map((base) => gitDiffAt(cwd, base, target.head, pathspec)));
+  const diffs: DiffStats[] = [];
+  for (const [index, result] of results.entries()) {
+    if ("error" in result) {
+      const base = resolved.bases[index]!;
+      return { error: `${UNRESOLVED}: git diff ${base}...${target.head} failed (${where(base)}): ${result.error}` };
+    }
+    diffs.push(result);
+  }
+  return widestDiff(diffs);
 }
 
 /**
@@ -501,7 +641,7 @@ async function effectiveDepth(record: Record<string, unknown>, options: Coverage
   let input: DepthInput = { files: options.files, changedLines: options.changedLines };
   if (options.packageDir !== undefined || options.diffStats !== undefined) {
     const stats = await packageDiffStats(options);
-    if (stats === undefined) return { depth: "full", refused: "the diff could not be resolved from git to confirm the size" };
+    if ("error" in stats) return { depth: "full", refused: stats.error };
     input = { files: stats.files, changedLines: stats.changedLines };
   }
   const decision = await decideRoundDepth(options.root, "auto", input);
@@ -553,7 +693,12 @@ async function unconfirmedDecision(options: CoverageOptions, kind: OperatorDecis
     recorded === undefined
       ? ""
       : `the recorded decision (${recorded.at}) does not cover this: it was ${recorded.subject === undefined ? "not bound to a head or to what it waived" : `shown head ${recorded.subject.head ?? "unknown"} and ${recorded.subject.items.length} item(s)`}, and now the head is ${now.head ?? "unknown"} with ${now.items.length === 0 ? "nothing" : now.items.join(", ")} to waive. `;
-  return `${stale}${decisionWriters(kind, path.relative(process.cwd(), dir) || ".")}`;
+  return `${stale}${writersFor(kind, dir)}`;
+}
+
+/** The card and terminal command that record an operator decision of `kind` for the package, named relative to the working directory. */
+function writersFor(kind: OperatorDecisionKind, packageDir: string | undefined): string {
+  return decisionWriters(kind, packageDir === undefined ? "<review-dir>" : path.relative(process.cwd(), packageDir) || ".");
 }
 
 async function mutationErrors(record: Record<string, unknown>, options: CoverageOptions, depth: RoundDepth): Promise<string[]> {
@@ -569,8 +714,7 @@ async function mutationErrors(record: Record<string, unknown>, options: Coverage
         "A mutationWaiver quote written into the dispatch is not the operator's word. A run with nobody present declares it at the start: `keryx review start --unattended`",
     ];
   }
-  const w = record.mutationWaiver;
-  const waiver = w && typeof w === "object" && !Array.isArray(w) ? (w as Record<string, unknown>) : {};
+  const waiver = asRecord(record.mutationWaiver) ?? {};
   const text = (v: unknown): boolean => typeof v === "string" && v.trim().length > 0;
   if (text(waiver.operatorQuote) && text(waiver.reason)) return [];
   return [
@@ -595,15 +739,15 @@ export function packageHasPrContext(packageDir: string, name = "pr-context.md"):
 }
 
 export async function coverageErrors(dispatch: unknown, options: CoverageOptions): Promise<string[]> {
-  const record = dispatch && typeof dispatch === "object" && !Array.isArray(dispatch) ? (dispatch as Record<string, unknown>) : undefined;
+  const record = asRecord(dispatch);
   const effective = record === undefined ? undefined : await effectiveDepth(record, options);
   const profileMissing = runProfileRefusal(options.packageDir);
   return [...(profileMissing === undefined ? [] : [profileMissing]), ...(await reviewerSetErrors(dispatch, options, effective)), ...(record === undefined || effective === undefined ? [] : await mutationErrors(record, options, effective.depth))];
 }
 
 async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions, effective: { depth: RoundDepth; refused?: string } | undefined): Promise<string[]> {
-  if (!dispatch || typeof dispatch !== "object" || Array.isArray(dispatch)) return [];
-  const record = dispatch as Record<string, unknown>;
+  const record = asRecord(dispatch);
+  if (record === undefined) return [];
   const text = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
   if (record.mode !== "all" && record.mode !== "diff")
     return ['dispatch must declare mode "all" (every available reviewer) or "diff" (the set derived from the diff); run `keryx review required --mode all|diff`'];
@@ -617,7 +761,7 @@ async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions, ef
     return [`dispatch ${override !== undefined ? "override" : 'mode "diff"'} narrows the reviewer set, and an operatorQuote written into the dispatch is not the operator's word on this package: ${unconfirmed}`];
   }
   if (override !== undefined) {
-    const o = override && typeof override === "object" && !Array.isArray(override) ? (override as Record<string, unknown>) : {};
+    const o = asRecord(override) ?? {};
     return text(o.operatorQuote) && text(o.reason)
       ? []
       : ["dispatch override needs operatorQuote (the operator's own words) and reason; without them a smaller reviewer set is not allowed"];
@@ -639,11 +783,29 @@ async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions, ef
   const missing = need.required.filter((name) => !selected.has(name));
   if (!missing.length) return [];
   if (!decided.ok) return [`dispatch.skipped is not accepted: ${decided.refusal}`];
+  if (await overrideRecorded(options.packageDir, selectedNow, missing)) return [];
+  const repair = operatorGateApplies(options.packageDir)
+    ? `Dispatch them, or have the operator leave them out (${writersFor("reviewer-override", options.packageDir)})`
+    : "Dispatch them, or record an operator override {operatorQuote, reason}";
   return [
     `dispatch covers ${need.required.length - missing.length} of ${need.required.length} reviewers that mode ${record.mode} requires; missing: ${missing.join(", ")}. ` +
-      "Dispatch them, or record an operator override {operatorQuote, reason}; `keryx review required` prints the set" +
+      repair +
+      "; `keryx review required` prints the set" +
       (effective?.refused === undefined ? "" : `. The dispatch says depth light, but the full set applies: ${effective.refused}`),
   ];
+}
+
+/**
+ * Flow 460 (B). The `review_override_reviewers` card and `keryx review override-reviewers` write only the operator
+ * decision, never a dispatch `override` field, so the decision itself accounts for the reviewers it left out: one bound
+ * to the package's current head and shown at least every reviewer `selected` leaves out now (and every one missing here).
+ * A decision for another head or a smaller set of left-out reviewers counts for nothing.
+ */
+async function overrideRecorded(packageDir: string | undefined, selected: readonly string[], missing: readonly string[]): Promise<boolean> {
+  if (packageDir === undefined) return false;
+  const now = await operatorDecisionSubject(packageDir, "reviewer-override", selected);
+  const subject = { ...now, items: [...new Set([...now.items, ...missing])].sort() };
+  return (await confirmedDecision(packageDir, "reviewer-override", subject)) !== undefined;
 }
 
 /** A reviewer the operator chose not to run, with why: `dispatch.skipped` as `ledger build --skip --reason` writes it. */
@@ -657,7 +819,7 @@ export type ReviewerSkip = { reviewer: string; reason: string };
  */
 export async function skipDecision(packageDir: string | undefined, skipped: readonly string[]): Promise<{ ok: true } | { ok: false; refusal: string }> {
   if (skipped.length === 0) return { ok: true };
-  const writers = decisionWriters("reviewer-override", packageDir === undefined ? "<review-dir>" : path.relative(process.cwd(), packageDir) || ".");
+  const writers = writersFor("reviewer-override", packageDir);
   if (packageDir === undefined) return { ok: false, refusal: `skipping ${skipped.join(", ")} needs the operator's decision recorded in the package: ${writers}` };
   const { required } = await reviewersLeftOut(packageDir, undefined);
   const outside = skipped.filter((name) => !required.includes(name));
@@ -670,12 +832,13 @@ export async function skipDecision(packageDir: string | undefined, skipped: read
 
 /** The well-formed entries of `dispatch.skipped`; an entry without a reviewer or a reason is not a skip. */
 export function dispatchSkips(dispatch: unknown): ReviewerSkip[] {
-  const record = dispatch && typeof dispatch === "object" && !Array.isArray(dispatch) ? (dispatch as Record<string, unknown>) : undefined;
+  const record = asRecord(dispatch);
   if (record === undefined || !Array.isArray(record.skipped)) return [];
   const out: ReviewerSkip[] = [];
   for (const entry of record.skipped) {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
-    const { reviewer, reason } = entry as Record<string, unknown>;
+    const skip = asRecord(entry);
+    if (skip === undefined) continue;
+    const { reviewer, reason } = skip;
     if (typeof reviewer === "string" && reviewer.trim() !== "" && typeof reason === "string" && reason.trim() !== "") out.push({ reviewer: reviewer.trim(), reason: reason.trim() });
   }
   return out;

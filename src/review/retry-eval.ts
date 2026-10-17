@@ -2,7 +2,8 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { mkdir, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
-import { hasStatus, parseReviewResult } from "./ledger";
+import { hasStatus, parseReviewResult, unreadableInputClaim } from "./ledger";
+import { splitUsage } from "./dispatch-usage";
 import { type RetryState, type ReviewerResult, applyEscalations, emptyRetryState, planRetry, readSliceIds, scopeFingerprint } from "./retry-plan";
 import type { SliceEntry, SliceManifest } from "./slice";
 
@@ -28,7 +29,8 @@ export async function readJsonSource<T>(source: string, label: string): Promise<
     throw new UnreadableInput(`${label} is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);
   }
   try {
-    return JSON.parse(raw) as T;
+    // A saved reviewer result may end with the host's KERYX_USAGE lines (flow 460 H): they are not part of the JSON.
+    return JSON.parse(splitUsage(raw).body) as T;
   } catch {
     throw new UnreadableInput(`${label} is not valid JSON: ${source}`);
   }
@@ -36,18 +38,22 @@ export async function readJsonSource<T>(source: string, label: string): Promise<
 
 export class UnreadableInput extends Error {}
 
-/** A file that is one JSON object with a status is the documented plain-JSON input; `--reviewer` may name a reviewer it leaves out. */
+/**
+ * A file that is one JSON object with a status is the documented plain-JSON input; `--reviewer` may name a reviewer it
+ * leaves out. The usage lines a host appends after it (KERYX_USAGE) are set aside first, as every reader of a raw result does.
+ */
 export function wholeFileResult(raw: string): ReviewerResult | undefined {
   try {
-    const whole: unknown = JSON.parse(raw);
+    const whole: unknown = JSON.parse(splitUsage(raw).body);
     return hasStatus(whole) ? whole as ReviewerResult : undefined;
   } catch { return undefined; }
 }
 
 /**
  * Finished results a reviewer left in the package after its caller stopped waiting: for each driver of `reviewer` that
- * names its result file, a raw file that parses as DONE or DONE_WITH_CONCERNS with no open needs_context covers the slices
- * the driver handed out. `collected` counts those files that add a slice not yet in `known`. Anything unreadable, malformed
+ * names its result file, a raw file that parses as DONE or DONE_WITH_CONCERNS with no open needs_context (and no statement
+ * that a mandatory input could not be read) covers the slices its `slices` list names among those the driver handed out;
+ * a reply that names none covers none, as in the ledger. `collected` counts those files that add a slice not yet in `known`. Anything unreadable, malformed
  * or unfinished covers nothing.
  */
 export async function collectLateResults(packageDir: string, reviewer: string, known: ReadonlySet<string>, fingerprint?: string): Promise<{ covered: string[]; collected: number }> {
@@ -70,15 +76,15 @@ export async function collectLateResults(packageDir: string, reviewer: string, k
     if (result === undefined) continue;
     const status = String(result.status ?? "").trim().toUpperCase();
     const open = (Array.isArray(result.needs_context) ? result.needs_context : []).some((item) => String(item).trim() !== "");
-    if (open || (status !== "DONE" && status !== "DONE_WITH_CONCERNS")) continue;
+    if (open || (status !== "DONE" && status !== "DONE_WITH_CONCERNS") || unreadableInputClaim(result) !== undefined) continue;
     if (result.reviewer !== undefined && result.reviewer !== reviewer) continue;
     const stamped = (result as { scopeFingerprint?: unknown }).scopeFingerprint;
     if (typeof stamped === "string" && stamped !== fingerprint) continue;
     const assigned = readSliceIds(driver.slices, "assigned");
     if (assigned.unusable > 0) continue;
-    // Same rule as the ledger: the reply's own slice list bounded by what was assigned; no list means the whole assignment.
+    // Same rule as the ledger (flow 460 D): the reply's own slice list bounded by what was assigned; no list claims none.
     const allowed = new Set(assigned.ids);
-    const claimed = result.slices === undefined ? assigned.ids : readSliceIds(result.slices).ids.filter((id) => allowed.has(id));
+    const claimed = readSliceIds(result.slices).ids.filter((id) => allowed.has(id));
     if (!countedFiles.has(file) && claimed.some((id) => !known.has(id) && !covered.has(id))) {
       collected += 1;
       countedFiles.add(file);

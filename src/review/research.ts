@@ -4,10 +4,73 @@ import { coverageErrors, packageChangedLines, packageHasBlastRadius, packageHasP
 import { coverageGateErrors } from "./coverage-complete";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { asRecord, dispatchRunRecords } from "./record";
 export const PENDING_RESEARCH = { version: 1, scopeReviewed: false, rawReconciled: false, obligations: [] };
+
+/**
+ * Flow 460: where `review ingest` records the findings it kept out of findings.json (the scope-B screen), relative to the
+ * package. `review ledger build` reads it and closes each such raw finding `out-of-scope` with the screen's reason, so an
+ * ingest that screens findings out does not leave the research ledger stale. (A finding the duplicate merge folded into
+ * another is found through the survivor's `merged_from` in findings.json.)
+ */
+export const INGEST_SCREENED_FILE = "research-evidence/ingest-screened.json";
+
+/** One finding the ingest screened out: its display id and global_id, who raised it, and the screen's rule and words. */
+export type IngestScreened = { id: string; global_id?: string | undefined; reviewer?: string | undefined; rule: string; detail: string };
+
+/** The screened findings of an {@link INGEST_SCREENED_FILE} record, read leniently: [] for anything that is not one. */
+export function ingestScreenedOf(record: unknown): IngestScreened[] {
+  const list = asRecord(record)?.screened;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((entry): IngestScreened[] => {
+    const row = asRecord(entry);
+    if (row === undefined) return [];
+    if (typeof row.id !== "string" || row.id === "" || typeof row.rule !== "string" || typeof row.detail !== "string") return [];
+    return [{ id: row.id, ...(typeof row.global_id === "string" ? { global_id: row.global_id } : {}), ...(typeof row.reviewer === "string" ? { reviewer: row.reviewer } : {}), rule: row.rule, detail: row.detail }];
+  });
+}
+
+/** One `dispatch.runs[]` entry of research.json as `ledger build` writes it (./ledger.ts `buildLedger`), read leniently. */
+export type DispatchRun = {
+  reviewer: string;
+  /** `complete`, `incomplete` or `not-run`; anything else is passed through as written. */
+  status?: string | undefined;
+  scopeComplete?: boolean | undefined;
+  /** True for a role slice routing gave no slice: recorded complete, never dispatched. */
+  routedOut?: boolean | undefined;
+  rawEvidence?: string | undefined;
+  notRunReason?: string | undefined;
+  executionReason?: string | undefined;
+};
+
+/**
+ * A reviewer name as a dispatch record may carry one: a bundled or project reviewer id (letters, digits, `-`, `_`, `.`,
+ * `:`, `/`, `@`), one line. A name that is anything else — a newline, a markdown fence — is not a reviewer and would be
+ * copied verbatim into coverage.md, so the run is dropped.
+ */
+export const REVIEWER_NAME = /^[A-Za-z0-9][\w.:/@-]{0,127}$/;
+
+/** A free-text field of a run, as one line (it is written into coverage.md line by line). */
+const oneLine = (value: unknown): string | undefined => (typeof value === "string" ? value.replace(/\s+/g, " ").trim() : undefined);
+
+/** The reviewer runs research.json's dispatch record holds, each with a valid reviewer name ({@link REVIEWER_NAME}); [] when there is none. */
+export function dispatchRuns(research: unknown): DispatchRun[] {
+  return dispatchRunRecords(asRecord(research)?.dispatch).flatMap((run): DispatchRun[] => {
+    if (typeof run.reviewer !== "string" || !REVIEWER_NAME.test(run.reviewer)) return [];
+    return [{
+      reviewer: run.reviewer,
+      status: oneLine(run.status),
+      scopeComplete: typeof run.scopeComplete === "boolean" ? run.scopeComplete : undefined,
+      routedOut: run.routedOut === true ? true : undefined,
+      rawEvidence: typeof run.rawEvidence === "string" ? run.rawEvidence : undefined,
+      notRunReason: oneLine(run.notRunReason),
+      executionReason: oneLine(run.executionReason),
+    }];
+  });
+}
 export function researchErrors(value: unknown, findings: unknown): string[] {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return ["research ledger must be an object"];
-  const ledger = value as Record<string, unknown>;
+  const ledger = asRecord(value);
+  if (ledger === undefined) return ["research ledger must be an object"];
   const errors: string[] = [];
   if (ledger.version !== 1) errors.push("research ledger version must be 1");
   if (ledger.scopeReviewed !== true) errors.push("research scope census is incomplete");
@@ -17,8 +80,8 @@ export function researchErrors(value: unknown, findings: unknown): string[] {
   const ids = new Set<string>();
   const nonempty = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
   for (const item of ledger.obligations) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) { errors.push("invalid research obligation"); continue; }
-    const o = item as Record<string, unknown>;
+    const o = asRecord(item);
+    if (o === undefined) { errors.push("invalid research obligation"); continue; }
     const id = nonempty(o.id) ? o.id : "<missing-id>";
     if (!nonempty(o.id) || ids.has(id)) errors.push(`${id}: missing or duplicate obligation id`);
     ids.add(id);
@@ -34,11 +97,28 @@ export function researchErrors(value: unknown, findings: unknown): string[] {
   return errors;
 }
 /**
+ * The coverage gate over a package's recorded dispatch, with the options read from the package. `review complete`
+ * (through `packageResearchErrors`) and `review readiness` both call this, so they cannot disagree on the reviewer set
+ * or the round depth (flow 460).
+ */
+export async function packageCoverageErrors(packageDir: string, dispatch: unknown): Promise<string[]> {
+  return coverageErrors(dispatch, {
+    root: projectRootOfPackage(packageDir),
+    packageDir,
+    files: await packageScopeFiles(packageDir),
+    changedLines: await packageChangedLines(packageDir),
+    blastRadius: await packageHasBlastRadius(packageDir),
+    prContext: packageHasPrContext(packageDir),
+    pendingMutants: (await pendingMutants(packageDir)).length,
+  });
+}
+
+/**
  * Absent artifact identifies packages predating this contract, not completed research. `completeness: false` skips the
  * layer/chunk coverage-completeness gate, for a round that was closed before that gate existed.
  */
 export async function packageResearchErrors(packageDir: string, artifacts: unknown, findings: unknown, options: { coverage?: boolean; completeness?: boolean } = {}): Promise<string[]> {
-  const a = artifacts && typeof artifacts === "object" ? artifacts as Record<string, unknown> : {};
+  const a = asRecord(artifacts) ?? {};
   if (a.research === undefined) return a.reviewerDispatch === undefined ? [] : ["dispatch requires a research artifact"];
   if (a.reviewerDispatch !== undefined && a.reviewerDispatch !== "research.json") return ["invalid dispatch artifact locator"];
   if (a.research !== "research.json") return ["invalid research artifact locator"];
@@ -53,15 +133,7 @@ export async function packageResearchErrors(packageDir: string, artifacts: unkno
     const dispatch = checked ? dispatchErrors(ledger?.dispatch) : [];
     const coverage = !checked || options.coverage === false || dispatch.length
       ? []
-      : await coverageErrors(ledger?.dispatch, {
-          root: projectRootOfPackage(packageDir),
-          packageDir,
-          files: await packageScopeFiles(packageDir),
-          changedLines: await packageChangedLines(packageDir),
-          blastRadius: await packageHasBlastRadius(packageDir),
-          prContext: packageHasPrContext(packageDir),
-          pendingMutants: (await pendingMutants(packageDir)).length,
-        });
+      : await packageCoverageErrors(packageDir, ledger?.dispatch);
     const completeness = !checked || options.coverage === false || options.completeness === false || dispatch.length ? [] : await coverageGateErrors(packageDir, ledger);
     return [...researchErrors(ledger, findings), ...mismatch, ...dispatch, ...coverage, ...completeness];
   }

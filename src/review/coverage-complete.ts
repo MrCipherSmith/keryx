@@ -11,6 +11,7 @@ import { packageScopeFiles } from "./coverage";
 import type { SliceManifest } from "./slice";
 import type { ConfirmedVia } from "./types";
 import { readJsonFileOr } from "../lib/json";
+import { asRecord as record, dispatchRunRecords } from "./record";
 
 export const COVERAGE_FILE = "coverage.json";
 /** Where the ledger build leaves a copy of the slice manifest when the input directory is not the package. */
@@ -46,7 +47,6 @@ export type CoverageReport = {
 const readJson = <T>(file: string): Promise<T | undefined> => readJsonFileOr<T | undefined>(file, undefined);
 
 const text = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
-const record = (value: unknown): Record<string, unknown> | undefined => (value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined);
 
 type Radius = { files?: Array<{ file?: unknown }>; dropped?: Array<{ file?: unknown; reason?: unknown; detail?: unknown }> };
 
@@ -60,10 +60,8 @@ async function readManifest(packageDir: string): Promise<SliceManifest | undefin
 
 function coveredSliceIds(dispatch: Record<string, unknown> | undefined, retry: unknown): Set<string> {
   const ids = new Set<string>();
-  const runs = Array.isArray(dispatch?.runs) ? dispatch.runs : [];
-  for (const entry of runs) {
-    const run = record(entry);
-    if (run === undefined || run.status === "not-run" || !Array.isArray(run.coveredSlices)) continue;
+  for (const run of dispatchRunRecords(dispatch)) {
+    if (run.status === "not-run" || !Array.isArray(run.coveredSlices)) continue;
     for (const id of run.coveredSlices) if (typeof id === "string") ids.add(id);
   }
   // Delta round (flow 458): fix slices whose attached findings all have a disposition.
@@ -77,11 +75,7 @@ function coveredSliceIds(dispatch: Record<string, unknown> | undefined, retry: u
 }
 
 function scopeBRunComplete(dispatch: Record<string, unknown> | undefined): boolean {
-  const runs = Array.isArray(dispatch?.runs) ? dispatch.runs : [];
-  return runs.some((entry) => {
-    const run = record(entry);
-    return run?.reviewer === BLAST_RADIUS_SCOPE_REVIEWER && run.status === "complete" && run.scopeComplete !== false;
-  });
+  return dispatchRunRecords(dispatch).some((run) => run.reviewer === BLAST_RADIUS_SCOPE_REVIEWER && run.status === "complete" && run.scopeComplete !== false);
 }
 
 /**
@@ -93,8 +87,7 @@ export async function packageRecordsCoverage(packageDir: string, research?: unkn
   if (hasChunkPlan(packageDir)) return true;
   if ((await readJson<unknown>(path.join(packageDir, COVERAGE_FILE))) !== undefined) return true;
   const ledger = research ?? (await readJson<unknown>(path.join(packageDir, "research.json")));
-  const runs = record(record(ledger)?.dispatch)?.runs;
-  return Array.isArray(runs) && runs.some((entry) => Array.isArray(record(entry)?.coveredSlices));
+  return dispatchRunRecords(record(ledger)?.dispatch).some((run) => Array.isArray(run.coveredSlices));
 }
 
 export function readCoverageWaiver(dispatch: unknown): CoverageWaiver | undefined {

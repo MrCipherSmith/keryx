@@ -1,9 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { requiredReviewers } from "./coverage";
-import { type LedgerInputs, type RawFile, buildLedger, ledgerBlockers, parseReviewResult } from "./ledger";
+import { type LedgerInputs, type RawFile, buildLedger, isEmptyOutput, ledgerBlockers, parseReviewResult, rawDispatchUsages, rawUsage, unreadableInputClaim } from "./ledger";
+import { MAX_DISPATCH_TOKENS, NO_TEXT_PLACEHOLDER, SPEND_HEADING, formatOtherUsageLine, formatUsageLine, splitUsage, usageTotals, usageTotalsLine, withSpendSection } from "./dispatch-usage";
+import { loadRaws } from "../commands/review-ledger";
 import type { MutationRecord } from "./mutate";
 import { emptyRetryState, planRetry, scopeFingerprint } from "./retry-plan";
 import { auditPackage, auditSeverity } from "./severity-audit";
@@ -46,7 +48,7 @@ const MANIFEST = {
 let clock = 0;
 function raw(reviewer: string, status: string, extra: Record<string, unknown> = {}, name = `raw/${reviewer}.txt`): RawFile {
   clock += 1;
-  return { name, hash: `h${clock}`, mtimeMs: clock, empty: false, result: { reviewer, status, summary: "s", findings: [], needs_context: [], ...extra } };
+  return { name, hash: `h${clock}`, mtimeMs: clock, empty: false, result: { reviewer, status, summary: "s", findings: [], needs_context: [], slices: ["slice-01", "slice-02"], ...extra } };
 }
 
 async function inputs(overrides: Partial<LedgerInputs> = {}): Promise<LedgerInputs> {
@@ -69,6 +71,26 @@ async function inputs(overrides: Partial<LedgerInputs> = {}): Promise<LedgerInpu
 
 const blockersOf = (result: ReturnType<typeof buildLedger>, canonical: Array<Record<string, unknown>> = []) =>
   ledgerBlockers(result.ledger, canonical, { root, files: FILES });
+
+/**
+ * Asserts `work(size)` grows about linearly with `size`: quadrupling the input may cost a few times more (a generous 12x for
+ * noise), never the 16x of a quadratic pattern. Best of three runs per size; the slack absorbs a loaded machine.
+ */
+function expectLinearTime(work: (size: number) => unknown): void {
+  const best = (size: number): number => {
+    let fastest = Infinity;
+    for (let run = 0; run < 3; run += 1) {
+      const start = performance.now();
+      work(size);
+      fastest = Math.min(fastest, performance.now() - start);
+    }
+    return fastest;
+  };
+  best(10_000);
+  const small = best(50_000);
+  const large = best(200_000);
+  expect(large).toBeLessThan(small * 12 + 25);
+}
 
 describe("parseReviewResult", () => {
   test("takes the last fenced block that is a result: a REVIEW_RESULT fence needs a status, a json fence a reviewer or findings", () => {
@@ -606,7 +628,8 @@ describe("buildLedger", () => {
   test("a retry slice accounts for the original it was cut from", async () => {
     const base = await inputs();
     const manifest = { ...MANIFEST, slices: [...MANIFEST.slices, slice("r1-review-logic-01", ["src/b.test.ts"], { retryOf: ["slice-02"], attempt: 1 })] } as SliceManifest;
-    const result = buildLedger({ ...base, manifest, payloadSlices: { ...base.payloadSlices, "review-logic": ["slice-01", "r1-review-logic-01"] } });
+    const reads = (...ids: string[]) => base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, slices: ids } } : r));
+    const result = buildLedger({ ...base, manifest, raws: reads("slice-01", "r1-review-logic-01"), payloadSlices: { ...base.payloadSlices, "review-logic": ["slice-01", "r1-review-logic-01"] } });
     expect(result.gaps).toEqual([]);
   });
 
@@ -686,9 +709,10 @@ describe("buildLedger", () => {
     const base = await inputs();
     const pieces = [slice("r1-review-logic-01", ["src/b.test.ts"], { retryOf: ["slice-02"], attempt: 1, reviewer: "review-logic" }), slice("r1-review-logic-02", ["src/b.test.ts"], { retryOf: ["slice-02"], attempt: 1, reviewer: "review-logic" })];
     const manifest = { ...MANIFEST, slices: [...MANIFEST.slices, ...pieces] } as SliceManifest;
-    const partial = buildLedger({ ...base, manifest, payloadSlices: { ...base.payloadSlices, "review-logic": ["slice-01", "r1-review-logic-01"] } });
+    const reads = (...ids: string[]) => base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, slices: ids } } : r));
+    const partial = buildLedger({ ...base, manifest, raws: reads("slice-01", "r1-review-logic-01"), payloadSlices: { ...base.payloadSlices, "review-logic": ["slice-01", "r1-review-logic-01"] } });
     expect(partial.gaps.find((g) => g.reviewer === "review-logic")!.detail).toContain("slice-02");
-    const whole = buildLedger({ ...base, manifest, payloadSlices: { ...base.payloadSlices, "review-logic": ["slice-01", "r1-review-logic-01", "r1-review-logic-02"] } });
+    const whole = buildLedger({ ...base, manifest, raws: reads("slice-01", "r1-review-logic-01", "r1-review-logic-02"), payloadSlices: { ...base.payloadSlices, "review-logic": ["slice-01", "r1-review-logic-01", "r1-review-logic-02"] } });
     expect(whole.gaps).toEqual([]);
   });
 });
@@ -731,6 +755,66 @@ describe("raw findings", () => {
     const base = await withFinding();
     const result = buildLedger({ ...base, dispositions: [{ id: "review-logic:L-01", status: "finding", finding: "nope", evidence: "e", reason: "r" }] });
     expect(result.ledger.obligations[0]).toMatchObject({ status: "unresolved" });
+  });
+
+  // Flow 460: the procedure as PR #1045's round 1 recorded it — canonical findings named `<raw stem>:<id>`, some merged
+  // as duplicates, some screened out by scope B — closes without hand-written rows.
+  const GID = (id: string) => `2026-10-17-round#${id}`;
+  const canonicalOf = (id: string, extra: Record<string, unknown> = {}) => ({ ...finding, id, global_id: GID(id), reviewer: "review-architecture", ...extra });
+
+  test("a `status: finding` row with no `finding` link resolves to the canonical finding with the same id", async () => {
+    const base = await withFinding();
+    const canonical = [canonicalOf("review-logic:L-01")];
+    const result = buildLedger({ ...base, canonical, dispositions: [{ id: "review-logic:L-01", status: "finding", evidence: "raw/review-logic.txt", reason: "kept as reported" }] });
+    expect(result.ledger.obligations[0]).toMatchObject({ status: "finding", finding: GID("review-logic:L-01"), reason: "kept as reported" });
+    expect(await blockersOf(result, canonical)).toEqual([]);
+    // With nothing of that id, the row links to what the raw finding already resolves to; with neither, it stays open.
+    const byReviewer = buildLedger({ ...base, canonical: [finding], dispositions: [{ id: "review-logic:L-01", status: "finding", evidence: "e", reason: "r" }] });
+    expect(byReviewer.ledger.obligations[0]).toMatchObject({ status: "finding", finding: "L-01" });
+    const none = buildLedger({ ...base, canonical: [canonicalOf("other")], dispositions: [{ id: "review-logic:L-01", status: "finding", evidence: "e", reason: "r" }] });
+    expect(none.ledger.obligations[0]).toMatchObject({ status: "unresolved" });
+  });
+
+  test("with no row at all, a canonical finding named by the obligation id closes it", async () => {
+    const base = await withFinding();
+    const canonical = [canonicalOf("review-logic:L-01")];
+    const result = buildLedger({ ...base, canonical });
+    expect(result.ledger.obligations[0]).toMatchObject({ status: "finding", finding: GID("review-logic:L-01") });
+    expect(await blockersOf(result, canonical)).toEqual([]);
+  });
+
+  test("a raw finding ingest merged as a duplicate links to the survivor through merged_from", async () => {
+    const base = await withFinding();
+    const canonical = [canonicalOf("review-architecture:A-07", { merged_from: [GID("review-logic:L-01")], reported_by: ["review-architecture", "review-logic"] })];
+    const result = buildLedger({ ...base, canonical });
+    expect(result.ledger.obligations[0]).toMatchObject({ status: "finding", finding: GID("review-architecture:A-07") });
+    expect(String(result.ledger.obligations[0]?.reason)).toContain("merged it as a duplicate");
+    expect(await blockersOf(result, canonical)).toEqual([]);
+  });
+
+  test("a raw finding ingest screened out of findings.json closes out-of-scope with the screen's reason", async () => {
+    const base = await withFinding();
+    const screened = [{ id: "review-logic:L-01", global_id: GID("review-logic:L-01"), reviewer: "review-logic", rule: "non-regression-severity", detail: "minor is below the scope-B floor major" }];
+    const result = buildLedger({ ...base, screened, screenedEvidence: "research-evidence/ingest-screened.json" });
+    expect(result.ledger.obligations[0]).toMatchObject({ status: "out-of-scope", evidence: "research-evidence/ingest-screened.json" });
+    expect(String(result.ledger.obligations[0]?.reason)).toContain("non-regression-severity");
+    expect(String(result.ledger.obligations[0]?.reason)).toContain("below the scope-B floor");
+    expect(result.ledger.rawReconciled).toBe(true);
+    expect(await blockersOf(result)).toEqual([]);
+    // Matched by the reviewer's own id too, for a canonical set that kept the raw ids.
+    const bare = buildLedger({ ...base, screened: [{ ...screened[0]!, id: "L-01" }] });
+    expect(bare.ledger.obligations[0]).toMatchObject({ status: "out-of-scope" });
+    // An explicit row still wins over the screen.
+    const given = buildLedger({ ...base, screened, dispositions: [{ id: "review-logic:L-01", status: "refuted", evidence: "ran it", reason: "no defect" }] });
+    expect(given.ledger.obligations[0]).toMatchObject({ status: "refuted" });
+  });
+
+  test("a raw finding id holding '#' is a gap naming the id form ingest needs", async () => {
+    const base = await inputs();
+    const result = buildLedger({ ...base, raws: base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, findings: [{ ...finding, id: "w1#L-01" }] } } : r)) });
+    const gap = result.gaps.find((entry) => entry.detail.includes("w1#L-01"));
+    expect(gap?.detail).toContain('holds "#"');
+    expect(gap?.next).toContain("global_id");
   });
 });
 
@@ -777,12 +861,12 @@ describe("dispatch attribution", () => {
   });
   test("explicit result assignments close only their own slices", async () => {
     const base = await inputs();
-    const a = { ...raw("review-logic", "DONE", {}, "raw/a.txt"), assignedSlices: ["slice-01"] };
-    const b = { ...raw("review-logic", "DONE", {}, "raw/b.txt"), assignedSlices: ["slice-02"] };
+    const a = { ...raw("review-logic", "DONE", { slices: ["slice-01"] }, "raw/a.txt"), assignedSlices: ["slice-01"] };
+    const b = { ...raw("review-logic", "DONE", { slices: ["slice-02"] }, "raw/b.txt"), assignedSlices: ["slice-02"] };
     const others = base.raws.filter(r => r.result?.reviewer !== "review-logic");
     expect(buildLedger({ ...base, raws: [...others, a, b] }).ledger.scopeReviewed).toBe(true);
     const hostile = { ...b, result: { ...b.result!, slices: ["slice-01", "slice-02"] } };
-    expect(buildLedger({ ...base, raws: [...others, { ...a, result: { ...a.result!, status: "BLOCKED" } }, hostile] }).ledger.scopeReviewed).toBe(false);
+    expect(buildLedger({ ...base, raws: [...others, { ...a, result: { ...a.result!, status: "BLOCKED", slices: undefined } }, hostile] }).ledger.scopeReviewed).toBe(false);
   });
   test("prose and JSON strings containing escaped quotes and braces parse", () => {
     const object = { status: "DONE", summary: 'brace } and "quote"', reviewer: "review-logic" };
@@ -971,5 +1055,211 @@ describe("a delta round's fix slices (flow 458 AC4)", () => {
     const answered = buildLedger({ ...base, raws: base.selected.map((reviewer) => ({ ...raw(reviewer, "DONE", { slices: read(reviewer), ...(reviewer === "review-architecture" ? { prior_dispositions: [{ id: "F1", disposition: "partial" }] } : {}) }), assignedSlices: read(reviewer) })) });
     expect(answered.ledger.dispatch.fixSlicesCovered).toEqual(["slice-01"]);
     expect(answered.ledger.scopeReviewed).toBe(true);
+  });
+});
+
+describe("ledgerBlockers with a package runs what review complete runs", () => {
+  test("the layer/chunk completeness gate is among them: a file in no slice blocks READY", async () => {
+    const packageDir = path.join(root, ".metaproject", "reviews", "pkg");
+    await mkdir(packageDir, { recursive: true });
+    await writeFile(path.join(packageDir, "scope-files.json"), JSON.stringify({ version: 1, files: [...FILES, "src/c.ts"] }));
+    await writeFile(path.join(packageDir, "slice-manifest.json"), JSON.stringify(MANIFEST));
+    const { ledger } = buildLedger(await inputs());
+    const blockers = await ledgerBlockers(ledger, [], { root, packageDir, files: [...FILES, "src/c.ts"] });
+    expect(blockers.some((blocker) => blocker.includes("in-scope file(s) are uncovered: src/c.ts"))).toBe(true);
+  });
+});
+
+describe("token spend per dispatch (flow 460, AC7)", () => {
+  const line = (tokensIn: number, tokensOut: number, model = "anthropic/claude-sonnet") => formatUsageLine({ tokens_in: tokensIn, tokens_out: tokensOut, model });
+
+  test("each run carries its usage; research totals sum the known dispatches and count the unknown ones, never as 0", async () => {
+    const base = await inputs();
+    const [first, second, ...others] = base.selected;
+    const raws: RawFile[] = [
+      { ...raw(first!, "DONE"), usage: { tokens_in: 1000, tokens_out: 200, model: "anthropic/claude-sonnet" } },
+      // The envelope's own usage counts when the host wrote no line.
+      raw(second!, "DONE", { usage: { tokens_in: 50, tokens_out: 5, model: "openai/gpt" } }),
+      ...others.map((reviewer) => raw(reviewer, "DONE")),
+    ];
+    const { ledger } = buildLedger({ ...base, raws });
+    const runs = ledger.dispatch.runs as Array<Record<string, unknown>>;
+    const byReviewer = Object.fromEntries(runs.map((run) => [run.reviewer, run.usage]));
+    expect(byReviewer[first!]).toEqual({ tokens_in: 1000, tokens_out: 200, model: "anthropic/claude-sonnet", dispatches: 1, unknown: 0 });
+    expect(byReviewer[second!]).toEqual({ tokens_in: 50, tokens_out: 5, model: "openai/gpt", dispatches: 1, unknown: 0, reported: 1 });
+    for (const reviewer of others) expect(byReviewer[reviewer]).toBe("unknown");
+    expect(ledger.usage).toEqual({ dispatches: raws.length, known: 2, unknown: raws.length - 2, tokens_in: 1050, tokens_out: 205, reported: 1, complete: false });
+    expect(usageTotalsLine(ledger.usage!)).toBe(`token spend: at least 1050 in, 205 out over 2 of ${raws.length} dispatch(es); ${raws.length - 2} unknown (no usage recorded); 1 stated by the reviewer, not measured by a host`);
+    expect(withSpendSection("# R\n", ledger)).toContain("## Token spend");
+  });
+
+  test("a round where nothing reported usage states unknown, not 0 tokens", async () => {
+    const { ledger } = buildLedger(await inputs());
+    expect(ledger.usage?.known).toBe(0);
+    expect(usageTotalsLine(ledger.usage!)).toMatch(/^token spend: unknown \(\d+ dispatch\(es\), none reported usage\)$/);
+    expect(withSpendSection("# R\n", ledger)).not.toContain(" 0 in");
+  });
+
+  test("a reviewer with several waves sums them and counts the wave that reported none", async () => {
+    const base = await inputs();
+    const reviewer = base.selected[0]!;
+    const waves = [
+      { ...raw(reviewer, "DONE", {}, `raw/${reviewer}-w1.txt`), usage: { tokens_in: 10, tokens_out: 1 } },
+      { ...raw(reviewer, "DONE", {}, `raw/${reviewer}-w2.txt`), usage: { tokens_in: 20, tokens_out: 2 } },
+      raw(reviewer, "DONE", {}, `raw/${reviewer}-w3.txt`),
+    ];
+    const { ledger } = buildLedger({ ...base, raws: [...waves, ...base.selected.slice(1).map((r) => raw(r, "DONE"))] });
+    const run = (ledger.dispatch.runs as Array<Record<string, unknown>>).find((entry) => entry.reviewer === reviewer);
+    expect(run?.usage).toEqual({ tokens_in: 30, tokens_out: 3, dispatches: 3, unknown: 1 });
+  });
+
+  test("ledger build reads the KERYX_USAGE line from raw/; the line never makes an empty reply non-empty or changes the parsed result", async () => {
+    const input = path.join(root, "input");
+    await mkdir(path.join(input, "raw"), { recursive: true });
+    await writeFile(path.join(input, "raw", "review-logic.txt"), `REVIEW_RESULT {"reviewer":"review-logic","status":"DONE","findings":[]}\n${line(900, 90)}\n`);
+    await writeFile(path.join(input, "raw", "review-style.txt"), `${NO_TEXT_PLACEHOLDER}\n${line(40, 0)}\n`);
+    await writeFile(path.join(input, "raw", "review-architecture.txt"), `REVIEW_RESULT {"reviewer":"review-architecture","status":"DONE","findings":[]}\nKERYX_USAGE {"tokens_in":"lots"}\n`);
+    const { raws } = await loadRaws(input, { files: new Set(), reviewers: ["review-logic", "review-style", "review-architecture"] });
+    const byName = Object.fromEntries(raws.map((entry) => [entry.name, entry]));
+    expect(byName["raw/review-logic.txt"]?.usage).toEqual({ tokens_in: 900, tokens_out: 90, model: "anthropic/claude-sonnet" });
+    expect(byName["raw/review-logic.txt"]?.result).toMatchObject({ reviewer: "review-logic", status: "DONE" });
+    expect(byName["raw/review-style.txt"]?.empty).toBe(true);
+    expect(byName["raw/review-style.txt"]?.usage).toEqual({ tokens_in: 40, tokens_out: 0, model: "anthropic/claude-sonnet" });
+    // A malformed line states nothing: unknown, not 0.
+    expect(byName["raw/review-architecture.txt"]?.usage).toBeUndefined();
+    expect(isEmptyOutput(`(subagent produced no text)\n${line(1, 1)}`)).toBe(true);
+    expect(usageTotals(raws.map(rawUsage))).toMatchObject({ dispatches: 3, known: 2, unknown: 1, tokens_in: 940, tokens_out: 90 });
+  });
+
+  test("a usage line is checked by hand, not by a backtracking pattern: a long line of braces states nothing, is never parsed and costs time linear in its size", () => {
+    const hostile = (size: number): string => `REVIEW_RESULT {"reviewer":"r","status":"DONE"}\nKERYX_USAGE {${"}".repeat(size)} trailing\n`;
+    const parse = spyOn(JSON, "parse");
+    try {
+      const { body, usage } = splitUsage(hostile(200_000));
+      expect(usage).toBeUndefined();
+      expect(body).not.toContain("KERYX_USAGE");
+      // The over-long line is refused by its length before any JSON parse.
+      expect(parse).not.toHaveBeenCalled();
+    } finally {
+      parse.mockRestore();
+    }
+    expectLinearTime((size) => splitUsage(hostile(size)));
+  });
+
+  test("a file saved with CRLF line endings states its usage, and its usage lines leave the body (HL-R3-001)", () => {
+    const crlf = `REVIEW_RESULT {"reviewer":"r","status":"DONE"}\r\n${formatOtherUsageLine({ tokens_in: 5, tokens_out: 1 })}\r\n${line(3, 1)}\r\n`;
+    const { body, usage, others } = splitUsage(crlf);
+    expect(usage).toEqual({ tokens_in: 3, tokens_out: 1, model: "anthropic/claude-sonnet" });
+    expect(others).toEqual([{ tokens_in: 5, tokens_out: 1 }]);
+    expect(body).not.toContain("KERYX_USAGE");
+    expect(isEmptyOutput(`${NO_TEXT_PLACEHOLDER}\r\n${line(1, 1)}\r\n`)).toBe(true);
+  });
+
+  test("a count past MAX_DISPATCH_TOKENS is not a measurement: the dispatch reads as unknown", () => {
+    expect(splitUsage(`x\nKERYX_USAGE {"tokens_in":${MAX_DISPATCH_TOKENS + 1},"tokens_out":1}`).usage).toBeUndefined();
+    expect(splitUsage(`x\nKERYX_USAGE {"tokens_in":${MAX_DISPATCH_TOKENS},"tokens_out":1}`).usage).toEqual({ tokens_in: MAX_DISPATCH_TOKENS, tokens_out: 1, reported: true });
+  });
+
+  test("a dispatch stopped at its deadline is a partial count: the totals say at least, and are not complete", () => {
+    const partial = splitUsage(`x\n${formatUsageLine({ tokens_in: 10, tokens_out: 2, partial: true })}`).usage;
+    expect(partial).toEqual({ tokens_in: 10, tokens_out: 2, partial: true });
+    const totals = usageTotals([partial, { tokens_in: 5, tokens_out: 1 }]);
+    expect(totals).toMatchObject({ dispatches: 2, known: 2, unknown: 0, partial: 1, complete: false });
+    expect(usageTotalsLine(totals)).toBe("token spend: at least 15 in, 3 out over 2 dispatch(es); 1 stopped at a deadline (counted so far only)");
+  });
+
+  test("withSpendSection appends the section, and a re-ingest replaces a stale one instead of keeping it", () => {
+    const research = { usage: usageTotals([{ tokens_in: 1, tokens_out: 1 }]) };
+    const current = usageTotalsLine(research.usage);
+    expect(withSpendSection("# R\n", research)).toBe(`# R\n\n${SPEND_HEADING}\n\n${current}\n`);
+    expect(withSpendSection(`# R\n\n${SPEND_HEADING}\n\nold\n`, research)).toBe(`# R\n\n${SPEND_HEADING}\n\n${current}\n`);
+    // Only the section is replaced: a heading after it, and the text under that heading, stay.
+    expect(withSpendSection(`# R\n\n${SPEND_HEADING}\n\nold\n\n## Notes\n\nkept\n`, research)).toBe(`# R\n\n${SPEND_HEADING}\n\n${current}\n\n## Notes\n\nkept\n`);
+    expect(withSpendSection("# R\n", {})).toBe("# R\n");
+  });
+
+  test("a re-dispatch to the same path counts every dispatch: KERYX_USAGE_OTHER lines are dispatches of their own", async () => {
+    const input = path.join(root, "input-retry");
+    await mkdir(path.join(input, "raw"), { recursive: true });
+    const body = `REVIEW_RESULT {"reviewer":"review-logic","status":"DONE","findings":[]}`;
+    await writeFile(path.join(input, "raw", "review-logic.txt"), `${body}\n${formatOtherUsageLine({ tokens_in: 5, tokens_out: 1 })}\n${formatOtherUsageLine(undefined)}\n${line(7, 2)}\n`);
+    const { raws } = await loadRaws(input, { files: new Set(), reviewers: ["review-logic"] });
+    expect(raws[0]?.result).toMatchObject({ reviewer: "review-logic", status: "DONE" });
+    expect(raws[0]?.otherUsage).toEqual([{ tokens_in: 5, tokens_out: 1 }, undefined]);
+    expect(usageTotals(raws.flatMap(rawDispatchUsages))).toMatchObject({ dispatches: 3, known: 2, unknown: 1, tokens_in: 12, tokens_out: 3 });
+  });
+
+  test("only the usage lines that end the file count: a line with reply text after it states nothing", () => {
+    expect(splitUsage(`${line(999, 9)}\nmy review\n${line(3, 1)}\n`)).toEqual({ body: "my review", usage: { tokens_in: 3, tokens_out: 1, model: "anthropic/claude-sonnet" } });
+    expect(splitUsage(`my review\n${line(999, 9)}\nmore text\n`)).toEqual({ body: "my review\nmore text" });
+    // Blank lines between the reply and its trailing usage lines do not end the block.
+    expect(splitUsage(`my review\n\n${line(3, 1)}\n\n`).usage).toEqual({ tokens_in: 3, tokens_out: 1, model: "anthropic/claude-sonnet" });
+  });
+
+  test("a long run of whitespace in a reply costs time linear in its size (a pattern trim backtracks quadratically on it)", () => {
+    const reply = (size: number): string => `a${" ".repeat(size)}b\n${line(1, 1)}`;
+    expect(splitUsage(reply(200_000)).body).toBe(`a${" ".repeat(200_000)}b`);
+    expectLinearTime((size) => splitUsage(reply(size)));
+  });
+});
+
+describe("flow 460 D/F: what a reply claims, and what the artifacts say ran", () => {
+  test("D: a DONE reply without `slices` under a slice manifest is not scope-complete", async () => {
+    const base = await inputs();
+    const bare = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, slices: undefined } } : r));
+    const result = buildLedger({ ...base, raws: bare });
+    const logic = (result.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find((r) => r.reviewer === "review-logic")!;
+    expect(logic).toMatchObject({ status: "complete", scopeComplete: false });
+    expect(result.gaps.find((g) => g.reviewer === "review-logic")!.detail).toContain("slice(s) not covered");
+    expect(result.ledger.scopeReviewed).toBe(false);
+    // Without a manifest there is nothing to name, so DONE alone still closes the reviewer.
+    const unsliced = buildLedger({ ...base, manifest: undefined, raws: bare });
+    expect((unsliced.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find((r) => r.reviewer === "review-logic")).toMatchObject({ status: "complete", scopeComplete: true });
+  });
+
+  test("D: a DONE reply whose inputs_unreadable names a mandatory input is incomplete", async () => {
+    const base = await inputs();
+    const said = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, inputs_unreadable: ["pr_context.json"] } } : r));
+    const result = buildLedger({ ...base, raws: said });
+    const logic = (result.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find((r) => r.reviewer === "review-logic")!;
+    expect(logic).toMatchObject({ status: "incomplete", scopeComplete: false });
+    expect(result.gaps.find((g) => g.reviewer === "review-logic")!.detail).toContain('mandatory input could not be read ("pr_context.json")');
+  });
+
+  test("D: the summary's prose is never read as a reading failure, whatever it says", async () => {
+    const base = await inputs();
+    // Round-2 examples of defect prose and clean summaries, and prose that does claim a reading failure: only the
+    // structured field decides, so every one of them leaves the run complete.
+    for (const summary of [
+      "The payload could not be parsed when slices is empty.",
+      "The schema could not be loaded when the path has spaces.",
+      "No blockers. Did not find any schema regressions.",
+      "I did not find any schema violations",
+      "We did not find any payload handling issues",
+      "Could not find any payload validation gaps",
+      "The payload was not found; the loader falls back to defaults",
+      "reviewer-finding.schema.json is missing a slices property",
+      "loadSchema cannot open the schema when the cache is cold",
+      "I could not read pr_context.json, so I reviewed the diff only",
+    ]) {
+      const fine = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, summary } } : r));
+      expect({ summary, gaps: buildLedger({ ...base, raws: fine }).gaps }).toEqual({ summary, gaps: [] });
+    }
+  });
+
+  test("D: unreadableInputClaim quotes the reviewer's own list, and nothing else", () => {
+    expect(unreadableInputClaim({ inputs_unreadable: ["pr_context.json", " the slice manifest "] })).toBe("pr_context.json, the slice manifest");
+    expect(unreadableInputClaim({ inputs_unreadable: [] })).toBeUndefined();
+    expect(unreadableInputClaim({ inputs_unreadable: ["", 3] })).toBeUndefined();
+    expect(unreadableInputClaim({ inputs_unreadable: "pr_context.json" })).toBeUndefined();
+    expect(unreadableInputClaim({ summary: "I could not read reviewer-finding.schema.json" })).toBeUndefined();
+    expect(unreadableInputClaim({})).toBeUndefined();
+  });
+
+  test("F: the light-round mutation line appears only when the package holds no mutation record", async () => {
+    const base = await inputs({ depth: "light" });
+    expect(buildLedger(base).ledger.dispatch.notRun).toEqual(["Not run: mutation (light round)"]);
+    expect(buildLedger({ ...base, mutationRecorded: false }).ledger.dispatch.notRun).toEqual(["Not run: mutation (light round)"]);
+    expect(buildLedger({ ...base, mutationRecorded: true }).ledger.dispatch.notRun).toBeUndefined();
   });
 });

@@ -48,7 +48,13 @@ export type ManagedReviewTarget = {
   kind: ReviewTargetKind;
   ref: string;
   repository?: string | undefined;
+  /** The base the round is measured from: `--base`, else a pull request's own base (`origin/<baseRefName>`, read with gh). */
   base?: string | undefined;
+  /**
+   * A pull request's own base when `--base` named another: the coverage gate's light recheck measures against it too, so
+   * a base the starter chose can only widen the diff it measures.
+   */
+  prBase?: string | undefined;
   /**
    * The commit the round ran against.
    *
@@ -529,6 +535,12 @@ export type StructuredReviewFinding = {
   locator?: ReviewFindingLocator | undefined;
   /** True when {@link file} does not exist at the reviewed head; the finding is kept and listed in `scope.md`. */
   path_missing?: boolean | undefined;
+  /**
+   * Flow 460: set by `review ingest` when {@link quote} is absent from {@link file} at the reviewed head, or matches
+   * more than one place there (`candidate_lines`, bounded by the scan). The finding is kept with no line, never
+   * relocated by similarity, listed in `scope.md` and by readiness item `quotes-located`.
+   */
+  quote_unlocated?: { reason: "absent" | "ambiguous"; candidate_lines?: number[] | undefined } | undefined;
   symbol?: string | null | undefined;
   dedupe_key?: string | null | undefined;
   blocking_merge?: boolean | undefined;
@@ -624,7 +636,7 @@ export type NormalizedReviewFinding = StructuredReviewFinding & {
  * the only thing that can later measure how far those claims drifted.
  */
 export type ReviewFindingLocator =
-  | { state: "derived"; method: "exact" | "whitespace-normalised"; reported_line?: number | null }
+  | { state: "derived"; method: "exact" | "whitespace-normalised" | "substring"; reported_line?: number | null }
   | { state: "unlocatable"; reason: string; reported_line?: number | null };
 
 export type ManagedReviewInput = {
@@ -699,7 +711,7 @@ export type ManagedReviewInput = {
    * merge is delete-only and must be able to receive, and visibly reject, a claim that
    * tried to carry something it may not.
    */
-  premises?: PremiseSource | undefined;
+  premises?: PremiseSource | readonly PremiseSource[] | undefined;
   /**
    * The §5.4 decision this round ran under, from
    * `keryx providers cross-family --json` (flow 209, AC2).

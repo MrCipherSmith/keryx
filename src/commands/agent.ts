@@ -1,6 +1,6 @@
 import { isTransportFailure } from "../harness/provider/provider-port";
 import { rememberArbiterSession } from "../review/arbiter-session";
-import { decideReviewGate, findReviewGateState, reviewRunSeenInHistory, sessionStartedAt } from "../review/completion-gate";
+import { decideReviewGate, findReviewGateState, sessionReviewNames, sessionStartedAt } from "../review/completion-gate";
 import { ENV_AUTONOMOUS_ANSWERS_FILE } from "../review/autonomous-answers";
 import { REFUSED_EARLIER, asksForReviewAuto, noteOperatorRefusal, operatorDenied, recordOperatorDenial, refusalFingerprint, reviewAutoActive, reviewAutoGrants, setReviewSystem } from "../review/review-system";
 import { classifyApprovalCause } from "./approval-cause";
@@ -3482,9 +3482,12 @@ async function runAgentTurnCore(
   /** True when the managed-review gate refused this stop and queued a nudge: the caller re-enters the round loop. */
   const holdReviewGate = async (): Promise<boolean> => {
     if (subagentBudget !== undefined || deps.unattended === true) return false;
-    const runSeen = reviewRunSeenInHistory(history);
+    // One tracker answers both: whether this session ran a review, and what its executed `keryx review` commands named.
+    // It keeps both, and the session's start, across a compaction that rewrites the history in place.
+    const named = sessionReviewNames(history, process.cwd());
+    const runSeen = named.runSeen === true;
     const open = runSeen
-      ? await findReviewGateState(process.cwd(), sessionStartedAt(history)).catch(() => null)
+      ? await findReviewGateState(process.cwd(), named.startedAt ?? sessionStartedAt(history), named).catch(() => null)
       : null;
     const gate = decideReviewGate({
       open,
