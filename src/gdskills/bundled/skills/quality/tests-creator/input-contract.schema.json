@@ -75,6 +75,10 @@
           "type": "integer",
           "minimum": 1,
           "description": "GitHub issue number for commit references"
+        },
+        "resolved_context_file": {
+          "type": "string",
+          "description": "Output of `keryx skills resolve-context --for test --out <path>` for this task, made by the dispatcher. Present => Phase 1 reads its `must_read` entries instead of resolving again, and the result must carry `project_context_applied`. Absent => Phase 1 runs the resolver itself."
         }
       }
     },

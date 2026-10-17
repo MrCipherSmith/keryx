@@ -66,6 +66,7 @@ import {
   runSkillsUpdateCommand,
 } from "../gdskills/import-skills";
 import { runSkillsImportRulesCommand } from "../gdskills/import-rules";
+import { checkResolvedContext, formatResolvedReport, readResolvedFile, RESOLVED_SCHEMAS } from "../gdskills/resolved-context-check";
 import { runResolveContextCommand } from "../gdskills/resolve-context-command";
 import { runSkillsRemoveRuleCommand } from "../gdskills/remove-rules";
 import { runSkillsUpdateRulesCommand } from "../gdskills/update-rules";
@@ -1577,8 +1578,15 @@ async function contractsCommand(args: string[]): Promise<void> {
     const filePath = args[1];
     const schemaName = normalizeContractName(optionValue(args, "--schema"));
     if (!filePath || !schemaName) {
-      console.error("Usage: keryx skills contracts validate <file> --schema <name>");
+      console.error("Usage: keryx skills contracts validate <file> --schema <name> [--resolved <resolved.json>]");
       printContractsHelp();
+      process.exitCode = 1;
+      return;
+    }
+
+    const resolvedPath = optionValue(args, "--resolved");
+    if (resolvedPath !== undefined && !RESOLVED_SCHEMAS.includes(schemaName)) {
+      console.error(`--resolved applies to ${RESOLVED_SCHEMAS.join(" and ")}, not ${schemaName}.`);
       process.exitCode = 1;
       return;
     }
@@ -1588,6 +1596,22 @@ async function contractsCommand(args: string[]): Promise<void> {
       if (result.valid) {
         console.log(`valid: ${result.file}`);
         console.log(`schema: ${result.schema}`);
+        if (resolvedPath !== undefined) {
+          const report = await checkResolvedContext({
+            projectRoot: process.cwd(),
+            resolved: await readResolvedFile(path.resolve(resolvedPath)),
+            result: JSON.parse(await readFile(path.resolve(filePath), "utf8")) as unknown,
+          });
+          for (const warning of report.warnings) console.error(`warning: ${warning}`);
+          const lines = formatResolvedReport(report);
+          const sink = report.blocking ? console.error : console.log;
+          if (lines.length === 0) console.log(`project context: every must_read entry cited, nothing drifted (enforcement ${report.enforcement})`);
+          else {
+            sink(`project context: ${report.misses.length} miss(es), ${report.drifted.length} drifted (enforcement ${report.enforcement})`);
+            for (const line of lines) sink(line);
+          }
+          if (report.blocking) process.exitCode = 1;
+        }
         return;
       }
 
@@ -1865,7 +1889,7 @@ Usage:
   keryx skills export <project-skill> --runtime codex|claude
   keryx skills sync --runtime codex|claude --target <dir>
   keryx skills contracts list
-  keryx skills contracts validate <file> --schema <name>
+  keryx skills contracts validate <file> --schema <name> [--resolved <resolved.json>]
   keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all]
               [--origin learned --source-ref <id>] [--json]
   keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>]
@@ -2154,7 +2178,7 @@ function printContractsHelp(): void {
 
 Usage:
   keryx skills contracts list
-  keryx skills contracts validate <file> --schema <name>
+  keryx skills contracts validate <file> --schema <name> [--resolved <resolved.json>]
 
 Schemas:
 ${schemas}

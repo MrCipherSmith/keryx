@@ -97,6 +97,20 @@
         }
       }
     },
+    "project_context_applied": {
+      "type": "array",
+      "description": "Which of the files `keryx skills resolve-context` listed this run actually used, so a reader can subtract it from the resolver's `must_read` list. `how`: `read` - the file was opened and its text used; `followed` - its rules were applied through a skill or another file that already contains them; `n/a` - the file does not touch the task, with the reason in `notes`. `sha256` is the resolver's value for the file, not a fresh hash: `keryx skills contracts validate --resolved` compares the two.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "how"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1, "description": "Repo-relative path exactly as the resolver printed it" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The resolver's sha256 of the file" },
+          "how": { "type": "string", "enum": ["read", "followed", "n/a"] }
+        }
+      }
+    },
     "notes": {
       "type": "string",
       "description": "Warnings, blockers, or additional context. The three fields above were carved out of this one: free text is where they went before they were declared, and anything that fits one of them belongs there instead."

@@ -14,7 +14,8 @@ export type ContractName =
   | "subagent-dispatch"
   | "subagent-result"
   | "task-implementer-input"
-  | "task-implementer-output";
+  | "task-implementer-output"
+  | "tests-creator-output";
 
 /**
  * Whether keryx itself refuses a bad value of this contract, and where.
@@ -376,6 +377,18 @@ export const CONTRACTS: ContractInfo[] = [
       kind: "none",
       reason:
         "The skill writes this file itself, in its own runtime, and no keryx command reads it back. Contrast subagent-result, which is the same shape of thing and IS enforced for one reason: the harness reads that one back and must decide whether it is well-formed.",
+    },
+  },
+  {
+    name: "tests-creator-output",
+    fileName: "tests-creator-output-contract.schema.json",
+    description:
+      "JSON result tests-creator reports: test case specs for task-implementer, a status report and the project context it applied.",
+    sourcePath: "src/gdskills/bundled/skills/quality/tests-creator/output-contract.schema.json",
+    enforcement: {
+      kind: "none",
+      reason:
+        "The skill writes this file itself, in its own runtime, and no keryx command reads it back on its own. `keryx skills contracts validate <result> --schema tests-creator-output --resolved <resolved.json>` performs the project-context check when a dispatcher asks for it.",
     },
   },
 ];
