@@ -486,7 +486,7 @@ export async function readFlowReviewRounds(cwd: string, flowRef: string): Promis
   const rounds: Array<{ sortKey: string; round: ReviewRound }> = [];
   // The flow's own reviews/ and the standalone packages bound to it (`review ingest --review-id`, flow 460 L5).
   for (const packageDir of await flowPackageDirs(cwd, dir)) {
-    const entry = { name: path.basename(packageDir) };
+    const name = path.basename(packageDir);
     const manifest = await readJson<ManagedReviewManifest>(path.join(packageDir, "manifest.json"));
     const findings = (await readJson<ReadonlyArray<Partial<StructuredReviewFinding>>>(
       path.join(packageDir, "findings.json"),
@@ -494,9 +494,9 @@ export async function readFlowReviewRounds(cwd: string, flowRef: string): Promis
     const reportPath = path.join(packageDir, "report.md");
     const output = (await pathExists(reportPath)) ? await readFile(reportPath, "utf8") : undefined;
     rounds.push({
-      sortKey: manifest?.createdAt ?? entry.name,
+      sortKey: manifest?.createdAt ?? name,
       round: {
-        label: manifest?.reviewId ?? entry.name,
+        label: manifest?.reviewId ?? name,
         findings: Array.isArray(findings) ? findings : [],
         output,
       },

@@ -1405,6 +1405,13 @@ test("flow 460 (H): every usage report is added, and one that names only one cou
     const tool = usageTool(root, usageStreamProvider('REVIEW_RESULT {"reviewer":"review-logic","status":"DONE","findings":[]}', [{ inputTokens: 100, outputTokens: 10 }, { outputTokens: 5 }]));
     expect((await tool.invoke({ task: "review", save_result_to: "raw/review-logic.txt" })).status).toBe("Completed");
     expect(splitUsage(await readFile(path.join(root, "raw/review-logic.txt"), "utf8")).usage).toEqual({ tokens_in: 100, tokens_out: 15, model: "ollama/fake" });
+    // A count that is not a finite number is no count: NaN and Infinity add nothing, and a report of only those states nothing.
+    const odd = usageTool(root, usageStreamProvider('REVIEW_RESULT {"reviewer":"review-style","status":"DONE","findings":[]}', [{ inputTokens: Number.NaN, outputTokens: Number.POSITIVE_INFINITY }, { inputTokens: 7, outputTokens: 1 }]));
+    await odd.invoke({ task: "review", save_result_to: "raw/review-style.txt" });
+    expect(splitUsage(await readFile(path.join(root, "raw/review-style.txt"), "utf8")).usage).toEqual({ tokens_in: 7, tokens_out: 1, model: "ollama/fake" });
+    const none = usageTool(root, usageStreamProvider('REVIEW_RESULT {"reviewer":"review-arch","status":"DONE","findings":[]}', [{ inputTokens: Number.NaN }]));
+    await none.invoke({ task: "review", save_result_to: "raw/review-arch.txt" });
+    expect(await readFile(path.join(root, "raw/review-arch.txt"), "utf8")).not.toContain("KERYX_USAGE");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -1418,10 +1425,12 @@ test("flow 460 (H): a child stopped at its deadline saves its partial text with 
     const partial = await usageTool(root, usageStreamProvider("half a review", [{ inputTokens: 50, outputTokens: 5 }], { hang: true })).invoke({ task: "review", save_result_to: "raw/review-logic.txt" });
     expect(partial.status).toBe("Timeout");
     const saved = await readFile(path.join(root, "raw/review-logic.txt"), "utf8");
-    expect(splitUsage(saved)).toEqual({ body: "half a review", usage: { tokens_in: 50, tokens_out: 5, model: "ollama/fake", partial: true } });
+    expect(splitUsage(saved)).toEqual({ body: "half a review", usage: { tokens_in: 50, tokens_out: 5, model: "ollama/fake", partial: true }, incomplete: true });
 
     const silent = await usageTool(root, usageStreamProvider("", [{ inputTokens: 30, outputTokens: 0 }], { hang: true })).invoke({ task: "review", save_result_to: "raw/review-style.txt" });
     expect(silent.status).toBe("Timeout");
+    // An empty record saved quietly: the parent is not told a result was saved (TP-001).
+    expect(String(silent.output)).not.toContain("saved to raw/review-style.txt");
     const empty = await readFile(path.join(root, "raw/review-style.txt"), "utf8");
     expect(isEmptyOutput(empty)).toBe(true);
     expect(splitUsage(empty).usage).toEqual({ tokens_in: 30, tokens_out: 0, model: "ollama/fake", partial: true });
@@ -1479,11 +1488,40 @@ test("flow 460 (H): a re-dispatch to the same path after an empty reply takes th
     expect(retry.status).toBe("Timeout");
     expect(retry.output).toContain("[partial result saved to raw/review-logic.txt]");
     const saved = await readFile(path.join(root, "raw/review-logic.txt"), "utf8");
-    expect(splitUsage(saved)).toEqual({ body: "half a review KERYX_USAGE", usage: { tokens_in: 50, tokens_out: 5, model: "ollama/fake", partial: true }, others: [first] });
+    expect(splitUsage(saved)).toEqual({ body: "half a review KERYX_USAGE", usage: { tokens_in: 50, tokens_out: 5, model: "ollama/fake", partial: true }, others: [first], incomplete: true });
     expect(existsSync(path.join(root, "raw/review-logic.txt.partial"))).toBe(false);
   } finally {
     if (prev === undefined) delete process.env[ENV_SUBAGENT_TIMEOUT_MS];
     else process.env[ENV_SUBAGENT_TIMEOUT_MS] = prev;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("flow 460 (H): a child that fails with a thrown error still records its dispatch at save_result_to, as an incomplete record (LG-002, LG-006)", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-saveusage-thrown-"));
+  try {
+    let calls = 0;
+    const tool = createSpawnSubagentTool({
+      cwd: root,
+      getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+      makeProvider: () => textProvider("never reached"),
+      getDetectedProviders: () => [{ name: "ollama" }],
+      idSeq: () => {
+        calls += 1;
+        if (calls >= 10) throw new Error("idSeq boom");
+        return `id-${calls}`;
+      },
+      clock: () => "2020-01-01T00:00:00.000Z",
+    });
+    const result = await tool.invoke({ task: "review", mode: "read_only", save_result_to: "raw/review-logic.txt" });
+    expect(result.status).toBe("Error");
+    expect(String(result.output)).toMatch(/failed: idSeq boom/);
+    const saved = await readFile(path.join(root, "raw/review-logic.txt"), "utf8");
+    expect(isEmptyOutput(saved)).toBe(true);
+    // The dispatch counts (as unknown usage), and the record says it is not a complete result.
+    expect(splitUsage(saved)).toMatchObject({ incomplete: true });
+    expect(splitUsage(saved).usage).toBeUndefined();
+  } finally {
     await rm(root, { recursive: true, force: true });
   }
 });

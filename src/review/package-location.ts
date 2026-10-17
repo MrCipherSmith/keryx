@@ -12,6 +12,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { flowsRoot } from "../flow/store";
+import { mapBounded } from "../lib/map-bounded";
 
 /** The standalone packages' root. */
 export function reviewsRoot(cwd: string): string {
@@ -51,28 +52,45 @@ function boundToFlow(head: ManifestHead, flowDir: string): boolean {
   return head.flowId !== undefined && head.flowId !== "" && (flowDir === head.flowId || flowDir.startsWith(`${head.flowId}-`));
 }
 
+async function dirsUnder(root: string): Promise<string[]> {
+  try {
+    return (await readdir(root, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => path.join(root, entry.name));
+  } catch {
+    return [];
+  }
+}
+
+/** The standalone packages (directly under {@link reviewsRoot}) with a readable manifest, each with its head. */
+export type StandalonePackages = ReadonlyArray<{ dir: string; head: ManifestHead }>;
+
+/** At most this many standalone manifests are read at once. */
+const HEAD_READ_CONCURRENCY = 16;
+
+/**
+ * Every standalone package's manifest head, read once. A pass over many flows (`keryx governance report`) reads this
+ * once and hands it to each {@link flowPackageDirs} call, so it pays one read per package, not one per flow and package.
+ */
+export async function readStandalonePackages(cwd: string): Promise<StandalonePackages> {
+  const dirs = await dirsUnder(reviewsRoot(cwd));
+  const heads = await mapBounded(dirs, HEAD_READ_CONCURRENCY, readManifestHead);
+  return dirs.flatMap((dir, at) => {
+    const head = heads[at];
+    return head === undefined ? [] : [{ dir, head }];
+  });
+}
+
 /**
  * Every package directory of one flow: the directories under its {@link flowReviewsRoot}, then the packages directly
  * under {@link reviewsRoot} whose manifest is bound to the flow (`manifest.flow`). `review ingest --review-id` of a round
  * `review start` opened keeps that package where it was and binds it to the flow (flow 460 L5), so the flow's readers —
  * the loop detector (review/loop.ts), the flow review gate (flow/review-gate.ts) and flow spend (governance/spend.ts) —
- * list the flow's rounds here, all three the same way.
+ * list the flow's rounds here, all three the same way. `standalone` is {@link readStandalonePackages} read once by a
+ * caller that asks about many flows; without it the heads are read for this call.
  */
-export async function flowPackageDirs(cwd: string, flowDir: string): Promise<string[]> {
-  const dirsUnder = async (root: string): Promise<string[]> => {
-    try {
-      return (await readdir(root, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => path.join(root, entry.name));
-    } catch {
-      return [];
-    }
-  };
+export async function flowPackageDirs(cwd: string, flowDir: string, standalone?: StandalonePackages): Promise<string[]> {
   const own = await dirsUnder(flowReviewsRoot(cwd, flowDir));
-  const bound: string[] = [];
-  for (const dir of await dirsUnder(reviewsRoot(cwd))) {
-    const head = await readManifestHead(dir);
-    if (head !== undefined && boundToFlow(head, flowDir)) bound.push(dir);
-  }
-  return [...own, ...bound];
+  const heads = standalone ?? (await readStandalonePackages(cwd));
+  return [...own, ...heads.filter(({ head }) => boundToFlow(head, flowDir)).map(({ dir }) => dir)];
 }
 
 /** Every package's manifest, as git pathspec globs relative to the checkout. */

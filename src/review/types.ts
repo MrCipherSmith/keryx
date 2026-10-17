@@ -48,7 +48,13 @@ export type ManagedReviewTarget = {
   kind: ReviewTargetKind;
   ref: string;
   repository?: string | undefined;
+  /** The base the round is measured from: `--base`, else a pull request's own base (`origin/<baseRefName>`, read with gh). */
   base?: string | undefined;
+  /**
+   * A pull request's own base when `--base` named another: the coverage gate's light recheck measures against it too, so
+   * a base the starter chose can only widen the diff it measures.
+   */
+  prBase?: string | undefined;
   /**
    * The commit the round ran against.
    *

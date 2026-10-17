@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 import { hasStatus, parseReviewResult, unreadableInputClaim } from "./ledger";
+import { splitUsage } from "./dispatch-usage";
 import { type RetryState, type ReviewerResult, applyEscalations, emptyRetryState, planRetry, readSliceIds, scopeFingerprint } from "./retry-plan";
 import type { SliceEntry, SliceManifest } from "./slice";
 
@@ -28,7 +29,8 @@ export async function readJsonSource<T>(source: string, label: string): Promise<
     throw new UnreadableInput(`${label} is unreadable: ${source} (${error instanceof Error ? error.message : String(error)})`);
   }
   try {
-    return JSON.parse(raw) as T;
+    // A saved reviewer result may end with the host's KERYX_USAGE lines (flow 460 H): they are not part of the JSON.
+    return JSON.parse(splitUsage(raw).body) as T;
   } catch {
     throw new UnreadableInput(`${label} is not valid JSON: ${source}`);
   }
@@ -36,10 +38,13 @@ export async function readJsonSource<T>(source: string, label: string): Promise<
 
 export class UnreadableInput extends Error {}
 
-/** A file that is one JSON object with a status is the documented plain-JSON input; `--reviewer` may name a reviewer it leaves out. */
+/**
+ * A file that is one JSON object with a status is the documented plain-JSON input; `--reviewer` may name a reviewer it
+ * leaves out. The usage lines a host appends after it (KERYX_USAGE) are set aside first, as every reader of a raw result does.
+ */
 export function wholeFileResult(raw: string): ReviewerResult | undefined {
   try {
-    const whole: unknown = JSON.parse(raw);
+    const whole: unknown = JSON.parse(splitUsage(raw).body);
     return hasStatus(whole) ? whole as ReviewerResult : undefined;
   } catch { return undefined; }
 }

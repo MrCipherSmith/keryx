@@ -10,11 +10,24 @@ import type { ReviewCoverageEntry } from "./types";
  */
 export const COVERAGE_MD_MARK = "<!-- keryx: coverage.md written from the dispatch record (flow 460) -->";
 
-/** One `reviewer:` / `status:` entry of coverage.md, the layout {@link renderCoverageEntry} writes. */
-const COVERAGE_ENTRY = /reviewer:\s*(\S+)\s*\n\s*status:\s*(\S+)/g;
+/** One `reviewer:` / `status:` entry of coverage.md, the layout {@link renderCoverageEntry} writes: each key starts its line. */
+const COVERAGE_ENTRY = /^[ \t]*reviewer:[ \t]*(\S+)[ \t]*\r?\n[ \t]*status:[ \t]*(\S+)/gm;
 
+/** One field as one line: line breaks and control characters become spaces, so a value can never start an entry of its own. */
+function oneLine(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ").trim();
+}
+
+/** A reviewer name or status as one word: whitespace becomes `_`, so the parser reads exactly what was written. */
+const oneWord = (value: string): string => oneLine(value).replace(/\s+/g, "_");
+
+/**
+ * One entry; every field is written on its own single line, the name and status as one word (review SEC-005: a line
+ * break or a key inside a value cannot forge a `reviewer:` / `status:` pair).
+ */
 export function renderCoverageEntry(entry: ReviewCoverageEntry): string {
-  return `reviewer: ${entry.reviewer}\nstatus: ${entry.status}\nreason: ${entry.reason}`;
+  return `reviewer: ${oneWord(entry.reviewer)}\nstatus: ${oneWord(entry.status)}\nreason: ${oneLine(entry.reason)}`;
 }
 
 /** The whole coverage.md: heading, mark, one entry per reviewer. */

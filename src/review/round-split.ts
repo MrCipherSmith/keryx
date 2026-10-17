@@ -351,6 +351,24 @@ export function fixSliceRoles(manifest: { slices: readonly SliceEntry[] }): stri
   return [...new Set(manifest.slices.filter((slice) => slice.retryOf === undefined && (slice.kind === "fix" || slice.kind === "second-look")).flatMap((slice) => slice.roles ?? []))].sort();
 }
 
+/**
+ * Roles slice routing gives a slice that the round runs whatever its depth: review-security-code, routed by content to
+ * process, argv, git, input-derived path, env or network code. A light round's required set is path-only (coverage.ts),
+ * so without this a small diff that spawns a process would be routed to the security reviewer and never dispatched to it
+ * (review SEC-R3-001).
+ */
+export const ALWAYS_DISPATCHED_ROUTED_ROLES: ReadonlySet<string> = new Set(["review-security-code"]);
+
+/**
+ * The roles a slice manifest adds to the round's required set: the roles of its fix and second-look slices
+ * ({@link fixSliceRoles}), and each {@link ALWAYS_DISPATCHED_ROUTED_ROLES} role that slice routing gave any original
+ * slice. The one roster extension the estimate (plan.json), the drivers, `review required` and `ledger build` share.
+ */
+export function manifestRosterRoles(manifest: { slices: readonly SliceEntry[] }): string[] {
+  const routed = manifest.slices.filter((slice) => slice.retryOf === undefined).flatMap((slice) => (slice.roles ?? []).filter((role) => ALWAYS_DISPATCHED_ROUTED_ROLES.has(role)));
+  return [...new Set([...fixSliceRoles(manifest), ...routed])].sort();
+}
+
 export type SplitCounts = { fix: number; new: number; secondLook?: number };
 
 export function splitCounts(manifest: { slices: readonly SliceEntry[] }): SplitCounts | undefined {

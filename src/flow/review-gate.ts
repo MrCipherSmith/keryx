@@ -460,7 +460,7 @@ export async function readReviewRounds(cwd: string, flowDir: string): Promise<Re
   const rounds: ReviewRoundRecord[] = [];
   // The flow's own reviews/ and the standalone packages bound to it (`review ingest --review-id`, flow 460 L5).
   for (const packageDir of await flowPackageDirs(cwd, flowDir)) {
-    const entry = { name: path.basename(packageDir) };
+    const name = path.basename(packageDir);
     const problems: string[] = [];
 
     const manifest = readRecord(await readJson(path.join(packageDir, "manifest.json")));
@@ -472,7 +472,7 @@ export async function readReviewRounds(cwd: string, flowDir: string): Promise<Re
       problems.push("findings.json is missing, unreadable, or not an array");
     }
 
-    const reviewId = readString(manifest?.["reviewId"]) ?? entry.name;
+    const reviewId = readString(manifest?.["reviewId"]) ?? name;
     const target = readRecord(manifest?.["target"]);
     const coverageRaw = manifest?.["coverage"];
     const coverage = Array.isArray(coverageRaw)
@@ -502,7 +502,7 @@ export async function readReviewRounds(cwd: string, flowDir: string): Promise<Re
     rounds.push({
       reviewId,
       dir: path.relative(cwd, packageDir),
-      sortKey: readString(manifest?.["createdAt"]) ?? entry.name,
+      sortKey: readString(manifest?.["createdAt"]) ?? name,
       ingested: problems.length === 0,
       problems,
       head: readString(target?.["head"]) ?? null,

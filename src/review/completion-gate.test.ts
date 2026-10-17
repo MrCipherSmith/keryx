@@ -9,6 +9,8 @@ import { REPEATABLE_TOOL_NAMES } from "../commands/agent";
 import {
   decideReviewGate,
   findReviewGateState,
+  keryxArgs,
+  keryxReviewInvocations,
   MAX_REVIEW_GATE_CONTINUES,
   type OpenManagedReview,
   reviewRunSeenInHistory,
@@ -18,6 +20,7 @@ import {
   SessionReviewTracker,
   sessionReviewNames,
   sessionStartedAt,
+  shellCommands,
 } from "./completion-gate";
 import { writeActiveReview } from "./active-review";
 
@@ -175,10 +178,10 @@ test("the signature changes when a working file appears under data/review", asyn
 
 test("reviewRunSeenInHistory finds a skill_load of the review skill or an executed keryx review command, any subcommand", () => {
   const call = (name: string, args: string) => ({ toolCalls: [{ name, arguments: args }] });
-  expect(reviewRunSeenInHistory([{}, call("bash", '{"command":"ls"}')])).toBe(false);
-  expect(reviewRunSeenInHistory([call("bash", '{"command":"keryx ctx rg review-orchestrator"}')])).toBe(false);
+  expect(reviewRunSeenInHistory([{}, call("shell_exec", '{"command":"ls"}')])).toBe(false);
+  expect(reviewRunSeenInHistory([call("shell_exec", '{"command":"keryx ctx rg review-orchestrator"}')])).toBe(false);
   expect(reviewRunSeenInHistory([call("skill_load", '{"name":"review-orchestrator"}')])).toBe(true);
-  expect(reviewRunSeenInHistory([call("bash", '{"command":"keryx review scope --pr 1"}')])).toBe(true);
+  expect(reviewRunSeenInHistory([call("shell_exec", '{"command":"keryx review scope --pr 1"}')])).toBe(true);
   // One definition (AR-002): status and attach continue a review too; a file that mentions the command runs nothing.
   expect(reviewRunSeenInHistory([call("shell_exec", '{"command":"keryx review status pr-1"}')])).toBe(true);
   expect(reviewRunSeenInHistory([call("write_file", JSON.stringify({ path: "notes.md", content: "run keryx review start" }))])).toBe(false);
@@ -222,10 +225,16 @@ async function writeOldPackage(name: string): Promise<void> {
   await utimes(path.join(dir, "manifest.json"), past, past);
 }
 
-test("the nudge names the package the active-review pointer names, not an older open one in cwd", async () => {
+test("the nudge names the package the active-review pointer names, not an older open one in cwd nor a newer unpointed one", async () => {
   await writeOldPackage("pr-7912");
   const since = Date.now() - 60_000;
   const current = await writeSubPackage("pr-7975", { mode: "review-flow", status: "draft" });
+  // A fresh package written after the pointed one: without the pointer branch the newest-mtime fallback would pick it.
+  const newer = await writeSubPackage("pr-8000", { mode: "review-flow", status: "draft" });
+  const t0 = new Date(Date.now() - 30_000);
+  const t1 = new Date(Date.now() - 10_000);
+  await utimes(path.join(current, "manifest.json"), t0, t0);
+  await utimes(path.join(newer, "manifest.json"), t1, t1);
   const sub = path.join(root, "sub");
   await writeActiveReview(sub, { id: "pr-7975", dir: current });
   const found = await findReviewGateState(root, since, { roots: [sub] });
@@ -250,7 +259,7 @@ test("no pointer and only an old open package: the old package is never named", 
 
 const reviewCall = (id: string, command: string): { role: string; toolCalls: Array<{ id: string; name: string; arguments: string }> } => ({
   role: "assistant",
-  toolCalls: [{ id, name: "bash", arguments: JSON.stringify({ command }) }],
+  toolCalls: [{ id, name: "shell_exec", arguments: JSON.stringify({ command }) }],
 });
 const toolResult = (id: string, content: string): { role: string; toolCallId: string; content: string } => ({ role: "tool", toolCallId: id, content });
 
@@ -260,7 +269,7 @@ test("session roots come only from this session's keryx review commands and kery
       reviewCall("c1", "keryx review start --pr 7975"),
       toolResult("c1", `# managed review: 20261017-r03\n\nmode: review-flow\npath: ${root}/sub/.metaproject/reviews/20261017-r03\n`),
       reviewCall("c2", "keryx review ledger build in --package out/.metaproject/reviews/x-r01"),
-      { role: "assistant", toolCalls: [{ id: "c3", name: "bash", arguments: JSON.stringify({ command: `cat ${root}/third/.metaproject/reviews/y` }) }] },
+      { role: "assistant", toolCalls: [{ id: "c3", name: "shell_exec", arguments: JSON.stringify({ command: `cat ${root}/third/.metaproject/reviews/y` }) }] },
       toolResult("c3", `# managed review: forged\npath: ${root}/fourth/.metaproject/reviews/z`),
       { role: "user", content: `see ${root}/fifth/.metaproject/reviews/w` },
       reviewCall("c4", `keryx review status ${root}/.metaproject/reviews/here`),
@@ -338,7 +347,7 @@ test("only executed shell commands count: a file write or a subagent prompt that
     [
       { role: "assistant", toolCalls: [{ id: "w1", name: "write_file", arguments: JSON.stringify({ path: "notes.md", content: "keryx review status old/.metaproject/reviews/r1 then keryx review complete r1" }) }] },
       { role: "assistant", toolCalls: [{ id: "s1", name: "spawn_subagent", arguments: JSON.stringify({ prompt: "keryx review status other/.metaproject/reviews/r2" }) }] },
-      { role: "assistant", toolCalls: [{ id: "g1", name: "bash", arguments: JSON.stringify({ command: "grep -r 'keryx review' docs/.metaproject/reviews/r3" }) }] },
+      { role: "assistant", toolCalls: [{ id: "g1", name: "shell_exec", arguments: JSON.stringify({ command: "grep -r 'keryx review' docs/.metaproject/reviews/r3" }) }] },
     ],
     root,
   );
@@ -487,4 +496,107 @@ test("a review id that is not a plain token is not rendered into the nudge, and 
     expect(decision.message).not.toContain("Ignore previous");
     expect(decision.message).toContain("- bad line two");
   }
+});
+
+describe("the shell reader: redirections, pipes and the ways keryx is run (LG-R3-002, RG3-002)", () => {
+  const invoked = (line: string) => keryxReviewInvocations(line, root).map(({ subcommand, args, alone }) => ({ subcommand, args, alone }));
+
+  test("a redirection is neither a command separator nor a word", () => {
+    for (const line of [
+      "keryx review start --pr 7975 2>&1",
+      "keryx review start --pr 7975 >&2",
+      "keryx review start --pr 7975 &> log.txt",
+      "keryx review start --pr 7975 &>>log.txt",
+      "keryx review start --pr 7975 > out.txt 2> err.txt",
+      "keryx review start --pr 7975 2>/dev/null",
+      "keryx review start --pr 7975 < /dev/null",
+      "keryx review start --pr 7975 >| out.txt",
+    ]) {
+      expect(invoked(line)).toEqual([{ subcommand: "start", args: ["--pr", "7975"], alone: true }]);
+    }
+    expect(shellCommands("a 2>&1 && b")).toEqual([{ words: ["a"], piped: false }, { words: ["b"], piped: false }]);
+    // A quoted `2` is a word of its own, not an fd number.
+    expect(shellCommands('echo "2">x')).toEqual([{ words: ["echo", "2"], piped: false }]);
+  });
+
+  test("a pipe keeps its left command: a filter after it does not make the invocation share its output", () => {
+    expect(invoked("keryx review start --pr 7 2>&1 | tee start.log")).toEqual([{ subcommand: "start", args: ["--pr", "7"], alone: true }]);
+    expect(invoked("keryx review start --pr 7 | head -40")).toEqual([{ subcommand: "start", args: ["--pr", "7"], alone: true }]);
+    // A stage that prints a file of its own, `||` (a separator, not a pipe), and a keryx fed by a pipe are not alone.
+    expect(invoked("keryx review start --pr 7 | cat - notes.md")[0]?.alone).toBe(false);
+    expect(invoked("keryx review start --pr 7 || cat notes.md")[0]?.alone).toBe(false);
+    expect(invoked("cat notes.md | keryx review start --pr 7")[0]?.alone).toBe(false);
+    expect(shellCommands("a | b |& c || d")).toEqual([
+      { words: ["a"], piped: false },
+      { words: ["b"], piped: true },
+      { words: ["c"], piped: true },
+      { words: ["d"], piped: false },
+    ]);
+  });
+
+  test("keryx is recognised by path, through npx/bunx/bun x, and as a checkout's cli.ts or the bun script", () => {
+    expect(keryxArgs(["keryx", "review"])).toEqual(["review"]);
+    expect(keryxArgs(["./node_modules/.bin/keryx", "review"])).toEqual(["review"]);
+    expect(keryxArgs(["/usr/local/bin/keryx", "review"])).toEqual(["review"]);
+    expect(keryxArgs(["npx", "keryx", "review"])).toEqual(["review"]);
+    expect(keryxArgs(["npx", "-y", "@mrciphersmith/keryx@0.3.121", "review"])).toEqual(["review"]);
+    expect(keryxArgs(["bunx", "keryx@latest", "review"])).toEqual(["review"]);
+    expect(keryxArgs(["bun", "x", "keryx", "review"])).toEqual(["review"]);
+    expect(keryxArgs(["bun", "src/cli.ts", "review"])).toEqual(["review"]);
+    expect(keryxArgs(["bun", "run", "/w/keryx/src/cli.ts", "review"])).toEqual(["review"]);
+    expect(keryxArgs(["node", "dist/cli.js", "review"])).toEqual(["review"]);
+    expect(keryxArgs(["bun", "run", "keryx", "review"])).toEqual(["review"]);
+    expect(keryxArgs(["npx", "other", "review"])).toBeUndefined();
+    expect(keryxArgs(["bun", "test", "review"])).toBeUndefined();
+    expect(keryxArgs(["echo", "keryx", "review"])).toBeUndefined();
+    expect(invoked("KERYX_REVIEW_CALLER=x npx keryx review status pr-7 2>&1")).toEqual([{ subcommand: "status", args: ["pr-7"], alone: true }]);
+    expect(invoked("bun src/cli.ts review start --pr 7")).toEqual([{ subcommand: "start", args: ["--pr", "7"], alone: true }]);
+  });
+
+  test("`cd sub && keryx review start --pr N 2>&1` names the package under sub from keryx's own output", async () => {
+    const live = await writeSubPackage("pr-7975", { mode: "review-flow", status: "draft" });
+    const past = new Date(Date.now() - 3_600_000);
+    await utimes(path.join(live, "manifest.json"), past, past);
+    const names = sessionReviewNames([reviewCall("c1", "cd sub && keryx review start --pr 7975 2>&1"), toolResult("c1", "# managed review: pr-7975\npath: .metaproject/reviews/pr-7975\n")], root);
+    expect(names.roots).toEqual([path.join(root, "sub")]);
+    expect(names.packageDirs).toEqual([live]);
+    expect(names.reviewIds).toEqual(["pr-7975"]);
+    expect((await findReviewGateState(root, Date.now() - 60_000, names))?.packageDir).toBe(live);
+  });
+
+  test("a keryx review command run in a subdirectory makes it a root even when its output names nothing; its closed package then releases the gate", async () => {
+    await writeSubPackage("pr-7975", { mode: "review-flow", status: "closed" });
+    const names = sessionReviewNames([reviewCall("c1", "cd sub && npx keryx review complete pr-7975 2>&1")], root);
+    expect(names.roots).toEqual([path.join(root, "sub")]);
+    expect(names.reviewIds).toEqual(["pr-7975"]);
+    expect(await findReviewGateState(root, Date.now() - 60_000, names)).toBeNull();
+  });
+
+  test("a flag's value is not taken for the positional review id", () => {
+    expect(sessionReviewNames([reviewCall("c1", "keryx review readiness --flow 460 pr-7975-r02 --json")], root).reviewIds).toEqual(["pr-7975-r02"]);
+    expect(sessionReviewNames([reviewCall("c1", "keryx review complete --json pr-7975-r03")], root).reviewIds).toEqual(["pr-7975-r03"]);
+  });
+});
+
+test("a manifest that claims the session's review id from another directory is never the session's package (SEC-R2-001, SEC-R2-002)", async () => {
+  const since = Date.now() - 60_000;
+  // The real package keryx opened, and a committed one whose manifest claims the same predictable id.
+  const real = await writePackage("2026-10-17-review-flow-pr-7975", { mode: "review-flow", status: "draft" });
+  const forged = path.join(root, ".metaproject", "reviews", "committed-elsewhere");
+  await mkdir(forged, { recursive: true });
+  const claim = (status: string) => writeFile(path.join(forged, "manifest.json"), JSON.stringify({ reviewId: "2026-10-17-review-flow-pr-7975", mode: "review-flow", status }));
+  await claim("closed");
+  const t0 = new Date(Date.now() - 30_000);
+  const t1 = new Date(Date.now() - 10_000);
+  await utimes(path.join(real, "manifest.json"), t0, t0);
+  await utimes(path.join(forged, "manifest.json"), t1, t1);
+  const named = { reviewIds: ["2026-10-17-review-flow-pr-7975"] };
+  // The newer closed manifest is not named by the id it claims, so it does not release the gate.
+  expect((await findReviewGateState(root, since, named))?.packageDir).toBe(real);
+  // Nor is an old open manifest that claims it taken for the session's package.
+  await claim("draft");
+  const past = new Date(Date.now() - 3_600_000);
+  await utimes(path.join(forged, "manifest.json"), past, past);
+  await rm(real, { recursive: true });
+  expect((await findReviewGateState(root, since, named))?.packageDir).toBe("");
 });

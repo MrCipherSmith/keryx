@@ -1,6 +1,7 @@
 // Why an approval prompt appears: one cause from a closed set, one line the operator reads
 // in the TUI modal, the readline shell and the Telegram relay (flow 426 AC5). Pure.
 
+import { SHELL_TOOL_NAMES } from "../lib/shell-tool-names";
 import type { ApprovalMeta } from "./agent";
 
 export const APPROVAL_CAUSES = [
@@ -51,8 +52,6 @@ export function approvalCauseLine(cause: ApprovalCause): string {
   return CAUSE_LINES[cause];
 }
 
-const SHELL_TOOLS: ReadonlySet<string> = new Set(["shell_exec", "shell"]);
-
 /** The cause the agent set on the meta, or one derived from the meta's flags for an approver that sets none. */
 export function causeOfMeta(tool: string, meta: ApprovalMeta | undefined): ApprovalCause {
   if (meta === undefined) return "mode-ask";
@@ -64,6 +63,6 @@ export function causeOfMeta(tool: string, meta: ApprovalMeta | undefined): Appro
     publishLease: meta.publishLease === true,
     hookAsk: meta.hookAsk === true,
     untrusted: meta.untrustedOrigin === true,
-    shell: SHELL_TOOLS.has(tool),
+    shell: SHELL_TOOL_NAMES.has(tool),
   });
 }

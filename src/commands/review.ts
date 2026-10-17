@@ -44,7 +44,7 @@ import { DEPTH_REQUESTS, ROUND_DEPTH_FILE, decideRoundDepth, packageChangedLines
 import { CONFIRM_PLAN_TOOL, estimatePackage, planConfirmationFor, planConfirmed, renderEstimate, writePlanConfirmation } from "../review/estimate";
 import { readJsonFileOr } from "../lib/json";
 import type { SliceManifest } from "../review/slice";
-import { fixSliceRoles } from "../review/round-split";
+import { manifestRosterRoles } from "../review/round-split";
 import { printPlanHelp, runPlan } from "./review-plan";
 import { printPlanEvalHelp, runPlanEval } from "./review-plan-eval";
 import { FIRST_FILES } from "../review/coverage-complete";
@@ -640,6 +640,27 @@ export interface ReviewCommandSeams {
   confirmPublish?: (body: string, ref: string, event: ReviewEvent) => Promise<boolean>;
   /** Test seam: the previous-round search of `start|attach` (sources, git, the pull request read). Default: the real ones. */
   priorRound?: Partial<Omit<PriorRoundDeps, "cwd" | "forced" | "excludeReviewId">>;
+  /** Test seam: a pull request's own base ref for `start|attach|ingest` of a PR target. Default: `gh pr view` (see ghPrBase). */
+  prBase?: (ref: string) => Promise<string | undefined>;
+}
+
+/** At most this long is spent asking gh for a pull request's base; a slower answer is no answer. */
+const PR_BASE_TIMEOUT_MS = 15_000;
+
+/**
+ * The pull request's own base as a ref git can resolve (`origin/<baseRefName>`), read with `gh pr view`; undefined when gh
+ * is missing, signed out or offline, or names something that is not a branch name. Never throws.
+ */
+async function ghPrBase(ref: string): Promise<string | undefined> {
+  if (ref.startsWith("-") || Bun.which("gh") === null) return undefined;
+  try {
+    const proc = Bun.spawn(["gh", "pr", "view", ref, "--json", "baseRefName", "--jq", ".baseRefName"], { stdin: "ignore", stdout: "pipe", stderr: "ignore", timeout: PR_BASE_TIMEOUT_MS, killSignal: "SIGKILL" });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    const name = stdout.trim();
+    return exitCode === 0 && /^[A-Za-z0-9._/-]{1,200}$/.test(name) && !name.startsWith("-") && !name.includes("..") ? `origin/${name}` : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function trackerPrLookup(ref: string): Promise<PrSnapshot | null> {
@@ -1041,11 +1062,17 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
   const cwd = process.cwd();
   const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
   // Recorded on the target (flow 460): the coverage gate's light recheck diffs against `target.base` before any default.
-  const base = optionValue(args, "--base")?.trim() || undefined;
+  // A pull request started without --base records its own base, read from GitHub, so a PR into another branch than main is
+  // measured against that branch (review F-004); beside a --base, the PR's base is kept as `prBase`, which the recheck
+  // also measures, so a --base the starter chose cannot narrow the diff (SEC-001).
+  const givenBase = optionValue(args, "--base")?.trim() || undefined;
+  const prBase = targetKind === "pr" ? await (createSeams.prBase ?? ghPrBase)(targetRef) : undefined;
+  const base = givenBase ?? prBase;
+  const keptPrBase = givenBase !== undefined && prBase !== undefined && prBase !== givenBase ? prBase : undefined;
   const input: ManagedReviewIngestInput = {
     cwd,
     mode,
-    target: { kind: targetKind, ref: targetRef, ...(base === undefined ? {} : { base }), ...(head === undefined ? {} : { head }) },
+    target: { kind: targetKind, ref: targetRef, ...(base === undefined ? {} : { base }), ...(keptPrBase === undefined ? {} : { prBase: keptPrBase }), ...(head === undefined ? {} : { head }) },
     flowId: optionValue(args, "--flow"),
     reviewId: optionValue(args, "--review-id"),
     ...(args.includes(AUTOMATIC_REVIEW_FLAG) ? { automatic: true } : {}),
@@ -3339,7 +3366,7 @@ async function runRequired(args: string[]): Promise<void> {
   });
   // A delta round's fix slices are read by the reviewers that authored the findings they answer (flow 458): they join the set.
   const sliceManifest = packageDir === undefined ? undefined : await readJsonFileOr<SliceManifest | undefined>(path.join(packageDir, "slices", "manifest.json"), undefined);
-  const fixRoles = sliceManifest !== undefined && Array.isArray(sliceManifest.slices) ? fixSliceRoles(sliceManifest).filter((role) => !baseSet.required.includes(role)) : [];
+  const fixRoles = sliceManifest !== undefined && Array.isArray(sliceManifest.slices) ? manifestRosterRoles(sliceManifest).filter((role) => !baseSet.required.includes(role)) : [];
   const set = fixRoles.length === 0 ? baseSet : { ...baseSet, required: [...baseSet.required, ...fixRoles].sort() };
   if (packageDir !== undefined) {
     // The one write: `ledger build` reads the round's depth back from the package.
@@ -3652,14 +3679,15 @@ async function readPremiseFile(source: string): Promise<PremiseSource[]> {
   }
   // The bare object, or a report / judge reply holding one fenced `keryx:premises` block.
   const parsed: unknown = parseEmbeddedPremises(raw, `--premises ${source}`);
-  // Validates every result; throws on anything that is not one result or a list of results.
+  // Validates every result; throws on anything that is not one result or a list of results, so the filter drops nothing.
   parsePremiseClaimSets(parsed);
-  return isPremiseSourceList(parsed) ? [...parsed] : [parsed as PremiseSource];
+  const results: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+  return results.filter(isPremiseSource);
 }
 
-/** A list of premise results (what parsePremiseClaimSets reads as several files), not one result. */
-function isPremiseSourceList(value: unknown): value is readonly PremiseSource[] {
-  return Array.isArray(value);
+/** A premise result: an object with a `premises` list (parsePremiseClaimSets has checked the rest). */
+function isPremiseSource(value: unknown): value is PremiseSource {
+  return typeof value === "object" && value !== null && "premises" in value && Array.isArray(value.premises);
 }
 
 /**

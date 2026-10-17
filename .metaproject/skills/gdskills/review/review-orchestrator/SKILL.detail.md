@@ -696,7 +696,7 @@ on lines no test could reach.
 | `mode` | `range` | Review |
 |---|---|---|
 | `first` | merge-base..head | A first round. `sourcesTried` records what was searched when nothing was found. |
-| `delta` | previous head..head | `fix` slices (a hunk that answers a prior finding): `review-logic`, `review-regression`, the authors of the attached findings and the verifier, each with its `prior_findings`. `new` slices: round 1, with the roles the slice names. Unchanged code: not re-reviewed. `carried` findings keep their dispositions. |
+| `delta` | previous head..head | `fix` slices (a hunk that answers a prior finding): `review-logic`, `review-regression`, the authors of the attached findings, `review-security-code` when one of them is a security finding, the roles the fix lines themselves route by content (e.g. `review-security-code` for a fix that spawns a process), and the verifier, each with its `prior_findings`. `new` slices: round 1, with the roles the slice names. Unchanged code: not re-reviewed. `carried` findings keep their dispositions. |
 | `fallback-first` | merge-base..head | The previous head is not an ancestor (force-push, rebase). Review the whole range with the prior findings attached. |
 
 A fix hunk still has a radius: enumerate what names the thing it changed (`review_context.scope.files`), as in any fix round. The attached findings are the contract: each leaves the round with a disposition, below.

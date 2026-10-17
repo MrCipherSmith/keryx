@@ -607,9 +607,21 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     const own = input.canonical.filter((f) => holdsKey(f, oid));
     return own.length > 0 ? own : input.canonical.filter((f) => mergedFromHas(f, oid));
   };
-  /** The canonical findings a raw finding resolves to: the same reviewer and id first, else by its obligation id. */
+  // A reviewer's display ids restart in every wave (review-logic-w3:F-001 and review-logic-w4:F-001 are two findings), so
+  // the reviewer plus a bare id names one raw finding only when exactly one raw file of that reviewer carries the id.
+  const carrierKey = (reviewer: string, id: string): string => `${reviewer}\u0000${id}`;
+  const carriers = new Map<string, number>();
+  for (const raw of attributed) {
+    const ids = new Set<string>();
+    for (const finding of Array.isArray(raw.result!.findings) ? raw.result!.findings! : []) if (finding && typeof finding.id === "string") ids.add(finding.id);
+    for (const id of ids) {
+      const key = carrierKey(raw.result!.reviewer!, id);
+      carriers.set(key, (carriers.get(key) ?? 0) + 1);
+    }
+  }
+  /** The canonical findings a raw finding resolves to: the same reviewer and id first (when no other wave reuses the id), else by its obligation id. */
   const resolveCanonical = (reviewer: string, fid: string, oid: string) => {
-    const byReviewer = canonicalByReviewer(reviewer, fid);
+    const byReviewer = carriers.get(carrierKey(reviewer, fid)) === 1 ? canonicalByReviewer(reviewer, fid) : [];
     return byReviewer.length === 1 ? byReviewer : canonicalByObligation(oid);
   };
   const keyOf = (f: Record<string, unknown>): string | undefined => (text(f.global_id) ? f.global_id : text(f.id) ? f.id : undefined);
@@ -688,7 +700,7 @@ function runUsage(mine: readonly RawFile[]): RunUsage | "unknown" {
   const totals = usageTotals(usages);
   if (totals.known === 0) return "unknown";
   const model = [...usages].reverse().find((usage) => usage?.model !== undefined)?.model;
-  return { tokens_in: totals.tokens_in, tokens_out: totals.tokens_out, ...(model === undefined ? {} : { model }), dispatches: totals.dispatches, unknown: totals.unknown, ...(totals.partial === undefined ? {} : { partial: totals.partial }) };
+  return { tokens_in: totals.tokens_in, tokens_out: totals.tokens_out, ...(model === undefined ? {} : { model }), dispatches: totals.dispatches, unknown: totals.unknown, ...(totals.partial === undefined ? {} : { partial: totals.partial }), ...(totals.reported === undefined ? {} : { reported: totals.reported }) };
 }
 
 /** A routable role that slice routing gave no slice, in a routed manifest; the regression reviewer always runs (scope B). */

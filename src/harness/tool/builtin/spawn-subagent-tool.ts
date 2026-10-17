@@ -23,7 +23,7 @@ import { createMetaprojectAdapter } from "../metaproject-adapter";
 import { RemainingBudgetLedger } from "../../child/ledger";
 import { DEFAULT_MAX_PASSES } from "../../../review/chunks-estimate";
 import { describeReviewWave, resolveReviewWave } from "../../../review/wave-key";
-import { type DispatchUsage, NO_TEXT_PLACEHOLDER, formatOtherUsageLine, formatUsageLine, isEmptyRecord, splitUsage } from "../../../review/dispatch-usage";
+import { type DispatchUsage, NO_TEXT_PLACEHOLDER, formatOtherUsageLine, formatRecordLine, isEmptyBody, splitUsage } from "../../../review/dispatch-usage";
 import { spawnSubagent, foldChildSummary } from "../../child/orchestrate";
 import type { SubagentContext } from "../../child/orchestrate";
 import type { HookRuntime } from "../../hooks";
@@ -327,46 +327,76 @@ export type DispatchRecord = {
   usage?: DispatchUsage | undefined;
 };
 
-/** Where a dispatch record went: `kept` when a complete earlier result stayed and only this dispatch's usage was added. */
-export type DispatchRecordSave = { kept: boolean } | { error: string };
+/**
+ * Where a dispatch record went. `kept` names the earlier record that stayed the file's reply when only this dispatch's
+ * usage was added: a `complete` result, or a `partial` one kept over a dispatch that produced no text. `replaced` names a
+ * `partial` earlier record this dispatch's text replaced.
+ */
+export type DispatchRecordSave = { kept?: "complete" | "partial"; replaced?: "partial" } | { error: string };
+
+/** The save in flight per absolute path: a save reads, then writes, the file, so two saves to one path run one after the other. */
+const recordSaves = new Map<string, Promise<DispatchRecordSave>>();
 
 /**
  * Save one dispatch's record at `save_result_to` (flow 460, H). Every exit of a child goes through here: a completed
- * reply, a child stopped or timed out with partial text, and one that ended with no text (saved as NO_TEXT_PLACEHOLDER,
- * which every reader treats as an empty reply).
+ * reply, a child stopped, timed out, refused for load or failed with partial text, and one that ended with no text
+ * (saved as NO_TEXT_PLACEHOLDER, which every reader treats as an empty reply).
  * - A file already at the path is another dispatch of the same slice. Its usage is never lost: it is carried into the
  *   new record as a `KERYX_USAGE_OTHER` line, so the round's spend counts every paid dispatch.
- * - A final record replaces what is there. A non-final one (partial or no text) replaces only an empty record, so an
- *   empty placeholder never blocks a retry's text; a complete earlier result is kept (security review minor), with this
- *   dispatch's usage added to it and its modification time left as it was.
+ * - A final record replaces what is there. A non-final one is saved with its line marked `incomplete`, and whether the
+ *   earlier record is a complete result is read from its content: a record with a reply and no `incomplete` mark is
+ *   complete and is kept (security review minor), with this dispatch's usage added and its modification time left as it
+ *   was. A later partial with text replaces an earlier partial (the retry ran longer); a dispatch with no text never
+ *   replaces earlier text.
+ * - Saves to one path are serialised in this process (read-modify-write under a per-path chain), so two children saving
+ *   to one path in one turn never write from the same stale read.
  * Usage lines inside the child's own text are dropped, so only the harness states usage.
  */
-export async function saveDispatchRecord(abs: string, record: DispatchRecord): Promise<DispatchRecordSave> {
-  const existing = await readFile(abs, "utf8").catch(() => undefined);
-  const prior = existing === undefined ? undefined : splitUsage(existing);
-  const ownLine = record.usage === undefined ? [] : [formatUsageLine(record.usage)];
-  if (existing !== undefined && prior !== undefined && !record.final && !isEmptyRecord(existing)) {
-    // The complete earlier result stays the file's reply, under its own usage line; this dispatch joins the others.
-    const others = [...(prior.others ?? []), record.usage].map(formatOtherUsageLine);
-    const before = await stat(abs).catch(() => undefined);
-    const error = await writeRecordFile(abs, [prior.body, ...others, ...(prior.usage === undefined ? [] : [formatUsageLine(prior.usage)])].join("\n"));
-    if (error !== undefined) return { error };
-    if (before !== undefined) await utimes(abs, before.atime, before.mtime).catch(() => undefined);
-    return { kept: true };
-  }
-  // A blank file with no usage line records no dispatch (nothing ran into it), so it adds no `unknown` one.
-  const priorRan = prior !== undefined && (prior.body.trim() !== "" || prior.usage !== undefined || prior.others !== undefined);
-  const others = priorRan ? [...(prior.others ?? []), prior.usage].map(formatOtherUsageLine) : [];
-  const body = splitUsage(record.text).body.trim();
-  const error = await writeRecordFile(abs, [body === "" ? NO_TEXT_PLACEHOLDER : body, ...others, ...ownLine].join("\n"));
-  return error === undefined ? { kept: false } : { error };
+export function saveDispatchRecord(abs: string, record: DispatchRecord): Promise<DispatchRecordSave> {
+  const save = (recordSaves.get(abs) ?? Promise.resolve<DispatchRecordSave>({})).then(
+    () => saveDispatchRecordNow(abs, record),
+    () => saveDispatchRecordNow(abs, record),
+  );
+  recordSaves.set(abs, save);
+  const release = (): void => {
+    if (recordSaves.get(abs) === save) recordSaves.delete(abs);
+  };
+  void save.then(release, release);
+  return save;
 }
 
-/** The line the parent reads about a saved record: where `what` went, or that a complete earlier result was kept. */
-function recordSaveNote(saved: DispatchRecordSave | undefined, what: string, savePath: string, options: { quietWhenSaved?: boolean } = {}): string {
+async function saveDispatchRecordNow(abs: string, record: DispatchRecord): Promise<DispatchRecordSave> {
+  const existing = await readFile(abs, "utf8").catch(() => undefined);
+  const prior = existing === undefined ? undefined : splitUsage(existing);
+  const body = splitUsage(record.text).body.trim();
+  const ownLine = formatRecordLine(record.usage, { incomplete: !record.final });
+  const priorHasReply = prior !== undefined && !isEmptyBody(prior.body);
+  const priorComplete = priorHasReply && prior.incomplete !== true;
+  if (prior !== undefined && priorHasReply && !record.final && (priorComplete || isEmptyBody(body))) {
+    // The earlier reply stays the file's, under its own line; this dispatch joins the others.
+    const others = [...(prior.others ?? []), record.usage].map(formatOtherUsageLine);
+    const priorLine = formatRecordLine(prior.usage, { incomplete: !priorComplete });
+    const before = await stat(abs).catch(() => undefined);
+    const error = await writeRecordFile(abs, [prior.body, ...others, ...(priorLine === undefined ? [] : [priorLine])].join("\n"));
+    if (error !== undefined) return { error };
+    if (before !== undefined) await utimes(abs, before.atime, before.mtime).catch(() => undefined);
+    return { kept: priorComplete ? "complete" : "partial" };
+  }
+  // A blank file with no usage line records no dispatch (nothing ran into it), so it adds no `unknown` one.
+  const priorRan = prior !== undefined && (prior.body.trim() !== "" || prior.usage !== undefined || prior.others !== undefined || prior.incomplete === true);
+  const others = priorRan ? [...(prior.others ?? []), prior.usage].map(formatOtherUsageLine) : [];
+  const error = await writeRecordFile(abs, [body === "" ? NO_TEXT_PLACEHOLDER : body, ...others, ...(ownLine === undefined ? [] : [ownLine])].join("\n"));
+  if (error !== undefined) return { error };
+  return priorHasReply && !priorComplete ? { replaced: "partial" } : {};
+}
+
+/** The line the parent reads about a saved record: where `what` went, or which earlier record was kept or replaced. */
+export function recordSaveNote(saved: DispatchRecordSave | undefined, what: string, savePath: string, options: { quietWhenSaved?: boolean } = {}): string {
   if (saved === undefined) return "";
   if ("error" in saved) return `\n[${what} could NOT be saved to ${savePath}: ${saved.error}]`;
-  if (saved.kept) return `\n[the complete result an earlier dispatch saved to ${savePath} was kept; this dispatch's ${what} was not written over it, only its usage was added]`;
+  if (saved.kept === "complete") return `\n[the complete result an earlier dispatch saved to ${savePath} was kept; this dispatch's ${what} was not written over it, only its usage was added]`;
+  if (saved.kept === "partial") return `\n[the partial result an earlier dispatch saved to ${savePath} was kept, because this dispatch produced no text; only its usage was added]`;
+  if (saved.replaced === "partial") return `\n[${what} saved to ${savePath}, replacing the partial result an earlier dispatch left there (its usage is kept)]`;
   return options.quietWhenSaved === true ? "" : `\n[${what} saved to ${savePath}]`;
 }
 
@@ -2338,9 +2368,10 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // "Completed"; its first line is the harness signal the review orchestrator halves its wave on.
         if (turnResult?.rateLimited !== undefined) {
           await failChild("rate-limited", "Error", { withModel: true });
-          // A refused child left no result, but the requests before the refusal were paid for: record their usage (as an
-          // empty record) when the provider reported it, so the requeued dispatch adds to it instead of hiding it.
-          const refusedSaved = childUsage.known ? await saveRecord("", { final: false }) : undefined;
+          // A refused child left no result, but it was dispatched and the requests before the refusal were paid for: it
+          // leaves an empty record with its usage (unknown when the provider reported none), so the requeued dispatch adds
+          // to it instead of hiding it, and the round counts it.
+          const refusedSaved = await saveRecord("", { final: false });
           // Earlier rounds may have produced text before the refusal: hand it back (quarantined, bounded) so the
           // parent keeps that context when it requeues the task.
           const earlier = producedNoText ? undefined : boundSummary(folded.text);
@@ -2440,7 +2471,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         releaseBudget(); // a failed child must not hold the parent's budget either
         const msg = cause instanceof Error ? cause.message : String(cause);
         await failChild("error", "Error");
-        return { status: "Error", output: `subagent ${label} failed: ${msg}`, isError: true };
+        // The failed dispatch still ran: it leaves what it wrote and its usage so far (unknown when none was reported), so
+        // the round counts it; its text is a partial, never written over a complete result.
+        const failedSaved = await saveRecord(assistant.trim(), { final: false }).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
+        const failedSaveNote = recordSaveNote(failedSaved, "partial result", String(input.save_result_to), { quietWhenSaved: true });
+        return { status: "Error", output: `subagent ${label} failed: ${msg}${failedSaveNote}`, isError: true };
       }
       } catch (cause) {
         emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "setup-error", task });

@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { asRecord, dispatchRunRecords } from "./record";
 
 export type ComparisonClass = "A" | "B" | "C" | "D" | "E";
 
@@ -157,12 +158,12 @@ export async function loadPackageEvidence(packageDir: string, inputDir?: string)
   }));
   const canonicalIds = new Set(findings.map((f) => f.id));
 
-  const research = (await readJson(path.join(packageDir, "research.json"))) as Record<string, unknown> | undefined;
-  const dispatch = research?.dispatch as Record<string, unknown> | undefined;
+  const research = asRecord(await readJson(path.join(packageDir, "research.json")));
+  const dispatch = asRecord(research?.dispatch);
   const rows = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.filter((r): r is Record<string, unknown> => r !== null && typeof r === "object") : []);
   const selected: unknown[] = Array.isArray(dispatch?.selected) ? dispatch.selected : [];
   const ran = new Set<string>(selected.filter((s): s is string => typeof s === "string"));
-  for (const run of rows(dispatch?.runs)) {
+  for (const run of dispatchRunRecords(dispatch)) {
     if (typeof run.reviewer === "string" && run.status !== "not-run") ran.add(run.reviewer);
   }
 

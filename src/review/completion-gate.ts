@@ -9,6 +9,8 @@ import { createHash } from "node:crypto";
 import { resolveActiveReview } from "./active-review";
 import { reviewCompletionBlockers, reviewsRoot } from "./managed";
 import { readManifestHead } from "./package-location";
+import { SHELL_TOOL_NAMES } from "../lib/shell-tool-names";
+import { mapBounded } from "../lib/map-bounded";
 
 export const MAX_REVIEW_GATE_CONTINUES = 20;
 export const MAX_REVIEW_GATE_STALLS = 3;
@@ -21,6 +23,33 @@ export type OpenManagedReview = {
   signature: string;
 };
 
+/** At most this many file hashes are remembered between stops; the oldest goes first. */
+const MAX_HASHED_FILES = 4096;
+/**
+ * A remembered hash is reused only for a file whose timestamps were already this much older than the moment it was
+ * hashed. Inside a filesystem's timestamp granularity a same-size rewrite can leave size and times unchanged (git's
+ * "racily clean" entries); such a file is hashed again on every stop.
+ */
+const RACY_WINDOW_MS = 2_000;
+/** File -> its stat key and content hash, so a stop re-reads only the files that changed since the last one. */
+const fileHashes = new Map<string, { key: string; hash: string }>();
+
+async function fileHash(file: string): Promise<string> {
+  const info = await stat(file).catch(() => undefined);
+  if (info === undefined) return "unreadable";
+  const key = `${info.size}:${info.mtimeMs}:${info.ctimeMs}:${info.ino}`;
+  const hit = fileHashes.get(file);
+  if (hit !== undefined && hit.key === key) return hit.hash;
+  const hash = await readFile(file).then((body) => createHash("sha256").update(body).digest("hex")).catch(() => "unreadable");
+  fileHashes.delete(file);
+  if (hash !== "unreadable" && Date.now() - Math.max(info.mtimeMs, info.ctimeMs) > RACY_WINDOW_MS) {
+    fileHashes.set(file, { key, hash });
+    if (fileHashes.size > MAX_HASHED_FILES) fileHashes.delete(fileHashes.keys().next().value as string);
+  }
+  return hash;
+}
+
+/** A signature of every file under `dir` (by content; a file unchanged since the last stop is not read again). */
 async function dirSignature(dir: string): Promise<string> {
   try {
     const entries = await readdir(dir, { withFileTypes: true });
@@ -28,9 +57,7 @@ async function dirSignature(dir: string): Promise<string> {
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
       const file = path.join(dir, entry.name);
       if (entry.isSymbolicLink()) continue;
-      const content = entry.isDirectory()
-        ? await dirSignature(file)
-        : await readFile(file).then((body) => createHash("sha256").update(body).digest("hex")).catch(() => "unreadable");
+      const content = entry.isDirectory() ? await dirSignature(file) : await fileHash(file);
       parts.push(`${entry.name}:${content}`);
     }
     return parts.join(",");
@@ -114,39 +141,62 @@ type HistoryMessage = {
   toolCallId?: string | undefined;
 };
 
-/** The tools whose `command` argument is a shell line the session executed. A file write that mentions `keryx review` is not one. */
-const SHELL_TOOLS: ReadonlySet<string> = new Set(["shell_exec", "bash", "shell"]);
 /** The subcommands that print the package they opened (`# managed review: <id>` and `path: <dir>`). */
 const OPENING_SUBCOMMANDS: ReadonlySet<string> = new Set(["start", "attach", "ingest"]);
 /** The subcommands whose first positional argument is a review id or package path. */
 const PACKAGE_ARG_SUBCOMMANDS: ReadonlySet<string> = new Set(["status", "readiness", "complete", "attach", "publish", "verdict", "show"]);
+/** Flags that take no value: the word after one can still be the positional id. Any other `--flag` (no `=`) takes the next word. */
+const VALUELESS_FLAGS: ReadonlySet<string> = new Set(["--json", "--yes", "--dry-run", "--force", "--partial", "--waive-coverage", "--help"]);
 /** The lines `keryx review start|attach|ingest` prints about the package it opened. */
 const OWN_OUTPUT_LINE = /^(# managed review|path): (\S.*)$/;
+/** The npm package keryx runs from through `npx`/`bunx`/`pnpx`/`bun x`, with an optional `@version`. */
+const KERYX_PACKAGE = /^(?:@mrciphersmith\/)?keryx(?:@[^\s/]+)?$/;
+/**
+ * Programs a pipeline's later stage may run while what the tool printed stays the left command's output: they pass on,
+ * cut or copy what they read. `cat` and `grep` count only when they name no file of their own (a file is not keryx's output).
+ */
+const PIPE_FILTERS: ReadonlySet<string> = new Set(["tee", "head", "tail", "cat", "grep", "less", "more"]);
 
 /** One `keryx review` invocation of a shell line: the directory it ran in, its words after `review`, and whether it ran alone. */
 export type ReviewInvocation = { cwd: string; subcommand: string; args: string[]; alone: boolean };
 
+/** One command of a shell line: its words, and whether it reads a pipe (a later stage of a pipeline). */
+export type ShellCommand = { words: string[]; piped: boolean };
+
 /**
- * The shell line split into commands (at `;`, `&`, `|`, newlines outside quotes) and each command into words (quotes
- * removed, a backslash escaping the next character outside single quotes). A small reader, not a shell: it is enough to
- * tell which words a command starts with.
+ * The shell line split into commands, each into words (quotes removed, a backslash escaping the next character outside
+ * single quotes). A command ends at `;`, `&&`, `||`, a background `&`, a newline, or a pipe `|`/`|&` (the command after
+ * a pipe is `piped`). A redirection is neither a separator nor a word: `>`, `>>`, `<`, `<<`, `<<<`, `>|`, `<>`, `>&n`,
+ * `<&n`, `&>`, `&>>`, and an fd number written right before one (`2>&1`), are dropped with their target. A small reader,
+ * not a shell: it is enough to tell which program a command runs and with which words.
  */
-function shellCommands(line: string): string[][] {
-  const commands: string[][] = [];
+export function shellCommands(line: string): ShellCommand[] {
+  const commands: ShellCommand[] = [];
   let words: string[] = [];
   let word = "";
   let inWord = false;
+  let quotedWord = false;
   let quote: "'" | '"' | undefined;
+  let piped = false;
+  /** The next word is a redirection's target: dropped. */
+  let dropNext = false;
   const endWord = (): void => {
-    if (inWord) words.push(word);
+    if (inWord) {
+      if (dropNext) dropNext = false;
+      else words.push(word);
+    }
     word = "";
     inWord = false;
+    quotedWord = false;
   };
-  const endCommand = (): void => {
+  const endCommand = (nextPiped: boolean): void => {
     endWord();
-    if (words.length > 0) commands.push(words);
+    dropNext = false;
+    if (words.length > 0) commands.push({ words, piped });
     words = [];
+    piped = nextPiped;
   };
+  const nextIs = (at: number, chars: string): boolean => at + 1 < line.length && chars.includes(line[at + 1]!);
   for (let at = 0; at < line.length; at += 1) {
     const ch = line[at]!;
     if (quote !== undefined) {
@@ -159,51 +209,131 @@ function shellCommands(line: string): string[][] {
     if (ch === "'" || ch === '"') {
       quote = ch;
       inWord = true;
+      quotedWord = true;
     } else if (ch === "\\" && at + 1 < line.length) {
       word += line[++at];
       inWord = true;
-    } else if (ch === ";" || ch === "&" || ch === "|" || ch === "\n") endCommand();
-    else if (/\s/.test(ch)) endWord();
+    } else if (ch === ">" || ch === "<" || (ch === "&" && nextIs(at, ">"))) {
+      // The fd number of `2>` belongs to the redirection, not to the command.
+      if (inWord && !quotedWord && /^\d+$/.test(word)) {
+        word = "";
+        inWord = false;
+      } else endWord();
+      if (ch === "&") {
+        at += 1;
+        if (nextIs(at, ">")) at += 1;
+      } else if (ch === ">") {
+        if (nextIs(at, ">&|")) at += 1;
+      } else if (nextIs(at, "<")) {
+        at += 1;
+        if (nextIs(at, "<")) at += 1;
+      } else if (nextIs(at, "&>")) at += 1;
+      dropNext = true;
+    } else if (ch === "&" || ch === ";" || ch === "\n") {
+      if (ch === "&" && nextIs(at, "&")) at += 1;
+      endCommand(false);
+    } else if (ch === "|") {
+      if (nextIs(at, "|")) {
+        at += 1;
+        endCommand(false);
+      } else {
+        if (nextIs(at, "&")) at += 1;
+        endCommand(true);
+      }
+    } else if (/\s/.test(ch)) endWord();
     else {
       word += ch;
       inWord = true;
     }
   }
-  endCommand();
+  endCommand(false);
   return commands;
+}
+
+/** The last path component of a program or script word, for a `/` or a `\` separated path. */
+const baseName = (word: string): string => path.posix.basename(word.replace(/\\/g, "/"));
+
+/**
+ * The words after the keryx program when `command` runs keryx, else undefined: `keryx` by any path; `npx`, `bunx`,
+ * `pnpx` or `bun x` of the `keryx` / `@mrciphersmith/keryx` package (any version); `bun`/`node` [`run`] of a `cli.ts` or
+ * `cli.js` (a checkout's entry point, `bun src/cli.ts`); `bun run keryx` (the package script).
+ */
+export function keryxArgs(command: readonly string[]): string[] | undefined {
+  const [program, ...rest] = command;
+  if (program === undefined) return undefined;
+  const name = baseName(program);
+  if (name === "keryx") return rest;
+  const bunX = name === "bun" && rest[0] === "x";
+  if (name === "npx" || name === "bunx" || name === "pnpx" || bunX) {
+    const words = bunX ? rest.slice(1) : rest;
+    let at = 0;
+    for (; at < words.length && words[at]!.startsWith("-"); at += 1) {
+      if (words[at] === "--") {
+        at += 1;
+        break;
+      }
+      if (words[at] === "-p" || words[at] === "--package") at += 1;
+    }
+    return at < words.length && KERYX_PACKAGE.test(words[at]!) ? words.slice(at + 1) : undefined;
+  }
+  if (name !== "bun" && name !== "node") return undefined;
+  const run = rest[0] === "run";
+  let at = run ? 1 : 0;
+  while (at < rest.length && rest[at]!.startsWith("-")) at += 1;
+  const script = rest[at];
+  if (script === undefined) return undefined;
+  const scriptName = baseName(script);
+  return scriptName === "cli.ts" || scriptName === "cli.js" || (name === "bun" && run && script === "keryx") ? rest.slice(at + 1) : undefined;
+}
+
+/** True for a pipeline stage that only passes the left command's output on (see {@link PIPE_FILTERS}). */
+function isPipeFilter(command: readonly string[]): boolean {
+  const program = command[0] === undefined ? "" : baseName(command[0]);
+  if (!PIPE_FILTERS.has(program)) return false;
+  const operands = command.slice(1).filter((word) => !word.startsWith("-"));
+  if (program === "cat") return operands.length === 0;
+  if (program === "grep") return operands.length <= 1;
+  return true;
 }
 
 /**
  * The `keryx review` invocations of one executed shell line, each with the directory it ran in: the session's cwd, moved
  * by a `cd <dir>` command before it (`cd sub && keryx review start …`). `alone` is true when the line holds nothing but
- * `cd` commands and this one invocation, so what the tool printed is keryx's own output.
+ * `cd` commands, this one invocation and pipe filters reading its output (`| tee log`), so what the tool printed is
+ * keryx's own output. A redirection (`2>&1`) is neither a command nor a word (see {@link shellCommands}); keryx is
+ * recognised however it is run (see {@link keryxArgs}).
  */
 export function keryxReviewInvocations(line: string, cwd: string): ReviewInvocation[] {
-  const commands = shellCommands(line);
   const found: ReviewInvocation[] = [];
   let dir = cwd;
   let others = 0;
-  for (const words of commands) {
+  let pipedKeryx = false;
+  for (const { words, piped } of shellCommands(line)) {
     let start = 0;
     while (start < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[start]!)) start += 1;
     const command = words.slice(start);
-    if (command[0] === "cd" && command.length === 2) {
+    if (!piped && command[0] === "cd" && command.length === 2) {
       dir = path.resolve(dir, command[1]!);
       continue;
     }
-    if (command.length >= 2 && path.basename(command[0]!) === "keryx" && command[1] === "review") {
-      found.push({ cwd: dir, subcommand: command[2] ?? "", args: command.slice(3), alone: false });
+    const keryx = keryxArgs(command);
+    if (keryx !== undefined && keryx[0] === "review") {
+      found.push({ cwd: dir, subcommand: keryx[1] ?? "", args: keryx.slice(2), alone: false });
+      // A keryx fed by a pipe ran, but what the tool printed may still be the left command's.
+      if (piped) pipedKeryx = true;
       continue;
     }
+    // A pipeline keeps its left command: a filter reading that command's output is not another command.
+    if (piped && isPipeFilter(command)) continue;
     others += 1;
   }
-  const alone = found.length === 1 && others === 0;
+  const alone = found.length === 1 && others === 0 && !pipedKeryx;
   return found.map((invocation) => ({ ...invocation, alone }));
 }
 
 /** The shell line of a tool call, when it is a shell tool's (`{ command }`); undefined for any other tool. */
 function executedCommand(call: { name?: string | undefined; arguments: string }): string | undefined {
-  if (call.name === undefined || !SHELL_TOOLS.has(call.name)) return undefined;
+  if (call.name === undefined || !SHELL_TOOL_NAMES.has(call.name)) return undefined;
   try {
     const parsed = JSON.parse(call.arguments) as { command?: unknown };
     return typeof parsed?.command === "string" ? parsed.command : undefined;
@@ -212,10 +342,15 @@ function executedCommand(call: { name?: string | undefined; arguments: string })
   }
 }
 
-/** The review ids an invocation names at an explicit argument position. */
+/**
+ * The review ids an invocation names at an explicit argument position: the value of `--review-id`/`--package`, and for a
+ * subcommand that takes a package, its first positional word. A word right after another `--flag` (no `=`) is that flag's
+ * value, not the positional (`readiness --flow 460 <id>` names `<id>`, never `460`), unless the flag takes none.
+ */
 function explicitReviewIds(invocation: ReviewInvocation): string[] {
   const ids: string[] = [];
   const args = invocation.args;
+  let positional: string | undefined;
   for (let at = 0; at < args.length; at += 1) {
     const arg = args[at]!;
     const flag = /^--(review-id|package)(?:=(.*))?$/.exec(arg);
@@ -223,9 +358,10 @@ function explicitReviewIds(invocation: ReviewInvocation): string[] {
       const value = flag[2] ?? args[at + 1];
       if (flag[2] === undefined) at += 1;
       if (value !== undefined && SAFE_REVIEW_ID.test(value)) ids.push(value);
-    }
+    } else if (arg.startsWith("-")) {
+      if (arg.startsWith("--") && !arg.includes("=") && !VALUELESS_FLAGS.has(arg)) at += 1;
+    } else positional ??= arg;
   }
-  const positional = args.find((arg) => !arg.startsWith("-"));
   if (PACKAGE_ARG_SUBCOMMANDS.has(invocation.subcommand) && positional !== undefined && SAFE_REVIEW_ID.test(positional)) ids.push(positional);
   return ids;
 }
@@ -288,8 +424,12 @@ export class SessionReviewTracker {
       if (call.name === "skill_load" && call.arguments.includes("review-orchestrator")) this.runSeen = true;
       const command = executedCommand(call);
       if (command === undefined || !command.includes("review")) continue;
-      for (const invocation of keryxReviewInvocations(command, path.resolve(this.cwd))) {
+      const cwd = path.resolve(this.cwd);
+      for (const invocation of keryxReviewInvocations(command, cwd)) {
         this.runSeen = true;
+        // A `keryx review` command run in another directory (`cd sub && …`) works on that directory's project, whether or
+        // not its output was read: it is a root to scan.
+        if (invocation.cwd !== cwd && inside(cwd, invocation.cwd)) remember(this.roots, invocation.cwd, MAX_SESSION_REVIEW_ROOTS);
         for (const arg of invocation.args) this.namePaths(arg, invocation.cwd);
         for (const id of explicitReviewIds(invocation)) remember(this.reviewIds, id, MAX_SESSION_REVIEW_IDS);
         if (call.id !== undefined && invocation.alone && OPENING_SUBCOMMANDS.has(invocation.subcommand)) {
@@ -341,15 +481,23 @@ export function sessionReviewNames(history: ReadonlyArray<HistoryMessage>, cwd: 
   return tracker.update(history);
 }
 
-/** True when this session named the package: by its path, or by its review id (an explicit argument or keryx's own output). */
-function namedBySession(named: Partial<SessionReviewNames>, dir: string, ids: ReadonlyArray<string | undefined>): boolean {
+/**
+ * True when this session named the package: by its path, or by its review id (an explicit argument of an executed
+ * `keryx review` command, or keryx's own output to one). The id is the package's directory name, the name keryx resolves
+ * an id to — never the `reviewId` its manifest claims: review ids are predictable (date, mode, PR slug), so a manifest a
+ * pull request commits under another directory could claim the id this session's `review start` prints (SEC-R2-001).
+ */
+function namedBySession(named: Partial<SessionReviewNames>, dir: string): boolean {
   const target = path.resolve(dir);
   if ((named.packageDirs ?? []).some((p) => path.resolve(p) === target)) return true;
-  const reviewIds = named.reviewIds ?? [];
-  return ids.some((id) => id !== undefined && SAFE_REVIEW_ID.test(id) && reviewIds.includes(id));
+  const id = path.basename(target);
+  return SAFE_REVIEW_ID.test(id) && (named.reviewIds ?? []).includes(id);
 }
 
-type ClosedPackage = { dir: string; mtime: number; ids: Array<string | undefined> };
+type ClosedPackage = { dir: string; mtime: number };
+
+/** At most this many package manifests of one root are read at once. */
+const SCAN_CONCURRENCY = 16;
 
 async function scanRoot(root: string, since: number, named: Partial<SessionReviewNames>): Promise<{ open: PackageCandidate[]; closed: ClosedPackage[] }> {
   let names: string[];
@@ -358,23 +506,27 @@ async function scanRoot(root: string, since: number, named: Partial<SessionRevie
   } catch {
     names = [];
   }
-  const open: PackageCandidate[] = [];
-  const closed: ClosedPackage[] = [];
-  for (const name of names) {
+  const read = await mapBounded(names, SCAN_CONCURRENCY, async (name) => {
     const dir = path.join(reviewsRoot(root), name);
     const head = await readManifestHead(dir);
-    if (head === undefined || (head.mode !== "review-flow" && head.mode !== "ingest")) continue;
+    if (head === undefined || (head.mode !== "review-flow" && head.mode !== "ingest")) return undefined;
     const info = await stat(path.join(dir, "manifest.json")).catch(() => undefined);
-    if (info === undefined) continue;
+    return info === undefined ? undefined : { dir, name, head, mtime: info.mtimeMs };
+  });
+  const open: PackageCandidate[] = [];
+  const closed: ClosedPackage[] = [];
+  for (const entry of read) {
+    if (entry === undefined) continue;
+    const { dir, name, head, mtime } = entry;
     if (head.status === "closed") {
-      if (info.mtimeMs >= since) closed.push({ dir, mtime: info.mtimeMs, ids: [head.reviewId, name] });
+      if (mtime >= since) closed.push({ dir, mtime });
       continue;
     }
     // An open package whose manifest predates the session is another run's (a checkout carries old drafts), unless
     // this session's own commands name it: then the session is continuing it. `ingest --review-id` flips the run's
     // own package to mode ingest, which this covers too.
-    if (info.mtimeMs < since && !namedBySession(named, dir, [head.reviewId, name])) continue;
-    open.push({ dir, mtime: info.mtimeMs, id: head.reviewId ?? name, root });
+    if (mtime < since && !namedBySession(named, dir)) continue;
+    open.push({ dir, mtime, id: name, root });
   }
   return { open, closed };
 }
@@ -390,14 +542,14 @@ async function pickPackage(roots: readonly string[], candidates: readonly Packag
   const newest = (list: readonly PackageCandidate[]): PackageCandidate | null => list.reduce<PackageCandidate | null>((best, candidate) => (best === null || candidate.mtime > best.mtime ? candidate : best), null);
   const pointers = (await Promise.all(roots.map(async (root) => ({ root, pointer: await resolveActiveReview(root) })))).filter((entry) => entry.pointer !== undefined);
   const pointed = (candidate: PackageCandidate): boolean => pointers.some(({ pointer }) => path.resolve(pointer!.dir) === path.resolve(candidate.dir));
-  const sessionNamed = candidates.filter((candidate) => namedBySession(named, candidate.dir, [candidate.id, path.basename(candidate.dir)]));
+  const sessionNamed = candidates.filter((candidate) => namedBySession(named, candidate.dir));
   if (sessionNamed.length > 0) return sessionNamed.find(pointed) ?? newest(sessionNamed);
   for (const { root, pointer } of pointers) {
     if (Date.parse(pointer!.startedAt) < since) continue;
     const head = await readManifestHead(pointer!.dir);
     if (head === undefined || head.status === "closed") continue;
     const mtime = await stat(path.join(pointer!.dir, "manifest.json")).then((i) => i.mtimeMs).catch(() => 0);
-    return { dir: pointer!.dir, mtime, id: head.reviewId ?? pointer!.id, root };
+    return { dir: pointer!.dir, mtime, id: path.basename(pointer!.dir), root };
   }
   return newest(candidates);
 }
@@ -434,7 +586,7 @@ export async function findReviewGateState(
   const best = await pickPackage(roots, candidates, since, named);
   // Only a package this session opened or named, closed under the root of the package it is on (any root while it is on
   // none), releases the gate: one closed elsewhere, or by another session, cannot end it.
-  const ours = scanned.filter((entry) => best === null || entry.root === best.root).flatMap((entry) => entry.closed).filter((closed) => namedBySession(named, closed.dir, closed.ids));
+  const ours = scanned.filter((entry) => best === null || entry.root === best.root).flatMap((entry) => entry.closed).filter((closed) => namedBySession(named, closed.dir));
   const closedAt = Math.max(0, ...ours.map((closed) => closed.mtime));
   if (closedAt > 0 && (best === null || best.mtime < closedAt)) return null;
   const workingRoot = best?.root ?? cwd;
