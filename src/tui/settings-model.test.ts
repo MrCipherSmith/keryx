@@ -217,7 +217,7 @@ describe("buildSettingsRows", () => {
 
   test("project rules check: warn/block buttons follow the mode, and an unreadable config makes the row read-only", () => {
     const warn = rowOf(rows, "projectctx");
-    expect(warn.detail).toBe("this project");
+    expect(warn.detail).toBe("cap 128 KiB, this project");
     expect(warn.actions.map((a) => [a.label, a.command, a.active])).toEqual([
       ["Warn", "/projectctx warn", true],
       ["Block", "/projectctx block", false],

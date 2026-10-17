@@ -248,7 +248,7 @@ export function buildSettingsRows(state: SettingsSnapshot): SettingRow[] {
       detail:
         state.projectContext.configError === true
           ? "tasks.config.json is not valid JSON; fix it to change this"
-          : "this project",
+          : `cap ${Math.round(state.projectContext.maxBytes / 1024)} KiB, this project`,
       command: "/projectctx",
       usage: "/projectctx [warn|block]",
       actions:
