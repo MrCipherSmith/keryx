@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { coverageErrors, coverageWarnings, decideRoundDepth, derivedFromFiles, globToRegExp, packageHasBlastRadius, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
+import { commitFiles, git, initRepo } from "./git-fixture.test-helpers";
 
 let root: string;
 
@@ -528,5 +530,74 @@ describe("projectRootOfPackage (flow 458 AC7)", () => {
     await mkdir(flowPackage, { recursive: true });
     const need = await requiredReviewers(projectRootOfPackage(flowPackage), "all", undefined);
     expect(need.required).toContain("review-logic");
+  });
+});
+
+describe("a pull-request package's diff is read at the repository top level against its base (flow 460 AC1)", () => {
+  const PR = "https://github.com/o/r/pull/7975";
+  const attended = { attended: true, pendingMutants: 3 } as const;
+  const two = ["src/a.ts", "src/b.ts"];
+
+  /** main with two files, a PR branch changing both (and `extra`); returns the PR head. */
+  function repo(extra: Record<string, string> = {}): string {
+    initRepo(root);
+    commitFiles(root, { "src/a.ts": "export const a = 1;\n", "src/b.ts": "export const b = 1;\n" }, "base");
+    git(root, "checkout", "-q", "-b", "pr");
+    const head = commitFiles(root, { "src/a.ts": "export const a = 2;\n", "src/b.ts": "export const b = 2;\n", ...extra }, "pr change");
+    git(root, "checkout", "-q", "main");
+    return head;
+  }
+
+  async function pkgAt(project: string, target: Record<string, unknown>): Promise<string> {
+    const dir = path.join(project, ".metaproject", "reviews", "r1");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "manifest.json"), JSON.stringify({ target: { kind: "pr", ref: PR, ...target } }));
+    return dir;
+  }
+
+  async function nestedProject(): Promise<string> {
+    const project = path.join(root, "output", "review-pr-7975");
+    await mkdir(project, { recursive: true });
+    await cp(path.join(root, ".metaproject"), path.join(project, ".metaproject"), { recursive: true });
+    return project;
+  }
+
+  async function lightErrors(pkg: string): Promise<string> {
+    const projectRoot = projectRootOfPackage(pkg);
+    const light = await requiredReviewers(projectRoot, "all", two, { depth: "light" });
+    return (await coverageErrors({ mode: "all", depth: "light", selected: light.required }, { root: projectRoot, packageDir: pkg, files: two, changedLines: 4, ...attended })).join("\n");
+  }
+
+  test("a light dispatch of a 2-file PR diff is accepted against target.base, never the PR URL", async () => {
+    const head = repo();
+    expect(await lightErrors(await pkgAt(root, { base: "main", head }))).toBe("");
+  });
+
+  test("without a recorded base the diff falls back to resolveBase (main here)", async () => {
+    const head = repo();
+    expect(await lightErrors(await pkgAt(root, { head }))).toBe("");
+  });
+
+  test("a package under a subdirectory's .metaproject reads the diff at the repository top level", async () => {
+    const head = repo();
+    expect(await lightErrors(await pkgAt(await nestedProject(), { base: "main", head }))).toBe("");
+  });
+
+  test("the nested package sees the top-level files: a risk-class path changed at the top makes it a full round", async () => {
+    const head = repo({ "src/core/store.ts": "export const s = 1;\n" });
+    const errors = await lightErrors(await pkgAt(await nestedProject(), { base: "main", head }));
+    expect(errors).toContain("depth light, but the full set applies");
+    expect(errors).toContain("review-core-boundaries");
+  });
+
+  test("when git cannot resolve the diff the refusal names the directory, the base and the head", async () => {
+    repo();
+    const missing = "0123456789abcdef0123456789abcdef01234567";
+    const errors = await lightErrors(await pkgAt(root, { base: "main", head: missing }));
+    expect(errors).toContain("could not be resolved");
+    expect(errors).toContain(`cwd ${realpathSync(root)}`);
+    expect(errors).toContain("base main");
+    expect(errors).toContain(`head ${missing}`);
+    expect(errors).not.toContain(PR);
   });
 });

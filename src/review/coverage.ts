@@ -459,27 +459,83 @@ export type CoverageOptions = {
   diffStats?: (() => Promise<{ files: string[]; changedLines: number } | undefined>) | undefined;
 };
 
-/** The files and retained changed lines of `ref...head`, from one `git diff`; undefined when git cannot answer. */
-export async function gitDiffStats(root: string, target: { ref: string; head: string }): Promise<{ files: string[]; changedLines: number } | undefined> {
+type DiffStats = { files: string[]; changedLines: number };
+
+/**
+ * Review packages at any depth of the repository, not only the top-level ones: run at the repository top level, the
+ * `NOT_REVIEW_PACKAGES` excludes would miss a package under a subdirectory's `.metaproject` (flow 460).
+ */
+const NOT_REVIEW_PACKAGES_ANY_DEPTH = [".", ":(exclude,glob)**/.metaproject/reviews/**", ":(exclude,glob)**/.metaproject/flows/*/reviews/**"];
+
+/** One `git diff base...head` at `cwd`: the stats, or why git could not answer. */
+async function gitDiffAt(cwd: string, base: string, head: string, pathspec: readonly string[]): Promise<DiffStats | { error: string }> {
   try {
-    assertGitRevision(target.ref);
-    assertGitRevision(target.head);
-    const proc = Bun.spawn(["git", "diff", "--no-color", "-U20", "--end-of-options", `${target.ref}...${target.head}`, "--", ...NOT_REVIEW_PACKAGES], { cwd: root, stdout: "pipe", stderr: "pipe", timeout: 15_000, killSignal: "SIGKILL", maxBuffer: 8 * 1024 * 1024 });
-    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-    if (exitCode !== 0 || proc.signalCode !== null) return undefined;
+    assertGitRevision(base);
+    assertGitRevision(head);
+    const proc = Bun.spawn(["git", "diff", "--no-color", "-U20", "--end-of-options", `${base}...${head}`, "--", ...pathspec], { cwd, stdout: "pipe", stderr: "pipe", timeout: 15_000, killSignal: "SIGKILL", maxBuffer: 8 * 1024 * 1024 });
+    const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+    if (proc.signalCode !== null) return { error: `git was stopped (${proc.signalCode})` };
+    if (exitCode !== 0) return { error: stderr.trim().split("\n")[0] || `git exited ${exitCode}` };
     const scope = buildReviewScope(stdout);
     return { files: scope.files, changedLines: scope.counts.changedLinesRetained };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/** The files and retained changed lines of `ref...head`, from one `git diff`; undefined when git cannot answer. */
+export async function gitDiffStats(root: string, target: { ref: string; head: string }): Promise<DiffStats | undefined> {
+  const result = await gitDiffAt(root, target.ref, target.head, NOT_REVIEW_PACKAGES);
+  return "error" in result ? undefined : result;
+}
+
+/** The repository top level that holds `dir`, or undefined when it is not inside a git work tree. */
+async function gitTopLevel(dir: string): Promise<string | undefined> {
+  try {
+    const proc = Bun.spawn(["git", "rev-parse", "--show-toplevel"], { cwd: dir, stdout: "pipe", stderr: "ignore", timeout: 15_000, killSignal: "SIGKILL" });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    const top = stdout.trim();
+    return exitCode === 0 && top !== "" ? top : undefined;
   } catch {
     return undefined;
   }
 }
 
-async function packageDiffStats(options: CoverageOptions): Promise<{ files: string[]; changedLines: number } | undefined> {
-  if (options.diffStats !== undefined) return options.diffStats();
-  if (options.packageDir === undefined) return undefined;
+const UNRESOLVED = "the diff could not be resolved from git to confirm the size";
+
+/**
+ * The scope the package's target names, recomputed from git (flow 460). A pull-request target's `ref` is its URL or
+ * number, never a revision: the diff runs against the recorded `target.base`, else the first of origin/main, main,
+ * origin/master, master that resolves (`resolveBase`, as `review plan` reads it). Another target diffs against its base
+ * when one is recorded, else its ref. Git runs at the repository top level of the package — the scope's files are
+ * repository paths, and a package can sit under a subdirectory's `.metaproject` — with review packages excluded at any
+ * depth. A refusal names the directory, the base and the head.
+ */
+async function packageDiffStats(options: CoverageOptions): Promise<DiffStats | { error: string }> {
+  if (options.diffStats !== undefined) return (await options.diffStats()) ?? { error: UNRESOLVED };
+  if (options.packageDir === undefined) return { error: UNRESOLVED };
   const manifest = await readFile(path.join(options.packageDir, "manifest.json"), "utf8").then((t) => JSON.parse(t)).catch(() => undefined);
-  const { ref, head } = manifest?.target ?? {};
-  return typeof ref === "string" && typeof head === "string" ? gitDiffStats(options.root, { ref, head }) : undefined;
+  const target = manifest?.target && typeof manifest.target === "object" ? (manifest.target as Record<string, unknown>) : {};
+  const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() !== "" ? v.trim() : undefined);
+  const kind = str(target.kind) ?? "";
+  const ref = str(target.ref);
+  const recordedBase = str(target.base);
+  const head = str(target.head);
+  const cwd = (await gitTopLevel(options.packageDir)) ?? (await gitTopLevel(options.root));
+  const where = (base: string | undefined): string => `cwd ${cwd ?? options.packageDir}, base ${base ?? "unresolved"}, head ${head ?? "unrecorded"}`;
+  if (head === undefined) return { error: `${UNRESOLVED}: the package manifest records no target head (${where(recordedBase ?? (kind === "pr" ? undefined : ref))})` };
+  if (cwd === undefined) return { error: `${UNRESOLVED}: the package is not inside a git work tree (${where(recordedBase ?? (kind === "pr" ? undefined : ref))})` };
+  let base: string | undefined;
+  if (kind === "pr" || recordedBase !== undefined) {
+    const { defaultGitRunner, resolveBase } = await import("./prior-round");
+    base = (await resolveBase(defaultGitRunner(cwd), { kind, ref: ref ?? "", base: recordedBase }, head))?.ref;
+    if (base === undefined) return { error: `${UNRESOLVED}: no base resolves (tried ${[recordedBase, "origin/main", "main", "origin/master", "master"].filter(Boolean).join(", ")}) (${where(recordedBase)})` };
+  } else {
+    base = ref;
+    if (base === undefined) return { error: `${UNRESOLVED}: the package manifest records no target ref or base (${where(undefined)})` };
+  }
+  const result = await gitDiffAt(cwd, base, head, NOT_REVIEW_PACKAGES_ANY_DEPTH);
+  return "error" in result ? { error: `${UNRESOLVED}: git diff ${base}...${head} failed (${where(base)}): ${result.error}` } : result;
 }
 
 /**
@@ -501,7 +557,7 @@ async function effectiveDepth(record: Record<string, unknown>, options: Coverage
   let input: DepthInput = { files: options.files, changedLines: options.changedLines };
   if (options.packageDir !== undefined || options.diffStats !== undefined) {
     const stats = await packageDiffStats(options);
-    if (stats === undefined) return { depth: "full", refused: "the diff could not be resolved from git to confirm the size" };
+    if ("error" in stats) return { depth: "full", refused: stats.error };
     input = { files: stats.files, changedLines: stats.changedLines };
   }
   const decision = await decideRoundDepth(options.root, "auto", input);
@@ -639,11 +695,28 @@ async function reviewerSetErrors(dispatch: unknown, options: CoverageOptions, ef
   const missing = need.required.filter((name) => !selected.has(name));
   if (!missing.length) return [];
   if (!decided.ok) return [`dispatch.skipped is not accepted: ${decided.refusal}`];
+  if (await overrideRecorded(options.packageDir, selectedNow, missing)) return [];
   return [
     `dispatch covers ${need.required.length - missing.length} of ${need.required.length} reviewers that mode ${record.mode} requires; missing: ${missing.join(", ")}. ` +
-      "Dispatch them, or record an operator override {operatorQuote, reason}; `keryx review required` prints the set" +
+      (operatorGateApplies(options.packageDir)
+        ? `Dispatch them, or have the operator leave them out (${decisionWriters("reviewer-override", path.relative(process.cwd(), options.packageDir ?? ".") || ".")})`
+        : "Dispatch them, or record an operator override {operatorQuote, reason}") +
+      "; `keryx review required` prints the set" +
       (effective?.refused === undefined ? "" : `. The dispatch says depth light, but the full set applies: ${effective.refused}`),
   ];
+}
+
+/**
+ * Flow 460 (B). The `review_override_reviewers` card and `keryx review override-reviewers` write only the operator
+ * decision, never a dispatch `override` field, so the decision itself accounts for the reviewers it left out: one bound
+ * to the package's current head and shown at least every reviewer `selected` leaves out now (and every one missing here).
+ * A decision for another head or a smaller set of left-out reviewers counts for nothing.
+ */
+async function overrideRecorded(packageDir: string | undefined, selected: readonly string[], missing: readonly string[]): Promise<boolean> {
+  if (packageDir === undefined) return false;
+  const now = await operatorDecisionSubject(packageDir, "reviewer-override", selected);
+  const subject = { ...now, items: [...new Set([...now.items, ...missing])].sort() };
+  return (await confirmedDecision(packageDir, "reviewer-override", subject)) !== undefined;
 }
 
 /** A reviewer the operator chose not to run, with why: `dispatch.skipped` as `ledger build --skip --reason` writes it. */

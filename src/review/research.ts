@@ -34,6 +34,23 @@ export function researchErrors(value: unknown, findings: unknown): string[] {
   return errors;
 }
 /**
+ * The coverage gate over a package's recorded dispatch, with the options read from the package. `review complete`
+ * (through `packageResearchErrors`) and `review readiness` both call this, so they cannot disagree on the reviewer set
+ * or the round depth (flow 460).
+ */
+export async function packageCoverageErrors(packageDir: string, dispatch: unknown): Promise<string[]> {
+  return coverageErrors(dispatch, {
+    root: projectRootOfPackage(packageDir),
+    packageDir,
+    files: await packageScopeFiles(packageDir),
+    changedLines: await packageChangedLines(packageDir),
+    blastRadius: await packageHasBlastRadius(packageDir),
+    prContext: packageHasPrContext(packageDir),
+    pendingMutants: (await pendingMutants(packageDir)).length,
+  });
+}
+
+/**
  * Absent artifact identifies packages predating this contract, not completed research. `completeness: false` skips the
  * layer/chunk coverage-completeness gate, for a round that was closed before that gate existed.
  */
@@ -53,15 +70,7 @@ export async function packageResearchErrors(packageDir: string, artifacts: unkno
     const dispatch = checked ? dispatchErrors(ledger?.dispatch) : [];
     const coverage = !checked || options.coverage === false || dispatch.length
       ? []
-      : await coverageErrors(ledger?.dispatch, {
-          root: projectRootOfPackage(packageDir),
-          packageDir,
-          files: await packageScopeFiles(packageDir),
-          changedLines: await packageChangedLines(packageDir),
-          blastRadius: await packageHasBlastRadius(packageDir),
-          prContext: packageHasPrContext(packageDir),
-          pendingMutants: (await pendingMutants(packageDir)).length,
-        });
+      : await packageCoverageErrors(packageDir, ledger?.dispatch);
     const completeness = !checked || options.coverage === false || options.completeness === false || dispatch.length ? [] : await coverageGateErrors(packageDir, ledger);
     return [...researchErrors(ledger, findings), ...mismatch, ...dispatch, ...coverage, ...completeness];
   }

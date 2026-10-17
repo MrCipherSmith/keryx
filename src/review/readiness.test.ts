@@ -11,6 +11,8 @@ import { reviewCommand } from "../commands/review";
 import { CHUNK_REVIEWER, ensureChunkPlan, recordChunk } from "./chunks";
 import { CALLER_UNATTRIBUTED, recordLogStart, recordOrchestratorCall } from "./orchestrator-log";
 import { downgradedPremise, heldFinding, premiseAnswer } from "./premise-fixtures";
+import { commitFiles, git, initRepo } from "./git-fixture.test-helpers";
+import { packageCoverageErrors } from "./research";
 import { READINESS_ITEMS, computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
 
 let root: string;
@@ -536,5 +538,61 @@ describe("a delta round's fix slice (flow 458 AC4)", () => {
     fixOnly(["slice-01"]);
     const covered = (await computeReadiness(pkg)).items.find((item) => item.id === "files-covered");
     expect(covered?.status).toBe("pass");
+  });
+});
+
+describe("item 3 runs the coverage gate review complete runs (flow 460 AC1)", () => {
+  const two = ["src/a.ts", "src/b.ts"];
+  const LIGHT = ["review-clean-code", "review-logic", "review-testing-practices"];
+
+  /** A repository with the light set installed, main plus a PR branch; returns the PR head. */
+  function repo(extra: Record<string, string>): string {
+    mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+    writeFileSync(path.join(root, ".metaproject", "metaproject.json"), JSON.stringify({ modules: { gdskills: {} } }));
+    for (const name of ["review-orchestrator", "review-verifier", "review-architecture", "review-style", "review-core-boundaries", ...LIGHT]) {
+      const dir = path.join(root, ".metaproject", "skills", "gdskills", "review", name);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: Use when testing ${name}.\n---\n`);
+    }
+    initRepo(root);
+    commitFiles(root, { "src/a.ts": "export const a = 1;\n", "src/b.ts": "export const b = 1;\n" }, "base");
+    git(root, "checkout", "-q", "-b", "pr");
+    const head = commitFiles(root, { "src/a.ts": "export const a = 2;\n", "src/b.ts": "export const b = 2;\n", ...extra }, "pr change");
+    git(root, "checkout", "-q", "main");
+    return head;
+  }
+
+  /** A light round's package for `head`: the light set dispatched, ran and on disk. */
+  function lightPackage(head: string): void {
+    const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
+    writeJson("manifest.json", { ...manifest, target: { ...manifest.target, base: "main", head } });
+    writeJson("scope-files.json", { version: 1, files: two, changedLines: 4 });
+    writeBlastRadius(two, []);
+    writeJson("research.json", {
+      version: 1,
+      scopeReviewed: true,
+      rawReconciled: true,
+      obligations: [],
+      dispatch: { version: 1, mode: "all", depth: "light", selected: LIGHT, unresolvedRules: [], runs: LIGHT.map((name) => run(name, { coveredSlices: [] })) },
+    });
+    for (const name of LIGHT) writeFileSync(path.join(pkg, "raw", `${name}.txt`), "reply");
+  }
+
+  const item3 = async () => (await computeReadiness(pkg)).items.find((item) => item.id === "reviewers");
+
+  test("a light 2-file PR round: item 3 passes and complete's coverage gate accepts it", async () => {
+    lightPackage(repo({}));
+    expect(await packageCoverageErrors(pkg, JSON.parse(readFileSync(path.join(pkg, "research.json"), "utf8")).dispatch)).toEqual([]);
+    expect((await item3())?.status).toBe("pass");
+  });
+
+  test("when complete would refuse on coverage, item 3 fails with the same refusal", async () => {
+    lightPackage(repo({ "src/core/store.ts": "export const s = 1;\n" }));
+    const refusal = await packageCoverageErrors(pkg, JSON.parse(readFileSync(path.join(pkg, "research.json"), "utf8")).dispatch);
+    expect(refusal.join("\n")).toContain("review-core-boundaries");
+    const item = await item3();
+    expect(item?.status).toBe("fail");
+    for (const error of refusal) expect(item?.evidence).toContain(error);
+    expect(item?.repair).toContain("coverage gate");
   });
 });

@@ -1,11 +1,15 @@
 // Flow 431 AC10: `keryx review complete` refuses while an in-scope file is uncovered, names the count, the first files and
 // the command that runs the missing chunks, and lets the operator past only in their own words.
 
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { operatorDecisionSubject, requiredReviewers } from "./coverage";
 import { coverageGateErrors, recordCoverageWaiver } from "./coverage-complete";
+import { commitFiles, git, initRepo } from "./git-fixture.test-helpers";
+import { recordOperatorDecision, type OperatorDecisionSubject } from "./operator-decisions";
+import { buildRunProfile, writeRunProfile } from "./run-profile";
 import { READY_DISPATCH } from "./dispatch.test-helpers";
 import { readReviewRounds } from "../flow/review-gate";
 import { packageResearchErrors } from "./research";
@@ -106,4 +110,112 @@ test("R2-06: the flow review gate reads a closed round without the completeness 
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
+});
+
+describe("flow 460: the complete gate on a project with reviewers installed", () => {
+  const NAMES = ["review-orchestrator", "review-verifier", "review-architecture", "review-style", "review-core-boundaries", "review-clean-code", "review-logic", "review-testing-practices"];
+  const LIGHT = ["review-clean-code", "review-logic", "review-testing-practices"];
+  const two = ["src/a.ts", "src/b.ts"];
+  let root: string;
+
+  const install = (project: string): void => {
+    mkdirSync(path.join(project, ".metaproject"), { recursive: true });
+    writeFileSync(path.join(project, ".metaproject", "metaproject.json"), JSON.stringify({ modules: { gdskills: {} } }));
+    for (const name of NAMES) {
+      const dir = path.join(project, ".metaproject", "skills", "gdskills", "review", name);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: Use when testing ${name}.\n---\n`);
+    }
+  };
+  const runOf = (reviewer: string) => ({ reviewer, executionId: `run-${reviewer}`, status: "complete", scopeComplete: true, rawEvidence: `raw/${reviewer}.txt`, ruleEvidence: ["rule"], executionRequired: false, executionReason: "source-only review" });
+  /** A package of `project` with `selected` dispatched and run, no dispatch `override` field. */
+  const packageOf = (project: string, target: Record<string, unknown>, selected: readonly string[], extra: object = {}): string => {
+    const dir = path.join(project, ".metaproject", "reviews", "r1");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "manifest.json"), JSON.stringify({ reviewId: "r1", target: { kind: "pr", ref: "https://github.com/o/r/pull/7975", ...target }, artifacts }));
+    writeFileSync(path.join(dir, "scope-files.json"), JSON.stringify({ version: 1, files: two, changedLines: 4 }));
+    writeFileSync(
+      path.join(dir, "research.json"),
+      JSON.stringify({ version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: { version: 1, mode: "all", selected, unresolvedRules: [], runs: selected.map(runOf), ...extra } }),
+    );
+    return dir;
+  };
+
+  beforeEach(() => {
+    root = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-gate-460-")));
+    install(root);
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  describe("AC1: a light PR round is diffed at the repository top level against the base", () => {
+    function repo(): string {
+      initRepo(root);
+      commitFiles(root, { "src/a.ts": "export const a = 1;\n", "src/b.ts": "export const b = 1;\n" }, "base");
+      git(root, "checkout", "-q", "-b", "pr");
+      const head = commitFiles(root, { "src/a.ts": "export const a = 2;\n", "src/b.ts": "export const b = 2;\n" }, "pr change");
+      git(root, "checkout", "-q", "main");
+      return head;
+    }
+
+    test("complete accepts the light set of a 2-file PR diff (target.ref is the PR URL, target.base recorded)", async () => {
+      const dir = packageOf(root, { base: "main", head: repo() }, LIGHT, { depth: "light" });
+      expect(await packageResearchErrors(dir, artifacts, [])).toEqual([]);
+    });
+
+    test("and for a package under a subdirectory's .metaproject/reviews", async () => {
+      const head = repo();
+      const project = path.join(root, "output", "review-pr-7975");
+      install(project);
+      const dir = packageOf(project, { base: "main", head }, LIGHT, { depth: "light" });
+      expect(await packageResearchErrors(dir, artifacts, [])).toEqual([]);
+    });
+
+    test("a head git cannot read is refused, naming cwd, base and head", async () => {
+      repo();
+      const dir = packageOf(root, { base: "main", head: "0123456789abcdef0123456789abcdef01234567" }, LIGHT, { depth: "light" });
+      const errors = (await packageResearchErrors(dir, artifacts, [])).join("\n");
+      expect(errors).toContain(`cwd ${root}`);
+      expect(errors).toContain("base main");
+      expect(errors).toContain("head 0123456789abcdef0123456789abcdef01234567");
+    });
+  });
+
+  describe("AC2: a confirmed reviewer-override decision counts without a dispatch override field", () => {
+    const HEAD = "aaaaaaa";
+    let selected: string[];
+    let dir: string;
+
+    beforeEach(async () => {
+      const required = (await requiredReviewers(root, "all", two)).required;
+      selected = required.filter((name) => name !== "review-style" && name !== "review-architecture");
+      expect(required.length - selected.length).toBe(2);
+      dir = packageOf(root, { head: HEAD }, selected);
+      await writeRunProfile(dir, buildRunProfile({ env: {}, now: new Date("2026-10-17T00:00:00Z") }));
+    });
+
+    const decide = async (subject: OperatorDecisionSubject): Promise<void> => {
+      await recordOperatorDecision(dir, { kind: "reviewer-override", quote: "leave style and architecture out: yes", reason: "two-line fix", confirmedVia: "terminal", at: new Date().toISOString(), subject });
+    };
+
+    test("without a decision complete refuses and names the card and the terminal command", async () => {
+      const errors = (await packageResearchErrors(dir, artifacts, [])).join("\n");
+      expect(errors).toContain("missing: review-architecture, review-style");
+      expect(errors).toContain("review_override_reviewers");
+    });
+
+    test("a decision for this head and these missing reviewers lets complete pass", async () => {
+      await decide(await operatorDecisionSubject(dir, "reviewer-override", selected));
+      expect(await packageResearchErrors(dir, artifacts, [])).toEqual([]);
+    });
+
+    test("a decision for another head does not count", async () => {
+      await decide({ head: "bbbbbbb", items: ["review-architecture", "review-style"] });
+      expect((await packageResearchErrors(dir, artifacts, [])).join("\n")).toContain("missing: review-architecture, review-style");
+    });
+
+    test("a decision that left out a different reviewer set does not count", async () => {
+      await decide({ head: HEAD, items: ["review-style"] });
+      expect((await packageResearchErrors(dir, artifacts, [])).join("\n")).toContain("missing: review-architecture, review-style");
+    });
+  });
 });
