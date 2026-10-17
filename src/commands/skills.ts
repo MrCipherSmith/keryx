@@ -66,6 +66,7 @@ import {
   runSkillsUpdateCommand,
 } from "../gdskills/import-skills";
 import { runSkillsImportRulesCommand } from "../gdskills/import-rules";
+import { runResolveContextCommand } from "../gdskills/resolve-context-command";
 import { runSkillsRemoveRuleCommand } from "../gdskills/remove-rules";
 import { runSkillsUpdateRulesCommand } from "../gdskills/update-rules";
 import { printSkillsRemoveHelp, runSkillsRemoveCommand } from "../gdskills/remove-skill";
@@ -160,6 +161,16 @@ export async function skillsCommand(args: string[]): Promise<void> {
 
   if (command === "route") {
     await routeProjectSkills(args);
+    return;
+  }
+
+  if (command === "resolve-context") {
+    try {
+      await runResolveContextCommand(args.slice(1));
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
     return;
   }
 
@@ -1802,6 +1813,7 @@ const SKILLS_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["doctor", printDoctorHelp],
   ["uninstall", printUninstallHelp],
   ["route", printRouteHelp],
+  ["resolve-context", printResolveContextHelp],
   ["inspect", printInspectHelp],
   ["create", () => printCreateHelp("create")],
   ["generate", () => printCreateHelp("generate")],
@@ -1831,6 +1843,8 @@ Usage:
   keryx skills list
   keryx skills inspect <project-skill>
   keryx skills route <query-or-target>
+  keryx skills resolve-context --files <file>[,<file>...] --for implement|test|review
+      [--task-type <type>] [--max-bytes <n>] [--out <path>] [--json]
   keryx skills catalog [--profile minimal|recommended|full|custom]
   keryx skills install [--profile minimal|recommended|full|custom]
   keryx skills install --profile <manifest-profile> [--with <component>]... [--without <component>]...
@@ -1864,7 +1878,8 @@ Commands:
   list      List registered project skills
   inspect   Inspect one registered project skill
   route     Route a query or target to matching project skills
-  catalog   Print bundled gdskills catalog for a profile
+  resolve-context  List the project rules and skills a worker must read for these files (project first)
+  catalog  Print bundled gdskills catalog for a profile
   install   Install bundled gdskills into .metaproject (legacy profile), or resolve/apply a
             profile->modules/components install-manifest plan (--with/--without/--target/
             --dry-run/--json/--include-deprecated, or a non-legacy profile id such as
@@ -1952,6 +1967,37 @@ Examples:
   keryx skills route src/pipelines/PipelineStepStore.ts
   keryx skills route "подготовь пакет документации"
   keryx skills route "change pipeline step store behavior" --json
+`);
+}
+
+function printResolveContextHelp(): void {
+  console.log(`keryx skills resolve-context
+
+Decides which project rules and project skills a worker must read before it
+writes code or tests, project first, bundled second. Reads files on disk only;
+no model is asked. A successful resolve exits 0 whatever the budget says.
+
+Usage:
+  keryx skills resolve-context --files <file>[,<file>...] --for implement|test|review
+      [--task-type ui_component|store_logic|service_api|fix|mixed]
+      [--max-bytes <4096..1048576>] [--out <path>] [--json]
+
+  --files       Target files, repo-relative; commas or a repeated flag.
+  --for         implement: rules and implementation skills; test: rules and testing skills;
+                review: project rules only.
+  --task-type   Adds the bundled rules for that task type (the task-implementer table).
+  --max-bytes   Cap on project content that is must_read (default 131072, or
+                gdskills.projectContext.maxBytes in .metaproject/tasks.config.json). Over the cap,
+                later entries become on_demand and a warning goes to stderr.
+  --out         Write the JSON here (inside the project); its path is the task's resolved_context_file.
+
+Each entry carries path, sha256, bytes, reason and tier (must_read | on_demand).
+Check a worker's result against it with:
+  keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <resolved.json>
+
+Examples:
+  keryx skills resolve-context --files src/stores/UserStore.ts --for implement --task-type store_logic --json
+  keryx skills resolve-context --files src/a.test.tsx --for test --out .metaproject/data/resolved.json
 `);
 }
 
