@@ -93,8 +93,7 @@ not a hardcoded `cat`/`ls`/`find` invocation).
 **1.2b Load test-convention rules, project first.** Read the testing rules the task touches (`testing-conventions`, `tdd-workflow`, and any rule the task names) in this order: `.metaproject/rules/project/<rule>.mdc` first, then `.metaproject/rules/core/<rule>.mdc`. A project rule with the same name replaces the bundled one; a project rule with a different name adds to it. When the task carries `resolved_context_file`, read the entries it lists (`must_read` first) instead of searching, and record each one in `project_context_applied`. Where a project test convention and a bundled one conflict, the project wins. A project skill only supplements these steps; it never replaces this skill.
 
 **1.3 Identify test file naming:**
-- Pattern: `<component>.test.ts`, `<service>.spec.ts`, `test_<module>.py`, etc.
-- Location: co-located with source or in `__tests__`/`tests/` directory
+- Pattern (`<component>.test.ts`, `<service>.spec.ts`, `test_<module>.py`) and location (co-located, or `__tests__`/`tests/`)
 
 **Output of Phase 1:**
 ```
@@ -268,7 +267,8 @@ TEST_CASE_SPECS:
 
   project_context_applied: [{path: <rule path, project first>, sha256: <hash as read>, how: read|followed|n/a}]
 
-  run_command: "<command to run just these tests>"  # expected: all failing (RED)
+  run_command: "<command to run just these tests>"
+  expected_result: "all failing (RED phase)"
   notes: "<any test design decisions or assumptions>"
 ```
 
