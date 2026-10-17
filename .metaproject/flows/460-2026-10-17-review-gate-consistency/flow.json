@@ -11,12 +11,12 @@
   "title": "Review gates agree: readiness, complete, overrides, nudges, child results and artifacts tell one story",
   "status": "in-progress",
   "createdAt": "2026-10-17T03:45:43.162Z",
-  "updatedAt": "2026-10-17T08:45:06.969Z",
+  "updatedAt": "2026-10-17T10:20:09.921Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:5bff430626e9d18805624d0b54c508c157ee1df1199e5f71ab0ed82dec57fe1e",
+  "acChecksum": "sha256:d52b926cf54f6b1cc920b8cd7968962595b6c15631ec242ef89dd88b9dbadf3d",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -338,6 +338,11 @@
       "at": "2026-10-17T08:45:06.969Z",
       "event": "task-added",
       "detail": "T13: L6 fix slices get the fix roster; fix hunks are the ones touching a finding"
+    },
+    {
+      "at": "2026-10-17T10:20:09.921Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"An ingest whose report has findings with unplaceable quotes (absent, or matching several places) records the round: those findings are kept unanchored and flagged `quote_unlocated` (never relocated by similarity), listed in scope.md and by readiness; the round is recorded so the next `review plan` after a fix commit detects it and plans a delta round with the fix roster. Tests including the plan → ingest → fix → plan sequence. · sensitive: failure-scenario [verify: exec `bun test src/review/managed.test.ts src/commands/review-plan.test.ts`]\" -> \"An ingest whose report has findings with unplaceable quotes (absent, or matching several places) records the round: those findings are kept unanchored and flagged `quote_unlocated` (never relocated by similarity), listed in scope.md and by readiness; the round is recorded so the next `review plan` after a fix commit detects it and plans a delta round with the fix roster. Tests including the plan → ingest → fix → plan sequence. · sensitive: failure-scenario [verify: exec `bun test src/review/managed.test.ts src/commands/review-plan.test.ts src/commands/review-plan.e2e.test.ts`]\" (review RG-001 (round 2): the plan → ingest → fix → plan test moved to review-plan.e2e.test.ts (repo convention for real-git tests))"
     }
   ],
   "acKinds": {
@@ -363,7 +368,7 @@
     },
     "AC6": {
       "kind": "exec",
-      "check": "bun test src/review/managed.test.ts src/commands/review-plan.test.ts"
+      "check": "bun test src/review/managed.test.ts src/commands/review-plan.test.ts src/commands/review-plan.e2e.test.ts"
     },
     "AC7": {
       "kind": "exec",
