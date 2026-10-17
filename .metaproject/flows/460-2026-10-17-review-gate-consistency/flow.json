@@ -11,7 +11,7 @@
   "title": "Review gates agree: readiness, complete, overrides, nudges, child results and artifacts tell one story",
   "status": "in-progress",
   "createdAt": "2026-10-17T03:45:43.162Z",
-  "updatedAt": "2026-10-17T04:15:45.258Z",
+  "updatedAt": "2026-10-17T04:19:24.450Z",
   "source": {
     "type": "description",
     "ref": null
@@ -130,7 +130,7 @@
       "id": "T7",
       "title": "L3 child results and artifacts reconcile (D, E, F)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -138,7 +138,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -288,6 +289,11 @@
       "at": "2026-10-17T04:15:45.258Z",
       "event": "task-done",
       "detail": "T8: L4 ingest keeps unplaceable quotes, delta e2e, token spend (G, H)"
+    },
+    {
+      "at": "2026-10-17T04:19:24.450Z",
+      "event": "task-done",
+      "detail": "T7: L3 child results and artifacts reconcile (D, E, F)"
     }
   ],
   "acKinds": {
