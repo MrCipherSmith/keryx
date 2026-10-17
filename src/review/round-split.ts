@@ -152,7 +152,7 @@ function labelLines(kinds: ReadonlyArray<boolean | undefined>): boolean[] {
  * Cut a walked region into runs of one label. A piece next to another piece lost the context lines its neighbour kept,
  * so it says `contextTruncated`; the region's own flag carries over to every piece.
  */
-function cutPieces(region: ScopedRegion, lines: readonly WalkedLine[], labels: readonly boolean[]): Array<{ fix: boolean; region: ScopedRegion }> {
+function cutPieces(region: ScopedRegion, lines: readonly WalkedLine[], labels: readonly boolean[]): Array<{ on: boolean; region: ScopedRegion }> {
   const runs: Array<{ start: number; end: number }> = [];
   let start = 0;
   for (let index = 1; index <= lines.length; index += 1) {
@@ -165,7 +165,7 @@ function cutPieces(region: ScopedRegion, lines: readonly WalkedLine[], labels: r
     const kept = piece.filter((walked) => !walked.removed);
     const startLine = piece[0]!.line;
     return {
-      fix: labels[from]!,
+      on: labels[from]!,
       region: {
         path: region.path,
         startLine,
@@ -185,17 +185,26 @@ function cutPieces(region: ScopedRegion, lines: readonly WalkedLine[], labels: r
  * carries no new code, and the new code is routed as in round 1.
  */
 export function partitionRegionsByFix(regions: readonly ScopedRegion[], hunks: readonly FixHunk[]): { fix: ScopedRegion[]; other: ScopedRegion[] } {
-  const fix: ScopedRegion[] = [];
-  const other: ScopedRegion[] = [];
+  const { on: fix, off: other } = splitRegions(regions, (file, walked) => hunks.some((hunk) => lineInHunk(hunk, file, walked.line, walked.removed)));
+  return { fix, other };
+}
+
+/**
+ * Split regions by a changed-line predicate: a region whose changed lines all pass goes to `on`, one with none to `off`,
+ * and a mixed one is cut between them ({@link labelLines}, {@link cutPieces}). Region order is kept within each side.
+ */
+function splitRegions(regions: readonly ScopedRegion[], isOn: (file: string, walked: WalkedLine) => boolean): { on: ScopedRegion[]; off: ScopedRegion[] } {
+  const on: ScopedRegion[] = [];
+  const off: ScopedRegion[] = [];
   for (const region of regions) {
     const lines = walkRegion(region);
-    const kinds = lines.map((walked) => (walked.changed ? hunks.some((hunk) => lineInHunk(hunk, region.path, walked.line, walked.removed)) : undefined));
+    const kinds = lines.map((walked) => (walked.changed ? isOn(region.path, walked) : undefined));
     const changedKinds = kinds.filter((kind): kind is boolean => kind !== undefined);
-    if (!changedKinds.some(Boolean)) other.push(region);
-    else if (changedKinds.every(Boolean)) fix.push(region);
-    else for (const piece of cutPieces(region, lines, labelLines(kinds))) (piece.fix ? fix : other).push(piece.region);
+    if (!changedKinds.some(Boolean)) off.push(region);
+    else if (changedKinds.every(Boolean)) on.push(region);
+    else for (const piece of cutPieces(region, lines, labelLines(kinds))) (piece.on ? on : off).push(piece.region);
   }
-  return { fix, other };
+  return { on, off };
 }
 
 /** The roles that read a second-look slice, once: logic and the code-level security reviewer. */
@@ -204,6 +213,31 @@ export const SECOND_LOOK_ROLES: readonly string[] = [ALWAYS_ROLE, FIX_SECURITY_R
 /** Whether a region of the full range overlaps one of the second-look hunks (same file, intersecting new-side lines). */
 export function regionInSecondLook(region: { path: string; startLine: number; endLine: number }, hunks: readonly { file: string; startLine: number; endLine: number }[]): boolean {
   return hunks.some((hunk) => hunk.file === region.path && region.startLine <= hunk.endLine && region.endLine >= hunk.startLine);
+}
+
+/**
+ * Whether a changed line lies in a second-look hunk: same file, its new-side number inside the hunk. Unlike a fix line, a
+ * removed line gets no `line - 1` tolerance: the second-look hunks are head-side ranges of unchanged code, and a removal
+ * just past one is not in it. The one predicate `review slice` cuts second-look slices by and the routing check
+ * ({@link secondLookClaimBacked}) judges them by, so the two agree by construction (flow 460).
+ */
+function inSecondLookHunk(hunks: readonly RoundHunk[], file: string, walked: WalkedLine): boolean {
+  return hunks.some((hunk) => hunk.file === file && walked.line >= hunk.startLine && walked.line <= hunk.endLine);
+}
+
+/**
+ * Cut the merge-base..head regions that touch a second-look hunk (flow 460): `secondLook` holds exactly the changed lines
+ * inside the hunks ({@link inSecondLookHunk}), cut as {@link partitionRegionsByFix} cuts fix lines, so every second-look
+ * slice built from it passes {@link secondLookClaimBacked}. Every other changed line goes to `outside`, to be routed as a
+ * new slice — except an added line inside one of the round's fix or new hunks (`deltaHunks`): that line is in the delta
+ * range, which the round's own fix/new cut already slices, so it is not read twice. A removed line outside the hunks (a
+ * pure deletion the previous round read, or the merge-base side of a line the delta changed again) stays in `outside`.
+ */
+export function partitionRegionsBySecondLook(regions: readonly ScopedRegion[], secondLook: readonly RoundHunk[], deltaHunks: readonly RoundHunk[]): { secondLook: ScopedRegion[]; outside: ScopedRegion[] } {
+  const touching = regions.filter((region) => regionInSecondLook(region, secondLook));
+  const { on, off } = splitRegions(touching, (file, walked) => inSecondLookHunk(secondLook, file, walked));
+  const inDelta = (file: string, walked: WalkedLine): boolean => !walked.removed && deltaHunks.some((hunk) => hunk.file === file && walked.line >= hunk.startLine && walked.line <= hunk.endLine);
+  return { secondLook: on, outside: splitRegions(off, inDelta).off };
 }
 
 /**
@@ -308,9 +342,8 @@ export function secondLookClaimBacked(entry: Pick<SliceEntry, "kind" | "files">,
   if (hunks.length === 0) return false;
   // By the slice's own text, not its file list: every changed line must lie in a second-look hunk (and so in no fix or new
   // hunk, which the round keeps disjoint from them). A new slice tagged second-look in a file that merely has unchanged
-  // lines elsewhere is judged as new. Unlike a fix line, a removed line gets no `line - 1` tolerance: the second-look
-  // hunks are head-side ranges of unchanged code, and a removal just past one is not in it.
-  return everyChangedLine(text, (file, walked) => hunks.some((hunk) => hunk.file === file && walked.line >= hunk.startLine && walked.line <= hunk.endLine));
+  // lines elsewhere is judged as new. The predicate is the one `review slice` cuts by (partitionRegionsBySecondLook).
+  return everyChangedLine(text, (file, walked) => inSecondLookHunk(hunks, file, walked));
 }
 
 /** Roles that own at least one original fix or second-look slice of the manifest (they join the round's required set). */

@@ -22,7 +22,8 @@ import { commentRuleScopeConfig } from "../review/comment-rule";
 import { type RoutingOptions, renderRoutingSummary, routeSlices, summarizeRouting } from "../review/slice-routing";
 import { NOT_REVIEW_PACKAGES } from "../review/prior-round";
 import { type PriorFinding, readPriorFindings, readRoundRecord, roundRecordTampered, type RoundRecord } from "../review/round-record";
-import { classifyDeltaSlices, isDeltaRound, partitionRegionsByFix, regionInSecondLook, splitCounts, tagSecondLookSlices } from "../review/round-split";
+import { classifyDeltaSlices, isDeltaRound, partitionRegionsByFix, partitionRegionsBySecondLook, splitCounts, tagSecondLookSlices } from "../review/round-split";
+import type { ScopedRegion } from "../review/scope";
 import { defaultWaveBytes, detectReviewHost, HOST_WAVE_BYTES, parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
 
 /** The diff-fetching and flag helpers `review.ts` owns, passed in so this file does not import its caller. */
@@ -315,19 +316,27 @@ function firstRoundCut(source: SliceSource, sizes: SliceSizes, routing: RoutingO
  * is routed as in round 1; unchanged code the previous round read gets its second look. Ledgers are judged once over the
  * whole source before the fix/new partition, so a file is omitted (with its full size) or sliced, never both.
  */
-export function deltaRoundCut(input: { source: SliceSource; delta: RoundRecord; prior: readonly PriorFinding[]; sizes: SliceSizes; routing: RoutingOptions; secondLook: SliceSource | undefined }): RoundCut {
+export function deltaRoundCut(input: { source: SliceSource; delta: RoundRecord; prior: readonly PriorFinding[]; sizes: SliceSizes; routing: RoutingOptions; secondLook: SecondLookSource | undefined }): RoundCut {
   const { source, delta, prior, sizes, routing } = input;
   const ledgers = ledgerOmissions(source.regions);
   const omitted = new Set(ledgers.map((omission) => omission.path));
   const parts = partitionRegionsByFix(source.regions.filter((region) => !omitted.has(region.path)), delta.fixHunks);
   const built = buildSlices({ ...source, regions: parts.other }, { ...sizes, keepLedgers: true });
   const fixBuilt = parts.fix.length === 0 ? undefined : buildSlices({ ...source, regions: parts.fix, drops: [] }, { ...sizes, keepLedgers: true });
-  const secondBuilt = input.secondLook === undefined ? undefined : buildSlices(input.secondLook, sizes);
+  // Second look (flow 460): ledgers are judged over the second-look and outside regions together, then each side is cut
+  // apart, so a second-look slice holds only second-look lines (what the routing check backs) and the rest is new.
+  const look = input.secondLook;
+  const lookLedgers = look === undefined ? [] : ledgerOmissions([...look.regions, ...look.outside]);
+  const lookOmitted = new Set(lookLedgers.map((omission) => omission.path));
+  const secondBuilt = look === undefined ? undefined : buildSlices({ ...look, regions: look.regions.filter((region) => !lookOmitted.has(region.path)) }, { ...sizes, keepLedgers: true });
+  const outside = look?.outside.filter((region) => !lookOmitted.has(region.path)) ?? [];
+  const outsideBuilt = outside.length === 0 ? undefined : buildSlices({ ...look!, regions: outside, drops: [] }, { ...sizes, keepLedgers: true });
   const fixSlices = fixBuilt === undefined ? [] : classifyDeltaSlices(routeSlices(fixBuilt.slices, routing), delta, prior);
   const classified = classifyDeltaSlices(routeSlices(built.slices, routing), delta, prior);
+  const outsideSlices = outsideBuilt === undefined ? [] : classifyDeltaSlices(routeSlices(outsideBuilt.slices, routing), delta, prior);
   const second = secondBuilt === undefined ? [] : tagSecondLookSlices(routeSlices(secondBuilt.slices, { head: routing.head }), delta.round - 1);
-  const slices = second.length === 0 && fixSlices.length === 0 ? classified : renumberSlices([...fixSlices, ...classified, ...second]);
-  const omissions = [...built.manifest.omissions, ...ledgers, ...(secondBuilt?.manifest.omissions ?? [])].filter((omission, index, all) => all.findIndex((known) => known.path === omission.path) === index);
+  const slices = second.length === 0 && fixSlices.length === 0 && outsideSlices.length === 0 ? classified : renumberSlices([...fixSlices, ...classified, ...outsideSlices, ...second]);
+  const omissions = [...built.manifest.omissions, ...ledgers, ...lookLedgers, ...(secondBuilt?.manifest.omissions ?? [])].filter((omission, index, all) => all.findIndex((known) => known.path === omission.path) === index);
   return { slices, omissions, manifest: built.manifest, totals: built.manifest.totals };
 }
 
@@ -368,21 +377,27 @@ export function renumberSlices<T extends { id: string; path: string }>(slices: r
   });
 }
 
+/** The second-look cut of a delta round: `regions` hold only second-look lines; `outside` the other changed lines no other cut carries. */
+export type SecondLookSource = SliceSource & { outside: ScopedRegion[] };
+
 /**
  * The regions of merge-base..head that the delta round does not cover and the previous round already read (the round's
- * `secondLookHunks`), cut with the same context and pre-filters as every other cut. Undefined when the round has none.
+ * `secondLookHunks`), cut with the same context and pre-filters as every other cut. A git region that merely touches a
+ * hunk is cut to the hunk's own lines (`partitionRegionsBySecondLook`, the predicate the routing check judges by), and
+ * its other changed lines that the delta cut does not already carry are returned as `outside`, to be sliced as new.
+ * Undefined when the round has none.
  */
 export async function secondLookSource(
-  round: Pick<RoundRecord, "range" | "mergeBase" | "secondLookHunks">,
+  round: Pick<RoundRecord, "range" | "mergeBase" | "secondLookHunks"> & Partial<Pick<RoundRecord, "fixHunks" | "newHunks">>,
   contextLines: number,
   config: Parameters<typeof sliceSourceFromDiff>[1],
   rangeDiff: (base: string, head: string, contextLines: number) => Promise<string> = gitRangeDiff,
-): Promise<ReturnType<typeof sliceSourceFromDiff> | undefined> {
+): Promise<SecondLookSource | undefined> {
   const hunks = round.secondLookHunks ?? [];
   if (hunks.length === 0 || round.mergeBase === undefined || round.mergeBase === null) return undefined;
   const source = sliceSourceFromDiff(await rangeDiff(round.mergeBase, round.range.head!, contextLines), config);
-  const regions = source.regions.filter((region) => regionInSecondLook(region, hunks));
-  return regions.length === 0 ? undefined : { ...source, regions };
+  const parts = partitionRegionsBySecondLook(source.regions, hunks, [...(round.fixHunks ?? []), ...(round.newHunks ?? [])]);
+  return parts.secondLook.length === 0 && parts.outside.length === 0 ? undefined : { ...source, regions: parts.secondLook, outside: parts.outside };
 }
 
 /** `git diff <base> <head>` of a delta round, without committed review packages (the same pathspec the round's hunks were cut with). */
