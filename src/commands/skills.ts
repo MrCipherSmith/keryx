@@ -832,6 +832,18 @@ function parseProjectSkillMetadata(content: string): {
   };
 }
 
+/** Higher score first; on a tie a project skill precedes a bundled one, then module/name order. */
+export function compareRouteMatches(
+  a: { source: "catalog" | "project"; module: string; name: string; score: number },
+  b: { source: "catalog" | "project"; module: string; name: string; score: number },
+): number {
+  return (
+    b.score - a.score ||
+    Number(a.source !== "project") - Number(b.source !== "project") ||
+    `${a.module}/${a.name}`.localeCompare(`${b.module}/${b.name}`)
+  );
+}
+
 async function routeProjectSkills(args: string[]): Promise<void> {
   if (args.includes("--help") || args.includes("-h")) {
     printRouteHelp();
@@ -876,12 +888,7 @@ async function routeProjectSkills(args: string[]): Promise<void> {
       next: `keryx skills inspect ${match.entry.module}/${match.entry.name}`,
     }));
 
-  const matches = [...catalogMatches, ...projectMatches].sort(
-    (a, b) =>
-      b.score - a.score ||
-      a.source.localeCompare(b.source) ||
-      `${a.module}/${a.name}`.localeCompare(`${b.module}/${b.name}`),
-  );
+  const matches = [...catalogMatches, ...projectMatches].sort(compareRouteMatches);
 
   const result = { query, matches };
 

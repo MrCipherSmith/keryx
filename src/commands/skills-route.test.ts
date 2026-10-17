@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { BUNDLED_GDSKILLS, renderBundledSkill } from "../gdskills/catalog";
-import { normalizeRouteText, scoreBundledSkillRoute } from "./skills";
+import { compareRouteMatches, normalizeRouteText, scoreBundledSkillRoute } from "./skills";
 
 function topBundled(query: string): { name: string; score: number } | undefined {
   const ranked = BUNDLED_GDSKILLS.map((entry) => scoreBundledSkillRoute(entry, query))
@@ -143,5 +143,37 @@ describe("AC14: entity-skill-verifier describes only what `keryx skills verify` 
     for (const sentence of claimSentences) {
       expect(sentence, sentence).toMatch(/manual|does not|the command does not do this/i);
     }
+  });
+});
+
+describe("compareRouteMatches: project first on equal score", () => {
+  const match = (source: "catalog" | "project", module: string, name: string, score: number) => ({ source, module, name, score });
+
+  test("a project skill outranks a bundled skill with the same score", () => {
+    const sorted = [match("catalog", "orchestration", "task-implementer", 9), match("project", "implementation", "mobx-store", 9)].sort(
+      compareRouteMatches,
+    );
+    expect(sorted.map((m) => m.source)).toEqual(["project", "catalog"]);
+  });
+
+  test("the order of the inputs does not change the outcome", () => {
+    const a = match("catalog", "a", "x", 5);
+    const b = match("project", "z", "y", 5);
+    expect([a, b].sort(compareRouteMatches)[0]?.source).toBe("project");
+    expect([b, a].sort(compareRouteMatches)[0]?.source).toBe("project");
+  });
+
+  test("a higher score still wins over source", () => {
+    const sorted = [match("project", "review", "p", 3), match("catalog", "review", "c", 8)].sort(compareRouteMatches);
+    expect(sorted.map((m) => m.source)).toEqual(["catalog", "project"]);
+  });
+
+  test("ties inside one source keep the module/name order", () => {
+    const sorted = [match("project", "testing", "b", 4), match("project", "implementation", "z", 4), match("project", "implementation", "a", 4)].sort(
+      compareRouteMatches,
+    );
+    expect(sorted.map((m) => `${m.module}/${m.name}`)).toEqual(["implementation/a", "implementation/z", "testing/b"]);
+    const bundled = [match("catalog", "review", "b", 4), match("catalog", "core", "a", 4)].sort(compareRouteMatches);
+    expect(bundled.map((m) => `${m.module}/${m.name}`)).toEqual(["core/a", "review/b"]);
   });
 });

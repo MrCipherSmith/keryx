@@ -173,6 +173,7 @@ Before you rely on a project-skill's guidance, confirm it still matches the code
 - `keryx skills route <target_file>` — find the project-skill for this module/entity (if any).
 - If one exists: `keryx skills verify <module>/<skill>` — classifies it `fresh | stale | needs-review | blocked`.
 - If it is **not `fresh`**: do not follow it blindly. Verify each claim against the code you read in Phase 2, and note the drift in `notes` (Phase 6.1) so the orchestrator can trigger `skills learn`.
+- If it is **`fresh`**: apply it. Its rules, templates and conventions for the target are part of the task, not background reading, and they supplement this skill's phases: a project skill never replaces a phase, the TDD order or the output contract. Where it and a bundled rule disagree, the project skill wins; say so in `notes`.
 - If no skill exists for a non-trivial module you had to reverse-engineer, note that too — it's a candidate for `skills create`.
 
 This step is read-only and inline; do not spawn a subagent for it.
@@ -224,8 +225,7 @@ Based on what you're implementing, load and follow the relevant project rules.
 - `async`/`await` or queue code → `async-patterns.mdc`
 - New architectural layers or modules → `clean-architecture.mdc`
 
-Rules live at `.metaproject/rules/core/<rule>.mdc` on every harness — that is the
-one tree `keryx init` installs and the one every build of this skill reads.
+Resolve every rule above project first, bundled second: read `.metaproject/rules/project/<rule>.mdc` when it exists, otherwise `.metaproject/rules/core/<rule>.mdc`. A project rule with the same name replaces the bundled one (never read both as if they agreed). `.metaproject/rules/core/` is the tree `keryx init` installs and `keryx update` overwrites, so a project's own rules live only in `rules/project/`.
 
 ### Phase 3: PLAN
 
