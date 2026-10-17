@@ -68,6 +68,14 @@ function reviewHistory(): NormalizedMessage[] {
       toolCalls: [{ id: "s1", name: "skill_load", arguments: JSON.stringify({ name: "review-orchestrator" }) }],
     },
     { role: "tool", content: "loaded", toolCallId: "s1" } as NormalizedMessage,
+    // The package was opened before this turn began; this session's own `review status` names it, so the gate
+    // recognises it (flow 460 review: a resumed review named in history is used).
+    {
+      role: "assistant",
+      content: "",
+      toolCalls: [{ id: "s2", name: "bash", arguments: JSON.stringify({ command: "keryx review status pr-1-all" }) }],
+    },
+    { role: "tool", content: "status: draft", toolCallId: "s2" } as NormalizedMessage,
   ];
 }
 
