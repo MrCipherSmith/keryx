@@ -57,7 +57,7 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ### Root causes (code reading at 0.3.120, bb0423cab; flow 459 changed only premise code in these files)
 
-Source report: /Users/Goodea/.claude/uploads/6e21c062-ce7d-4325-ac7a-f18aff8997ec/90e502aa-pr-7975-process-XXXXXX.md
+Source report: the owner-supplied PR #7975 process report (an upload; not committed)
 
 A (confirmed) readiness READY vs complete refusing:
 1. coverage.ts effectiveDepth (~495-509): a light dispatch with packageDir always recomputes the diff from git; packageDiffStats (477-483) runs `git diff ${target.ref}...${target.head}` — for a PR target ref is the PR URL/number (review.ts:1025/1046) → git fails → "diff could not be resolved" → full 11 set. target.base ignored; prior-round.ts:315 resolveBase does it right.

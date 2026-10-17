@@ -82,7 +82,7 @@
             "minimum": 1
           },
           "quote": {
-            "description": "The code this finding is about, copied verbatim out of `file`. A few lines is enough — it is matched against the file at the round's head, exactly first and then with whitespace collapsed. A quote that appears in more than one place is recorded as `unlocatable` rather than anchored to the first hit, so quote enough to be unambiguous.",
+            "description": "The code this finding is about, copied verbatim out of `file`. A few lines is enough — it is matched against the file at the round's head, exactly first, then with whitespace collapsed, then (a one-line quote) as an exact substring of exactly one line. A quote that appears in more than one place is recorded as `unlocatable` rather than anchored to the first hit, so quote enough to be unambiguous.",
             "type": [
               "string",
               "null"
