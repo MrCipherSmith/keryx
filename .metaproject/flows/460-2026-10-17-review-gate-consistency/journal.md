@@ -14,3 +14,4 @@
 - 2026-10-17T03:47:35.229Z - task-added: T11: CHANGELOG, release 0.3.122
 - 2026-10-17T03:47:35.402Z - frozen: 9 criteria; checksum recorded
 - 2026-10-17T03:47:35.559Z - started
+- 2026-10-17T03:54:05.947Z - task-done: T6: L2 nudge names this session's review (C)

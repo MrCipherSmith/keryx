@@ -11,7 +11,7 @@
   "title": "Review gates agree: readiness, complete, overrides, nudges, child results and artifacts tell one story",
   "status": "in-progress",
   "createdAt": "2026-10-17T03:45:43.162Z",
-  "updatedAt": "2026-10-17T03:47:35.559Z",
+  "updatedAt": "2026-10-17T03:54:05.947Z",
   "source": {
     "type": "description",
     "ref": null
@@ -114,7 +114,7 @@
       "id": "T6",
       "title": "L2 nudge names this session's review (C)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -122,7 +122,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
@@ -270,6 +271,11 @@
     {
       "at": "2026-10-17T03:47:35.559Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-17T03:54:05.947Z",
+      "event": "task-done",
+      "detail": "T6: L2 nudge names this session's review (C)"
     }
   ],
   "acKinds": {
