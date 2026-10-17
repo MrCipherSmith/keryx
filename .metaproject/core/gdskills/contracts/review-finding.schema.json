@@ -226,7 +226,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["reason"],
-      "description": "Written only by `review ingest` when `quote` was checked against `file` at the round's reviewed head and is absent from it (`absent`) or matches more than one place (`ambiguous`, with the matched lines in `candidate_lines`, bounded by the scan). The finding is kept with `line` null, never relocated by similarity or proximity, listed in scope.md and by readiness item `quotes-located`; the round is recorded rather than refused.",
+      "description": "Written only by `review ingest` when `quote` was checked against `file` at the round's reviewed head and is absent from it (`absent`) or matches more than one place (`ambiguous`, with the matched lines in `candidate_lines`, bounded by the scan). The finding is kept with `line` null, never relocated by similarity or proximity, listed in scope.md and by readiness item `quotes-located`; the round is recorded rather than refused. It is the machine-readable outcome of the same check that writes `locator` (`state: unlocatable`, its `reason` the prose of it): ingest writes both from one result and recomputes both on every ingest, so they never disagree. Gates and readers branch on this flag; `locator` is the record of how the line was or was not derived.",
       "properties": {
         "reason": { "type": "string", "enum": ["absent", "ambiguous"] },
         "candidate_lines": { "type": "array", "items": { "type": "integer", "minimum": 1 } }

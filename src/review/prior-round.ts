@@ -318,9 +318,11 @@ export async function resolveBase(git: GitRunner, target: PriorRoundTarget, head
   // merge-base with origin/main is its own head (an empty range), so a candidate that gives an empty range yields to the
   // next one; when every candidate is empty the first is returned and the caller warns loudly (`emptyRangeWarning`).
   let empty: { ref: string; sha: string } | null = null;
-  for (const ref of [target.base, "origin/main", "main", "origin/master", "master"]) {
-    if (ref === undefined || ref === "" || ref.startsWith("-")) continue;
-    const sha = await mergeBaseOf(git, ref, head);
+  const candidates = [target.base, "origin/main", "main", "origin/master", "master"].filter((ref): ref is string => ref !== undefined && ref !== "" && !ref.startsWith("-"));
+  // The probes are independent: run them together, then take the first that qualifies in candidate order.
+  const shas = await Promise.all(candidates.map((ref) => mergeBaseOf(git, ref, head)));
+  for (const [at, ref] of candidates.entries()) {
+    const sha = shas[at] ?? null;
     if (sha === null) continue;
     // An explicit base is kept even when it gives an empty range: the caller warns, it is never silently replaced.
     if (ref === target.base) return { ref, sha };

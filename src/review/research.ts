@@ -5,6 +5,40 @@ import { coverageGateErrors } from "./coverage-complete";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 export const PENDING_RESEARCH = { version: 1, scopeReviewed: false, rawReconciled: false, obligations: [] };
+
+/** One `dispatch.runs[]` entry of research.json as `ledger build` writes it (./ledger.ts `buildLedger`), read leniently. */
+export type DispatchRun = {
+  reviewer: string;
+  /** `complete`, `incomplete` or `not-run`; anything else is passed through as written. */
+  status?: string | undefined;
+  scopeComplete?: boolean | undefined;
+  /** True for a role slice routing gave no slice: recorded complete, never dispatched. */
+  routedOut?: boolean | undefined;
+  rawEvidence?: string | undefined;
+  notRunReason?: string | undefined;
+  executionReason?: string | undefined;
+};
+
+/** The reviewer runs research.json's dispatch record holds, each with a reviewer name; [] when there is none. */
+export function dispatchRuns(research: unknown): DispatchRun[] {
+  const record = (value: unknown): Record<string, unknown> | undefined => (value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined);
+  const runs = record(record(research)?.dispatch)?.runs;
+  if (!Array.isArray(runs)) return [];
+  const str = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined);
+  return runs.flatMap((value): DispatchRun[] => {
+    const run = record(value);
+    if (run === undefined || typeof run.reviewer !== "string" || run.reviewer === "") return [];
+    return [{
+      reviewer: run.reviewer,
+      status: str(run.status),
+      scopeComplete: typeof run.scopeComplete === "boolean" ? run.scopeComplete : undefined,
+      routedOut: run.routedOut === true ? true : undefined,
+      rawEvidence: str(run.rawEvidence),
+      notRunReason: str(run.notRunReason),
+      executionReason: str(run.executionReason),
+    }];
+  });
+}
 export function researchErrors(value: unknown, findings: unknown): string[] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return ["research ledger must be an object"];
   const ledger = value as Record<string, unknown>;

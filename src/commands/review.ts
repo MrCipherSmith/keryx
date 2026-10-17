@@ -1039,10 +1039,12 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
   }
   const cwd = process.cwd();
   const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
+  // Recorded on the target (flow 460): the coverage gate's light recheck diffs against `target.base` before any default.
+  const base = optionValue(args, "--base")?.trim() || undefined;
   const input: ManagedReviewIngestInput = {
     cwd,
     mode,
-    target: { kind: targetKind, ref: targetRef, ...(head === undefined ? {} : { head }) },
+    target: { kind: targetKind, ref: targetRef, ...(base === undefined ? {} : { base }), ...(head === undefined ? {} : { head }) },
     flowId: optionValue(args, "--flow"),
     reviewId: optionValue(args, "--review-id"),
     ...(args.includes(AUTOMATIC_REVIEW_FLAG) ? { automatic: true } : {}),

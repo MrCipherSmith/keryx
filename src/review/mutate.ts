@@ -343,8 +343,9 @@ export function renderMutationTable(record: MutationRecord): string {
 export async function writeMutationEvidence(packageDir: string, record: MutationRecord): Promise<{ json: string; md: string }> {
   const dir = path.join(packageDir, EVIDENCE_DIR);
   await mkdir(dir, { recursive: true });
-  const stem = record.baseline.tail !== undefined ? "mutation-baseline" : "mutation";
-  const pattern = new RegExp(`^${stem}-(\\d+)\\.json$`);
+  const baseline = record.baseline.tail !== undefined;
+  const pattern = baseline ? BASELINE_RECORD_FILE : MUTATION_RECORD_FILE;
+  const stem = baseline ? "mutation-baseline" : "mutation";
   const taken = (await readdir(dir)).map((n) => pattern.exec(n)?.[1]).filter((n): n is string => n !== undefined).map(Number);
   const n = (taken.length ? Math.max(...taken) : 0) + 1;
   const json = path.join(dir, `${stem}-${n}.json`);
@@ -354,19 +355,28 @@ export async function writeMutationEvidence(packageDir: string, record: Mutation
   return { json, md };
 }
 
+/** A recorded mutation pass, `mutation-<n>.json`; the number is captured. A baseline-failed record does not match. */
+const MUTATION_RECORD_FILE = /^mutation-(\d+)\.json$/;
+/** A record whose baseline failed, `mutation-baseline-<n>.json`: it judged no mutant. */
+const BASELINE_RECORD_FILE = /^mutation-baseline-(\d+)\.json$/;
+
+/** The names of the package's recorded mutation passes in `research-evidence/`; [] when there is none. */
+async function mutationRecordNames(packageDir: string): Promise<string[]> {
+  const dir = path.join(packageDir, EVIDENCE_DIR);
+  if (!existsSync(dir)) return [];
+  return (await readdir(dir)).filter((n) => MUTATION_RECORD_FILE.test(n));
+}
+
 /** Whether the package holds a recorded mutation pass (`research-evidence/mutation-<n>.json`); a baseline-failed record does not count. */
 export async function packageHasMutationRecord(packageDir: string): Promise<boolean> {
-  const dir = path.join(packageDir, EVIDENCE_DIR);
-  if (!existsSync(dir)) return false;
-  return (await readdir(dir)).some((n) => /^mutation-\d+\.json$/.test(n));
+  return (await mutationRecordNames(packageDir)).length > 0;
 }
 
 /** Ids of the mutants a recorded pass has judged. An invalid row judged nothing, so it does not count. */
 export async function doneMutantIds(packageDir: string): Promise<Set<string>> {
   const dir = path.join(packageDir, EVIDENCE_DIR);
   const done = new Set<string>();
-  if (!existsSync(dir)) return done;
-  for (const name of (await readdir(dir)).filter((n) => /^mutation-\d+\.json$/.test(n))) {
+  for (const name of await mutationRecordNames(packageDir)) {
     try {
       const record = JSON.parse(await readFile(path.join(dir, name), "utf8")) as MutationRecord;
       for (const m of record.mutants) if (m.status !== "invalid") done.add(m.id);

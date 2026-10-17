@@ -2,32 +2,47 @@ import { createHash } from "node:crypto";
 import { coverageErrors, skipLine, type ReviewMode, type ReviewerSkip } from "./coverage";
 import { dispatchErrors } from "./dispatch";
 import { layersUsedFrom } from "./layers-usage";
-import { researchErrors } from "./research";
+import { packageCoverageErrors, researchErrors } from "./research";
 import { describeUnusableResult, holdsResultList, lenientReviewResult } from "./result-parse";
 import { readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } from "./retry-plan";
 import { type SliceManifest, packWavesByKind, waveBytesOf } from "./slice";
 import { ALWAYS_ROLE, DEEP_ROLES, ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 import { fixSliceCoverage, priorDispositionsOf } from "./round-split";
-import { type DispatchUsage, type UsageTotals, splitUsage, usageFrom, usageTotals } from "./dispatch-usage";
+import { type DispatchUsage, type RunUsage, type UsageTotals, splitUsage, usageFrom, usageTotals } from "./dispatch-usage";
 
 /** Statuses of `reviewer-finding.schema.json` that mean the reviewer finished what it was given. */
 const FINISHED = new Set(["DONE", "DONE_WITH_CONCERNS"]);
 const CLOSED = new Set(["finding", "refuted", "out-of-scope", "narrowed"]);
 
 /** The mandatory inputs of a reviewer dispatch: a reply that says it could not read one did not review what it was asked to. */
-const MANDATORY_INPUT = "(?:pr[_ -]?context|result[_ -]?schema|(?:review(?:er)?[_ -])?schema|context[_ -]?file|payload|slice[_ -]?manifest)";
-const UNREADABLE = "(?:(?:could|can|did|was|were|is|are)(?:\\s+not|n['\u2019]t)|cannot|unable\\s+to|failed\\s+to|fail(?:s|ed)?\\s+to|missing|unreadable|not\\s+found|does\\s+not\\s+exist|no\\s+such\\s+file|permission\\s+denied)";
+const MANDATORY_INPUT = "(?:pr[_ -]?context(?:\\.json)?|result[_ -]?schema|(?:review(?:er)?[_ -])?schema|context[_ -]?file|payload|slice[_ -]?manifest)";
+/** Where a statement about the reviewer's own reading starts: the start of the summary or of a sentence, or a first-person subject. */
+const OWN_STATEMENT = "(?:^|[.;:!?]\\s+|\\b(?:I|we|this\\s+reviewer|the\\s+reviewer)\\s+)";
+const CANNOT = "(?:could\\s+not|couldn['\u2019]t|cannot|can['\u2019]t|did\\s+not|didn['\u2019]t|(?:was|were)\\s+unable\\s+to|unable\\s+to|failed\\s+to)";
+const INPUT_NAMED = `(?:the\\s+|my\\s+|its\\s+|this\\s+|any\\s+)?(?:dispatch(?:ed)?\\s+|mandatory\\s+)?${MANDATORY_INPUT}`;
+/**
+ * Flow 460 D: the only phrasings that count as the reviewer saying it could not read a mandatory input. Each is anchored
+ * to a statement about the reviewer's own reading (a sentence start or a first-person subject) and names the input right
+ * next to a reading verb, so defect prose about a schema or a payload ("the payload parser is missing a guard",
+ * "reviewer-finding.schema.json is missing a slices property", "pr-context is not passed to the light check",
+ * "loadSchema cannot open the schema when\u2026") never matches. No gap of free text is allowed between the parts.
+ */
 const UNREADABLE_INPUT = [
-  new RegExp(`${UNREADABLE}[^.\\n]{0,80}\\b(?:read|open|load|access|find|parse)\\b[^.\\n]{0,80}\\b${MANDATORY_INPUT}\\b`, "i"),
-  new RegExp(`\\b${MANDATORY_INPUT}\\b[^.\\n]{0,80}${UNREADABLE}`, "i"),
+  // "I could not read pr_context.json", "Unable to open the context file", "Failed to load the payload".
+  new RegExp(`${OWN_STATEMENT}${CANNOT}\\s+(?:read|open|load|access|find|parse)\\s+${INPUT_NAMED}\\b`, "im"),
+  // "The result schema could not be read", "The payload was unreadable", "The result schema was not found; \u2026".
+  new RegExp(`${OWN_STATEMENT}${INPUT_NAMED}(?:\\s+file)?\\s+(?:(?:could\\s+not|couldn['\u2019]t)\\s+be\\s+(?:read|opened|loaded|accessed|found|parsed)|was\\s+(?:unreadable|not\\s+readable)|was\\s+not\\s+found\\s*(?:[.;:,]|$))`, "im"),
 ];
+/** How much of the matched statement the gap quotes back. */
+const CLAIM_QUOTE_CHARS = 120;
 
 /** Flow 460 D: the words of a reviewer reply that state a mandatory input could not be read, if it says so. */
-export function unreadableInputClaim(result: ParsedResult): string | undefined {
-  if (!text(result.summary)) return undefined;
-  const hit = UNREADABLE_INPUT.map((re) => re.exec(result.summary!)).find((m) => m !== null);
-  return hit ? hit[0].trim().slice(0, 120) : undefined;
+export function unreadableInputClaim(result: object): string | undefined {
+  const summary = (result as { summary?: unknown }).summary;
+  if (typeof summary !== "string" || summary.trim() === "") return undefined;
+  const hit = UNREADABLE_INPUT.map((re) => re.exec(summary)).find((m) => m !== null);
+  return hit ? hit[0].replace(/^[.;:!?\s]+/, "").trim().slice(0, CLAIM_QUOTE_CHARS) : undefined;
 }
 
 export type ParsedResult = {
@@ -515,7 +530,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     if (manifest !== undefined) {
       for (const raw of mine) {
         const reply = raw.result!;
-                const assigned = raw.assignedSlices ?? (mine.length === 1 && input.payloadDispatchCounts?.[reviewer] === 1 ? input.payloadSlices[reviewer] : undefined);
+        const assigned = raw.assignedSlices ?? (mine.length === 1 && input.payloadDispatchCounts?.[reviewer] === 1 ? input.payloadSlices[reviewer] : undefined);
         if (assigned === undefined) continue;
         const allowed = new Set(assigned);
         // Flow 460 D: a reply that names no `slices` claims none; a DONE status alone is not coverage of a manifest.
@@ -636,12 +651,12 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
  * Flow 460: a run's token use over every raw result of its reviewer (one per dispatch/wave). `"unknown"` when none
  * reported usage; otherwise the known sums with the count of dispatches that reported none, never folded in as 0.
  */
-function runUsage(mine: readonly RawFile[]): Record<string, unknown> | "unknown" {
+function runUsage(mine: readonly RawFile[]): RunUsage | "unknown" {
   const usages = mine.map(rawUsage);
   const totals = usageTotals(usages);
   if (totals.known === 0) return "unknown";
   const model = [...usages].reverse().find((usage) => usage?.model !== undefined)?.model;
-  return { tokens_in: totals.tokens_in, tokens_out: totals.tokens_out, ...(model === undefined ? {} : { model }), dispatches: totals.dispatches, unknown: totals.unknown };
+  return { tokens_in: totals.tokens_in, tokens_out: totals.tokens_out, ...(model === undefined ? {} : { model }), dispatches: totals.dispatches, unknown: totals.unknown, ...(totals.partial === undefined ? {} : { partial: totals.partial }) };
 }
 
 /** A routable role that slice routing gave no slice, in a routed manifest; the regression reviewer always runs (scope B). */
@@ -741,13 +756,13 @@ function closeWith(given: Disposition | undefined, canonical: Array<Record<strin
 }
 
 /**
- * The gate's validators over the ledger just built (research, dispatch, coverage). The coverage check runs with the
- * options the caller passes: `review complete` and `review readiness` read theirs from the package
- * (`packageCoverageErrors`, ./research.ts), so a caller that passes others (no `prContext`, another root) can still
- * disagree with them. "ready" here is the ledger's view, not a promise that complete will pass.
+ * The gate's validators over the ledger just built (research, dispatch, coverage). With a `packageDir` the coverage check
+ * is the one `review complete` and `review readiness` run, with its options read from the package
+ * (`packageCoverageErrors`, ./research.ts), so READY here is what complete accepts. Without one (a ledger built outside
+ * a package) it runs with the options the caller passes.
  */
 export async function ledgerBlockers(ledger: LedgerResult["ledger"], canonical: unknown, options: { root: string; packageDir?: string | undefined; files: readonly string[] | undefined; changedLines?: number | undefined; blastRadius?: boolean | undefined; pendingMutants?: number | undefined }): Promise<string[]> {
   const dispatch = dispatchErrors(ledger.dispatch);
-  const coverage = dispatch.length === 0 ? await coverageErrors(ledger.dispatch, options) : [];
+  const coverage = dispatch.length > 0 ? [] : options.packageDir !== undefined ? await packageCoverageErrors(options.packageDir, ledger.dispatch) : await coverageErrors(ledger.dispatch, options);
   return [...researchErrors(ledger, canonical), ...dispatch, ...coverage];
 }

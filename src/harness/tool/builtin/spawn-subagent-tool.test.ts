@@ -22,7 +22,7 @@ import type { NormalizedEvent, NormalizedRequest, ProviderPort, StreamOptions } 
 import { loadRoutingConfigRaw } from "../../routing/config";
 import { approveProjectRouting } from "../../routing/trust";
 import { splitUsage } from "../../../review/dispatch-usage";
-import { parseReviewResult } from "../../../review/ledger";
+import { isEmptyOutput, parseReviewResult } from "../../../review/ledger";
 
 function stubProvider(text: string): ProviderPort {
   return {
@@ -1376,6 +1376,85 @@ test("flow 460 (H): save_result_to carries the child's token use as a KERYX_USAG
     });
     await silent.invoke({ task: "review", save_result_to: "raw/review-style.txt" });
     expect(await readFile(path.join(root, "raw/review-style.txt"), "utf8")).not.toContain("KERYX_USAGE");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/** One provider stream: `text`, then each usage report, then the end (or a hang, for a child stopped at its deadline). */
+function usageStreamProvider(text: string, usages: ReadonlyArray<{ inputTokens?: number; outputTokens?: number }>, options: { hang?: boolean } = {}): ProviderPort {
+  return {
+    describe: () => ({ capabilities: PROBE_CAPABILITIES, descriptor: { providerId: "usage-stream" } }),
+    async *stream(_req, opts: StreamOptions): AsyncGenerator<NormalizedEvent> {
+      let sequence = 0;
+      if (text !== "") yield { kind: "text_delta", sequence: sequence++, attemptId: opts.attemptId, text };
+      for (const usage of usages) yield { kind: "usage_update", sequence: sequence++, attemptId: opts.attemptId, usage: { ...usage, exact: true } };
+      if (options.hang === true) await new Promise(() => {});
+      yield { kind: "model_end", sequence, attemptId: opts.attemptId };
+    },
+  };
+}
+
+const usageTool = (root: string, provider: ProviderPort) =>
+  createSpawnSubagentTool({ cwd: root, getParentModel: () => ({ providerId: "ollama", modelId: "fake" }), makeProvider: () => provider, getDetectedProviders: () => [{ name: "ollama" }] });
+
+test("flow 460 (H): every usage report is added, and one that names only one count still counts", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-saveusage-sum-"));
+  try {
+    const tool = usageTool(root, usageStreamProvider('REVIEW_RESULT {"reviewer":"review-logic","status":"DONE","findings":[]}', [{ inputTokens: 100, outputTokens: 10 }, { outputTokens: 5 }]));
+    expect((await tool.invoke({ task: "review", save_result_to: "raw/review-logic.txt" })).status).toBe("Completed");
+    expect(splitUsage(await readFile(path.join(root, "raw/review-logic.txt"), "utf8")).usage).toEqual({ tokens_in: 100, tokens_out: 15, model: "ollama/fake" });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("flow 460 (H): a child stopped at its deadline saves its partial text with a usage line marked partial; one with no text still records the dispatch", async () => {
+  const prev = process.env[ENV_SUBAGENT_TIMEOUT_MS];
+  process.env[ENV_SUBAGENT_TIMEOUT_MS] = "250";
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-saveusage-timeout-"));
+  try {
+    const partial = await usageTool(root, usageStreamProvider("half a review", [{ inputTokens: 50, outputTokens: 5 }], { hang: true })).invoke({ task: "review", save_result_to: "raw/review-logic.txt" });
+    expect(partial.status).toBe("Timeout");
+    const saved = await readFile(path.join(root, "raw/review-logic.txt"), "utf8");
+    expect(splitUsage(saved)).toEqual({ body: "half a review", usage: { tokens_in: 50, tokens_out: 5, model: "ollama/fake", partial: true } });
+
+    const silent = await usageTool(root, usageStreamProvider("", [{ inputTokens: 30, outputTokens: 0 }], { hang: true })).invoke({ task: "review", save_result_to: "raw/review-style.txt" });
+    expect(silent.status).toBe("Timeout");
+    const empty = await readFile(path.join(root, "raw/review-style.txt"), "utf8");
+    expect(isEmptyOutput(empty)).toBe(true);
+    expect(splitUsage(empty).usage).toEqual({ tokens_in: 30, tokens_out: 0, model: "ollama/fake", partial: true });
+  } finally {
+    if (prev === undefined) delete process.env[ENV_SUBAGENT_TIMEOUT_MS];
+    else process.env[ENV_SUBAGENT_TIMEOUT_MS] = prev;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("flow 460 E/H: an empty reply records its dispatch and usage, never over a complete result, and its advice depends on the mode", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-saveusage-empty-"));
+  try {
+    const counted = usageStreamProvider("", [{ inputTokens: 70, outputTokens: 0 }]);
+    let requests = 0;
+    const counting: ProviderPort = { ...counted, stream: (req, opts) => { requests += 1; return counted.stream(req, opts); } };
+    const readOnly = await usageTool(root, counting).invoke({ task: "review", mode: "read_only", save_result_to: "raw/review-logic.txt" });
+    expect(readOnly.isError).toBe(true);
+    expect(readOnly.output).toContain("re-dispatch it once");
+    const saved = await readFile(path.join(root, "raw/review-logic.txt"), "utf8");
+    expect(isEmptyOutput(saved)).toBe(true);
+    // Every provider request the empty child made is counted.
+    expect(requests).toBeGreaterThan(0);
+    expect(splitUsage(saved).usage).toEqual({ tokens_in: 70 * requests, tokens_out: 0, model: "ollama/fake" });
+
+    // A complete result already there is kept: the empty dispatch goes beside it, where no reader picks it up.
+    await writeFile(path.join(root, "raw/review-style.txt"), 'REVIEW_RESULT {"reviewer":"review-style","status":"DONE","findings":[]}\n');
+    await usageTool(root, usageStreamProvider("", [])).invoke({ task: "review", mode: "read_only", save_result_to: "raw/review-style.txt" });
+    expect(await readFile(path.join(root, "raw/review-style.txt"), "utf8")).toContain('"status":"DONE"');
+
+    const general = await usageTool(root, usageStreamProvider("", [])).invoke({ task: "edit", mode: "general" });
+    expect(general.isError).toBe(true);
+    expect(general.output).toContain("inspect the working tree before re-dispatching");
+    expect(general.output).not.toContain("re-dispatch it once");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

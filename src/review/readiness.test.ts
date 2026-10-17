@@ -13,7 +13,7 @@ import { CALLER_UNATTRIBUTED, recordLogStart, recordOrchestratorCall } from "./o
 import { downgradedPremise, heldFinding, premiseAnswer } from "./premise-fixtures";
 import { commitFiles, git, initRepo } from "./git-fixture.test-helpers";
 import { packageCoverageErrors } from "./research";
-import { READINESS_ITEMS, computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
+import { COVERAGE_MD_MARK, READINESS_ITEMS, computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
 
 let root: string;
 let pkg: string;
@@ -635,5 +635,37 @@ describe("flow 460 F: coverage.md names what the dispatch record ran", () => {
     expect(stale.evidence).toContain("review-logic");
     writeCoverageMd(Object.fromEntries(REVIEWERS.map((name) => [name, "run"])));
     expect((await computeReadiness(pkg)).items.find((item) => item.id === "coverage-md")!.status).toBe("pass");
+  });
+
+  test("the repair names the cause: an ingest with --reviewers writes the list as given and fails again", async () => {
+    writeResearch("repaired");
+    writeCoverageMd({ "review-logic": "run" });
+    const item = (await computeReadiness(pkg)).items.find((entry) => entry.id === "coverage-md")!;
+    expect(item.status).toBe("fail");
+    expect(item.repair).toContain("without --reviewers or --coverage");
+  });
+
+  /** The package as `review complete` left it before flow 460: closed, its coverage.md naming the stand-in. */
+  function closedBefore460(): void {
+    writeResearch("repaired");
+    for (const name of REVIEWERS) writeFileSync(path.join(pkg, "raw", `${name}.txt`), "reply");
+    writeCoverageMd({ "review-orchestrator": "run" });
+    const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
+    writeJson("manifest.json", { ...manifest, status: "closed" });
+  }
+
+  test("a package closed before flow 460 keeps its recorded close: item 6 does not hold its coverage.md to the omission check", async () => {
+    closedBefore460();
+    const report = await computeReadiness(pkg);
+    expect(report.items.find((item) => item.id === "coverage-md")!.status).toBe("pass");
+    expect(report.items.find((item) => item.id === "reviewers")!.evidence).toContain("closed before readiness ran the coverage gate");
+  });
+
+  test("a closed package whose coverage.md carries the flow 460 mark is still held to the omission check", async () => {
+    closedBefore460();
+    writeFileSync(path.join(pkg, "coverage.md"), `# Reviewer Coverage\n\n${COVERAGE_MD_MARK}\n\nreviewer: review-orchestrator\nstatus: run\nreason: x\n`);
+    const item = (await computeReadiness(pkg)).items.find((entry) => entry.id === "coverage-md")!;
+    expect(item.status).toBe("fail");
+    expect(item.evidence).toContain("omits");
   });
 });
