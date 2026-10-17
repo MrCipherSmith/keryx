@@ -4740,7 +4740,7 @@ keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] 
                    [--memory-query "<query>"] [--automatic]
 keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--automatic]
                     [--verifications <file|->] [--verification-mode off|annotate|filter]
-                    [--premises <file|->]
+                    [--premises <file|->]...
                     [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                     [--refuted <file|->]
                     [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
@@ -6656,7 +6656,7 @@ Claims that name an unknown finding, come from the finding's own reporter, chall
 
 | Flag | Description |
 |---|---|
-| `--premises <file\|->` | The judge's result: the bare `{judge, model?, premises}` object, or a reply or report holding it in one fenced ` ```json keryx:premises ` block. A bare array is refused: it names no judge. |
+| `--premises <file\|->` | The judge's result: the bare `{judge, model?, premises}` object, or a reply or report holding it in one fenced ` ```json keryx:premises ` block. A bare array is refused: it names no judge. Repeatable (one file per judge dispatch): the files merge as one set of claims, each keeping its own judge; two claims on one finding that agree (the same verdict, across files, or on a finding and the duplicate ingest folded into it) apply once, and claims that disagree apply neither (`duplicate-claim`). A finding id holds no `#`, the global_id separator. |
 
 ### A finding points at the code it quotes
 

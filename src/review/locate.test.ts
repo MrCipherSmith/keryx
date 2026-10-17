@@ -172,3 +172,37 @@ describe("locateFinding", () => {
     expect(await locateFinding({ file: "src/greet.ts", quote: "   ", line: 6 }, reader(FILE))).toBeUndefined();
   });
 });
+
+describe("locateQuote — a one-line quote inside a line (flow 460)", () => {
+  test("an exact substring of exactly one line is located at that line", () => {
+    expect(locateQuote(FILE, "`hello ${trimmed}`")).toEqual({ state: "derived", method: "substring", line: 6 });
+  });
+
+  test("whitespace around the substring is trimmed before the exact match", () => {
+    expect(locateQuote(FILE, "  farewell(name  ")).toEqual({ state: "derived", method: "substring", line: 9 });
+  });
+
+  test("a substring several lines hold stays ambiguous, never the first hit", () => {
+    expect(locateQuote(FILE, "name.trim()")).toMatchObject({ state: "unlocatable", kind: "ambiguous", candidates: [2, 10] });
+    expect(locateQuote(FILE, "(name: string): string {")).toMatchObject({ state: "unlocatable", kind: "ambiguous", candidates: [1, 9] });
+  });
+
+  test("never similarity: a near-substring is absent", () => {
+    expect(locateQuote(FILE, "`helo ${trimmed}`")).toMatchObject({ state: "unlocatable", kind: "absent" });
+    // Spacing inside the substring is not normalised.
+    expect(locateQuote(FILE, "`hello  ${trimmed}`")).toMatchObject({ state: "unlocatable", kind: "absent" });
+  });
+
+  test("a multi-line quote is never matched as a substring", () => {
+    expect(locateQuote(FILE, "`hello ${trimmed}`;\n}\n\nexport function farew")).toMatchObject({ state: "unlocatable", kind: "absent" });
+  });
+
+  test("the size bounds still apply before the substring pass", () => {
+    const big = Array.from({ length: MAX_LOCATE_FILE_LINES + 1 }, (_, index) => `line ${index}`).join("\n");
+    expect(locateQuote(big, "line 7")).toMatchObject({ state: "unlocatable", kind: "bound" });
+  });
+
+  test("locateFinding records the substring method", async () => {
+    expect(await locateFinding({ file: "src/greet.ts", quote: "farewell(name", line: 40 }, async () => FILE)).toEqual({ state: "derived", method: "substring", line: 9, reported_line: 40 });
+  });
+});

@@ -736,6 +736,66 @@ describe("raw findings", () => {
     const result = buildLedger({ ...base, dispositions: [{ id: "review-logic:L-01", status: "finding", finding: "nope", evidence: "e", reason: "r" }] });
     expect(result.ledger.obligations[0]).toMatchObject({ status: "unresolved" });
   });
+
+  // Flow 460: the procedure as PR #1045's round 1 recorded it — canonical findings named `<raw stem>:<id>`, some merged
+  // as duplicates, some screened out by scope B — closes without hand-written rows.
+  const GID = (id: string) => `2026-10-17-round#${id}`;
+  const canonicalOf = (id: string, extra: Record<string, unknown> = {}) => ({ ...finding, id, global_id: GID(id), reviewer: "review-architecture", ...extra });
+
+  test("a `status: finding` row with no `finding` link resolves to the canonical finding with the same id", async () => {
+    const base = await withFinding();
+    const canonical = [canonicalOf("review-logic:L-01")];
+    const result = buildLedger({ ...base, canonical, dispositions: [{ id: "review-logic:L-01", status: "finding", evidence: "raw/review-logic.txt", reason: "kept as reported" }] });
+    expect(result.ledger.obligations[0]).toMatchObject({ status: "finding", finding: GID("review-logic:L-01"), reason: "kept as reported" });
+    expect(await blockersOf(result, canonical)).toEqual([]);
+    // With nothing of that id, the row links to what the raw finding already resolves to; with neither, it stays open.
+    const byReviewer = buildLedger({ ...base, canonical: [finding], dispositions: [{ id: "review-logic:L-01", status: "finding", evidence: "e", reason: "r" }] });
+    expect(byReviewer.ledger.obligations[0]).toMatchObject({ status: "finding", finding: "L-01" });
+    const none = buildLedger({ ...base, canonical: [canonicalOf("other")], dispositions: [{ id: "review-logic:L-01", status: "finding", evidence: "e", reason: "r" }] });
+    expect(none.ledger.obligations[0]).toMatchObject({ status: "unresolved" });
+  });
+
+  test("with no row at all, a canonical finding named by the obligation id closes it", async () => {
+    const base = await withFinding();
+    const canonical = [canonicalOf("review-logic:L-01")];
+    const result = buildLedger({ ...base, canonical });
+    expect(result.ledger.obligations[0]).toMatchObject({ status: "finding", finding: GID("review-logic:L-01") });
+    expect(await blockersOf(result, canonical)).toEqual([]);
+  });
+
+  test("a raw finding ingest merged as a duplicate links to the survivor through merged_from", async () => {
+    const base = await withFinding();
+    const canonical = [canonicalOf("review-architecture:A-07", { merged_from: [GID("review-logic:L-01")], reported_by: ["review-architecture", "review-logic"] })];
+    const result = buildLedger({ ...base, canonical });
+    expect(result.ledger.obligations[0]).toMatchObject({ status: "finding", finding: GID("review-architecture:A-07") });
+    expect(String(result.ledger.obligations[0]?.reason)).toContain("merged it as a duplicate");
+    expect(await blockersOf(result, canonical)).toEqual([]);
+  });
+
+  test("a raw finding ingest screened out of findings.json closes out-of-scope with the screen's reason", async () => {
+    const base = await withFinding();
+    const screened = [{ id: "review-logic:L-01", global_id: GID("review-logic:L-01"), reviewer: "review-logic", rule: "non-regression-severity", detail: "minor is below the scope-B floor major" }];
+    const result = buildLedger({ ...base, screened, screenedEvidence: "research-evidence/ingest-screened.json" });
+    expect(result.ledger.obligations[0]).toMatchObject({ status: "out-of-scope", evidence: "research-evidence/ingest-screened.json" });
+    expect(String(result.ledger.obligations[0]?.reason)).toContain("non-regression-severity");
+    expect(String(result.ledger.obligations[0]?.reason)).toContain("below the scope-B floor");
+    expect(result.ledger.rawReconciled).toBe(true);
+    expect(await blockersOf(result)).toEqual([]);
+    // Matched by the reviewer's own id too, for a canonical set that kept the raw ids.
+    const bare = buildLedger({ ...base, screened: [{ ...screened[0]!, id: "L-01" }] });
+    expect(bare.ledger.obligations[0]).toMatchObject({ status: "out-of-scope" });
+    // An explicit row still wins over the screen.
+    const given = buildLedger({ ...base, screened, dispositions: [{ id: "review-logic:L-01", status: "refuted", evidence: "ran it", reason: "no defect" }] });
+    expect(given.ledger.obligations[0]).toMatchObject({ status: "refuted" });
+  });
+
+  test("a raw finding id holding '#' is a gap naming the id form ingest needs", async () => {
+    const base = await inputs();
+    const result = buildLedger({ ...base, raws: base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, findings: [{ ...finding, id: "w1#L-01" }] } } : r)) });
+    const gap = result.gaps.find((entry) => entry.detail.includes("w1#L-01"));
+    expect(gap?.detail).toContain('holds "#"');
+    expect(gap?.next).toContain("global_id");
+  });
 });
 
 describe("raw files", () => {

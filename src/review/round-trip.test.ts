@@ -457,15 +457,22 @@ describe("legacy markdown reports are not stranded", () => {
 
     await withTempRoot(async (root) => {
       for (const [index, report] of reports.entries()) {
-        const result = await createManagedReviewPackage({
+        const input = {
           cwd: root,
-          mode: "ingest",
+          mode: "ingest" as const,
           reviewId: `legacy-${index}`,
-          target: { kind: "report", ref: report.id },
+          target: { kind: "report" as const, ref: report.id },
           reportText: report.text,
           ...(report.blastRadius === undefined ? {} : { blastRadius: report.blastRadius }),
           now: new Date("2026-08-29T10:00:00Z"),
-        });
+        };
+        // Flow 460: a recorded package whose report is still the placeholder `review start` wrote (no block, no
+        // finding) is a stub, and ingest now refuses it by name instead of recording a round that found nothing.
+        if (report.text.includes("No reviewer findings recorded yet.") && !report.text.includes("keryx:findings")) {
+          await expect(createManagedReviewPackage(input)).rejects.toThrow("it is a stub");
+          continue;
+        }
+        const result = await createManagedReviewPackage(input);
         const findings = JSON.parse(
           await readFile(path.join(root, result.path, "findings.json"), "utf8"),
         ) as StructuredReviewFinding[];

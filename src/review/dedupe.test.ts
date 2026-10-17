@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { codeTokens, isDuplicate, knownFindingsForWave, mergeDuplicates, problemSimilarity, renderDuplicatesMarkdown } from "./dedupe";
+import { checkFilterStats } from "./filter-stats";
 import { createManagedReviewPackage } from "./managed";
 import type { StructuredReviewFinding } from "./types";
 
@@ -288,6 +289,9 @@ describe("ingest", () => {
     expect(recorded[0]?.reported_by).toEqual(["review-architecture", "review-logic"]);
     expect(recorded[0]?.merged_from).toEqual(["2026-10-16-dedupe#F-001"]);
     expect(result.duplicates).toHaveLength(1);
+    // Flow 460: the merge is counted, so total − drops − merged_duplicates = retained and the checker stays quiet.
+    expect(result.filterStats).toMatchObject({ total: 2, merged_duplicates: 1, retained: 1 });
+    expect(checkFilterStats(result.filterStats)).toEqual([]);
 
     // Ingest gates every record on review-finding.schema.json before the write,
     // so a record on disk carrying reported_by/merged_from is a schema-valid one.

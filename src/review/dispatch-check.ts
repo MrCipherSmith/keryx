@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type JsonSchema, validateJson } from "../gdskills/contracts";
+import { DISPLAY_ID_FORM, displayIdHasHash } from "./display-id";
 import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, byteLength, manifestSizeProblem, waveBytesOf } from "./slice";
 
 export type DispatchCheckCode =
@@ -13,7 +14,8 @@ export type DispatchCheckCode =
   | "REVIEWER_INPUT_NO_PR_CONTEXT"
   | "REVIEWER_INPUT_PATH_MISSING"
   | "REVIEWER_INPUT_MANIFEST_UNSIZED"
-  | "REVIEWER_INPUT_PLAN_UNCONFIRMED";
+  | "REVIEWER_INPUT_PLAN_UNCONFIRMED"
+  | "REVIEWER_INPUT_ID_FORM";
 
 export type DispatchCheckError = {
   code: DispatchCheckCode;
@@ -111,6 +113,20 @@ export async function checkDispatch(payloads: readonly unknown[], options: Check
             message: `${field} ${value} does not exist; the reviewer would be rejected at dispatch. Fix the path or omit the field`,
           });
         }
+      }
+    }
+    // Flow 460: a finding handed to the reviewer is named by a display id it will echo back; one holding "#" would
+    // only fail at ingest, after the whole round, when its global_id is minted.
+    if (isRecord(payload)) {
+      for (const [field, ids] of [
+        ["known_findings", (Array.isArray(payload.known_findings) ? payload.known_findings : []).map((entry) => (isRecord(entry) ? entry.id : undefined))],
+        ["prior_findings", (Array.isArray(payload.prior_findings) ? payload.prior_findings : []).map((entry) => (isRecord(entry) && isRecord(entry.finding) ? entry.finding.id : undefined))],
+      ] as const) {
+        ids.forEach((id, at) => {
+          if (displayIdHasHash(id)) {
+            errors.push({ code: "REVIEWER_INPUT_ID_FORM", reviewer, path: `$.${field}[${at}]`, message: `finding id "${id}": ${DISPLAY_ID_FORM}` });
+          }
+        });
       }
     }
     if (options.prContext !== undefined) {

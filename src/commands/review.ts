@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { closeSync, openSync } from "node:fs";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import path, { join } from "node:path";
-import { optionValue } from "../lib/args";
+import { optionValue, optionValues } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
 import { assertGitRevision, revisionOperand } from "../lib/git-revision";
 // Through the security facade, not `security/redact` directly — same
@@ -227,6 +227,7 @@ import {
   VERIFICATION_MODES,
   type FindingDispositionState,
   type ManagedReviewInput,
+  type PremiseSource,
   type ManagedReviewMode,
   type ReviewFindingsSource,
   type ReviewScopeRecordLike,
@@ -1053,7 +1054,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
     reportPath: optionValue(args, "--report"),
     refuted: await readRefuted(optionValue(args, "--refuted")),
     verifications: await readVerifications(optionValue(args, "--verifications")),
-    premises: await readPremises(optionValue(args, "--premises")),
+    premises: await readPremises(optionValues(args, "--premises")),
     research: optionValue(args, "--research") ? JSON.parse(await readFile(path.resolve(cwd, optionValue(args, "--research")!), "utf8")) : undefined,
     verificationMode: parseVerificationMode(optionValue(args, "--verification-mode")),
     scope: await readScope(optionValue(args, "--scope")),
@@ -3621,10 +3622,26 @@ async function readVerifications(source: string | undefined): Promise<ManagedRev
  * `review-premise`'s own output (flow 459): `{ judge, model?, premises: [...] }`, read from a file or stdin. The shape is
  * checked here so a malformed file refuses the ingest before anything is written; the per-claim rules run in the merge.
  */
-async function readPremises(source: string | undefined): Promise<ManagedReviewInput["premises"]> {
-  if (source === undefined) {
+async function readPremises(sources: readonly string[]): Promise<ManagedReviewInput["premises"]> {
+  if (sources.length === 0) {
     return undefined;
   }
+  // Flow 460: --premises is repeatable. One file is read as before; several are kept as a list, each with its own
+  // judge, and merged by the ingest as one set of claims (a conflicting claim across files is a duplicate-claim).
+  if (sources.filter((source) => source === "-").length > 1) {
+    throw new Error("--premises - (stdin) may be given once. Nothing was ingested.");
+  }
+  if (sources.length === 1) {
+    return readPremiseFile(sources[0] as string);
+  }
+  const files: PremiseSource[] = [];
+  for (const source of sources) {
+    files.push((await readPremiseFile(source)) as PremiseSource);
+  }
+  return files;
+}
+
+async function readPremiseFile(source: string): Promise<ManagedReviewInput["premises"]> {
   let raw: string;
   try {
     raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
@@ -4818,7 +4835,7 @@ ${GRAPH_TIMEOUT_HELP}`);
 function printIngestHelp(): void {
   console.log(`keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--research <ledger.json>]
                     [--review-id <id>] [--automatic] [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
-                    [--premises <file|->]
+                    [--premises <file|->]...
                     [--scope <scope.json>] [--blast-radius <blast-radius.json>] [--cross-family-review <file|->]
                     [--refuted <file|->] [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                     [--tokens-in <n>] [--tokens-out <n>] [--parallel <n>] [--outstanding <n>]
@@ -4901,7 +4918,7 @@ Usage:
   keryx review verify-run --package <dir> --finding <id> -- <command…>
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--research <ledger.json>] [--review-id <id>] [--automatic]
-                      [--verifications <file|->] [--premises <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
+                      [--verifications <file|->] [--premises <file|->]... [--verification-mode ${VERIFICATION_MODES.join("|")}]
                       [--scope <scope.json>] [--blast-radius <blast-radius.json>]
                       [--cross-family-review <file|->]
                     [--refuted <file|->]
@@ -5307,6 +5324,11 @@ verification (attach/start/ingest):
   only lower a severity. The operator answers with \`keryx review decide-premise\`. A re-ingest
   without --premises over a package the judge held carries each hold from the previous
   findings.json to the same unchanged finding, and is refused otherwise.
+  --premises is repeatable (one file per judge dispatch): the files are merged as one set of
+  claims, each keeping its own judge. Two claims on one finding that agree (the same verdict,
+  across files, or on a finding and the duplicate ingest folded into it) apply once; claims that
+  disagree apply neither (duplicate-claim). A finding id holds no "#": that is the global_id
+  separator (<reviewId>#<id>).
   --scope takes the WHOLE \`keryx review scope --json\` document — counts and the
   per-drop reasons — so the package records what the pre-filter dropped and why.
   Omitted, a \`## Pre-filter scope\` block already in the package's scope.md is

@@ -251,6 +251,11 @@
           "type": ["integer", "null"],
           "minimum": 0
         },
+        "merged_duplicates": {
+          "description": "Records the duplicate merge folded into a surviving finding (flow 460). Not a drop; counted so that total minus the finding-stage drops minus merged_duplicates equals retained. Absent on records written before it, read as 0.",
+          "type": "integer",
+          "minimum": 0
+        },
         "retained": {
           "type": ["integer", "null"],
           "minimum": 0
