@@ -11,7 +11,7 @@
   "title": "Review gates agree: readiness, complete, overrides, nudges, child results and artifacts tell one story",
   "status": "in-progress",
   "createdAt": "2026-10-17T03:45:43.162Z",
-  "updatedAt": "2026-10-17T04:19:24.450Z",
+  "updatedAt": "2026-10-17T07:55:48.359Z",
   "source": {
     "type": "description",
     "ref": null
@@ -204,6 +204,20 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "L5 ingest procedure defects (substring quotes, ids, --premises, links, closures, flow binding, stub, merged verdicts, filter_stats)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -294,6 +308,11 @@
       "at": "2026-10-17T04:19:24.450Z",
       "event": "task-done",
       "detail": "T7: L3 child results and artifacts reconcile (D, E, F)"
+    },
+    {
+      "at": "2026-10-17T07:55:48.359Z",
+      "event": "task-added",
+      "detail": "T12: L5 ingest procedure defects (substring quotes, ids, --premises, links, closures, flow binding, stub, merged verdicts, filter_stats)"
     }
   ],
   "acKinds": {
