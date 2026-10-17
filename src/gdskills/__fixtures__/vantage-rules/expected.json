@@ -1,0 +1,10 @@
+{
+  "files": ["src/features/panel/Panel.tsx"],
+  "entries": [
+    { "path": ".metaproject/rules/project/styling.mdc", "reason": "glob:src/**/*.{tsx,css}", "tier": "must_read" },
+    { "path": ".metaproject/rules/project/i18n.mdc", "reason": "glob:src/**/*.tsx", "tier": "must_read" },
+    { "path": ".metaproject/rules/project/components.mdc", "reason": "glob:src/**/*.tsx", "tier": "must_read" },
+    { "path": ".metaproject/rules/project/index.mdc", "reason": "always", "tier": "on_demand", "index": true }
+  ],
+  "warnings": []
+}

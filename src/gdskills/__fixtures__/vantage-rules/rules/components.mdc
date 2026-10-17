@@ -1,0 +1,42 @@
+---
+description: React component structure and View/Store boundary
+globs: src/**/*.tsx
+alwaysApply: false
+---
+
+# Component structure
+
+1. Wrap every component that reads an observable in observer (rule component-structure-01)
+2. Pass callbacks down, never the whole store (rule component-structure-02)
+3. Keep one exported component per file and name the file after it (rule component-structure-03)
+4. Derive display values with computed in the store, not in JSX (rule component-structure-04)
+5. A view component reads state from its store and renders; it owns no business logic (rule component-structure-05)
+6. Wrap every component that reads an observable in observer (rule component-structure-06)
+7. Pass callbacks down, never the whole store (rule component-structure-07)
+8. Keep one exported component per file and name the file after it (rule component-structure-08)
+9. Derive display values with computed in the store, not in JSX (rule component-structure-09)
+10. A view component reads state from its store and renders; it owns no business logic (rule component-structure-10)
+11. Wrap every component that reads an observable in observer (rule component-structure-11)
+12. Pass callbacks down, never the whole store (rule component-structure-12)
+13. Keep one exported component per file and name the file after it (rule component-structure-13)
+14. Derive display values with computed in the store, not in JSX (rule component-structure-14)
+15. A view component reads state from its store and renders; it owns no business logic (rule component-structure-15)
+16. Wrap every component that reads an observable in observer (rule component-structure-16)
+17. Pass callbacks down, never the whole store (rule component-structure-17)
+18. Keep one exported component per file and name the file after it (rule component-structure-18)
+19. Derive display values with computed in the store, not in JSX (rule component-structure-19)
+20. A view component reads state from its store and renders; it owns no business logic (rule component-structure-20)
+21. Wrap every component that reads an observable in observer (rule component-structure-21)
+22. Pass callbacks down, never the whole store (rule component-structure-22)
+23. Keep one exported component per file and name the file after it (rule component-structure-23)
+24. Derive display values with computed in the store, not in JSX (rule component-structure-24)
+25. A view component reads state from its store and renders; it owns no business logic (rule component-structure-25)
+26. Wrap every component that reads an observable in observer (rule component-structure-26)
+27. Pass callbacks down, never the whole store (rule component-structure-27)
+28. Keep one exported component per file and name the file after it (rule component-structure-28)
+29. Derive display values with computed in the store, not in JSX (rule component-structure-29)
+30. A view component reads state from its store and renders; it owns no business logic (rule component-structure-30)
+31. Wrap every component that reads an observable in observer (rule component-structure-31)
+32. Pass callbacks down, never the whole store (rule component-structure-32)
+33. Keep one exported component per file and name the file after it (rule component-structure-33)
+34. Derive display values with computed in the store, not in JSX (rule component-structure-34)

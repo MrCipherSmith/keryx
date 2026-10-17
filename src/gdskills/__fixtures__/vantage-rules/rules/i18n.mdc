@@ -1,0 +1,42 @@
+---
+description: User-facing text goes through translation keys
+globs: src/**/*.tsx
+alwaysApply: false
+---
+
+# Translations
+
+1. Add the key to the English catalog in the same change (rule translations-01)
+2. Do not build a sentence by concatenating translated fragments (rule translations-02)
+3. Pass counts to the plural form instead of branching on them (rule translations-03)
+4. Keep key names after the feature, not after the screen (rule translations-04)
+5. Every visible string comes from a translation key (rule translations-05)
+6. Add the key to the English catalog in the same change (rule translations-06)
+7. Do not build a sentence by concatenating translated fragments (rule translations-07)
+8. Pass counts to the plural form instead of branching on them (rule translations-08)
+9. Keep key names after the feature, not after the screen (rule translations-09)
+10. Every visible string comes from a translation key (rule translations-10)
+11. Add the key to the English catalog in the same change (rule translations-11)
+12. Do not build a sentence by concatenating translated fragments (rule translations-12)
+13. Pass counts to the plural form instead of branching on them (rule translations-13)
+14. Keep key names after the feature, not after the screen (rule translations-14)
+15. Every visible string comes from a translation key (rule translations-15)
+16. Add the key to the English catalog in the same change (rule translations-16)
+17. Do not build a sentence by concatenating translated fragments (rule translations-17)
+18. Pass counts to the plural form instead of branching on them (rule translations-18)
+19. Keep key names after the feature, not after the screen (rule translations-19)
+20. Every visible string comes from a translation key (rule translations-20)
+21. Add the key to the English catalog in the same change (rule translations-21)
+22. Do not build a sentence by concatenating translated fragments (rule translations-22)
+23. Pass counts to the plural form instead of branching on them (rule translations-23)
+24. Keep key names after the feature, not after the screen (rule translations-24)
+25. Every visible string comes from a translation key (rule translations-25)
+26. Add the key to the English catalog in the same change (rule translations-26)
+27. Do not build a sentence by concatenating translated fragments (rule translations-27)
+28. Pass counts to the plural form instead of branching on them (rule translations-28)
+29. Keep key names after the feature, not after the screen (rule translations-29)
+30. Every visible string comes from a translation key (rule translations-30)
+31. Add the key to the English catalog in the same change (rule translations-31)
+32. Do not build a sentence by concatenating translated fragments (rule translations-32)
+33. Pass counts to the plural form instead of branching on them (rule translations-33)
+34. Keep key names after the feature, not after the screen (rule translations-34)
