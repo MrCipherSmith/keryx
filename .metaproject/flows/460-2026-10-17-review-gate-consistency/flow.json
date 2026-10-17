@@ -11,7 +11,7 @@
   "title": "Review gates agree: readiness, complete, overrides, nudges, child results and artifacts tell one story",
   "status": "in-progress",
   "createdAt": "2026-10-17T03:45:43.162Z",
-  "updatedAt": "2026-10-17T08:36:33.775Z",
+  "updatedAt": "2026-10-17T08:45:06.969Z",
   "source": {
     "type": "description",
     "ref": null
@@ -219,6 +219,20 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "L6 fix slices get the fix roster; fix hunks are the ones touching a finding",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -319,6 +333,11 @@
       "at": "2026-10-17T08:36:33.775Z",
       "event": "task-done",
       "detail": "T12: L5 ingest procedure defects (substring quotes, ids, --premises, links, closures, flow binding, stub, merged verdicts, filter_stats)"
+    },
+    {
+      "at": "2026-10-17T08:45:06.969Z",
+      "event": "task-added",
+      "detail": "T13: L6 fix slices get the fix roster; fix hunks are the ones touching a finding"
     }
   ],
   "acKinds": {
