@@ -5548,8 +5548,13 @@ Token spend per dispatch: a raw result may end with one line
 `KERYX_USAGE {"tokens_in":N,"tokens_out":M,"model":"<id>"}`. keryx shell's `spawn_subagent`
 appends it to the `save_result_to` file itself; a host that saves the reply on its own
 (Claude Code, Codex) appends it from the token counts its own agent result reports. A
-reviewer's result object may carry the same `usage` object instead; the line wins. The line
-is not part of the reply: it never makes an empty reply non-empty. `ledger build` records each
+reviewer's result object may carry the same `usage` object instead; the line wins. When a
+retry writes to the same file, every earlier dispatch's usage is kept as a
+`KERYX_USAGE_OTHER {…}` line and counted as its own dispatch; a complete earlier result is never
+overwritten by an empty or partial one. The lines are not part of the reply: they never make an
+empty reply non-empty. A reviewer that could not read a mandatory input says so in its result's
+`inputs_unreadable` array (e.g. `["pr_context"]`), which makes the run incomplete; its prose is
+never read for this. `ledger build` records each
 run's `usage` (summed over its waves, with the count of waves that reported none, or
 `"unknown"`) and the round's total as `research.json` `usage`
 (`dispatches`, `known`, `unknown`, `tokens_in`, `tokens_out`); it prints `token spend: …`, and
