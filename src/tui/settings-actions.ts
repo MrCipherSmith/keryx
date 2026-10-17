@@ -10,6 +10,8 @@ export interface SettingsActionHandlers {
   plan: (line: string) => void;
   guard: (on: boolean) => void;
   editGuard: (on: boolean) => Promise<void>;
+  /** `/projectctx warn|block` (flow 461). */
+  projectContext: (mode: "warn" | "block") => Promise<void>;
   route: (on: boolean) => void;
   external: (value: "on" | "off") => Promise<void>;
   /** `/external-agents [on|off]`: the text to show. */
@@ -51,6 +53,9 @@ export async function runSettingsCommand(command: string, handlers: SettingsActi
         return;
       case "/editguard":
         await handlers.editGuard(arg === "on");
+        return;
+      case "/projectctx":
+        await handlers.projectContext(arg === "block" ? "block" : "warn");
         return;
       case "/route":
         handlers.route(arg === "on");

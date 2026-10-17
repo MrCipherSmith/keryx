@@ -56,6 +56,8 @@ export interface SettingsSnapshot {
   plan: boolean;
   guard: boolean;
   editGuard: boolean;
+  /** Flow 461: whether a missing `project_context_applied` only warns or blocks. `configError`: `tasks.config.json` cannot be read, so the row is read-only. */
+  projectContext: { enforcement: "warn" | "block"; maxBytes: number; configError?: boolean };
   routing: boolean;
   externalPrivacy: { value: "on" | "off"; source: "project" | "user" | "default" };
   /**
@@ -236,6 +238,26 @@ export function buildSettingsRows(state: SettingsSnapshot): SettingRow[] {
       command: "/editguard",
       usage: "/editguard [on|off]",
       actions: toggleActions("/editguard", state.editGuard),
+    },
+    {
+      id: "projectctx",
+      group: "Safety",
+      label: "Project rules check",
+      value: state.projectContext.enforcement,
+      scope: "saved",
+      detail:
+        state.projectContext.configError === true
+          ? "tasks.config.json is not valid JSON; fix it to change this"
+          : "this project",
+      command: "/projectctx",
+      usage: "/projectctx [warn|block]",
+      actions:
+        state.projectContext.configError === true
+          ? []
+          : [
+              action("Warn", "/projectctx warn", state.projectContext.enforcement === "warn"),
+              action("Block", "/projectctx block", state.projectContext.enforcement === "block"),
+            ],
     },
     {
       id: "route",

@@ -440,6 +440,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/projectctx",
+    group: "Managed work",
+    summary: "Project rules for implementation: the last resolve, the context cap and warn/block enforcement — /projectctx [warn|block].",
+  },
+  {
+    kind: "slash",
     name: "/jevprofile",
     group: "Managed work",
     summary: "Every review.jev.* setting next to its measured verdict; toggle one or apply the recommended profile.",
