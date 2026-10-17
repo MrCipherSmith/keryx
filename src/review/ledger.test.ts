@@ -46,7 +46,7 @@ const MANIFEST = {
 let clock = 0;
 function raw(reviewer: string, status: string, extra: Record<string, unknown> = {}, name = `raw/${reviewer}.txt`): RawFile {
   clock += 1;
-  return { name, hash: `h${clock}`, mtimeMs: clock, empty: false, result: { reviewer, status, summary: "s", findings: [], needs_context: [], ...extra } };
+  return { name, hash: `h${clock}`, mtimeMs: clock, empty: false, result: { reviewer, status, summary: "s", findings: [], needs_context: [], slices: ["slice-01", "slice-02"], ...extra } };
 }
 
 async function inputs(overrides: Partial<LedgerInputs> = {}): Promise<LedgerInputs> {
@@ -606,7 +606,8 @@ describe("buildLedger", () => {
   test("a retry slice accounts for the original it was cut from", async () => {
     const base = await inputs();
     const manifest = { ...MANIFEST, slices: [...MANIFEST.slices, slice("r1-review-logic-01", ["src/b.test.ts"], { retryOf: ["slice-02"], attempt: 1 })] } as SliceManifest;
-    const result = buildLedger({ ...base, manifest, payloadSlices: { ...base.payloadSlices, "review-logic": ["slice-01", "r1-review-logic-01"] } });
+    const reads = (...ids: string[]) => base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, slices: ids } } : r));
+    const result = buildLedger({ ...base, manifest, raws: reads("slice-01", "r1-review-logic-01"), payloadSlices: { ...base.payloadSlices, "review-logic": ["slice-01", "r1-review-logic-01"] } });
     expect(result.gaps).toEqual([]);
   });
 
@@ -686,9 +687,10 @@ describe("buildLedger", () => {
     const base = await inputs();
     const pieces = [slice("r1-review-logic-01", ["src/b.test.ts"], { retryOf: ["slice-02"], attempt: 1, reviewer: "review-logic" }), slice("r1-review-logic-02", ["src/b.test.ts"], { retryOf: ["slice-02"], attempt: 1, reviewer: "review-logic" })];
     const manifest = { ...MANIFEST, slices: [...MANIFEST.slices, ...pieces] } as SliceManifest;
-    const partial = buildLedger({ ...base, manifest, payloadSlices: { ...base.payloadSlices, "review-logic": ["slice-01", "r1-review-logic-01"] } });
+    const reads = (...ids: string[]) => base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, slices: ids } } : r));
+    const partial = buildLedger({ ...base, manifest, raws: reads("slice-01", "r1-review-logic-01"), payloadSlices: { ...base.payloadSlices, "review-logic": ["slice-01", "r1-review-logic-01"] } });
     expect(partial.gaps.find((g) => g.reviewer === "review-logic")!.detail).toContain("slice-02");
-    const whole = buildLedger({ ...base, manifest, payloadSlices: { ...base.payloadSlices, "review-logic": ["slice-01", "r1-review-logic-01", "r1-review-logic-02"] } });
+    const whole = buildLedger({ ...base, manifest, raws: reads("slice-01", "r1-review-logic-01", "r1-review-logic-02"), payloadSlices: { ...base.payloadSlices, "review-logic": ["slice-01", "r1-review-logic-01", "r1-review-logic-02"] } });
     expect(whole.gaps).toEqual([]);
   });
 });
@@ -777,12 +779,12 @@ describe("dispatch attribution", () => {
   });
   test("explicit result assignments close only their own slices", async () => {
     const base = await inputs();
-    const a = { ...raw("review-logic", "DONE", {}, "raw/a.txt"), assignedSlices: ["slice-01"] };
-    const b = { ...raw("review-logic", "DONE", {}, "raw/b.txt"), assignedSlices: ["slice-02"] };
+    const a = { ...raw("review-logic", "DONE", { slices: ["slice-01"] }, "raw/a.txt"), assignedSlices: ["slice-01"] };
+    const b = { ...raw("review-logic", "DONE", { slices: ["slice-02"] }, "raw/b.txt"), assignedSlices: ["slice-02"] };
     const others = base.raws.filter(r => r.result?.reviewer !== "review-logic");
     expect(buildLedger({ ...base, raws: [...others, a, b] }).ledger.scopeReviewed).toBe(true);
     const hostile = { ...b, result: { ...b.result!, slices: ["slice-01", "slice-02"] } };
-    expect(buildLedger({ ...base, raws: [...others, { ...a, result: { ...a.result!, status: "BLOCKED" } }, hostile] }).ledger.scopeReviewed).toBe(false);
+    expect(buildLedger({ ...base, raws: [...others, { ...a, result: { ...a.result!, status: "BLOCKED", slices: undefined } }, hostile] }).ledger.scopeReviewed).toBe(false);
   });
   test("prose and JSON strings containing escaped quotes and braces parse", () => {
     const object = { status: "DONE", summary: 'brace } and "quote"', reviewer: "review-logic" };
@@ -971,5 +973,40 @@ describe("a delta round's fix slices (flow 458 AC4)", () => {
     const answered = buildLedger({ ...base, raws: base.selected.map((reviewer) => ({ ...raw(reviewer, "DONE", { slices: read(reviewer), ...(reviewer === "review-architecture" ? { prior_dispositions: [{ id: "F1", disposition: "partial" }] } : {}) }), assignedSlices: read(reviewer) })) });
     expect(answered.ledger.dispatch.fixSlicesCovered).toEqual(["slice-01"]);
     expect(answered.ledger.scopeReviewed).toBe(true);
+  });
+});
+
+describe("flow 460 D/F: what a reply claims, and what the artifacts say ran", () => {
+  test("D: a DONE reply without `slices` under a slice manifest is not scope-complete", async () => {
+    const base = await inputs();
+    const bare = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, slices: undefined } } : r));
+    const result = buildLedger({ ...base, raws: bare });
+    const logic = (result.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find((r) => r.reviewer === "review-logic")!;
+    expect(logic).toMatchObject({ status: "complete", scopeComplete: false });
+    expect(result.gaps.find((g) => g.reviewer === "review-logic")!.detail).toContain("slice(s) not covered");
+    expect(result.ledger.scopeReviewed).toBe(false);
+    // Without a manifest there is nothing to name, so DONE alone still closes the reviewer.
+    const unsliced = buildLedger({ ...base, manifest: undefined, raws: bare });
+    expect((unsliced.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find((r) => r.reviewer === "review-logic")).toMatchObject({ status: "complete", scopeComplete: true });
+  });
+
+  test("D: a DONE reply that states a mandatory input could not be read is incomplete", async () => {
+    const base = await inputs();
+    for (const summary of ["I could not read pr_context.json, so I reviewed the diff only", "The result schema was not found; replied from memory", "unable to open the context file"]) {
+      const said = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, summary } } : r));
+      const result = buildLedger({ ...base, raws: said });
+      const logic = (result.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find((r) => r.reviewer === "review-logic")!;
+      expect(logic).toMatchObject({ status: "incomplete", scopeComplete: false });
+      expect(result.gaps.find((g) => g.reviewer === "review-logic")!.detail).toContain("mandatory input could not be read");
+    }
+    const fine = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, summary: "Read pr_context and the schema; no problems found" } } : r));
+    expect(buildLedger({ ...base, raws: fine }).gaps).toEqual([]);
+  });
+
+  test("F: the light-round mutation line appears only when the package holds no mutation record", async () => {
+    const base = await inputs({ depth: "light" });
+    expect(buildLedger(base).ledger.dispatch.notRun).toEqual(["Not run: mutation (light round)"]);
+    expect(buildLedger({ ...base, mutationRecorded: false }).ledger.dispatch.notRun).toEqual(["Not run: mutation (light round)"]);
+    expect(buildLedger({ ...base, mutationRecorded: true }).ledger.dispatch.notRun).toBeUndefined();
   });
 });

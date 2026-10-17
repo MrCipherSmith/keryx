@@ -5,3 +5,6 @@ export const READY_DISPATCH = {
     scopeComplete: true, rawEvidence: "synthetic fixture report", ruleEvidence: ["synthetic fixture contract"],
     executionRequired: false, executionReason: "Synthetic package lifecycle test; no production code under review" }],
 };
+
+/** The coverage.md an ingest writes for a package whose research is {@link READY_DISPATCH}: it lists the reviewer that ran. */
+export const READY_COVERAGE_MD = "# Reviewer Coverage\n\nreviewer: synthetic-reviewer\nstatus: run\nreason: lifecycle fixture\n";

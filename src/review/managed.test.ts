@@ -1895,6 +1895,37 @@ describe("ingest into an existing package defaults to its recorded head (flow 45
   });
 });
 
+describe("flow 460 F: coverage reconciles with the dispatch record", () => {
+  const research = (extra: Record<string, unknown> = {}) => ({
+    version: 1, scopeReviewed: true, rawReconciled: true, obligations: [],
+    dispatch: { ...READY_DISPATCH, selected: ["review-logic", "review-style"], runs: [
+      { ...READY_DISPATCH.runs[0], reviewer: "review-logic", executionId: "a" },
+      { reviewer: "review-style", executionId: "b", status: "not-run", notRunReason: "never dispatched", scopeComplete: false },
+    ] },
+    ...extra,
+  });
+  const ingest = (input: Partial<ManagedReviewIngestInput>) =>
+    createManagedReviewPackage({ cwd: ROOT, mode: "ingest", reviewId: "2026-10-17-cov", target: { kind: "branch", ref: "feature" }, reportText: "# Round\n", findings: [], now: new Date("2026-10-17T12:00:00Z"), ...input });
+
+  test("research without --reviewers lists the reviewers that ran, with their status, in the manifest and coverage.md", async () => {
+    await fresh();
+    const created = await ingest({ research: research() });
+    expect(created.manifest.coverage.map((entry) => `${entry.reviewer}:${entry.status}`)).toEqual(["review-logic:run", "review-style:failed"]);
+    const md = await readFile(path.join(ROOT, created.path, "coverage.md"), "utf8");
+    expect(md).toContain("reviewer: review-logic");
+    expect(md).toContain("reviewer: review-style");
+    expect(md).not.toContain("review-orchestrator");
+  });
+
+  test("an explicit --reviewers list still wins, and no research keeps the orchestrator stand-in", async () => {
+    await fresh();
+    const named = await ingest({ research: research(), reviewers: ["review-logic"], reviewId: "2026-10-17-cov-named" });
+    expect(named.manifest.coverage.map((entry) => entry.reviewer)).toEqual(["review-logic"]);
+    const bare = await ingest({ research: undefined, reviewId: "2026-10-17-cov-bare" });
+    expect(bare.manifest.coverage.map((entry) => entry.reviewer)).toEqual(["review-orchestrator"]);
+  });
+});
+
 // These synthetic fixtures exercise disposition/ingest, not outstanding research.
 // The pending default is exercised without this helper in research.test.ts.
 function createManagedReviewPackage(input: ManagedReviewIngestInput) {

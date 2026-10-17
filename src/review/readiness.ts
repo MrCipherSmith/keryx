@@ -231,6 +231,10 @@ async function coverageMdCheck(ctx: Context): Promise<Verdict> {
   if (raw === undefined) return bad("coverage.md is missing", `re-run keryx review ingest <input> for this package: it writes coverage.md`);
   const claimed = [...raw.matchAll(/reviewer:\s*(\S+)\s*\n\s*status:\s*(\S+)/g)].filter((match) => match[2] === "run").map((match) => match[1] as string);
   const lying = claimed.filter((name) => bad2.has(name));
+  // Flow 460 F: a reviewer the dispatch record ran must be listed too; coverage.md that names a stand-in omits it.
+  const listed = new Set([...raw.matchAll(/reviewer:\s*(\S+)\s*\n\s*status:\s*(\S+)/g)].map((match) => match[1] as string));
+  const omitted = runs.flatMap((run) => (run !== undefined && typeof run.reviewer === "string" && !listed.has(run.reviewer) ? [run.reviewer] : []));
+  if (omitted.length > 0) return bad(`coverage.md omits ${some(omitted)}, which the dispatch record ran`, `re-run keryx review ingest <input> for this package: it writes coverage.md from the dispatch record`);
   if (lying.length === 0) return ok(`${claimed.length} reviewer(s) listed as run, none contradicted by the dispatch record`);
   return bad(`coverage.md lists ${some(lying)} as "run", but the dispatch record says they did not finish`, `re-run keryx review ingest <input> for this package: it rewrites coverage.md from the dispatch record`);
 }

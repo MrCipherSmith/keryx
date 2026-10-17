@@ -569,6 +569,28 @@ test("status: Completed on a clean model finish", async () => {
   expect(result.partial).toBeUndefined();
 });
 
+test("flow 460 E: a child that ends with no text and submitted nothing is an error outcome, not Completed", async () => {
+  const events: SpawnSubagentFleetEvent[] = [];
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => textProvider(""),
+    getDetectedProviders: () => [{ name: "ollama" }],
+    idSeq: (() => {
+      let n = 0;
+      return () => `id-${n++}`;
+    })(),
+    clock: () => "2020-01-01T00:00:00.000Z",
+    onFleetEvent: (event) => events.push(event),
+  });
+  const result = await tool.invoke({ task: "say nothing", mode: "read_only" });
+  expect(result.isError).toBe(true);
+  expect(result.status).not.toBe("Completed");
+  expect(result.output).toContain("no text");
+  expect(result.output).not.toContain("--- summary ---");
+  expect(lastUpsert(events)?.status).toBe("failed");
+});
+
 test("status: BudgetExhausted when the child's round budget exhausts before a clean finish (AC5)", async () => {
   let requests = 0;
   const events: SpawnSubagentFleetEvent[] = [];
