@@ -2,7 +2,7 @@
 // package is open and `keryx review complete` would still refuse.
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { REPEATABLE_TOOL_NAMES } from "../commands/agent";
@@ -12,8 +12,10 @@ import {
   MAX_REVIEW_GATE_CONTINUES,
   type OpenManagedReview,
   reviewRunSeenInHistory,
+  sessionReviewRoots,
   sessionStartedAt,
 } from "./completion-gate";
+import { writeActiveReview } from "./active-review";
 
 let root: string;
 
@@ -107,7 +109,7 @@ test("findReviewGateState returns the draft review-flow package with its blocker
   await writePackage("old-closed", { mode: "review-flow", status: "closed" });
   await writePackage("other-mode", { mode: "something-else", status: "draft" });
   await writePackage("live", { mode: "review-flow", status: "draft" });
-  const found = await findReviewGateState(root, Date.now() + 60_000);
+  const found = await findReviewGateState(root, 0);
   expect(found?.reviewId).toBe("live");
   expect(found?.blockers[0]).toContain("missing artifacts");
 });
@@ -183,4 +185,55 @@ test("hardening: nested same-size rewrite counts as progress", async () => {
   const after = await findReviewGateState(root, 0);
   expect(after?.signature).not.toBe(before?.signature);
   expect(decideReviewGate({ ...idle, open: after, stalls: 2, lastSignature: before?.signature })).toMatchObject({ action: "continue", stalls: 0 });
+});
+
+async function writeSubPackage(name: string, manifest: Record<string, unknown>): Promise<string> {
+  const dir = path.join(root, "sub", ".metaproject", "reviews", name);
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, "manifest.json"), JSON.stringify({ reviewId: name, ...manifest }));
+  return dir;
+}
+
+async function writeOldPackage(name: string): Promise<void> {
+  const dir = await writePackage(name, { mode: "review-flow", status: "draft" });
+  const past = new Date(Date.now() - 3_600_000);
+  await utimes(path.join(dir, "manifest.json"), past, past);
+}
+
+test("the nudge names the package the active-review pointer names, not an older open one in cwd", async () => {
+  await writeOldPackage("pr-7912");
+  const since = Date.now() - 60_000;
+  const current = await writeSubPackage("pr-7975", { mode: "review-flow", status: "draft" });
+  const sub = path.join(root, "sub");
+  await writeActiveReview(sub, { id: "pr-7975", dir: current });
+  const found = await findReviewGateState(root, since, [sub]);
+  expect(found?.reviewId).toBe("pr-7975");
+  expect(found?.packageDir).toBe(current);
+});
+
+test("a package started this session under a subdirectory is found without a pointer; an older one in cwd is not named", async () => {
+  await writeOldPackage("pr-7912");
+  const since = Date.now() - 60_000;
+  await writeSubPackage("pr-7975", { mode: "review-flow", status: "draft" });
+  const found = await findReviewGateState(root, since, [path.join(root, "sub")]);
+  expect(found?.reviewId).toBe("pr-7975");
+});
+
+test("no pointer and only an old open package: the old package is never named", async () => {
+  await writeOldPackage("pr-7912");
+  const found = await findReviewGateState(root, Date.now() - 60_000);
+  expect(found?.reviewId).not.toBe("pr-7912");
+  expect(found?.packageDir).toBe("");
+});
+
+test("sessionReviewRoots derives the project root from a package path the session printed", () => {
+  const roots = sessionReviewRoots(
+    [
+      { content: `opened ${root}/sub/.metaproject/reviews/20261017-r03 ok` },
+      { toolCalls: [{ arguments: '{"command":"keryx review ledger build in --package out/.metaproject/reviews/x-r01"}' }] },
+      { content: `${root}/.metaproject/reviews/here` },
+    ],
+    root,
+  );
+  expect(roots.sort()).toEqual([path.join(root, "out"), path.join(root, "sub")].sort());
 });
