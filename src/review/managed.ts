@@ -9,7 +9,7 @@ import { roundRecordTampered } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
 import { withSpendSection } from "./dispatch-usage";
 import { renderCoverageMd } from "./coverage-md";
-import { INGEST_SCREENED_FILE, PENDING_RESEARCH, dispatchRuns, packageResearchErrors, type IngestScreened } from "./research";
+import { INGEST_SCREENED_FILE, PENDING_RESEARCH, dispatchRuns, packageResearchErrors, type DispatchRun, type IngestScreened } from "./research";
 import { computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
@@ -273,7 +273,7 @@ export async function createManagedReviewPackage(
   const { reviewId, packageDir } = await allocatePackage(input, flowMatch, at);
   // Before anything is written: an id that names packages in two places refuses here (review LG6-002, SEC6-001).
   const verifications = await ownPackageVerifications(input, packageDir);
-  const coverage = normalizeCoverage(input.coverage, input.reviewers, input.research);
+  const coverage = normalizeCoverage(input.coverage, input.reviewers, dispatchRuns(input.research));
   const report = await readReport(input);
   const reviewers = attributionReviewers(input);
   const { findings: reported, from: findingsFrom } = await normalizeFindings({
@@ -1216,13 +1216,14 @@ function buildManifest(args: {
 }
 
 /**
- * Flow 460 F: the reviewers a research record says were dispatched, with the status each ended in. With a research
- * record and no explicit `--reviewers`, coverage lists these rather than a stand-in orchestrator that never reviewed.
+ * Flow 460 F: the reviewers a research record says were dispatched (its typed `dispatch.runs`), with the status each
+ * ended in. With a research record and no explicit `--reviewers`, coverage lists these rather than a stand-in
+ * orchestrator that never reviewed.
  */
-function coverageFromResearch(research: unknown): ReviewCoverageEntry[] {
+function coverageFromResearch(runs: readonly DispatchRun[]): ReviewCoverageEntry[] {
   const seen = new Set<string>();
   const entries: ReviewCoverageEntry[] = [];
-  for (const { reviewer, status, routedOut, notRunReason, executionReason } of dispatchRuns(research)) {
+  for (const { reviewer, status, routedOut, notRunReason, executionReason } of runs) {
     if (seen.has(reviewer)) continue;
     seen.add(reviewer);
     // A routed-out role is recorded complete but was never dispatched: coverage.md says so rather than "dispatched".
@@ -1243,13 +1244,13 @@ function coverageFromResearch(research: unknown): ReviewCoverageEntry[] {
 const ATTRIBUTION_FALLBACK = "review-orchestrator";
 
 /** coverage.md's entries: --coverage as given, else the dispatch record (no --reviewers), else the named reviewers, else the fallback. */
-function normalizeCoverage(coverage: ReviewCoverageEntry[] | undefined, reviewers: string[] | undefined, research: unknown): ReviewCoverageEntry[] {
+function normalizeCoverage(coverage: ReviewCoverageEntry[] | undefined, reviewers: string[] | undefined, runs: readonly DispatchRun[]): ReviewCoverageEntry[] {
   if (coverage && coverage.length > 0) {
     return coverage;
   }
   const named = reviewers !== undefined && reviewers.length > 0;
   if (!named) {
-    const fromResearch = coverageFromResearch(research);
+    const fromResearch = coverageFromResearch(runs);
     if (fromResearch.length > 0) return fromResearch;
   }
   const selected = named ? reviewers : [ATTRIBUTION_FALLBACK];
@@ -1333,13 +1334,6 @@ async function normalizeFindings(args: NormalizeFindingsArgs): Promise<{ finding
 }
 
 /**
- * Flow 460: `review ingest` of a stub — an empty report, or the placeholder `review start` writes into a package before
- * any reviewer ran — that carries no `keryx:findings` block and no finding, with no `--findings` either, is not a clean
- * round: ingesting it would record a reviewed round that found nothing. Refused before anything is written. A round
- * that really found nothing says so in its own report, or with an empty block. (A prose report of an older round that
- * found nothing is not a stub and still ingests.)
- */
-/**
  * The reviewers a finding that names none is attributed to: what the operator gave (--coverage entries that ran, else
  * --reviewers), else the orchestrator — never the research record, where one finished reviewer must not absorb the
  * orchestrator's findings.
@@ -1367,6 +1361,13 @@ export function isStubReportText(report: string): boolean {
   return text === "" || text.includes(STUB_REPORT_LINE);
 }
 
+/**
+ * Flow 460: `review ingest` of a stub — an empty report, or the placeholder `review start` writes into a package before
+ * any reviewer ran — that carries no `keryx:findings` block and no finding, with no `--findings` either, is not a clean
+ * round: ingesting it would record a reviewed round that found nothing. Refused before anything is written. A round
+ * that really found nothing says so in its own report, or with an empty block. (A prose report of an older round that
+ * found nothing is not a stub and still ingests.)
+ */
 function refuseStubReport(input: ManagedReviewInput, report: string, from: "input" | "block" | "prose", findings: number): void {
   if (input.mode !== "ingest" || from !== "prose" || findings > 0) return;
   if (!isStubReportText(report)) return;

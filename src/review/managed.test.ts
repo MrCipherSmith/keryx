@@ -23,6 +23,7 @@ import type { BlastRadiusScreenInput } from "./blast-radius";
 import { readFlowReviewRounds } from "./loop";
 import { readReviewRounds } from "../flow/review-gate";
 import { readFlowReviewManifests } from "../governance/spend";
+import { flowPackageDirs, readStandalonePackages } from "./package-location";
 import {
   FINDING_DISPOSITION_STATES,
   MANAGED_REVIEW_MODES,
@@ -237,6 +238,11 @@ describe("flow 460: ingest procedure", () => {
     // An unbound standalone package is not the flow's.
     await createManagedReviewPackage({ cwd: ROOT, mode: "review-flow", reviewId: "2026-07-09-other", target: { kind: "branch", ref: "feature/y" }, now: new Date("2026-07-09T14:00:00Z") });
     expect((await readFlowReviewManifests(ROOT, flowDir)).map((manifest) => manifest.reviewId)).toEqual([reviewId]);
+    // A pass over many flows reads the standalone heads once and hands them over: the same answer (HL-R3-002).
+    const standalone = await readStandalonePackages(ROOT);
+    expect(standalone.map(({ dir }) => path.basename(dir)).sort()).toEqual([reviewId, "2026-07-09-other"]);
+    expect(await flowPackageDirs(ROOT, flowDir, standalone)).toEqual(await flowPackageDirs(ROOT, flowDir));
+    expect((await readFlowReviewManifests(ROOT, flowDir, standalone)).map((manifest) => manifest.reviewId)).toEqual([reviewId]);
   });
 
   test("ingest refuses the placeholder report `review start` writes, before writing anything", async () => {
@@ -272,7 +278,7 @@ describe("flow 460: ingest procedure", () => {
       target: { kind: "report", ref: "r.md" },
       reportText: "# Round\n",
       findings: [FINDING, { ...FINDING, id: "review-regression-w1:F-001", reviewer: "review-regression", file: "src/far.ts" }],
-      blastRadius: { files: [{ path: "src/near.ts", hop: 1 }], changedFiles: ["src/a.ts"] } as unknown as BlastRadiusScreenInput,
+      blastRadius: { files: [{ file: "src/near.ts", hop: 1, fanIn: 1, via: "src/a.ts", path: ["src/near.ts", "src/a.ts"], source: "graph", isTest: false }], changedFiles: ["src/a.ts"] } satisfies BlastRadiusScreenInput,
       now: new Date("2026-07-09T12:00:00Z"),
     });
     const record = JSON.parse(await readFile(path.join(ROOT, result.path, "research-evidence", "ingest-screened.json"), "utf8")) as { screened: Array<{ id: string; reviewer: string; rule: string; detail: string }> };

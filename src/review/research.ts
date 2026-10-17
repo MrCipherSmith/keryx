@@ -4,11 +4,8 @@ import { coverageErrors, packageChangedLines, packageHasBlastRadius, packageHasP
 import { coverageGateErrors } from "./coverage-complete";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { asRecord, dispatchRunRecords } from "./record";
 export const PENDING_RESEARCH = { version: 1, scopeReviewed: false, rawReconciled: false, obligations: [] };
-
-/** A JSON object as a record, or undefined for anything else (null, an array, a scalar). The one lenient reader of research.json. */
-export const asRecord = (value: unknown): Record<string, unknown> | undefined =>
-  value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
 
 /**
  * Flow 460: where `review ingest` records the findings it kept out of findings.json (the scope-B screen), relative to the
@@ -58,11 +55,8 @@ const oneLine = (value: unknown): string | undefined => (typeof value === "strin
 
 /** The reviewer runs research.json's dispatch record holds, each with a valid reviewer name ({@link REVIEWER_NAME}); [] when there is none. */
 export function dispatchRuns(research: unknown): DispatchRun[] {
-  const runs = asRecord(asRecord(research)?.dispatch)?.runs;
-  if (!Array.isArray(runs)) return [];
-  return runs.flatMap((value): DispatchRun[] => {
-    const run = asRecord(value);
-    if (run === undefined || typeof run.reviewer !== "string" || !REVIEWER_NAME.test(run.reviewer)) return [];
+  return dispatchRunRecords(asRecord(research)?.dispatch).flatMap((run): DispatchRun[] => {
+    if (typeof run.reviewer !== "string" || !REVIEWER_NAME.test(run.reviewer)) return [];
     return [{
       reviewer: run.reviewer,
       status: oneLine(run.status),
@@ -75,8 +69,8 @@ export function dispatchRuns(research: unknown): DispatchRun[] {
   });
 }
 export function researchErrors(value: unknown, findings: unknown): string[] {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return ["research ledger must be an object"];
-  const ledger = value as Record<string, unknown>;
+  const ledger = asRecord(value);
+  if (ledger === undefined) return ["research ledger must be an object"];
   const errors: string[] = [];
   if (ledger.version !== 1) errors.push("research ledger version must be 1");
   if (ledger.scopeReviewed !== true) errors.push("research scope census is incomplete");
@@ -86,8 +80,8 @@ export function researchErrors(value: unknown, findings: unknown): string[] {
   const ids = new Set<string>();
   const nonempty = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
   for (const item of ledger.obligations) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) { errors.push("invalid research obligation"); continue; }
-    const o = item as Record<string, unknown>;
+    const o = asRecord(item);
+    if (o === undefined) { errors.push("invalid research obligation"); continue; }
     const id = nonempty(o.id) ? o.id : "<missing-id>";
     if (!nonempty(o.id) || ids.has(id)) errors.push(`${id}: missing or duplicate obligation id`);
     ids.add(id);
@@ -124,7 +118,7 @@ export async function packageCoverageErrors(packageDir: string, dispatch: unknow
  * layer/chunk coverage-completeness gate, for a round that was closed before that gate existed.
  */
 export async function packageResearchErrors(packageDir: string, artifacts: unknown, findings: unknown, options: { coverage?: boolean; completeness?: boolean } = {}): Promise<string[]> {
-  const a = artifacts && typeof artifacts === "object" ? artifacts as Record<string, unknown> : {};
+  const a = asRecord(artifacts) ?? {};
   if (a.research === undefined) return a.reviewerDispatch === undefined ? [] : ["dispatch requires a research artifact"];
   if (a.reviewerDispatch !== undefined && a.reviewerDispatch !== "research.json") return ["invalid dispatch artifact locator"];
   if (a.research !== "research.json") return ["invalid research artifact locator"];

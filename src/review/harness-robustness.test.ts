@@ -26,7 +26,7 @@ import { publishReview } from "./publish";
 import { RUN_PROFILE_FILE, buildRunProfile, isAttendedRun, unattendedStartRefusal, writeRunProfile } from "./run-profile";
 import { compareVersions, defaultBundledReviewRoot, renderSkillDrift, reviewSkillDrift, shellQuote, skillVersion } from "./skill-drift";
 import { computeVerdict, renderVerdict, writeVerdict } from "./verdict";
-import { saveDispatchRecord } from "../harness/tool/builtin/spawn-subagent-tool";
+import { recordSaveNote, saveDispatchRecord } from "../harness/tool/builtin/spawn-subagent-tool";
 import { NO_TEXT_PLACEHOLDER, formatUsageLine, splitUsage } from "./dispatch-usage";
 import { isEmptyOutput } from "./ledger";
 import { defaultRunner, promoteParentExecutions, verifyRun } from "./verify-run";
@@ -580,36 +580,72 @@ describe("row 14: the record a dispatch leaves at save_result_to", () => {
     mkdirSync(path.dirname(target), { recursive: true });
   });
 
+  const INCOMPLETE = `KERYX_USAGE {"by":"host","incomplete":true}`;
+
   test("a partial result never overwrites a complete one: only its usage joins the file, whose mtime is kept", async () => {
-    expect(await saveDispatchRecord(target, { text: "partial one", final: false })).toEqual({ kept: false });
-    expect(readFileSync(target, "utf8")).toBe("partial one\n");
+    expect(await saveDispatchRecord(target, { text: "partial one", final: false })).toEqual({});
+    // A non-final save marks its own line incomplete, even with no usage to state (which reads as unknown).
+    expect(readFileSync(target, "utf8")).toBe(`partial one\n${INCOMPLETE}\n`);
+    expect(splitUsage(readFileSync(target, "utf8"))).toEqual({ body: "partial one", incomplete: true });
     writeFileSync(target, `COMPLETE RESULT\n${formatUsageLine(usage(10))}\n`);
     utimesSync(target, new Date(1_000_000), new Date(1_000_000));
-    expect(await saveDispatchRecord(target, { text: "partial two", final: false, usage: { ...usage(20), partial: true } })).toEqual({ kept: true });
+    expect(await saveDispatchRecord(target, { text: "partial two", final: false, usage: { ...usage(20), partial: true } })).toEqual({ kept: "complete" });
     expect(splitUsage(readFileSync(target, "utf8"))).toEqual({ body: "COMPLETE RESULT", usage: usage(10), others: [{ ...usage(20), partial: true }] });
     expect(statSync(target).mtimeMs).toBe(1_000_000);
     expect(existsSync(`${target}.partial`)).toBe(false);
   });
 
   test("an empty placeholder never blocks a retry, and every dispatch's usage stays on the file", async () => {
-    expect(await saveDispatchRecord(target, { text: "", final: false, usage: usage(5) })).toEqual({ kept: false });
+    expect(await saveDispatchRecord(target, { text: "", final: false, usage: usage(5) })).toEqual({});
     const empty = readFileSync(target, "utf8");
     expect(isEmptyOutput(empty)).toBe(true);
     expect(splitUsage(empty).body).toBe(NO_TEXT_PLACEHOLDER);
     // The retry times out with text: it lands at the target, not beside it.
-    expect(await saveDispatchRecord(target, { text: "half a review", final: false, usage: usage(7) })).toEqual({ kept: false });
-    expect(splitUsage(readFileSync(target, "utf8"))).toEqual({ body: "half a review", usage: usage(7), others: [usage(5)] });
+    expect(await saveDispatchRecord(target, { text: "half a review", final: false, usage: usage(7) })).toEqual({});
+    expect(splitUsage(readFileSync(target, "utf8"))).toEqual({ body: "half a review", usage: usage(7), others: [usage(5)], incomplete: true });
     // A third dispatch completes: it replaces the partial text and keeps both earlier dispatches' usage.
-    expect(await saveDispatchRecord(target, { text: "REVIEW_RESULT {}", final: true })).toEqual({ kept: false });
+    expect(await saveDispatchRecord(target, { text: "REVIEW_RESULT {}", final: true })).toEqual({ replaced: "partial" });
     expect(splitUsage(readFileSync(target, "utf8"))).toEqual({ body: "REVIEW_RESULT {}", others: [usage(5), usage(7)] });
   });
 
   test("an empty retry after a complete result keeps the result and records the empty dispatch", async () => {
     await saveDispatchRecord(target, { text: "COMPLETE RESULT", final: true, usage: usage(3) });
-    expect(await saveDispatchRecord(target, { text: "", final: false })).toEqual({ kept: true });
+    expect(await saveDispatchRecord(target, { text: "", final: false })).toEqual({ kept: "complete" });
     const saved = readFileSync(target, "utf8");
     expect(isEmptyOutput(saved)).toBe(false);
     expect(splitUsage(saved)).toEqual({ body: "COMPLETE RESULT", usage: usage(3), others: [undefined] });
+  });
+
+  test("a later partial replaces an earlier partial, never the other way round; an empty one keeps the earlier text (LG-001, RG3-001)", async () => {
+    // Dispatch 1 times out with some text; dispatch 2 times out after writing its whole result.
+    await saveDispatchRecord(target, { text: "partial A", final: false, usage: { ...usage(4), partial: true } });
+    expect(await saveDispatchRecord(target, { text: "REVIEW_RESULT {fuller B}", final: false, usage: { ...usage(9), partial: true } })).toEqual({ replaced: "partial" });
+    expect(splitUsage(readFileSync(target, "utf8"))).toEqual({ body: "REVIEW_RESULT {fuller B}", usage: { ...usage(9), partial: true }, others: [{ ...usage(4), partial: true }], incomplete: true });
+    // Dispatch 3 ends with no text: B stays, still marked incomplete, and dispatch 3 is counted.
+    expect(await saveDispatchRecord(target, { text: "", final: false })).toEqual({ kept: "partial" });
+    expect(splitUsage(readFileSync(target, "utf8"))).toEqual({ body: "REVIEW_RESULT {fuller B}", usage: { ...usage(9), partial: true }, others: [{ ...usage(4), partial: true }, undefined], incomplete: true });
+  });
+
+  test("the parent is told what was actually kept or replaced: never 'complete' for an earlier partial", () => {
+    expect(recordSaveNote({ kept: "complete" }, "partial result", "raw/x.txt")).toContain("the complete result an earlier dispatch saved");
+    expect(recordSaveNote({ kept: "partial" }, "empty result", "raw/x.txt")).toContain("the partial result an earlier dispatch saved to raw/x.txt was kept");
+    expect(recordSaveNote({ kept: "partial" }, "empty result", "raw/x.txt")).not.toContain("complete");
+    expect(recordSaveNote({ replaced: "partial" }, "partial result", "raw/x.txt")).toContain("replacing the partial result");
+    expect(recordSaveNote({}, "empty result", "raw/x.txt", { quietWhenSaved: true })).toBe("");
+    expect(recordSaveNote({ error: "EACCES" }, "empty result", "raw/x.txt", { quietWhenSaved: true })).toContain("could NOT be saved");
+  });
+
+  test("saves to one path run one after the other: two concurrent saves both leave their usage", async () => {
+    await saveDispatchRecord(target, { text: "COMPLETE RESULT", final: true, usage: usage(1) });
+    await Promise.all([
+      saveDispatchRecord(target, { text: "", final: false, usage: usage(2) }),
+      saveDispatchRecord(target, { text: "", final: false, usage: usage(3) }),
+      saveDispatchRecord(target, { text: "partial", final: false, usage: usage(4) }),
+    ]);
+    const saved = splitUsage(readFileSync(target, "utf8"));
+    expect(saved.body).toBe("COMPLETE RESULT");
+    expect(saved.usage).toEqual(usage(1));
+    expect(saved.others).toEqual([usage(2), usage(3), usage(4)]);
   });
 
   test("usage lines the child wrote itself are dropped: only the harness states usage", async () => {

@@ -192,7 +192,7 @@
     },
     "quote": {
       "title": "The code this finding is about, copied verbatim out of `file`",
-      "description": "What replaces asking the model for a line number: a model is poor at counting lines and good at repeating text it has just read. The quote is matched against `file` at the round's head — exactly first, then with whitespace collapsed, then (a one-line quote) as an exact substring of exactly one line, then not at all. A quote that matches in more than one place is `unlocatable` rather than anchored to the first hit, because choosing among them would be a guess wearing a line number. Absent for a finding that is about the round rather than a site.",
+      "description": "What replaces asking the model for a line number: a model is poor at counting lines and good at repeating text it has just read. The quote is matched against `file` at the round's head — exactly first, then with whitespace collapsed, then (a one-line quote of at least 12 characters, MIN_SUBSTRING_QUOTE_CHARS) as an exact substring of exactly one line, then not at all; a shorter fragment must be a whole line. A quote that matches in more than one place is `unlocatable` rather than anchored to the first hit, because choosing among them would be a guess wearing a line number. Absent for a finding that is about the round rather than a site.",
       "type": ["string", "null"]
     },
     "locator": {

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { realpathSync } from "node:fs";
-import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { coverageErrors, coverageWarnings, decideRoundDepth, derivedFromFiles, globToRegExp, packageHasBlastRadius, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
+import { coverageErrors, coverageWarnings, decideRoundDepth, derivedFromFiles, globToRegExp, packageHasBlastRadius, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers, widestDiff } from "./coverage";
 import { commitFiles, git, initRepo } from "./git-fixture.test-helpers";
 
 let root: string;
@@ -637,6 +637,41 @@ describe("a pull-request package's diff is read at the repository top level agai
     git(root, "checkout", "-q", "main");
     const errors = await lightErrors(await pkgAt(root, { base: bulk, head }));
     expect(errors).toContain("depth light, but the full set applies");
+  });
+
+  test("a pull request's own base widens a narrower --base even where no main/master ref resolves (SEC-001)", async () => {
+    repo();
+    git(root, "branch", "-m", "main", "trunk");
+    git(root, "checkout", "-q", "pr");
+    const many = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`src/m${i}.ts`, `export const m${i} = ${i};\n`]));
+    const bulk = commitFiles(root, many, "a large change");
+    const head = commitFiles(root, { "src/a.ts": "export const a = 3;\n" }, "a small last commit");
+    git(root, "checkout", "-q", "trunk");
+    // Without prBase only the narrow --base resolves (no default branch exists), and the round would pass as light.
+    expect(await lightErrors(await pkgAt(root, { base: bulk, head }))).toBe("");
+    const nested = path.join(root, "again");
+    await mkdir(nested, { recursive: true });
+    await cp(path.join(root, ".metaproject"), path.join(nested, ".metaproject"), { recursive: true });
+    expect(await lightErrors(await pkgAt(nested, { base: bulk, prBase: "trunk", head }))).toContain("depth light, but the full set applies");
+  });
+
+  test("a project reached through a symlink still excludes its committed review packages from the measured diff", async () => {
+    // Four committed package files and two source files: six changed files, over the light limit unless the packages are excluded.
+    const head = repo(Object.fromEntries(Array.from({ length: 4 }, (_, i) => [`.metaproject/reviews/old-${i}/manifest.json`, "{}\n"])));
+    const link = `${root}-link`;
+    await symlink(root, link);
+    try {
+      expect(await lightErrors(await pkgAt(link, { base: "main", head }))).toBe("");
+    } finally {
+      await rm(link, { force: true });
+    }
+  });
+
+  test("the widest diff is the widest in each dimension, not the one larger in either", () => {
+    const recorded = { files: Array.from({ length: 10 }, (_, i) => `f${i}`), changedLines: 900 };
+    const fallback = { files: [...recorded.files, "extra"], changedLines: 100 };
+    expect(widestDiff([recorded, fallback])).toEqual({ files: fallback.files, changedLines: 900 });
+    expect(widestDiff([fallback, recorded])).toEqual({ files: fallback.files, changedLines: 900 });
   });
 
   test("the light recheck's git diff is remembered per package and head: a second check in the same process runs no git", async () => {

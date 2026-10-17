@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -1066,10 +1066,10 @@ describe("token spend per dispatch (flow 460, AC7)", () => {
     const runs = ledger.dispatch.runs as Array<Record<string, unknown>>;
     const byReviewer = Object.fromEntries(runs.map((run) => [run.reviewer, run.usage]));
     expect(byReviewer[first!]).toEqual({ tokens_in: 1000, tokens_out: 200, model: "anthropic/claude-sonnet", dispatches: 1, unknown: 0 });
-    expect(byReviewer[second!]).toMatchObject({ tokens_in: 50, tokens_out: 5, model: "openai/gpt" });
+    expect(byReviewer[second!]).toEqual({ tokens_in: 50, tokens_out: 5, model: "openai/gpt", dispatches: 1, unknown: 0, reported: 1 });
     for (const reviewer of others) expect(byReviewer[reviewer]).toBe("unknown");
-    expect(ledger.usage).toEqual({ dispatches: raws.length, known: 2, unknown: raws.length - 2, tokens_in: 1050, tokens_out: 205, complete: false });
-    expect(usageTotalsLine(ledger.usage!)).toBe(`token spend: at least 1050 in, 205 out over 2 of ${raws.length} dispatch(es); ${raws.length - 2} unknown (no usage recorded)`);
+    expect(ledger.usage).toEqual({ dispatches: raws.length, known: 2, unknown: raws.length - 2, tokens_in: 1050, tokens_out: 205, reported: 1, complete: false });
+    expect(usageTotalsLine(ledger.usage!)).toBe(`token spend: at least 1050 in, 205 out over 2 of ${raws.length} dispatch(es); ${raws.length - 2} unknown (no usage recorded); 1 stated by the reviewer, not measured by a host`);
     expect(withSpendSection("# R\n", ledger)).toContain("## Token spend");
   });
 
@@ -1111,18 +1111,36 @@ describe("token spend per dispatch (flow 460, AC7)", () => {
     expect(usageTotals(raws.map(rawUsage))).toMatchObject({ dispatches: 3, known: 2, unknown: 1, tokens_in: 940, tokens_out: 90 });
   });
 
-  test("a usage line is checked by hand, not by a backtracking pattern: a long line of braces is read in linear time and states nothing", () => {
+  test("a usage line is checked by hand, not by a backtracking pattern: a long line of braces states nothing and is never parsed", () => {
     const hostile = `REVIEW_RESULT {"reviewer":"r","status":"DONE"}\nKERYX_USAGE {${"}".repeat(200_000)} trailing\n`;
-    const started = performance.now();
-    const { body, usage } = splitUsage(hostile);
-    expect(performance.now() - started).toBeLessThan(500);
-    expect(usage).toBeUndefined();
+    // Deterministic, not a clock: the over-long line is refused by its length before any JSON parse, and the line pattern
+    // runs once per line that holds the marker, never again over the text.
+    const parse = spyOn(JSON, "parse");
+    const exec = spyOn(RegExp.prototype, "exec");
+    try {
+      const { body, usage } = splitUsage(hostile);
+      expect(usage).toBeUndefined();
+      expect(body).not.toContain("KERYX_USAGE");
+      expect(parse).not.toHaveBeenCalled();
+      expect(exec.mock.calls.filter(([input]) => String(input).length > 1_000)).toHaveLength(1);
+    } finally {
+      parse.mockRestore();
+      exec.mockRestore();
+    }
+  });
+
+  test("a file saved with CRLF line endings states its usage, and its usage lines leave the body (HL-R3-001)", () => {
+    const crlf = `REVIEW_RESULT {"reviewer":"r","status":"DONE"}\r\n${formatOtherUsageLine({ tokens_in: 5, tokens_out: 1 })}\r\n${line(3, 1)}\r\n`;
+    const { body, usage, others } = splitUsage(crlf);
+    expect(usage).toEqual({ tokens_in: 3, tokens_out: 1, model: "anthropic/claude-sonnet" });
+    expect(others).toEqual([{ tokens_in: 5, tokens_out: 1 }]);
     expect(body).not.toContain("KERYX_USAGE");
+    expect(isEmptyOutput(`${NO_TEXT_PLACEHOLDER}\r\n${line(1, 1)}\r\n`)).toBe(true);
   });
 
   test("a count past MAX_DISPATCH_TOKENS is not a measurement: the dispatch reads as unknown", () => {
     expect(splitUsage(`x\nKERYX_USAGE {"tokens_in":${MAX_DISPATCH_TOKENS + 1},"tokens_out":1}`).usage).toBeUndefined();
-    expect(splitUsage(`x\nKERYX_USAGE {"tokens_in":${MAX_DISPATCH_TOKENS},"tokens_out":1}`).usage).toEqual({ tokens_in: MAX_DISPATCH_TOKENS, tokens_out: 1 });
+    expect(splitUsage(`x\nKERYX_USAGE {"tokens_in":${MAX_DISPATCH_TOKENS},"tokens_out":1}`).usage).toEqual({ tokens_in: MAX_DISPATCH_TOKENS, tokens_out: 1, reported: true });
   });
 
   test("a dispatch stopped at its deadline is a partial count: the totals say at least, and are not complete", () => {
@@ -1161,11 +1179,17 @@ describe("token spend per dispatch (flow 460, AC7)", () => {
     expect(splitUsage(`my review\n\n${line(3, 1)}\n\n`).usage).toEqual({ tokens_in: 3, tokens_out: 1, model: "anthropic/claude-sonnet" });
   });
 
-  test("a long run of whitespace in a reply is trimmed in linear time", () => {
+  test("a long run of whitespace in a reply is never scanned by a pattern: only the lines that hold the marker are", () => {
     const reply = `a${" ".repeat(200_000)}b\n${line(1, 1)}`;
-    const started = performance.now();
-    expect(splitUsage(reply).body).toBe(`a${" ".repeat(200_000)}b`);
-    expect(performance.now() - started).toBeLessThan(500);
+    // Deterministic, not a clock: a pattern trim (`/\s+$/`) backtracks quadratically on this line; the reply text reaches
+    // no pattern at all (every String replace/match/test goes through RegExp.prototype.exec).
+    const exec = spyOn(RegExp.prototype, "exec");
+    try {
+      expect(splitUsage(reply).body).toBe(`a${" ".repeat(200_000)}b`);
+      expect(exec.mock.calls.filter(([input]) => String(input).length > 1_000)).toEqual([]);
+    } finally {
+      exec.mockRestore();
+    }
   });
 });
 

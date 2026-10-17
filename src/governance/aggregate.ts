@@ -8,6 +8,7 @@ import path from "node:path";
 import { readAcKindRecords } from "../flow/ac-kinds";
 import { flowIdOf, flowsRoot, listFlowDirs, readAcCriteria, readFlow } from "../flow/store";
 import { readTriggerRuns, type TriggerRunsRead } from "../trigger/record";
+import { readStandalonePackages } from "../review/package-location";
 import {
   collectFlowDispatch,
   readFlowReviewManifests,
@@ -39,14 +40,16 @@ export const POLICY_DECISIONS_NOT_RECORDED: PolicyDecisionsSummary = {
  * Every flow in `cwd`'s `.metaproject/flows/`, aggregated, unfiltered.
  * `ledger` is the project's trigger-run record, read once by the caller
  * (`collectProjectGovernance`) and shared with every flow's dispatch view
- * (AC1, AC2) so the ledger file is read once per project, not once per flow.
+ * (AC1, AC2) so the ledger file is read once per project, not once per flow. The standalone review packages' manifest
+ * heads are read once here for the same reason (review HL-R3-002): a flow's bound packages are picked from them.
  */
 export async function collectFlowGovernance(cwd: string, ledger: TriggerRunsRead): Promise<FlowGovernance[]> {
   const dirs = await listFlowDirs(cwd);
+  const standalone = await readStandalonePackages(cwd);
   const flows: FlowGovernance[] = [];
   for (const dir of dirs) {
     const flow = await readFlow(cwd, dir);
-    const manifests = await readFlowReviewManifests(cwd, dir);
+    const manifests = await readFlowReviewManifests(cwd, dir, standalone);
     // Only a flow with no `acKinds` needs its criteria file counted: that is the
     // one case where the total cannot come from the derived field.
     let criteriaInFile: number | undefined;

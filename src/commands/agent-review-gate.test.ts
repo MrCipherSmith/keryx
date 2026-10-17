@@ -73,7 +73,7 @@ function reviewHistory(): NormalizedMessage[] {
     {
       role: "assistant",
       content: "",
-      toolCalls: [{ id: "s2", name: "bash", arguments: JSON.stringify({ command: "keryx review status pr-1-all" }) }],
+      toolCalls: [{ id: "s2", name: "shell_exec", arguments: JSON.stringify({ command: "keryx review status pr-1-all" }) }],
     },
     { role: "tool", content: "status: draft", toolCallId: "s2" } as NormalizedMessage,
   ];

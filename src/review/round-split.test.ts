@@ -12,7 +12,7 @@ import { computeCoverage } from "./coverage-complete";
 import { estimateRound } from "./estimate";
 import { buildLedger, type LedgerInputs, type RawFile } from "./ledger";
 import { type PriorFinding, type RoundRecord } from "./round-record";
-import { classifyDeltaSlices, expectedFixRoles, fixClaimBacked, fixContentRoles, fixRosterRoles, fixSliceCoverage, fixSliceRoles, isDeltaRound, isSecurityFinding, partitionRegionsByFix, priorDispositionsOf, splitCounts } from "./round-split";
+import { classifyDeltaSlices, expectedFixRoles, fixClaimBacked, fixContentRoles, fixRosterRoles, fixSliceCoverage, fixSliceRoles, isDeltaRound, manifestRosterRoles, isSecurityFinding, partitionRegionsByFix, priorDispositionsOf, splitCounts } from "./round-split";
 import { narrowedSlices } from "./routing-check";
 import type { ScopedRegion } from "./scope";
 import { buildSlices, parseScopedDiff, type SliceEntry, type SliceManifest } from "./slice";
@@ -232,6 +232,17 @@ describe("fix slices in the manifest", () => {
     expect(fixSliceRoles(m)).toEqual(["my-project-reviewer", "review-logic", "review-regression", "review-security-code"]);
     expect(splitCounts(m)).toEqual({ fix: 1, new: 1 });
     expect(splitCounts(manifest([plain(newSlice)]))).toBeUndefined();
+  });
+
+  test("a slice routed to the security reviewer adds it to the roster in a light round too; another routed role does not (SEC-R3-001)", () => {
+    // A light round's required set is path-only: a new slice that spawns a process is routed to review-security-code by
+    // its content, and the roster (drivers, plan.json, ledger) must dispatch it.
+    const light = manifest([{ ...plain(newSlice), roles: ["review-logic", "review-security-code", "review-backend"] }]);
+    expect(manifestRosterRoles(light)).toEqual(["review-security-code"]);
+    expect(estimateRound(["review-logic", ...manifestRosterRoles(light)], light).perRole.find((r) => r.role === "review-security-code")?.waves).toBe(1);
+    // A retry piece adds nothing of its own; the fix roster is still part of it.
+    expect(manifestRosterRoles(manifest([{ ...plain(newSlice), id: "r1", roles: ["review-security-code"], retryOf: ["slice-02"] }]))).toEqual([]);
+    expect(manifestRosterRoles(m)).toEqual(fixSliceRoles(m));
   });
 
   test("estimate counts both kinds: a dispatch carries one kind, and the split is reported", () => {

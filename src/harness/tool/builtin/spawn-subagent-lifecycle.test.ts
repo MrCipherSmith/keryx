@@ -11,6 +11,10 @@
 // approached.
 
 import { expect, test } from "bun:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { isEmptyRecord, splitUsage } from "../../../review/dispatch-usage";
 import { createSpawnSubagentTool, ENV_SUBAGENT_TIMEOUT_MS } from "./spawn-subagent-tool";
 import type { NormalizedEvent, ProviderDescription, ProviderPort } from "../../provider/types";
 
@@ -123,6 +127,30 @@ test("E5: a rate-limited child hands back the text it produced before the refusa
   const result = await toolWith(provider).invoke({ task: "review", label: "r4" });
   expect(result.output.split("\n")[0]).toBe("STATUS: RATE_LIMITED");
   expect(result.output).toContain("found the bug in parser.ts");
+});
+
+test("E5 / flow 460 (H): a rate-limited child that reported no usage still records its dispatch at save_result_to (LG-002, LG-006)", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-ratelimit-save-"));
+  try {
+    let seq = 0;
+    const tool = createSpawnSubagentTool({
+      cwd: root,
+      getParentModel: () => ({ providerId: "anthropic", modelId: "claude-sonnet-5" }),
+      makeProvider: refusingProvider("rate_limit"),
+      getDetectedProviders: () => [{ name: "anthropic" }],
+      idSeq: () => `id-${seq++}`,
+      clock: () => "2026-07-21T00:00:00.000Z",
+    });
+    const result = await tool.invoke({ task: "review", label: "r5", save_result_to: "raw/review-logic.txt" });
+    expect(result.output.split("\n")[0]).toBe("STATUS: RATE_LIMITED");
+    const saved = await readFile(path.join(root, "raw/review-logic.txt"), "utf8");
+    expect(isEmptyRecord(saved)).toBe(true);
+    // One dispatch, usage unknown (no line states counts), and not a complete result.
+    expect(splitUsage(saved)).toMatchObject({ incomplete: true });
+    expect(splitUsage(saved).usage).toBeUndefined();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("a fast subagent returns its unused budget, so a session is not capped at three", async () => {

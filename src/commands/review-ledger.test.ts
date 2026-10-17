@@ -199,6 +199,25 @@ describe("raw/ files through loadRaws and runLedger (flow 430 AC3, AC4)", () => 
     }
   });
 
+  test("flow 460: a bare-id canonical finding links one wave's raw finding only when no other wave of that reviewer reuses the id", async () => {
+    const result = (findings: object[]) => `REVIEW_RESULT ${JSON.stringify({ reviewer: "review-logic", status: "DONE", summary: "s", findings, needs_context: [] })}`;
+    const raw = (id: string) => ({ id, severity: "minor", problem: `p ${id}`, impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" });
+    const { pkg, cleanup } = await fixture({ "review-logic-w3.txt": result([raw("F-001"), raw("F-007")]), "review-logic-w4.txt": result([raw("F-001")]) });
+    try {
+      // One canonical F-001 from review-logic: it is wave 3's or wave 4's, and the bare id cannot say which.
+      await writeFile(path.join(pkg, "findings.json"), JSON.stringify([{ ...raw("F-001"), reviewer: "review-logic" }, { ...raw("F-007"), reviewer: "review-logic" }]));
+      const out = await build(pkg);
+      const obligations = out.ledger.obligations as Array<{ id: string; status: string; finding?: string }>;
+      expect(Object.fromEntries(obligations.map((o) => [o.id, [o.status, o.finding ?? null]]))).toEqual({
+        "review-logic-w3:F-001": ["unresolved", null],
+        "review-logic-w3:F-007": ["finding", "F-007"],
+        "review-logic-w4:F-001": ["unresolved", null],
+      });
+    } finally {
+      await cleanup();
+    }
+  });
+
   test("flow 460: canonical findings whose display id holds '#' are refused by ledger build, naming the id form", async () => {
     const { pkg, cleanup } = await fixture({});
     try {

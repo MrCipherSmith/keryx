@@ -10,7 +10,7 @@ import { layersSummaryLine } from "../review/layers-view";
 import { ensurePackageLayers, resolvePackageDir } from "./review-layers";
 import { checkDispatch, renderDispatchCheck } from "../review/dispatch-check";
 import { MAX_RETRY_ROUNDS, type ReviewerResult } from "../review/retry-plan";
-import { type BuiltSlice, DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceManifest, type SliceOmission, type SliceSource, buildSlices, ledgerOmissions, manifestSizeProblem, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
+import { DEFAULT_SLICE_MAX_BYTES, DEFAULT_WAVE_BYTES, type SliceManifest, manifestSizeProblem, renderSliceSummary, sliceSourceFromDiff, validateSliceMaxBytes, validateWaveBytes } from "../review/slice";
 import { packagePlanGate } from "../review/estimate";
 import { packageReviewers, writeWaveDrivers } from "../review/wave-drivers";
 import { RETRY_STATE_NAME, UnreadableInput, commitRetryPlan, evaluateRetry, packageOfManifest, readJsonSource, wholeFileResult, writeSliceFiles } from "../review/retry-eval";
@@ -19,11 +19,11 @@ export { packageOfManifest };
 import { resolveActiveReview } from "../review/active-review";
 import { operatorGateApplies } from "../review/run-profile";
 import { commentRuleScopeConfig } from "../review/comment-rule";
-import { type RoutingOptions, renderRoutingSummary, routeSlices, summarizeRouting } from "../review/slice-routing";
+import { type RoutingOptions, renderRoutingSummary, summarizeRouting } from "../review/slice-routing";
 import { NOT_REVIEW_PACKAGES } from "../review/prior-round";
-import { type PriorFinding, readPriorFindings, readRoundRecord, roundRecordTampered, type RoundRecord } from "../review/round-record";
-import { classifyDeltaSlices, isDeltaRound, partitionRegionsByFix, partitionRegionsBySecondLook, splitCounts, tagSecondLookSlices } from "../review/round-split";
-import type { ScopedRegion } from "../review/scope";
+import { readPriorFindings, readRoundRecord, roundRecordTampered, type RoundRecord } from "../review/round-record";
+import { isDeltaRound, partitionRegionsBySecondLook, splitCounts } from "../review/round-split";
+import { type SecondLookSource, deltaRoundCut, firstRoundCut } from "../review/round-cut";
 import { defaultWaveBytes, detectReviewHost, HOST_WAVE_BYTES, parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
 
 /** The diff-fetching and flag helpers `review.ts` owns, passed in so this file does not import its caller. */
@@ -300,46 +300,6 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   if (packageOut !== undefined) console.log(`drivers: ${drivers.length} written to ${path.join(packageOut, "drivers")} (one per reviewer x wave; \`keryx review next --package <dir>\` lists what is left)`);
 }
 
-type SliceSizes = { maxBytes: number; waveBytes: number };
-/** What one round's cut produces: the slices (with text), every omission once, and the manifest fields of the cut. */
-type RoundCut = { slices: BuiltSlice[]; omissions: SliceOmission[]; manifest: SliceManifest; totals: SliceManifest["totals"] };
-
-/** A first or fallback-first round: one cut over the whole source, routed as round 1. */
-function firstRoundCut(source: SliceSource, sizes: SliceSizes, routing: RoutingOptions): RoundCut {
-  const built = buildSlices(source, sizes);
-  return { slices: routeSlices(built.slices, routing), omissions: built.manifest.omissions, manifest: built.manifest, totals: built.manifest.totals };
-}
-
-/**
- * A delta round (flow 458, 460 L6): the lines that answer prior findings are cut apart from the new lines before slicing,
- * so a fix slice holds only fix hunks (fix roster plus its own content roles) while every new line, even in the same file,
- * is routed as in round 1; unchanged code the previous round read gets its second look. Ledgers are judged once over the
- * whole source before the fix/new partition, so a file is omitted (with its full size) or sliced, never both.
- */
-export function deltaRoundCut(input: { source: SliceSource; delta: RoundRecord; prior: readonly PriorFinding[]; sizes: SliceSizes; routing: RoutingOptions; secondLook: SecondLookSource | undefined }): RoundCut {
-  const { source, delta, prior, sizes, routing } = input;
-  const ledgers = ledgerOmissions(source.regions);
-  const omitted = new Set(ledgers.map((omission) => omission.path));
-  const parts = partitionRegionsByFix(source.regions.filter((region) => !omitted.has(region.path)), delta.fixHunks);
-  const built = buildSlices({ ...source, regions: parts.other }, { ...sizes, keepLedgers: true });
-  const fixBuilt = parts.fix.length === 0 ? undefined : buildSlices({ ...source, regions: parts.fix, drops: [] }, { ...sizes, keepLedgers: true });
-  // Second look (flow 460): ledgers are judged over the second-look and outside regions together, then each side is cut
-  // apart, so a second-look slice holds only second-look lines (what the routing check backs) and the rest is new.
-  const look = input.secondLook;
-  const lookLedgers = look === undefined ? [] : ledgerOmissions([...look.regions, ...look.outside]);
-  const lookOmitted = new Set(lookLedgers.map((omission) => omission.path));
-  const secondBuilt = look === undefined ? undefined : buildSlices({ ...look, regions: look.regions.filter((region) => !lookOmitted.has(region.path)) }, { ...sizes, keepLedgers: true });
-  const outside = look?.outside.filter((region) => !lookOmitted.has(region.path)) ?? [];
-  const outsideBuilt = outside.length === 0 ? undefined : buildSlices({ ...look!, regions: outside, drops: [] }, { ...sizes, keepLedgers: true });
-  const fixSlices = fixBuilt === undefined ? [] : classifyDeltaSlices(routeSlices(fixBuilt.slices, routing), delta, prior);
-  const classified = classifyDeltaSlices(routeSlices(built.slices, routing), delta, prior);
-  const outsideSlices = outsideBuilt === undefined ? [] : classifyDeltaSlices(routeSlices(outsideBuilt.slices, routing), delta, prior);
-  const second = secondBuilt === undefined ? [] : tagSecondLookSlices(routeSlices(secondBuilt.slices, { head: routing.head }), delta.round - 1);
-  const slices = second.length === 0 && fixSlices.length === 0 && outsideSlices.length === 0 ? classified : renumberSlices([...fixSlices, ...classified, ...outsideSlices, ...second]);
-  const omissions = [...built.manifest.omissions, ...ledgers, ...lookLedgers, ...(secondBuilt?.manifest.omissions ?? [])].filter((omission, index, all) => all.findIndex((known) => known.path === omission.path) === index);
-  return { slices, omissions, manifest: built.manifest, totals: built.manifest.totals };
-}
-
 /**
  * The diff a delta round is sliced from. It goes through exactly what a round-1 cut of the same head goes through — the
  * same context lines, the same review-package pathspec, and afterwards the same scope pre-filters and omissions in
@@ -367,18 +327,6 @@ export async function deltaSliceDiff(
     note: `delta ${round.range.base!.slice(0, 12)}..${round.range.head!.slice(0, 12)} (${Buffer.byteLength(delta)} bytes) is larger than the round-1 diff ${mergeBase.slice(0, 12)}..${round.range.head!.slice(0, 12)} (${Buffer.byteLength(full)} bytes): sliced over merge-base..head, still split fix/new`,
   };
 }
-
-/** Renumber slices `slice-NN` in order, so ids and file names stay one sequence after two cuts are joined. */
-export function renumberSlices<T extends { id: string; path: string }>(slices: readonly T[]): T[] {
-  const width = Math.max(2, String(slices.length).length);
-  return slices.map((slice, index) => {
-    const id = `slice-${String(index + 1).padStart(width, "0")}`;
-    return { ...slice, id, path: `${id}.diff` };
-  });
-}
-
-/** The second-look cut of a delta round: `regions` hold only second-look lines; `outside` the other changed lines no other cut carries. */
-export type SecondLookSource = SliceSource & { outside: ScopedRegion[] };
 
 /**
  * The regions of merge-base..head that the delta round does not cover and the previous round already read (the round's

@@ -12,7 +12,7 @@ import { operatorGateApplies, runProfileRefusal } from "./run-profile";
 import { manifestSizeProblem, packWavesByKind, waveBytesOf, type SliceEntry, type SliceManifest } from "./slice";
 import { ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph } from "./waves";
-import { fixSliceRoles, splitCounts } from "./round-split";
+import { manifestRosterRoles, splitCounts } from "./round-split";
 
 /** A spawned reviewer child is killed after 5 minutes (src/harness/tool/builtin/spawn-subagent-tool.ts), so one dispatch never runs longer than this. */
 export const CHILD_DEADLINE_MINUTES = 5;
@@ -297,8 +297,9 @@ export async function estimatePackage(packageDir: string, options: { manifest?: 
   const problem = found === undefined ? undefined : manifestSizeProblem(found.manifest);
   if (problem !== undefined) throw new Error(`${path.relative(root, found!.file)}: ${problem}`);
   const thresholds = await readPlanThresholds(root);
-  // A delta round's fix slices add the roles that authored the findings they answer to the round's reviewers (flow 458).
-  const roles = [...new Set([...set.required, ...(found === undefined ? [] : fixSliceRoles(found.manifest))])].sort();
+  // A delta round's fix slices add the roles that authored the findings they answer (flow 458), and a slice routed to the
+  // security reviewer adds it in a light round too (manifestRosterRoles).
+  const roles = [...new Set([...set.required, ...(found === undefined ? [] : manifestRosterRoles(found.manifest))])].sort();
   return { ...estimateRound(roles, found?.manifest, recorded?.depth ?? "unrecorded", thresholds), manifest: found === undefined ? undefined : path.relative(root, found.file) };
 }
 

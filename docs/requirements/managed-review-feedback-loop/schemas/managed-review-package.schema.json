@@ -49,6 +49,10 @@
         "base": {
           "type": "string"
         },
+        "prBase": {
+          "type": "string",
+          "description": "A pull request's own base (origin/<baseRefName>, read with gh at review start) when --base named another; the light recheck measures against it too."
+        },
         "head": {
           "type": "string"
         }

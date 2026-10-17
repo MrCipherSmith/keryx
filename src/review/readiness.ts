@@ -21,7 +21,8 @@ import type { PremiseQuestionDecision } from "./operator-decisions";
 import { awaitingOperator, premiseHoldState } from "./premise";
 import { premiseRecords } from "./verdict";
 import { packageParityWarnings } from "./parity";
-import { asRecord, dispatchRuns, packageCoverageErrors, researchErrors, type DispatchRun } from "./research";
+import { dispatchRuns, packageCoverageErrors, researchErrors, type DispatchRun } from "./research";
+import { asRecord as record } from "./record";
 import { COVERAGE_MD_MARK, parseCoverageEntries } from "./coverage-md";
 import { FINDING_DISPOSITION_STATES, type ConfirmedVia, type ManagedReviewManifest, type ReadinessWaiver } from "./types";
 
@@ -90,7 +91,6 @@ const MIN_WAIVER_QUOTE_CHARS = 8;
 const FIRST = 5;
 
 const readJson = <T>(file: string): Promise<T | undefined> => readJsonFileOr<T | undefined>(file, undefined);
-const record = asRecord;
 const text = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
 const some = (names: readonly string[]): string => names.slice(0, FIRST).join(", ") + (names.length > FIRST ? `, … (+${names.length - FIRST})` : "");
 

@@ -4,7 +4,7 @@ import path from "node:path";
 import { type DriverFile, readDrivers } from "./driver-read";
 import { writeFileAtomic } from "../lib/fs";
 import { packageHasBlastRadius, packageHasPrContext, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
-import { fixSliceRoles } from "./round-split";
+import { manifestRosterRoles } from "./round-split";
 import { type SliceManifest } from "./slice";
 import { roleDispatchWaves } from "./estimate";
 
@@ -13,8 +13,9 @@ export const DRIVERS_DIR = "drivers";
 export const RAW_DIR = "raw";
 
 /**
- * The roster of the package: the required set plus the roles of its fix and second-look slices — the roles the estimate
- * (and so plan.json) counts. A role slice routing gave a slice but the roster does not run (review-backend or
+ * The roster of the package: the required set plus {@link manifestRosterRoles} (the roles of its fix and second-look
+ * slices, and review-security-code wherever slice routing gave it a slice, in a light round too) — the roles the estimate
+ * (and so plan.json) counts. Any other role slice routing gave a slice but the roster does not run (review-backend or
  * review-frontend on a project that never selects them) is not a reviewer of the round. With `withDrivers`, every
  * reviewer a driver already on disk names joins too (`review next` collects what was dispatched by hand).
  */
@@ -30,7 +31,7 @@ export async function packageReviewers(packageDir: string, manifest: SliceManife
     // Not swallowed: a reviewer set computed without the project's rules would silently drop the reviewers they require.
     throw new Error(`the required reviewers of ${packageDir} could not be read (${error instanceof Error ? error.message : String(error)}); fix the reviewer rules and re-run`, { cause: error });
   }
-  if (manifest !== undefined) for (const reviewer of fixSliceRoles(manifest)) names.add(reviewer);
+  if (manifest !== undefined) for (const reviewer of manifestRosterRoles(manifest)) names.add(reviewer);
   if (options.withDrivers === true) for (const reviewer of (await readDrivers(packageDir, root)).replies.reviewers) names.add(reviewer);
   return [...names].sort();
 }
