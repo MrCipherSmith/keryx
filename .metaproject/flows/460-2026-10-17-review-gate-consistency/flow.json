@@ -11,7 +11,7 @@
   "title": "Review gates agree: readiness, complete, overrides, nudges, child results and artifacts tell one story",
   "status": "in-progress",
   "createdAt": "2026-10-17T03:45:43.162Z",
-  "updatedAt": "2026-10-17T04:03:59.562Z",
+  "updatedAt": "2026-10-17T04:15:45.258Z",
   "source": {
     "type": "description",
     "ref": null
@@ -144,7 +144,7 @@
       "id": "T8",
       "title": "L4 ingest keeps unplaceable quotes, delta e2e, token spend (G, H)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -152,7 +152,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -282,6 +283,11 @@
       "at": "2026-10-17T04:03:59.562Z",
       "event": "task-done",
       "detail": "T5: L1 gates: package diff base/root, readiness runs coverage, override decisions count (A, B)"
+    },
+    {
+      "at": "2026-10-17T04:15:45.258Z",
+      "event": "task-done",
+      "detail": "T8: L4 ingest keeps unplaceable quotes, delta e2e, token spend (G, H)"
     }
   ],
   "acKinds": {
