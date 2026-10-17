@@ -9,6 +9,13 @@ import { writeFileAtomic } from "../lib/fs";
 /** The round's code: everything but committed review packages, which record a review rather than being reviewed. Every diff a review slices goes through this pathspec. */
 export const NOT_REVIEW_PACKAGES = [".", ":(exclude).metaproject/reviews", ":(exclude,glob).metaproject/flows/*/reviews/**"];
 
+/**
+ * The same exclusion at any depth of the repository (flow 460), for a diff run at the repository top level of a package
+ * that may sit under a subdirectory's `.metaproject`: there NOT_REVIEW_PACKAGES, which is relative to the project root
+ * the round was sliced at, would miss it. The coverage gate's light recheck uses it.
+ */
+export const NOT_REVIEW_PACKAGES_ANY_DEPTH = [".", ":(exclude,glob)**/.metaproject/reviews/**", ":(exclude,glob)**/.metaproject/flows/*/reviews/**"];
+
 export const ROUND_FILE = "round.json";
 export const PRIOR_FINDINGS_FILE = "prior_findings.json";
 

@@ -1,4 +1,5 @@
 import { READY_DISPATCH } from "./dispatch.test-helpers";
+import { COVERAGE_MD_MARK } from "./readiness";
 import { afterEach, describe, test, expect } from "bun:test";
 import { appendFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
@@ -1923,6 +1924,26 @@ describe("flow 460 F: coverage reconciles with the dispatch record", () => {
     expect(named.manifest.coverage.map((entry) => entry.reviewer)).toEqual(["review-logic"]);
     const bare = await ingest({ research: undefined, reviewId: "2026-10-17-cov-bare" });
     expect(bare.manifest.coverage.map((entry) => entry.reviewer)).toEqual(["review-orchestrator"]);
+  });
+
+  test("a routed-out role is listed as not dispatched, and coverage.md carries the flow 460 mark readiness reads", async () => {
+    await fresh();
+    const routed = research();
+    routed.dispatch.runs.push({ ...READY_DISPATCH.runs[0], reviewer: "review-architecture", executionId: "c", routedOut: true } as (typeof routed.dispatch.runs)[number]);
+    const created = await ingest({ research: routed });
+    const entry = created.manifest.coverage.find((item) => item.reviewer === "review-architecture");
+    expect(entry).toMatchObject({ status: "run" });
+    expect(entry?.reason).toContain("routed out");
+    expect(entry?.reason).not.toContain("dispatched;");
+    const md = await readFile(path.join(ROOT, created.path, "coverage.md"), "utf8");
+    expect(md).toContain(COVERAGE_MD_MARK);
+  });
+
+  test("one finished reviewer in the research record does not absorb a finding that names no reviewer", async () => {
+    await fresh();
+    const created = await ingest({ research: research(), findings: [{ ...FULL_FINDING, reviewer: undefined } as unknown as StructuredReviewFinding] });
+    const findings = JSON.parse(await readFile(path.join(ROOT, created.path, "findings.json"), "utf8")) as Array<{ reviewer: string }>;
+    expect(findings.map((finding) => finding.reviewer)).toEqual(["review-orchestrator"]);
   });
 });
 

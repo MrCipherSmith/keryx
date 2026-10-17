@@ -304,6 +304,12 @@ export async function resolveSaveResultPath(
   return { ok: true, abs };
 }
 
+/** What a child that ended with no assistant text is shown as: display text only, never compared to decide an outcome. */
+const NO_TEXT_PLACEHOLDER = "(subagent produced no text)";
+
+/** `value` when it is a finite number, else undefined: narrows without a cast. */
+const finiteNumber = (value: unknown): number | undefined => (typeof value === "number" && Number.isFinite(value) ? value : undefined);
+
 /** Write a child's full final text to the path `resolveSaveResultPath` approved. */
 async function saveChildResult(abs: string, text: string): Promise<string | undefined> {
   try {
@@ -1899,8 +1905,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       // Flow 460 (H): the child's token use, summed over its provider requests; written into `save_result_to` as a
       // `KERYX_USAGE` line so `review ledger build` can state the round's spend. Unknown (no line) when nothing reported.
       const childUsage = { tokens_in: 0, tokens_out: 0, known: false };
-      const usageSuffix = (): string =>
-        childUsage.known ? `\n${formatUsageLine({ tokens_in: childUsage.tokens_in, tokens_out: childUsage.tokens_out, model: `${runModel.provider}/${runModel.model}` })}` : "";
+      const usageSuffix = (options: { partial?: boolean } = {}): string =>
+        childUsage.known ? `\n${formatUsageLine({ tokens_in: childUsage.tokens_in, tokens_out: childUsage.tokens_out, model: `${runModel.provider}/${runModel.model}`, ...(options.partial === true ? { partial: true } : {}) })}` : "";
       // AC6 (flow 352 audit): `internalAbort` is triggered by THIS function's
       // own reasons (the deadline below, the catch block's cleanup) exactly
       // as `childAbort` always was; `composed` additionally aborts when the
@@ -1915,8 +1921,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           assistant += s;
         },
         onUsage: (usage) => {
-          const tokensIn = Number.isFinite(usage.inputTokens) ? (usage.inputTokens as number) : undefined;
-          const tokensOut = Number.isFinite(usage.outputTokens) ? (usage.outputTokens as number) : undefined;
+          const tokensIn = finiteNumber(usage.inputTokens);
+          const tokensOut = finiteNumber(usage.outputTokens);
           if (tokensIn === undefined && tokensOut === undefined) return;
           childUsage.tokens_in += tokensIn ?? 0;
           childUsage.tokens_out += tokensOut ?? 0;
@@ -2176,6 +2182,16 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           });
         }
       };
+      /**
+       * The epilogue every exit that does not complete shares: the fleet row marked failed with `detail`, the slate
+       * folded as incomplete and cleaned up, and the SubagentStop hook fired with `outcome`. `withModel` adds the
+       * child's model to the fleet row (the exits that know the run reached the provider).
+       */
+      const failChild = async (detail: string, outcome: string, options: { withModel?: boolean } = {}): Promise<void> => {
+        emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail, ...(options.withModel === true ? { model: `${runModel.provider}/${runModel.model}` } : {}), task });
+        await foldChildSlateAndCleanup("incomplete");
+        await fireSubagentStop(outcome);
+      };
 
       try {
         const history: import("../../provider/types").NormalizedMessage[] = [];
@@ -2229,9 +2245,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             });
             composed.dispose();
             releaseBudget();
-            emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "timeout", task });
-            await foldChildSlateAndCleanup("incomplete");
-            await fireSubagentStop("Timeout");
+            await failChild("timeout", "Timeout");
             // AC3 (flow 352 audit): this is child-authored free text same as
             // every other exit path's summary/submitted-result — an abandoned
             // child can still have written instruction-shaped prose before the
@@ -2240,10 +2254,12 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             const partial = assistant.trim();
             const foldedPartial = partial.length > 0 ? foldChildSummary(partial).text : "";
             // Flow 457 (T7, audit row 14): the parent parses the saved file, never the bounded tool output, so a
-            // child that ran out of time still leaves everything it wrote in `save_result_to`.
-            const partialSaved = saveTarget.abs === undefined || partial.length === 0 ? undefined : await saveTimedOutPartial(saveTarget.abs, `${partial}${usageSuffix()}`);
+            // child that ran out of time still leaves everything it wrote in `save_result_to`. Flow 460 (H): a child
+            // that wrote nothing still leaves the placeholder, so its dispatch is counted; the usage line is marked
+            // partial, because the request in flight at the deadline had not reported its tokens yet.
+            const partialSaved = saveTarget.abs === undefined ? undefined : await saveTimedOutPartial(saveTarget.abs, `${partial.length > 0 ? partial : NO_TEXT_PLACEHOLDER}${usageSuffix({ partial: true })}`);
             const partialSaveNote =
-              partialSaved === undefined
+              partialSaved === undefined || (partial.length === 0 && !("error" in partialSaved))
                 ? ""
                 : "error" in partialSaved
                   ? `\n[partial result could NOT be saved to ${String(input.save_result_to)}]`
@@ -2270,33 +2286,25 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         closed = true;
         composed.dispose();
         releaseBudget();
-        const raw =
+        const childText =
           assistant.trim().length > 0
             ? assistant.trim()
             : history
                 .filter((m) => m.role === "assistant")
                 .map((m) => m.content)
                 .join("\n")
-                .trim() || "(subagent produced no text)";
+                .trim();
+        // Decided once, here: the placeholder is display text, never compared to decide an outcome.
+        const producedNoText = childText === "";
+        const raw = producedNoText ? NO_TEXT_PLACEHOLDER : childText;
         const folded = foldChildSummary(raw);
         // E5: a child the provider refused for load ended with no result of its own. It is not
         // "Completed"; its first line is the harness signal the review orchestrator halves its wave on.
         if (turnResult?.rateLimited !== undefined) {
-          emitFleetEvent({
-            kind: "upsert",
-            id: workerId,
-            label,
-            status: "failed",
-            detail: "rate-limited",
-            model: `${runModel.provider}/${runModel.model}`,
-            task,
-          });
-          await foldChildSlateAndCleanup("incomplete");
-          await fireSubagentStop("Error");
+          await failChild("rate-limited", "Error", { withModel: true });
           // Earlier rounds may have produced text before the refusal: hand it back (quarantined, bounded) so the
           // parent keeps that context when it requeues the task.
-          const hadText = raw !== "(subagent produced no text)";
-          const earlier = hadText ? boundSummary(folded.text) : undefined;
+          const earlier = producedNoText ? undefined : boundSummary(folded.text);
           return {
             status: "Error",
             isError: true,
@@ -2313,24 +2321,22 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         const status = subagentStatusForFinishReason(turnResult?.finishReason);
         // Flow 460 E: a child that ended with no text and submitted nothing produced no result. It is an
         // error outcome, never "Completed" with a placeholder summary the parent could read as success.
-        if (status === "Completed" && raw === "(subagent produced no text)" && turnResult?.submittedResult === undefined) {
-          emitFleetEvent({
-            kind: "upsert",
-            id: workerId,
-            label,
-            status: "failed",
-            detail: "empty-reply",
-            model: `${runModel.provider}/${runModel.model}`,
-            task,
-          });
-          await foldChildSlateAndCleanup("incomplete");
-          await fireSubagentStop("Error");
+        if (status === "Completed" && producedNoText && turnResult?.submittedResult === undefined) {
+          await failChild("empty-reply", "Error", { withModel: true });
+          // Flow 460 (H): the empty dispatch was paid for, so `save_result_to` still records it (the placeholder, which
+          // every reader treats as empty, and the usage line), never over a complete result already there.
+          const emptySaved = saveTarget.abs === undefined ? undefined : await saveTimedOutPartial(saveTarget.abs, `${NO_TEXT_PLACEHOLDER}${usageSuffix()}`);
+          const emptySaveNote = emptySaved === undefined || !("error" in emptySaved) ? "" : `\n[the empty result could NOT be recorded in ${String(input.save_result_to)}]`;
+          // PRD R9: advice for the parent model only. A read-only child changed nothing, so one more dispatch is safe; a
+          // general child may already have edited files or run commands before it ended, so a blind re-dispatch is not.
+          const advice =
+            mode === "read_only"
+              ? "treat the task as not done: re-dispatch it once, and if it ends empty again, report it as not run instead of dispatching it a third time."
+              : "treat the task as not done, but it may have changed files or run commands before it ended: inspect the working tree before re-dispatching it, and do not re-dispatch it more than once.";
           return {
             status: "Error",
             isError: true,
-            output:
-              `subagent ${label} (${workerId}) via ${runModel.provider}/${runModel.model} ended with no text and submitted no result; ` +
-              "treat the task as not done and re-dispatch it.",
+            output: `subagent ${label} (${workerId}) via ${runModel.provider}/${runModel.model} ended with no text and submitted no result; ${advice}${emptySaveNote}`,
           };
         }
         // PRD R9 guard: `status` is advisory for the PARENT MODEL's own
@@ -2395,16 +2401,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         composed.dispose();
         releaseBudget(); // a failed child must not hold the parent's budget either
         const msg = cause instanceof Error ? cause.message : String(cause);
-        emitFleetEvent({
-          kind: "upsert",
-          id: workerId,
-          label,
-          status: "failed",
-          detail: "error",
-          task,
-        });
-        await foldChildSlateAndCleanup("incomplete");
-        await fireSubagentStop("Error");
+        await failChild("error", "Error");
         return { status: "Error", output: `subagent ${label} failed: ${msg}`, isError: true };
       }
       } catch (cause) {

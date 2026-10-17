@@ -192,6 +192,19 @@ test("retry-plan --package: a late result counts the slices it reported, not the
   expect(plan.collectedLate).toBe(1);
 });
 
+test("retry-plan --package: a late DONE result that names no slices covers none (flow 460 D, same rule as the ledger)", async () => {
+  const { ids } = await sliceOnce();
+  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", findings: [] })}\n`);
+  let plan = JSON.parse(await nextWave());
+  expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
+  expect(plan.collectedLate).toBe(0);
+  // A finished reply that says it could not read a mandatory input covers nothing either.
+  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", summary: "I could not read the payload, so I reviewed the diff only", slices: ids })}\n`);
+  plan = JSON.parse(await nextWave());
+  expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
+  expect(plan.collectedLate).toBe(0);
+});
+
 test("retry-plan --package: a late result for a different scope fingerprint covers nothing", async () => {
   const { ids } = await sliceOnce();
   await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", scopeFingerprint: "stale", slices: ids })}\n`);

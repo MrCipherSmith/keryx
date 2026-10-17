@@ -80,18 +80,21 @@ describe("locateQuote", () => {
     expect(outcome.state).toBe("unlocatable");
     expect(outcome.state === "unlocatable" && outcome.reason).toContain("2 places");
     expect(outcome.state === "unlocatable" && outcome.reason).toContain("whitespace");
+    expect(outcome).toMatchObject({ kind: "ambiguous", candidates: [1, 3] });
   });
 
   test("a quote past the line bound is refused rather than matched slowly", () => {
     const outcome = locateQuote("a\n".repeat(10), `${"x\n".repeat(MAX_QUOTE_LINES + 1)}`);
     expect(outcome.state).toBe("unlocatable");
     expect(outcome.state === "unlocatable" && outcome.reason).toContain(`${MAX_QUOTE_LINES}-line bound`);
+    expect(outcome).toMatchObject({ kind: "bound" });
   });
 
   test("a file past the line bound is refused rather than matched slowly", () => {
     const outcome = locateQuote("a\n".repeat(MAX_LOCATE_FILE_LINES + 1), "a");
     expect(outcome.state).toBe("unlocatable");
     expect(outcome.state === "unlocatable" && outcome.reason).toContain("bound for locating");
+    expect(outcome).toMatchObject({ kind: "bound" });
   });
 
   test("a quote that is not in the file says so", () => {

@@ -56,6 +56,8 @@ test("a quote that is not at the reviewed SHA is kept unanchored, flagged quote_
   expect(kept[0].quote_unlocated).toEqual({ reason: "absent" });
   expect(kept[1].quote_unlocated).toBeUndefined();
   expect(kept[1].line).toBe(3);
+  // One check writes both: a finding flagged quote_unlocated always records an unlocatable locator.
+  for (const entry of kept) if (entry.quote_unlocated !== undefined) expect(entry.locator.state).toBe("unlocatable");
   const scope = await readFile(path.join(dir, result.path, "scope.md"), "utf8");
   expect(scope).toContain("## Quotes not located at the reviewed head");
   expect(scope).toContain("F-001 (review-logic): src/greet.ts: the quote is absent from the file");
@@ -84,8 +86,9 @@ test("a quote that could not be checked at all (the head is not in this checkout
   await expect(readFile(path.join(dir, ".metaproject", "reviews"), "utf8")).rejects.toThrow();
 });
 
-// Flow 458 AC12 (supersedes the old refusal): a finding's own file absent at the SHA is kept and flagged path_missing;
-// only a quote that fails at a file that EXISTS refuses (above). Citations of absent files are refused elsewhere.
+// Flow 458 AC12 (supersedes the old refusal): a finding's own file absent at the SHA is kept and flagged path_missing.
+// Only a quote that could not be checked at all (the head is not in this checkout, an empty quote, a size bound) refuses
+// (above); a quote that was checked and is absent or ambiguous is kept and flagged quote_unlocated.
 test("a file that is not in the tree at the SHA is kept, flagged path_missing, not refused", async () => {
   const result = await ingest({ findings: [finding({ file: "src/gone.ts", quote: "anything" })] });
   const [kept] = JSON.parse(await readFile(path.join(dir, result.path, "findings.json"), "utf8"));
@@ -93,8 +96,13 @@ test("a file that is not in the tree at the SHA is kept, flagged path_missing, n
   expect(kept.locator).toMatchObject({ state: "unlocatable" });
 });
 
-test("a finding the round dismissed is recorded rather than refused", async () => {
+// The two exemptions below are pinned on a quote that still refuses for an open internal finding (a head this checkout
+// does not have): an absent quote at a head that exists no longer refuses anyone, so it would pass without them.
+const UNCHECKABLE = { kind: "report" as const, ref: "review.md", head: "f".repeat(40) };
+
+test("a finding the round dismissed is recorded rather than refused, even where its quote cannot be checked", async () => {
   const result = await ingest({
+    target: UNCHECKABLE,
     findings: [],
     refuted: [finding({ quote: "  return `howdy ${trimmed}`;", disposition: { state: "dismissed-incorrect", evidence: "the reviewer misread the file" } })],
   });
@@ -104,7 +112,10 @@ test("a finding the round dismissed is recorded rather than refused", async () =
 
 test("a dismissed finding and an external comment are not asked to resolve, even among the reported findings", async () => {
   const stale = "  return `howdy ${trimmed}`;";
+  // The same quote on an open internal finding refuses at this head: the exemptions are what lets these two through.
+  expect(await ingest({ target: UNCHECKABLE, findings: [finding({ quote: stale })] }).catch((e: Error) => e)).toBeInstanceOf(Error);
   const result = await ingest({
+    target: UNCHECKABLE,
     findings: [
       finding({ id: "F-001", quote: stale, disposition: { state: "dismissed-incorrect", evidence: "the reviewer misread the file" } }),
       finding({ id: "F-002", quote: stale, source: "external", external_ref: { id: "review-comment:12", author: "someone", url: "https://github.com/acme/app/pull/7#discussion_r12", submitted_at: "2026-10-14T00:00:00Z" } }),

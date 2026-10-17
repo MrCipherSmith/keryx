@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { requiredReviewers } from "./coverage";
-import { type LedgerInputs, type RawFile, buildLedger, isEmptyOutput, ledgerBlockers, parseReviewResult, rawUsage } from "./ledger";
-import { formatUsageLine, renderSpendMarkdown, usageTotals, usageTotalsLine } from "./dispatch-usage";
+import { type LedgerInputs, type RawFile, buildLedger, isEmptyOutput, ledgerBlockers, parseReviewResult, rawUsage, unreadableInputClaim } from "./ledger";
+import { MAX_DISPATCH_TOKENS, SPEND_HEADING, formatUsageLine, renderSpendMarkdown, splitUsage, usageTotals, usageTotalsLine } from "./dispatch-usage";
 import { loadRaws } from "../commands/review-ledger";
 import type { MutationRecord } from "./mutate";
 import { emptyRetryState, planRetry, scopeFingerprint } from "./retry-plan";
@@ -1038,6 +1038,34 @@ describe("token spend per dispatch (flow 460, AC7)", () => {
     expect(isEmptyOutput(`(subagent produced no text)\n${line(1, 1)}`)).toBe(true);
     expect(usageTotals(raws.map(rawUsage))).toMatchObject({ dispatches: 3, known: 2, unknown: 1, tokens_in: 940, tokens_out: 90 });
   });
+
+  test("a usage line is checked by hand, not by a backtracking pattern: a long line of braces is read in linear time and states nothing", () => {
+    const hostile = `REVIEW_RESULT {"reviewer":"r","status":"DONE"}\nKERYX_USAGE {${"}".repeat(200_000)} trailing\n`;
+    const started = performance.now();
+    const { body, usage } = splitUsage(hostile);
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(usage).toBeUndefined();
+    expect(body).not.toContain("KERYX_USAGE");
+  });
+
+  test("a count past MAX_DISPATCH_TOKENS is not a measurement: the dispatch reads as unknown", () => {
+    expect(splitUsage(`x\nKERYX_USAGE {"tokens_in":${MAX_DISPATCH_TOKENS + 1},"tokens_out":1}`).usage).toBeUndefined();
+    expect(splitUsage(`x\nKERYX_USAGE {"tokens_in":${MAX_DISPATCH_TOKENS},"tokens_out":1}`).usage).toEqual({ tokens_in: MAX_DISPATCH_TOKENS, tokens_out: 1 });
+  });
+
+  test("a dispatch stopped at its deadline is a partial count: the totals say at least, and are not complete", () => {
+    const partial = splitUsage(`x\n${formatUsageLine({ tokens_in: 10, tokens_out: 2, partial: true })}`).usage;
+    expect(partial).toEqual({ tokens_in: 10, tokens_out: 2, partial: true });
+    const totals = usageTotals([partial, { tokens_in: 5, tokens_out: 1 }]);
+    expect(totals).toMatchObject({ dispatches: 2, known: 2, unknown: 0, partial: 1, complete: false });
+    expect(usageTotalsLine(totals)).toBe("token spend: at least 15 in, 3 out over 2 dispatch(es); 1 stopped at a deadline (counted so far only)");
+  });
+
+  test("renderSpendMarkdown adds the section once: a report that already holds it gets nothing", () => {
+    const research = { usage: usageTotals([{ tokens_in: 1, tokens_out: 1 }]) };
+    expect(renderSpendMarkdown(research)).toContain(SPEND_HEADING);
+    expect(renderSpendMarkdown(research, `# R\n\n${SPEND_HEADING}\n\nold\n`)).toBe("");
+  });
 });
 
 describe("flow 460 D/F: what a reply claims, and what the artifacts say ran", () => {
@@ -1063,8 +1091,29 @@ describe("flow 460 D/F: what a reply claims, and what the artifacts say ran", ()
       expect(logic).toMatchObject({ status: "incomplete", scopeComplete: false });
       expect(result.gaps.find((g) => g.reviewer === "review-logic")!.detail).toContain("mandatory input could not be read");
     }
-    const fine = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, summary: "Read pr_context and the schema; no problems found" } } : r));
-    expect(buildLedger({ ...base, raws: fine }).gaps).toEqual([]);
+    // Defect prose about a schema, a payload or PR context is a finding, not a statement about the reviewer's own reading.
+    for (const summary of [
+      "Read pr_context and the schema; no problems found",
+      "reviewer-finding.schema.json is missing a slices property",
+      "the payload parser is missing a guard for empty slices",
+      "the schema is unchanged and nothing is missing",
+      "the dispatch payload is missing slices",
+      "the finding schema is not updated for usage",
+      "pr-context is not passed to the light check",
+      "loadSchema cannot open the schema when the cache is cold",
+      "the payload was not found in a sibling file by design, which is fine",
+    ]) {
+      const fine = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, summary } } : r));
+      expect({ summary, gaps: buildLedger({ ...base, raws: fine }).gaps }).toEqual({ summary, gaps: [] });
+    }
+  });
+
+  test("D: unreadableInputClaim quotes only the reviewer's own statement", () => {
+    expect(unreadableInputClaim({ summary: "Done. I was unable to load the slice manifest, so slices are guessed." })).toBe("I was unable to load the slice manifest");
+    expect(unreadableInputClaim({ summary: "The result schema could not be read; replied from memory" })).toBe("The result schema could not be read");
+    expect(unreadableInputClaim({ summary: "Failed to parse the payload" })).toBe("Failed to parse the payload");
+    expect(unreadableInputClaim({ summary: "the payload builder failed to read the schema in the fixture" })).toBeUndefined();
+    expect(unreadableInputClaim({})).toBeUndefined();
   });
 
   test("F: the light-round mutation line appears only when the package holds no mutation record", async () => {

@@ -21,7 +21,7 @@ import type { PremiseQuestionDecision } from "./operator-decisions";
 import { awaitingOperator, premiseHoldState } from "./premise";
 import { premiseRecords } from "./verdict";
 import { packageParityWarnings } from "./parity";
-import { packageCoverageErrors, researchErrors } from "./research";
+import { dispatchRuns, packageCoverageErrors, researchErrors } from "./research";
 import type { ConfirmedVia, ManagedReviewManifest, ReadinessWaiver } from "./types";
 
 export const READINESS_ITEMS = [
@@ -119,7 +119,25 @@ type Context = {
   premise: { records: Array<Record<string, unknown>>; decisions: PremiseQuestionDecision[]; ingested: boolean };
   /** True when the package carries the dispatch record (a package cut before it existed is not held to it). */
   dispatched: boolean;
+  /** coverage.md as written, or undefined when it is missing. */
+  coverageMd: string | undefined;
+  /**
+   * Whether the two flow 460 checks apply (the omitted-reviewer check of item 6, the coverage gate in item 3): when
+   * coverage.md carries COVERAGE_MD_MARK (ingested by a keryx that has them), or the package is still open, so its
+   * repair (a re-ingest) is available. A package closed before flow 460 passed the gate of its own version; its
+   * recorded state is final, and publish, the publish guard and the panel do not suddenly call it NOT READY.
+   */
+  coverageGated: boolean;
 };
+
+/**
+ * The line `review ingest` writes into coverage.md since flow 460. On a closed package, its presence is what keeps the
+ * omitted-reviewer check of item 6 and the coverage gate in item 3 (see Context.coverageGated).
+ */
+export const COVERAGE_MD_MARK = "<!-- keryx: coverage.md written from the dispatch record (flow 460) -->";
+
+/** One `reviewer:` / `status:` entry of coverage.md. */
+const COVERAGE_ENTRY = /reviewer:\s*(\S+)\s*\n\s*status:\s*(\S+)/g;
 
 async function filesChecks(ctx: Context): Promise<{ files: Verdict; radius: Verdict }> {
   const coverage = await computeCoverage(ctx.dir, ctx.research === undefined ? {} : { research: ctx.research });
@@ -165,9 +183,11 @@ async function reviewersCheck(ctx: Context): Promise<Verdict> {
   }
   const all = [...new Set([...unfinished, ...unplanned, ...lost])];
   // The coverage gate `review complete` runs, with the same options (flow 460): readiness must not say READY while
-  // complete refuses the reviewer set, the round depth or an unwaived mutation pass.
-  const coverage = problems.length === 0 ? await packageCoverageErrors(ctx.dir, dispatch) : [];
-  if (problems.length === 0 && all.length === 0 && coverage.length === 0) return ok(`${runs.length} reviewer run(s), all complete with their result on disk; the coverage gate accepts the dispatch`);
+  // complete refuses the reviewer set, the round depth or an unwaived mutation pass. Not for a package ingested before
+  // that and closed (see Context.coverageGated). Its git diff is remembered per package and head (./coverage.ts).
+  const coverage = problems.length === 0 && ctx.coverageGated ? await packageCoverageErrors(ctx.dir, dispatch) : [];
+  const gateNote = ctx.coverageGated ? "the coverage gate accepts the dispatch" : "the package was closed before readiness ran the coverage gate (flow 460), so its recorded close stands";
+  if (problems.length === 0 && all.length === 0 && coverage.length === 0) return ok(`${runs.length} reviewer run(s), all complete with their result on disk; ${gateNote}`);
   const parts = [
     ...(unfinished.length > 0 ? [`not run or incomplete: ${some(unfinished)}`] : []),
     ...(unplanned.length > 0 ? [`planned with no run recorded: ${some(unplanned)}`] : []),
@@ -259,17 +279,24 @@ function ledgerCheck(ctx: Context): Verdict {
   return bad(`${problems.length} ledger problem(s): ${problems.slice(0, 3).join("; ")}${problems.length > 3 ? "; …" : ""}`, `close each obligation with a disposition, then \`keryx review ledger build <input-dir> --package ${ctx.arg} --dispositions <file>\``);
 }
 
-async function coverageMdCheck(ctx: Context): Promise<Verdict> {
-  const raw = await readFile(path.join(ctx.dir, "coverage.md"), "utf8").catch(() => undefined);
-  const runs = (Array.isArray(record(ctx.research?.dispatch)?.runs) ? (record(ctx.research?.dispatch)!.runs as unknown[]) : []).map(record);
-  const bad2 = new Set(runs.filter((run) => run !== undefined && run.status !== "complete").map((run) => String(run!.reviewer)));
+function coverageMdCheck(ctx: Context): Verdict {
+  const raw = ctx.coverageMd;
+  const runs = dispatchRuns(ctx.research);
+  const unfinished = new Set(runs.filter((run) => run.status !== "complete").map((run) => run.reviewer));
   if (raw === undefined) return bad("coverage.md is missing", `re-run keryx review ingest <input> for this package: it writes coverage.md`);
-  const claimed = [...raw.matchAll(/reviewer:\s*(\S+)\s*\n\s*status:\s*(\S+)/g)].filter((match) => match[2] === "run").map((match) => match[1] as string);
-  const lying = claimed.filter((name) => bad2.has(name));
-  // Flow 460 F: a reviewer the dispatch record ran must be listed too; coverage.md that names a stand-in omits it.
-  const listed = new Set([...raw.matchAll(/reviewer:\s*(\S+)\s*\n\s*status:\s*(\S+)/g)].map((match) => match[1] as string));
-  const omitted = runs.flatMap((run) => (run !== undefined && typeof run.reviewer === "string" && !listed.has(run.reviewer) ? [run.reviewer] : []));
-  if (omitted.length > 0) return bad(`coverage.md omits ${some(omitted)}, which the dispatch record ran`, `re-run keryx review ingest <input> for this package: it writes coverage.md from the dispatch record`);
+  const entries = [...raw.matchAll(COVERAGE_ENTRY)].map((match) => ({ reviewer: match[1]!, status: match[2]! }));
+  const claimed = entries.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
+  const lying = claimed.filter((name) => unfinished.has(name));
+  // Flow 460 F: a reviewer the dispatch record ran must be listed too; coverage.md that names a stand-in omits it. Only
+  // while it applies (Context.coverageGated): a closed package's older coverage.md predates ingest reading the record.
+  const listed = new Set(entries.map((entry) => entry.reviewer));
+  const omitted = ctx.coverageGated ? runs.filter((run) => !listed.has(run.reviewer)).map((run) => run.reviewer) : [];
+  if (omitted.length > 0) {
+    return bad(
+      `coverage.md omits ${some(omitted)}, which the dispatch record ran`,
+      "re-run keryx review ingest <input> for this package without --reviewers or --coverage: only then is coverage.md written from the dispatch record (an explicit list is written as given, and fails this item again)",
+    );
+  }
   if (lying.length === 0) return ok(`${claimed.length} reviewer(s) listed as run, none contradicted by the dispatch record`);
   return bad(`coverage.md lists ${some(lying)} as "run", but the dispatch record says they did not finish`, `re-run keryx review ingest <input> for this package: it rewrites coverage.md from the dispatch record`);
 }
@@ -376,6 +403,7 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
   if (manifest === undefined) throw new Error(`Managed review package has no readable manifest.json: ${packageDir}`);
   const research = record(await readJson<unknown>(path.join(packageDir, "research.json")));
   const findingsRaw = await readJson<unknown>(path.join(packageDir, "findings.json"));
+  const coverageMd = await readFile(path.join(packageDir, "coverage.md"), "utf8").catch(() => undefined);
   const ctx: Context = {
     dir: packageDir,
     arg: packageArg(packageDir),
@@ -385,6 +413,8 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     findings: Array.isArray(findingsRaw) ? findingsRaw.map(record).filter((entry): entry is Record<string, unknown> => entry !== undefined) : [],
     premise: await premiseRecords(packageDir),
     dispatched: manifest.artifacts.reviewerDispatch !== undefined || manifest.artifacts.research !== undefined,
+    coverageMd,
+    coverageGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== "closed",
   };
   const { files, radius } = await filesChecks(ctx);
   const verdicts: Record<ReadinessItemId, Verdict> = {
@@ -393,7 +423,7 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     reviewers: await reviewersCheck(ctx),
     verifier: verifierCheck(ctx),
     ledger: ledgerCheck(ctx),
-    "coverage-md": await coverageMdCheck(ctx),
+    "coverage-md": coverageMdCheck(ctx),
     head: await headCheck(ctx, options),
     "report-names": await reportNamesCheck(ctx),
     "pr-files": await prFilesCheck(ctx, options),

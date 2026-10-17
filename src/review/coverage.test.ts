@@ -600,4 +600,23 @@ describe("a pull-request package's diff is read at the repository top level agai
     expect(errors).toContain(`head ${missing}`);
     expect(errors).not.toContain(PR);
   });
+
+  test("an empty range (a merged PR read against its own target branch) refuses the light round instead of passing it on zero files", async () => {
+    repo();
+    const merged = git(root, "rev-parse", "main").trim();
+    const errors = await lightErrors(await pkgAt(root, { head: merged }));
+    expect(errors).toContain("empty review range");
+    expect(errors).toContain("depth light, but the full set applies");
+  });
+
+  test("the light recheck's git diff is remembered per package and head: a second check in the same process runs no git", async () => {
+    const head = repo();
+    const pkg = await pkgAt(root, { base: "main", head });
+    expect(await lightErrors(pkg)).toBe("");
+    // With the repository gone, only the remembered result can answer.
+    await rm(path.join(root, ".git"), { recursive: true, force: true });
+    expect(await lightErrors(pkg)).toBe("");
+    // Another head is another key: it is not answered from the cache.
+    expect(await lightErrors(await pkgAt(root, { base: "main", head: "0123456789abcdef0123456789abcdef01234567" }))).toContain("could not be resolved");
+  });
 });

@@ -4,10 +4,10 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { writeFileAtomic } from "../lib/fs";
-import { DISPATCH_KNOWN_ROLES, skipDecision, skipLine, type ReviewerSkip, packageChangedLines, packageRoundDepth, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
+import { DISPATCH_KNOWN_ROLES, skipDecision, skipLine, type ReviewerSkip, packageRoundDepth, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
 import { SLICE_MANIFEST_COPY } from "../review/coverage-complete";
 import { readToolLog } from "../review/layers-usage";
-import { packageHasMutationRecord, pendingMutants } from "../review/mutate";
+import { packageHasMutationRecord } from "../review/mutate";
 import { DISPOSITION_SCHEMA, normalizeDispositions, type LedgerGap, type RawFile, buildLedger, explainUnparsedResult, followUpsOf, isEmptyOutput, isReviewerResult, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
 import { type DriverFile, type DriverRecords, type ReplyNames, definitionCandidates, readDrivers, readJson } from "../review/driver-read";
 import { type RetryState, applyEscalations, emptyRetryState, escalationsFor, scopeFingerprint } from "../review/retry-plan";
@@ -47,10 +47,11 @@ finding?, remains? — required for narrowed: what of the finding still stands};
 --dispositions is a JSON array, or an object holding one under dispositions, items, results, data, entries or
 obligations; a row with no id, an unknown status or a narrowed row without remains refuses the build with the list of bad rows.
 Each reviewer's model (drivers/*.json "model", or "model" in its result) is listed after READY / NOT READY; none reads "model not recorded".
+scopeReviewed and rawReconciled are true only when established.
+
 Token spend: a raw file may end with a \`KERYX_USAGE {"tokens_in":N,"tokens_out":M,"model":"…"}\` line (keryx shell's
 spawn_subagent writes it; another host appends it from its own agent result), or the result may carry "usage". Each run's
-usage and the round's total (research.json "usage") are recorded; a dispatch without one is counted unknown, never 0. scopeReviewed and rawReconciled
-are true only when established.
+usage and the round's total (research.json "usage") are recorded; a dispatch without one is counted unknown, never 0.
 
 --skip <reviewer> --reason "<why>" (repeatable, each --skip followed by its --reason) records a
 required reviewer the operator deliberately did not run: it leaves the dispatch selection, is
@@ -109,9 +110,9 @@ export async function loadRaws(inputDir: string, replies: ReplyNames): Promise<{
     // `Parent follow-up:` lines below the block join the result's own `follow_ups`; a result with neither is left as parsed.
     const followUps = result === undefined ? [] : followUpsOf(result, body);
     const merged = result === undefined || followUps.length === 0 ? result : { ...result, follow_ups: followUps };
-    // Flow 460: the dispatch's token use, from the `KERYX_USAGE` line the host appended (absent: unknown).
-    const { usage } = splitUsage(body);
-    raws.push({ name: `raw/${name}`, hash: sha(body), mtimeMs: (await stat(file)).mtimeMs, empty: isEmptyOutput(body), ...(merged === undefined ? { diagnosis: explainUnparsedResult(splitUsage(body).body) } : { result: merged }), ...(usage === undefined ? {} : { usage }) });
+    // Flow 460: the dispatch's token use, from the `KERYX_USAGE` line the host appended (absent: unknown); `reply` is the body without it.
+    const { body: reply, usage } = splitUsage(body);
+    raws.push({ name: `raw/${name}`, hash: sha(body), mtimeMs: (await stat(file)).mtimeMs, empty: isEmptyOutput(body), ...(merged === undefined ? { diagnosis: explainUnparsedResult(reply) } : { result: merged }), ...(usage === undefined ? {} : { usage }) });
   }
   return { raws, ignored, setAside };
 }
@@ -176,7 +177,18 @@ export function parseSkips(args: readonly string[]): ReviewerSkip[] {
   return skips as ReviewerSkip[];
 }
 
-export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: string[], out: string, ignored: string[], dryRun = false, notRun: readonly string[] = [], models: ReadonlyArray<{ reviewer: string; model?: string | undefined }> = [], usage?: UsageTotals): string {
+/** What the ledger report prints beside the verdict, the gaps and the gate's blockers. */
+export type LedgerReportExtras = {
+  /** True for `--dry-run`: research.json "would be written". */
+  dryRun?: boolean | undefined;
+  /** `Not run: <reviewer> — <why>` lines. */
+  notRun?: readonly string[] | undefined;
+  models?: ReadonlyArray<{ reviewer: string; model?: string | undefined }> | undefined;
+  usage?: UsageTotals | undefined;
+};
+
+export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: string[], out: string, ignored: string[], extras: LedgerReportExtras = {}): string {
+  const { dryRun = false, notRun = [], models = [], usage } = extras;
   const verb = dryRun ? "would be written" : "written";
   const lines = [ready ? `READY: ${out} ${verb} and satisfies the completion gate.` : `NOT READY: ${out} ${verb}, but the completion gate would refuse it.`];
   for (const line of notRun) lines.push(`- ${line}`);
@@ -318,12 +330,13 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     gaps.push({ reviewer: driver.reviewer, detail: `drivers/${driver.file}: ${driver.unusable} slice entr${driver.unusable === 1 ? "y" : "ies"} without a usable id; none of this dispatch's slices counts as handed to ${driver.reviewer}`, next: `give every entry in drivers/${driver.file} an id string, or an object with an id` });
   }
   if (setAside.length > 0) ledger.setAside = setAside;
-  const blockers = await ledgerBlockers(ledger, canonical, { root, packageDir, files, changedLines: await packageChangedLines(packageDir), blastRadius, pendingMutants: (await pendingMutants(packageDir)).length });
+  // The package's own coverage options (packageCoverageErrors), as review complete and review readiness read them.
+  const blockers = await ledgerBlockers(ledger, canonical, { root, packageDir, files });
   const ready = blockers.length === 0;
   if (!rest.includes("--dry-run")) {
     await writeFileAtomic(out, `${JSON.stringify(ledger, null, 2)}\n`);
     if (manifest !== undefined && path.resolve(packageDir) !== inputDir) await writeFileAtomic(path.join(packageDir, SLICE_MANIFEST_COPY), `${JSON.stringify(manifest, null, 2)}\n`);
   }
-  console.log(rest.includes("--json") ? JSON.stringify({ ready, out, gaps, blockers, ignored, ledger }, null, 2) : renderLedgerReport(ready, gaps, blockers, path.relative(process.cwd(), out) || out, ignored, rest.includes("--dry-run"), skipped.map(skipLine), modelsOf(ledger.dispatch.runs), ledger.usage));
+  console.log(rest.includes("--json") ? JSON.stringify({ ready, out, gaps, blockers, ignored, ledger }, null, 2) : renderLedgerReport(ready, gaps, blockers, path.relative(process.cwd(), out) || out, ignored, { dryRun: rest.includes("--dry-run"), notRun: skipped.map(skipLine), models: modelsOf(ledger.dispatch.runs), usage: ledger.usage }));
   if (!ready) process.exitCode = 1;
 }

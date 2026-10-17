@@ -392,10 +392,10 @@ describe("ledger build --skip and flow-bound packages (flow 458 AC7)", () => {
       expect(out.blockers.join("\n")).not.toContain(skipped);
       // The gate on the dispatch: the skip counts with the package's recorded decision, never as a dispatch entry alone.
       const dispatch = out.ledger.dispatch;
-      expect((await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"], packageDir: pkg })).join("\n")).not.toContain("missing");
+      expect(await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"], packageDir: pkg })).toEqual([]);
       expect((await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"] })).join("\n")).toContain("dispatch.skipped is not accepted");
       // Flow 460 (B): the recorded decision itself accounts for the reviewer it left out, with or without a dispatch field.
-      expect((await coverageErrors({ mode: "all", selected: dispatch.selected }, { root, files: ["src/a.ts"], packageDir: pkg })).join("\n")).not.toContain("missing");
+      expect(await coverageErrors({ mode: "all", selected: dispatch.selected }, { root, files: ["src/a.ts"], packageDir: pkg })).toEqual([]);
 
       const text = (await run([pkg, "--mode", "all", "--dry-run", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).text;
       expect(text).toContain(`- Not run: ${skipped} — operator: no style pass on a hotfix`);

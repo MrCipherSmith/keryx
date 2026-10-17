@@ -8,8 +8,8 @@ import { packageParityWarnings } from "./parity";
 import { roundRecordTampered } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
 import { renderSpendMarkdown } from "./dispatch-usage";
-import { PENDING_RESEARCH, packageResearchErrors } from "./research";
-import { computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
+import { PENDING_RESEARCH, dispatchRuns, packageResearchErrors } from "./research";
+import { COVERAGE_MD_MARK, computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
@@ -273,7 +273,9 @@ export async function createManagedReviewPackage(
   const verifications = await ownPackageVerifications(input, packageDir);
   const coverage = normalizeCoverage(input.coverage, input.reviewers, input.research);
   const report = await readReport(input);
-  const reviewers = coverage.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
+  // The attribution default for findings that name no reviewer comes from what the operator gave (or the orchestrator),
+  // never from the research record: one finished reviewer there must not absorb the orchestrator's findings.
+  const reviewers = normalizeCoverage(input.coverage, input.reviewers).filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
   const reported = await normalizeFindings({
     report,
     reportLabel: reportLabel(input),
@@ -538,7 +540,7 @@ export async function createManagedReviewPackage(
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
   // Flow 460: the round's token spend, as research.json states it (unknown dispatches counted, never 0).
-  await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode) + (report.includes("\n## Token spend\n") ? "" : renderSpendMarkdown(input.research)));
+  await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode) + renderSpendMarkdown(input.research, report));
   // Under the decisions lock, like every other findings.json writer: a premise answer to a re-ingested package
   // rewrites the same file.
   await withOperatorDecisionsLock(packageDir, () => writeFileAtomic(
@@ -1199,22 +1201,22 @@ function buildManifest(args: {
  * record and no explicit `--reviewers`, coverage lists these rather than a stand-in orchestrator that never reviewed.
  */
 function coverageFromResearch(research: unknown): ReviewCoverageEntry[] {
-  const dispatch = research !== null && typeof research === "object" ? (research as { dispatch?: unknown }).dispatch : undefined;
-  const runs = dispatch !== null && typeof dispatch === "object" ? (dispatch as { runs?: unknown }).runs : undefined;
-  if (!Array.isArray(runs)) return [];
   const seen = new Set<string>();
   const entries: ReviewCoverageEntry[] = [];
-  for (const run of runs) {
-    if (run === null || typeof run !== "object") continue;
-    const { reviewer, status, notRunReason, executionReason } = run as Record<string, unknown>;
-    if (typeof reviewer !== "string" || reviewer.length === 0 || seen.has(reviewer)) continue;
+  for (const { reviewer, status, routedOut, notRunReason, executionReason } of dispatchRuns(research)) {
+    if (seen.has(reviewer)) continue;
     seen.add(reviewer);
-    if (status === "complete") entries.push({ reviewer, status: "run", reason: "dispatched; the research ledger records it complete" });
-    else if (status === "incomplete") entries.push({ reviewer, status: "needs_context", reason: `dispatched; the research ledger records it incomplete${typeof executionReason === "string" ? ` (${executionReason})` : ""}` });
-    else entries.push({ reviewer, status: "failed", reason: `not run: ${typeof notRunReason === "string" ? notRunReason : "the research ledger records no result"}` });
+    // A routed-out role is recorded complete but was never dispatched: coverage.md says so rather than "dispatched".
+    if (status === "complete" && routedOut === true) entries.push({ reviewer, status: "run", reason: "routed out: slice routing gave this role no slice, so it was not dispatched" });
+    else if (status === "complete") entries.push({ reviewer, status: "run", reason: "dispatched; the research ledger records it complete" });
+    else if (status === "incomplete") entries.push({ reviewer, status: "needs_context", reason: `dispatched; the research ledger records it incomplete${executionReason === undefined ? "" : ` (${executionReason})`}` });
+    else entries.push({ reviewer, status: "failed", reason: `not run: ${notRunReason ?? "the research ledger records no result"}` });
   }
   return entries;
 }
+
+/** The reviewer a finding with no reviewer of its own is attributed to, when the operator named none: never a coverage entry. */
+const ATTRIBUTION_FALLBACK = "review-orchestrator";
 
 function normalizeCoverage(
   coverage: ReviewCoverageEntry[] | undefined,
@@ -1224,11 +1226,12 @@ function normalizeCoverage(
   if (coverage && coverage.length > 0) {
     return coverage;
   }
-  if (!(reviewers && reviewers.length > 0)) {
+  const named = reviewers !== undefined && reviewers.length > 0;
+  if (!named) {
     const fromResearch = coverageFromResearch(research);
     if (fromResearch.length > 0) return fromResearch;
   }
-  const selected = reviewers && reviewers.length > 0 ? reviewers : ["review-orchestrator"];
+  const selected = named ? reviewers : [ATTRIBUTION_FALLBACK];
   return selected.map((reviewer) => ({
     reviewer,
     status: "run",
@@ -2688,6 +2691,8 @@ ${rows}
 
 function renderCoverage(coverage: ReviewCoverageEntry[]): string {
   return `# Reviewer Coverage
+
+${COVERAGE_MD_MARK}
 
 ${coverage.map((entry) => `reviewer: ${entry.reviewer}\nstatus: ${entry.status}\nreason: ${entry.reason}`).join("\n\n")}
 `;

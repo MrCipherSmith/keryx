@@ -49,7 +49,6 @@ export const MAX_LOCATE_FILE_LINES = 50_000;
 /** Read bound for the same reason, applied before the file reaches the matcher. */
 export const MAX_LOCATE_FILE_BYTES = 4_000_000;
 
-/** How a finding's `line` was arrived at. */
 /**
  * Why a quote was not placed, as a word a gate can branch on (flow 460): `absent` (the file is there, the quote is
  * not), `ambiguous` (it is there more than once; `candidates` are the lines it matched, bounded by the scan), `bound`
@@ -58,6 +57,7 @@ export const MAX_LOCATE_FILE_BYTES = 4_000_000;
  */
 export type UnlocatableKind = "absent" | "ambiguous" | "bound" | "empty";
 
+/** How a finding's `line` was arrived at. */
 export type LocatorRecord =
   | { state: "derived"; method: "exact" | "whitespace-normalised"; line: number; reported_line?: number | null }
   | { state: "unlocatable"; reason: string; reported_line?: number | null; kind?: UnlocatableKind | undefined; candidates?: number[] | undefined };
