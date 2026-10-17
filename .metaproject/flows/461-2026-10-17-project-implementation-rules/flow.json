@@ -11,13 +11,110 @@
   "title": "Project rules and skills are applied first when code and tests are written",
   "status": "in-progress",
   "createdAt": "2026-10-17T18:22:54.675Z",
-  "updatedAt": "2026-10-17T18:53:36.370Z",
+  "updatedAt": "2026-10-17T19:57:06.315Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-17T19:41:04.472Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC2": {
+      "at": "2026-10-17T19:41:04.692Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC3": {
+      "at": "2026-10-17T19:41:04.899Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC4": {
+      "at": "2026-10-17T19:41:05.109Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC5": {
+      "at": "2026-10-17T19:41:05.325Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC6": {
+      "at": "2026-10-17T19:41:05.532Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC7": {
+      "at": "2026-10-17T19:41:05.742Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC8": {
+      "at": "2026-10-17T19:41:05.959Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC9": {
+      "at": "2026-10-17T19:41:06.163Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC10": {
+      "at": "2026-10-17T19:41:06.368Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC11": {
+      "at": "2026-10-17T19:41:06.578Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC12": {
+      "at": "2026-10-17T19:41:06.787Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC13": {
+      "at": "2026-10-17T19:41:06.992Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC14": {
+      "at": "2026-10-17T19:41:07.194Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC15": {
+      "at": "2026-10-17T19:41:07.399Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC16": {
+      "at": "2026-10-17T19:41:07.606Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC23": {
+      "at": "2026-10-17T19:41:07.809Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC24": {
+      "at": "2026-10-17T19:41:08.019Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC25": {
+      "at": "2026-10-17T19:41:08.231Z",
+      "note": "verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route)"
+    },
+    "AC17": {
+      "at": "2026-10-17T19:45:40.020Z",
+      "note": "verify green 2026-10-17: task-implementer-contract + project-context-config + flow/task-project-context tests, 58 pass 0 fail"
+    },
+    "AC18": {
+      "at": "2026-10-17T19:45:40.224Z",
+      "note": "verify green 2026-10-17: task-implementer-contract + project-context-config + flow/task-project-context tests, 58 pass 0 fail"
+    },
+    "AC19": {
+      "at": "2026-10-17T19:57:05.687Z",
+      "note": "verify green 2026-10-17: cli-reference-coverage + cli-docs-structure + project-reviewers + rule-references + reviewers + vantage fixture + group-subcommands-flow, 80 pass 0 fail; tsc clean"
+    },
+    "AC20": {
+      "at": "2026-10-17T19:57:05.898Z",
+      "note": "verify green 2026-10-17: cli-reference-coverage + cli-docs-structure + project-reviewers + rule-references + reviewers + vantage fixture + group-subcommands-flow, 80 pass 0 fail; tsc clean"
+    },
+    "AC21": {
+      "at": "2026-10-17T19:57:06.106Z",
+      "note": "verify green 2026-10-17: cli-reference-coverage + cli-docs-structure + project-reviewers + rule-references + reviewers + vantage fixture + group-subcommands-flow, 80 pass 0 fail; tsc clean"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -126,7 +223,7 @@
       "id": "T7",
       "title": "Stage 2: resolve-context, config, contracts, contract files, skill calls (AC9-AC14, AC25)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -134,13 +231,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "AC9-AC14, AC25 verify tests green"
     },
     {
       "id": "T8",
       "title": "Stage 3: orchestrator templates, shell/MCP operation, TUI (AC15, AC16, AC24)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -148,13 +247,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "AC15, AC16, AC24 verify tests green"
     },
     {
       "id": "T9",
       "title": "Stage 4: enforcement block mode and flow task done check (AC17, AC18)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -162,13 +263,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "AC17, AC18 verify tests green"
     },
     {
       "id": "T10",
       "title": "Docs, reviewer non-regression, Vantage fixture, live-run runbook (AC19-AC22)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -176,7 +279,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "docs, router fix, Vantage fixture and runbook done; AC19-AC21 confirmed, AC22 left to the operator"
     }
   ],
   "history": [
@@ -242,6 +347,146 @@
       "at": "2026-10-17T18:53:36.370Z",
       "event": "task-done",
       "detail": "T6: Stage 1: categories, skills import --rules/--link, registry fields, update/remove (AC4-AC8, AC23)"
+    },
+    {
+      "at": "2026-10-17T19:41:04.472Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:04.692Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:04.899Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:05.109Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:05.325Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:05.532Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:05.742Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:05.959Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:06.163Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:06.369Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:06.578Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:06.787Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:06.992Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:07.194Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:07.399Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:07.606Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:07.809Z",
+      "event": "ac-confirmed",
+      "detail": "AC23: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:08.019Z",
+      "event": "ac-confirmed",
+      "detail": "AC24: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:08.232Z",
+      "event": "ac-confirmed",
+      "detail": "AC25: verify command green 2026-10-17: 383 pass/0 fail across 15 files (resolver, config, contract, bundled text, operations, mcp, tui inspector, skills import/update/remove/route) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:41:08.439Z",
+      "event": "task-done",
+      "detail": "T7: Stage 2: resolve-context, config, contracts, contract files, skill calls (AC9-AC14, AC25)"
+    },
+    {
+      "at": "2026-10-17T19:41:08.646Z",
+      "event": "task-done",
+      "detail": "T8: Stage 3: orchestrator templates, shell/MCP operation, TUI (AC15, AC16, AC24)"
+    },
+    {
+      "at": "2026-10-17T19:45:40.020Z",
+      "event": "ac-confirmed",
+      "detail": "AC17: verify green 2026-10-17: task-implementer-contract + project-context-config + flow/task-project-context tests, 58 pass 0 fail (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:45:40.224Z",
+      "event": "ac-confirmed",
+      "detail": "AC18: verify green 2026-10-17: task-implementer-contract + project-context-config + flow/task-project-context tests, 58 pass 0 fail (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:45:40.424Z",
+      "event": "task-done",
+      "detail": "T9: Stage 4: enforcement block mode and flow task done check (AC17, AC18)"
+    },
+    {
+      "at": "2026-10-17T19:57:05.687Z",
+      "event": "ac-confirmed",
+      "detail": "AC19: verify green 2026-10-17: cli-reference-coverage + cli-docs-structure + project-reviewers + rule-references + reviewers + vantage fixture + group-subcommands-flow, 80 pass 0 fail; tsc clean (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:57:05.898Z",
+      "event": "ac-confirmed",
+      "detail": "AC20: verify green 2026-10-17: cli-reference-coverage + cli-docs-structure + project-reviewers + rule-references + reviewers + vantage fixture + group-subcommands-flow, 80 pass 0 fail; tsc clean (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:57:06.106Z",
+      "event": "ac-confirmed",
+      "detail": "AC21: verify green 2026-10-17: cli-reference-coverage + cli-docs-structure + project-reviewers + rule-references + reviewers + vantage fixture + group-subcommands-flow, 80 pass 0 fail; tsc clean (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-17T19:57:06.315Z",
+      "event": "task-done",
+      "detail": "T10: Docs, reviewer non-regression, Vantage fixture, live-run runbook (AC19-AC22)"
     }
   ],
   "acKinds": {
@@ -344,5 +589,271 @@
       "kind": "exec",
       "check": "bun test src/gdskills/context-resolver.test.ts"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-17T19:41:04.472Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:04.692Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:04.899Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:05.109Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:05.325Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:05.532Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:05.742Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:05.959Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:06.163Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:06.368Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:06.578Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:06.787Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:06.992Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:07.194Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:07.399Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC15",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:07.606Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC16",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:07.809Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC23",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:08.019Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC24",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:41:08.231Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC25",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:45:40.020Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC17",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:45:40.224Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC18",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:57:05.687Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC19",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:57:05.898Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC20",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-17T19:57:06.106Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC21",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    }
+  ]
 }
