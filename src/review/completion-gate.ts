@@ -3,6 +3,7 @@
 // used to accept it; a review is finished when `keryx review complete` accepts
 // the package, not when the model stops writing. Deterministic: no model judges.
 
+import { readFileSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -34,7 +35,11 @@ const RACY_WINDOW_MS = 2_000;
 /** File -> its stat key and content hash, so a stop re-reads only the files that changed since the last one. */
 const fileHashes = new Map<string, { key: string; hash: string }>();
 
-async function fileHash(file: string): Promise<string> {
+/** The number of file hashes currently remembered (for tests). */
+export const hashedFileCount = (): number => fileHashes.size;
+
+/** `now` is injectable so a test can age a file past {@link RACY_WINDOW_MS} without sleeping. */
+export async function fileHash(file: string, now: number = Date.now()): Promise<string> {
   const info = await stat(file).catch(() => undefined);
   if (info === undefined) return "unreadable";
   const key = `${info.size}:${info.mtimeMs}:${info.ctimeMs}:${info.ino}`;
@@ -42,7 +47,7 @@ async function fileHash(file: string): Promise<string> {
   if (hit !== undefined && hit.key === key) return hit.hash;
   const hash = await readFile(file).then((body) => createHash("sha256").update(body).digest("hex")).catch(() => "unreadable");
   fileHashes.delete(file);
-  if (hash !== "unreadable" && Date.now() - Math.max(info.mtimeMs, info.ctimeMs) > RACY_WINDOW_MS) {
+  if (hash !== "unreadable" && now - Math.max(info.mtimeMs, info.ctimeMs) > RACY_WINDOW_MS) {
     fileHashes.set(file, { key, hash });
     if (fileHashes.size > MAX_HASHED_FILES) fileHashes.delete(fileHashes.keys().next().value as string);
   }
@@ -145,17 +150,60 @@ type HistoryMessage = {
 const OPENING_SUBCOMMANDS: ReadonlySet<string> = new Set(["start", "attach", "ingest"]);
 /** The subcommands whose first positional argument is a review id or package path. */
 const PACKAGE_ARG_SUBCOMMANDS: ReadonlySet<string> = new Set(["status", "readiness", "complete", "attach", "publish", "verdict", "show"]);
-/** Flags that take no value: the word after one can still be the positional id. Any other `--flag` (no `=`) takes the next word. */
-const VALUELESS_FLAGS: ReadonlySet<string> = new Set(["--json", "--yes", "--dry-run", "--force", "--partial", "--waive-coverage", "--help"]);
+/**
+ * The `keryx review` flags that take no value (the ones `review.ts` reads with `args.includes`, plus the publish and
+ * import switches): the word after one can still be the positional id. Any other `--flag` (no `=`) takes the next word,
+ * so `--waive-coverage "<reason>"` and `--detail`-less forms stay right. A test keeps this list equal to the flags
+ * `review.ts` reads as switches.
+ */
+export const VALUELESS_FLAGS: ReadonlySet<string> = new Set([
+  "--json",
+  "--yes",
+  "--dry-run",
+  "--force",
+  "--partial",
+  "--help",
+  "--unattended",
+  "--automatic",
+  "--final",
+  "--allow-closed-pr",
+  "--no-prior-round",
+  "--detail",
+  "--brief",
+  "--all",
+  "--gating",
+  "--confirm",
+  "--explain",
+  "--live",
+  "--full",
+  "--no-related-tests",
+  "--no-text-links",
+  "--report-only",
+  "--scoped-diff",
+  "--security",
+  "--premise",
+  "--from-shell-config",
+  "--forced-strategy-change",
+  "--allow-flagged",
+]);
 /** The lines `keryx review start|attach|ingest` prints about the package it opened. */
 const OWN_OUTPUT_LINE = /^(# managed review|path): (\S.*)$/;
 /** The npm package keryx runs from through `npx`/`bunx`/`pnpx`/`bun x`, with an optional `@version`. */
 const KERYX_PACKAGE = /^(?:@mrciphersmith\/)?keryx(?:@[^\s/]+)?$/;
 /**
  * Programs a pipeline's later stage may run while what the tool printed stays the left command's output: they pass on,
- * cut or copy what they read. `cat` and `grep` count only when they name no file of their own (a file is not keryx's output).
+ * cut or copy what they read. Every reader of files (`cat`, `head`, `tail`, `less`, `more`, `grep`) counts only as a pure
+ * stdin filter: naming a file of its own, or searching a tree, prints something that is not keryx's output.
  */
 const PIPE_FILTERS: ReadonlySet<string> = new Set(["tee", "head", "tail", "cat", "grep", "less", "more"]);
+/** Options of the readers that consume the next word as their value, so it is not a file operand. */
+const READER_VALUE_OPTIONS: ReadonlySet<string> = new Set(["-n", "-c", "--lines", "--bytes", "-m", "--max-count", "-A", "-B", "-C", "--include", "--exclude"]);
+/** grep options that take the pattern (or the pattern file) from the option, so a file operand is every positional word. */
+const GREP_PATTERN_OPTIONS: ReadonlySet<string> = new Set(["-e", "--regexp", "-f", "--file"]);
+/** grep options that read a tree or a directory instead of stdin. */
+const GREP_TREE_OPTION = /^(?:--(?:recursive|dereference-recursive|directories(?:=.*)?)|-[A-Za-z]*[rRd][A-Za-z]*)$/;
+/** The keryx package names a checkout's or install's `package.json` carries. */
+const KERYX_PACKAGE_NAMES: ReadonlySet<string> = new Set(["keryx", "@mrciphersmith/keryx"]);
 
 /** One `keryx review` invocation of a shell line: the directory it ran in, its words after `review`, and whether it ran alone. */
 export type ReviewInvocation = { cwd: string; subcommand: string; args: string[]; alone: boolean };
@@ -163,91 +211,120 @@ export type ReviewInvocation = { cwd: string; subcommand: string; args: string[]
 /** One command of a shell line: its words, and whether it reads a pipe (a later stage of a pipeline). */
 export type ShellCommand = { words: string[]; piped: boolean };
 
+/** What {@link shellCommands} has read so far: the finished commands and the command and word being built. */
+type LexState = {
+  commands: ShellCommand[];
+  words: string[];
+  word: string;
+  inWord: boolean;
+  quotedWord: boolean;
+  quote: "'" | '"' | undefined;
+  piped: boolean;
+  /** The next word is a redirection's target: dropped. */
+  dropNext: boolean;
+};
+
+const nextIs = (line: string, at: number, chars: string): boolean => at + 1 < line.length && chars.includes(line[at + 1]!);
+
+function endWord(state: LexState): void {
+  if (state.inWord) {
+    if (state.dropNext) state.dropNext = false;
+    else state.words.push(state.word);
+  }
+  state.word = "";
+  state.inWord = false;
+  state.quotedWord = false;
+}
+
+function endCommand(state: LexState, nextPiped: boolean): void {
+  endWord(state);
+  state.dropNext = false;
+  if (state.words.length > 0) state.commands.push({ words: state.words, piped: state.piped });
+  state.words = [];
+  state.piped = nextPiped;
+}
+
+/**
+ * A character inside quotes. In double quotes a backslash escapes only `$`, a backtick, `"`, `\` and a newline (as sh
+ * reads it): a Windows path keeps its separators. Returns the index of the last character used.
+ */
+function readQuoted(state: LexState, line: string, at: number): number {
+  const ch = line[at]!;
+  if (ch === state.quote) state.quote = undefined;
+  else if (ch === "\\" && state.quote === '"' && at + 1 < line.length && '$`"\\\n'.includes(line[at + 1]!)) {
+    state.word += line[at + 1];
+    return at + 1;
+  } else state.word += ch;
+  return at;
+}
+
+/** A redirection operator at `at` (`>`, `<` or `&>`): ends the word before it and drops its target. Returns the index of the operator's last character. */
+function readRedirection(state: LexState, line: string, at: number): number {
+  const ch = line[at]!;
+  // The fd number of `2>` belongs to the redirection, not to the command.
+  if (state.inWord && !state.quotedWord && /^\d+$/.test(state.word)) {
+    state.word = "";
+    state.inWord = false;
+  } else endWord(state);
+  let last = at;
+  if (ch === "&") {
+    last += 1;
+    if (nextIs(line, last, ">")) last += 1;
+  } else if (ch === ">") {
+    if (nextIs(line, last, ">&|")) last += 1;
+  } else if (nextIs(line, last, "<")) {
+    last += 1;
+    if (nextIs(line, last, "<")) last += 1;
+  } else if (nextIs(line, last, "&>")) last += 1;
+  state.dropNext = true;
+  return last;
+}
+
+/** A command separator at `at` (`&`, `&&`, `;`, newline, `|`, `||`, `|&`): ends the command. Returns the index of its last character. */
+function readSeparator(state: LexState, line: string, at: number): number {
+  const ch = line[at]!;
+  if (ch !== "|") {
+    endCommand(state, false);
+    return ch === "&" && nextIs(line, at, "&") ? at + 1 : at;
+  }
+  if (nextIs(line, at, "|")) {
+    endCommand(state, false);
+    return at + 1;
+  }
+  endCommand(state, true);
+  return nextIs(line, at, "&") ? at + 1 : at;
+}
+
 /**
  * The shell line split into commands, each into words (quotes removed, a backslash escaping the next character outside
  * single quotes). A command ends at `;`, `&&`, `||`, a background `&`, a newline, or a pipe `|`/`|&` (the command after
  * a pipe is `piped`). A redirection is neither a separator nor a word: `>`, `>>`, `<`, `<<`, `<<<`, `>|`, `<>`, `>&n`,
  * `<&n`, `&>`, `&>>`, and an fd number written right before one (`2>&1`), are dropped with their target. A small reader,
- * not a shell: it is enough to tell which program a command runs and with which words.
+ * not a shell: it is enough to tell which program a command runs and with which words. Subshells, command
+ * substitutions and heredocs are not read.
  */
 export function shellCommands(line: string): ShellCommand[] {
-  const commands: ShellCommand[] = [];
-  let words: string[] = [];
-  let word = "";
-  let inWord = false;
-  let quotedWord = false;
-  let quote: "'" | '"' | undefined;
-  let piped = false;
-  /** The next word is a redirection's target: dropped. */
-  let dropNext = false;
-  const endWord = (): void => {
-    if (inWord) {
-      if (dropNext) dropNext = false;
-      else words.push(word);
-    }
-    word = "";
-    inWord = false;
-    quotedWord = false;
-  };
-  const endCommand = (nextPiped: boolean): void => {
-    endWord();
-    dropNext = false;
-    if (words.length > 0) commands.push({ words, piped });
-    words = [];
-    piped = nextPiped;
-  };
-  const nextIs = (at: number, chars: string): boolean => at + 1 < line.length && chars.includes(line[at + 1]!);
+  const state: LexState = { commands: [], words: [], word: "", inWord: false, quotedWord: false, quote: undefined, piped: false, dropNext: false };
   for (let at = 0; at < line.length; at += 1) {
     const ch = line[at]!;
-    if (quote !== undefined) {
-      if (ch === quote) quote = undefined;
-      // In double quotes a backslash escapes only `$`, a backtick, `"`, `\` and a newline (as sh reads it): a Windows path keeps its separators.
-      else if (ch === "\\" && quote === '"' && at + 1 < line.length && '$`"\\\n'.includes(line[at + 1]!)) word += line[++at];
-      else word += ch;
-      continue;
-    }
-    if (ch === "'" || ch === '"') {
-      quote = ch;
-      inWord = true;
-      quotedWord = true;
+    if (state.quote !== undefined) at = readQuoted(state, line, at);
+    else if (ch === "'" || ch === '"') {
+      state.quote = ch;
+      state.inWord = true;
+      state.quotedWord = true;
     } else if (ch === "\\" && at + 1 < line.length) {
-      word += line[++at];
-      inWord = true;
-    } else if (ch === ">" || ch === "<" || (ch === "&" && nextIs(at, ">"))) {
-      // The fd number of `2>` belongs to the redirection, not to the command.
-      if (inWord && !quotedWord && /^\d+$/.test(word)) {
-        word = "";
-        inWord = false;
-      } else endWord();
-      if (ch === "&") {
-        at += 1;
-        if (nextIs(at, ">")) at += 1;
-      } else if (ch === ">") {
-        if (nextIs(at, ">&|")) at += 1;
-      } else if (nextIs(at, "<")) {
-        at += 1;
-        if (nextIs(at, "<")) at += 1;
-      } else if (nextIs(at, "&>")) at += 1;
-      dropNext = true;
-    } else if (ch === "&" || ch === ";" || ch === "\n") {
-      if (ch === "&" && nextIs(at, "&")) at += 1;
-      endCommand(false);
-    } else if (ch === "|") {
-      if (nextIs(at, "|")) {
-        at += 1;
-        endCommand(false);
-      } else {
-        if (nextIs(at, "&")) at += 1;
-        endCommand(true);
-      }
-    } else if (/\s/.test(ch)) endWord();
+      state.word += line[++at];
+      state.inWord = true;
+    } else if (ch === ">" || ch === "<" || (ch === "&" && nextIs(line, at, ">"))) at = readRedirection(state, line, at);
+    else if (ch === "&" || ch === ";" || ch === "\n" || ch === "|") at = readSeparator(state, line, at);
+    else if (/\s/.test(ch)) endWord(state);
     else {
-      word += ch;
-      inWord = true;
+      state.word += ch;
+      state.inWord = true;
     }
   }
-  endCommand(false);
-  return commands;
+  endCommand(state, false);
+  return state.commands;
 }
 
 /** The last path component of a program or script word, for a `/` or a `\` separated path. */
@@ -256,9 +333,10 @@ const baseName = (word: string): string => path.posix.basename(word.replace(/\\/
 /**
  * The words after the keryx program when `command` runs keryx, else undefined: `keryx` by any path; `npx`, `bunx`,
  * `pnpx` or `bun x` of the `keryx` / `@mrciphersmith/keryx` package (any version); `bun`/`node` [`run`] of a `cli.ts` or
- * `cli.js` (a checkout's entry point, `bun src/cli.ts`); `bun run keryx` (the package script).
+ * `cli.js` that is keryx's own entry point (see {@link isKeryxEntry}; `bun src/cli.ts` in a keryx checkout, resolved from
+ * `cwd`); `bun run keryx` (the package script).
  */
-export function keryxArgs(command: readonly string[]): string[] | undefined {
+export function keryxArgs(command: readonly string[], cwd: string = process.cwd()): string[] | undefined {
   const [program, ...rest] = command;
   if (program === undefined) return undefined;
   const name = baseName(program);
@@ -282,18 +360,53 @@ export function keryxArgs(command: readonly string[]): string[] | undefined {
   while (at < rest.length && rest[at]!.startsWith("-")) at += 1;
   const script = rest[at];
   if (script === undefined) return undefined;
+  const bunScript = name === "bun" && run && script === "keryx";
+  return bunScript || isKeryxEntry(script, cwd) ? rest.slice(at + 1) : undefined;
+}
+
+/**
+ * Whether `script` (resolved from `cwd`) is a `cli.ts` / `cli.js` of the keryx package: the nearest `package.json` above it
+ * (at most three directories up) names keryx. Another project's `cli.js` is not keryx's.
+ */
+function isKeryxEntry(script: string, cwd: string): boolean {
   const scriptName = baseName(script);
-  return scriptName === "cli.ts" || scriptName === "cli.js" || (name === "bun" && run && script === "keryx") ? rest.slice(at + 1) : undefined;
+  if (scriptName !== "cli.ts" && scriptName !== "cli.js") return false;
+  let dir = path.dirname(path.resolve(cwd, script));
+  for (let up = 0; up < 3; up += 1, dir = path.dirname(dir)) {
+    try {
+      const { name } = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")) as { name?: unknown };
+      return typeof name === "string" && KERYX_PACKAGE_NAMES.has(name);
+    } catch {
+      // No readable package.json here: look one directory up.
+    }
+  }
+  return false;
+}
+
+/** The words of a file-reading filter that name a file (or, for grep, a tree): positional words other than option values. */
+function readerOperands(args: readonly string[], skipValue: ReadonlySet<string>): string[] {
+  const operands: string[] = [];
+  for (let at = 0; at < args.length; at += 1) {
+    const arg = args[at]!;
+    if (arg === "--") operands.push(...args.slice(at + 1));
+    else if (skipValue.has(arg)) at += 1;
+    else if (!arg.startsWith("-")) operands.push(arg);
+    if (arg === "--") break;
+  }
+  return operands;
 }
 
 /** True for a pipeline stage that only passes the left command's output on (see {@link PIPE_FILTERS}). */
 function isPipeFilter(command: readonly string[]): boolean {
   const program = command[0] === undefined ? "" : baseName(command[0]);
   if (!PIPE_FILTERS.has(program)) return false;
-  const operands = command.slice(1).filter((word) => !word.startsWith("-"));
-  if (program === "cat") return operands.length === 0;
-  if (program === "grep") return operands.length <= 1;
-  return true;
+  const args = command.slice(1);
+  if (program === "tee") return true;
+  if (program !== "grep") return readerOperands(args, READER_VALUE_OPTIONS).length === 0;
+  if (args.some((arg) => GREP_TREE_OPTION.test(arg))) return false;
+  // The pattern is one positional word, unless an option supplies it; any further word is a file.
+  const patternFromOption = args.some((arg) => GREP_PATTERN_OPTIONS.has(arg));
+  return readerOperands(args, new Set([...READER_VALUE_OPTIONS, ...GREP_PATTERN_OPTIONS])).length <= (patternFromOption ? 0 : 1);
 }
 
 /**
@@ -316,7 +429,7 @@ export function keryxReviewInvocations(line: string, cwd: string): ReviewInvocat
       dir = path.resolve(dir, command[1]!);
       continue;
     }
-    const keryx = keryxArgs(command);
+    const keryx = keryxArgs(command, dir);
     if (keryx !== undefined && keryx[0] === "review") {
       found.push({ cwd: dir, subcommand: keryx[1] ?? "", args: keryx.slice(2), alone: false });
       // A keryx fed by a pipe ran, but what the tool printed may still be the left command's.
@@ -347,7 +460,7 @@ function executedCommand(call: { name?: string | undefined; arguments: string })
  * subcommand that takes a package, its first positional word. A word right after another `--flag` (no `=`) is that flag's
  * value, not the positional (`readiness --flow 460 <id>` names `<id>`, never `460`), unless the flag takes none.
  */
-function explicitReviewIds(invocation: ReviewInvocation): string[] {
+export function explicitReviewIds(invocation: ReviewInvocation): string[] {
   const ids: string[] = [];
   const args = invocation.args;
   let positional: string | undefined;

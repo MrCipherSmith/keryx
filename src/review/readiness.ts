@@ -26,8 +26,6 @@ import { asRecord as record } from "./record";
 import { COVERAGE_MD_MARK, parseCoverageEntries } from "./coverage-md";
 import { FINDING_DISPOSITION_STATES, type ConfirmedVia, type ManagedReviewManifest, type ReadinessWaiver } from "./types";
 
-export { COVERAGE_MD_MARK };
-
 export const READINESS_ITEMS = [
   { number: 1, id: "files-covered", title: "every changed file is covered by a wave or a recorded waiver" },
   { number: 2, id: "blast-radius", title: "no file the blast radius cut is left unreviewed" },

@@ -13,7 +13,8 @@ import { CALLER_UNATTRIBUTED, recordLogStart, recordOrchestratorCall } from "./o
 import { downgradedPremise, heldFinding, premiseAnswer } from "./premise-fixtures";
 import { commitFiles, git, initRepo } from "./git-fixture.test-helpers";
 import { packageCoverageErrors } from "./research";
-import { COVERAGE_MD_MARK, READINESS_ITEMS, computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
+import { COVERAGE_MD_MARK } from "./coverage-md";
+import { READINESS_ITEMS, computeReadiness, failingItems, memoryLogNote, partialHeader, readinessDepthLines, readinessItemId, readinessLine, readinessRefusal, renderReadiness, waiveReadiness } from "./readiness";
 
 let root: string;
 let pkg: string;

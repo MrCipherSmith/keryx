@@ -647,17 +647,23 @@ export interface ReviewCommandSeams {
 /** At most this long is spent asking gh for a pull request's base; a slower answer is no answer. */
 const PR_BASE_TIMEOUT_MS = 15_000;
 
+/** `origin/<name>` for the branch name `gh` printed; undefined when it is not a plain branch name (an option, a range, empty). */
+export function prBaseRef(output: string): string | undefined {
+  const name = output.trim();
+  return /^[A-Za-z0-9._/-]{1,200}$/.test(name) && !name.startsWith("-") && !name.includes("..") ? `origin/${name}` : undefined;
+}
+
 /**
  * The pull request's own base as a ref git can resolve (`origin/<baseRefName>`), read with `gh pr view`; undefined when gh
  * is missing, signed out or offline, or names something that is not a branch name. Never throws.
  */
-async function ghPrBase(ref: string): Promise<string | undefined> {
-  if (ref.startsWith("-") || Bun.which("gh") === null) return undefined;
+export async function ghPrBase(ref: string): Promise<string | undefined> {
+  // `KERYX_REVIEW_PR_BASE=off` skips the lookup (the test runner sets it; an offline operator may too).
+  if (process.env.KERYX_REVIEW_PR_BASE === "off" || ref.startsWith("-") || Bun.which("gh") === null) return undefined;
   try {
     const proc = Bun.spawn(["gh", "pr", "view", ref, "--json", "baseRefName", "--jq", ".baseRefName"], { stdin: "ignore", stdout: "pipe", stderr: "ignore", timeout: PR_BASE_TIMEOUT_MS, killSignal: "SIGKILL" });
     const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-    const name = stdout.trim();
-    return exitCode === 0 && /^[A-Za-z0-9._/-]{1,200}$/.test(name) && !name.startsWith("-") && !name.includes("..") ? `origin/${name}` : undefined;
+    return exitCode === 0 ? prBaseRef(stdout) : undefined;
   } catch {
     return undefined;
   }
@@ -715,7 +721,7 @@ export async function reviewCommand(args: string[], seams?: ReviewCommandSeams):
       return;
     }
     if (command === "ingest") {
-      await runCreate("ingest", args.slice(1));
+      await runCreate("ingest", args.slice(1), seams);
       return;
     }
     if (command === "scope") {

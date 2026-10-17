@@ -1974,9 +1974,15 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       const childUsage = { tokens_in: 0, tokens_out: 0, known: false };
       const measuredUsage = (options: { partial?: boolean } = {}): DispatchUsage | undefined =>
         childUsage.known ? { tokens_in: childUsage.tokens_in, tokens_out: childUsage.tokens_out, model: `${runModel.provider}/${runModel.model}`, ...(options.partial === true ? { partial: true as const } : {}) } : undefined;
+      /** Whether this dispatch's record is already written: a later throw must not save (and count) the same dispatch twice. */
+      let recordSaved = false;
       /** Save this dispatch's record at `save_result_to` (saveDispatchRecord), when the parent asked for one. */
-      const saveRecord = async (text: string, options: { final: boolean; partial?: boolean }): Promise<DispatchRecordSave | undefined> =>
-        saveTarget.abs === undefined ? undefined : await saveDispatchRecord(saveTarget.abs, { text, final: options.final, usage: measuredUsage(options) });
+      const saveRecord = async (text: string, options: { final: boolean; partial?: boolean }): Promise<DispatchRecordSave | undefined> => {
+        if (saveTarget.abs === undefined) return undefined;
+        const saved = await saveDispatchRecord(saveTarget.abs, { text, final: options.final, usage: measuredUsage(options) });
+        recordSaved = true;
+        return saved;
+      };
       // AC6 (flow 352 audit): `internalAbort` is triggered by THIS function's
       // own reasons (the deadline below, the catch block's cleanup) exactly
       // as `childAbort` always was; `composed` additionally aborts when the
@@ -2471,10 +2477,14 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         releaseBudget(); // a failed child must not hold the parent's budget either
         const msg = cause instanceof Error ? cause.message : String(cause);
         await failChild("error", "Error");
-        // The failed dispatch still ran: it leaves what it wrote and its usage so far (unknown when none was reported), so
-        // the round counts it; its text is a partial, never written over a complete result.
-        const failedSaved = await saveRecord(assistant.trim(), { final: false }).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
-        const failedSaveNote = recordSaveNote(failedSaved, "partial result", String(input.save_result_to), { quietWhenSaved: true });
+        // The failed dispatch still ran: it leaves what it wrote and its usage so far, so the round counts it. The request in
+        // flight when it threw had not reported its tokens (the usage line is marked partial, as on a timeout), and the text is
+        // a partial, never written over a complete result. A record this dispatch already wrote stays the only one.
+        const failedText = assistant.trim();
+        const failedSaved = recordSaved
+          ? undefined
+          : await saveRecord(failedText, { final: false, partial: true }).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
+        const failedSaveNote = recordSaveNote(failedSaved, failedText.length > 0 ? "partial result" : "empty result", String(input.save_result_to), { quietWhenSaved: failedText.length === 0 });
         return { status: "Error", output: `subagent ${label} failed: ${msg}${failedSaveNote}`, isError: true };
       }
       } catch (cause) {

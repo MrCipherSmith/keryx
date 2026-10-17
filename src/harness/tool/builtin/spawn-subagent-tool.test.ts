@@ -1497,30 +1497,60 @@ test("flow 460 (H): a re-dispatch to the same path after an empty reply takes th
   }
 });
 
-test("flow 460 (H): a child that fails with a thrown error still records its dispatch at save_result_to, as an incomplete record (LG-002, LG-006)", async () => {
+/**
+ * A child whose provider reports one request's usage and writes `text`, and whose id generator fails from then on: the
+ * dispatch's own bookkeeping throws after the request ran, so the dispatch's catch is what writes its record.
+ */
+function failsAfterFirstRequest(root: string, text: string, usage: { inputTokens: number; outputTokens: number }): ReturnType<typeof createSpawnSubagentTool> {
+  let streamed = false;
+  const provider: ProviderPort = {
+    describe: () => ({ capabilities: PROBE_CAPABILITIES, descriptor: { providerId: "usage-stream" } }),
+    async *stream(_req, opts: StreamOptions): AsyncGenerator<NormalizedEvent> {
+      let sequence = 0;
+      if (text !== "") yield { kind: "text_delta", sequence: sequence++, attemptId: opts.attemptId, text };
+      yield { kind: "usage_update", sequence: sequence++, attemptId: opts.attemptId, usage: { ...usage, exact: true } };
+      // A tool call makes the child ask for a second request, whose attempt id the failing generator refuses.
+      yield { kind: "tool_call_start", sequence: sequence++, attemptId: opts.attemptId, toolCallId: "t1", toolName: "probe_1" };
+      yield { kind: "tool_call_end", sequence: sequence++, attemptId: opts.attemptId, toolCallId: "t1", input: "{}" };
+      streamed = true;
+      yield { kind: "model_end", sequence, attemptId: opts.attemptId };
+    },
+  };
+  let n = 0;
+  return createSpawnSubagentTool({
+    cwd: root,
+    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+    makeProvider: () => provider,
+    getDetectedProviders: () => [{ name: "ollama" }],
+    idSeq: () => {
+      if (streamed) throw new Error("idSeq boom");
+      return `id-${n++}`;
+    },
+    clock: () => "2020-01-01T00:00:00.000Z",
+  });
+}
+
+test("flow 460 (H): a child that fails with a thrown error records its dispatch once, as an incomplete record with partial usage (LG-002, LG-R4-002, RG4-005)", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-saveusage-thrown-"));
   try {
-    let calls = 0;
-    const tool = createSpawnSubagentTool({
-      cwd: root,
-      getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
-      makeProvider: () => textProvider("never reached"),
-      getDetectedProviders: () => [{ name: "ollama" }],
-      idSeq: () => {
-        calls += 1;
-        if (calls >= 10) throw new Error("idSeq boom");
-        return `id-${calls}`;
-      },
-      clock: () => "2020-01-01T00:00:00.000Z",
-    });
-    const result = await tool.invoke({ task: "review", mode: "read_only", save_result_to: "raw/review-logic.txt" });
-    expect(result.status).toBe("Error");
-    expect(String(result.output)).toMatch(/failed: idSeq boom/);
-    const saved = await readFile(path.join(root, "raw/review-logic.txt"), "utf8");
-    expect(isEmptyOutput(saved)).toBe(true);
-    // The dispatch counts (as unknown usage), and the record says it is not a complete result.
-    expect(splitUsage(saved)).toMatchObject({ incomplete: true });
-    expect(splitUsage(saved).usage).toBeUndefined();
+    const withText = await failsAfterFirstRequest(root, "half a review", { inputTokens: 30, outputTokens: 4 }).invoke({ task: "review", mode: "read_only", save_result_to: "raw/review-logic.txt" });
+    expect(withText.status).toBe("Error");
+    expect(String(withText.output)).toMatch(/failed: idSeq boom/);
+    // The same note as the timeout path: the parent is told a partial result was saved.
+    expect(String(withText.output)).toContain("[partial result saved to raw/review-logic.txt]");
+    const saved = splitUsage(await readFile(path.join(root, "raw/review-logic.txt"), "utf8"));
+    expect(saved.body).toBe("half a review");
+    expect(saved.incomplete).toBe(true);
+    // The request in flight when it threw is marked partial, and the dispatch is counted once.
+    expect(saved.usage).toMatchObject({ model: "ollama/fake", partial: true });
+    expect((await readFile(path.join(root, "raw/review-logic.txt"), "utf8")).split("KERYX_USAGE").length - 1).toBe(1);
+
+    // Nothing written: the empty record is quiet, still counted, still incomplete.
+    const empty = await failsAfterFirstRequest(root, "", { inputTokens: 5, outputTokens: 0 }).invoke({ task: "review", mode: "read_only", save_result_to: "raw/review-style.txt" });
+    expect(String(empty.output)).not.toContain("saved to");
+    const emptyText = await readFile(path.join(root, "raw/review-style.txt"), "utf8");
+    expect(isEmptyOutput(emptyText)).toBe(true);
+    expect(splitUsage(emptyText)).toMatchObject({ incomplete: true, usage: { partial: true } });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
