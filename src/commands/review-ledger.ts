@@ -14,6 +14,7 @@ import { type RetryState, applyEscalations, emptyRetryState, escalationsFor, sco
 import { narrowedSlices, packageRoutingRefusal, routingRefusal, sliceTextReader } from "../review/routing-check";
 import { fixContextOf, fixSliceRoles } from "../review/round-split";
 import { readRoundRecord, roundRecordTampered } from "../review/round-record";
+import { type UsageTotals, splitUsage, usageTotalsLine } from "../review/dispatch-usage";
 import { type SliceManifest, manifestSizeProblem } from "../review/slice";
 import { packagePlanGate } from "../review/estimate";
 
@@ -45,7 +46,10 @@ valid --dispositions entry ({id, status finding|refuted|out-of-scope|narrowed, e
 finding?, remains? — required for narrowed: what of the finding still stands}; default: the obligations already in research.json).
 --dispositions is a JSON array, or an object holding one under dispositions, items, results, data, entries or
 obligations; a row with no id, an unknown status or a narrowed row without remains refuses the build with the list of bad rows.
-Each reviewer's model (drivers/*.json "model", or "model" in its result) is listed after READY / NOT READY; none reads "model not recorded". scopeReviewed and rawReconciled
+Each reviewer's model (drivers/*.json "model", or "model" in its result) is listed after READY / NOT READY; none reads "model not recorded".
+Token spend: a raw file may end with a \`KERYX_USAGE {"tokens_in":N,"tokens_out":M,"model":"…"}\` line (keryx shell's
+spawn_subagent writes it; another host appends it from its own agent result), or the result may carry "usage". Each run's
+usage and the round's total (research.json "usage") are recorded; a dispatch without one is counted unknown, never 0. scopeReviewed and rawReconciled
 are true only when established.
 
 --skip <reviewer> --reason "<why>" (repeatable, each --skip followed by its --reason) records a
@@ -105,7 +109,9 @@ export async function loadRaws(inputDir: string, replies: ReplyNames): Promise<{
     // `Parent follow-up:` lines below the block join the result's own `follow_ups`; a result with neither is left as parsed.
     const followUps = result === undefined ? [] : followUpsOf(result, body);
     const merged = result === undefined || followUps.length === 0 ? result : { ...result, follow_ups: followUps };
-    raws.push({ name: `raw/${name}`, hash: sha(body), mtimeMs: (await stat(file)).mtimeMs, empty: isEmptyOutput(body), ...(merged === undefined ? { diagnosis: explainUnparsedResult(body) } : { result: merged }) });
+    // Flow 460: the dispatch's token use, from the `KERYX_USAGE` line the host appended (absent: unknown).
+    const { usage } = splitUsage(body);
+    raws.push({ name: `raw/${name}`, hash: sha(body), mtimeMs: (await stat(file)).mtimeMs, empty: isEmptyOutput(body), ...(merged === undefined ? { diagnosis: explainUnparsedResult(splitUsage(body).body) } : { result: merged }), ...(usage === undefined ? {} : { usage }) });
   }
   return { raws, ignored, setAside };
 }
@@ -170,11 +176,12 @@ export function parseSkips(args: readonly string[]): ReviewerSkip[] {
   return skips as ReviewerSkip[];
 }
 
-export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: string[], out: string, ignored: string[], dryRun = false, notRun: readonly string[] = [], models: ReadonlyArray<{ reviewer: string; model?: string | undefined }> = []): string {
+export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: string[], out: string, ignored: string[], dryRun = false, notRun: readonly string[] = [], models: ReadonlyArray<{ reviewer: string; model?: string | undefined }> = [], usage?: UsageTotals): string {
   const verb = dryRun ? "would be written" : "written";
   const lines = [ready ? `READY: ${out} ${verb} and satisfies the completion gate.` : `NOT READY: ${out} ${verb}, but the completion gate would refuse it.`];
   for (const line of notRun) lines.push(`- ${line}`);
   if (models.length > 0) lines.push(`models: ${models.map((entry) => `${entry.reviewer} ${entry.model ?? "model not recorded"}`).join(", ")}`);
+  if (usage !== undefined) lines.push(usageTotalsLine(usage));
   for (const gap of gaps) lines.push(`- gap${gap.reviewer ? ` [${gap.reviewer}]` : ""}: ${gap.detail}\n    next: ${gap.next}`);
   const waves = gaps.filter((gap) => gap.reviewer !== undefined && gap.waves !== undefined && gap.waves > 0);
   if (waves.length > 0) lines.push(`remaining waves: ${waves.map((gap) => `${gap.reviewer} ${gap.waves}`).join(", ")}`);
@@ -316,6 +323,6 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     await writeFileAtomic(out, `${JSON.stringify(ledger, null, 2)}\n`);
     if (manifest !== undefined && path.resolve(packageDir) !== inputDir) await writeFileAtomic(path.join(packageDir, SLICE_MANIFEST_COPY), `${JSON.stringify(manifest, null, 2)}\n`);
   }
-  console.log(rest.includes("--json") ? JSON.stringify({ ready, out, gaps, blockers, ignored, ledger }, null, 2) : renderLedgerReport(ready, gaps, blockers, path.relative(process.cwd(), out) || out, ignored, rest.includes("--dry-run"), skipped.map(skipLine), modelsOf(ledger.dispatch.runs)));
+  console.log(rest.includes("--json") ? JSON.stringify({ ready, out, gaps, blockers, ignored, ledger }, null, 2) : renderLedgerReport(ready, gaps, blockers, path.relative(process.cwd(), out) || out, ignored, rest.includes("--dry-run"), skipped.map(skipLine), modelsOf(ledger.dispatch.runs), ledger.usage));
   if (!ready) process.exitCode = 1;
 }

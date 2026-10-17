@@ -21,6 +21,8 @@ import { harnessEnvelopePrefix, runAgentTurn } from "../../../commands/agent";
 import type { NormalizedEvent, NormalizedRequest, ProviderPort, StreamOptions } from "../../provider/types";
 import { loadRoutingConfigRaw } from "../../routing/config";
 import { approveProjectRouting } from "../../routing/trust";
+import { splitUsage } from "../../../review/dispatch-usage";
+import { parseReviewResult } from "../../../review/ledger";
 
 function stubProvider(text: string): ProviderPort {
   return {
@@ -1317,6 +1319,43 @@ test("flow 420: save_result_to writes the child's full text inside the project a
   } finally {
     await rm(root, { recursive: true, force: true });
     await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("flow 460 (H): save_result_to carries the child's token use as a KERYX_USAGE line; none reported writes none (unknown)", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-saveusage-"));
+  const usageProvider = (usage?: { inputTokens: number; outputTokens: number }): ProviderPort => ({
+    describe: () => ({ capabilities: PROBE_CAPABILITIES, descriptor: { providerId: "text" } }),
+    async *stream(_req, opts: StreamOptions): AsyncGenerator<NormalizedEvent> {
+      yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: 'REVIEW_RESULT {"reviewer":"review-logic","status":"DONE","findings":[]}' };
+      if (usage !== undefined) yield { kind: "usage_update", sequence: 1, attemptId: opts.attemptId, usage: { ...usage, exact: true } };
+      yield { kind: "model_end", sequence: 2, attemptId: opts.attemptId };
+    },
+  });
+  try {
+    const measured = createSpawnSubagentTool({
+      cwd: root,
+      getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+      makeProvider: () => usageProvider({ inputTokens: 1200, outputTokens: 340 }),
+      getDetectedProviders: () => [{ name: "ollama" }],
+    });
+    expect((await measured.invoke({ task: "review", save_result_to: "raw/review-logic.txt" })).status).toBe("Completed");
+    const saved = await readFile(path.join(root, "raw/review-logic.txt"), "utf8");
+    const { body, usage } = splitUsage(saved);
+    expect(usage).toEqual({ tokens_in: 1200, tokens_out: 340, model: "ollama/fake" });
+    expect(parseReviewResult(saved)).toMatchObject({ reviewer: "review-logic", status: "DONE" });
+    expect(body).not.toContain("KERYX_USAGE");
+
+    const silent = createSpawnSubagentTool({
+      cwd: root,
+      getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+      makeProvider: () => usageProvider(),
+      getDetectedProviders: () => [{ name: "ollama" }],
+    });
+    await silent.invoke({ task: "review", save_result_to: "raw/review-style.txt" });
+    expect(await readFile(path.join(root, "raw/review-style.txt"), "utf8")).not.toContain("KERYX_USAGE");
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
 

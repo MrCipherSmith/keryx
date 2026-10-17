@@ -103,7 +103,7 @@ describe("the checklist on a package shaped like pr7932-r1 (AC1, AC2)", () => {
   test("is NOT READY with exactly the failing items, each naming the command that repairs it", async () => {
     const report = await computeReadiness(pkg);
     expect(report.verdict).toBe("NOT READY");
-    expect(report.items.map((item) => item.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(report.items.map((item) => item.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     expect(ids(failingItems(report))).toEqual(["blast-radius", "reviewers", "verifier", "ledger", "coverage-md"]);
     for (const item of failingItems(report)) {
       expect(item.repair).toBeTruthy();
@@ -210,6 +210,33 @@ describe("premise-decisions: every held finding has an operator decision (flow 4
   test("a downgraded finding is not held", async () => {
     writeJson("findings.json", [{ ...held, severity: "minor", premise: downgradedPremise("major", "minor") }]);
     expect((await item())?.status).toBe("pass");
+  });
+});
+
+describe("quotes-located: an open finding whose quote ingest could not place does not pass silently (flow 460, AC6)", () => {
+  const item = async () => (await computeReadiness(pkg)).items.find((entry) => entry.id === "quotes-located");
+  const unplaced = (over: object = {}) => ({ id: "f-4", global_id: "pr7932-r1#f-4", severity: "minor", file: "src/a.ts", line: null, quote: "x", quote_unlocated: { reason: "ambiguous", candidate_lines: [3, 9] }, ...over });
+
+  test("passes when every quote was placed", async () => {
+    expect((await item())?.status).toBe("pass");
+  });
+
+  test("fails while an unplaced finding is open, naming it, the reason and the candidate lines, with a waivable repair", async () => {
+    writeJson("findings.json", [unplaced(), { id: "f-5", global_id: "pr7932-r1#f-5", file: "src/b.ts", quote_unlocated: { reason: "absent" } }]);
+    const result = await item();
+    expect(result?.status).toBe("fail");
+    expect(result?.evidence).toContain("pr7932-r1#f-4 (src/a.ts: ambiguous lines 3, 9)");
+    expect(result?.evidence).toContain("pr7932-r1#f-5 (src/b.ts: absent)");
+    expect(result?.repair).toContain("--waive quotes-located");
+    await waiveReadiness(pkg, ["quotes-located"], "the operator accepts the unplaced quote for this round");
+    expect((await item())?.status).toBe("waived");
+  });
+
+  test("passes once the finding has a disposition, still naming it", async () => {
+    writeJson("findings.json", [unplaced({ disposition: { state: "acted-on", evidence: "fixed in abc1234" } })]);
+    const result = await item();
+    expect(result?.status).toBe("pass");
+    expect(result?.evidence).toContain("pr7932-r1#f-4");
   });
 });
 
@@ -324,7 +351,8 @@ describe("a waiver is the operator's own words (AC3)", () => {
   test("items are named by number or by id", () => {
     expect(readinessItemId("5")).toBe("ledger");
     expect(readinessItemId("Ledger")).toBe("ledger");
-    expect(readinessItemId("12")).toBeUndefined();
+    expect(readinessItemId("12")).toBe("quotes-located");
+    expect(readinessItemId("13")).toBeUndefined();
   });
 });
 

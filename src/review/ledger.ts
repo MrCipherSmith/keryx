@@ -9,6 +9,7 @@ import { type SliceManifest, packWavesByKind, waveBytesOf } from "./slice";
 import { ALWAYS_ROLE, DEEP_ROLES, ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 import { fixSliceCoverage, priorDispositionsOf } from "./round-split";
+import { type DispatchUsage, type UsageTotals, splitUsage, usageFrom, usageTotals } from "./dispatch-usage";
 
 /** Statuses of `reviewer-finding.schema.json` that mean the reviewer finished what it was given. */
 const FINISHED = new Set(["DONE", "DONE_WITH_CONCERNS"]);
@@ -27,6 +28,8 @@ export type ParsedResult = {
   model?: string;
   /** Delta round (flow 458): what the reviewer concluded about each prior finding its fix slices answer, `[{ id, disposition }]`. */
   prior_dispositions?: unknown;
+  /** Flow 460: `{tokens_in, tokens_out, model}` when the result envelope carries it; a `KERYX_USAGE` line in the raw file wins. */
+  usage?: unknown;
 };
 
 export type RawFile = {
@@ -41,6 +44,8 @@ export type RawFile = {
   empty: boolean;
   /** Why no result was read from this file (what is missing), set by the loader when `result` is absent. */
   diagnosis?: string;
+  /** Flow 460: the dispatch's token use, from the file's `KERYX_USAGE` line (see ./dispatch-usage.ts). */
+  usage?: DispatchUsage | undefined;
 };
 
 export type Disposition = {
@@ -108,6 +113,8 @@ export type LedgerResult = {
     setAside?: string[];
     /** The audit sample of a routed round and what it caught; not read by the gate. */
     audit?: AuditRecord;
+    /** Flow 460: the round's token spend over every raw result, unknown dispatches counted, never added as 0. */
+    usage?: UsageTotals;
   };
   gaps: LedgerGap[];
 };
@@ -325,7 +332,9 @@ function scannedResult(raw: string): ParsedResult | undefined {
  * wave), a result wrapped in `result` / `review_result`, a fenced ```json block or a bare object with prose around it.
  * It is skipped for a reply that looks cut off, and gives none for disagreeing results.
  */
-export function parseReviewResult(raw: string): ParsedResult | undefined {
+export function parseReviewResult(reply: string): ParsedResult | undefined {
+  // A host's `KERYX_USAGE` line (flow 460) is not part of the reviewer's reply.
+  const raw = splitUsage(reply).body;
   const labelled = labelledFence(raw);
   if (labelled !== undefined) return labelled.result ?? lenientReviewResult(raw.slice(labelled.at));
   const marked = afterMarker(raw)?.result;
@@ -373,8 +382,15 @@ export function followUpsOf(result: ParsedResult, raw?: string): string[] {
   return [...new Set([...own, ...(raw === undefined ? [] : parentFollowUps(raw))])];
 }
 
-export function isEmptyOutput(raw: string): boolean {
+export function isEmptyOutput(reply: string): boolean {
+  // A usage line (flow 460) records what an empty reply cost; it does not make the reply non-empty.
+  const raw = splitUsage(reply).body;
   return raw.trim() === "" || /^\(subagent produced no text\)$/.test(raw.trim());
+}
+
+/** A raw result's token use: the host's `KERYX_USAGE` line, else the result envelope's own `usage`; undefined is unknown. */
+export function rawUsage(raw: RawFile): DispatchUsage | undefined {
+  return raw.usage ?? usageFrom(raw.result?.usage);
 }
 
 const sliceIdsOf = (value: unknown): string[] => readSliceIds(value).ids;
@@ -473,6 +489,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     const run: Record<string, unknown> = { reviewer, executionId: `${reviewer}:${latest.hash}`, rawEvidence: `${latest.name}#sha256:${latest.hash}`, executionRequired: false, layersUsed: layersUsedFrom(input.toolLogs?.[reviewer]) };
     const recorded = [...mine].reverse().map((raw) => raw.result?.model).find(text) ?? input.models?.[reviewer];
     if (text(recorded)) run.model = recorded.trim();
+    run.usage = runUsage(mine);
     const rule = input.ruleFiles[reviewer];
     run.ruleEvidence = rule === undefined ? [] : [rule];
     if (rule === undefined) gaps.push({ reviewer, detail: `${reviewer}: no resolved rule file (driver payload names none that exists)`, next: `write drivers/${reviewer}.json with the reviewer's definition path` });
@@ -592,7 +609,21 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     }
   }
   const audit = manifest === undefined ? undefined : auditRecord(manifest, attributed);
-  return { ledger: { version: 1, scopeReviewed, rawReconciled: reconciled, obligations, dispatch, ...(audit === undefined ? {} : { audit }) }, gaps };
+  // Every raw result is one dispatch, an empty or unparseable one included: it was paid for either way.
+  const usage = usageTotals(raws.map(rawUsage));
+  return { ledger: { version: 1, scopeReviewed, rawReconciled: reconciled, obligations, dispatch, ...(audit === undefined ? {} : { audit }), usage }, gaps };
+}
+
+/**
+ * Flow 460: a run's token use over every raw result of its reviewer (one per dispatch/wave). `"unknown"` when none
+ * reported usage; otherwise the known sums with the count of dispatches that reported none, never folded in as 0.
+ */
+function runUsage(mine: readonly RawFile[]): Record<string, unknown> | "unknown" {
+  const usages = mine.map(rawUsage);
+  const totals = usageTotals(usages);
+  if (totals.known === 0) return "unknown";
+  const model = [...usages].reverse().find((usage) => usage?.model !== undefined)?.model;
+  return { tokens_in: totals.tokens_in, tokens_out: totals.tokens_out, ...(model === undefined ? {} : { model }), dispatches: totals.dispatches, unknown: totals.unknown };
 }
 
 /** A routable role that slice routing gave no slice, in a routed manifest; the regression reviewer always runs (scope B). */

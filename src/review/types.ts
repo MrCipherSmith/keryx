@@ -529,6 +529,12 @@ export type StructuredReviewFinding = {
   locator?: ReviewFindingLocator | undefined;
   /** True when {@link file} does not exist at the reviewed head; the finding is kept and listed in `scope.md`. */
   path_missing?: boolean | undefined;
+  /**
+   * Flow 460: set by `review ingest` when {@link quote} is absent from {@link file} at the reviewed head, or matches
+   * more than one place there (`candidate_lines`, bounded by the scan). The finding is kept with no line, never
+   * relocated by similarity, listed in `scope.md` and by readiness item `quotes-located`.
+   */
+  quote_unlocated?: { reason: "absent" | "ambiguous"; candidate_lines?: number[] | undefined } | undefined;
   symbol?: string | null | undefined;
   dedupe_key?: string | null | undefined;
   blocking_merge?: boolean | undefined;
