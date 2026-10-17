@@ -39,3 +39,16 @@ test("`keryx flow outcome author` reaches its handler through the real router", 
     rmSync(dir, { recursive: true, force: true });
   }
 }, 60_000);
+
+test("every top-level subcommand commands/skills.ts dispatches is listed for the router", () => {
+  const source = readFileSync(path.join(SRC, "commands", "skills.ts"), "utf8");
+  const start = source.indexOf('if (!command || command === "--help"');
+  const end = source.indexOf("\nfunction ", start);
+  expect(start).toBeGreaterThan(-1);
+  const dispatched = [...source.slice(start, end).matchAll(/command === "([a-z][a-z0-9-]*)"/g)]
+    .map((m) => m[1] as string)
+    .filter((name) => name !== "--help");
+  expect(dispatched).toContain("resolve-context");
+  const listed = new Set(GROUP_SUBCOMMANDS.get("skills") ?? []);
+  expect(dispatched.filter((name) => !listed.has(name))).toEqual([]);
+});
