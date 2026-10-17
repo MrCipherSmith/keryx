@@ -11,7 +11,7 @@
   "title": "Review gates agree: readiness, complete, overrides, nudges, child results and artifacts tell one story",
   "status": "in-progress",
   "createdAt": "2026-10-17T03:45:43.162Z",
-  "updatedAt": "2026-10-17T10:20:09.921Z",
+  "updatedAt": "2026-10-17T10:32:55.928Z",
   "source": {
     "type": "description",
     "ref": null
@@ -224,7 +224,7 @@
       "id": "T13",
       "title": "L6 fix slices get the fix roster; fix hunks are the ones touching a finding",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -232,7 +232,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -343,6 +344,11 @@
       "at": "2026-10-17T10:20:09.921Z",
       "event": "ac-updated",
       "detail": "AC6: \"An ingest whose report has findings with unplaceable quotes (absent, or matching several places) records the round: those findings are kept unanchored and flagged `quote_unlocated` (never relocated by similarity), listed in scope.md and by readiness; the round is recorded so the next `review plan` after a fix commit detects it and plans a delta round with the fix roster. Tests including the plan → ingest → fix → plan sequence. · sensitive: failure-scenario [verify: exec `bun test src/review/managed.test.ts src/commands/review-plan.test.ts`]\" -> \"An ingest whose report has findings with unplaceable quotes (absent, or matching several places) records the round: those findings are kept unanchored and flagged `quote_unlocated` (never relocated by similarity), listed in scope.md and by readiness; the round is recorded so the next `review plan` after a fix commit detects it and plans a delta round with the fix roster. Tests including the plan → ingest → fix → plan sequence. · sensitive: failure-scenario [verify: exec `bun test src/review/managed.test.ts src/commands/review-plan.test.ts src/commands/review-plan.e2e.test.ts`]\" (review RG-001 (round 2): the plan → ingest → fix → plan test moved to review-plan.e2e.test.ts (repo convention for real-git tests))"
+    },
+    {
+      "at": "2026-10-17T10:32:55.928Z",
+      "event": "task-done",
+      "detail": "T13: L6 fix slices get the fix roster; fix hunks are the ones touching a finding"
     }
   ],
   "acKinds": {
