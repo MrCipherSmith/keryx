@@ -143,6 +143,11 @@ async function listRuleFiles(projectRoot: string, relative = ""): Promise<string
   return found;
 }
 
+/** Refs of the rule files copied under `.metaproject/rules/project/`. */
+export async function listRuleRefs(projectRoot: string): Promise<string[]> {
+  return listRuleFiles(projectRoot);
+}
+
 async function readText(absolute: string): Promise<string | undefined> {
   try {
     return await readFile(absolute, "utf8");

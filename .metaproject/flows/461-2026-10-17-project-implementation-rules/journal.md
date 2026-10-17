@@ -23,3 +23,18 @@
 - Then T8 (orchestrator text, skills_resolve_context in shell/MCP, TUI), T9 (block mode, flow task done check), T10 (docs, reviewer non-regression, Vantage fixture, live-run.md runbook, not run).
 - Safe defaults chosen for operator-owned decisions (to repeat in the final report): cap 131072 bytes (85 KB Vantage set + 50%), config in .metaproject/tasks.config.json under gdskills.projectContext, last resolve at .metaproject/data/skills/project-context/last.json, `exceeded` = a non-index project entry was pushed to on_demand by the cap, update --rules and remove --rule flags, bundled rules listed only if present in rules/core, `--rules` takes a directory (a single contract file is not accepted; contract files are reached through citations).
 - Pointed tests only; the full suite runs on CI.
+
+## State at second restart 2026-10-17 (worker fork)
+
+- Committed: T7 (resolver, `skills resolve-context`, config, `contracts validate --resolved`, `project_context_applied`, skill calls, installed copies); AC15 (orchestrator templates, flow-orchestrator and job-orchestrator text, ceilings 682 and 2197); AC16 (`skills_resolve_context` for shell, ACP and MCP, 8f375df24).
+- In the tree, being finished: `src/gdskills/project-context-status.ts` (read-only snapshot for the TUI) and an exported `listRuleRefs` in `context-resolver.ts`. Next: `src/tui/project-context-inspector.ts` (AC24), then T9 (AC17 flag + AC18 check in `flow task done`), then T10.
+- Decisions taken while implementing (all reversible, to repeat in the report and the TRD):
+  - `resolved_context_file` is under `workspace` in both input contracts. The tests-creator schemas have no top-level `additionalProperties: false`.
+  - "`project_context_applied` required when `resolved_context_file` is given" is enforced by `contracts validate --resolved`, not by schema conditionals, so a result written without the resolver stays valid.
+  - `keryx skills import --rules` takes a directory; a single-file `--rules <file>` is not implemented.
+  - The TRD row "40,960/40,961" is replaced by the 131,072 default.
+  - Resolver reasons emitted: `glob:<g>`, `always`, `task-type:<t>`, `replaces-bundled`, `route`, `bundled-default`, `referenced-by:<path>`.
+  - The `skills_resolve_context` operation is pure: it does not write `last.json`; only the CLI does. Over MCP it returns the structured record, in the shell and ACP the same Markdown as the CLI.
+  - The ProjectCtx sidebar row and `/projectctx` read through `loadProjectContextStatus`, which never throws: an unreadable `tasks.config.json` or `last.json` is a field (`configError`, `lastError`), shown in the modal.
+  - TRD section 6 (Vantage thin overlays, criteria P1-P4) is a proposal only and is not implemented here.
+- Unverified until run: whether `flow task done` can read a recorded task result (AC18 may need a `--result <file>` input); real Vantage globs (the fixture in T10 stands in; the operator's live run is AC22).
