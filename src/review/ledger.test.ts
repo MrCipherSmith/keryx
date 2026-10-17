@@ -3,7 +3,9 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { requiredReviewers } from "./coverage";
-import { type LedgerInputs, type RawFile, buildLedger, ledgerBlockers, parseReviewResult } from "./ledger";
+import { type LedgerInputs, type RawFile, buildLedger, isEmptyOutput, ledgerBlockers, parseReviewResult, rawUsage } from "./ledger";
+import { formatUsageLine, renderSpendMarkdown, usageTotals, usageTotalsLine } from "./dispatch-usage";
+import { loadRaws } from "../commands/review-ledger";
 import type { MutationRecord } from "./mutate";
 import { emptyRetryState, planRetry, scopeFingerprint } from "./retry-plan";
 import { auditPackage, auditSeverity } from "./severity-audit";
@@ -971,5 +973,67 @@ describe("a delta round's fix slices (flow 458 AC4)", () => {
     const answered = buildLedger({ ...base, raws: base.selected.map((reviewer) => ({ ...raw(reviewer, "DONE", { slices: read(reviewer), ...(reviewer === "review-architecture" ? { prior_dispositions: [{ id: "F1", disposition: "partial" }] } : {}) }), assignedSlices: read(reviewer) })) });
     expect(answered.ledger.dispatch.fixSlicesCovered).toEqual(["slice-01"]);
     expect(answered.ledger.scopeReviewed).toBe(true);
+  });
+});
+
+describe("token spend per dispatch (flow 460, AC7)", () => {
+  const line = (tokensIn: number, tokensOut: number, model = "anthropic/claude-sonnet") => formatUsageLine({ tokens_in: tokensIn, tokens_out: tokensOut, model });
+
+  test("each run carries its usage; research totals sum the known dispatches and count the unknown ones, never as 0", async () => {
+    const base = await inputs();
+    const [first, second, ...others] = base.selected;
+    const raws: RawFile[] = [
+      { ...raw(first!, "DONE"), usage: { tokens_in: 1000, tokens_out: 200, model: "anthropic/claude-sonnet" } },
+      // The envelope's own usage counts when the host wrote no line.
+      raw(second!, "DONE", { usage: { tokens_in: 50, tokens_out: 5, model: "openai/gpt" } }),
+      ...others.map((reviewer) => raw(reviewer, "DONE")),
+    ];
+    const { ledger } = buildLedger({ ...base, raws });
+    const runs = ledger.dispatch.runs as Array<Record<string, unknown>>;
+    const byReviewer = Object.fromEntries(runs.map((run) => [run.reviewer, run.usage]));
+    expect(byReviewer[first!]).toEqual({ tokens_in: 1000, tokens_out: 200, model: "anthropic/claude-sonnet", dispatches: 1, unknown: 0 });
+    expect(byReviewer[second!]).toMatchObject({ tokens_in: 50, tokens_out: 5, model: "openai/gpt" });
+    for (const reviewer of others) expect(byReviewer[reviewer]).toBe("unknown");
+    expect(ledger.usage).toEqual({ dispatches: raws.length, known: 2, unknown: raws.length - 2, tokens_in: 1050, tokens_out: 205, complete: false });
+    expect(usageTotalsLine(ledger.usage!)).toBe(`token spend: at least 1050 in, 205 out over 2 of ${raws.length} dispatch(es); ${raws.length - 2} unknown (no usage recorded)`);
+    expect(renderSpendMarkdown(ledger)).toContain("## Token spend");
+  });
+
+  test("a round where nothing reported usage states unknown, not 0 tokens", async () => {
+    const { ledger } = buildLedger(await inputs());
+    expect(ledger.usage?.known).toBe(0);
+    expect(usageTotalsLine(ledger.usage!)).toMatch(/^token spend: unknown \(\d+ dispatch\(es\), none reported usage\)$/);
+    expect(renderSpendMarkdown(ledger)).not.toContain(" 0 in");
+  });
+
+  test("a reviewer with several waves sums them and counts the wave that reported none", async () => {
+    const base = await inputs();
+    const reviewer = base.selected[0]!;
+    const waves = [
+      { ...raw(reviewer, "DONE", {}, `raw/${reviewer}-w1.txt`), usage: { tokens_in: 10, tokens_out: 1 } },
+      { ...raw(reviewer, "DONE", {}, `raw/${reviewer}-w2.txt`), usage: { tokens_in: 20, tokens_out: 2 } },
+      raw(reviewer, "DONE", {}, `raw/${reviewer}-w3.txt`),
+    ];
+    const { ledger } = buildLedger({ ...base, raws: [...waves, ...base.selected.slice(1).map((r) => raw(r, "DONE"))] });
+    const run = (ledger.dispatch.runs as Array<Record<string, unknown>>).find((entry) => entry.reviewer === reviewer);
+    expect(run?.usage).toEqual({ tokens_in: 30, tokens_out: 3, dispatches: 3, unknown: 1 });
+  });
+
+  test("ledger build reads the KERYX_USAGE line from raw/; the line never makes an empty reply non-empty or changes the parsed result", async () => {
+    const input = path.join(root, "input");
+    await mkdir(path.join(input, "raw"), { recursive: true });
+    await writeFile(path.join(input, "raw", "review-logic.txt"), `REVIEW_RESULT {"reviewer":"review-logic","status":"DONE","findings":[]}\n${line(900, 90)}\n`);
+    await writeFile(path.join(input, "raw", "review-style.txt"), `(subagent produced no text)\n${line(40, 0)}\n`);
+    await writeFile(path.join(input, "raw", "review-architecture.txt"), `REVIEW_RESULT {"reviewer":"review-architecture","status":"DONE","findings":[]}\nKERYX_USAGE {"tokens_in":"lots"}\n`);
+    const { raws } = await loadRaws(input, { files: new Set(), reviewers: ["review-logic", "review-style", "review-architecture"] });
+    const byName = Object.fromEntries(raws.map((entry) => [entry.name, entry]));
+    expect(byName["raw/review-logic.txt"]?.usage).toEqual({ tokens_in: 900, tokens_out: 90, model: "anthropic/claude-sonnet" });
+    expect(byName["raw/review-logic.txt"]?.result).toMatchObject({ reviewer: "review-logic", status: "DONE" });
+    expect(byName["raw/review-style.txt"]?.empty).toBe(true);
+    expect(byName["raw/review-style.txt"]?.usage).toEqual({ tokens_in: 40, tokens_out: 0, model: "anthropic/claude-sonnet" });
+    // A malformed line states nothing: unknown, not 0.
+    expect(byName["raw/review-architecture.txt"]?.usage).toBeUndefined();
+    expect(isEmptyOutput(`(subagent produced no text)\n${line(1, 1)}`)).toBe(true);
+    expect(usageTotals(raws.map(rawUsage))).toMatchObject({ dispatches: 3, known: 2, unknown: 1, tokens_in: 940, tokens_out: 90 });
   });
 });

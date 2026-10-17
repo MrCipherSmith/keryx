@@ -7,6 +7,7 @@ import { packageCoverageWarnings } from "./coverage";
 import { packageParityWarnings } from "./parity";
 import { roundRecordTampered } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
+import { renderSpendMarkdown } from "./dispatch-usage";
 import { PENDING_RESEARCH, packageResearchErrors } from "./research";
 import { computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
@@ -536,7 +537,8 @@ export async function createManagedReviewPackage(
       renderDuplicatesMarkdown(deduped.merges),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
-  await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode));
+  // Flow 460: the round's token spend, as research.json states it (unknown dispatches counted, never 0).
+  await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode) + (report.includes("\n## Token spend\n") ? "" : renderSpendMarkdown(input.research)));
   // Under the decisions lock, like every other findings.json writer: a premise answer to a re-ingested package
   // rewrites the same file.
   await withOperatorDecisionsLock(packageDir, () => writeFileAtomic(
@@ -1338,6 +1340,8 @@ async function anchorFindings(
         });
   for (const finding of findings) {
     const locator = await locateFinding(finding, read);
+    // Recomputed on every ingest: a flag carried in from a previous round describes a check that is re-made here.
+    delete finding.quote_unlocated;
     if (locator === undefined) {
       // No quote, so nothing was checked — and a locator carried in from a
       // previous round describes a check that did not happen this time. Round
@@ -1365,6 +1369,14 @@ async function anchorFindings(
       reason: locator.reason,
       ...(locator.reported_line === undefined ? {} : { reported_line: locator.reported_line }),
     };
+    // Flow 460: a quote that is absent from its file, or in it more than once, is kept unanchored and flagged, never
+    // relocated by similarity or proximity. The flag is what scope.md and readiness item `quotes-located` read.
+    if (finding.source !== "external" && (locator.kind === "absent" || locator.kind === "ambiguous")) {
+      finding.quote_unlocated = {
+        reason: locator.kind,
+        ...(locator.kind === "ambiguous" && locator.candidates !== undefined ? { candidate_lines: [...locator.candidates] } : {}),
+      };
+    }
   }
 }
 
@@ -1409,12 +1421,32 @@ function renderPathMissingMarkdown(findings: readonly StructuredReviewFinding[])
   return `\n## Paths missing at the reviewed head\n\n${missing.length} finding(s) cite a file that does not exist at the reviewed head. They are kept, flagged \`path_missing\` in findings.json; check the path before acting on them.\n\n${lines.join("\n")}\n`;
 }
 
+/** `## Quotes not located at the reviewed head`: the findings flagged `quote_unlocated`, or an empty string when there are none. */
+function renderQuoteUnlocatedMarkdown(findings: readonly StructuredReviewFinding[]): string {
+  const unlocated = findings.filter((finding) => finding.quote_unlocated !== undefined);
+  if (unlocated.length === 0) return "";
+  const lines = unlocated.map((finding) => `- ${finding.global_id ?? finding.id} (${finding.reviewer}): ${finding.file ?? "(no file)"}: ${quoteUnlocatedText(finding.quote_unlocated)}`);
+  return `\n## Quotes not located at the reviewed head\n\n${unlocated.length} finding(s) quote code that could not be placed in their file. They are kept with no line (never relocated by similarity), flagged \`quote_unlocated\` in findings.json, and readiness item \`quotes-located\` lists them until each has a disposition or the operator waives it.\n\n${lines.join("\n")}\n`;
+}
+
+/** "absent from the file" / "ambiguous (candidate lines 2, 10)". */
+export function quoteUnlocatedText(flag: StructuredReviewFinding["quote_unlocated"]): string {
+  if (flag === undefined) return "";
+  if (flag.reason === "absent") return "the quote is absent from the file";
+  const candidates = flag.candidate_lines ?? [];
+  return `the quote is ambiguous${candidates.length === 0 ? "" : ` (candidate lines ${candidates.join(", ")}, and the scan stopped there)`}`;
+}
+
 /**
  * A round is a claim about a commit. Where the commit is known and an internal
- * finding's quote is not at its `path:line` there, the finding cites something the
- * reviewer did not read at that SHA — refuse the ingest and name each one, rather
- * than record a locator that points nowhere. Findings the round already dismissed,
- * external comments and findings without a quote are not asked to resolve.
+ * finding's quote could not be CHECKED there, refuse the ingest and name each one.
+ * Flow 460: a quote that was checked and is absent from its file, or in it more than
+ * once, is not refused any more: it is kept unanchored and flagged `quote_unlocated`
+ * (see {@link anchorFindings}), so one bad quote no longer costs the whole round.
+ * What still refuses is what could not be checked at all: the commit is not in this
+ * checkout, the finding quotes code but names no file, or a size bound stopped the
+ * match. Findings the round already dismissed, external comments and findings
+ * without a quote are not asked to resolve.
  */
 function refuseUnresolvedLocators(
   findings: ReadonlyArray<StructuredReviewFinding & { summary: string }>,
@@ -1426,7 +1458,11 @@ function refuseUnresolvedLocators(
   }
   const unresolved = findings.filter(
     (finding) =>
-      finding.source !== "external" && finding.disposition === undefined && finding.locator?.state === "unlocatable" && finding.path_missing !== true,
+      finding.source !== "external" &&
+      finding.disposition === undefined &&
+      finding.locator?.state === "unlocatable" &&
+      finding.path_missing !== true &&
+      finding.quote_unlocated === undefined,
   );
   if (unresolved.length === 0) {
     return;
@@ -1437,7 +1473,7 @@ function refuseUnresolvedLocators(
     return `  - ${finding.id ?? finding.summary} (${finding.file}${line === null ? "" : `:${line}`}): ${locator?.reason ?? ""}`;
   });
   throw new Error(
-    `Cannot ingest review; ${unresolved.length} finding(s) cite a quote that does not resolve at the reviewed SHA ${head.slice(0, 12)}:\n${lines.join("\n")}\nCauses: the quote is not in the file at that commit, appears in it more than once, or the file or the commit is not in this checkout (check \`git cat-file -e ${head.slice(0, 12)}\`). Re-quote one distinct line from \`git show ${head.slice(0, 7)}:<path>\` or dismiss the finding with evidence.`,
+    `Cannot ingest review; ${unresolved.length} finding(s) cite a quote that could not be checked at the reviewed SHA ${head.slice(0, 12)}:\n${lines.join("\n")}\nCauses: the commit is not in this checkout (check \`git cat-file -e ${head.slice(0, 12)}\`), the finding quotes code but names no file, or a size bound stopped the match. (A quote that is absent from its file or in it more than once is not refused: it is kept, flagged quote_unlocated.) Re-quote one distinct line from \`git show ${head.slice(0, 7)}:<path>\` or dismiss the finding with evidence.`,
   );
 }
 
@@ -1552,6 +1588,9 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   }
   if (finding.path_missing === true) {
     record.path_missing = true;
+  }
+  if (finding.quote_unlocated !== undefined) {
+    record.quote_unlocated = finding.quote_unlocated;
   }
   if (finding.symbol !== undefined) {
     record.symbol = finding.symbol;
@@ -2547,7 +2586,7 @@ ${renderStageCountsMarkdown({
 ${renderCapsMarkdown(caps)}
 ${renderScopeBScreenMarkdown(scopeBScreen)}${
     filterStats === undefined ? "" : `\n${renderFilterStatsMarkdown(filterStats)}`
-  }${renderExternalReclaimsMarkdown(externalReclaims)}${renderPathMissingMarkdown(allFindings)}`;
+  }${renderExternalReclaimsMarkdown(externalReclaims)}${renderPathMissingMarkdown(allFindings)}${renderQuoteUnlocatedMarkdown(allFindings)}`;
   return carriedPreFilter === undefined ? head : `${head.trimEnd()}\n\n${carriedPreFilter}\n`;
 }
 

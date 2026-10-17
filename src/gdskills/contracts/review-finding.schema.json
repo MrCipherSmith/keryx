@@ -222,6 +222,16 @@
       "type": "boolean",
       "description": "Written, as true, only by `review ingest` when `file` does not exist at the round's reviewed head (a cat-file existence check of `<head>:<file>`). The finding is kept, never dropped, and is listed in scope.md: a finding that cites a path nobody can open is the reviewer's claim, not a located site."
     },
+    "quote_unlocated": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason"],
+      "description": "Written only by `review ingest` when `quote` was checked against `file` at the round's reviewed head and is absent from it (`absent`) or matches more than one place (`ambiguous`, with the matched lines in `candidate_lines`, bounded by the scan). The finding is kept with `line` null, never relocated by similarity or proximity, listed in scope.md and by readiness item `quotes-located`; the round is recorded rather than refused.",
+      "properties": {
+        "reason": { "type": "string", "enum": ["absent", "ambiguous"] },
+        "candidate_lines": { "type": "array", "items": { "type": "integer", "minimum": 1 } }
+      }
+    },
     "symbol": { "type": ["string", "null"] },
     "problem": { "type": "string" },
     "impact": { "type": "string" },

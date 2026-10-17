@@ -36,6 +36,7 @@ export const READINESS_ITEMS = [
   { number: 9, id: "pr-files", title: "the changed-file count equals the PR's own file list" },
   { number: 10, id: "memory-outside-stage", title: "the orchestrator read memory only in its own memory stage" },
   { number: 11, id: "premise-decisions", title: "every held finding has an operator decision" },
+  { number: 12, id: "quotes-located", title: "every open finding's quote is placed in its file, or the finding is answered" },
 ] as const;
 
 export type ReadinessItemId = (typeof READINESS_ITEMS)[number]["id"];
@@ -223,6 +224,33 @@ function premiseDecisionsCheck(ctx: Context): Verdict {
 export const PREMISE_DECISIONS_NOT_WAIVABLE =
   "premise-decisions cannot be waived in the operator's own words. A held finding needs its own answer: run `keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason \"<why>\"`, or in keryx shell call the review_decide_premise tool (the operator answers a card).";
 
+/**
+ * Flow 460. `review ingest` keeps a finding whose quote is absent from its file, or in it more than once, with no line
+ * and the flag `quote_unlocated`, instead of refusing the round. Such a finding is a claim nobody could place, so it may
+ * not pass silently: while it has no disposition this item FAILS and names it. It is waivable in the operator's own
+ * words like any other item (unlike `premise-decisions`): the repair is a re-quote and re-ingest, or a disposition with
+ * evidence, and an operator may decide an unplaced claim is acceptable for this round.
+ */
+function quotesLocatedCheck(ctx: Context): Verdict {
+  const flagged = ctx.findings.filter((finding) => record(finding.quote_unlocated) !== undefined);
+  if (flagged.length === 0) return ok("every quoted finding was placed in its file at the reviewed head");
+  const name = (finding: Record<string, unknown>): string => {
+    const flag = record(finding.quote_unlocated) ?? {};
+    const lines = Array.isArray(flag.candidate_lines) ? ` lines ${flag.candidate_lines.join(", ")}` : "";
+    return `${String(finding.global_id ?? finding.id)} (${String(finding.file ?? "no file")}: ${String(flag.reason)}${lines})`;
+  };
+  const answered = (finding: Record<string, unknown>): boolean => {
+    const state = record(finding.disposition)?.state;
+    return typeof state === "string" && state !== "" && state !== "unknown";
+  };
+  const open = flagged.filter((finding) => !answered(finding));
+  if (open.length === 0) return ok(`${flagged.length} finding(s) with an unplaced quote, every one with a disposition: ${some(flagged.map(name))}`);
+  return bad(
+    `${open.length} open finding(s) quote code that could not be placed in the file at the reviewed head (kept with no line, flagged quote_unlocated): ${some(open.map(name))}`,
+    `re-quote one distinct line from \`git show <head>:<path>\` in the reviewer's result and re-ingest, or record a disposition with evidence; or the operator waives it: in keryx shell call the review_waive_readiness tool with item quotes-located; in a terminal run keryx review complete ${ctx.arg} --waive quotes-located "<operator quote>"`,
+  );
+}
+
 function ledgerCheck(ctx: Context): Verdict {
   if (!ctx.dispatched) return ok("this package predates the research ledger");
   if (ctx.research === undefined) return bad("research.json is missing or unreadable", `keryx review ledger build <input-dir> --package ${ctx.arg}`);
@@ -367,6 +395,7 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     "pr-files": await prFilesCheck(ctx, options),
     "memory-outside-stage": await memoryStageCheck(ctx),
     "premise-decisions": premiseDecisionsCheck(ctx),
+    "quotes-located": quotesLocatedCheck(ctx),
   };
   const waivers = new Map((manifest.readiness_waivers ?? []).map((waiver) => [waiver.item, waiver]));
   const items: ReadinessItem[] = READINESS_ITEMS.map((spec) => {

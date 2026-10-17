@@ -23,6 +23,7 @@ import { createMetaprojectAdapter } from "../metaproject-adapter";
 import { RemainingBudgetLedger } from "../../child/ledger";
 import { DEFAULT_MAX_PASSES } from "../../../review/chunks-estimate";
 import { describeReviewWave, resolveReviewWave } from "../../../review/wave-key";
+import { formatUsageLine } from "../../../review/dispatch-usage";
 import { spawnSubagent, foldChildSummary } from "../../child/orchestrate";
 import type { SubagentContext } from "../../child/orchestrate";
 import type { HookRuntime } from "../../hooks";
@@ -1895,6 +1896,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
 
       let assistant = "";
       let closed = false;
+      // Flow 460 (H): the child's token use, summed over its provider requests; written into `save_result_to` as a
+      // `KERYX_USAGE` line so `review ledger build` can state the round's spend. Unknown (no line) when nothing reported.
+      const childUsage = { tokens_in: 0, tokens_out: 0, known: false };
+      const usageSuffix = (): string =>
+        childUsage.known ? `\n${formatUsageLine({ tokens_in: childUsage.tokens_in, tokens_out: childUsage.tokens_out, model: `${runModel.provider}/${runModel.model}` })}` : "";
       // AC6 (flow 352 audit): `internalAbort` is triggered by THIS function's
       // own reasons (the deadline below, the catch block's cleanup) exactly
       // as `childAbort` always was; `composed` additionally aborts when the
@@ -1907,6 +1913,14 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       const io: AgentIO = {
         write: (s) => {
           assistant += s;
+        },
+        onUsage: (usage) => {
+          const tokensIn = Number.isFinite(usage.inputTokens) ? (usage.inputTokens as number) : undefined;
+          const tokensOut = Number.isFinite(usage.outputTokens) ? (usage.outputTokens as number) : undefined;
+          if (tokensIn === undefined && tokensOut === undefined) return;
+          childUsage.tokens_in += tokensIn ?? 0;
+          childUsage.tokens_out += tokensOut ?? 0;
+          childUsage.known = true;
         },
         onAssistantText: (text) => {
           assistant = text;
@@ -2227,7 +2241,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
             const foldedPartial = partial.length > 0 ? foldChildSummary(partial).text : "";
             // Flow 457 (T7, audit row 14): the parent parses the saved file, never the bounded tool output, so a
             // child that ran out of time still leaves everything it wrote in `save_result_to`.
-            const partialSaved = saveTarget.abs === undefined || partial.length === 0 ? undefined : await saveTimedOutPartial(saveTarget.abs, partial);
+            const partialSaved = saveTarget.abs === undefined || partial.length === 0 ? undefined : await saveTimedOutPartial(saveTarget.abs, `${partial}${usageSuffix()}`);
             const partialSaveNote =
               partialSaved === undefined
                 ? ""
@@ -2324,7 +2338,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         const saveNote =
           saveTarget.abs === undefined
             ? ""
-            : `\n[full result ${(await saveChildResult(saveTarget.abs, raw)) === undefined ? "saved to" : "could NOT be saved to"} ${String(input.save_result_to)}]`;
+            : `\n[full result ${(await saveChildResult(saveTarget.abs, `${raw}${usageSuffix()}`)) === undefined ? "saved to" : "could NOT be saved to"} ${String(input.save_result_to)}]`;
         if (status === "Completed") {
           return { status, isError, output: `${header}--- summary ---\n${boundSummary(folded.text)}${saveNote}` };
         }

@@ -66,6 +66,8 @@ describe("locateQuote", () => {
     expect(outcome.state).toBe("unlocatable");
     expect(outcome.state === "unlocatable" && outcome.reason).toContain("2 places");
     expect(outcome.state === "unlocatable" && outcome.reason).toContain("lines 2, 10");
+    // Flow 460: the candidates are recorded as data, so ingest can list them without parsing the reason.
+    expect(outcome).toMatchObject({ kind: "ambiguous", candidates: [2, 10] });
   });
 
   test("AMBIGUITY — the same rule holds for the whitespace-normalised pass", () => {
@@ -94,11 +96,11 @@ describe("locateQuote", () => {
 
   test("a quote that is not in the file says so", () => {
     const outcome = locateQuote(FILE, "  return `howdy ${trimmed}`;");
-    expect(outcome).toEqual({ state: "unlocatable", reason: "the quote does not appear in the file" });
+    expect(outcome).toEqual({ state: "unlocatable", reason: "the quote does not appear in the file", kind: "absent" });
   });
 
   test("an empty quote is unlocatable rather than matching everything", () => {
-    expect(locateQuote(FILE, "   \n  \n")).toEqual({ state: "unlocatable", reason: "the quote is empty" });
+    expect(locateQuote(FILE, "   \n  \n")).toEqual({ state: "unlocatable", reason: "the quote is empty", kind: "empty" });
   });
 
   test("CRLF on either side does not defeat the match", () => {

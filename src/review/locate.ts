@@ -50,13 +50,21 @@ export const MAX_LOCATE_FILE_LINES = 50_000;
 export const MAX_LOCATE_FILE_BYTES = 4_000_000;
 
 /** How a finding's `line` was arrived at. */
+/**
+ * Why a quote was not placed, as a word a gate can branch on (flow 460): `absent` (the file is there, the quote is
+ * not), `ambiguous` (it is there more than once; `candidates` are the lines it matched, bounded by the scan), `bound`
+ * (a size limit stopped the match) and `empty`. Never persisted inside `locator`: `review ingest` turns `absent` and
+ * `ambiguous` into the finding's `quote_unlocated` flag.
+ */
+export type UnlocatableKind = "absent" | "ambiguous" | "bound" | "empty";
+
 export type LocatorRecord =
   | { state: "derived"; method: "exact" | "whitespace-normalised"; line: number; reported_line?: number | null }
-  | { state: "unlocatable"; reason: string; reported_line?: number | null };
+  | { state: "unlocatable"; reason: string; reported_line?: number | null; kind?: UnlocatableKind | undefined; candidates?: number[] | undefined };
 
 export type LocateOutcome =
   | { state: "derived"; method: "exact" | "whitespace-normalised"; line: number }
-  | { state: "unlocatable"; reason: string };
+  | { state: "unlocatable"; reason: string; kind?: UnlocatableKind | undefined; candidates?: number[] | undefined };
 
 /** Lines of `quote`, with blank edges dropped and common indentation removed. */
 export function quoteLines(quote: string): string[] {
@@ -142,6 +150,8 @@ function ambiguity(hits: readonly number[], pass: string): LocateOutcome {
   return {
     state: "unlocatable",
     reason: `the quote matches at least ${hits.length} places${pass}(lines ${hits.join(", ")}, and the scan stopped there); an anchor chosen among them would be a guess`,
+    kind: "ambiguous",
+    candidates: [...hits],
   };
 }
 
@@ -154,12 +164,13 @@ function ambiguity(hits: readonly number[], pass: string): LocateOutcome {
 export function locateQuote(fileText: string, quote: string): LocateOutcome {
   const needle = quoteLines(quote);
   if (needle.length === 0) {
-    return { state: "unlocatable", reason: "the quote is empty" };
+    return { state: "unlocatable", reason: "the quote is empty", kind: "empty" };
   }
   if (needle.length > MAX_QUOTE_LINES) {
     return {
       state: "unlocatable",
       reason: `the quote is ${needle.length} lines, past the ${MAX_QUOTE_LINES}-line bound; quote the few lines the finding is about`,
+      kind: "bound",
     };
   }
   const haystack = fileText.replace(/\r\n/g, "\n").split("\n");
@@ -167,6 +178,7 @@ export function locateQuote(fileText: string, quote: string): LocateOutcome {
     return {
       state: "unlocatable",
       reason: `the file is ${haystack.length} lines, past the ${MAX_LOCATE_FILE_LINES}-line bound for locating`,
+      kind: "bound",
     };
   }
 
@@ -192,7 +204,7 @@ export function locateQuote(fileText: string, quote: string): LocateOutcome {
   if (loose.length > 1) {
     return ambiguity(loose, " once whitespace is normalised ");
   }
-  return { state: "unlocatable", reason: "the quote does not appear in the file" };
+  return { state: "unlocatable", reason: "the quote does not appear in the file", kind: "absent" };
 }
 
 /**
@@ -222,5 +234,11 @@ export async function locateFinding(
   const outcome = locateQuote(text, quote);
   return outcome.state === "derived"
     ? { state: "derived", method: outcome.method, line: outcome.line, reported_line: reported }
-    : { state: "unlocatable", reason: outcome.reason, reported_line: reported };
+    : {
+        state: "unlocatable",
+        reason: outcome.reason,
+        reported_line: reported,
+        ...(outcome.kind === undefined ? {} : { kind: outcome.kind }),
+        ...(outcome.candidates === undefined ? {} : { candidates: outcome.candidates }),
+      };
 }
