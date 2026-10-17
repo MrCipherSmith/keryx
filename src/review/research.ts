@@ -6,6 +6,10 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 export const PENDING_RESEARCH = { version: 1, scopeReviewed: false, rawReconciled: false, obligations: [] };
 
+/** A JSON object as a record, or undefined for anything else (null, an array, a scalar). The one lenient reader of research.json. */
+export const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+
 /**
  * Flow 460: where `review ingest` records the findings it kept out of findings.json (the scope-B screen), relative to the
  * package. `review ledger build` reads it and closes each such raw finding `out-of-scope` with the screen's reason, so an
@@ -19,11 +23,11 @@ export type IngestScreened = { id: string; global_id?: string | undefined; revie
 
 /** The screened findings of an {@link INGEST_SCREENED_FILE} record, read leniently: [] for anything that is not one. */
 export function ingestScreenedOf(record: unknown): IngestScreened[] {
-  const list = record !== null && typeof record === "object" && !Array.isArray(record) ? (record as { screened?: unknown }).screened : undefined;
+  const list = asRecord(record)?.screened;
   if (!Array.isArray(list)) return [];
   return list.flatMap((entry): IngestScreened[] => {
-    if (entry === null || typeof entry !== "object") return [];
-    const row = entry as Record<string, unknown>;
+    const row = asRecord(entry);
+    if (row === undefined) return [];
     if (typeof row.id !== "string" || row.id === "" || typeof row.rule !== "string" || typeof row.detail !== "string") return [];
     return [{ id: row.id, ...(typeof row.global_id === "string" ? { global_id: row.global_id } : {}), ...(typeof row.reviewer === "string" ? { reviewer: row.reviewer } : {}), rule: row.rule, detail: row.detail }];
   });
@@ -42,23 +46,31 @@ export type DispatchRun = {
   executionReason?: string | undefined;
 };
 
-/** The reviewer runs research.json's dispatch record holds, each with a reviewer name; [] when there is none. */
+/**
+ * A reviewer name as a dispatch record may carry one: a bundled or project reviewer id (letters, digits, `-`, `_`, `.`,
+ * `:`, `/`, `@`), one line. A name that is anything else — a newline, a markdown fence — is not a reviewer and would be
+ * copied verbatim into coverage.md, so the run is dropped.
+ */
+export const REVIEWER_NAME = /^[A-Za-z0-9][\w.:/@-]{0,127}$/;
+
+/** A free-text field of a run, as one line (it is written into coverage.md line by line). */
+const oneLine = (value: unknown): string | undefined => (typeof value === "string" ? value.replace(/\s+/g, " ").trim() : undefined);
+
+/** The reviewer runs research.json's dispatch record holds, each with a valid reviewer name ({@link REVIEWER_NAME}); [] when there is none. */
 export function dispatchRuns(research: unknown): DispatchRun[] {
-  const record = (value: unknown): Record<string, unknown> | undefined => (value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined);
-  const runs = record(record(research)?.dispatch)?.runs;
+  const runs = asRecord(asRecord(research)?.dispatch)?.runs;
   if (!Array.isArray(runs)) return [];
-  const str = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined);
   return runs.flatMap((value): DispatchRun[] => {
-    const run = record(value);
-    if (run === undefined || typeof run.reviewer !== "string" || run.reviewer === "") return [];
+    const run = asRecord(value);
+    if (run === undefined || typeof run.reviewer !== "string" || !REVIEWER_NAME.test(run.reviewer)) return [];
     return [{
       reviewer: run.reviewer,
-      status: str(run.status),
+      status: oneLine(run.status),
       scopeComplete: typeof run.scopeComplete === "boolean" ? run.scopeComplete : undefined,
       routedOut: run.routedOut === true ? true : undefined,
-      rawEvidence: str(run.rawEvidence),
-      notRunReason: str(run.notRunReason),
-      executionReason: str(run.executionReason),
+      rawEvidence: typeof run.rawEvidence === "string" ? run.rawEvidence : undefined,
+      notRunReason: oneLine(run.notRunReason),
+      executionReason: oneLine(run.executionReason),
     }];
   });
 }

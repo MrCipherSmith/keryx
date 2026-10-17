@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { NOT_REVIEW_PACKAGES_ANY_DEPTH } from "./round-record";
+import { DEFAULT_BASE_CANDIDATES, defaultGitRunner, emptyRangeWarning, resolveBase } from "./git-base";
+import { notReviewPackagesAt } from "./round-record";
 import { extractStackRequiresField, parseStackRequires, scopeReviewerByStack, detectProjectStack } from "./stack";
 import { collectReviewers, overlapGroupsOf, type ReviewerInventory } from "./reviewers";
 import { CORE_MANDATORY_REVIEWER_IDS } from "./jev-select";
@@ -466,7 +467,7 @@ async function gitDiffAt(cwd: string, base: string, head: string, pathspec: read
   try {
     assertGitRevision(base);
     assertGitRevision(head);
-    const proc = Bun.spawn(["git", "diff", "--no-color", "-U20", "--end-of-options", `${base}...${head}`, "--", ...pathspec], { cwd, stdout: "pipe", stderr: "pipe", timeout: 15_000, killSignal: "SIGKILL", maxBuffer: 8 * 1024 * 1024 });
+    const proc = Bun.spawn(["git", "diff", "--no-color", "-U20", "--end-of-options", `${base}...${head}`, "--", ...pathspec], { cwd, stdout: "pipe", stderr: "pipe", timeout: GIT_TIMEOUT_MS, killSignal: "SIGKILL", maxBuffer: 8 * 1024 * 1024 });
     const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
     if (proc.signalCode !== null) return { error: `git was stopped (${proc.signalCode})` };
     if (exitCode !== 0) return { error: stderr.trim().split("\n")[0] || `git exited ${exitCode}` };
@@ -479,29 +480,44 @@ async function gitDiffAt(cwd: string, base: string, head: string, pathspec: read
 
 /** At most this many entries are kept in each per-process cache below; the oldest goes first. */
 const GIT_CACHE_ENTRIES = 64;
+/**
+ * How long a cached git answer is trusted. The gate runs inside the long-lived keryx shell, where the process outlives
+ * many commands, checkouts and worktree moves; a short life keeps one command (readiness then complete, a panel refresh)
+ * paying for git once without an answer outliving the checkout it was read from. It also bounds a pending entry: one
+ * older than this is recomputed rather than awaited.
+ */
+const GIT_CACHE_TTL_MS = 30_000;
+/** Every git call of the light recheck is killed after this long (SIGKILL) and reads as a failure. */
+const GIT_TIMEOUT_MS = 15_000;
 
-/** Remembers `compute(key)` for the process, at most GIT_CACHE_ENTRIES keys; a value `keep` rejects is not remembered. */
-function processCache<T>(compute: (key: string) => Promise<T>, keep: (value: T) => boolean): (key: string) => Promise<T> {
-  const cache = new Map<string, Promise<T>>();
-  return (key) => {
+/**
+ * Remembers `compute(arg)` for {@link GIT_CACHE_TTL_MS}, keyed by `keyOf(arg)`, at most GIT_CACHE_ENTRIES keys; a value
+ * `keep` rejects is not remembered. The arguments travel typed; the key is only a key.
+ */
+function processCache<A, T>(compute: (arg: A) => Promise<T>, keep: (value: T) => boolean, keyOf: (arg: A) => string): (arg: A) => Promise<T> {
+  const cache = new Map<string, { at: number; value: Promise<T> }>();
+  return (arg) => {
+    const key = keyOf(arg);
     const hit = cache.get(key);
-    if (hit !== undefined) return hit;
-    const pending = compute(key).then((value) => {
-      if (!keep(value)) cache.delete(key);
+    if (hit !== undefined && Date.now() - hit.at <= GIT_CACHE_TTL_MS) return hit.value;
+    cache.delete(key);
+    const entry = { at: Date.now(), value: compute(arg) };
+    entry.value = entry.value.then((value) => {
+      if (!keep(value) && cache.get(key) === entry) cache.delete(key);
       return value;
     });
-    cache.set(key, pending);
+    cache.set(key, entry);
     if (cache.size > GIT_CACHE_ENTRIES) cache.delete(cache.keys().next().value as string);
-    return pending;
+    return entry.value;
   };
 }
 
-/** The repository top level that holds `dir`, or undefined when it is not inside a git work tree. Cached per directory for the process (it does not change within a command). */
-const gitTopLevel = processCache(uncachedGitTopLevel, (top) => top !== undefined);
+/** The repository top level that holds `dir`, or undefined when it is not inside a git work tree. Cached briefly per directory (see GIT_CACHE_TTL_MS). */
+const gitTopLevel = processCache(uncachedGitTopLevel, (top) => top !== undefined, (dir) => dir);
 
 async function uncachedGitTopLevel(dir: string): Promise<string | undefined> {
   try {
-    const proc = Bun.spawn(["git", "rev-parse", "--show-toplevel"], { cwd: dir, stdout: "pipe", stderr: "ignore", timeout: 15_000, killSignal: "SIGKILL" });
+    const proc = Bun.spawn(["git", "rev-parse", "--show-toplevel"], { cwd: dir, stdout: "pipe", stderr: "ignore", timeout: GIT_TIMEOUT_MS, killSignal: "SIGKILL" });
     const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
     const top = stdout.trim();
     return exitCode === 0 && top !== "" ? top : undefined;
@@ -513,63 +529,67 @@ async function uncachedGitTopLevel(dir: string): Promise<string | undefined> {
 const UNRESOLVED = "the diff could not be resolved from git to confirm the size";
 
 /**
- * The scope the package's target names, recomputed from git (flow 460). A pull-request target's `ref` is its URL or
- * number, never a revision: the diff runs against the recorded `target.base`, else the first of origin/main, main,
- * origin/master, master that resolves (`resolveBase`, as `review plan` reads it). Another target diffs against its base
- * when one is recorded, else its ref. Git runs at the repository top level of the package — the scope's files are
- * repository paths, and a package can sit under a subdirectory's `.metaproject` — with review packages excluded at any
- * depth. A range that resolves empty (base equals head, as for a merged pull request with no recorded base) is not a
- * small diff: it refuses, so the full set applies until a base is given. A refusal names the directory, the base and
- * the head. A successful result is remembered per package, target and head for the process (see packageDiffStatsCached),
- * so readiness and complete in one command, or a panel refresh, pay for the git diff once.
+ * The scope the package's target names, recomputed from git (flow 460). The base is resolved for every target kind —
+ * never the target's own ref, which for a branch target is the head itself — by `resolveBase` (git-base.ts, as `review
+ * plan` reads it): the recorded `target.base`, else the first of origin/main, main, origin/master, master that resolves.
+ * A recorded base can only widen the check: it is supplied by whoever started the round, so when the default base gives
+ * a larger diff, that one is measured (a `--base head~1` on a large pull request cannot make it look small). Git runs at
+ * the repository top level of the package — the scope's files are repository paths, and a package can sit under a
+ * subdirectory's `.metaproject` — with the review packages of the project root excluded (the slicer's exclusion). A range
+ * that resolves empty (base equals head, as for a merged pull request with no recorded base) is not a small diff: it
+ * refuses with the empty-range warning, so the full set applies until a base is given. A refusal names the directory,
+ * the base and the head. A successful result is remembered briefly (see processCache).
  */
 async function packageDiffStats(options: CoverageOptions): Promise<DiffStats | { error: string }> {
   if (options.diffStats !== undefined) return (await options.diffStats()) ?? { error: UNRESOLVED };
   if (options.packageDir === undefined) return { error: UNRESOLVED };
   const target = await readPackageTarget(options.packageDir);
   if (target.head === undefined) return { error: `${UNRESOLVED}: the package manifest records no target head (cwd ${options.packageDir}, base ${target.nominalBase ?? "unresolved"}, head unrecorded)` };
-  return packageDiffStatsCached(JSON.stringify([options.packageDir, options.root, target]));
+  return packageDiffStatsCached({ packageDir: options.packageDir, root: options.root, target: { ...target, head: target.head } });
 }
 
 type PackageTarget = { kind: string; ref?: string | undefined; recordedBase?: string | undefined; head?: string | undefined; nominalBase?: string | undefined };
+type DiffRequest = { packageDir: string; root: string; target: PackageTarget & { head: string } };
 
 /** The target fields the light recheck reads from the package manifest. `nominalBase` is the base a refusal names before git resolves one. */
 async function readPackageTarget(packageDir: string): Promise<PackageTarget> {
   const manifest = await readFile(path.join(packageDir, "manifest.json"), "utf8").then((t) => JSON.parse(t)).catch(() => undefined);
   const target = manifest?.target && typeof manifest.target === "object" ? (manifest.target as Record<string, unknown>) : {};
   const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() !== "" ? v.trim() : undefined);
-  const kind = str(target.kind) ?? "";
-  const ref = str(target.ref);
-  const recordedBase = str(target.base);
-  return { kind, ref, recordedBase, head: str(target.head), nominalBase: recordedBase ?? (kind === "pr" ? undefined : ref) };
+  return { kind: str(target.kind) ?? "", ref: str(target.ref), recordedBase: str(target.base), head: str(target.head), nominalBase: str(target.base) };
 }
 
-const packageDiffStatsCached = processCache(async (key: string): Promise<DiffStats | { error: string }> => {
-  const [packageDir, root, target] = JSON.parse(key) as [string, string, PackageTarget];
-  return diffOfTarget(packageDir, root, target, target.head!);
-}, (value) => !("error" in value));
+const packageDiffStatsCached = processCache(diffOfTarget, (value) => !("error" in value), (request: DiffRequest) => JSON.stringify([request.packageDir, request.root, request.target]));
 
-/** The base the diff runs against: the PR's base as `review plan` resolves it, else the target's ref; or why none does. */
-async function resolveDiffBase(cwd: string, target: PackageTarget, head: string): Promise<{ base: string } | { error: string }> {
-  if (target.kind !== "pr" && target.recordedBase === undefined) {
-    return target.ref === undefined ? { error: "the package manifest records no target ref or base" } : { base: target.ref };
-  }
-  // Imported lazily: prior-round imports publish, which imports readiness, which imports this module (a cycle at load).
-  const { defaultGitRunner, emptyRangeWarning, resolveBase } = await import("./prior-round");
-  const resolved = await resolveBase(defaultGitRunner(cwd), { kind: target.kind, ref: target.ref ?? "", base: target.recordedBase }, head);
-  if (resolved === null) return { error: `no base resolves (tried ${[target.recordedBase, "origin/main", "main", "origin/master", "master"].filter(Boolean).join(", ")})` };
-  const empty = emptyRangeWarning(resolved, head);
-  return empty === undefined ? { base: resolved.ref } : { error: empty };
+/**
+ * The bases the diff runs against, in order of preference: the recorded base (or, without one, the default base) first;
+ * then the default base when it differs, so the wider of the two is measured. An empty range on the first is a refusal.
+ */
+async function resolveDiffBases(cwd: string, target: DiffRequest["target"]): Promise<{ bases: string[] } | { error: string }> {
+  const git = defaultGitRunner(cwd, { timeoutMs: GIT_TIMEOUT_MS });
+  const [recorded, fallback] = await Promise.all([target.recordedBase === undefined ? Promise.resolve(null) : resolveBase(git, { base: target.recordedBase }, target.head), resolveBase(git, {}, target.head)]);
+  const primary = recorded ?? fallback;
+  if (primary === null) return { error: `no base resolves (tried ${[target.recordedBase, ...DEFAULT_BASE_CANDIDATES].filter(Boolean).join(", ")})` };
+  const empty = emptyRangeWarning(primary, target.head);
+  if (empty !== undefined) return { error: empty };
+  const wider = fallback !== null && fallback.sha !== primary.sha && emptyRangeWarning(fallback, target.head) === undefined ? [fallback.ref] : [];
+  return { bases: [primary.ref, ...wider] };
 }
 
-async function diffOfTarget(packageDir: string, root: string, target: PackageTarget, head: string): Promise<DiffStats | { error: string }> {
+async function diffOfTarget({ packageDir, root, target }: DiffRequest): Promise<DiffStats | { error: string }> {
   const cwd = (await gitTopLevel(packageDir)) ?? (await gitTopLevel(root));
-  const where = (base: string | undefined): string => `cwd ${cwd ?? packageDir}, base ${base ?? "unresolved"}, head ${head}`;
+  const where = (base: string | undefined): string => `cwd ${cwd ?? packageDir}, base ${base ?? "unresolved"}, head ${target.head}`;
   if (cwd === undefined) return { error: `${UNRESOLVED}: the package is not inside a git work tree (${where(target.nominalBase)})` };
-  const resolved = await resolveDiffBase(cwd, target, head);
+  const resolved = await resolveDiffBases(cwd, target);
   if ("error" in resolved) return { error: `${UNRESOLVED}: ${resolved.error} (${where(target.nominalBase)})` };
-  const result = await gitDiffAt(cwd, resolved.base, head, NOT_REVIEW_PACKAGES_ANY_DEPTH);
-  return "error" in result ? { error: `${UNRESOLVED}: git diff ${resolved.base}...${head} failed (${where(resolved.base)}): ${result.error}` } : result;
+  const pathspec = notReviewPackagesAt(path.relative(cwd, path.resolve(root)));
+  let widest: DiffStats | undefined;
+  for (const base of resolved.bases) {
+    const result = await gitDiffAt(cwd, base, target.head, pathspec);
+    if ("error" in result) return { error: `${UNRESOLVED}: git diff ${base}...${target.head} failed (${where(base)}): ${result.error}` };
+    if (widest === undefined || result.changedLines > widest.changedLines || result.files.length > widest.files.length) widest = result;
+  }
+  return widest!;
 }
 
 /**

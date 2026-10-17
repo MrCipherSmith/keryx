@@ -7,9 +7,10 @@ import { packageCoverageWarnings } from "./coverage";
 import { packageParityWarnings } from "./parity";
 import { roundRecordTampered } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
-import { renderSpendMarkdown } from "./dispatch-usage";
+import { SPEND_HEADING, renderSpendMarkdown } from "./dispatch-usage";
+import { renderCoverageMd } from "./coverage-md";
 import { INGEST_SCREENED_FILE, PENDING_RESEARCH, dispatchRuns, packageResearchErrors, type IngestScreened } from "./research";
-import { COVERAGE_MD_MARK, computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
+import { computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
@@ -53,7 +54,7 @@ import {
 import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
 import { hashedDisplayIdMessage, hashedDisplayIds } from "./display-id";
 import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
-import { flowReviewsRoot, reviewsRoot } from "./package-location";
+import { flowReviewsRoot, readManifestHead, reviewsRoot } from "./package-location";
 import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaimSets, previousFindingsUnreadable, renderPremiseMarkdown } from "./premise";
 import { promoteParentExecutions } from "./verify-run";
 import { withOperatorDecisionsLock } from "./operator-decisions";
@@ -274,9 +275,7 @@ export async function createManagedReviewPackage(
   const verifications = await ownPackageVerifications(input, packageDir);
   const coverage = normalizeCoverage(input.coverage, input.reviewers, input.research);
   const report = await readReport(input);
-  // The attribution default for findings that name no reviewer comes from what the operator gave (or the orchestrator),
-  // never from the research record: one finished reviewer there must not absorb the orchestrator's findings.
-  const reviewers = normalizeCoverage(input.coverage, input.reviewers).filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
+  const reviewers = attributionReviewers(input);
   const { findings: reported, from: findingsFrom } = await normalizeFindings({
     report,
     reportLabel: reportLabel(input),
@@ -285,12 +284,7 @@ export async function createManagedReviewPackage(
     source: input.findings,
     reviewers,
   });
-  // Flow 460: refused before anything is located, verified, merged or written.
-  refuseStubReport(input, report, findingsFrom, reported.length);
-  const hashed = hashedDisplayIds(reported.map((finding) => finding.id));
-  if (hashed.length > 0) {
-    throw new Error(`Refusing to ingest: ${hashedDisplayIdMessage(hashed, findingsFrom === "input" ? "--findings" : reportLabel(input))} Nothing was written.`);
-  }
+  refuseUnacceptableRound(input, report, findingsFrom, reported);
   // Typing, filled in; judgement, still refused. Runs BEFORE `assignGlobalIds`,
   // because a finding with no `id` mints the key `<reviewId>#undefined` and five
   // of them then collide on it — which is how a round was lost to a field the
@@ -523,7 +517,10 @@ export async function createManagedReviewPackage(
     // The claims as received, rejected ones included: the record of what the judge said. Only a package without an
     // ingested round re-applies it (the interim verdict over raw results); findings.json is the record after ingest.
     await mkdir(path.join(packageDir, "research-evidence"), { recursive: true });
-    await writeFileAtomic(path.join(packageDir, PREMISES_FILE), `${JSON.stringify(input.premises, null, 2)}\n`);
+    // One result is written as the judge's object, several as their list; both read back through parsePremiseClaimSets
+    // (the verdict, and `review ingest --premises <this file>`).
+    const record = Array.isArray(input.premises) && input.premises.length === 1 ? input.premises[0] : input.premises;
+    await writeFileAtomic(path.join(packageDir, PREMISES_FILE), `${JSON.stringify(record, null, 2)}\n`);
   } else if (carriedHolds === undefined && (await pathExists(path.join(packageDir, PREMISES_FILE)))) {
     // An ingest without --premises that carried no hold keeps the judge's record, moved aside (review RG2-004): the
     // verdict never re-applies claims to an ingested round, so the file at its own name would only mislead a reader
@@ -547,8 +544,11 @@ export async function createManagedReviewPackage(
       renderDuplicatesMarkdown(deduped.merges),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
-  // Flow 460: the round's token spend, as research.json states it (unknown dispatches counted, never 0).
-  await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode) + renderSpendMarkdown(input.research, report));
+  // Flow 460: the round's token spend, as research.json states it (unknown dispatches counted, never 0). A section an
+  // earlier ingest wrote (a re-ingest whose --report is the package's own report.md) is dropped first, so the spend is
+  // always this ingest's, never a stale total.
+  const reportBody = withoutSpendSection(report);
+  await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(reportBody, input.mode) + renderSpendMarkdown(input.research, reportBody));
   // Under the decisions lock, like every other findings.json writer: a premise answer to a re-ingested package
   // rewrites the same file.
   await withOperatorDecisionsLock(packageDir, () => writeFileAtomic(
@@ -1231,19 +1231,21 @@ function coverageFromResearch(research: unknown): ReviewCoverageEntry[] {
     if (status === "complete" && routedOut === true) entries.push({ reviewer, status: "run", reason: "routed out: slice routing gave this role no slice, so it was not dispatched" });
     else if (status === "complete") entries.push({ reviewer, status: "run", reason: "dispatched; the research ledger records it complete" });
     else if (status === "incomplete") entries.push({ reviewer, status: "needs_context", reason: `dispatched; the research ledger records it incomplete${executionReason === undefined ? "" : ` (${executionReason})`}` });
-    else entries.push({ reviewer, status: "failed", reason: `not run: ${notRunReason ?? "the research ledger records no result"}` });
+    else if (status === "not-run" || status === undefined) entries.push({ reviewer, status: "failed", reason: `not run: ${notRunReason ?? "the research ledger records no result"}` });
+    // A status the ledger never writes (a typo, a hand edit) is not a "not run": it says what was found.
+    else entries.push({ reviewer, status: "failed", reason: `unrecognised status "${status}" in the research ledger; re-run \`keryx review ledger build\`` });
   }
   return entries;
 }
 
-/** The reviewer a finding with no reviewer of its own is attributed to, when the operator named none: never a coverage entry. */
+/**
+ * The reviewer a finding with no reviewer of its own is attributed to, when the operator named none. It becomes coverage's
+ * one entry only when there is nothing better to list: no --coverage, no --reviewers and no dispatch record.
+ */
 const ATTRIBUTION_FALLBACK = "review-orchestrator";
 
-function normalizeCoverage(
-  coverage: ReviewCoverageEntry[] | undefined,
-  reviewers: string[] | undefined,
-  research?: unknown,
-): ReviewCoverageEntry[] {
+/** coverage.md's entries: --coverage as given, else the dispatch record (no --reviewers), else the named reviewers, else the fallback. */
+function normalizeCoverage(coverage: ReviewCoverageEntry[] | undefined, reviewers: string[] | undefined, research: unknown): ReviewCoverageEntry[] {
   if (coverage && coverage.length > 0) {
     return coverage;
   }
@@ -1339,10 +1341,37 @@ async function normalizeFindings(args: NormalizeFindingsArgs): Promise<{ finding
  * that really found nothing says so in its own report, or with an empty block. (A prose report of an older round that
  * found nothing is not a stub and still ingests.)
  */
+/**
+ * The reviewers a finding that names none is attributed to: what the operator gave (--coverage entries that ran, else
+ * --reviewers), else the orchestrator — never the research record, where one finished reviewer must not absorb the
+ * orchestrator's findings.
+ */
+function attributionReviewers(input: ManagedReviewInput): string[] {
+  if (input.coverage !== undefined && input.coverage.length > 0) return input.coverage.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
+  return input.reviewers !== undefined && input.reviewers.length > 0 ? [...input.reviewers] : [ATTRIBUTION_FALLBACK];
+}
+
+/**
+ * Flow 460: the round refusals that run before anything is located, verified, merged or written — a stub report, and a
+ * display id holding `#` (which would mint a global_id the schema refuses, after the whole round was processed).
+ */
+function refuseUnacceptableRound(input: ManagedReviewInput, report: string, from: "input" | "block" | "prose", findings: readonly { id?: unknown }[]): void {
+  refuseStubReport(input, report, from, findings.length);
+  const hashed = hashedDisplayIds(findings.map((finding) => finding.id));
+  if (hashed.length > 0) {
+    throw new Error(`Refusing to ingest: ${hashedDisplayIdMessage(hashed, from === "input" ? "--findings" : reportLabel(input))} Nothing was written.`);
+  }
+}
+
+/** Whether a report's text is a stub: empty, or the placeholder `review start` writes (whatever surrounds it). */
+export function isStubReportText(report: string): boolean {
+  const text = report.trim();
+  return text === "" || text.includes(STUB_REPORT_LINE);
+}
+
 function refuseStubReport(input: ManagedReviewInput, report: string, from: "input" | "block" | "prose", findings: number): void {
   if (input.mode !== "ingest" || from !== "prose" || findings > 0) return;
-  const text = report.trim();
-  if (text !== "" && !text.includes(STUB_REPORT_LINE)) return;
+  if (!isStubReportText(report)) return;
   throw new Error(
     `Refusing to ingest ${reportLabel(input)}: it is ${report.trim() === "" ? "empty" : `the placeholder \`review start\` writes ("${STUB_REPORT_LINE}")`}, with no \`\`\`json keryx:findings block and no finding, so it is a stub, not a round's report. Point --report at the consolidated report (with its keryx:findings block), pass --findings <file>, or, for a round that found nothing, add an empty block (\`\`\`json keryx:findings / [] / \`\`\`). Nothing was written.`,
   );
@@ -2731,12 +2760,19 @@ ${rows}
 }
 
 function renderCoverage(coverage: ReviewCoverageEntry[]): string {
-  return `# Reviewer Coverage
+  return renderCoverageMd(coverage);
+}
 
-${COVERAGE_MD_MARK}
-
-${coverage.map((entry) => `reviewer: ${entry.reviewer}\nstatus: ${entry.status}\nreason: ${entry.reason}`).join("\n\n")}
-`;
+/**
+ * The report without a `## Token spend` section an earlier ingest appended (from the heading to the next `## ` heading or
+ * the end), so a re-ingest of the package's own report.md writes this ingest's spend, never the stale one.
+ */
+export function withoutSpendSection(report: string): string {
+  const at = report.indexOf(`\n${SPEND_HEADING}\n`);
+  if (at === -1) return report;
+  const rest = report.slice(at + SPEND_HEADING.length + 2);
+  const next = rest.search(/^## /m);
+  return next === -1 ? `${report.slice(0, at).replace(/\n+$/, "")}\n` : `${report.slice(0, at)}\n${rest.slice(next)}`;
 }
 
 function renderReport(report: string, mode: ManagedReviewMode): string {
@@ -2869,16 +2905,6 @@ async function allocatePackage(
   throw new Error(
     `Refusing to record a ${MAX_SAME_DAY_ROUNDS + 1}th review round for "${base}" in one day. ${MAX_SAME_DAY_ROUNDS} rounds against one target is a repair loop that nothing stopped — run \`keryx review loop --flow <id>\`, or pass --review-id to name this round yourself.`,
   );
-}
-
-/** `manifest.mode` and `manifest.flow.id` of the package at `packageDir`, or undefined when it has no readable manifest. */
-async function readManifestHead(packageDir: string): Promise<{ mode: unknown; flowId: unknown } | undefined> {
-  try {
-    const manifest = JSON.parse(await readFile(path.join(packageDir, "manifest.json"), "utf8")) as { mode?: unknown; flow?: { id?: unknown } } | null;
-    return manifest === null || typeof manifest !== "object" ? undefined : { mode: manifest.mode, flowId: manifest.flow?.id };
-  } catch {
-    return undefined;
-  }
 }
 
 function matchesTarget(flow: FlowState, dir: string, kind: string, ref: string): boolean {

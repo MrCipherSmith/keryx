@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadSchema, validateJson } from "../gdskills/contracts";
 import type { BlastRadiusScreenInput } from "./blast-radius";
-import { completeManagedReview, createManagedReviewPackage, findingDispositionState } from "./managed";
+import { completeManagedReview, createManagedReviewPackage, findingDispositionState, isStubReportText } from "./managed";
 import { readyResearchFixture } from "./research.test-helpers";
 import type { ManagedReviewInput, StructuredReviewFinding } from "./types";
 
@@ -455,6 +455,7 @@ describe("legacy markdown reports are not stranded", () => {
     // Non-vacuous: these packages exist and are the artifacts this guard is about.
     expect(reports.length).toBeGreaterThan(5);
 
+    let ingested = 0;
     await withTempRoot(async (root) => {
       for (const [index, report] of reports.entries()) {
         const input = {
@@ -467,12 +468,15 @@ describe("legacy markdown reports are not stranded", () => {
           now: new Date("2026-08-29T10:00:00Z"),
         };
         // Flow 460: a recorded package whose report is still the placeholder `review start` wrote (no block, no
-        // finding) is a stub, and ingest now refuses it by name instead of recording a round that found nothing.
-        if (report.text.includes("No reviewer findings recorded yet.") && !report.text.includes("keryx:findings")) {
-          await expect(createManagedReviewPackage(input)).rejects.toThrow("it is a stub");
-          continue;
-        }
-        const result = await createManagedReviewPackage(input);
+        // finding) is a stub, and ingest refuses it by name instead of recording a round that found nothing. The refusal
+        // is the production predicate's, never a copy of its text here.
+        const result = await createManagedReviewPackage(input).catch((error: unknown) => {
+          if (!(error instanceof Error) || !error.message.includes("it is a stub")) throw error;
+          expect(isStubReportText(report.text)).toBe(true);
+          return undefined;
+        });
+        if (result === undefined) continue;
+        ingested += 1;
         const findings = JSON.parse(
           await readFile(path.join(root, result.path, "findings.json"), "utf8"),
         ) as StructuredReviewFinding[];
@@ -481,6 +485,8 @@ describe("legacy markdown reports are not stranded", () => {
         expect(Array.isArray(findings)).toBe(true);
       }
     });
+    // Non-vacuous: the guard is about ingest, so most recorded packages must still take the ingest path.
+    expect(ingested).toBeGreaterThan(5);
   });
 
   test("a legacy report yields a round-2 input, with its lost fields named as lost", async () => {

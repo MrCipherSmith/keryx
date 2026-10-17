@@ -21,8 +21,11 @@ import type { PremiseQuestionDecision } from "./operator-decisions";
 import { awaitingOperator, premiseHoldState } from "./premise";
 import { premiseRecords } from "./verdict";
 import { packageParityWarnings } from "./parity";
-import { dispatchRuns, packageCoverageErrors, researchErrors } from "./research";
-import type { ConfirmedVia, ManagedReviewManifest, ReadinessWaiver } from "./types";
+import { asRecord, dispatchRuns, packageCoverageErrors, researchErrors, type DispatchRun } from "./research";
+import { COVERAGE_MD_MARK, parseCoverageEntries } from "./coverage-md";
+import { FINDING_DISPOSITION_STATES, type ConfirmedVia, type ManagedReviewManifest, type ReadinessWaiver } from "./types";
+
+export { COVERAGE_MD_MARK };
 
 export const READINESS_ITEMS = [
   { number: 1, id: "files-covered", title: "every changed file is covered by a wave or a recorded waiver" },
@@ -87,7 +90,7 @@ const MIN_WAIVER_QUOTE_CHARS = 8;
 const FIRST = 5;
 
 const readJson = <T>(file: string): Promise<T | undefined> => readJsonFileOr<T | undefined>(file, undefined);
-const record = (value: unknown): Record<string, unknown> | undefined => (value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined);
+const record = asRecord;
 const text = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
 const some = (names: readonly string[]): string => names.slice(0, FIRST).join(", ") + (names.length > FIRST ? `, … (+${names.length - FIRST})` : "");
 
@@ -122,22 +125,20 @@ type Context = {
   /** coverage.md as written, or undefined when it is missing. */
   coverageMd: string | undefined;
   /**
-   * Whether the two flow 460 checks apply (the omitted-reviewer check of item 6, the coverage gate in item 3): when
-   * coverage.md carries COVERAGE_MD_MARK (ingested by a keryx that has them), or the package is still open, so its
-   * repair (a re-ingest) is available. A package closed before flow 460 passed the gate of its own version; its
-   * recorded state is final, and publish, the publish guard and the panel do not suddenly call it NOT READY.
+   * Whether item 6's omitted-reviewer check (flow 460 F) applies: coverage.md carries COVERAGE_MD_MARK (ingested by a
+   * keryx that writes it from the dispatch record), or the package is still open, so its repair (a re-ingest) is
+   * available. It reads the package's own files only.
    */
-  coverageGated: boolean;
+  coverageMdGated: boolean;
+  /**
+   * Whether item 3 re-runs the coverage gate `review complete` runs (flow 460): only while the package is open. A closed
+   * package passed that gate at its close; its recorded decision (the dispatch's depth, the reviewer set) is final, and
+   * the gate's inputs are live — the project's current roster and config, and a git diff whose base, once a pull request
+   * is merged, is its own head — so publish, the publish guard and the panel must not re-derive it and call the close
+   * NOT READY.
+   */
+  liveCoverageGate: boolean;
 };
-
-/**
- * The line `review ingest` writes into coverage.md since flow 460. On a closed package, its presence is what keeps the
- * omitted-reviewer check of item 6 and the coverage gate in item 3 (see Context.coverageGated).
- */
-export const COVERAGE_MD_MARK = "<!-- keryx: coverage.md written from the dispatch record (flow 460) -->";
-
-/** One `reviewer:` / `status:` entry of coverage.md. */
-const COVERAGE_ENTRY = /reviewer:\s*(\S+)\s*\n\s*status:\s*(\S+)/g;
 
 async function filesChecks(ctx: Context): Promise<{ files: Verdict; radius: Verdict }> {
   const coverage = await computeCoverage(ctx.dir, ctx.research === undefined ? {} : { research: ctx.research });
@@ -165,40 +166,60 @@ async function filesChecks(ctx: Context): Promise<{ files: Verdict; radius: Verd
   return { files, radius };
 }
 
+/** Complete runs whose recorded result file is gone from raw/ (only checked when the package has a raw/ directory). */
+async function runsMissingResultFile(dir: string, runs: readonly DispatchRun[]): Promise<string[]> {
+  if (!(await pathExists(path.join(dir, "raw")))) return [];
+  const lost: string[] = [];
+  for (const run of runs) {
+    const evidence = run.rawEvidence?.split("#")[0];
+    if (run.status !== "complete" || evidence === undefined || evidence === "") continue;
+    if (!(await pathExists(path.join(dir, evidence)))) lost.push(run.reviewer);
+  }
+  return lost;
+}
+
+/** The coverage gate's verdict for item 3: re-run on an open package, the recorded close on a closed one (Context.liveCoverageGate). */
+async function coverageGateOf(ctx: Context, dispatch: Record<string, unknown>): Promise<{ errors: string[]; note: string }> {
+  if (!ctx.liveCoverageGate) {
+    const depth = typeof dispatch.depth === "string" ? `, depth ${dispatch.depth}` : "";
+    return { errors: [], note: `the package is closed: the coverage gate ran at its close and its recorded decision stands (${dispatchRuns(ctx.research).length} run(s)${depth}); not re-derived from the live roster or git` };
+  }
+  // The coverage gate `review complete` runs, with the same options (flow 460): readiness must not say READY while
+  // complete refuses the reviewer set, the round depth or an unwaived mutation pass. Its git diff is remembered briefly (./coverage.ts).
+  return { errors: await packageCoverageErrors(ctx.dir, dispatch), note: "the coverage gate accepts the dispatch" };
+}
+
+function reviewersFailure(found: { unfinished: string[]; unplanned: string[]; lost: string[]; problems: string[]; coverage: string[] }, arg: string): Verdict {
+  const all = [...new Set([...found.unfinished, ...found.unplanned, ...found.lost])];
+  const parts = [
+    ...(found.unfinished.length > 0 ? [`not run or incomplete: ${some(found.unfinished)}`] : []),
+    ...(found.unplanned.length > 0 ? [`planned with no run recorded: ${some(found.unplanned)}`] : []),
+    ...(found.lost.length > 0 ? [`result file missing from raw/: ${some(found.lost)}`] : []),
+    ...found.problems.slice(0, 2),
+    ...found.coverage.map((error) => `coverage gate (as review complete runs it): ${error}`),
+  ];
+  const repair = all.length === 0 && found.coverage.length > 0
+    ? "do what the coverage gate message names (dispatch the missing reviewers, or record the operator's decision), then re-run `keryx review readiness`"
+    : `dispatch ${some(all.length > 0 ? all : ["the missing reviewers"])}, save each reply to raw/<reviewer>.txt, then \`keryx review ledger build <input-dir> --package ${arg}\``;
+  return bad(parts.join("; "), repair);
+}
+
 async function reviewersCheck(ctx: Context): Promise<Verdict> {
   if (!ctx.dispatched) return ok("this package predates the dispatch record, so there is nothing to hold it against");
   const dispatch = record(ctx.research?.dispatch);
   if (dispatch === undefined) return bad("no reviewer dispatch is recorded in research.json", `keryx review ledger build <input-dir> --package ${ctx.arg}`);
   const problems = dispatchErrors(dispatch);
-  const runs = (Array.isArray(dispatch.runs) ? dispatch.runs : []).map(record).filter((run): run is Record<string, unknown> => run !== undefined);
+  const runs = dispatchRuns(ctx.research);
   const selected = Array.isArray(dispatch.selected) ? dispatch.selected.filter(text) : [];
-  const ran = new Set(runs.map((run) => String(run.reviewer)));
-  const unfinished = runs.filter((run) => run.status !== "complete" || run.scopeComplete === false).map((run) => String(run.reviewer));
+  const ran = new Set(runs.map((run) => run.reviewer));
+  const unfinished = runs.filter((run) => run.status !== "complete" || run.scopeComplete === false).map((run) => run.reviewer);
   const unplanned = selected.filter((name) => !ran.has(name));
-  const lost: string[] = [];
-  for (const run of runs) {
-    const evidence = typeof run.rawEvidence === "string" ? run.rawEvidence.split("#")[0] : undefined;
-    if (run.status !== "complete" || evidence === undefined || evidence === "") continue;
-    if (!(await pathExists(path.join(ctx.dir, evidence))) && (await pathExists(path.join(ctx.dir, "raw")))) lost.push(String(run.reviewer));
+  const lost = await runsMissingResultFile(ctx.dir, runs);
+  const gate = problems.length === 0 ? await coverageGateOf(ctx, dispatch) : { errors: [], note: "" };
+  if (problems.length === 0 && unfinished.length === 0 && unplanned.length === 0 && lost.length === 0 && gate.errors.length === 0) {
+    return ok(`${runs.length} reviewer run(s), all complete with their result on disk; ${gate.note}`);
   }
-  const all = [...new Set([...unfinished, ...unplanned, ...lost])];
-  // The coverage gate `review complete` runs, with the same options (flow 460): readiness must not say READY while
-  // complete refuses the reviewer set, the round depth or an unwaived mutation pass. Not for a package ingested before
-  // that and closed (see Context.coverageGated). Its git diff is remembered per package and head (./coverage.ts).
-  const coverage = problems.length === 0 && ctx.coverageGated ? await packageCoverageErrors(ctx.dir, dispatch) : [];
-  const gateNote = ctx.coverageGated ? "the coverage gate accepts the dispatch" : "the package was closed before readiness ran the coverage gate (flow 460), so its recorded close stands";
-  if (problems.length === 0 && all.length === 0 && coverage.length === 0) return ok(`${runs.length} reviewer run(s), all complete with their result on disk; ${gateNote}`);
-  const parts = [
-    ...(unfinished.length > 0 ? [`not run or incomplete: ${some(unfinished)}`] : []),
-    ...(unplanned.length > 0 ? [`planned with no run recorded: ${some(unplanned)}`] : []),
-    ...(lost.length > 0 ? [`result file missing from raw/: ${some(lost)}`] : []),
-    ...problems.slice(0, 2),
-    ...coverage.map((error) => `coverage gate (as review complete runs it): ${error}`),
-  ];
-  const repair = all.length === 0 && coverage.length > 0
-    ? "do what the coverage gate message names (dispatch the missing reviewers, or record the operator's decision), then re-run `keryx review readiness`"
-    : `dispatch ${some(all.length > 0 ? all : ["the missing reviewers"])}, save each reply to raw/<reviewer>.txt, then \`keryx review ledger build <input-dir> --package ${ctx.arg}\``;
-  return bad(parts.join("; "), repair);
+  return reviewersFailure({ unfinished, unplanned, lost, problems, coverage: gate.errors }, ctx.arg);
 }
 
 const pathExists = (file: string): Promise<boolean> => stat(file).then(() => true, () => false);
@@ -259,14 +280,19 @@ function quotesLocatedCheck(ctx: Context): Verdict {
     const lines = Array.isArray(flag.candidate_lines) ? ` lines ${flag.candidate_lines.join(", ")}` : "";
     return `${String(finding.global_id ?? finding.id)} (${String(finding.file ?? "no file")}: ${String(flag.reason)}${lines})`;
   };
+  // Only a real disposition state answers a finding (types.ts FINDING_DISPOSITION_STATES, "unknown" excepted): findings.json
+  // is read raw, so a made-up word ("todo", "pending") is named as invalid rather than taken for an answer.
+  const stateOf = (finding: Record<string, unknown>): unknown => record(finding.disposition)?.state;
   const answered = (finding: Record<string, unknown>): boolean => {
-    const state = record(finding.disposition)?.state;
-    return typeof state === "string" && state !== "" && state !== "unknown";
+    const state = stateOf(finding);
+    return typeof state === "string" && state !== "unknown" && (FINDING_DISPOSITION_STATES as readonly string[]).includes(state);
   };
   const open = flagged.filter((finding) => !answered(finding));
   if (open.length === 0) return ok(`${flagged.length} finding(s) with an unplaced quote, every one with a disposition: ${some(flagged.map(name))}`);
+  const invalid = open.filter((finding) => typeof stateOf(finding) === "string" && stateOf(finding) !== "" && stateOf(finding) !== "unknown");
+  const invalidNote = invalid.length === 0 ? "" : `; disposition state not one of ${FINDING_DISPOSITION_STATES.filter((state) => state !== "unknown").join(", ")}: ${some(invalid.map((finding) => `${String(finding.global_id ?? finding.id)} ("${String(stateOf(finding))}")`))}`;
   return bad(
-    `${open.length} open finding(s) quote code that could not be placed in the file at the reviewed head (kept with no line, flagged quote_unlocated): ${some(open.map(name))}`,
+    `${open.length} open finding(s) quote code that could not be placed in the file at the reviewed head (kept with no line, flagged quote_unlocated): ${some(open.map(name))}${invalidNote}`,
     `re-quote one distinct line from \`git show <head>:<path>\` in the reviewer's result and re-ingest, or record a disposition with evidence; or the operator waives it: in keryx shell call the review_waive_readiness tool with item quotes-located; in a terminal run keryx review complete ${ctx.arg} --waive quotes-located "<operator quote>"`,
   );
 }
@@ -284,21 +310,25 @@ function coverageMdCheck(ctx: Context): Verdict {
   const runs = dispatchRuns(ctx.research);
   const unfinished = new Set(runs.filter((run) => run.status !== "complete").map((run) => run.reviewer));
   if (raw === undefined) return bad("coverage.md is missing", `re-run keryx review ingest <input> for this package: it writes coverage.md`);
-  const entries = [...raw.matchAll(COVERAGE_ENTRY)].map((match) => ({ reviewer: match[1]!, status: match[2]! }));
+  const entries = parseCoverageEntries(raw);
   const claimed = entries.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
   const lying = claimed.filter((name) => unfinished.has(name));
   // Flow 460 F: a reviewer the dispatch record ran must be listed too; coverage.md that names a stand-in omits it. Only
-  // while it applies (Context.coverageGated): a closed package's older coverage.md predates ingest reading the record.
+  // while it applies (Context.coverageMdGated): a closed package's older coverage.md predates ingest reading the record.
   const listed = new Set(entries.map((entry) => entry.reviewer));
-  const omitted = ctx.coverageGated ? runs.filter((run) => !listed.has(run.reviewer)).map((run) => run.reviewer) : [];
-  if (omitted.length > 0) {
-    return bad(
-      `coverage.md omits ${some(omitted)}, which the dispatch record ran`,
-      "re-run keryx review ingest <input> for this package without --reviewers or --coverage: only then is coverage.md written from the dispatch record (an explicit list is written as given, and fails this item again)",
-    );
-  }
-  if (lying.length === 0) return ok(`${claimed.length} reviewer(s) listed as run, none contradicted by the dispatch record`);
-  return bad(`coverage.md lists ${some(lying)} as "run", but the dispatch record says they did not finish`, `re-run keryx review ingest <input> for this package: it rewrites coverage.md from the dispatch record`);
+  const omitted = ctx.coverageMdGated ? runs.filter((run) => !listed.has(run.reviewer)).map((run) => run.reviewer) : [];
+  if (omitted.length === 0 && lying.length === 0) return ok(`${claimed.length} reviewer(s) listed as run, none contradicted by the dispatch record`);
+  // Both contradictions in one verdict, so one repair cycle sees them all.
+  const evidence = [
+    ...(omitted.length > 0 ? [`coverage.md omits ${some(omitted)}, which the dispatch record ran`] : []),
+    ...(lying.length > 0 ? [`coverage.md lists ${some(lying)} as "run", but the dispatch record says they did not finish`] : []),
+  ].join("; ");
+  return bad(
+    evidence,
+    omitted.length > 0
+      ? "re-run keryx review ingest <input> for this package without --reviewers or --coverage: only then is coverage.md written from the dispatch record (an explicit list is written as given, and fails this item again)"
+      : "re-run keryx review ingest <input> for this package: it rewrites coverage.md from the dispatch record",
+  );
 }
 
 async function headCheck(ctx: Context, options: ReadinessOptions): Promise<Verdict> {
@@ -414,7 +444,8 @@ export async function computeReadiness(packageDir: string, options: ReadinessOpt
     premise: await premiseRecords(packageDir),
     dispatched: manifest.artifacts.reviewerDispatch !== undefined || manifest.artifacts.research !== undefined,
     coverageMd,
-    coverageGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== "closed",
+    coverageMdGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== "closed",
+    liveCoverageGate: manifest.status !== "closed",
   };
   const { files, radius } = await filesChecks(ctx);
   const verdicts: Record<ReadinessItemId, Verdict> = {

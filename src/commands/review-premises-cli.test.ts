@@ -87,6 +87,13 @@ test("flow 460: --premises is repeatable — files merge with their own judges, 
   expect(scope).toContain("premise files name this finding and do not agree");
   // The claims are kept as received, one entry per file.
   expect(JSON.parse(await readFile(path.join(dir, PREMISES_FILE), "utf8"))).toEqual([code, rest]);
+  // The package's own record round-trips (RG-002): a re-ingest with --premises <that file> reads the list, as the verdict does.
+  await writeFile(path.join(ROOT, "kept.json"), await readFile(path.join(dir, PREMISES_FILE), "utf8"));
+  const again = await ingest("2026-10-17-premises-many", ["--premises", "kept.json"]);
+  expect(process.exitCode ?? 0).toBe(0);
+  const reread = JSON.parse(await readFile(path.join(again, "findings.json"), "utf8")) as Array<{ id: string; premise?: { verdict: string; judge: string } }>;
+  expect(reread.find((finding) => finding.id === "LG-001")?.premise).toMatchObject({ verdict: "upheld", judge: "review-premise-code" });
+  expect(JSON.parse(await readFile(path.join(again, PREMISES_FILE), "utf8"))).toEqual([code, rest]);
 });
 
 type HeldRecord = { premise?: { verdict: string } };

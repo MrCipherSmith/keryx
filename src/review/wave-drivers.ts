@@ -5,15 +5,20 @@ import { type DriverFile, readDrivers } from "./driver-read";
 import { writeFileAtomic } from "../lib/fs";
 import { packageHasBlastRadius, packageHasPrContext, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
 import { fixSliceRoles } from "./round-split";
-import { type SliceManifest, packWavesByKind, waveBytesOf } from "./slice";
-import { requiredSlices, sliceGraph } from "./waves";
+import { type SliceManifest } from "./slice";
+import { roleDispatchWaves } from "./estimate";
 
 /** Flow 458 AC12: the reviewers of a package and the per-wave driver files `review slice --package` writes for them. */
 export const DRIVERS_DIR = "drivers";
 export const RAW_DIR = "raw";
 
-/** The reviewers of the package: the required set plus the roles of its fix slices, plus every reviewer a driver names. */
-export async function packageReviewers(packageDir: string, manifest: SliceManifest | undefined): Promise<string[]> {
+/**
+ * The roster of the package: the required set plus the roles of its fix and second-look slices — the roles the estimate
+ * (and so plan.json) counts. A role slice routing gave a slice but the roster does not run (review-backend or
+ * review-frontend on a project that never selects them) is not a reviewer of the round. With `withDrivers`, every
+ * reviewer a driver already on disk names joins too (`review next` collects what was dispatched by hand).
+ */
+export async function packageReviewers(packageDir: string, manifest: SliceManifest | undefined, options: { withDrivers?: boolean } = {}): Promise<string[]> {
   const root = projectRootOfPackage(packageDir);
   const names = new Set<string>();
   try {
@@ -25,11 +30,8 @@ export async function packageReviewers(packageDir: string, manifest: SliceManife
     // Not swallowed: a reviewer set computed without the project's rules would silently drop the reviewers they require.
     throw new Error(`the required reviewers of ${packageDir} could not be read (${error instanceof Error ? error.message : String(error)}); fix the reviewer rules and re-run`, { cause: error });
   }
-  if (manifest !== undefined) {
-    for (const reviewer of fixSliceRoles(manifest)) names.add(reviewer);
-    for (const entry of manifest.slices) for (const role of entry.roles ?? []) names.add(role);
-  }
-  for (const reviewer of (await readDrivers(packageDir, root)).replies.reviewers) names.add(reviewer);
+  if (manifest !== undefined) for (const reviewer of fixSliceRoles(manifest)) names.add(reviewer);
+  if (options.withDrivers === true) for (const reviewer of (await readDrivers(packageDir, root)).replies.reviewers) names.add(reviewer);
   return [...names].sort();
 }
 
@@ -39,7 +41,7 @@ const DEFINITION_CANDIDATES = (reviewer: string): string[] => [
 ];
 
 /**
- * `drivers/<reviewer>-w<n>.json` for every reviewer x wave: the slice ids it is handed (`slices`), their ABSOLUTE paths
+ * `drivers/<reviewer>-w<n>.json` for every reviewer x wave ({@link roleDispatchWaves}): the slice ids it is handed (`slices`), their ABSOLUTE paths
  * (`slicePaths`), the file its reply goes to (`result`) and its rule file (`definition`) when one exists. `model` is left to the
  * dispatcher, which passes it; a model or tool log an earlier driver of the same name already recorded is kept. Drivers
  * of an earlier cut (`*-w<n>.json`) that no wave of this one replaces are removed. Returns the files written.
@@ -57,10 +59,9 @@ export async function writeWaveDrivers(input: { packageDir: string; manifest: Sl
   }
   const written: string[] = [];
   for (const reviewer of [...input.reviewers].sort()) {
-    const graph = sliceGraph(manifest, reviewer);
-    const open = graph.open(requiredSlices(manifest, reviewer), new Set());
-    // A dispatch carries one kind (fix, second-look, new), as the estimate counts: waves are packed per kind.
-    const waves = packWavesByKind(open, waveBytesOf(manifest));
+    // The estimate's own count (one kind per dispatch; a role that runs without slices gets one empty wave; a routed-out
+    // role none), so plan.json's dispatches equal the drivers written here.
+    const waves = roleDispatchWaves(manifest, reviewer);
     const definition = DEFINITION_CANDIDATES(reviewer).find((candidate) => existsSync(path.resolve(root, candidate)));
     for (const [at, wave] of waves.entries()) {
       const number = at + 1;

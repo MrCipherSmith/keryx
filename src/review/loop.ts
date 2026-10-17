@@ -87,10 +87,10 @@
  * looping.
  */
 
-import { readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { readFlow, resolveFlowDir } from "../flow/store";
-import { flowReviewsRoot } from "./package-location";
+import { flowPackageDirs } from "./package-location";
 import { pathExists } from "../lib/fs";
 import type { ManagedReviewManifest, StructuredReviewFinding } from "./types";
 
@@ -483,14 +483,10 @@ class KeyGroups {
  */
 export async function readFlowReviewRounds(cwd: string, flowRef: string): Promise<ReviewRound[]> {
   const dir = await resolveFlowDir(cwd, flowRef);
-  const reviewsDir = flowReviewsRoot(cwd, dir);
-  if (!(await pathExists(reviewsDir))) {
-    return [];
-  }
-  const entries = (await readdir(reviewsDir, { withFileTypes: true })).filter((entry) => entry.isDirectory());
   const rounds: Array<{ sortKey: string; round: ReviewRound }> = [];
-  for (const entry of entries) {
-    const packageDir = path.join(reviewsDir, entry.name);
+  // The flow's own reviews/ and the standalone packages bound to it (`review ingest --review-id`, flow 460 L5).
+  for (const packageDir of await flowPackageDirs(cwd, dir)) {
+    const entry = { name: path.basename(packageDir) };
     const manifest = await readJson<ManagedReviewManifest>(path.join(packageDir, "manifest.json"));
     const findings = (await readJson<ReadonlyArray<Partial<StructuredReviewFinding>>>(
       path.join(packageDir, "findings.json"),

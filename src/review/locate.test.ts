@@ -187,6 +187,12 @@ describe("locateQuote — a one-line quote inside a line (flow 460)", () => {
     expect(locateQuote(FILE, "(name: string): string {")).toMatchObject({ state: "unlocatable", kind: "ambiguous", candidates: [1, 9] });
   });
 
+  test("a short substring that one line holds by chance is not placed: a one-token anchor is a coincidence (SEC-R2-002)", () => {
+    const outcome = locateQuote(FILE, "farewell");
+    expect(outcome).toMatchObject({ state: "unlocatable", kind: "absent" });
+    expect(outcome.state === "unlocatable" && outcome.reason).toContain("too short");
+  });
+
   test("never similarity: a near-substring is absent", () => {
     expect(locateQuote(FILE, "`helo ${trimmed}`")).toMatchObject({ state: "unlocatable", kind: "absent" });
     // Spacing inside the substring is not normalised.

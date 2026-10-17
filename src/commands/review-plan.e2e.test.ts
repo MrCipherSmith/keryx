@@ -10,21 +10,20 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { PLAN_FILE, type ReviewPlan } from "./review-plan";
 import { reviewCommand } from "./review";
+import { DEFAULT_MAX_DISPATCHES } from "../review/estimate";
+import { commitFiles, git, initRepo } from "../review/git-fixture.test-helpers";
 import { computeReadiness } from "../review/readiness";
+
+/** A child dispatch of `review plan` runs real git in a real repository: a minute is the ceiling, not the expectation. */
+const E2E_TIMEOUT_MS = 60_000;
 
 describe("plan → ingest with an unplaceable quote → fix commit → plan", () => {
   const ORIGINAL_CWD = process.cwd();
-  const EMAIL = "200531777+MrCipherSmith@users.noreply.github.com";
   const realLog = console.log;
   const realError = console.error;
   const realXdg = process.env.XDG_DATA_HOME;
   let repo = "";
 
-  const git = (...args: string[]): string => {
-    const run = Bun.spawnSync(["git", ...args], { cwd: repo, env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: EMAIL, GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: EMAIL } });
-    if (run.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${run.stderr.toString()}`);
-    return run.stdout.toString().trim();
-  };
   const source = (fixed: boolean): string =>
     [
       ...Array.from({ length: 12 }, (_, i) => `export const base${i} = ${i};`),
@@ -39,15 +38,10 @@ describe("plan → ingest with an unplaceable quote → fix commit → plan", ()
     repo = await mkdtemp(path.join(tmpdir(), "keryx-plan-e2e-"));
     process.env.XDG_DATA_HOME = path.join(repo, ".xdg");
     await mkdir(path.join(repo, ".metaproject"), { recursive: true });
-    await mkdir(path.join(repo, "src"), { recursive: true });
-    git("init", "-q", "-b", "main");
-    await writeFile(path.join(repo, "src", "a.ts"), Array.from({ length: 12 }, (_, i) => `export const base${i} = ${i};`).join("\n") + "\n");
-    git("add", "src/a.ts");
-    git("commit", "-q", "-m", "base");
-    git("checkout", "-q", "-b", "feature");
-    await writeFile(path.join(repo, "src", "a.ts"), source(false));
-    git("add", "src/a.ts");
-    git("commit", "-q", "-m", "add total");
+    initRepo(repo);
+    commitFiles(repo, { "src/a.ts": Array.from({ length: 12 }, (_, i) => `export const base${i} = ${i};`).join("\n") + "\n" }, "base");
+    git(repo, "checkout", "-q", "-b", "feature");
+    commitFiles(repo, { "src/a.ts": source(false) }, "add total");
     process.chdir(repo);
     console.log = () => {};
     console.error = () => {};
@@ -93,9 +87,7 @@ describe("plan → ingest with an unplaceable quote → fix commit → plan", ()
     expect(await readFile(path.join(first.package, "scope.md"), "utf8")).toContain("## Quotes not located at the reviewed head");
     expect((await computeReadiness(first.package)).items.find((item) => item.id === "quotes-located")).toMatchObject({ status: "fail" });
 
-    await writeFile(path.join(repo, "src", "a.ts"), source(true));
-    git("add", "src/a.ts");
-    git("commit", "-q", "-m", "fix F-1: seed the reduce");
+    commitFiles(repo, { "src/a.ts": source(true) }, "fix F-1: seed the reduce");
 
     const second = await plan();
     expect(second.package).not.toBe(first.package);
@@ -105,37 +97,64 @@ describe("plan → ingest with an unplaceable quote → fix commit → plan", ()
     const fix = second.slices.fix.find((slice) => slice.findingIds?.includes("F-1"));
     expect(fix?.files).toContain("src/a.ts");
     expect(fix?.roles).toEqual(expect.arrayContaining(["review-logic", "review-regression"]));
-  }, 60_000);
+  }, E2E_TIMEOUT_MS);
 
-  test("flow 460 L6: a fix of F-1 and an unrelated new function in the same file plan as one fix slice with the fix roster and one new slice with round-1 roles", async () => {
+  /** Round 1 over `source(false)` + 40 unchanged lines, F-1 recorded on the reduce; returns once the round is ingested. */
+  const PADDING = `${Array.from({ length: 40 }, (_, i) => `export const pad${i} = ${i};`).join("\n")}\n`;
+  const recordRoundOne = async (): Promise<ReviewPlan> => {
+    commitFiles(repo, { "src/a.ts": `${source(false)}${PADDING}` }, "pad the module");
     const first = await plan();
-    const firstId = path.basename(first.package);
     const report = ["# Round 1", "", "```json keryx:findings", JSON.stringify([finding("F-1", "  return items.reduce((sum, item) => sum + item);")]), "```", ""].join("\n");
     await writeFile(path.join(repo, "report.md"), report);
     await writeFile(path.join(repo, "research.json"), JSON.stringify({ version: 1, scopeReviewed: true, rawReconciled: true, obligations: [] }));
-    await reviewCommand(["ingest", "--target", "branch", "--ref", "feature", "--review-id", firstId, "--report", "report.md", "--research", "research.json"]);
+    await reviewCommand(["ingest", "--target", "branch", "--ref", "feature", "--review-id", path.basename(first.package), "--report", "report.md", "--research", "research.json"]);
     expect(process.exitCode ?? 0).toBe(0);
+    return first;
+  };
+  /** The driver files `review slice --package` wrote, by role. */
+  const driverRolesOf = async (packageDir: string): Promise<{ files: string[]; roles: Set<string> }> => {
+    const files = (await readdir(path.join(packageDir, "drivers"))).filter((name) => /-w\d+\.json$/.test(name));
+    return { files, roles: new Set(files.map((name) => name.replace(/-w\d+\.json$/, ""))) };
+  };
 
-    await writeFile(path.join(repo, "src", "a.ts"), source(true));
-    git("add", "src/a.ts");
-    git("commit", "-q", "-m", "fix F-1: seed the reduce");
-    // Far below the fix, in its own commit that names no finding: new code.
-    const padding = Array.from({ length: 40 }, (_, i) => `export const pad${i} = ${i};`).join("\n");
-    await writeFile(path.join(repo, "src", "a.ts"), `${source(true)}${padding}\nexport function run(cmd: string[]) { return Bun.spawn(cmd); }\n`);
-    git("add", "src/a.ts");
-    git("commit", "-q", "-m", "add a runner");
+  test("flow 460 L6: a fix of F-1 and an unrelated new function in the same file plan as one fix slice with the fix roster and one new slice with round-1 roles", async () => {
+    await recordRoundOne();
+    commitFiles(repo, { "src/a.ts": `${source(true)}${PADDING}` }, "fix F-1: seed the reduce");
+    // Forty unchanged lines below the fix, in its own commit that names no finding: new code.
+    commitFiles(repo, { "src/a.ts": `${source(true)}${PADDING}export function run(cmd: string[]) { return Bun.spawn(cmd); }\n` }, "add a runner");
 
     const second = await plan();
     expect(second.round).toMatchObject({ number: 2, mode: "delta" });
     expect(second.slices.fix).toHaveLength(1);
-    // Exactly the fix roster: logic and regression (F-1's author is review-logic); nothing the fix's content would route.
+    // The fix roster: logic and regression (F-1's author is review-logic); the fix line routes no content role, and the
+    // deep round-1 roster of the file is not owed.
     expect(second.slices.fix[0]).toMatchObject({ files: ["src/a.ts"], findingIds: ["F-1"], roles: ["review-logic", "review-regression"] });
     // The runner, in the same file, is a new slice routed as in round 1: spawning a process brings security-code.
     const fresh = second.slices.new.filter((slice) => slice.files.includes("src/a.ts"));
     expect(fresh).toHaveLength(1);
     expect(fresh[0]!.roles).toEqual(expect.arrayContaining(["review-logic", "review-security-code"]));
-    // The fix slice's roster joins the round; nothing its content routes does (no union with round-1 routing).
+    // The fix slice's roster joins the round; the deep round-1 roster of its file does not.
     expect(second.split?.fix).toMatchObject({ slices: 1, dispatches: 2 });
-    expect(second.dispatches).toBeLessThanOrEqual(40);
-  }, 60_000);
+    expect(second.dispatches).toBeLessThanOrEqual(DEFAULT_MAX_DISPATCHES);
+    // The drivers `review slice --package` wrote are exactly the dispatches the plan counts, all for roster roles: the new
+    // slice's deep routing names review-backend and review-frontend, which this roster never runs.
+    const drivers = await driverRolesOf(second.package);
+    expect(drivers.files).toHaveLength(second.dispatches);
+    const rosterRoles = new Set([...second.roster, ...second.slices.fix.flatMap((slice) => slice.roles ?? [])]);
+    expect([...drivers.roles].filter((role) => !rosterRoles.has(role))).toEqual([]);
+  }, E2E_TIMEOUT_MS);
+
+  test("flow 458 M3: a fix whose own line spawns a process keeps review-security-code on the fix slice and in the drivers", async () => {
+    await recordRoundOne();
+    const spawning = source(true).replace("  return items.reduce((sum, item) => sum + item, 0);", "  return Bun.spawnSync([\"true\"]).exitCode + items.reduce((sum, item) => sum + item, 0);");
+    commitFiles(repo, { "src/a.ts": `${spawning}${PADDING}` }, "fix F-1: seed the reduce");
+
+    const second = await plan();
+    expect(second.slices.fix).toHaveLength(1);
+    // F-1 is a logic finding: the security reviewer is there only because the fix line spawns a process.
+    expect(second.slices.fix[0]!.roles).toEqual(expect.arrayContaining(["review-logic", "review-regression", "review-security-code"]));
+    const drivers = await driverRolesOf(second.package);
+    expect(drivers.roles.has("review-security-code")).toBe(true);
+    expect(drivers.files).toHaveLength(second.dispatches);
+  }, E2E_TIMEOUT_MS);
 });

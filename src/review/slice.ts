@@ -409,6 +409,23 @@ export function validateWaveBytes(value: number, maxBytes: number): number {
 }
 
 /**
+ * The ledger omissions of a set of regions, judged per file over ALL of that file's regions — the same judgement
+ * `buildSlices` makes. A caller that cuts one source into several `buildSlices` calls (a delta round's fix and new
+ * regions) classifies here first, so a large json is judged on its whole diff and recorded once with its full size.
+ */
+export function ledgerOmissions(regions: readonly ScopedRegion[]): SliceOmission[] {
+  const byFile = new Map<string, ScopedRegion[]>();
+  for (const region of regions) byFile.set(region.path, [...(byFile.get(region.path) ?? []), region]);
+  const omissions: SliceOmission[] = [];
+  for (const [filePath, fileRegions] of byFile) {
+    const bytes = sectionsBytes(fileRegions.map(regionSection));
+    const ledger = classifyLedger(filePath, bytes);
+    if (ledger !== null) omissions.push({ path: filePath, reason: ledger.reason, detail: ledger.detail, bytes });
+  }
+  return omissions;
+}
+
+/**
  * Cut scope A into slices of at most `maxBytes` each.
  *
  * Domains keep their files together; a domain larger than the ceiling is cut by

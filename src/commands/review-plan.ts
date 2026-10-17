@@ -13,6 +13,7 @@ import { readPriorFindings, readRoundRecord, renderRoundLine, type RoundRecord }
 import { isDeltaRound } from "../review/round-split";
 import type { SliceEntry, SliceManifest } from "../review/slice";
 import { REVIEW_HOSTS } from "../review/host-profile";
+import { packageReviewers, writeWaveDrivers } from "../review/wave-drivers";
 
 export const PLAN_FILE = "plan.json";
 export const PLAN_FLAGS = ["--target", "--ref", "--head", "--host", "--memory-query", "--unattended", "--json", "--help", "-h"] as const;
@@ -193,6 +194,10 @@ export async function runPlan(args: string[], deps: PlanDeps): Promise<void> {
 
   // 6. estimate: dispatches and minutes of both kinds.
   const estimate = await estimatePackage(packageDir);
+  // `slice` wrote its drivers before `required` recorded the round's depth, so they were cut for the full roster. Write
+  // them again now, for the roster the estimate counts: one driver per dispatch, so `review next` and plan.json agree.
+  const drivers = await writeWaveDrivers({ packageDir, manifest, sliceDir: path.dirname(manifestPath), reviewers: await packageReviewers(packageDir, manifest) });
+  if (drivers.length !== estimate.dispatches) warnings.push(`${drivers.length} driver(s) written for ${estimate.dispatches} planned dispatch(es); re-run \`keryx review slice --package ${packageDir}\``);
   const confirmed = planConfirmed(packageDir, estimate);
   const byKind = slicesByKind(manifest);
   const plan: ReviewPlan = {

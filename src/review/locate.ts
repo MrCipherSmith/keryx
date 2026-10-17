@@ -59,13 +59,13 @@ export const MAX_LOCATE_FILE_BYTES = 4_000_000;
  */
 export type UnlocatableKind = "absent" | "ambiguous" | "bound" | "empty";
 
-/** How a finding's `line` was arrived at. */
 /**
  * How a quote was placed. `substring` (flow 460): a one-line quote, edges trimmed, that is an exact substring of exactly
  * one line of the file — a reviewer quoting the middle of a long line. Still exact text, never a near-match.
  */
 export type LocateMethod = "exact" | "whitespace-normalised" | "substring";
 
+/** How a finding's `line` was arrived at: placed from its quote (`derived`), or why it could not be (`unlocatable`). */
 export type LocatorRecord =
   | { state: "derived"; method: LocateMethod; line: number; reported_line?: number | null }
   | { state: "unlocatable"; reason: string; reported_line?: number | null; kind?: UnlocatableKind | undefined; candidates?: number[] | undefined };
@@ -112,15 +112,6 @@ function deindent(lines: readonly string[]): string[] {
 }
 
 /**
- * Every 1-based line where `needle` runs contiguously through `haystack`.
- *
- * `shape` is applied to the candidate WINDOW rather than to the whole file,
- * which is what lets a quote be compared against the file at its own
- * indentation: the window is de-indented the same way the quote was, so a
- * snippet that lost its leading spaces on the way through a code fence still
- * matches the indented original, and one that kept them matches too.
- */
-/**
  * Two hits are as informative as twenty thousand.
  *
  * The scan stops at this many, because the only question it answers is "none,
@@ -132,6 +123,22 @@ function deindent(lines: readonly string[]): string[] {
  */
 const MAX_HITS = 2;
 
+/**
+ * The shortest one-line quote placed as a substring of a line. A shorter one (`x`, `)`, `return`) is in many lines by
+ * chance, and in exactly one only by luck: placing it would anchor a finding to a coincidence. It is still placed when
+ * it is a whole line (the exact passes).
+ */
+export const MIN_SUBSTRING_QUOTE_CHARS = 12;
+
+/**
+ * Every 1-based line where `needle` runs contiguously through `haystack`.
+ *
+ * `shape` is applied to the candidate WINDOW rather than to the whole file,
+ * which is what lets a quote be compared against the file at its own
+ * indentation: the window is de-indented the same way the quote was, so a
+ * snippet that lost its leading spaces on the way through a code fence still
+ * matches the indented original, and one that kept them matches too.
+ */
 function findRuns(
   haystack: readonly string[],
   needle: readonly string[],
@@ -235,11 +242,14 @@ export function locateQuote(fileText: string, quote: string): LocateOutcome {
   if (needle.length === 1) {
     const part = (needle[0] as string).trim();
     const within = findSubstring(haystack, part);
-    if (within.length === 1) {
-      return { state: "derived", method: "substring", line: within[0] as number };
-    }
     if (within.length > 1) {
       return ambiguity(within, " as a substring of a line ");
+    }
+    if (within.length === 1 && part.length < MIN_SUBSTRING_QUOTE_CHARS) {
+      return { state: "unlocatable", reason: `the quote is not a whole line of the file, and at ${part.length} characters it is too short (under ${MIN_SUBSTRING_QUOTE_CHARS}) to place inside one; quote the whole line`, kind: "absent" };
+    }
+    if (within.length === 1) {
+      return { state: "derived", method: "substring", line: within[0] as number };
     }
   }
   return { state: "unlocatable", reason: "the quote does not appear in the file", kind: "absent" };

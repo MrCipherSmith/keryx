@@ -16,10 +16,14 @@ import {
   findingDispositionState,
   findRelatedFlow,
   validateManagedReviewManifest,
+  withoutSpendSection,
   type ManagedReviewIngestInput,
   type ScopeBScreenRecord,
 } from "./managed";
 import type { BlastRadiusScreenInput } from "./blast-radius";
+import { readFlowReviewRounds } from "./loop";
+import { readReviewRounds } from "../flow/review-gate";
+import { readFlowReviewManifests } from "../governance/spend";
 import {
   FINDING_DISPOSITION_STATES,
   MANAGED_REVIEW_MODES,
@@ -224,6 +228,15 @@ describe("flow 460: ingest procedure", () => {
     const again = await createManagedReviewPackage({ cwd: ROOT, mode: "ingest", flowId, reviewId, target: { kind: "branch", ref: "feature/x" }, reportText: BLOCK, now: new Date("2026-07-09T13:00:00Z") });
     expect(again.path).toBe(started.path);
     expect(existsSync(path.join(ROOT, ".metaproject", "flows", "001-2026-07-09-managed-review-flow", "reviews", reviewId))).toBe(false);
+    // Every reader of the flow's rounds sees the bound round, the same way (REG-001): the loop detector, the flow review
+    // gate (`flow complete`'s require_clean_round) and flow spend.
+    const flowDir = "001-2026-07-09-managed-review-flow";
+    expect((await readFlowReviewRounds(ROOT, flowDir)).map((round) => round.label)).toEqual([reviewId]);
+    expect((await readReviewRounds(ROOT, flowDir)).map((round) => round.reviewId)).toEqual([reviewId]);
+    expect((await readFlowReviewManifests(ROOT, flowDir)).map((manifest) => manifest.reviewId)).toEqual([reviewId]);
+    // An unbound standalone package is not the flow's.
+    await createManagedReviewPackage({ cwd: ROOT, mode: "review-flow", reviewId: "2026-07-09-other", target: { kind: "branch", ref: "feature/y" }, now: new Date("2026-07-09T14:00:00Z") });
+    expect((await readFlowReviewManifests(ROOT, flowDir)).map((manifest) => manifest.reviewId)).toEqual([reviewId]);
   });
 
   test("ingest refuses the placeholder report `review start` writes, before writing anything", async () => {
@@ -2008,6 +2021,28 @@ describe("flow 460 F: coverage reconciles with the dispatch record", () => {
     const created = await ingest({ research: research(), findings: [{ ...FULL_FINDING, reviewer: undefined } as unknown as StructuredReviewFinding] });
     const findings = JSON.parse(await readFile(path.join(ROOT, created.path, "findings.json"), "utf8")) as Array<{ reviewer: string }>;
     expect(findings.map((finding) => finding.reviewer)).toEqual(["review-orchestrator"]);
+  });
+
+  test("a status the ledger never writes is named as such, not reported as 'not run'; a reviewer name with a newline is dropped", async () => {
+    await fresh();
+    const odd = research();
+    odd.dispatch.runs.push({ reviewer: "review-highload", executionId: "d", status: "compelte", scopeComplete: true } as (typeof odd.dispatch.runs)[number]);
+    odd.dispatch.runs.push({ reviewer: "review-x\nstatus: run", executionId: "e", status: "complete" } as (typeof odd.dispatch.runs)[number]);
+    const created = await ingest({ research: odd });
+    const entry = created.manifest.coverage.find((item) => item.reviewer === "review-highload");
+    expect(entry).toMatchObject({ status: "failed" });
+    expect(entry?.reason).toContain('unrecognised status "compelte"');
+    expect(created.manifest.coverage.some((item) => item.reviewer.includes("\n"))).toBe(false);
+  });
+});
+
+describe("flow 460: the token spend section is this ingest's (LG-004)", () => {
+  test("a re-ingest of the package's own report.md drops the earlier spend section before appending the new one", () => {
+    const earlier = "# Round\n\nbody\n\n## Token spend\n\ntoken spend: 1 in, 1 out over 1 dispatch(es)\n";
+    expect(withoutSpendSection(earlier)).toBe("# Round\n\nbody\n");
+    const middle = "# Round\n\n## Token spend\n\nold line\n\n## Findings\n\nf\n";
+    expect(withoutSpendSection(middle)).toBe("# Round\n\n## Findings\n\nf\n");
+    expect(withoutSpendSection("# Round\n\nno spend\n")).toBe("# Round\n\nno spend\n");
   });
 });
 

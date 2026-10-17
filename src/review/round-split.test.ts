@@ -12,7 +12,7 @@ import { computeCoverage } from "./coverage-complete";
 import { estimateRound } from "./estimate";
 import { buildLedger, type LedgerInputs, type RawFile } from "./ledger";
 import { type PriorFinding, type RoundRecord } from "./round-record";
-import { classifyDeltaSlices, expectedFixRoles, fixClaimBacked, fixRosterRoles, fixSliceCoverage, fixSliceRoles, isDeltaRound, isSecurityFinding, partitionRegionsByFix, priorDispositionsOf, splitCounts } from "./round-split";
+import { classifyDeltaSlices, expectedFixRoles, fixClaimBacked, fixContentRoles, fixRosterRoles, fixSliceCoverage, fixSliceRoles, isDeltaRound, isSecurityFinding, partitionRegionsByFix, priorDispositionsOf, splitCounts } from "./round-split";
 import { narrowedSlices } from "./routing-check";
 import type { ScopedRegion } from "./scope";
 import { buildSlices, parseScopedDiff, type SliceEntry, type SliceManifest } from "./slice";
@@ -60,6 +60,26 @@ describe("fix roster", () => {
     expect(fixRosterRoles(["review-style-w1:SEC-002"], [secId])).toEqual(["review-logic", "review-regression", "review-security-code", "review-style"]);
     expect(fixRosterRoles(["L2"], [plain])).toEqual(["review-logic", "review-regression"]);
   });
+
+  test("security classes a non-security reviewer names in other words still count; a literal next to its own stem is gone (SEC-002)", () => {
+    for (const problem of ["builds a shell string from the ref", "spawns git with a user-controlled argv", "a symlink lets the write escape the package", "TOCTOU between stat and open", "a ReDoS on a crafted ref", "prototype pollution through the merged JSON", "unsanitized input reaches the SQL", "the secret leaks into the log", "deserialization of untrusted YAML"]) {
+      expect(isSecurityFinding({ id: "L9", reviewer: "review-logic", problem })).toBe(true);
+    }
+    for (const problem of ["off by one in the loop", "the execution id is not unique", "a memory leak in the cache", "keryx shell prints the wrong path"]) {
+      expect(isSecurityFinding({ id: "L9", reviewer: "review-logic", problem })).toBe(false);
+    }
+  });
+});
+
+describe("fix slice content roles (flow 458 M3, restored in 460 round 2)", () => {
+  test("a fix whose own lines spawn a process or build a git argv brings review-security-code; plain fix lines bring nothing", () => {
+    expect(fixContentRoles(region("src/a/a.ts", 10, 10, "+  return Bun.spawn(cmd);"))).toContain("review-security-code");
+    expect(fixContentRoles(region("src/a/a.ts", 10, 10, "+  await runGit(cwd, [\"diff\", ref]);"))).toContain("review-security-code");
+    expect(fixContentRoles(region("src/a/a.ts", 10, 10, "+  return total + 1;"))).toEqual([]);
+    // Content roles only, not the deep roster of the file: no backend, frontend or style reviewer.
+    const roles = fixContentRoles(region("src/a/a.ts", 10, 10, "+  return Bun.spawn(cmd);"));
+    expect(roles.some((role) => ["review-backend", "review-frontend", "review-style"].includes(role))).toBe(false);
+  });
 });
 
 describe("partitionRegionsByFix (flow 460 L6)", () => {
@@ -86,6 +106,22 @@ describe("partitionRegionsByFix (flow 460 L6)", () => {
     expect(other[0]!.endLine).toBe(16);
   });
 
+  test("each piece of a cut region says its context is truncated: the neighbour kept part of the window (LG-002)", () => {
+    const body = [" l8", " l9", "-old10", "+fix10", " l11", " l12", " l13", "+new14", " l15", " l16"].join("\n");
+    const { fix, other } = partitionRegionsByFix([scoped("src/a/a.ts", 8, body)], hunks);
+    expect(fix[0]!.contextTruncated).toBe(true);
+    expect(other[0]!.contextTruncated).toBe(true);
+    expect(partitionRegionsByFix([scoped("src/a/a.ts", 9, " l9\n+fix10\n l11")], hunks).fix[0]!.contextTruncated).toBe(false);
+  });
+
+  test("a large mixed region is labelled in linear time and every line lands in exactly one piece", () => {
+    const many = Array.from({ length: 20_000 }, (_, i) => (i % 2 === 0 ? `+n${i}` : ` c${i}`));
+    const body = [" l9", "+fix10", ...many].join("\n");
+    const { fix, other } = partitionRegionsByFix([scoped("src/a/a.ts", 9, body)], hunks);
+    expect([...fix, ...other].map((piece) => piece.text).join("\n")).toBe(body);
+    expect(fix).toHaveLength(1);
+  });
+
   test("a region of only fix lines, or only new lines, is kept whole; another file's change is new", () => {
     const onlyFix = scoped("src/a/a.ts", 9, " l9\n+fix10\n l11");
     const onlyNew = scoped("src/a/a.ts", 20, " l20\n+new21");
@@ -96,6 +132,13 @@ describe("partitionRegionsByFix (flow 460 L6)", () => {
   test("a pure deletion right after a fix hunk's line counts as in it (git records it at the line before)", () => {
     const deletion = scoped("src/a/a.ts", 10, " l10\n-gone");
     expect(partitionRegionsByFix([deletion], hunks).fix).toEqual([deletion]);
+  });
+
+  test("a deletion one line past the hunk, or before its start, is new (TP-006): the tolerance is one line, on one side", () => {
+    const past = scoped("src/a/a.ts", 11, " l11\n-gone");
+    expect(partitionRegionsByFix([past], hunks)).toEqual({ fix: [], other: [past] });
+    const before = scoped("src/a/a.ts", 8, " l8\n-gone\n l9");
+    expect(partitionRegionsByFix([before], hunks)).toEqual({ fix: [], other: [before] });
   });
 });
 
@@ -122,6 +165,13 @@ describe("classifyDeltaSlices", () => {
     risk: { score: 0.1, why: [] },
     text,
     ...extra,
+  });
+
+  test("a fix slice whose own line spawns a process gets review-security-code although no finding it answers is a security one (458 M3)", () => {
+    const [fix] = classifyDeltaSlices([entry("slice-01", ["src/a/a.ts"], region("src/a/a.ts", 10, 10, "+  return Bun.spawn(cmd);"))], round({ fixHunks: [{ file: "src/a/a.ts", startLine: 10, endLine: 10, findingIds: ["F2"] }] }), PRIOR);
+    expect(fix).toMatchObject({ kind: "fix", findingIds: ["F2"] });
+    expect(fix!.roles).toEqual(expect.arrayContaining(["review-architecture", "review-logic", "review-regression", "review-security-code"]));
+    expect(fix!.roles).not.toContain("review-style");
   });
 
   test("a slice whose changed lines all lie in fix hunks is fix with exactly the fix roster; every other slice is new and keeps its routing", () => {
@@ -224,7 +274,8 @@ describe("a #1045-shaped fix delta (flow 460 L6)", () => {
     const built = buildSlices({ source: "scoped-diff", regions: parts.fix, drops: [] }, { maxBytes: 150_000, waveBytes: 150_000 });
     const classified = classifyDeltaSlices(routeSlices(built.slices, { head: "h" }), deltaRound, prior33);
     expect(classified.every((s) => s.kind === "fix")).toBe(true);
-    for (const s of classified) expect(s.roles).toEqual(fixRosterRoles(s.findingIds ?? [], prior33));
+    // The fix roster united with the fix lines' own content roles (458 M3): never the deep round-1 roster.
+    for (const s of classified) expect(s.roles).toEqual([...new Set([...fixRosterRoles(s.findingIds ?? [], prior33), ...fixContentRoles(s.text)])].sort());
     // What round-1 routing would have given the same slices (the old union): wider than the fix roster.
     const contentRoles = new Set(routeSlices(built.slices, { head: "h" }).flatMap((s) => s.roles ?? []));
     expect(contentRoles.has("review-backend") || contentRoles.has("review-frontend")).toBe(true);
@@ -250,7 +301,7 @@ describe("routing check accepts fix rosters", () => {
   const contentRoles = routeSliceRegions("slice-01", parseScopedDiff(text), { changedFiles: ["src/a/a.ts"] }).roles;
   const FIX_ROSTER = ["review-architecture", "review-logic", "review-regression", "review-security-code"];
 
-  test("a backed fix slice is held to exactly the fix roster (flow 460 L6): its content's round-1 routing is not owed", () => {
+  test("a backed fix slice is held to the fix roster plus its content roles (flow 460 L6, 458 M3): the deep round-1 roster is not owed", () => {
     expect(expectedFixRoles({ findingIds: ["F1", "F2"] }, context, text)).toEqual(FIX_ROSTER);
     // The content would route more roles as a round-1 slice; a fix slice needs none of them.
     expect(contentRoles.some((role) => !FIX_ROSTER.includes(role))).toBe(true);
@@ -258,6 +309,15 @@ describe("routing check accepts fix rosters", () => {
     expect(narrowedSlices({ slices: [fixOnly] }, read, context).narrowed).toEqual([]);
     // A fix slice is read deep.
     expect(narrowedSlices({ slices: [{ ...fixOnly, depth: "light" }] }, read, context).narrowed).toEqual([{ id: "slice-01", missingRoles: [], depth: { recorded: "light", needed: "deep" } }]);
+  });
+
+  test("a fix slice whose content routes review-security-code is narrowed without it, although its findings are not security ones", () => {
+    const spawnText = region("src/a/a.ts", 10, 10, "+  return Bun.spawn(cmd);");
+    const ctx = { round: round({ fixHunks: [{ file: "src/a/a.ts", startLine: 10, endLine: 10, findingIds: ["F2"] }] }), prior: PRIOR };
+    const entryOf = (roles: string[]): SliceEntry => ({ id: "slice-01", path: "slice-01.diff", bytes: 100, files: ["src/a/a.ts"], domain: "src/a", split: "domain", kind: "fix", findingIds: ["F2"], roles, depth: "deep" });
+    expect(expectedFixRoles({ findingIds: ["F2"] }, ctx, spawnText)).toContain("review-security-code");
+    expect(narrowedSlices({ slices: [entryOf(["review-architecture", "review-logic", "review-regression"])] }, () => spawnText, ctx).narrowed).toEqual([{ id: "slice-01", missingRoles: ["review-security-code"] }]);
+    expect(narrowedSlices({ slices: [entryOf(expectedFixRoles({ findingIds: ["F2"] }, ctx, spawnText))] }, () => spawnText, ctx).narrowed).toEqual([]);
   });
 
   test("a fix slice missing an author of its finding is narrowed, also when the manifest dropped that finding's id", () => {
@@ -492,7 +552,8 @@ describe("review slice in a delta round", () => {
     const { slices } = await manifestOf(pkg);
     const fixes = slices.filter((s) => s.kind === "fix");
     expect(fixes).toHaveLength(1);
-    // Exactly the fix roster: logic, regression, F2's author. No round-1 content role rides along.
+    // The fix roster: logic, regression, F2's author; the fix line's own content (an export) routes architecture, F2's
+    // author already. The deep round-1 roster of the file does not ride along.
     expect(fixes[0]).toMatchObject({ files: ["src/a/a.ts"], findingIds: ["F2"], depth: "deep", roles: ["review-architecture", "review-logic", "review-regression"] });
     const fixText = await readFile(path.join(pkg, "slices", fixes[0]!.path), "utf8");
     expect(fixText).toContain("a9 = 99");
@@ -526,14 +587,21 @@ describe("review slice in a delta round", () => {
     const fullDir = path.join(repo, "full-slices");
     await reviewCommand(["slice", "--out", fullDir, "--ref", base, "--max-bytes", "100000", "--head", fixed]);
     const full = JSON.parse(await readFile(path.join(fullDir, "manifest.json"), "utf8")) as SliceManifest;
-    // Diff lines read, without section headers: the fix/new cut (flow 460 L6) may split one window into two sections,
-    // which repeats a `--- path` / `@@ a,b @@` header but never a line of the diff.
-    const bodyLines = async (dir: string, m: SliceManifest): Promise<number> => {
-      let count = 0;
-      for (const s of m.slices) count += (await readFile(path.join(dir, s.path), "utf8")).split("\n").filter((line) => line !== "" && !/^--- /.test(line) && !/^@@ \d+,\d+ @@$/.test(line)).length;
-      return count;
+    // Bytes of the diff lines read, without section headers: the fix/new cut (flow 460 L6) may split one window into two
+    // sections, which repeats a header but never a line of the diff. A header is a `--- path` line directly followed by
+    // its `@@ a,b @@` line (the scoped format's section structure), so a removed `-- comment` line still counts.
+    const bodyBytes = async (dir: string, m: SliceManifest): Promise<number> => {
+      let bytes = 0;
+      for (const s of m.slices) {
+        const lines = (await readFile(path.join(dir, s.path), "utf8")).split("\n");
+        lines.forEach((line, index) => {
+          const header = /^@@ \d+,\d+ @@$/.test(line) || (line.startsWith("--- ") && /^@@ \d+,\d+ @@$/.test(lines[index + 1] ?? ""));
+          if (line !== "" && !header) bytes += Buffer.byteLength(line) + 1;
+        });
+      }
+      return bytes;
     };
-    expect(await bodyLines(path.join(pkg, "slices"), delta)).toBeLessThanOrEqual(await bodyLines(fullDir, full));
+    expect(await bodyBytes(path.join(pkg, "slices"), delta)).toBeLessThanOrEqual(await bodyBytes(fullDir, full));
     expect(delta.slices.some((slice) => slice.kind === "fix")).toBe(true);
 
     // The ordinary case: a small fix on top of round 1 is cut from prev..head, smaller than the whole branch.
