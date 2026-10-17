@@ -31,6 +31,7 @@ the one that describes shipped behaviour.
 ## Guides — organised by what you are trying to do
 
 - [Give an agent context about my repository](guides/give-an-agent-context.md)
+- [Make agents follow my project's own rules](guides/apply-project-rules.md)
 - [Give a subagent a name instead of a paragraph](guides/agent-catalog.md)
 - [Use Shared Agent Context (workspaces, FWK, proposals)](guides/shared-agent-context.md)
 - [Choose an approval mode: ask, trust, auto](guides/permission-modes.md)
