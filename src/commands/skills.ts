@@ -66,7 +66,7 @@ import {
   runSkillsUpdateCommand,
 } from "../gdskills/import-skills";
 import { runSkillsImportRulesCommand } from "../gdskills/import-rules";
-import { checkResolvedContext, formatResolvedReport, readResolvedFile, RESOLVED_SCHEMAS } from "../gdskills/resolved-context-check";
+import { checkResolvedContext, formatResolvedHeadline, formatResolvedReport, readResolvedFile, RESOLVED_SCHEMAS } from "../gdskills/resolved-context-check";
 import { runResolveContextCommand } from "../gdskills/resolve-context-command";
 import { runSkillsRemoveRuleCommand } from "../gdskills/remove-rules";
 import { runSkillsUpdateRulesCommand } from "../gdskills/update-rules";
@@ -1607,7 +1607,7 @@ async function contractsCommand(args: string[]): Promise<void> {
           const sink = report.blocking ? console.error : console.log;
           if (lines.length === 0) console.log(`project context: every must_read entry cited, nothing drifted (enforcement ${report.enforcement})`);
           else {
-            sink(`project context: ${report.misses.length} miss(es), ${report.drifted.length} drifted (enforcement ${report.enforcement})`);
+            sink(formatResolvedHeadline(report));
             for (const line of lines) sink(line);
           }
           if (report.blocking) process.exitCode = 1;

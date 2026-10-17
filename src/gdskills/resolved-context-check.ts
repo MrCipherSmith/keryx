@@ -96,6 +96,10 @@ export async function checkResolvedContext(input: {
   };
 }
 
+export function formatResolvedHeadline(report: ResolvedContextReport): string {
+  return `project context: ${report.misses.length} miss(es), ${report.drifted.length} drifted (enforcement ${report.enforcement})`;
+}
+
 export function formatResolvedReport(report: ResolvedContextReport): string[] {
   const lines: string[] = [];
   for (const miss of report.misses) {
