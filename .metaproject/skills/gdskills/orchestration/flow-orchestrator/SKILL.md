@@ -143,9 +143,8 @@ it already tried. The flow package does.
         or close the task (`keryx flow task done <id> <Tn>`). Re-dispatching
         over an unresolved attempt is how the same work gets done twice.
 
-      `keryx flow next` also lists every OTHER not-done task with an unresolved
-      attempt, under `unresolved`: parallel dispatches that never reported back.
-      Resolve them the same way before assuming the flow is idle.
+      `keryx flow next` also lists, under `unresolved`, every OTHER not-done task with an
+      unresolved attempt (parallel dispatches that never reported back); resolve them the same way.
 
    5. Before dispatching a worker for that task, record the attempt:
 
@@ -164,10 +163,8 @@ it already tried. The flow package does.
       keryx review loop --flow <id> --task <Tn>
       ```
 
-      A non-zero exit means the same finding has recurred or two consecutive
-      rounds produced identical output. Go straight to the re-planning step.
-      Do not spend the remaining attempts on the same approach because the
-      budget has some left — that is the failure this check exists to catch.
+      A non-zero exit means the same finding recurred or two consecutive rounds
+      produced identical output: go straight to the re-planning step, whatever budget is left.
    8. If the flow is `blocked`, read the blocking reason from `journal.md`,
       resolve or escalate it, then `keryx flow unblock <id>`.
 4. If the user wants a new flow, continue at 0.1.
@@ -323,6 +320,8 @@ auto-commit off (task-implementer's `automation.auto_commit: false`). A
 `subagent-dispatch` has no `automation` field, so the setting travels as the
 explicit constraint below — never as the worker's default, which is `true`.
 
+Before every `test`, `implement` and fix dispatch, run `keryx skills resolve-context --for test|implement --files <the task's target files, comma-joined> --task-type <type> --out .metaproject/flows/<dir>/resolved/<Tn>.<for>.json` (a fix dispatch re-resolves on the new head) and pass that path as `resolved_context_file`: a `context_refs` entry plus the constraint below. Before accepting the reply, run `keryx skills contracts validate <result.json> --schema task-implementer-output|tests-creator-output --resolved <that file>`; under `gdskills.projectContext.enforcement: block` a miss is a refusal, under `warn` journal it.
+
 Dispatch payload, bound to the flow (map `target_skill` from the routing table):
 
 ```json
@@ -337,12 +336,14 @@ Dispatch payload, bound to the flow (map `target_skill` from the routing table):
   "context_refs": [
     { "path": ".metaproject/flows/<dir>/context.md", "kind": "context", "exists": true },
     { "path": ".metaproject/flows/<dir>/plan.md", "kind": "plan", "exists": true },
-    { "path": ".metaproject/flows/<dir>/acceptance-criteria.md", "kind": "custom", "exists": true }
+    { "path": ".metaproject/flows/<dir>/acceptance-criteria.md", "kind": "custom", "exists": true },
+    { "path": ".metaproject/flows/<dir>/resolved/<Tn>.<for>.json", "kind": "custom", "exists": true }
   ],
   "files_to_read": ["<only files gdgraph/gdctx narrowed to>"],
   "constraints": [
     "Never edit flow.json.",
     "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/<dir>/resolved/<Tn>.<for>.json — read its must_read entries and cite each in project_context_applied.",
     "Return a subagent-result; first line must be STATUS:.",
     "Follow rules/core/git-concurrency.mdc: never git stash; never git add -A.",
     "Root: <worktree_path>. Before the first write run `cd <worktree_path> && pwd && git branch --show-current`; run every git command as `git -C <worktree_path>`.",
@@ -359,9 +360,8 @@ Dispatch payload, bound to the flow (map `target_skill` from the routing table):
 `DONE_WITH_CONCERNS`), then mark task progress. It commits exactly those
 `changed_files` from the worker's `subagent-result` that git still shows as
 changed, never `-A`/`--all`/`.` (`rules/core/git-concurrency.mdc` rule 4 and
-"Reporting Back"). It skips cleanly when none remain. That is expected, not an
-error, for a worker that reported no files (review, context, docs) or that
-committed on its own (tests-creator's stubs):
+"Reporting Back"). It skips cleanly when none remain (expected for a worker that
+reported no files or committed on its own, like tests-creator's stubs):
 
 ```bash
 set -- <each changed_files path, single-quoted: 'src/a.ts' 'docs/b c.md'>   # may be none; an unquoted path with a space splits and is skipped

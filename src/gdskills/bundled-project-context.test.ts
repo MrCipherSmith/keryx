@@ -82,8 +82,64 @@ describe("AC14: both skills call the resolver and write the field", () => {
   }
 });
 
+const JOB_ORCHESTRATOR = "orchestration/job-orchestrator/SKILL.md";
+const JOB_PROMPT = "orchestration/job-orchestrator/orchestrator-prompt.md";
+const FLOW_ORCHESTRATOR = "orchestration/flow-orchestrator/SKILL.md";
+
+describe("AC15: orchestrators hand the resolved file to every code-writing dispatch", () => {
+  for (const { tree, text } of trees(JOB_ORCHESTRATOR)) {
+    test(`${tree}: job-orchestrator Step A and Step B resolve, dispatch and validate`, () => {
+      const stepA = text.slice(text.indexOf("# Step A — tests-creator"), text.indexOf("# Step B — task-implementer"));
+      expect(stepA).toContain("keryx skills resolve-context --for test");
+      expect(stepA).toContain("resolved_context_file");
+      expect(stepA).toContain("--schema tests-creator-output --resolved");
+      const stepB = text.slice(text.indexOf("# Step B — task-implementer"));
+      expect(stepB.slice(0, 1200)).toContain("keryx skills resolve-context --for implement");
+      expect(stepB.slice(0, 1200)).toContain("resolved_context_file");
+      expect(stepB.slice(0, 1200)).toContain("--schema task-implementer-output --resolved");
+    });
+
+    test(`${tree}: both dispatch templates carry resolved_context_file`, () => {
+      const lines = text.split("\n").filter((l) => l.includes("- resolved_context_file:"));
+      expect(lines.some((l) => l.includes(".test.resolved.json"))).toBe(true);
+      expect(lines.some((l) => l.includes(".implement.resolved.json"))).toBe(true);
+    });
+
+    test(`${tree}: the fix loop re-resolves and validates`, () => {
+      expect(text).toContain("Re-run `keryx skills resolve-context --for implement` on the fix files");
+      expect(text).toContain("`contracts validate --resolved` on the result");
+    });
+  }
+
+  for (const { tree, text } of trees(JOB_PROMPT)) {
+    test(`${tree}: the wave checklist resolves and validates both dispatches`, () => {
+      const waves = text.slice(text.indexOf("### Step: TESTS-CREATOR + IMPLEMENT"), text.indexOf("### Step: VERIFY"));
+      expect(waves).toContain("resolve-context --for test");
+      expect(waves).toContain("resolve-context --for implement");
+      expect(waves).toContain("--schema tests-creator-output --resolved");
+      expect(waves).toContain("--schema task-implementer-output --resolved");
+      const fix = text.slice(text.indexOf("### Step: FIX"), text.indexOf("### Step: REPORT"));
+      expect(fix).toContain("resolved_context_file");
+    });
+  }
+
+  for (const { tree, text } of trees(FLOW_ORCHESTRATOR)) {
+    test(`${tree}: flow-orchestrator resolves before test, implement and fix dispatches and validates the reply`, () => {
+      const flat = text.replace(/\s+/g, " ");
+      expect(flat).toContain("Before every `test`, `implement` and fix dispatch, run `keryx skills resolve-context");
+      expect(flat).toContain("pass that path as `resolved_context_file`");
+      expect(flat).toContain("--schema task-implementer-output|tests-creator-output --resolved");
+    });
+
+    test(`${tree}: the dispatch payload lists the resolved file and the constraint`, () => {
+      expect(text).toContain('"path": ".metaproject/flows/<dir>/resolved/<Tn>.<for>.json"');
+      expect(text).toContain("resolved_context_file: .metaproject/flows/<dir>/resolved/<Tn>.<for>.json");
+    });
+  }
+});
+
 describe("installed copies", () => {
-  for (const relative of [IMPLEMENTER, TESTS_CREATOR]) {
+  for (const relative of [IMPLEMENTER, TESTS_CREATOR, JOB_ORCHESTRATOR, JOB_PROMPT, FLOW_ORCHESTRATOR]) {
     test(`${relative}: the installed copy is byte-identical to the bundled skill`, () => {
       const [bundled, installed] = trees(relative);
       expect(installed!.text).toBe(bundled!.text);

@@ -746,8 +746,10 @@ FOR wave_index, wave_tasks in enumerate(WAVES):
 
   keryx job step <job-name> tests-creator --status in-progress      # wave 1 only
   # Step A — tests-creator (MANDATORY, run first)
-  Dispatch one tests-creator per task in this wave, in a SINGLE turn (parallel).
-  Wait for ALL of them. Collect TEST_SPECS[task_id] from each response.
+  keryx skills resolve-context --for test --files <task target_files, comma-joined> --task-type <task_type> --out <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
+  Dispatch one tests-creator per task in this wave, in a SINGLE turn (parallel), each carrying resolved_context_file.
+  Wait for ALL of them. Collect TEST_SPECS[task_id] from each response, then per result:
+    keryx skills contracts validate <task_id>-tests.json --schema tests-creator-output --resolved <that resolved file>
   keryx job step <job-name> tests-creator --status completed         # last wave only
 
   # Parallel safety check, before Step B:
@@ -755,9 +757,10 @@ FOR wave_index, wave_tasks in enumerate(WAVES):
 
   keryx job step <job-name> implement --status in-progress           # wave 1 only
   # Step B — task-implementer (after all test stubs are committed)
+  keryx skills resolve-context --for implement ... --out <JOBS_ROOT>/<job-name>/results/<task_id>.implement.resolved.json
   Dispatch one task-implementer per task in this wave, in a SINGLE turn (parallel),
-  each carrying test_case_specs: TEST_SPECS[task_id].
-  Wait for ALL of them.
+  each carrying test_case_specs: TEST_SPECS[task_id] and resolved_context_file.
+  Wait for ALL of them; per result: keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <that resolved file>
 
   Read each result's STATUS line:
     DONE / DONE_WITH_CONCERNS → accept it (record every concern)
@@ -789,6 +792,7 @@ Task({
     - package_manager:  <pm>
     - run_command:      <runner>
     - context_path:     <JOBS_ROOT>/<job-name>/ai/context.md
+    - resolved_context_file: <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
 
     ## Required response
     Begin with STATUS: <STATUS>. Return the test_case_specs for this task and
@@ -819,6 +823,7 @@ Task({
     - issue_number:     <N>
     - job_name:         <job-name>
     - context_path:     <JOBS_ROOT>/<job-name>/ai/context.md
+    - resolved_context_file: <JOBS_ROOT>/<job-name>/results/<task_id>.implement.resolved.json
 
     ## Automation (task-implementer input `automation`)
     - auto_commit:      <implementer_settings.auto_commit>   # false: do not commit; report exact paths
@@ -1114,10 +1119,8 @@ keryx review tier --scope <scope> --diff-lines <n> --findings <n> [--security] [
 ```
 
 Paste the `model` block it prints into that dispatch. `model_strategy: "current"` is
-gone: it meant "do not switch models", which is exactly the behaviour this command
-replaced. The command names no model — it ranks what the provider reports at runtime
-and, when it cannot rank anything, prints `inherit: true`, which means the dispatch
-runs on the session model. That is a correct answer, not a failure.
+gone. The command names no model: it ranks what the provider reports at runtime and,
+when it cannot, prints `inherit: true` — the dispatch runs on the session model, a correct answer.
 
 **Step 6 — run `review-orchestrator` inline, in this main session.** Load
 `skills/gdskills/review/review-orchestrator/SKILL.md` yourself; do **not** wrap it in a
@@ -1159,10 +1162,9 @@ keryx review ingest --report <path/to/review-report.md> --ref <feature-branch> \
   --spent <usd-so-far> --outstanding <subagents in flight>
 ```
 
-An unrecognised option is **refused, not ignored** — a silently dropped flag writes
-nothing and still reports success. `--refuted` carries findings this round raised and
-then dismissed; without it the package keeps only the survivors of an unlogged triage.
-A first ingest without `--premises` holds nothing; a re-ingest carries earlier holds.
+An unrecognised option is **refused, not ignored**. `--refuted` carries findings this round
+raised and then dismissed; without it the package keeps only the survivors of an unlogged
+triage. A first ingest without `--premises` holds nothing; a re-ingest carries earlier holds.
 
 **Findings are the canonical shape.** One vocabulary, everywhere in this skill:
 
@@ -1278,15 +1280,11 @@ cumulative ever-correct is **0.847**
 ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Other agent tools
 hardcode the same bound (`max_reflections = 3`).
 
-The bound is a ceiling, not a target. Repetition ends the loop earlier and
-**regardless of remaining iterations** — a counter cannot tell "converging
-slowly" from "stuck", and an agent emitting the identical failing output three
-times spends the whole budget before anything notices.
+The bound is a ceiling, not a target. Repetition ends the loop earlier, **regardless of
+remaining iterations**: a counter cannot tell "converging slowly" from "stuck".
 
-**A finding leaves this loop by being dispositioned, never by being absent.** The
-previous version of this section recomputed "unresolved" as whatever the next round
-still reported — so a finding the next reviewer simply did not look at was recorded as
-fixed. That is absence-as-evidence, and the completion gate refuses it.
+**A finding leaves this loop by being dispositioned, never by being absent.** One the next
+reviewer did not look at is not fixed: absence-as-evidence, which the completion gate refuses.
 
 ```
 UNRESOLVED_FINDINGS = OPEN from step 2.6          # never a HELD finding (Classify, 2.6.1)
@@ -1306,9 +1304,10 @@ FOR iteration in [1, 2, 3]:
      previously_unresolved: <findings that were in UNRESOLVED_FINDINGS last iteration but still present>
          → Prefix: "These specific findings were NOT fixed in iteration <N-1>: [list]"
 
-  3. Launch task-implementer with the fix prompt (subagent_type: "general-purpose"),
+  3. Re-run `keryx skills resolve-context --for implement` on the fix files (fresh `--out`), then launch task-implementer
+     with the fix prompt and `resolved_context_file` (subagent_type: "general-purpose"),
      on the model `keryx review tier --fix-attempt <N> --findings <n> --json` computes
-  4. Run the sanity check (step 2.5.2 logic) — verify commits were made
+  4. Run the sanity check (step 2.5.2 logic) — verify commits were made — and `contracts validate --resolved` on the result
   5. Run the next managed round — the FULL 2.6.1 sequence, not a bare re-dispatch:
        keryx review budget  --spent <usd> --outstanding <n>
        keryx review plan    --target branch --ref <feature-branch> --head <new-head>
