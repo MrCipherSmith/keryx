@@ -653,9 +653,10 @@ filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=
 same numbers `scope.md` shows a person, in a form something else can check.
 `not-measured` is not `0`: it means that stage did not run, and the reason is
 printed underneath. `status` exits **1** when the numbers do not add up (`total`
-minus the measured finding-stage drops and `merged_duplicates` must equal `retained`) or when a count is
-absent with no reason recorded, so a stage that starts dropping findings without
-counting them is caught on the next status call rather than a release later.
+minus the measured finding-stage drops and `merged_duplicates` must equal
+`retained`) or when a count is absent with no reason recorded, so a stage that
+starts dropping findings without counting them is caught on the next status call
+rather than a release later.
 
 `dropped_prefilter` counts diff material — whole files and change blocks removed
 before anyone read them — so it is deliberately not summed with the rest.
@@ -962,9 +963,10 @@ filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=
 same numbers `scope.md` shows a person, in a form something else can check.
 `not-measured` is not `0`: it means that stage did not run, and the reason is
 printed underneath. `status` exits **1** when the numbers do not add up (`total`
-minus the measured finding-stage drops and `merged_duplicates` must equal `retained`) or when a count is
-absent with no reason recorded, so a stage that starts dropping findings without
-counting them is caught on the next status call rather than a release later.
+minus the measured finding-stage drops and `merged_duplicates` must equal
+`retained`) or when a count is absent with no reason recorded, so a stage that
+starts dropping findings without counting them is caught on the next status call
+rather than a release later.
 
 `dropped_prefilter` counts diff material — whole files and change blocks removed
 before anyone read them — so it is deliberately not summed with the rest.

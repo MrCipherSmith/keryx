@@ -43,12 +43,14 @@ function cutRegions(from: SliceSource, regions: ScopedRegion[], sizes: SliceSize
 export function deltaRoundCut(input: { source: SliceSource; delta: RoundRecord; prior: readonly PriorFinding[]; sizes: SliceSizes; routing: RoutingOptions; secondLook: SecondLookSource | undefined }): RoundCut {
   const { source, delta, prior, sizes, routing } = input;
   const routeAsDelta = (slices: BuiltSlice[]): BuiltSlice[] => classifyDeltaSlices(routeSlices(slices, routing), delta, prior);
+  /** A second-look slice is routed by the head alone, then tagged with the round it answers. */
+  const routeAsSecondLook = (slices: BuiltSlice[]): BuiltSlice[] => tagSecondLookSlices(routeSlices(slices, { head: routing.head }), delta.round - 1);
   const ledgers = ledgerOmissions(source.regions);
   const parts = partitionRegionsByFix(withoutOmitted(source.regions, ledgers), delta.fixHunks);
   const built = cutRegions(source, parts.other, sizes, true);
   const fixSlices = parts.fix.length === 0 ? [] : routeAsDelta(cutRegions(source, parts.fix, sizes, false).slices);
   const classified = routeAsDelta(built.slices);
-  const look = input.secondLook === undefined ? undefined : secondLookCut(input.secondLook, delta, sizes, routing, routeAsDelta);
+  const look = input.secondLook === undefined ? undefined : secondLookCut(input.secondLook, sizes, { routeAsDelta, routeAsSecondLook });
   const ordered = [...fixSlices, ...classified, ...(look?.outside ?? []), ...(look?.second ?? [])];
   const slices = ordered.length === classified.length ? classified : renumberSlices(ordered);
   const omissions = [...built.manifest.omissions, ...ledgers, ...(look?.omissions ?? [])].filter((omission, index, all) => all.findIndex((known) => known.path === omission.path) === index);
@@ -59,12 +61,16 @@ export function deltaRoundCut(input: { source: SliceSource; delta: RoundRecord; 
  * Second look (flow 460): ledgers are judged over the second-look and outside regions together, then each side is cut
  * apart, so a second-look slice holds only second-look lines (what the routing check backs) and the rest is new.
  */
-function secondLookCut(look: SecondLookSource, delta: RoundRecord, sizes: SliceSizes, routing: RoutingOptions, routeAsDelta: (slices: BuiltSlice[]) => BuiltSlice[]): { second: BuiltSlice[]; outside: BuiltSlice[]; omissions: SliceOmission[] } {
+function secondLookCut(
+  look: SecondLookSource,
+  sizes: SliceSizes,
+  route: { routeAsDelta: (slices: BuiltSlice[]) => BuiltSlice[]; routeAsSecondLook: (slices: BuiltSlice[]) => BuiltSlice[] },
+): { second: BuiltSlice[]; outside: BuiltSlice[]; omissions: SliceOmission[] } {
   const ledgers = ledgerOmissions([...look.regions, ...look.outside]);
   const secondBuilt = cutRegions(look, withoutOmitted(look.regions, ledgers), sizes, true);
   const outsideRegions = withoutOmitted(look.outside, ledgers);
-  const outside = outsideRegions.length === 0 ? [] : routeAsDelta(cutRegions(look, outsideRegions, sizes, false).slices);
-  const second = tagSecondLookSlices(routeSlices(secondBuilt.slices, { head: routing.head }), delta.round - 1);
+  const outside = outsideRegions.length === 0 ? [] : route.routeAsDelta(cutRegions(look, outsideRegions, sizes, false).slices);
+  const second = route.routeAsSecondLook(secondBuilt.slices);
   return { second, outside, omissions: [...ledgers, ...secondBuilt.manifest.omissions] };
 }
 

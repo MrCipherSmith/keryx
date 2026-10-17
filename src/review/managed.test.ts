@@ -1,5 +1,5 @@
 import { READY_DISPATCH } from "./dispatch.test-helpers";
-import { COVERAGE_MD_MARK } from "./readiness";
+import { COVERAGE_MD_MARK } from "./coverage-md";
 import { afterEach, describe, test, expect } from "bun:test";
 import { appendFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";

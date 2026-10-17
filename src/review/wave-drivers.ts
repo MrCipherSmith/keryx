@@ -5,7 +5,7 @@ import { type DriverFile, readDrivers } from "./driver-read";
 import { writeFileAtomic } from "../lib/fs";
 import { packageHasBlastRadius, packageHasPrContext, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers } from "./coverage";
 import { manifestRosterRoles } from "./round-split";
-import { type SliceManifest } from "./slice";
+import type { SliceManifest } from "./slice";
 import { roleDispatchWaves } from "./estimate";
 
 /** Flow 458 AC12: the reviewers of a package and the per-wave driver files `review slice --package` writes for them. */

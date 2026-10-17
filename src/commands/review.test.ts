@@ -116,7 +116,7 @@ async function ingest(reviewId: string, extra: string[] = []): Promise<string> {
     "--research",
     "research.json",
     ...extra,
-  ]);
+  ], { prBase: async () => undefined });
   return path.join(ROOT, ".metaproject", "reviews", reviewId);
 }
 

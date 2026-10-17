@@ -72,6 +72,26 @@ async function inputs(overrides: Partial<LedgerInputs> = {}): Promise<LedgerInpu
 const blockersOf = (result: ReturnType<typeof buildLedger>, canonical: Array<Record<string, unknown>> = []) =>
   ledgerBlockers(result.ledger, canonical, { root, files: FILES });
 
+/**
+ * Asserts `work(size)` grows about linearly with `size`: quadrupling the input may cost a few times more (a generous 12x for
+ * noise), never the 16x of a quadratic pattern. Best of three runs per size; the slack absorbs a loaded machine.
+ */
+function expectLinearTime(work: (size: number) => unknown): void {
+  const best = (size: number): number => {
+    let fastest = Infinity;
+    for (let run = 0; run < 3; run += 1) {
+      const start = performance.now();
+      work(size);
+      fastest = Math.min(fastest, performance.now() - start);
+    }
+    return fastest;
+  };
+  best(10_000);
+  const small = best(50_000);
+  const large = best(200_000);
+  expect(large).toBeLessThan(small * 12 + 25);
+}
+
 describe("parseReviewResult", () => {
   test("takes the last fenced block that is a result: a REVIEW_RESULT fence needs a status, a json fence a reviewer or findings", () => {
     const labelled = 'STATUS: DONE\n\n```REVIEW_RESULT\n{"status":"DONE","reviewer":"review-logic","findings":[]}\n```\n';
@@ -1111,22 +1131,19 @@ describe("token spend per dispatch (flow 460, AC7)", () => {
     expect(usageTotals(raws.map(rawUsage))).toMatchObject({ dispatches: 3, known: 2, unknown: 1, tokens_in: 940, tokens_out: 90 });
   });
 
-  test("a usage line is checked by hand, not by a backtracking pattern: a long line of braces states nothing and is never parsed", () => {
-    const hostile = `REVIEW_RESULT {"reviewer":"r","status":"DONE"}\nKERYX_USAGE {${"}".repeat(200_000)} trailing\n`;
-    // Deterministic, not a clock: the over-long line is refused by its length before any JSON parse, and the line pattern
-    // runs once per line that holds the marker, never again over the text.
+  test("a usage line is checked by hand, not by a backtracking pattern: a long line of braces states nothing, is never parsed and costs time linear in its size", () => {
+    const hostile = (size: number): string => `REVIEW_RESULT {"reviewer":"r","status":"DONE"}\nKERYX_USAGE {${"}".repeat(size)} trailing\n`;
     const parse = spyOn(JSON, "parse");
-    const exec = spyOn(RegExp.prototype, "exec");
     try {
-      const { body, usage } = splitUsage(hostile);
+      const { body, usage } = splitUsage(hostile(200_000));
       expect(usage).toBeUndefined();
       expect(body).not.toContain("KERYX_USAGE");
+      // The over-long line is refused by its length before any JSON parse.
       expect(parse).not.toHaveBeenCalled();
-      expect(exec.mock.calls.filter(([input]) => String(input).length > 1_000)).toHaveLength(1);
     } finally {
       parse.mockRestore();
-      exec.mockRestore();
     }
+    expectLinearTime((size) => splitUsage(hostile(size)));
   });
 
   test("a file saved with CRLF line endings states its usage, and its usage lines leave the body (HL-R3-001)", () => {
@@ -1179,17 +1196,10 @@ describe("token spend per dispatch (flow 460, AC7)", () => {
     expect(splitUsage(`my review\n\n${line(3, 1)}\n\n`).usage).toEqual({ tokens_in: 3, tokens_out: 1, model: "anthropic/claude-sonnet" });
   });
 
-  test("a long run of whitespace in a reply is never scanned by a pattern: only the lines that hold the marker are", () => {
-    const reply = `a${" ".repeat(200_000)}b\n${line(1, 1)}`;
-    // Deterministic, not a clock: a pattern trim (`/\s+$/`) backtracks quadratically on this line; the reply text reaches
-    // no pattern at all (every String replace/match/test goes through RegExp.prototype.exec).
-    const exec = spyOn(RegExp.prototype, "exec");
-    try {
-      expect(splitUsage(reply).body).toBe(`a${" ".repeat(200_000)}b`);
-      expect(exec.mock.calls.filter(([input]) => String(input).length > 1_000)).toEqual([]);
-    } finally {
-      exec.mockRestore();
-    }
+  test("a long run of whitespace in a reply costs time linear in its size (a pattern trim backtracks quadratically on it)", () => {
+    const reply = (size: number): string => `a${" ".repeat(size)}b\n${line(1, 1)}`;
+    expect(splitUsage(reply(200_000)).body).toBe(`a${" ".repeat(200_000)}b`);
+    expectLinearTime((size) => splitUsage(reply(size)));
   });
 });
 

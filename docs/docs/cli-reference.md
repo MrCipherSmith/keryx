@@ -4848,6 +4848,15 @@ A package is bound to a pull request when it targets one or when its `--ref` is 
 
 `review complete` on a package bound to a pull request refuses a merged PR or a moved head unless the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed completes with a warning. `review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA; a quote absent from that file, or in it more than once, is kept with no line and flagged `quote_unlocated` (readiness item `quotes-located` lists it until it has a disposition), and only a quote it could not check at all (commit not in the checkout, no file named, or a size bound) refuses the round; ingest also adds a `citation not found: <path>` line to a dismissal whose rebuttal cites a rule or document that is not in the tree. A research obligation may close as `narrowed` with a `remains` text; without it, it stays open.
 
+`review start|attach|ingest` of a pull request target also record the base the depth gate measures. Without `--base`, the
+pull request's own base branch is read with `gh pr view` and stored as `target.base` (`origin/<branch>`; nothing is
+recorded when `gh` is missing, signed out, offline or names something that is not a branch). With `--base`, that value is
+`target.base` and the pull request's own base is kept beside it as `target.prBase` when it differs. The light recheck
+measures the widest of the recorded base, `target.prBase` and the default base, so a `--base` cannot narrow the diff.
+A small pull request into a non-default branch (a stacked PR, a release-branch backport) therefore never reads as a light
+round on its own base: the default-base diff, which carries everything the parent branch holds, is measured too and the
+wider one counts. `KERYX_REVIEW_PR_BASE=off` skips the `gh` read.
+
 | Subcommand | Description |
 |---|---|
 | `attach` | Create a managed package linked to an existing Task Manager flow. Like `start`, it marks the package active (`.metaproject/data/review-active/active-review.json`, not committed) so keryx writes `tool-calls/orchestrator.jsonl` itself; `review complete` removes the pointer when it closes the package. |
@@ -5555,15 +5564,14 @@ writes to the same file, every earlier dispatch's usage is kept as a `KERYX_USAG
 line and counted as its own dispatch. A dispatch that did not finish (stopped, timed out, refused
 for load, failed, or empty) is saved with its line marked `"incomplete":true`: it never replaces
 a complete earlier result, a later partial with text replaces an earlier partial, and one with no
-text keeps the earlier text. The lines are not part of the reply: they never make an
-empty reply non-empty. A reviewer that could not read a mandatory input says so in its result's
+text keeps the earlier text. The lines are not part of the reply: they never make an empty
+reply non-empty. A reviewer that could not read a mandatory input says so in its result's
 `inputs_unreadable` array (e.g. `["pr_context"]`), which makes the run incomplete; its prose is
-never read for this. `ledger build` records each
-run's `usage` (summed over its waves, with the count of waves that reported none, or
-`"unknown"`) and the round's total as `research.json` `usage`
-(`dispatches`, `known`, `unknown`, `tokens_in`, `tokens_out`); it prints `token spend: …`, and
-`review ingest --research` adds a `## Token spend` section to report.md. A dispatch without
-usage is counted unknown, never as 0.
+never read for this. `ledger build` records each run's `usage` (summed over its waves, with the
+count of waves that reported none, or `"unknown"`) and the round's total as `research.json`
+`usage` (`dispatches`, `known`, `unknown`, `tokens_in`, `tokens_out`); it prints
+`token spend: …`, and `review ingest --research` adds a `## Token spend` section to report.md.
+A dispatch without usage is counted unknown, never as 0.
 The rule file is taken from `definition`, or from a `skill_path` at the top level or
 inside a `payload` object, whichever names a file that exists; a reviewer with none
 stays a named gap (`no resolved rule file`). Only reviewer replies belong in `raw/`.

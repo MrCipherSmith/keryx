@@ -546,6 +546,7 @@ async function packageDiffStats(options: CoverageOptions): Promise<DiffStats | {
   if (options.packageDir === undefined) return { error: UNRESOLVED };
   const target = await readPackageTarget(options.packageDir);
   if (target.head === undefined) return { error: `${UNRESOLVED}: the package manifest records no target head (cwd ${options.packageDir}, base ${target.recordedBase ?? "unresolved"}, head unrecorded)` };
+  // The spread narrows `head` to a string for the request type.
   return packageDiffStatsCached({ packageDir: options.packageDir, root: options.root, target: { ...target, head: target.head } });
 }
 
@@ -564,6 +565,8 @@ async function readPackageTarget(packageDir: string): Promise<PackageTarget> {
   return { recordedBase: str(target.base), prBase: str(target.prBase), head: str(target.head) };
 }
 
+// The key holds the package, root and target, not the bases' resolved shas: a base ref that moves within the cache's TTL is
+// read as it stood at the first computation (a successful result is remembered only briefly, see processCache).
 const packageDiffStatsCached = processCache(diffOfTarget, (value) => !("error" in value), (request: DiffRequest) => JSON.stringify([request.packageDir, request.root, request.target]));
 
 /**
@@ -606,10 +609,14 @@ async function diffOfTarget({ packageDir, root, target }: DiffRequest): Promise<
   // through a symlink (macOS /tmp -> /private/tmp) yields a `../..` pathspec that excludes no review package.
   const realRoot = await realpath(path.resolve(root)).catch(() => path.resolve(root));
   const pathspec = notReviewPackagesAt(path.relative(cwd, realRoot));
+  // At most three bases, each a full diff: they run side by side, and the first failure in base order is the one reported.
+  const results = await Promise.all(resolved.bases.map((base) => gitDiffAt(cwd, base, target.head, pathspec)));
   const diffs: DiffStats[] = [];
-  for (const base of resolved.bases) {
-    const result = await gitDiffAt(cwd, base, target.head, pathspec);
-    if ("error" in result) return { error: `${UNRESOLVED}: git diff ${base}...${target.head} failed (${where(base)}): ${result.error}` };
+  for (const [index, result] of results.entries()) {
+    if ("error" in result) {
+      const base = resolved.bases[index]!;
+      return { error: `${UNRESOLVED}: git diff ${base}...${target.head} failed (${where(base)}): ${result.error}` };
+    }
     diffs.push(result);
   }
   return widestDiff(diffs);

@@ -22,9 +22,9 @@
 // (Claude Code, Codex) the reviewer can write a line too. A line without the host's mark, and a result envelope's own
 // `usage`, read as `reported` (stated by the reviewer, not measured), and a total says how many it holds; a reviewer
 // that copies the mark is not caught. That is acceptable only because no gate decision reads usage: it is the round's
-// stated spend, nothing more. Counts above
-// MAX_DISPATCH_TOKENS are not believed. Nothing here invents a count: a dispatch with no usage is `unknown`, and a total
-// over dispatches where some are unknown says how many, never folds them in as 0.
+// stated spend, nothing more. Counts above MAX_DISPATCH_TOKENS are not believed. Nothing here invents a count: a
+// dispatch with no usage is `unknown`, and a total over dispatches where some are unknown says how many, never folds
+// them in as 0.
 
 export const USAGE_MARKER = "KERYX_USAGE";
 /** The marker of another dispatch's usage, kept when a re-dispatch saves to the same path. */

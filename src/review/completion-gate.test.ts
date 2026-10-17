@@ -2,17 +2,22 @@
 // package is open and `keryx review complete` would still refuse.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { REPEATABLE_TOOL_NAMES } from "../commands/agent";
 import {
   decideReviewGate,
+  explicitReviewIds,
+  fileHash,
   findReviewGateState,
+  hashedFileCount,
   keryxArgs,
   keryxReviewInvocations,
   MAX_REVIEW_GATE_CONTINUES,
   type OpenManagedReview,
+  VALUELESS_FLAGS,
   reviewRunSeenInHistory,
   NO_PACKAGE_BLOCKER,
   MAX_SESSION_REVIEW_ROOTS,
@@ -522,8 +527,27 @@ describe("the shell reader: redirections, pipes and the ways keryx is run (LG-R3
   test("a pipe keeps its left command: a filter after it does not make the invocation share its output", () => {
     expect(invoked("keryx review start --pr 7 2>&1 | tee start.log")).toEqual([{ subcommand: "start", args: ["--pr", "7"], alone: true }]);
     expect(invoked("keryx review start --pr 7 | head -40")).toEqual([{ subcommand: "start", args: ["--pr", "7"], alone: true }]);
+    expect(invoked("keryx review start --pr 7 | tail -n 20")[0]?.alone).toBe(true);
+    expect(invoked("keryx review start --pr 7 | grep path:")[0]?.alone).toBe(true);
+    expect(invoked("keryx review start --pr 7 | grep -e path: -i")[0]?.alone).toBe(true);
     // A stage that prints a file of its own, `||` (a separator, not a pipe), and a keryx fed by a pipe are not alone.
-    expect(invoked("keryx review start --pr 7 | cat - notes.md")[0]?.alone).toBe(false);
+    for (const reader of [
+      "cat - notes.md",
+      "head notes.md",
+      "head -40 notes.md",
+      "tail -n 50 notes.md",
+      "less notes.md",
+      "more notes.md",
+      "grep path: notes.md",
+      "grep -r path:",
+      "grep -rh path: .",
+      "grep -R x",
+      "grep --recursive x",
+      "grep -d recurse x",
+      "grep -e path: notes.md",
+    ]) {
+      expect(invoked(`keryx review start --pr 7 | ${reader}`)[0]?.alone).toBe(false);
+    }
     expect(invoked("keryx review start --pr 7 || cat notes.md")[0]?.alone).toBe(false);
     expect(invoked("cat notes.md | keryx review start --pr 7")[0]?.alone).toBe(false);
     expect(shellCommands("a | b |& c || d")).toEqual([
@@ -534,7 +558,7 @@ describe("the shell reader: redirections, pipes and the ways keryx is run (LG-R3
     ]);
   });
 
-  test("keryx is recognised by path, through npx/bunx/bun x, and as a checkout's cli.ts or the bun script", () => {
+  test("keryx is recognised by path, through npx/bunx/bun x, and as its own cli.ts or the bun script", async () => {
     expect(keryxArgs(["keryx", "review"])).toEqual(["review"]);
     expect(keryxArgs(["./node_modules/.bin/keryx", "review"])).toEqual(["review"]);
     expect(keryxArgs(["/usr/local/bin/keryx", "review"])).toEqual(["review"]);
@@ -542,15 +566,26 @@ describe("the shell reader: redirections, pipes and the ways keryx is run (LG-R3
     expect(keryxArgs(["npx", "-y", "@mrciphersmith/keryx@0.3.121", "review"])).toEqual(["review"]);
     expect(keryxArgs(["bunx", "keryx@latest", "review"])).toEqual(["review"]);
     expect(keryxArgs(["bun", "x", "keryx", "review"])).toEqual(["review"]);
-    expect(keryxArgs(["bun", "src/cli.ts", "review"])).toEqual(["review"]);
-    expect(keryxArgs(["bun", "run", "/w/keryx/src/cli.ts", "review"])).toEqual(["review"]);
-    expect(keryxArgs(["node", "dist/cli.js", "review"])).toEqual(["review"]);
     expect(keryxArgs(["bun", "run", "keryx", "review"])).toEqual(["review"]);
     expect(keryxArgs(["npx", "other", "review"])).toBeUndefined();
     expect(keryxArgs(["bun", "test", "review"])).toBeUndefined();
     expect(keryxArgs(["echo", "keryx", "review"])).toBeUndefined();
     expect(invoked("KERYX_REVIEW_CALLER=x npx keryx review status pr-7 2>&1")).toEqual([{ subcommand: "status", args: ["pr-7"], alone: true }]);
-    expect(invoked("bun src/cli.ts review start --pr 7")).toEqual([{ subcommand: "start", args: ["--pr", "7"], alone: true }]);
+    // A cli.ts / cli.js counts only inside a package named keryx (a checkout's src/cli.ts, an install's dist/cli.js).
+    await mkdir(path.join(root, "keryx", "src"), { recursive: true });
+    await writeFile(path.join(root, "keryx", "package.json"), JSON.stringify({ name: "@mrciphersmith/keryx" }));
+    await mkdir(path.join(root, "other", "dist"), { recursive: true });
+    await writeFile(path.join(root, "other", "package.json"), JSON.stringify({ name: "other-tool" }));
+    await mkdir(path.join(root, "bare"), { recursive: true });
+    expect(keryxArgs(["bun", "src/cli.ts", "review"], path.join(root, "keryx"))).toEqual(["review"]);
+    expect(keryxArgs(["bun", "run", path.join(root, "keryx", "src", "cli.ts"), "review"], root)).toEqual(["review"]);
+    expect(keryxArgs(["node", "src/cli.js", "review"], path.join(root, "keryx"))).toEqual(["review"]);
+    expect(keryxArgs(["node", "dist/cli.js", "review"], path.join(root, "other"))).toBeUndefined();
+    expect(keryxArgs(["node", path.join(root, "other", "dist", "cli.js"), "review"], root)).toBeUndefined();
+    expect(keryxArgs(["bun", "cli.ts", "review"], path.join(root, "bare"))).toBeUndefined();
+    expect(keryxArgs(["node", "tools/cli.js", "review"], root)).toBeUndefined();
+    expect(keryxReviewInvocations("node dist/cli.js review start --pr 7", path.join(root, "other"))).toEqual([]);
+    expect(keryxReviewInvocations("bun src/cli.ts review start --pr 7", path.join(root, "keryx")).map((entry) => entry.subcommand)).toEqual(["start"]);
   });
 
   test("`cd sub && keryx review start --pr N 2>&1` names the package under sub from keryx's own output", async () => {
@@ -570,6 +605,27 @@ describe("the shell reader: redirections, pipes and the ways keryx is run (LG-R3
     expect(names.roots).toEqual([path.join(root, "sub")]);
     expect(names.reviewIds).toEqual(["pr-7975"]);
     expect(await findReviewGateState(root, Date.now() - 60_000, names)).toBeNull();
+  });
+
+  test("a switch does not swallow the positional review id, a valued flag does (RG4-001)", () => {
+    const named = (line: string): string[] => keryxReviewInvocations(line, root).flatMap((invocation) => explicitReviewIds(invocation));
+    for (const flag of VALUELESS_FLAGS) expect(named(`keryx review attach ${flag} pr-9`)).toEqual(["pr-9"]);
+    for (const flag of ["--waive-coverage", "--flow", "--head", "--evidence", "--disposition", "--raw", "--base"]) {
+      expect(named(`keryx review complete ${flag} "x" pr-9`)).toEqual(["pr-9"]);
+      expect(named(`keryx review complete ${flag} pr-9`)).toEqual([]);
+    }
+    expect(named("keryx review attach --unattended pr-9")).toEqual(["pr-9"]);
+    expect(named("keryx review complete --waive-coverage pr-9")).toEqual([]);
+  });
+
+  test("the switches are exactly the flags review.ts reads as switches", () => {
+    const source = readFileSync(path.resolve(import.meta.dir, "..", "commands", "review.ts"), "utf8");
+    const read = new Set([...source.matchAll(/args\.includes\("(--[a-z-]+)"\)/g)].map((match) => match[1]!));
+    read.add("--automatic");
+    // `--help` and the publish/import switches are read through other helpers.
+    for (const flag of read) expect(VALUELESS_FLAGS.has(flag)).toBe(true);
+    for (const flag of ["--partial", "--yes", "--force", "--allow-flagged"]) expect(VALUELESS_FLAGS.has(flag)).toBe(true);
+    expect(VALUELESS_FLAGS.has("--waive-coverage")).toBe(false);
   });
 
   test("a flag's value is not taken for the positional review id", () => {
@@ -599,4 +655,29 @@ test("a manifest that claims the session's review id from another directory is n
   await utimes(path.join(forged, "manifest.json"), past, past);
   await rm(real, { recursive: true });
   expect((await findReviewGateState(root, since, named))?.packageDir).toBe("");
+});
+
+describe("fileHash: a file unchanged since the last stop is not read again, a changed one is", () => {
+  test("a rewrite of the same size is seen, an aged file is remembered and a fresh one is not", async () => {
+    const file = path.join(root, "artifact.txt");
+    await writeFile(file, "aaaa");
+    const aged = Date.now() + 60_000;
+    const before = hashedFileCount();
+    const first = await fileHash(file, aged);
+    expect(hashedFileCount()).toBe(before + 1);
+    // Unchanged: the remembered hash answers.
+    expect(await fileHash(file, aged)).toBe(first);
+    // The same size, different bytes: the hash changes (the timestamps moved with the write).
+    await writeFile(file, "bbbb");
+    const second = await fileHash(file, aged);
+    expect(second).not.toBe(first);
+    // A file written just now is inside the racy window: hashed again on every stop, never remembered.
+    const fresh = path.join(root, "fresh.txt");
+    await writeFile(fresh, "cccc");
+    const count = hashedFileCount();
+    await fileHash(fresh);
+    expect(hashedFileCount()).toBe(count);
+    // A file that cannot be read is reported, not remembered.
+    expect(await fileHash(path.join(root, "missing.txt"), aged)).toBe("unreadable");
+  });
 });
