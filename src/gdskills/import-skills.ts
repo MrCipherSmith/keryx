@@ -691,7 +691,16 @@ function frontmatterName(content: string): string | undefined {
   return frontmatterScalar(content, "name", "top") || undefined;
 }
 
-const KNOWN_CATEGORIES = new Set(["review", "quality", "orchestration", "planning", "platform", "core"]);
+const KNOWN_CATEGORIES = new Set([
+  "review",
+  "quality",
+  "orchestration",
+  "planning",
+  "platform",
+  "core",
+  "implementation",
+  "testing",
+]);
 
 /** `metadata.category`, else a top-level `category`, when it is a module keryx knows. */
 function frontmatterCategory(content: string): string | undefined {
@@ -2121,7 +2130,7 @@ function inferModule(name: string, content: string): string {
   if (category) return category;
   if (name.startsWith("review-") || name.startsWith("code-")) return PROJECT_REVIEWER_MODULE;
   throw new Error(
-    `keryx skills import: cannot infer module for ${name}. Pass --module review|quality|orchestration|…`,
+    `keryx skills import: cannot infer module for ${name}. Pass --module review|quality|orchestration|implementation|testing|…`,
   );
 }
 
