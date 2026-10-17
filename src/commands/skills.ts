@@ -65,6 +65,9 @@ import {
   runSkillsImportCommand,
   runSkillsUpdateCommand,
 } from "../gdskills/import-skills";
+import { runSkillsImportRulesCommand } from "../gdskills/import-rules";
+import { runSkillsRemoveRuleCommand } from "../gdskills/remove-rules";
+import { runSkillsUpdateRulesCommand } from "../gdskills/update-rules";
 import { printSkillsRemoveHelp, runSkillsRemoveCommand } from "../gdskills/remove-skill";
 import { verifyProjectSkill } from "../gdskills/verify";
 import {
@@ -167,7 +170,8 @@ export async function skillsCommand(args: string[]): Promise<void> {
 
   if (command === "import") {
     try {
-      await runSkillsImportCommand(args);
+      if (args.includes("--rules")) await runSkillsImportRulesCommand(args);
+      else await runSkillsImportCommand(args);
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       process.exitCode = 1;
@@ -177,7 +181,8 @@ export async function skillsCommand(args: string[]): Promise<void> {
 
   if (command === "update") {
     try {
-      await runSkillsUpdateCommand(args);
+      if (args.includes("--rules")) await runSkillsUpdateRulesCommand(args);
+      else await runSkillsUpdateCommand(args);
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       process.exitCode = 1;
@@ -187,7 +192,8 @@ export async function skillsCommand(args: string[]): Promise<void> {
 
   if (command === "remove") {
     try {
-      await runSkillsRemoveCommand(args);
+      if (args.includes("--rule")) await runSkillsRemoveRuleCommand(args);
+      else await runSkillsRemoveCommand(args);
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       process.exitCode = 1;
