@@ -1,0 +1,313 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "460",
+  "slug": "review-gate-consistency",
+  "title": "Review gates agree: readiness, complete, overrides, nudges, child results and artifacts tell one story",
+  "status": "in-progress",
+  "createdAt": "2026-10-17T03:45:43.162Z",
+  "updatedAt": "2026-10-17T03:47:35.559Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:5bff430626e9d18805624d0b54c508c157ee1df1199e5f71ab0ed82dec57fe1e",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the lane tasks in plan.md"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the lane tasks in plan.md"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the lane tasks in plan.md"
+    },
+    {
+      "id": "T5",
+      "title": "L1 gates: package diff base/root, readiness runs coverage, override decisions count (A, B)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "L2 nudge names this session's review (C)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "L3 child results and artifacts reconcile (D, E, F)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "L4 ingest keeps unplaceable quotes, delta e2e, token spend (G, H)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Close flows 458 and 459 (I)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "PR review clean",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "CHANGELOG, release 0.3.122",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-17T03:45:43.162Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-17T03:47:33.699Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-17T03:47:33.848Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-17T03:47:34.000Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-17T03:47:34.153Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-17T03:47:34.301Z",
+      "event": "task-added",
+      "detail": "T5: L1 gates: package diff base/root, readiness runs coverage, override decisions count (A, B)"
+    },
+    {
+      "at": "2026-10-17T03:47:34.451Z",
+      "event": "task-added",
+      "detail": "T6: L2 nudge names this session's review (C)"
+    },
+    {
+      "at": "2026-10-17T03:47:34.606Z",
+      "event": "task-added",
+      "detail": "T7: L3 child results and artifacts reconcile (D, E, F)"
+    },
+    {
+      "at": "2026-10-17T03:47:34.756Z",
+      "event": "task-added",
+      "detail": "T8: L4 ingest keeps unplaceable quotes, delta e2e, token spend (G, H)"
+    },
+    {
+      "at": "2026-10-17T03:47:34.908Z",
+      "event": "task-added",
+      "detail": "T9: Close flows 458 and 459 (I)"
+    },
+    {
+      "at": "2026-10-17T03:47:35.062Z",
+      "event": "task-added",
+      "detail": "T10: PR review clean"
+    },
+    {
+      "at": "2026-10-17T03:47:35.229Z",
+      "event": "task-added",
+      "detail": "T11: CHANGELOG, release 0.3.122"
+    },
+    {
+      "at": "2026-10-17T03:47:35.402Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-17T03:47:35.559Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/coverage.test.ts src/review/readiness.test.ts src/review/complete-coverage-gate.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/complete-coverage-gate.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/review/completion-gate.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/harness/tool/builtin/spawn-subagent-tool.test.ts src/review/ledger.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/ledger.test.ts src/review/managed.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/managed.test.ts src/commands/review-plan.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/review/ledger.test.ts src/harness/tool/builtin/spawn-subagent-tool.test.ts"
+    },
+    "AC8": {
+      "kind": "invariant",
+      "check": "keryx flow status 459"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "npm view @mrciphersmith/keryx version"
+    }
+  }
+}
