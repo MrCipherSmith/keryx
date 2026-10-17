@@ -61,8 +61,9 @@ Each reviewer's model (drivers/*.json "model", or "model" in its result) is list
 scopeReviewed and rawReconciled are true only when established.
 
 Token spend: a raw file may end with a \`KERYX_USAGE {"tokens_in":N,"tokens_out":M,"model":"…"}\` line (keryx shell's
-spawn_subagent writes it; another host appends it from its own agent result), or the result may carry "usage". Each run's
-usage and the round's total (research.json "usage") are recorded; a dispatch without one is counted unknown, never 0.
+spawn_subagent writes it; another host appends it from its own agent result), or the result may carry "usage". Only the
+usage lines that end the file count; a \`KERYX_USAGE_OTHER\` line there is one more dispatch saved to the same path.
+Each run's usage and the round's total (research.json "usage") are recorded; a dispatch without one is counted unknown, never 0.
 
 --skip <reviewer> --reason "<why>" (repeatable, each --skip followed by its --reason) records a
 required reviewer the operator deliberately did not run: it leaves the dispatch selection, is
@@ -121,9 +122,10 @@ export async function loadRaws(inputDir: string, replies: ReplyNames): Promise<{
     // `Parent follow-up:` lines below the block join the result's own `follow_ups`; a result with neither is left as parsed.
     const followUps = result === undefined ? [] : followUpsOf(result, body);
     const merged = result === undefined || followUps.length === 0 ? result : { ...result, follow_ups: followUps };
-    // Flow 460: the dispatch's token use, from the `KERYX_USAGE` line the host appended (absent: unknown); `reply` is the body without it.
-    const { body: reply, usage } = splitUsage(body);
-    raws.push({ name: `raw/${name}`, hash: sha(body), mtimeMs: (await stat(file)).mtimeMs, empty: isEmptyOutput(body), ...(merged === undefined ? { diagnosis: explainUnparsedResult(reply) } : { result: merged }), ...(usage === undefined ? {} : { usage }) });
+    // Flow 460: the dispatch's token use, from the `KERYX_USAGE` line the host appended (absent: unknown), and the other
+    // dispatches a re-dispatch to the same path recorded (`KERYX_USAGE_OTHER`); `reply` is the body without them.
+    const { body: reply, usage, others } = splitUsage(body);
+    raws.push({ name: `raw/${name}`, hash: sha(body), mtimeMs: (await stat(file)).mtimeMs, empty: isEmptyOutput(body), ...(merged === undefined ? { diagnosis: explainUnparsedResult(reply) } : { result: merged }), ...(usage === undefined ? {} : { usage }), ...(others === undefined ? {} : { otherUsage: others }) });
   }
   return { raws, ignored, setAside };
 }

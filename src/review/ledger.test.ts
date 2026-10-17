@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { requiredReviewers } from "./coverage";
-import { type LedgerInputs, type RawFile, buildLedger, isEmptyOutput, ledgerBlockers, parseReviewResult, rawUsage, unreadableInputClaim } from "./ledger";
-import { MAX_DISPATCH_TOKENS, SPEND_HEADING, formatUsageLine, renderSpendMarkdown, splitUsage, usageTotals, usageTotalsLine } from "./dispatch-usage";
+import { type LedgerInputs, type RawFile, buildLedger, isEmptyOutput, ledgerBlockers, parseReviewResult, rawDispatchUsages, rawUsage, unreadableInputClaim } from "./ledger";
+import { MAX_DISPATCH_TOKENS, NO_TEXT_PLACEHOLDER, SPEND_HEADING, formatOtherUsageLine, formatUsageLine, splitUsage, usageTotals, usageTotalsLine, withSpendSection } from "./dispatch-usage";
 import { loadRaws } from "../commands/review-ledger";
 import type { MutationRecord } from "./mutate";
 import { emptyRetryState, planRetry, scopeFingerprint } from "./retry-plan";
@@ -1038,6 +1038,18 @@ describe("a delta round's fix slices (flow 458 AC4)", () => {
   });
 });
 
+describe("ledgerBlockers with a package runs what review complete runs", () => {
+  test("the layer/chunk completeness gate is among them: a file in no slice blocks READY", async () => {
+    const packageDir = path.join(root, ".metaproject", "reviews", "pkg");
+    await mkdir(packageDir, { recursive: true });
+    await writeFile(path.join(packageDir, "scope-files.json"), JSON.stringify({ version: 1, files: [...FILES, "src/c.ts"] }));
+    await writeFile(path.join(packageDir, "slice-manifest.json"), JSON.stringify(MANIFEST));
+    const { ledger } = buildLedger(await inputs());
+    const blockers = await ledgerBlockers(ledger, [], { root, packageDir, files: [...FILES, "src/c.ts"] });
+    expect(blockers.some((blocker) => blocker.includes("in-scope file(s) are uncovered: src/c.ts"))).toBe(true);
+  });
+});
+
 describe("token spend per dispatch (flow 460, AC7)", () => {
   const line = (tokensIn: number, tokensOut: number, model = "anthropic/claude-sonnet") => formatUsageLine({ tokens_in: tokensIn, tokens_out: tokensOut, model });
 
@@ -1058,14 +1070,14 @@ describe("token spend per dispatch (flow 460, AC7)", () => {
     for (const reviewer of others) expect(byReviewer[reviewer]).toBe("unknown");
     expect(ledger.usage).toEqual({ dispatches: raws.length, known: 2, unknown: raws.length - 2, tokens_in: 1050, tokens_out: 205, complete: false });
     expect(usageTotalsLine(ledger.usage!)).toBe(`token spend: at least 1050 in, 205 out over 2 of ${raws.length} dispatch(es); ${raws.length - 2} unknown (no usage recorded)`);
-    expect(renderSpendMarkdown(ledger)).toContain("## Token spend");
+    expect(withSpendSection("# R\n", ledger)).toContain("## Token spend");
   });
 
   test("a round where nothing reported usage states unknown, not 0 tokens", async () => {
     const { ledger } = buildLedger(await inputs());
     expect(ledger.usage?.known).toBe(0);
     expect(usageTotalsLine(ledger.usage!)).toMatch(/^token spend: unknown \(\d+ dispatch\(es\), none reported usage\)$/);
-    expect(renderSpendMarkdown(ledger)).not.toContain(" 0 in");
+    expect(withSpendSection("# R\n", ledger)).not.toContain(" 0 in");
   });
 
   test("a reviewer with several waves sums them and counts the wave that reported none", async () => {
@@ -1085,7 +1097,7 @@ describe("token spend per dispatch (flow 460, AC7)", () => {
     const input = path.join(root, "input");
     await mkdir(path.join(input, "raw"), { recursive: true });
     await writeFile(path.join(input, "raw", "review-logic.txt"), `REVIEW_RESULT {"reviewer":"review-logic","status":"DONE","findings":[]}\n${line(900, 90)}\n`);
-    await writeFile(path.join(input, "raw", "review-style.txt"), `(subagent produced no text)\n${line(40, 0)}\n`);
+    await writeFile(path.join(input, "raw", "review-style.txt"), `${NO_TEXT_PLACEHOLDER}\n${line(40, 0)}\n`);
     await writeFile(path.join(input, "raw", "review-architecture.txt"), `REVIEW_RESULT {"reviewer":"review-architecture","status":"DONE","findings":[]}\nKERYX_USAGE {"tokens_in":"lots"}\n`);
     const { raws } = await loadRaws(input, { files: new Set(), reviewers: ["review-logic", "review-style", "review-architecture"] });
     const byName = Object.fromEntries(raws.map((entry) => [entry.name, entry]));
@@ -1121,10 +1133,39 @@ describe("token spend per dispatch (flow 460, AC7)", () => {
     expect(usageTotalsLine(totals)).toBe("token spend: at least 15 in, 3 out over 2 dispatch(es); 1 stopped at a deadline (counted so far only)");
   });
 
-  test("renderSpendMarkdown adds the section once: a report that already holds it gets nothing", () => {
+  test("withSpendSection appends the section, and a re-ingest replaces a stale one instead of keeping it", () => {
     const research = { usage: usageTotals([{ tokens_in: 1, tokens_out: 1 }]) };
-    expect(renderSpendMarkdown(research)).toContain(SPEND_HEADING);
-    expect(renderSpendMarkdown(research, `# R\n\n${SPEND_HEADING}\n\nold\n`)).toBe("");
+    const current = usageTotalsLine(research.usage);
+    expect(withSpendSection("# R\n", research)).toBe(`# R\n\n${SPEND_HEADING}\n\n${current}\n`);
+    expect(withSpendSection(`# R\n\n${SPEND_HEADING}\n\nold\n`, research)).toBe(`# R\n\n${SPEND_HEADING}\n\n${current}\n`);
+    // Only the section is replaced: a heading after it, and the text under that heading, stay.
+    expect(withSpendSection(`# R\n\n${SPEND_HEADING}\n\nold\n\n## Notes\n\nkept\n`, research)).toBe(`# R\n\n${SPEND_HEADING}\n\n${current}\n\n## Notes\n\nkept\n`);
+    expect(withSpendSection("# R\n", {})).toBe("# R\n");
+  });
+
+  test("a re-dispatch to the same path counts every dispatch: KERYX_USAGE_OTHER lines are dispatches of their own", async () => {
+    const input = path.join(root, "input-retry");
+    await mkdir(path.join(input, "raw"), { recursive: true });
+    const body = `REVIEW_RESULT {"reviewer":"review-logic","status":"DONE","findings":[]}`;
+    await writeFile(path.join(input, "raw", "review-logic.txt"), `${body}\n${formatOtherUsageLine({ tokens_in: 5, tokens_out: 1 })}\n${formatOtherUsageLine(undefined)}\n${line(7, 2)}\n`);
+    const { raws } = await loadRaws(input, { files: new Set(), reviewers: ["review-logic"] });
+    expect(raws[0]?.result).toMatchObject({ reviewer: "review-logic", status: "DONE" });
+    expect(raws[0]?.otherUsage).toEqual([{ tokens_in: 5, tokens_out: 1 }, undefined]);
+    expect(usageTotals(raws.flatMap(rawDispatchUsages))).toMatchObject({ dispatches: 3, known: 2, unknown: 1, tokens_in: 12, tokens_out: 3 });
+  });
+
+  test("only the usage lines that end the file count: a line with reply text after it states nothing", () => {
+    expect(splitUsage(`${line(999, 9)}\nmy review\n${line(3, 1)}\n`)).toEqual({ body: "my review", usage: { tokens_in: 3, tokens_out: 1, model: "anthropic/claude-sonnet" } });
+    expect(splitUsage(`my review\n${line(999, 9)}\nmore text\n`)).toEqual({ body: "my review\nmore text" });
+    // Blank lines between the reply and its trailing usage lines do not end the block.
+    expect(splitUsage(`my review\n\n${line(3, 1)}\n\n`).usage).toEqual({ tokens_in: 3, tokens_out: 1, model: "anthropic/claude-sonnet" });
+  });
+
+  test("a long run of whitespace in a reply is trimmed in linear time", () => {
+    const reply = `a${" ".repeat(200_000)}b\n${line(1, 1)}`;
+    const started = performance.now();
+    expect(splitUsage(reply).body).toBe(`a${" ".repeat(200_000)}b`);
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });
 
@@ -1142,37 +1183,42 @@ describe("flow 460 D/F: what a reply claims, and what the artifacts say ran", ()
     expect((unsliced.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find((r) => r.reviewer === "review-logic")).toMatchObject({ status: "complete", scopeComplete: true });
   });
 
-  test("D: a DONE reply that states a mandatory input could not be read is incomplete", async () => {
+  test("D: a DONE reply whose inputs_unreadable names a mandatory input is incomplete", async () => {
     const base = await inputs();
-    for (const summary of ["I could not read pr_context.json, so I reviewed the diff only", "The result schema was not found; replied from memory", "unable to open the context file"]) {
-      const said = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, summary } } : r));
-      const result = buildLedger({ ...base, raws: said });
-      const logic = (result.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find((r) => r.reviewer === "review-logic")!;
-      expect(logic).toMatchObject({ status: "incomplete", scopeComplete: false });
-      expect(result.gaps.find((g) => g.reviewer === "review-logic")!.detail).toContain("mandatory input could not be read");
-    }
-    // Defect prose about a schema, a payload or PR context is a finding, not a statement about the reviewer's own reading.
+    const said = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, inputs_unreadable: ["pr_context.json"] } } : r));
+    const result = buildLedger({ ...base, raws: said });
+    const logic = (result.ledger.dispatch as { runs: Array<Record<string, unknown>> }).runs.find((r) => r.reviewer === "review-logic")!;
+    expect(logic).toMatchObject({ status: "incomplete", scopeComplete: false });
+    expect(result.gaps.find((g) => g.reviewer === "review-logic")!.detail).toContain('mandatory input could not be read ("pr_context.json")');
+  });
+
+  test("D: the summary's prose is never read as a reading failure, whatever it says", async () => {
+    const base = await inputs();
+    // Round-2 examples of defect prose and clean summaries, and prose that does claim a reading failure: only the
+    // structured field decides, so every one of them leaves the run complete.
     for (const summary of [
-      "Read pr_context and the schema; no problems found",
+      "The payload could not be parsed when slices is empty.",
+      "The schema could not be loaded when the path has spaces.",
+      "No blockers. Did not find any schema regressions.",
+      "I did not find any schema violations",
+      "We did not find any payload handling issues",
+      "Could not find any payload validation gaps",
+      "The payload was not found; the loader falls back to defaults",
       "reviewer-finding.schema.json is missing a slices property",
-      "the payload parser is missing a guard for empty slices",
-      "the schema is unchanged and nothing is missing",
-      "the dispatch payload is missing slices",
-      "the finding schema is not updated for usage",
-      "pr-context is not passed to the light check",
       "loadSchema cannot open the schema when the cache is cold",
-      "the payload was not found in a sibling file by design, which is fine",
+      "I could not read pr_context.json, so I reviewed the diff only",
     ]) {
       const fine = base.raws.map((r) => (r.result?.reviewer === "review-logic" ? { ...r, result: { ...r.result, summary } } : r));
       expect({ summary, gaps: buildLedger({ ...base, raws: fine }).gaps }).toEqual({ summary, gaps: [] });
     }
   });
 
-  test("D: unreadableInputClaim quotes only the reviewer's own statement", () => {
-    expect(unreadableInputClaim({ summary: "Done. I was unable to load the slice manifest, so slices are guessed." })).toBe("I was unable to load the slice manifest");
-    expect(unreadableInputClaim({ summary: "The result schema could not be read; replied from memory" })).toBe("The result schema could not be read");
-    expect(unreadableInputClaim({ summary: "Failed to parse the payload" })).toBe("Failed to parse the payload");
-    expect(unreadableInputClaim({ summary: "the payload builder failed to read the schema in the fixture" })).toBeUndefined();
+  test("D: unreadableInputClaim quotes the reviewer's own list, and nothing else", () => {
+    expect(unreadableInputClaim({ inputs_unreadable: ["pr_context.json", " the slice manifest "] })).toBe("pr_context.json, the slice manifest");
+    expect(unreadableInputClaim({ inputs_unreadable: [] })).toBeUndefined();
+    expect(unreadableInputClaim({ inputs_unreadable: ["", 3] })).toBeUndefined();
+    expect(unreadableInputClaim({ inputs_unreadable: "pr_context.json" })).toBeUndefined();
+    expect(unreadableInputClaim({ summary: "I could not read reviewer-finding.schema.json" })).toBeUndefined();
     expect(unreadableInputClaim({})).toBeUndefined();
   });
 

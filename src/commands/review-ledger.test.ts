@@ -162,9 +162,38 @@ describe("raw/ files through loadRaws and runLedger (flow 430 AC3, AC4)", () => 
         ["review-logic-w1:F-003", "out-of-scope", null],
       ]);
       expect(obligations[2]?.reason).toContain("outside-set");
-      // Readiness item 5 reads these through researchErrors: no obligation is open and every link resolves.
-      expect(researchErrors(out.ledger, canonical).filter((error) => error.includes("review-logic-w1"))).toEqual([]);
+      // Readiness item 5 reads these through researchErrors: no obligation is open and every link resolves, by the raw
+      // stem or by the canonical ids a link names.
+      expect(researchErrors(out.ledger, canonical).filter((error) => ["review-logic-w1", "review-arch-w1", "2026-10-17-round#"].some((id) => error.includes(id)))).toEqual([]);
       expect(out.ledger.rawReconciled).toBe(true);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("flow 460: a screened finding closes only its own raw obligation, never the same display id in another wave", async () => {
+    const result = (findings: object[]) => `REVIEW_RESULT ${JSON.stringify({ reviewer: "review-logic", status: "DONE", summary: "s", findings, needs_context: [] })}`;
+    const raw = (id: string) => ({ id, severity: "minor", problem: `p ${id}`, impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" });
+    const { pkg, cleanup } = await fixture({ "review-logic-w1.txt": result([raw("F-001"), raw("F-002")]), "review-logic-w2.txt": result([raw("F-001"), raw("F-002")]) });
+    try {
+      await writeFile(path.join(pkg, "findings.json"), "[]");
+      await mkdir(path.join(pkg, "research-evidence"), { recursive: true });
+      const screened = [
+        // A bare display id with the reviewer: ambiguous across waves, so it closes neither wave's F-001.
+        { id: "F-001", reviewer: "review-logic", rule: "outside-set", detail: "d" },
+        // The exact obligation of wave 1, and a global id naming wave 2's: each closes only that one.
+        { id: "review-logic-w1:F-002", reviewer: "review-logic", rule: "outside-set", detail: "d" },
+        { id: "F-002", global_id: "2026-10-17-round#review-logic-w2:F-002", reviewer: "review-logic", rule: "outside-set", detail: "d" },
+      ];
+      await writeFile(path.join(pkg, INGEST_SCREENED_FILE), JSON.stringify({ version: 1, screened }));
+      const out = await build(pkg);
+      const obligations = out.ledger.obligations as Array<{ id: string; status: string }>;
+      expect(Object.fromEntries(obligations.map((o) => [o.id, o.status]))).toEqual({
+        "review-logic-w1:F-001": "unresolved",
+        "review-logic-w1:F-002": "out-of-scope",
+        "review-logic-w2:F-001": "unresolved",
+        "review-logic-w2:F-002": "out-of-scope",
+      });
     } finally {
       await cleanup();
     }
@@ -174,8 +203,9 @@ describe("raw/ files through loadRaws and runLedger (flow 430 AC3, AC4)", () => 
     const { pkg, cleanup } = await fixture({});
     try {
       await writeFile(path.join(pkg, "findings.json"), JSON.stringify([{ id: "review-logic-w1#F-001", reviewer: "review-logic" }]));
-      await expect(build(pkg)).rejects.toThrow('ledger build refused: 1 finding id(s) in');
-      await expect(build(pkg)).rejects.toThrow('a display id holds no "#"');
+      const refusal = await build(pkg).then(() => undefined, (error: unknown) => (error as Error).message);
+      expect(refusal).toContain("ledger build refused: 1 finding id(s) in");
+      expect(refusal).toContain('a display id holds no "#"');
     } finally {
       await cleanup();
     }

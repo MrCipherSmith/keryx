@@ -184,6 +184,15 @@
         "type": "string"
       }
     },
+    "inputs_unreadable": {
+      "title": "Mandatory inputs the reviewer could not read",
+      "description": "Name each mandatory input of the dispatch the reviewer could not read: pr_context.json, this schema, a context file, the payload, the slice manifest. Empty or absent when it read them all. A DONE or DONE_WITH_CONCERNS result that names any is not a finished run for `ledger build` or `retry-plan`. Only this field is read for it, never the summary's wording.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
     "follow_ups": {
       "title": "Follow-ups handed back to the parent",
       "description": "Work the reviewer could not do itself and leaves to the parent. Each entry becomes a research obligation `<raw>:fu<N>` (N counts from 1, in this order; a `Parent follow-up:` line after the REVIEW_RESULT block is appended) with status `unresolved`. It closes only through a disposition (`finding`, `refuted`, `out-of-scope` or `narrowed` with a \"what remains\" text); until then the ledger is not reconciled and the report lists it as not verified.",

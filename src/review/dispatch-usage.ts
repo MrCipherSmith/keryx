@@ -6,18 +6,35 @@
 //
 // keryx shell's spawn_subagent writes it itself when it saves a child's result (`save_result_to`). A host that saves the
 // reply on its own (Claude Code, Codex) appends the same line with the counts its own agent result reported. A reviewer's
-// result object may instead carry `usage: {tokens_in, tokens_out, model}`; the line wins when both are present, and the
-// last line wins over earlier ones, so a host line appended after the reply overrides any line inside it.
+// result object may instead carry `usage: {tokens_in, tokens_out, model}`; the line wins when both are present.
 //
-// The figure is a reported one, not a proof. On a host where the reviewer writes its own raw file (Claude Code, Codex) the
-// reviewer can write a line too, and nothing here can tell it from the host's. That is acceptable only because no gate
-// decision reads usage: it is the round's stated spend, nothing more. Counts above MAX_DISPATCH_TOKENS are not believed.
-// Nothing here invents a count: a dispatch with no usage is `unknown`, and a total over dispatches where some are unknown
-// says how many, never folds them in as 0.
+// Only the usage lines that END the file state anything (the trailing block; blank lines may sit between them): a usage
+// line with reply text after it is removed from the body and states nothing, so a line quoted inside a reply never
+// counts. In that block the last well-formed `KERYX_USAGE` line is the dispatch whose reply the file holds, and each
+// `KERYX_USAGE_OTHER` line is one other dispatch saved to the same path: spawn_subagent writes them when a re-dispatch
+// saves there, so a retry never erases what another attempt cost. A malformed or `unknown` one is a dispatch whose usage
+// is unknown.
+//
+// The figure is a reported one, not a proof. spawn_subagent strips usage lines out of the child's own text before it
+// saves it, so in keryx shell only the harness states usage. On a host where the reviewer writes its own raw file
+// (Claude Code, Codex) the reviewer can write a line too, and nothing here can tell it from the host's. That is
+// acceptable only because no gate decision reads usage: it is the round's stated spend, nothing more. Counts above
+// MAX_DISPATCH_TOKENS are not believed. Nothing here invents a count: a dispatch with no usage is `unknown`, and a total
+// over dispatches where some are unknown says how many, never folds them in as 0.
 
 export const USAGE_MARKER = "KERYX_USAGE";
+/** The marker of another dispatch's usage, kept when a re-dispatch saves to the same path. */
+export const OTHER_USAGE_MARKER = "KERYX_USAGE_OTHER";
 
-/** The `## Token spend` heading report.md carries (see renderSpendMarkdown). */
+/**
+ * What a dispatch that ended with no assistant text leaves as its body: spawn_subagent's display summary for it, and the
+ * body of the record it saves at `save_result_to`. Every reader of a raw result (`isEmptyRecord`, and through it the
+ * ledger's `isEmptyOutput`) reads a body that is exactly this as an empty reply, never as a result. This is the one copy
+ * of the text the writer and the readers compare.
+ */
+export const NO_TEXT_PLACEHOLDER = "(subagent produced no text)";
+
+/** The `## Token spend` heading report.md carries (see withSpendSection). */
 export const SPEND_HEADING = "## Token spend";
 
 /**
@@ -32,8 +49,8 @@ export type RunUsage = { tokens_in: number; tokens_out: number; model?: string; 
 /** More tokens than one dispatch can spend: a count above it is not a measurement, so the dispatch reads as unknown. */
 export const MAX_DISPATCH_TOKENS = 100_000_000;
 
-/** A usage line at the start of a line; the rest of the line is checked and parsed by hand (no backtracking regex). Anchored per line; the last one wins. */
-const USAGE_LINE = /^[ \t]*KERYX_USAGE[ \t]+([^\n]*)$/gm;
+/** One usage line: optional indent, the marker (`_OTHER` for another dispatch), whitespace, the rest. Matched one line at a time. */
+const USAGE_LINE = /^[ \t]*KERYX_USAGE(_OTHER)?[ \t]+(.*)$/;
 /** A usage line longer than this is not one keryx or a host wrote; it is removed from the body and states nothing. */
 const MAX_USAGE_LINE_CHARS = 4096;
 
@@ -67,23 +84,51 @@ export function formatUsageLine(usage: DispatchUsage): string {
   return `${USAGE_MARKER} ${JSON.stringify({ tokens_in: usage.tokens_in, tokens_out: usage.tokens_out, ...(usage.model === undefined ? {} : { model: usage.model }), ...(usage.partial === true ? { partial: true } : {}) })}`;
 }
 
+/** The `KERYX_USAGE_OTHER` line recording one other dispatch to the same path; `unknown` when it reported no usage. */
+export function formatOtherUsageLine(usage: DispatchUsage | undefined): string {
+  return usage === undefined ? `${OTHER_USAGE_MARKER} unknown` : `${OTHER_USAGE_MARKER}${formatUsageLine(usage).slice(USAGE_MARKER.length)}`;
+}
+
+/** A raw result split into the reply and the usage its trailing block states (see splitUsage). */
+export type SplitRecord = { body: string; usage?: DispatchUsage | undefined; others?: Array<DispatchUsage | undefined> };
+
 /**
- * The reply without its usage lines, and the usage the last well-formed one states. The body is what every reader of a
- * reply parses and tests for emptiness, so a usage line can never turn an empty reply into a non-empty one or add an
- * object to the result scan.
+ * The reply without its usage lines; the usage the last well-formed `KERYX_USAGE` line of the trailing block states; and
+ * one entry per `KERYX_USAGE_OTHER` line there, in file order (undefined: that dispatch's usage is unknown). The body is
+ * what every reader of a reply parses and tests for emptiness, so a usage line can never turn an empty reply into a
+ * non-empty one or add an object to the result scan. One pass over the lines, linear in the reply.
  */
-export function splitUsage(raw: string): { body: string; usage?: DispatchUsage | undefined } {
+export function splitUsage(raw: string): SplitRecord {
   if (!raw.includes(USAGE_MARKER)) return { body: raw };
+  const lines = raw.split("\n");
+  const kept: string[] = [];
+  const others: Array<DispatchUsage | undefined> = [];
   let usage: DispatchUsage | undefined;
   let found = false;
-  for (const match of raw.matchAll(USAGE_LINE)) {
+  // Walked from the end: `trailing` holds while only usage lines and blank lines have been passed.
+  let trailing = true;
+  for (let at = lines.length - 1; at >= 0; at -= 1) {
+    const line = lines[at]!;
+    const match = line.includes(USAGE_MARKER) ? USAGE_LINE.exec(line) : null;
+    if (match === null) {
+      if (line.trim() !== "") trailing = false;
+      kept.push(line);
+      continue;
+    }
     found = true;
-    // A malformed line states nothing; it is still removed from the body.
-    usage = usageOfLine(match[1]!) ?? usage;
+    if (!trailing) continue;
+    if (match[1] !== undefined) others.unshift(usageOfLine(match[2]!));
+    else usage ??= usageOfLine(match[2]!);
   }
   if (!found) return { body: raw };
-  const body = raw.replace(USAGE_LINE, "").replace(/\s+$/, "");
-  return usage === undefined ? { body } : { body, usage };
+  const body = kept.reverse().join("\n").trimEnd();
+  return { body, ...(usage === undefined ? {} : { usage }), ...(others.length === 0 ? {} : { others }) };
+}
+
+/** True for a record that holds no reply: blank, or exactly the no-text placeholder, once its usage lines are set aside. */
+export function isEmptyRecord(raw: string): boolean {
+  const body = splitUsage(raw).body.trim();
+  return body === "" || body === NO_TEXT_PLACEHOLDER;
 }
 
 /** The round's spend over its dispatches: summed where known, with the unknown ones counted, never added as 0. */
@@ -126,14 +171,20 @@ export function usageTotalsLine(totals: UsageTotals): string {
 }
 
 /**
- * `## Token spend` for report.md, from the totals research.json carries; empty when it carries none, or when `report`
- * (the report it is appended to) already holds the section.
+ * `report` with its `## Token spend` section set from the totals research.json carries. A section already there (up to
+ * the next `## ` heading, or the end) is replaced, so a re-ingest states the current spend, never a stale one; a report
+ * without one gets it appended. With no totals in `research` the report is returned unchanged.
  */
-export function renderSpendMarkdown(research: unknown, report?: string): string {
-  if (report !== undefined && report.includes(`\n${SPEND_HEADING}\n`)) return "";
+export function withSpendSection(report: string, research: unknown): string {
   const usage = research !== null && typeof research === "object" ? (research as { usage?: unknown }).usage : undefined;
-  if (usage === null || typeof usage !== "object") return "";
+  if (usage === null || typeof usage !== "object") return report;
   const totals = usage as Partial<UsageTotals>;
-  if (typeof totals.dispatches !== "number" || typeof totals.known !== "number") return "";
-  return `\n${SPEND_HEADING}\n\n${usageTotalsLine(totals as UsageTotals)}\n`;
+  if (typeof totals.dispatches !== "number" || typeof totals.known !== "number") return report;
+  const section = `${SPEND_HEADING}\n\n${usageTotalsLine(totals as UsageTotals)}\n`;
+  const lines = report.split("\n");
+  const start = lines.findIndex((line) => line.trimEnd() === SPEND_HEADING);
+  if (start === -1) return `${report.endsWith("\n") ? report : `${report}\n`}\n${section}`;
+  const next = lines.findIndex((line, at) => at > start && line.startsWith("## "));
+  const before = lines.slice(0, start).join("\n");
+  return `${before}\n${section}${next === -1 ? "" : `\n${lines.slice(next).join("\n")}`}`;
 }

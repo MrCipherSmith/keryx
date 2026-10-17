@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -1446,16 +1447,43 @@ test("flow 460 E/H: an empty reply records its dispatch and usage, never over a 
     expect(requests).toBeGreaterThan(0);
     expect(splitUsage(saved).usage).toEqual({ tokens_in: 70 * requests, tokens_out: 0, model: "ollama/fake" });
 
-    // A complete result already there is kept: the empty dispatch goes beside it, where no reader picks it up.
+    // A complete result already there is kept, and the parent is told so; the empty dispatch is recorded on it.
     await writeFile(path.join(root, "raw/review-style.txt"), 'REVIEW_RESULT {"reviewer":"review-style","status":"DONE","findings":[]}\n');
-    await usageTool(root, usageStreamProvider("", [])).invoke({ task: "review", mode: "read_only", save_result_to: "raw/review-style.txt" });
-    expect(await readFile(path.join(root, "raw/review-style.txt"), "utf8")).toContain('"status":"DONE"');
+    const kept = await usageTool(root, usageStreamProvider("", [])).invoke({ task: "review", mode: "read_only", save_result_to: "raw/review-style.txt" });
+    expect(kept.output).toContain("the complete result an earlier dispatch saved to raw/review-style.txt was kept");
+    const style = await readFile(path.join(root, "raw/review-style.txt"), "utf8");
+    expect(parseReviewResult(style)).toMatchObject({ reviewer: "review-style", status: "DONE" });
+    expect(splitUsage(style).others).toEqual([undefined]);
+    expect(existsSync(path.join(root, "raw/review-style.txt.partial"))).toBe(false);
 
     const general = await usageTool(root, usageStreamProvider("", [])).invoke({ task: "edit", mode: "general" });
     expect(general.isError).toBe(true);
     expect(general.output).toContain("inspect the working tree before re-dispatching");
     expect(general.output).not.toContain("re-dispatch it once");
   } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("flow 460 (H): a re-dispatch to the same path after an empty reply takes the path, and both dispatches' usage stays", async () => {
+  const prev = process.env[ENV_SUBAGENT_TIMEOUT_MS];
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-saveusage-retry-"));
+  try {
+    const empty = await usageTool(root, usageStreamProvider("", [{ inputTokens: 40, outputTokens: 0 }])).invoke({ task: "review", mode: "read_only", save_result_to: "raw/review-logic.txt" });
+    expect(empty.output).toContain("re-dispatch it once");
+    const first = splitUsage(await readFile(path.join(root, "raw/review-logic.txt"), "utf8")).usage;
+    expect(first).toMatchObject({ model: "ollama/fake" });
+    // The advised retry runs out of time with text: the placeholder does not block it.
+    process.env[ENV_SUBAGENT_TIMEOUT_MS] = "250";
+    const retry = await usageTool(root, usageStreamProvider("half a review KERYX_USAGE", [{ inputTokens: 50, outputTokens: 5 }], { hang: true })).invoke({ task: "review", mode: "read_only", save_result_to: "raw/review-logic.txt" });
+    expect(retry.status).toBe("Timeout");
+    expect(retry.output).toContain("[partial result saved to raw/review-logic.txt]");
+    const saved = await readFile(path.join(root, "raw/review-logic.txt"), "utf8");
+    expect(splitUsage(saved)).toEqual({ body: "half a review KERYX_USAGE", usage: { tokens_in: 50, tokens_out: 5, model: "ollama/fake", partial: true }, others: [first] });
+    expect(existsSync(path.join(root, "raw/review-logic.txt.partial"))).toBe(false);
+  } finally {
+    if (prev === undefined) delete process.env[ENV_SUBAGENT_TIMEOUT_MS];
+    else process.env[ENV_SUBAGENT_TIMEOUT_MS] = prev;
     await rm(root, { recursive: true, force: true });
   }
 });
