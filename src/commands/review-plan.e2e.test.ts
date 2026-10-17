@@ -106,4 +106,36 @@ describe("plan → ingest with an unplaceable quote → fix commit → plan", ()
     expect(fix?.files).toContain("src/a.ts");
     expect(fix?.roles).toEqual(expect.arrayContaining(["review-logic", "review-regression"]));
   }, 60_000);
+
+  test("flow 460 L6: a fix of F-1 and an unrelated new function in the same file plan as one fix slice with the fix roster and one new slice with round-1 roles", async () => {
+    const first = await plan();
+    const firstId = path.basename(first.package);
+    const report = ["# Round 1", "", "```json keryx:findings", JSON.stringify([finding("F-1", "  return items.reduce((sum, item) => sum + item);")]), "```", ""].join("\n");
+    await writeFile(path.join(repo, "report.md"), report);
+    await writeFile(path.join(repo, "research.json"), JSON.stringify({ version: 1, scopeReviewed: true, rawReconciled: true, obligations: [] }));
+    await reviewCommand(["ingest", "--target", "branch", "--ref", "feature", "--review-id", firstId, "--report", "report.md", "--research", "research.json"]);
+    expect(process.exitCode ?? 0).toBe(0);
+
+    await writeFile(path.join(repo, "src", "a.ts"), source(true));
+    git("add", "src/a.ts");
+    git("commit", "-q", "-m", "fix F-1: seed the reduce");
+    // Far below the fix, in its own commit that names no finding: new code.
+    const padding = Array.from({ length: 40 }, (_, i) => `export const pad${i} = ${i};`).join("\n");
+    await writeFile(path.join(repo, "src", "a.ts"), `${source(true)}${padding}\nexport function run(cmd: string[]) { return Bun.spawn(cmd); }\n`);
+    git("add", "src/a.ts");
+    git("commit", "-q", "-m", "add a runner");
+
+    const second = await plan();
+    expect(second.round).toMatchObject({ number: 2, mode: "delta" });
+    expect(second.slices.fix).toHaveLength(1);
+    // Exactly the fix roster: logic and regression (F-1's author is review-logic); nothing the fix's content would route.
+    expect(second.slices.fix[0]).toMatchObject({ files: ["src/a.ts"], findingIds: ["F-1"], roles: ["review-logic", "review-regression"] });
+    // The runner, in the same file, is a new slice routed as in round 1: spawning a process brings security-code.
+    const fresh = second.slices.new.filter((slice) => slice.files.includes("src/a.ts"));
+    expect(fresh).toHaveLength(1);
+    expect(fresh[0]!.roles).toEqual(expect.arrayContaining(["review-logic", "review-security-code"]));
+    // The fix slice's roster joins the round; nothing its content routes does (no union with round-1 routing).
+    expect(second.split?.fix).toMatchObject({ slices: 1, dispatches: 2 });
+    expect(second.dispatches).toBeLessThanOrEqual(40);
+  }, 60_000);
 });

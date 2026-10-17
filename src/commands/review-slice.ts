@@ -22,7 +22,7 @@ import { commentRuleScopeConfig } from "../review/comment-rule";
 import { renderRoutingSummary, routeSlices, summarizeRouting } from "../review/slice-routing";
 import { NOT_REVIEW_PACKAGES } from "../review/prior-round";
 import { readPriorFindings, readRoundRecord, roundRecordTampered, type RoundRecord } from "../review/round-record";
-import { classifyDeltaSlices, isDeltaRound, regionInSecondLook, splitCounts, tagSecondLookSlices } from "../review/round-split";
+import { classifyDeltaSlices, isDeltaRound, partitionRegionsByFix, regionInSecondLook, splitCounts, tagSecondLookSlices } from "../review/round-split";
 import { defaultWaveBytes, detectReviewHost, HOST_WAVE_BYTES, parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
 
 /** The diff-fetching and flag helpers `review.ts` owns, passed in so this file does not import its caller. */
@@ -96,10 +96,12 @@ generated. A deterministic 10-15% of light slices (hash of --head, default HEAD,
 the slice id; none below 4 light slices) run deep as an audit sample (\`audit: true\`).
 
 In a delta round (the package's round.json, written by \`review start\`, names a previous
-round at an ancestor head) only the round's range prevHead..head is cut. A slice holding a
-fix hunk is \`kind: "fix"\` with its \`findingIds\`, read deep by review-logic, review-regression,
-the reviewers that authored those findings AND every role its own content routes as above;
-every other slice is \`kind: "new"\` and routed as above. The delta diff takes the same context,
+round at an ancestor head) only the round's range prevHead..head is cut. The changed lines
+that lie in a fix hunk (round.json \`fixHunks\`: a hunk over a prior finding's located lines,
+or in a commit naming it) are cut apart from every other changed line, even in the same file.
+A slice of fix lines is \`kind: "fix"\` with its \`findingIds\`, read deep by exactly review-logic,
+review-regression, the reviewers that authored those findings, and review-security-code when
+one is a security finding; every other slice is \`kind: "new"\` and routed as above. The delta diff takes the same context,
 exclusions and pre-filters as a round-1 cut and is never larger than merge-base..head (when it
 would be, merge-base..head is cut instead, still split fix/new). Code of merge-base..head that did not change since the previous round gets one more
 look (round.json \`secondLookHunks\`): \`kind: "second-look"\` slices, read once by review-logic and
@@ -230,7 +232,12 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const rawWave = optionValue(args, "--wave-bytes");
   const waveBytes = validateWaveBytes(rawWave === undefined ? defaultWaveBytes(host, maxBytes) : Number(rawWave), maxBytes);
   const scopeConfig = { contextLines, ...(await commentRuleScopeConfig(process.cwd())) };
-  const built = buildSlices(sliceSourceFromDiff(diff, scopeConfig), { maxBytes, waveBytes });
+  const source = sliceSourceFromDiff(diff, scopeConfig);
+  // Flow 460 L6: a delta round cuts the lines that answer prior findings apart from the new lines before slicing, so a fix
+  // slice holds only fix hunks (and gets the fix roster) while every new line, even in the same file, is routed as in round 1.
+  const parts = delta === undefined ? undefined : partitionRegionsByFix(source.regions, delta.fixHunks);
+  const built = buildSlices(parts === undefined ? source : { ...source, regions: parts.other }, { maxBytes, waveBytes });
+  const fixBuilt = parts === undefined || parts.fix.length === 0 ? undefined : buildSlices({ ...source, regions: parts.fix, drops: [] }, { maxBytes, waveBytes });
   // Cheap second look: code of merge-base..head unchanged since the previous round, cut apart from the delta so each slice has one kind.
   const secondLook = delta === undefined ? undefined : await secondLookSource(delta, contextLines, scopeConfig);
   const secondBuilt = secondLook === undefined ? undefined : buildSlices(secondLook, { maxBytes, waveBytes });
@@ -238,15 +245,18 @@ export async function runSlice(args: string[], deps: SliceDeps): Promise<void> {
   const head = optionValue(args, "--head") ?? delta?.range.head ?? (await currentHead()) ?? "no-head";
   const reachFile = placed("--reach");
   const jevFile = placed("--jev-scores");
-  const routed = routeSlices(built.slices, {
+  const routing = {
     head,
     ...(reachFile === undefined ? {} : { reach: await readNumberMap(reachFile, "--reach") }),
     ...(jevFile === undefined ? {} : { jevScores: await readNumberMap(jevFile, "--jev-scores") }),
-  });
-  const classified = delta === undefined ? routed : classifyDeltaSlices(routed, delta, readPriorFindings(packageFlag!));
+  };
+  const routed = routeSlices(built.slices, routing);
+  const prior = delta === undefined ? [] : readPriorFindings(packageFlag!);
+  const fixSlices = fixBuilt === undefined || delta === undefined ? [] : classifyDeltaSlices(routeSlices(fixBuilt.slices, routing), delta, prior);
+  const classified = delta === undefined ? routed : classifyDeltaSlices(routed, delta, prior);
   const second = secondBuilt === undefined || delta === undefined ? [] : tagSecondLookSlices(routeSlices(secondBuilt.slices, { head }), delta.round - 1);
-  const slices = second.length === 0 ? classified : renumberSlices([...classified, ...second]);
-  const omissions = [...built.manifest.omissions, ...(secondBuilt?.manifest.omissions ?? []).filter((omission) => !built.manifest.omissions.some((known) => known.path === omission.path))];
+  const slices = second.length === 0 && fixSlices.length === 0 ? classified : renumberSlices([...fixSlices, ...classified, ...second]);
+  const omissions = [...built.manifest.omissions, ...(fixBuilt?.manifest.omissions ?? []), ...(secondBuilt?.manifest.omissions ?? [])].filter((omission, index, all) => all.findIndex((known) => known.path === omission.path) === index);
   const totals = {
     ...built.manifest.totals,
     slices: slices.length,
