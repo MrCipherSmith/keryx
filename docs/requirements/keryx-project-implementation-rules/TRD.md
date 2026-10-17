@@ -122,3 +122,54 @@ Per the operator's rule, the full suite runs on GitHub CI, not locally; local ru
 - `resolve-context` and `project_context_applied` are provisional names.
 - "Both modes, import by default" is interpreted in PRD section 5.
 - The glob matcher and the `alwaysApply`/index threshold (30,720 bytes) are proposals, to be fixed against the real Vantage `globs`.
+
+## 6. Совместимость с Vantage thin-overlay и унификация
+
+Source: vantage-ai-assistant `main` at 8c967fb (PR #16, `chore/thin-overlays-drift-sync`), read 2026-10-17: `README.md`, `scripts/project-drift.ts`, `scripts/keryx-upgrade.sh`, `skills/keryx-reviewer-setup/scripts/setup.sh`, `skills/vantage-rules-sync/SKILL.md`, `project-sources.json`. This section is a proposal for the operator. It changes no frozen AC (AC1-AC24) and no code of this flow.
+
+### 6.1 What Vantage built, in the terms of this flow
+
+- The overlay holds thin rules (40-90 lines) that point at the project's own contract files (`CLAUDE.md`, `.claude/rules/*.md`, `STYLING.md`, `THEMING.md`) by path and anchor. The project owns every value. This is the case AC23/AC25 (links and referenced contract files with a sha256 pin) were written for; it is now the main case, not an edge.
+- `project-sources.json` maps each overlay file to the project files it depends on, records a baseline (project sha, Keryx release), lists the reviewers to register, the packages that must never be registered, and the Keryx files each overlay skill composes (`keryx.depends_on`).
+- `scripts/project-drift.ts` (about 1,100 lines, bun) compares the overlay with the project at `origin/develop` via `git show` (the project working tree is never read) and with the installed Keryx. Its checks: upstream, unmapped, paths, anchors, lint-rules, path-gates, internal, retired-terms, indexes, coverage, sources, portability, forks, keryx, install. `--record-baseline` refuses while any non-upstream error remains.
+- `scripts/keryx-upgrade.sh` (plan, snapshot, apply, diff) upgrades Keryx globally and re-runs `keryx update --skip-runtime`, the reviewer import and the drift check; `setup.sh` imports reviewers one by one (`keryx skills import --from ... --module review`) and the facade as module `orchestration`.
+- The law "an overlay skill that shares a name with a Keryx bundled skill is a fork and is deleted" matches PRD section 3 (non-goal: same-name project skill).
+
+### 6.2 Honest comparison
+
+Vantage is ahead on: drift detection against the project's source of truth (anchors, paths, retired terms, lint rules and path gates are verified, not just hashed); a recorded baseline per project sha; tracking of the Keryx release and of the exact bundled files a facade composes; snapshotting a Keryx release before an upgrade; the "never register" list.
+
+This flow is ahead on: a deterministic resolver that selects rules for a task (globs, taskTypes), a byte cap with an `on_demand` split instead of loading everything, `project_context_applied` in the implementer result with a validator and `warn`/`block` enforcement, the sha256 pin of linked files at the moment of use (AC13, AC23), `shadows` reporting, the TUI representation (AC24). Vantage has no equivalent of the resolver: its rules reach reviewers through the Keryx project slot only.
+
+Duplicated in Vantage scripts, and already owned or about to be owned by Keryx:
+
+- Copy and link bookkeeping for imported rules (`setup.sh` step 2 only reports `shadowedRules`; Keryx already writes `rules/project/<dir>/`).
+- Reviewer inventory checks (`keryx review reviewers` is parsed with awk/grep in `setup.sh`; a `--json` form exists and is already used for one step).
+- The `MIN_KERYX` gate and the `install` group ("installed copies differ"): this re-derives from files what the `keryx skills` registry already holds (origin, hash, `changed`).
+- A hash baseline per mapped file in `project-sources.json`: the same job as the sha256 pin of AC23, written by hand and checked only by the overlay's own script.
+
+Vantage-only and not to be absorbed: lint-rule, path-gate, retired-term and index checks; the `vantage-rules-sync` subagent-per-area procedure; the Cursor/OpenCode/Qwen/Zed mirrors (`sync-skills.sh`, `sync-rules.sh`). These are Vantage's runtime and doctrine.
+
+### 6.3 Decisions proposed (D-V1..D-V5)
+
+- D-V1. Keep the resolver independent of Vantage's `project-sources.json` (section 2.6b stands). The resolver reads Keryx's own registry (`link` entries with path and sha256) and the project's contract files; it never parses a foreign manifest. Vantage may generate the Keryx registry entries from its manifest in `setup.sh`; that is its integration, not a Keryx dependency.
+- D-V2. After flow 461, add a generic read-only command, working name `keryx skills drift [--project <dir>] [--json]`. For every imported or linked package and rule it reports: the origin path exists; the origin sha256 equals the recorded one (`changed`); cited rules resolve; a linked contract file still exists and matches its pin; a package shadows a Keryx bundled name (the "fork" case); the registry copy differs from the installed copy. Exit 0 clean, 1 findings, 2 usage. This absorbs the Vantage `install`, `forks`, `portability` and `paths` checks for any project and leaves anchors, lint-rules, path-gates and retired terms to the overlay's own script, which can call `keryx skills drift --json` first.
+- D-V3. Add `keryx skills sources` (read-only): the recorded baseline per origin (origin path or repo, commit sha when the origin is a git checkout, hashes, Keryx version at import time), and `keryx skills sources --record` to store it in the registry. This replaces a hand-kept baseline per project with a Keryx-owned one. It reads no project documents beyond hashing the files the registry already lists.
+- D-V4. Leave the global upgrade and the runtime mirrors out of Keryx. `keryx-upgrade.sh` mutates the global npm install and `sync-skills.sh` prunes agent runtimes; both are operator-side decisions. Keryx adds only the "Keryx moved past the recorded version" line to `keryx skills drift`.
+- D-V5. One import path: after flow 461 is released, Vantage's `setup.sh` calls `keryx skills import --rules <dir> [--link]` (AC4-AC8) for the rules it cites, instead of relying on reviewer citation only. Until then it keeps working, because reviewer import is unchanged (AC20).
+
+### 6.4 Open questions for the operator
+
+1. Take D-V2 and D-V3 as a separate follow-up flow after 461, with its own PRD and AC (recommended: yes, since 461's AC are frozen)?
+2. Should `keryx skills drift` exit 1 on findings by default (CI-failing) or only warn?
+3. Baseline home: the Keryx registry (D-V3), or Vantage's `project-sources.json` as the single source that Keryx reads? D-V1 recommends the first; the second is faster for Vantage but couples Keryx to a foreign format.
+4. Vantage `project-sources.json` lists `skills/screen-recording`, which does not exist in the overlay repo, so its coverage check fails on any clean clone. This is a Vantage bug for its owner; it does not affect this flow.
+
+### 6.5 Proposed new criteria (not added to the frozen set)
+
+For the follow-up flow, not for 461:
+
+- P1. `keryx skills drift --json` on a project with one linked rule whose origin changed reports exactly that rule as `changed` and exits 1; on a clean project it exits 0.
+- P2. A project skill named like a bundled Keryx skill is reported as `fork`.
+- P3. `keryx skills sources` output is stable (sorted, no timestamps), so it can be committed and diffed.
+- P4. Neither command writes outside `.metaproject/` and neither executes origin content.
