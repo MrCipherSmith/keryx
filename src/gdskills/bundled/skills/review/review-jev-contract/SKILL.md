@@ -141,7 +141,7 @@ object (`sites`, `enumeration_method`) — never a bare label.
 3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
 4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
 
-This reviewer satisfies all three by construction: `evidence` always names the
+This reviewer satisfies laws 1-3 by construction (law 4 is the premise judge's question, Wave D, for its findings at `minor` and above): `evidence` always names the
 matched artefacts/facts and the claim text (never an unreproducible claim); a
 finding is synthesized only against a claim actually extracted from the real
 description, never a hypothetical one; and each claim is its own site, so
