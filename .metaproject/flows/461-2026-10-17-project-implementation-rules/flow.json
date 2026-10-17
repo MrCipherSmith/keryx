@@ -11,7 +11,7 @@
   "title": "Project rules and skills are applied first when code and tests are written",
   "status": "in-progress",
   "createdAt": "2026-10-17T18:22:54.675Z",
-  "updatedAt": "2026-10-17T18:53:20.097Z",
+  "updatedAt": "2026-10-17T18:53:36.370Z",
   "source": {
     "type": "description",
     "ref": null
@@ -111,7 +111,7 @@
       "id": "T6",
       "title": "Stage 1: categories, skills import --rules/--link, registry fields, update/remove (AC4-AC8, AC23)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -119,7 +119,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
@@ -236,6 +237,11 @@
       "at": "2026-10-17T18:53:20.097Z",
       "event": "ac-updated",
       "detail": "AC7 tests live in project-skills-registry-kind.test.ts and import-skills-rules.test.ts; the verify command now names them"
+    },
+    {
+      "at": "2026-10-17T18:53:36.370Z",
+      "event": "task-done",
+      "detail": "T6: Stage 1: categories, skills import --rules/--link, registry fields, update/remove (AC4-AC8, AC23)"
     }
   ],
   "acKinds": {
