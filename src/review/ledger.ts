@@ -691,7 +691,12 @@ function closeWith(given: Disposition | undefined, canonical: Array<Record<strin
   return { status: given.status, evidence: given.evidence, reason: given.reason, ...(given.status === "finding" ? { finding: given.finding } : {}), ...(given.status === "narrowed" ? { remains: given.remains } : {}) };
 }
 
-/** The gate's own validators over the built ledger, so "ready" cannot disagree with `keryx review complete`. */
+/**
+ * The gate's validators over the ledger just built (research, dispatch, coverage). The coverage check runs with the
+ * options the caller passes: `review complete` and `review readiness` read theirs from the package
+ * (`packageCoverageErrors`, ./research.ts), so a caller that passes others (no `prContext`, another root) can still
+ * disagree with them. "ready" here is the ledger's view, not a promise that complete will pass.
+ */
 export async function ledgerBlockers(ledger: LedgerResult["ledger"], canonical: unknown, options: { root: string; packageDir?: string | undefined; files: readonly string[] | undefined; changedLines?: number | undefined; blastRadius?: boolean | undefined; pendingMutants?: number | undefined }): Promise<string[]> {
   const dispatch = dispatchErrors(ledger.dispatch);
   const coverage = dispatch.length === 0 ? await coverageErrors(ledger.dispatch, options) : [];

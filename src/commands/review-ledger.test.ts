@@ -394,7 +394,8 @@ describe("ledger build --skip and flow-bound packages (flow 458 AC7)", () => {
       const dispatch = out.ledger.dispatch;
       expect((await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"], packageDir: pkg })).join("\n")).not.toContain("missing");
       expect((await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"] })).join("\n")).toContain("dispatch.skipped is not accepted");
-      expect((await coverageErrors({ mode: "all", selected: dispatch.selected }, { root, files: ["src/a.ts"], packageDir: pkg })).join("\n")).toContain(`missing: ${skipped}`);
+      // Flow 460 (B): the recorded decision itself accounts for the reviewer it left out, with or without a dispatch field.
+      expect((await coverageErrors({ mode: "all", selected: dispatch.selected }, { root, files: ["src/a.ts"], packageDir: pkg })).join("\n")).not.toContain("missing");
 
       const text = (await run([pkg, "--mode", "all", "--dry-run", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).text;
       expect(text).toContain(`- Not run: ${skipped} — operator: no style pass on a hotfix`);

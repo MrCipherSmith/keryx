@@ -21,7 +21,7 @@ import type { PremiseQuestionDecision } from "./operator-decisions";
 import { awaitingOperator, premiseHoldState } from "./premise";
 import { premiseRecords } from "./verdict";
 import { packageParityWarnings } from "./parity";
-import { researchErrors } from "./research";
+import { packageCoverageErrors, researchErrors } from "./research";
 import type { ConfirmedVia, ManagedReviewManifest, ReadinessWaiver } from "./types";
 
 export const READINESS_ITEMS = [
@@ -163,14 +163,21 @@ async function reviewersCheck(ctx: Context): Promise<Verdict> {
     if (!(await pathExists(path.join(ctx.dir, evidence))) && (await pathExists(path.join(ctx.dir, "raw")))) lost.push(String(run.reviewer));
   }
   const all = [...new Set([...unfinished, ...unplanned, ...lost])];
-  if (problems.length === 0 && all.length === 0) return ok(`${runs.length} reviewer run(s), all complete with their result on disk`);
+  // The coverage gate `review complete` runs, with the same options (flow 460): readiness must not say READY while
+  // complete refuses the reviewer set, the round depth or an unwaived mutation pass.
+  const coverage = problems.length === 0 ? await packageCoverageErrors(ctx.dir, dispatch) : [];
+  if (problems.length === 0 && all.length === 0 && coverage.length === 0) return ok(`${runs.length} reviewer run(s), all complete with their result on disk; the coverage gate accepts the dispatch`);
   const parts = [
     ...(unfinished.length > 0 ? [`not run or incomplete: ${some(unfinished)}`] : []),
     ...(unplanned.length > 0 ? [`planned with no run recorded: ${some(unplanned)}`] : []),
     ...(lost.length > 0 ? [`result file missing from raw/: ${some(lost)}`] : []),
     ...problems.slice(0, 2),
+    ...coverage.map((error) => `coverage gate (as review complete runs it): ${error}`),
   ];
-  return bad(parts.join("; "), `dispatch ${some(all.length > 0 ? all : ["the missing reviewers"])}, save each reply to raw/<reviewer>.txt, then \`keryx review ledger build <input-dir> --package ${ctx.arg}\``);
+  const repair = all.length === 0 && coverage.length > 0
+    ? "do what the coverage gate message names (dispatch the missing reviewers, or record the operator's decision), then re-run `keryx review readiness`"
+    : `dispatch ${some(all.length > 0 ? all : ["the missing reviewers"])}, save each reply to raw/<reviewer>.txt, then \`keryx review ledger build <input-dir> --package ${ctx.arg}\``;
+  return bad(parts.join("; "), repair);
 }
 
 const pathExists = (file: string): Promise<boolean> => stat(file).then(() => true, () => false);
