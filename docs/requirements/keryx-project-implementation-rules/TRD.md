@@ -123,6 +123,18 @@ Per the operator's rule, the full suite runs on GitHub CI, not locally; local ru
 - "Both modes, import by default" is interpreted in PRD section 5.
 - The glob matcher and the `alwaysApply`/index threshold (30,720 bytes) are proposals, to be fixed against the real Vantage `globs`.
 
+### 5.1 Safe defaults chosen by the implementation (operator-owned, change on request)
+
+- Cap 128 KiB (131072 bytes), range 4096..1048576, set in `.metaproject/tasks.config.json` under `gdskills.projectContext.maxBytes`; `--max-bytes` overrides it for one call. `budget.exceeded` means a non-index project entry was pushed to `on_demand` by the cap.
+- Enforcement `warn` by default; `block` is the flag. Under `block`, `flow task done` refuses an `implement`/`test` task with no recorded result; `--disposition skipped --reason` is the escape.
+- The last result is written to `.metaproject/data/skills/project-context/last.json` by the CLI; the shell/MCP operation `skills_resolve_context` is pure and does not write it.
+- Registry keys, `update --rules [<ref>]` and `remove --rule <ref>` are the maintenance flags. `--rules` takes a directory (`.mdc`, `.md`); `--link` reads it in place and excludes a linked rule whose file changed.
+- Bundled rules are listed only if present in `.metaproject/rules/core`.
+- The cap is shown in the settings row detail (`cap 128 KiB, this project`); editing it stays in the config file. The mode is switched by the row buttons and `/projectctx`.
+- `alwaysApply` is applied as written; an always-apply rule larger than 30,720 bytes is an index (listed `on_demand`, never counted against the cap).
+- Found while writing the docs: the CLI router (`src/lib/group-subcommands.ts`) did not list `resolve-context`, so `keryx skills resolve-context` answered `Unknown command` from the command line while direct calls passed. It is listed now and a test compares the dispatch with the list.
+- Section 6 (P1–P4, Vantage thin-overlay compatibility) is a proposal and is not implemented.
+
 ## 6. Совместимость с Vantage thin-overlay и унификация
 
 Source: vantage-ai-assistant `main` at 8c967fb (PR #16, `chore/thin-overlays-drift-sync`), read 2026-10-17: `README.md`, `scripts/project-drift.ts`, `scripts/keryx-upgrade.sh`, `skills/keryx-reviewer-setup/scripts/setup.sh`, `skills/vantage-rules-sync/SKILL.md`, `project-sources.json`. This section is a proposal for the operator. It changes no frozen AC (AC1-AC24) and no code of this flow.

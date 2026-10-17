@@ -81,8 +81,9 @@ Set both the cap and the strictness in `.metaproject/tasks.config.json`:
 ```
 
 `warn` (the default) records a miss in the flow journal and lets the task
-close. `block` refuses it. In the TUI the same two settings are the **Project
-rules check** row of `/settings`, and `/projectctx` opens the last result.
+close. `block` refuses it. In the TUI, the **Project rules check** row of
+`/settings` switches the mode and shows the cap, and `/projectctx` opens the
+last result.
 
 ## 4. Check the worker's work
 

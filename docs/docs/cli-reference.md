@@ -3553,10 +3553,11 @@ Both the cap and the enforcement mode live in `.metaproject/tasks.config.json`:
 | `gdskills.projectContext.enforcement` | `warn` (default), `block` | `warn`: a miss is printed by `contracts validate --resolved`, and written to the flow journal by `flow task done`; the exit code stays `0`. `block`: `contracts validate --resolved` exits `1` naming the missing paths, and `flow task done` refuses an `implement` or `test` task whose result fails the check or that records no result (close it with `--disposition skipped --reason "<why>"` to move past it). An unknown value reads as `warn`. |
 | `gdskills.projectContext.maxBytes` | integer 4096..1048576, default 131072 | Cap on project-sourced content per task. Entries that fit are `must_read`; the rest are listed `on_demand` with their description and `budget.exceeded` is set with one warning that names this key. Rules are never cut. `resolve-context --max-bytes` overrides it for one call. A value outside the range reads as the default and warns. |
 
-The default install writes neither key and reads as `warn` with 128 KiB. Both
-keys can also be set from the TUI: `/projectctx [warn|block]` opens the
+The default install writes neither key and reads as `warn` with 128 KiB. The
+mode can also be changed from the TUI: `/projectctx [warn|block]` opens the
 inspector (Status and Last resolve tabs, `e` toggles the mode) and the
-settings modal has a `Project rules check` row under Safety. The sidebar shows a
+settings modal has a `Project rules check` row under Safety that shows the
+mode and, beside it, the cap (the cap itself is edited in the config file). The sidebar shows a
 `ProjectCtx` line once the project has imported rules or a recorded resolve.
 
 The MCP and shell operation `skills_resolve_context` returns the same entries

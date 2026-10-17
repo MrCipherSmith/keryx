@@ -36,7 +36,7 @@ test("a .tsx target gets the scoped rules must_read and the index listed, matchi
     files: result.files,
     entries: result.entries.map((entry) => ({ path: entry.path, reason: entry.reason, tier: entry.tier, ...(entry.index === true ? { index: true } : {}) })),
     warnings: result.warnings,
-  }).toEqual(expected);
+  } as unknown).toEqual(expected as unknown);
 });
 
 test("the index file is bigger than the threshold, is listed without being counted, and the rules scoped to other files are absent", async () => {
