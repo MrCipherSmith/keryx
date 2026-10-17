@@ -609,6 +609,36 @@ describe("a pull-request package's diff is read at the repository top level agai
     expect(errors).toContain("depth light, but the full set applies");
   });
 
+  test("a branch target without a recorded base resolves a real base, never its own ref (which is the head)", async () => {
+    // `pr...head` is empty (the ref is the head), which would pass a 32-file branch as a zero-line light round.
+    const head = repo(Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`src/m${i}.ts`, `export const m${i} = ${i};\n`])));
+    expect(await lightErrors(await pkgAt(root, { kind: "branch", ref: "pr", head }))).toContain("depth light, but the full set applies");
+  });
+
+  test("a small branch target without a recorded base is measured against main and stays light", async () => {
+    const head = repo();
+    expect(await lightErrors(await pkgAt(root, { kind: "branch", ref: "pr", head }))).toBe("");
+  });
+
+  test("a branch target whose head is its base's tip refuses with the empty-range warning", async () => {
+    repo();
+    const merged = git(root, "rev-parse", "main").trim();
+    const errors = await lightErrors(await pkgAt(root, { kind: "branch", ref: "main", head: merged }));
+    expect(errors).toContain("empty review range");
+    expect(errors).toContain("depth light, but the full set applies");
+  });
+
+  test("a recorded base can only widen the check: --base head~1 on a large pull request does not make it light (SEC-001)", async () => {
+    repo();
+    git(root, "checkout", "-q", "pr");
+    const many = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`src/m${i}.ts`, `export const m${i} = ${i};\n`]));
+    const bulk = commitFiles(root, many, "a large change");
+    const head = commitFiles(root, { "src/a.ts": "export const a = 3;\n" }, "a small last commit");
+    git(root, "checkout", "-q", "main");
+    const errors = await lightErrors(await pkgAt(root, { base: bulk, head }));
+    expect(errors).toContain("depth light, but the full set applies");
+  });
+
   test("the light recheck's git diff is remembered per package and head: a second check in the same process runs no git", async () => {
     const head = repo();
     const pkg = await pkgAt(root, { base: "main", head });

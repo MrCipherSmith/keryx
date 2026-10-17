@@ -26,6 +26,7 @@
 
 import { createHash } from "node:crypto";
 import { actorKey } from "./verification";
+import { DISPLAY_ID_FORM, displayIdHasHash } from "./display-id";
 import {
   HELD_PREMISE_VERDICTS,
   PREMISE_VERDICTS,
@@ -145,9 +146,11 @@ const ELLIPSIS = "...";
  * because it names no judge, and the never-judge-your-own-finding rule cannot be checked against nobody.
  */
 export function parsePremiseClaims(source: unknown): ParsedPremiseClaims | undefined {
-  if (source === undefined) {
-    return undefined;
-  }
+  return source === undefined ? undefined : parseOnePremiseResult(source);
+}
+
+/** One premise result, read as {@link parsePremiseClaims} reads it; a value that is not one throws. */
+function parseOnePremiseResult(source: unknown): ParsedPremiseClaims {
   if (!isRecord(source)) {
     throw new Error(
       "A premise result must be an object `{ judge, model?, premises: [...] }`, not an array or a bare value. Nothing was merged.",
@@ -182,9 +185,14 @@ export function parsePremiseClaimSets(source: unknown): ParsedPremiseClaims[] | 
     return undefined;
   }
   if (Array.isArray(source) && source.length > 0 && source.every((entry) => isRecord(entry) && "premises" in entry)) {
-    return source.map((entry) => parsePremiseClaims(entry) as ParsedPremiseClaims);
+    return source.map(parseOnePremiseResult);
   }
-  return [parsePremiseClaims(source) as ParsedPremiseClaims];
+  return [parseOnePremiseResult(source)];
+}
+
+/** Several parsed premise results rather than one (`Array.isArray` does not narrow a readonly union). */
+function isClaimSetList(value: ParsedPremiseClaims | readonly ParsedPremiseClaims[]): value is readonly ParsedPremiseClaims[] {
+  return Array.isArray(value);
 }
 
 /**
@@ -192,7 +200,7 @@ export function parsePremiseClaimSets(source: unknown): ParsedPremiseClaims[] | 
  * may not contain it: a judge shown `review-logic-w1#F-001` as a display id names a key ingest can never mint.
  */
 export function hashInDisplayIdDetail(id: string): string {
-  return `"${id}" contains "#", which only a global_id may (\`<reviewId>#<id>\`); name the finding by its display id, which holds no "#" (e.g. \`review-logic-w1:F-001\`), or by its full global_id.`;
+  return `"${id}" contains "#" but is no global_id of this round: ${DISPLAY_ID_FORM}; name the finding by its display id, or by its full global_id.`;
 }
 
 export function isPremiseVerdict(value: unknown): value is PremiseVerdict {
@@ -229,7 +237,7 @@ function claimName(claim: PremiseClaimInput): string {
 function mergedKeyNames(key: string, id: string): boolean {
   if (key === id) return true;
   const hash = key.lastIndexOf("#");
-  return hash >= 0 && !id.includes("#") && key.slice(hash + 1) === id;
+  return hash >= 0 && !displayIdHasHash(id) && key.slice(hash + 1) === id;
 }
 
 /**
@@ -336,7 +344,7 @@ export function mergePremises<T extends StructuredReviewFinding>(
   parsedInput: ParsedPremiseClaims | readonly ParsedPremiseClaims[] | undefined,
 ): PremiseMergeResult<T> {
   // Several premise files (flow 460) are one merge: each claim keeps its own file's judge and model.
-  const sets: readonly ParsedPremiseClaims[] = parsedInput === undefined ? [] : Array.isArray(parsedInput) ? (parsedInput as readonly ParsedPremiseClaims[]) : [parsedInput as ParsedPremiseClaims];
+  const sets: readonly ParsedPremiseClaims[] = parsedInput === undefined ? [] : isClaimSetList(parsedInput) ? parsedInput : [parsedInput];
   const claims = sets.flatMap((parsed, file) => parsed.claims.map((claim) => ({ claim, parsed, file })));
   const judges = [...new Set(sets.map((parsed) => parsed.judge).filter((judge): judge is string => judge !== undefined))];
   const rejections: PremiseRejection[] = [];
@@ -370,7 +378,7 @@ export function mergePremises<T extends StructuredReviewFinding>(
     if (matches.length === 0) {
       reject(
         "unknown-finding",
-        typeof claim.finding_id === "string" && claim.finding_id.includes("#")
+        displayIdHasHash(claim.finding_id)
           ? `this round reported no such finding: ${hashInDisplayIdDetail(claim.finding_id)}`
           : "this round reported no such finding. A premise judge cannot introduce one.",
       );

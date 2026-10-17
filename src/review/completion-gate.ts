@@ -8,6 +8,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { resolveActiveReview } from "./active-review";
 import { reviewCompletionBlockers, reviewsRoot } from "./managed";
+import { readManifestHead } from "./package-location";
 
 export const MAX_REVIEW_GATE_CONTINUES = 20;
 export const MAX_REVIEW_GATE_STALLS = 3;
@@ -49,8 +50,12 @@ const MAX_PREFIX_CHARS = 1024;
 const MAX_NAME_CHARS = 255;
 /** The most recent project roots the gate scans: each one costs directory reads on every stop. */
 export const MAX_SESSION_REVIEW_ROOTS = 8;
-const MAX_SESSION_REVIEW_PACKAGES = 32;
-const MAX_SESSION_REVIEW_COMMANDS = 64;
+/** The most recent package directories the session named by path. */
+const MAX_SESSION_REVIEW_DIRS = 32;
+/** The most recent review ids the session named (an explicit argument, or keryx's own `# managed review:` line). */
+const MAX_SESSION_REVIEW_IDS = 32;
+/** Tool calls awaiting their result: one that never gets one is dropped once this many are newer. */
+const MAX_PENDING_CALLS = 64;
 /** A review id fit to quote in a harness nudge or to match as a token. */
 const SAFE_REVIEW_ID = /^[A-Za-z0-9._:-]{1,120}$/;
 
@@ -84,28 +89,146 @@ export function reviewPackagePaths(text: string): Array<{ prefix: string; name: 
   }
 }
 
-/** What this session's own `keryx review` commands named. The gate looks only here, never at arbitrary tool output. */
+/** What this session's own executed `keryx review` commands named. The gate looks only here, never at arbitrary tool output. */
 export type SessionReviewNames = {
   /** Project roots (the directory holding `.metaproject`) inside `cwd`, other than `cwd`: the newest {@link MAX_SESSION_REVIEW_ROOTS}. */
   roots: readonly string[];
   /** Absolute package directories named by path. */
   packageDirs: readonly string[];
-  /** Review ids keryx itself printed in reply to this session's commands (`# managed review: <id>`). */
+  /**
+   * Review ids this session named: an explicit argument of its `keryx review` commands (`status|readiness|complete|… <id>`,
+   * `--review-id <id>`, `--package <id>`), or the id keryx itself printed in reply (`# managed review: <id>`).
+   */
   reviewIds: readonly string[];
-  /** The arguments of this session's `keryx review` tool calls, newest last: a review id named there counts as named. */
-  commands: readonly string[];
+  /** Whether this session ran a review: loaded the review skill, or executed any `keryx review` command. */
+  runSeen?: boolean | undefined;
+  /** When the session started: the earliest message timestamp seen, kept when the history is later compacted. */
+  startedAt?: number | undefined;
 };
 
 type HistoryMessage = {
   role?: string | undefined;
   content?: unknown;
+  ts?: string | undefined;
+  toolCalls?: ReadonlyArray<{ id?: string | undefined; name?: string | undefined; arguments: string }> | undefined;
   toolCallId?: string | undefined;
-  toolCalls?: ReadonlyArray<{ id?: string | undefined; arguments: string }> | undefined;
 };
 
-const KERYX_REVIEW_COMMAND = /\bkeryx review\b/;
+/** The tools whose `command` argument is a shell line the session executed. A file write that mentions `keryx review` is not one. */
+const SHELL_TOOLS: ReadonlySet<string> = new Set(["shell_exec", "bash", "shell"]);
+/** The subcommands that print the package they opened (`# managed review: <id>` and `path: <dir>`). */
+const OPENING_SUBCOMMANDS: ReadonlySet<string> = new Set(["start", "attach", "ingest"]);
+/** The subcommands whose first positional argument is a review id or package path. */
+const PACKAGE_ARG_SUBCOMMANDS: ReadonlySet<string> = new Set(["status", "readiness", "complete", "attach", "publish", "verdict", "show"]);
 /** The lines `keryx review start|attach|ingest` prints about the package it opened. */
 const OWN_OUTPUT_LINE = /^(# managed review|path): (\S.*)$/;
+
+/** One `keryx review` invocation of a shell line: the directory it ran in, its words after `review`, and whether it ran alone. */
+export type ReviewInvocation = { cwd: string; subcommand: string; args: string[]; alone: boolean };
+
+/**
+ * The shell line split into commands (at `;`, `&`, `|`, newlines outside quotes) and each command into words (quotes
+ * removed, a backslash escaping the next character outside single quotes). A small reader, not a shell: it is enough to
+ * tell which words a command starts with.
+ */
+function shellCommands(line: string): string[][] {
+  const commands: string[][] = [];
+  let words: string[] = [];
+  let word = "";
+  let inWord = false;
+  let quote: "'" | '"' | undefined;
+  const endWord = (): void => {
+    if (inWord) words.push(word);
+    word = "";
+    inWord = false;
+  };
+  const endCommand = (): void => {
+    endWord();
+    if (words.length > 0) commands.push(words);
+    words = [];
+  };
+  for (let at = 0; at < line.length; at += 1) {
+    const ch = line[at]!;
+    if (quote !== undefined) {
+      if (ch === quote) quote = undefined;
+      // In double quotes a backslash escapes only `$`, a backtick, `"`, `\` and a newline (as sh reads it): a Windows path keeps its separators.
+      else if (ch === "\\" && quote === '"' && at + 1 < line.length && '$`"\\\n'.includes(line[at + 1]!)) word += line[++at];
+      else word += ch;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      inWord = true;
+    } else if (ch === "\\" && at + 1 < line.length) {
+      word += line[++at];
+      inWord = true;
+    } else if (ch === ";" || ch === "&" || ch === "|" || ch === "\n") endCommand();
+    else if (/\s/.test(ch)) endWord();
+    else {
+      word += ch;
+      inWord = true;
+    }
+  }
+  endCommand();
+  return commands;
+}
+
+/**
+ * The `keryx review` invocations of one executed shell line, each with the directory it ran in: the session's cwd, moved
+ * by a `cd <dir>` command before it (`cd sub && keryx review start …`). `alone` is true when the line holds nothing but
+ * `cd` commands and this one invocation, so what the tool printed is keryx's own output.
+ */
+export function keryxReviewInvocations(line: string, cwd: string): ReviewInvocation[] {
+  const commands = shellCommands(line);
+  const found: ReviewInvocation[] = [];
+  let dir = cwd;
+  let others = 0;
+  for (const words of commands) {
+    let start = 0;
+    while (start < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[start]!)) start += 1;
+    const command = words.slice(start);
+    if (command[0] === "cd" && command.length === 2) {
+      dir = path.resolve(dir, command[1]!);
+      continue;
+    }
+    if (command.length >= 2 && path.basename(command[0]!) === "keryx" && command[1] === "review") {
+      found.push({ cwd: dir, subcommand: command[2] ?? "", args: command.slice(3), alone: false });
+      continue;
+    }
+    others += 1;
+  }
+  const alone = found.length === 1 && others === 0;
+  return found.map((invocation) => ({ ...invocation, alone }));
+}
+
+/** The shell line of a tool call, when it is a shell tool's (`{ command }`); undefined for any other tool. */
+function executedCommand(call: { name?: string | undefined; arguments: string }): string | undefined {
+  if (call.name === undefined || !SHELL_TOOLS.has(call.name)) return undefined;
+  try {
+    const parsed = JSON.parse(call.arguments) as { command?: unknown };
+    return typeof parsed?.command === "string" ? parsed.command : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The review ids an invocation names at an explicit argument position. */
+function explicitReviewIds(invocation: ReviewInvocation): string[] {
+  const ids: string[] = [];
+  const args = invocation.args;
+  for (let at = 0; at < args.length; at += 1) {
+    const arg = args[at]!;
+    const flag = /^--(review-id|package)(?:=(.*))?$/.exec(arg);
+    if (flag !== null) {
+      const value = flag[2] ?? args[at + 1];
+      if (flag[2] === undefined) at += 1;
+      if (value !== undefined && SAFE_REVIEW_ID.test(value)) ids.push(value);
+    }
+  }
+  const positional = args.find((arg) => !arg.startsWith("-"));
+  if (PACKAGE_ARG_SUBCOMMANDS.has(invocation.subcommand) && positional !== undefined && SAFE_REVIEW_ID.test(positional)) ids.push(positional);
+  return ids;
+}
 
 function remember<T>(items: Map<T, true>, item: T, cap: number): void {
   items.delete(item);
@@ -119,65 +242,83 @@ function inside(parent: string, child: string): boolean {
 }
 
 /**
- * Collects {@link SessionReviewNames} from a history incrementally: `update` scans only the messages added since
- * the last call, and starts over when the history was rewritten (compacted or cleared).
+ * Collects {@link SessionReviewNames} from a history incrementally: `update` scans only the messages added since the
+ * last call. When the history is rewritten (compacted or cleared) the scan starts over on the new history, but what
+ * the session named so far is kept: a compaction drops the `keryx review` calls that named a package, not the fact
+ * that they ran. Only executed shell commands count (a file write that mentions `keryx review` names nothing), and
+ * only the ids and paths they name are kept, never the command text.
  */
 export class SessionReviewTracker {
   private cursor = 0;
   private last: unknown;
-  private readonly pendingCalls = new Set<string>();
+  private runSeen = false;
+  private startedAt: number | undefined;
+  /** Call id -> the invocation whose result is awaited (only one that ran alone and opens a package). */
+  private readonly pendingCalls = new Map<string, ReviewInvocation>();
   private readonly roots = new Map<string, true>();
   private readonly packageDirs = new Map<string, true>();
   private readonly reviewIds = new Map<string, true>();
-  private readonly commands = new Map<string, true>();
 
   constructor(readonly cwd: string) {}
 
   update(history: ReadonlyArray<HistoryMessage>): SessionReviewNames {
-    if (history.length < this.cursor || (this.cursor > 0 && history[this.cursor - 1] !== this.last)) this.reset();
+    if (history.length < this.cursor || (this.cursor > 0 && history[this.cursor - 1] !== this.last)) this.rescan();
     for (; this.cursor < history.length; this.cursor += 1) this.scan(history[this.cursor]!);
     this.last = history[this.cursor - 1];
     return {
       roots: [...this.roots.keys()],
       packageDirs: [...this.packageDirs.keys()],
       reviewIds: [...this.reviewIds.keys()],
-      commands: [...this.commands.keys()],
+      runSeen: this.runSeen,
+      ...(this.startedAt === undefined ? {} : { startedAt: this.startedAt }),
     };
   }
 
-  private reset(): void {
+  /** The history was rewritten: read it again from the start, keeping what was already named. */
+  private rescan(): void {
     this.cursor = 0;
     this.last = undefined;
     this.pendingCalls.clear();
-    this.roots.clear();
-    this.packageDirs.clear();
-    this.reviewIds.clear();
-    this.commands.clear();
   }
 
   private scan(message: HistoryMessage): void {
+    const at = message.ts === undefined ? Number.NaN : Date.parse(message.ts);
+    if (!Number.isNaN(at) && (this.startedAt === undefined || at < this.startedAt)) this.startedAt = at;
     for (const call of message.toolCalls ?? []) {
-      if (!KERYX_REVIEW_COMMAND.test(call.arguments)) continue;
-      remember(this.commands, call.arguments, MAX_SESSION_REVIEW_COMMANDS);
-      if (call.id !== undefined) this.pendingCalls.add(call.id);
-      this.namePaths(call.arguments);
+      if (call.name === "skill_load" && call.arguments.includes("review-orchestrator")) this.runSeen = true;
+      const command = executedCommand(call);
+      if (command === undefined || !command.includes("review")) continue;
+      for (const invocation of keryxReviewInvocations(command, path.resolve(this.cwd))) {
+        this.runSeen = true;
+        for (const arg of invocation.args) this.namePaths(arg, invocation.cwd);
+        for (const id of explicitReviewIds(invocation)) remember(this.reviewIds, id, MAX_SESSION_REVIEW_IDS);
+        if (call.id !== undefined && invocation.alone && OPENING_SUBCOMMANDS.has(invocation.subcommand)) {
+          this.pendingCalls.delete(call.id);
+          this.pendingCalls.set(call.id, invocation);
+          if (this.pendingCalls.size > MAX_PENDING_CALLS) this.pendingCalls.delete(this.pendingCalls.keys().next().value as string);
+        }
+      }
     }
-    if (message.role !== "tool" || message.toolCallId === undefined || !this.pendingCalls.delete(message.toolCallId)) return;
+    if (message.role !== "tool" || message.toolCallId === undefined) return;
+    const invocation = this.pendingCalls.get(message.toolCallId);
+    if (invocation === undefined) return;
+    this.pendingCalls.delete(message.toolCallId);
     if (typeof message.content !== "string" || !message.content.includes("# managed review: ")) return;
     for (const line of message.content.split("\n")) {
       const own = OWN_OUTPUT_LINE.exec(line.trimEnd());
       if (own === null) continue;
-      if (own[1] === "path") this.namePaths(own[2]!);
-      else if (SAFE_REVIEW_ID.test(own[2]!)) remember(this.reviewIds, own[2]!, MAX_SESSION_REVIEW_PACKAGES);
+      // keryx prints `path:` relative to the directory it ran in, which a leading `cd` moved.
+      if (own[1] === "path") this.namePaths(own[2]!, invocation.cwd);
+      else if (SAFE_REVIEW_ID.test(own[2]!)) remember(this.reviewIds, own[2]!, MAX_SESSION_REVIEW_IDS);
     }
   }
 
-  private namePaths(text: string): void {
+  private namePaths(text: string, from: string): void {
     const cwd = path.resolve(this.cwd);
     for (const { prefix, name } of reviewPackagePaths(text)) {
-      const root = path.resolve(cwd, prefix === "" ? "." : prefix);
+      const root = path.resolve(from, prefix === "" ? "." : prefix);
       if (!inside(cwd, root)) continue;
-      remember(this.packageDirs, path.join(root, METAPROJECT, REVIEWS, name), MAX_SESSION_REVIEW_PACKAGES);
+      remember(this.packageDirs, path.join(root, METAPROJECT, REVIEWS, name), MAX_SESSION_REVIEW_DIRS);
       if (root !== cwd) remember(this.roots, root, MAX_SESSION_REVIEW_ROOTS);
     }
   }
@@ -187,8 +328,9 @@ const trackers = new WeakMap<object, SessionReviewTracker>();
 
 /**
  * {@link SessionReviewNames} for `history`, cached per history array so each stop scans only the new messages.
- * Taken only from the arguments of this session's `keryx review` tool calls and from the `path:` and
- * `# managed review:` lines keryx printed in reply to them, and only for paths inside `cwd`.
+ * Taken only from this session's executed `keryx review` commands (a shell tool call), from explicit argument
+ * positions and paths, and from the `path:` and `# managed review:` lines keryx printed in reply to one that ran alone,
+ * and only for paths inside `cwd`.
  */
 export function sessionReviewNames(history: ReadonlyArray<HistoryMessage>, cwd: string): SessionReviewNames {
   let tracker = trackers.get(history);
@@ -199,31 +341,17 @@ export function sessionReviewNames(history: ReadonlyArray<HistoryMessage>, cwd: 
   return tracker.update(history);
 }
 
-function namesToken(text: string, token: string): boolean {
-  const boundary = (ch: string | undefined): boolean => ch === undefined || !/[A-Za-z0-9._:-]/.test(ch);
-  for (let at = text.indexOf(token); at >= 0; at = text.indexOf(token, at + 1)) {
-    if (boundary(text[at - 1]) && boundary(text[at + token.length])) return true;
-  }
-  return false;
-}
-
-/** True when this session's own commands named the package by its path or its review id. */
+/** True when this session named the package: by its path, or by its review id (an explicit argument or keryx's own output). */
 function namedBySession(named: Partial<SessionReviewNames>, dir: string, ids: ReadonlyArray<string | undefined>): boolean {
   const target = path.resolve(dir);
   if ((named.packageDirs ?? []).some((p) => path.resolve(p) === target)) return true;
-  for (const id of ids) {
-    if (id === undefined || !SAFE_REVIEW_ID.test(id)) continue;
-    if ((named.reviewIds ?? []).includes(id)) return true;
-    if ((named.commands ?? []).some((command) => namesToken(command, id))) return true;
-  }
-  return false;
+  const reviewIds = named.reviewIds ?? [];
+  return ids.some((id) => id !== undefined && SAFE_REVIEW_ID.test(id) && reviewIds.includes(id));
 }
 
-async function scanRoot(
-  root: string,
-  since: number,
-  named: Partial<SessionReviewNames>,
-): Promise<{ open: PackageCandidate[]; closedAt: number }> {
+type ClosedPackage = { dir: string; mtime: number; ids: Array<string | undefined> };
+
+async function scanRoot(root: string, since: number, named: Partial<SessionReviewNames>): Promise<{ open: PackageCandidate[]; closed: ClosedPackage[] }> {
   let names: string[];
   try {
     names = (await readdir(reviewsRoot(root), { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
@@ -231,59 +359,47 @@ async function scanRoot(
     names = [];
   }
   const open: PackageCandidate[] = [];
-  let closedAt = 0;
+  const closed: ClosedPackage[] = [];
   for (const name of names) {
     const dir = path.join(reviewsRoot(root), name);
-    try {
-      const manifest = JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")) as {
-        mode?: string;
-        status?: string;
-        reviewId?: string;
-      };
-      if (manifest.mode !== "review-flow" && manifest.mode !== "ingest") continue;
-      const info = await stat(path.join(dir, "manifest.json"));
-      if (manifest.status === "closed") {
-        if (info.mtimeMs >= since) closedAt = Math.max(closedAt, info.mtimeMs);
-        continue;
-      }
-      // An open package whose manifest predates the session is another run's (a checkout carries old drafts), unless
-      // this session's own commands name it: then the session is continuing it. `ingest --review-id` flips the run's
-      // own package to mode ingest, which this covers too.
-      if (info.mtimeMs < since && !namedBySession(named, dir, [manifest.reviewId, name])) continue;
-      open.push({ dir, mtime: info.mtimeMs, id: manifest.reviewId ?? name, root });
-    } catch {
+    const head = await readManifestHead(dir);
+    if (head === undefined || (head.mode !== "review-flow" && head.mode !== "ingest")) continue;
+    const info = await stat(path.join(dir, "manifest.json")).catch(() => undefined);
+    if (info === undefined) continue;
+    if (head.status === "closed") {
+      if (info.mtimeMs >= since) closed.push({ dir, mtime: info.mtimeMs, ids: [head.reviewId, name] });
       continue;
     }
+    // An open package whose manifest predates the session is another run's (a checkout carries old drafts), unless
+    // this session's own commands name it: then the session is continuing it. `ingest --review-id` flips the run's
+    // own package to mode ingest, which this covers too.
+    if (info.mtimeMs < since && !namedBySession(named, dir, [head.reviewId, name])) continue;
+    open.push({ dir, mtime: info.mtimeMs, id: head.reviewId ?? name, root });
   }
-  return { open, closedAt };
+  return { open, closed };
 }
 
 /**
- * The package this session is reviewing: the first active-review pointer that was written this session or names a
- * package this session's commands named, else the newest open candidate. An older pointer alone never wins: an
- * earlier session's pointer to another PR is how the nudge was misdirected before (flow 460 C).
+ * The package this session is reviewing. A candidate this session's own commands name comes first: the one the
+ * active-review pointer names when it is among them, else the newest. Only when the session named none is the pointer a
+ * tie-breaker — when it was written this session (a concurrent session's newer pointer never beats what this session
+ * named, review CB-003) — else the newest open candidate. An older pointer alone never wins: an earlier session's
+ * pointer to another PR is how the nudge was misdirected before (flow 460 C).
  */
-async function pickPackage(
-  roots: readonly string[],
-  candidates: readonly PackageCandidate[],
-  since: number,
-  named: Partial<SessionReviewNames>,
-): Promise<PackageCandidate | null> {
-  for (const root of roots) {
-    const pointer = await resolveActiveReview(root);
-    if (pointer === undefined) continue;
-    const manifestPath = path.join(pointer.dir, "manifest.json");
-    const manifest = await readFile(manifestPath, "utf8")
-      .then((t) => JSON.parse(t) as { reviewId?: string })
-      .catch((): { reviewId?: string } => ({}));
-    const fresh = Date.parse(pointer.startedAt) >= since;
-    if (!fresh && !namedBySession(named, pointer.dir, [pointer.id, manifest.reviewId])) continue;
-    const mtime = await stat(manifestPath).then((i) => i.mtimeMs).catch(() => 0);
-    return { dir: pointer.dir, mtime, id: manifest.reviewId ?? pointer.id, root };
+async function pickPackage(roots: readonly string[], candidates: readonly PackageCandidate[], since: number, named: Partial<SessionReviewNames>): Promise<PackageCandidate | null> {
+  const newest = (list: readonly PackageCandidate[]): PackageCandidate | null => list.reduce<PackageCandidate | null>((best, candidate) => (best === null || candidate.mtime > best.mtime ? candidate : best), null);
+  const pointers = (await Promise.all(roots.map(async (root) => ({ root, pointer: await resolveActiveReview(root) })))).filter((entry) => entry.pointer !== undefined);
+  const pointed = (candidate: PackageCandidate): boolean => pointers.some(({ pointer }) => path.resolve(pointer!.dir) === path.resolve(candidate.dir));
+  const sessionNamed = candidates.filter((candidate) => namedBySession(named, candidate.dir, [candidate.id, path.basename(candidate.dir)]));
+  if (sessionNamed.length > 0) return sessionNamed.find(pointed) ?? newest(sessionNamed);
+  for (const { root, pointer } of pointers) {
+    if (Date.parse(pointer!.startedAt) < since) continue;
+    const head = await readManifestHead(pointer!.dir);
+    if (head === undefined || head.status === "closed") continue;
+    const mtime = await stat(path.join(pointer!.dir, "manifest.json")).then((i) => i.mtimeMs).catch(() => 0);
+    return { dir: pointer!.dir, mtime, id: head.reviewId ?? pointer!.id, root };
   }
-  let best: PackageCandidate | null = null;
-  for (const candidate of candidates) if (best === null || candidate.mtime > best.mtime) best = candidate;
-  return best;
+  return newest(candidates);
 }
 
 /** The review id as quoted in a harness nudge: an id that is not a plain token is replaced, never rendered raw. */
@@ -298,12 +414,13 @@ export const NO_PACKAGE_BLOCKER =
   "no review package this session opened or named: `keryx review start` has not opened one, and no `keryx review` command in this session names an open package by its path or review id";
 
 /**
- * The state `keryx review complete` is waiting on. `null` when a review-flow package under the chosen package's root
- * (any root, before one is chosen) was closed since `since`: the run is done. Otherwise the package this session is
- * reviewing (see {@link pickPackage}), searched under `cwd` and the project roots this session's own `keryx review`
- * commands named. An open package older than `since` is named only when this session's commands name its path or
- * review id. With none, a placeholder that says so: a run that built scope and slices but never opened a package is
- * not finished either.
+ * The state `keryx review complete` is waiting on. `null` when a package this session opened or named (by path or
+ * review id) was closed since `since`, under the chosen package's root and after the chosen package was last written:
+ * the run is done. A closed manifest nobody in this session named — another session's, or one the pull request commits
+ * — never ends the gate (review LG-002, SEC-R2-002). Otherwise the package this session is reviewing (see
+ * {@link pickPackage}), searched under `cwd` and the project roots this session's own `keryx review` commands named. An
+ * open package older than `since` is named only when this session's commands name its path or review id. With none, a
+ * placeholder that says so: a run that built scope and slices but never opened a package is not finished either.
  */
 export async function findReviewGateState(
   cwd: string,
@@ -311,17 +428,14 @@ export async function findReviewGateState(
   named: Partial<SessionReviewNames> = {},
 ): Promise<OpenManagedReview | null> {
   const roots = [...new Set([cwd, ...(named.roots ?? [])].map((r) => path.resolve(r)))];
-  const candidates: PackageCandidate[] = [];
-  const closedAtByRoot = new Map<string, number>();
-  for (const root of roots) {
-    const scanned = await scanRoot(root, since, named);
-    candidates.push(...scanned.open);
-    closedAtByRoot.set(root, scanned.closedAt);
-  }
+  // The roots are independent: read them together.
+  const scanned = await Promise.all(roots.map(async (root) => ({ root, ...(await scanRoot(root, since, named)) })));
+  const candidates = scanned.flatMap((entry) => entry.open);
   const best = await pickPackage(roots, candidates, since, named);
-  // A closed package releases the gate only under the root of the package this session is on: one closed elsewhere
-  // cannot end the gate for this one.
-  const closedAt = best === null ? Math.max(0, ...closedAtByRoot.values()) : (closedAtByRoot.get(best.root) ?? 0);
+  // Only a package this session opened or named, closed under the root of the package it is on (any root while it is on
+  // none), releases the gate: one closed elsewhere, or by another session, cannot end it.
+  const ours = scanned.filter((entry) => best === null || entry.root === best.root).flatMap((entry) => entry.closed).filter((closed) => namedBySession(named, closed.dir, closed.ids));
+  const closedAt = Math.max(0, ...ours.map((closed) => closed.mtime));
   if (closedAt > 0 && (best === null || best.mtime < closedAt)) return null;
   const workingRoot = best?.root ?? cwd;
   const working = await dirSignature(path.join(workingRoot, ".metaproject", "data", "review"));
@@ -342,17 +456,13 @@ export async function findReviewGateState(
   };
 }
 
-/** True when the transcript shows the review skill was loaded or a `keryx review` command was run in this session. */
-export function reviewRunSeenInHistory(
-  history: ReadonlyArray<{ toolCalls?: ReadonlyArray<{ name: string; arguments: string }> | undefined }>,
-): boolean {
-  for (const message of history) {
-    for (const call of message.toolCalls ?? []) {
-      if (call.name === "skill_load" && call.arguments.includes("review-orchestrator")) return true;
-      if (/keryx review (start|scope|slice|ingest|complete)/.test(call.arguments)) return true;
-    }
-  }
-  return false;
+/**
+ * True when the transcript shows the review skill was loaded or a `keryx review` command was executed in this session:
+ * the same definition the session tracker keeps (`SessionReviewNames.runSeen`), any subcommand — `status` and `attach`
+ * continue a review as much as `start` does.
+ */
+export function reviewRunSeenInHistory(history: ReadonlyArray<HistoryMessage>): boolean {
+  return new SessionReviewTracker(process.cwd()).update(history).runSeen === true;
 }
 
 /** The earliest message timestamp in the transcript: packages closed before it are not this run's. */

@@ -240,6 +240,13 @@ describe("quotes-located: an open finding whose quote ingest could not place doe
     expect(result?.status).toBe("pass");
     expect(result?.evidence).toContain("pr7932-r1#f-4");
   });
+
+  test("a made-up disposition state answers nothing, and the evidence names it as invalid", async () => {
+    writeJson("findings.json", [unplaced({ disposition: { state: "todo" } })]);
+    const result = await item();
+    expect(result?.status).toBe("fail");
+    expect(result?.evidence).toContain('pr7932-r1#f-4 ("todo")');
+  });
 });
 
 describe("the other items", () => {
@@ -623,6 +630,22 @@ describe("item 3 runs the coverage gate review complete runs (flow 460 AC1)", ()
     for (const error of refusal) expect(item?.evidence).toContain(error);
     expect(item?.repair).toContain("coverage gate");
   });
+
+  test("a closed post-460 package keeps its recorded decision: item 3 never re-derives depth from live git or config", async () => {
+    lightPackage(repo({}));
+    writeFileSync(path.join(pkg, "coverage.md"), `# Reviewer Coverage\n\n${COVERAGE_MD_MARK}\n\n${LIGHT.map((name) => `reviewer: ${name}\nstatus: run\nreason: x`).join("\n\n")}\n`);
+    const manifest = JSON.parse(readFileSync(path.join(pkg, "manifest.json"), "utf8"));
+    writeJson("manifest.json", { ...manifest, status: "closed" });
+    // The live state now refuses: the repository is gone, so the light recheck cannot resolve its diff.
+    rmSync(path.join(root, ".git"), { recursive: true, force: true });
+    const item = await item3();
+    expect(item?.status).toBe("pass");
+    expect(item?.evidence).toContain("recorded decision stands");
+    expect(item?.evidence).toContain("depth light");
+    // Reopened, the same package is held to the live gate again.
+    writeJson("manifest.json", { ...manifest, status: "draft" });
+    expect((await item3())?.status).toBe("fail");
+  });
 });
 
 describe("flow 460 F: coverage.md names what the dispatch record ran", () => {
@@ -635,6 +658,15 @@ describe("flow 460 F: coverage.md names what the dispatch record ran", () => {
     expect(stale.evidence).toContain("review-logic");
     writeCoverageMd(Object.fromEntries(REVIEWERS.map((name) => [name, "run"])));
     expect((await computeReadiness(pkg)).items.find((item) => item.id === "coverage-md")!.status).toBe("pass");
+  });
+
+  test("an omission and an unfinished reviewer listed as run are both named in one verdict", async () => {
+    writeResearch("broken");
+    writeCoverageMd({ "review-security-code": "run" });
+    const item = (await computeReadiness(pkg)).items.find((entry) => entry.id === "coverage-md")!;
+    expect(item.status).toBe("fail");
+    expect(item.evidence).toContain("omits");
+    expect(item.evidence).toContain('lists review-security-code as "run"');
   });
 
   test("the repair names the cause: an ingest with --reviewers writes the list as given and fails again", async () => {
@@ -658,7 +690,7 @@ describe("flow 460 F: coverage.md names what the dispatch record ran", () => {
     closedBefore460();
     const report = await computeReadiness(pkg);
     expect(report.items.find((item) => item.id === "coverage-md")!.status).toBe("pass");
-    expect(report.items.find((item) => item.id === "reviewers")!.evidence).toContain("closed before readiness ran the coverage gate");
+    expect(report.items.find((item) => item.id === "reviewers")!.evidence).toContain("recorded decision stands");
   });
 
   test("a closed package whose coverage.md carries the flow 460 mark is still held to the omission check", async () => {

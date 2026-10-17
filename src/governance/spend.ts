@@ -2,30 +2,26 @@
 // artifacts: no gate is re-run, no provider is called, nothing is written
 // here (AC5).
 
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
-import { flowReviewsRoot } from "../review/package-location";
+import { flowPackageDirs } from "../review/package-location";
 import { openReservations, readTriggerRuns, type TriggerRunRecord, type TriggerRunsRead } from "../trigger/record";
 import type { ManagedReviewManifest } from "../review/types";
 import type { FlowDispatch, FlowDispatchRun, FlowOpenReservation, FlowReviewSpend, ProjectTriggerSpend } from "./types";
 
 /**
- * Every review round manifest recorded under one flow's `reviews/` directory.
+ * Every review round manifest of one flow: its `reviews/` directory and the standalone packages bound to it.
  * A manifest that fails to parse is skipped rather than thrown — the same
  * "unreadable evidence, not a crash" discipline `src/health/service.ts`'s
  * `readLatest` applies, because one damaged round must not make the whole
  * report refuse to run.
  */
 export async function readFlowReviewManifests(cwd: string, flowDir: string): Promise<ManagedReviewManifest[]> {
-  const reviewsDir = flowReviewsRoot(cwd, flowDir);
-  if (!(await pathExists(reviewsDir))) {
-    return [];
-  }
-  const entries = (await readdir(reviewsDir, { withFileTypes: true })).filter((entry) => entry.isDirectory());
   const manifests: ManagedReviewManifest[] = [];
-  for (const entry of entries) {
-    const manifestPath = path.join(reviewsDir, entry.name, "manifest.json");
+  // The flow's own reviews/ and the standalone packages bound to it (`review ingest --review-id`, flow 460 L5).
+  for (const packageDir of await flowPackageDirs(cwd, flowDir)) {
+    const manifestPath = path.join(packageDir, "manifest.json");
     if (!(await pathExists(manifestPath))) {
       continue;
     }

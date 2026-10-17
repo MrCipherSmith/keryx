@@ -207,8 +207,11 @@ async function applyVerifierClaims(packageDir: string, entries: Loose[]): Promis
   return merged.counts.applied;
 }
 
-/** The package's premise claims file, parsed; `undefined` when it holds none or an unreadable one. */
-async function readPremiseClaimsFile(packageDir: string): Promise<ReturnType<typeof parsePremiseClaimSets>> {
+/**
+ * The premise results the package's claims file holds (one per judge file: the file is one result, or the list a
+ * multi-file ingest wrote), parsed; `undefined` when it holds none or an unreadable one.
+ */
+async function readPremiseClaimSets(packageDir: string): Promise<ReturnType<typeof parsePremiseClaimSets>> {
   const source = await readJson(path.join(packageDir, PREMISES_FILE));
   if (source === undefined) return undefined;
   try {
@@ -226,7 +229,7 @@ async function readPremiseClaimsFile(packageDir: string): Promise<ReturnType<typ
  * see as open, so nothing is applied here.
  */
 async function countPremisedFindings(packageDir: string, entries: readonly Loose[]): Promise<number | undefined> {
-  if ((await readPremiseClaimsFile(packageDir)) === undefined) return undefined;
+  if ((await readPremiseClaimSets(packageDir)) === undefined) return undefined;
   return entries.filter((entry) => object(entry.record.premise) !== undefined).length;
 }
 
@@ -238,7 +241,7 @@ async function countPremisedFindings(packageDir: string, entries: readonly Loose
  * removed here either.
  */
 async function applyPremiseClaims(packageDir: string, entries: Loose[]): Promise<number | undefined> {
-  const parsed = await readPremiseClaimsFile(packageDir);
+  const parsed = await readPremiseClaimSets(packageDir);
   if (parsed === undefined) return undefined;
   const merged = mergePremises(asSubjects(entries), parsed);
   merged.findings.forEach((finding, position) => {

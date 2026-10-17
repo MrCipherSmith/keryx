@@ -173,7 +173,7 @@ import { createTierRankHost, type TierRankHost } from "../harness/routing/tier-r
 import { TEST_FILE_RE } from "../testing/selection";
 import { isVerificationMode, verificationClaims } from "../review/verification";
 import { writeVerdict } from "../review/verdict";
-import { parsePremiseClaims } from "../review/premise";
+import { parsePremiseClaimSets } from "../review/premise";
 import {
   buildReplyPass,
   collectPrComments,
@@ -227,8 +227,8 @@ import {
   VERIFICATION_MODES,
   type FindingDispositionState,
   type ManagedReviewInput,
-  type PremiseSource,
   type ManagedReviewMode,
+  type PremiseSource,
   type ReviewFindingsSource,
   type ReviewScopeRecordLike,
   type ReviewTargetKind,
@@ -3622,26 +3622,27 @@ async function readVerifications(source: string | undefined): Promise<ManagedRev
  * `review-premise`'s own output (flow 459): `{ judge, model?, premises: [...] }`, read from a file or stdin. The shape is
  * checked here so a malformed file refuses the ingest before anything is written; the per-claim rules run in the merge.
  */
-async function readPremises(sources: readonly string[]): Promise<ManagedReviewInput["premises"]> {
+async function readPremises(sources: readonly string[]): Promise<PremiseSource[] | undefined> {
   if (sources.length === 0) {
     return undefined;
   }
-  // Flow 460: --premises is repeatable. One file is read as before; several are kept as a list, each with its own
-  // judge, and merged by the ingest as one set of claims (a conflicting claim across files is a duplicate-claim).
+  // Flow 460: --premises is repeatable. Every file is read the same way and the result is always a list of premise
+  // results, each with its own judge, merged by the ingest as one set of claims (a conflicting claim across files is a
+  // duplicate-claim).
   if (sources.filter((source) => source === "-").length > 1) {
     throw new Error("--premises - (stdin) may be given once. Nothing was ingested.");
   }
-  if (sources.length === 1) {
-    return readPremiseFile(sources[0] as string);
-  }
   const files: PremiseSource[] = [];
-  for (const source of sources) {
-    files.push((await readPremiseFile(source)) as PremiseSource);
-  }
+  for (const source of sources) files.push(...(await readPremiseFile(source)));
   return files;
 }
 
-async function readPremiseFile(source: string): Promise<ManagedReviewInput["premises"]> {
+/**
+ * One --premises file as premise results: a judge's `{ judge, model?, premises }` object, a report holding one fenced
+ * `keryx:premises` block, or a package's own research-evidence/premises.json — which a multi-file ingest writes as a list
+ * of results, so it is read with the same reader the verdict uses (`parsePremiseClaimSets`) and can be passed back.
+ */
+async function readPremiseFile(source: string): Promise<PremiseSource[]> {
   let raw: string;
   try {
     raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
@@ -3650,9 +3651,15 @@ async function readPremiseFile(source: string): Promise<ManagedReviewInput["prem
     throw new Error(`--premises ${source}: the file could not be read (${error instanceof Error && "code" in error ? String((error as NodeJS.ErrnoException).code) : "unreadable"}). Nothing was ingested.`);
   }
   // The bare object, or a report / judge reply holding one fenced `keryx:premises` block.
-  const parsed = parseEmbeddedPremises(raw, `--premises ${source}`);
-  parsePremiseClaims(parsed);
-  return parsed as ManagedReviewInput["premises"];
+  const parsed: unknown = parseEmbeddedPremises(raw, `--premises ${source}`);
+  // Validates every result; throws on anything that is not one result or a list of results.
+  parsePremiseClaimSets(parsed);
+  return isPremiseSourceList(parsed) ? [...parsed] : [parsed as PremiseSource];
+}
+
+/** A list of premise results (what parsePremiseClaimSets reads as several files), not one result. */
+function isPremiseSourceList(value: unknown): value is readonly PremiseSource[] {
+  return Array.isArray(value);
 }
 
 /**

@@ -10,11 +10,15 @@ import { writeFileAtomic } from "../lib/fs";
 export const NOT_REVIEW_PACKAGES = [".", ":(exclude).metaproject/reviews", ":(exclude,glob).metaproject/flows/*/reviews/**"];
 
 /**
- * The same exclusion at any depth of the repository (flow 460), for a diff run at the repository top level of a package
- * that may sit under a subdirectory's `.metaproject`: there NOT_REVIEW_PACKAGES, which is relative to the project root
- * the round was sliced at, would miss it. The coverage gate's light recheck uses it.
+ * NOT_REVIEW_PACKAGES for a diff run at the repository top level when the project root sits at `projectDir` (a path
+ * relative to that top level, "" for the top level itself). The exclusion stays anchored at the project root the round
+ * is sliced at, so the coverage gate's light recheck and the slicer count the same files: a source file under some other
+ * directory's `.metaproject/reviews/` is reviewed and counted, never silently dropped from the size check.
  */
-export const NOT_REVIEW_PACKAGES_ANY_DEPTH = [".", ":(exclude,glob)**/.metaproject/reviews/**", ":(exclude,glob)**/.metaproject/flows/*/reviews/**"];
+export function notReviewPackagesAt(projectDir: string): string[] {
+  const prefix = projectDir === "" || projectDir === "." ? "" : `${projectDir.split(path.sep).join("/").replace(/\/+$/, "")}/`;
+  return [".", `:(exclude)${prefix}.metaproject/reviews`, `:(exclude,glob)${prefix}.metaproject/flows/*/reviews/**`];
+}
 
 export const ROUND_FILE = "round.json";
 export const PRIOR_FINDINGS_FILE = "prior_findings.json";

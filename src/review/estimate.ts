@@ -9,7 +9,7 @@ import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr, readJsonObjectFile } from "../lib/json";
 import { packageHasBlastRadius, packageHasPrContext, packageRoundDepth, packageScopeFiles, projectRootOfPackage, requiredReviewers, type RoundDepth } from "./coverage";
 import { operatorGateApplies, runProfileRefusal } from "./run-profile";
-import { manifestSizeProblem, packWaves, waveBytesOf, type SliceManifest } from "./slice";
+import { manifestSizeProblem, packWavesByKind, waveBytesOf, type SliceEntry, type SliceManifest } from "./slice";
 import { ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph } from "./waves";
 import { fixSliceRoles, splitCounts } from "./round-split";
@@ -84,6 +84,19 @@ export function planKeyOf(estimate: Pick<RoundEstimate, "perRole" | "slicePlan">
   return createHash("sha256").update(JSON.stringify({ roles, slices, waveBytes: estimate.waveBytes ?? null })).digest("hex").slice(0, 16);
 }
 
+/**
+ * The dispatches (waves) one role needs over a manifest: its required slices packed per kind at the wave budget. A role a
+ * routed manifest gives no slice is routed out (no dispatch) unless it runs without slices (the regression reviewer reads
+ * scope B); any other role that owns nothing still gets one dispatch with no slice. The one count the estimate (and so
+ * plan.json) and the drivers `review slice --package` writes share, so the plan's dispatches equal the drivers written.
+ */
+export function roleDispatchWaves(manifest: SliceManifest, role: string): SliceEntry[][] {
+  const ids = requiredSlices(manifest, role);
+  if (ids.length === 0) return isRoutedManifest(manifest) && ROUTABLE_ROLES.has(role) && !ROLES_RUN_WITHOUT_SLICES.has(role) ? [] : [[]];
+  const waves = packWavesByKind(sliceGraph(manifest, role).open(ids, new Set()), waveBytesOf(manifest));
+  return waves.length === 0 ? [[]] : waves;
+}
+
 export function estimateRound(
   roles: readonly string[],
   manifest: SliceManifest | undefined,
@@ -102,25 +115,11 @@ export function estimateRound(
     if (manifest === undefined) return { role, slices: 0, waves: 1 };
     const ids = requiredSlices(manifest, role);
     for (const id of ids) owners.set(id, [...(owners.get(id) ?? []), role]);
-    if (routed && ids.length === 0 && ROUTABLE_ROLES.has(role) && !ROLES_RUN_WITHOUT_SLICES.has(role)) {
-      routedOut.push(role);
-      return { role, slices: 0, waves: 0 };
-    }
-    const graph = sliceGraph(manifest, role);
-    if (counts !== undefined) {
-      // A dispatch carries one kind: fix slices come with the prior findings they answer, new slices as in round 1.
-      let waves = 0;
-      for (const kind of ["fix", "second-look", "new"] as const) {
-        const ofKind = ids.filter((id) => kindOf.get(id) === kind);
-        if (ofKind.length === 0) continue;
-        const count = packWaves(graph.open(ofKind, new Set()), waveBytesOf(manifest)).length;
-        kindDispatches[kind] += count;
-        waves += count;
-      }
-      return { role, slices: ids.length, waves: Math.max(1, waves) };
-    }
-    const open = graph.open(ids, new Set());
-    return { role, slices: ids.length, waves: Math.max(1, packWaves(open, waveBytesOf(manifest)).length) };
+    const waves = roleDispatchWaves(manifest, role);
+    if (routed && waves.length === 0) routedOut.push(role);
+    // A dispatch carries one kind: fix slices come with the prior findings they answer, new slices as in round 1.
+    if (counts !== undefined) for (const wave of waves) if (wave.length > 0) kindDispatches[kindOf.get(wave[0]!.id) ?? "new"] += 1;
+    return { role, slices: ids.length, waves: waves.length };
   });
   const originals = manifest?.slices.filter((s) => s.retryOf === undefined) ?? [];
   const slicePlan: SlicePlanEntry[] = originals.map((s) => ({ id: s.id, roles: owners.get(s.id) ?? [], ...(s.depth === undefined ? {} : { depth: s.depth }) }));
