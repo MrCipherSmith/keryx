@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.122] - 2026-10-17
+
 ### Added
 - **Token spend per review dispatch.** A reviewer's saved result may end with a `KERYX_USAGE {tokens_in, tokens_out, model, by: "host"}` line (keryx shell's spawn_subagent writes it; other hosts append it from their agent result; counts without the host mark are reported as stated by the reviewer, not measured); `ledger build` records usage per run, research.json and report.md state the round's total, and a dispatch with no usage is counted as unknown, never 0.
 - Readiness item 12 `quotes-located` names findings whose quote could not be placed at the reviewed head.
