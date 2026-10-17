@@ -20,3 +20,8 @@
 - 2026-10-17T04:19:24.450Z - task-done: T7: L3 child results and artifacts reconcile (D, E, F)
 - 2026-10-17T07:55:48.359Z - task-added: T12: L5 ingest procedure defects (substring quotes, ids, --premises, links, closures, flow binding, stub, merged verdicts, filter_stats)
 - 2026-10-17T08:36:33.775Z - task-done: T12: L5 ingest procedure defects (substring quotes, ids, --premises, links, closures, flow binding, stub, merged verdicts, filter_stats)
+- 2026-10-17T08:45:06.969Z - task-added: T13: L6 fix slices get the fix roster; fix hunks are the ones touching a finding
+
+## 2026-10-17 — PR #1045 round 2 plan (owner approval in chat)
+
+`review plan` detected round 2 by itself (source local-package, delta dff7a38..HEAD) — G works on a live PR. After L6 the plan is fix 1 slice/10, new 4 slices/35 (L5 code), second-look 5/10 = 55 dispatches, over the 40 threshold. The owner has no terminal for `review confirm-plan`; the owner approved running all 55 in chat (question tool, 2026-10-17). The package's plan confirmation stays unrecorded in keryx.
