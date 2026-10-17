@@ -472,7 +472,7 @@ A turn in an ACP session is offered:
   `graph_symbol`, `graph_path`, `graph_affected`, `repomap`, `memory_search`,
   `read_wiki`, `wiki_ask`, `wiki_resolve`, `wiki_evidence`, `wiki_backlinks`,
   `wiki_freshness`, `flow_status`, `health_status`, `skills_catalog`,
-  `skill_load` and `test_related` — in exactly the projects where `keryx
+  `skill_load`, `skills_resolve_context` and `test_related` — in exactly the projects where `keryx
   shell` offers them. They come from the same assembly the shell uses, gate
   included: in a project with no usable metaproject (no manifest and nothing
   built under `.metaproject/`) only `search_code` is offered, because every
