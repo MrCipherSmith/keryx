@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+- **Token spend per review dispatch.** A reviewer's saved result may end with a `KERYX_USAGE {tokens_in, tokens_out, model}` line (keryx shell's spawn_subagent writes it; other hosts append it from their agent result); `ledger build` records usage per run, research.json and report.md state the round's total, and a dispatch with no usage is counted as unknown, never 0.
+- Readiness item 12 `quotes-located` names findings whose quote could not be placed at the reviewed head.
+
+### Fixed
+- **Readiness and complete agree.** Readiness item 3 runs the same coverage gate `review complete` runs. A light round's diff is recomputed at the repository top level against `target.base` (fallback origin/main, main, …) instead of `git diff <PR URL>...<head>`, which always failed and forced the full reviewer set; a package under a subdirectory's `.metaproject/reviews` works; a git failure names cwd, base and head.
+- A confirmed `reviewer-override` decision (card or `keryx review override-reviewers`) now lets `review complete` pass; it no longer needs a dispatch `override` field nothing wrote.
+- The shell's review-gate nudge names this session's review: the active-review pointer and packages started in the session (including under a subdirectory) come first, and an open package from before the session is never named.
+- A child subagent that ends with no text returns an error, not `Completed`; a DONE reply without `slices` under a slice manifest is not scope coverage; a reply saying it could not read a mandatory input is incomplete.
+- research.json lists "Not run: mutation (light round)" only when no mutation pass was recorded; an ingest with research lists the reviewers that ran in coverage.md and the manifest instead of `review-orchestrator`.
+- **`review ingest` no longer refuses a round for an unplaceable quote.** A finding whose quote is absent or matches several places is kept unanchored and flagged `quote_unlocated` (never relocated by similarity); the round is recorded, so the next `review plan` after a fix plans a delta round.
+
 ## [0.3.121] - 2026-10-16
 
 ### Added
