@@ -134,7 +134,7 @@ same dedup, same Wave C verification.
 3. **One finding per class, not one per occurrence.** When the same shape appears at several sites, report it once and list every site. Ten findings that are one finding hide the other nine problems.
 4. **A deliberate choice is not a defect until its reason is read and shown wrong.** An explicit override, suppression or exemption, a comment or commit giving a reason, or a sibling doing the same is a decision: read its reason (the comment, `git log -L` or `git blame`, the sibling) before you report it, and report it only when you can show that reason wrong. A project rule is checked against accepted platform practice and its known exceptions before a deviation from it is reported.
 
-This reviewer satisfies all three by construction: severity is fixed at
+This reviewer satisfies laws 1-3 by construction (law 4 is the premise judge's question, Wave D, for its findings at `minor` and above): severity is fixed at
 `minor` — never higher — and `evidence` always names the scenario's linked
 code and the exact files this diff touched (never an unreproducible claim);
 a scenario is only asked about when a real link of its own is in the diff,
