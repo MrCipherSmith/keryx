@@ -110,7 +110,7 @@ const CEILINGS_BY_KEY = {
   "orchestration/issue-analyzer": 373,
   "orchestration/job-documenter": 414,
   "orchestration/job-orchestrator": 2198,
-  "orchestration/task-implementer": 662,
+  "orchestration/task-implementer": 661,
   "planning/autodoc-analyst": 180,
   "planning/autodoc-architect": 179,
   "planning/autodoc-assembler": 145,

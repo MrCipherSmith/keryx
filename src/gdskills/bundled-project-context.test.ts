@@ -1,58 +1,98 @@
-// Flow 461 (AC1-AC3): code-writing and testing skills read project rules first, bundled rules second,
-// and a project skill only supplements them. Pins the bundled skills and their .metaproject copies.
+// Flow 461 — the sentences that make a project's own rules and skills reach the
+// implementer and the test writer. Each one is a behaviour claim that no code can
+// enforce on a model, so the only guard is that the sentence stays. Both trees
+// are read: an edit in the bundled copy that never reaches the installed one has
+// diverged.
 
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-const flat = (text: string): string => text.replace(/\s+/g, " ");
-const SKILLS = [
-  ["orchestration", "task-implementer"],
-  ["quality", "tests-creator"],
-] as const;
+const REPO_ROOT = path.join(import.meta.dir, "..", "..");
 
-const bundled = (cat: string, name: string): string =>
-  readFileSync(path.join(import.meta.dir, "bundled", "skills", cat, name, "SKILL.md"), "utf8");
-const installed = (cat: string, name: string): string =>
-  readFileSync(
-    path.join(import.meta.dir, "..", "..", ".metaproject", "skills", "gdskills", cat, name, "SKILL.md"),
-    "utf8",
-  );
+function trees(relative: string): Array<{ tree: string; text: string }> {
+  return [
+    ["bundled", path.join(REPO_ROOT, "src", "gdskills", "bundled", "skills", relative)],
+    ["installed", path.join(REPO_ROOT, ".metaproject", "skills", "gdskills", relative)],
+  ].map(([tree, file]) => ({ tree: tree!, text: readFileSync(file!, "utf8") }));
+}
 
-describe("task-implementer: project first", () => {
-  const text = flat(bundled("orchestration", "task-implementer"));
+const IMPLEMENTER = "orchestration/task-implementer/SKILL.md";
+const TESTS_CREATOR = "quality/tests-creator/SKILL.md";
 
-  test.each([
-    "read `.metaproject/rules/project/<rule>.mdc` when it exists, otherwise `.metaproject/rules/core/<rule>.mdc`",
-    "A project rule with the same name replaces the bundled one",
-    "a project's own rules live only in `rules/project/`",
-  ])("rule resolution says: %s", (phrase) => {
-    expect(text).toContain(phrase);
-  });
+describe("AC2: task-implementer reads the project first", () => {
+  for (const { tree, text } of trees(IMPLEMENTER)) {
+    test(`${tree}: Phase 2.4 resolves a rule from rules/project before rules/core`, () => {
+      const phase24 = text.slice(text.indexOf("**2.4 Load relevant rules"), text.indexOf("### Phase 3"));
+      expect(phase24).toContain("project first, bundled second");
+      const project = phase24.indexOf(".metaproject/rules/project/<rule>.mdc");
+      const core = phase24.indexOf(".metaproject/rules/core/<rule>.mdc");
+      expect(project).toBeGreaterThan(-1);
+      expect(core).toBeGreaterThan(project);
+      expect(phase24).toContain("replaces the bundled one");
+    });
 
-  test.each([
-    "a project skill never replaces a phase, the TDD order or the output contract",
-    "Where it and a bundled rule disagree, the project skill wins; say so in `notes`",
-  ])("a fresh project skill supplements and never replaces: %s", (phrase) => {
-    expect(text).toContain(phrase);
-  });
+    test(`${tree}: Phase 2.0b applies a fresh project skill, not only reports it`, () => {
+      const phase20b = text.slice(text.indexOf("**2.0b"), text.indexOf("**2.0c"));
+      expect(phase20b).toContain("**`fresh`**: apply it");
+      expect(phase20b).toContain("a project skill never replaces a phase");
+    });
+  }
 });
 
-describe("tests-creator: project first", () => {
-  const text = flat(bundled("quality", "tests-creator"));
+describe("AC3: tests-creator reads the project's test conventions first", () => {
+  for (const { tree, text } of trees(TESTS_CREATOR)) {
+    test(`${tree}: Phase 1 has a rules step, project first`, () => {
+      const phase1 = text.slice(text.indexOf("### Phase 1: DETECT"), text.indexOf("### Phase 2: ANALYZE"));
+      expect(phase1).toContain("**1.2b Load test-convention rules, project first.**");
+      expect(phase1.indexOf(".metaproject/rules/project/<rule>.mdc")).toBeGreaterThan(-1);
+      expect(phase1.indexOf(".metaproject/rules/core/<rule>.mdc")).toBeGreaterThan(
+        phase1.indexOf(".metaproject/rules/project/<rule>.mdc"),
+      );
+    });
 
-  test.each([
-    "`.metaproject/rules/project/<rule>.mdc` first, then `.metaproject/rules/core/<rule>.mdc`",
-    "A project rule with the same name replaces the bundled one",
-    "A project skill only supplements these steps; it never replaces this skill",
-    "project_context_applied:",
-  ])("the skill says: %s", (phrase) => {
-    expect(text).toContain(phrase);
-  });
+    test(`${tree}: the TEST_CASE_SPECS template names the rules read`, () => {
+      const phase4 = text.slice(text.indexOf("### Phase 4: REPORT"), text.indexOf("**STATUS reporting:**"));
+      expect(phase4).toContain("project_context_applied:");
+    });
+  }
+});
+
+describe("AC14: both skills call the resolver and write the field", () => {
+  for (const { tree, text } of trees(IMPLEMENTER)) {
+    test(`${tree}: task-implementer resolves in Phase 2 and writes project_context_applied`, () => {
+      const phase2 = text.slice(text.indexOf("### Phase 2: RESEARCH"), text.indexOf("### Phase 3"));
+      expect(phase2).toContain("keryx skills resolve-context --for implement");
+      expect(phase2).toContain("workspace.resolved_context_file");
+      expect(phase2.indexOf("**2.0c")).toBeLessThan(phase2.indexOf("**2.1 "));
+      expect(phase2).toContain("project_context_applied");
+      const phase6 = text.slice(text.indexOf("**6.1 Write result file"));
+      expect(phase6).toContain('"project_context_applied": [');
+    });
+  }
+
+  for (const { tree, text } of trees(TESTS_CREATOR)) {
+    test(`${tree}: tests-creator resolves in Phase 1, before any test is written`, () => {
+      const phase1 = text.slice(text.indexOf("### Phase 1: DETECT"), text.indexOf("### Phase 2: ANALYZE"));
+      expect(phase1).toContain("keryx skills resolve-context --for test");
+      expect(phase1).toContain("workspace.resolved_context_file");
+      expect(phase1).toContain("project_context_applied");
+      expect(text.indexOf("keryx skills resolve-context --for test")).toBeLessThan(text.indexOf("### Phase 3: GENERATE"));
+    });
+  }
 });
 
 describe("installed copies", () => {
-  test.each(SKILLS)("%s/%s installed copy is byte-identical to the bundled skill", (cat, name) => {
-    expect(installed(cat, name)).toBe(bundled(cat, name));
+  for (const relative of [IMPLEMENTER, TESTS_CREATOR]) {
+    test(`${relative}: the installed copy is byte-identical to the bundled skill`, () => {
+      const [bundled, installed] = trees(relative);
+      expect(installed!.text).toBe(bundled!.text);
+    });
+  }
+
+  test("tests-creator still says a project skill only supplements it", () => {
+    for (const { text } of trees(TESTS_CREATOR)) {
+      expect(text.replace(/\s+/g, " ")).toContain("A project skill only supplements these steps; it never replaces this skill");
+    }
   });
 });

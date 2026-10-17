@@ -90,7 +90,7 @@ not a hardcoded `cat`/`ls`/`find` invocation).
 - Fixture/factory patterns (how test data is created)
 - Before/after hook usage
 
-**1.2b Load test-convention rules, project first.** Read the testing rules the task touches (`testing-conventions`, `tdd-workflow`, and any rule the task names) in this order: `.metaproject/rules/project/<rule>.mdc` first, then `.metaproject/rules/core/<rule>.mdc`. A project rule with the same name replaces the bundled one; a project rule with a different name adds to it. When the task carries `resolved_context_file`, read the entries it lists (`must_read` first) instead of searching, and record each one in `project_context_applied`. Where a project test convention and a bundled one conflict, the project wins. A project skill only supplements these steps; it never replaces this skill.
+**1.2b Load test-convention rules, project first.** Read the testing rules the task touches (`testing-conventions`, `tdd-workflow`, and any rule the task names) in this order: `.metaproject/rules/project/<rule>.mdc` first, then `.metaproject/rules/core/<rule>.mdc`. A project rule with the same name replaces the bundled one; a project rule with a different name adds to it. Take the list from `workspace.resolved_context_file` when the task carries one, otherwise run `keryx skills resolve-context --for test --files <target_files, comma-joined> --out <project-relative path>`; read its `must_read` entries in full and record each in `project_context_applied` with the resolver's `sha256`. Where a project test convention and a bundled one conflict, the project wins. A project skill only supplements these steps; it never replaces this skill.
 
 **1.3 Identify test file naming:**
 - Pattern (`<component>.test.ts`, `<service>.spec.ts`, `test_<module>.py`) and location (co-located, or `__tests__`/`tests/`)
@@ -265,7 +265,7 @@ TEST_CASE_SPECS:
           type: happy_path | edge_case | error_path
           status: written  # test file exists, test is RED
 
-  project_context_applied: [{path: <rule path, project first>, sha256: <hash as read>, how: read|followed|n/a}]
+  project_context_applied: [{path: <rule path, project first>, sha256: <resolver's sha256>, how: read|followed|n/a}]
 
   run_command: "<command to run just these tests>"
   expected_result: "all failing (RED phase)"
