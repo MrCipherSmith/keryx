@@ -9,17 +9,66 @@
   "id": "458",
   "slug": "review-delta-rounds",
   "title": "Fix rounds review the delta, flows plan states up front, review lines dedupe",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-16T06:30:13.529Z",
-  "updatedAt": "2026-10-16T09:37:26.325Z",
+  "updatedAt": "2026-10-17T03:52:35.487Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-17T03:52:29.635Z",
+      "note": "exec bun test src/review/prior-round.test.ts: 43 pass 0 fail"
+    },
+    "AC2": {
+      "at": "2026-10-17T03:52:29.792Z",
+      "note": "exec bun test src/review/publish.test.ts src/review/pr-comments.test.ts: 113 pass 0 fail"
+    },
+    "AC3": {
+      "at": "2026-10-17T03:52:29.950Z",
+      "note": "exec bun test prior-round + round-split: 70 pass 0 fail"
+    },
+    "AC4": {
+      "at": "2026-10-17T03:52:30.111Z",
+      "note": "exec bun test round-split ledger readiness: 170 pass 0 fail"
+    },
+    "AC5": {
+      "at": "2026-10-17T03:52:30.277Z",
+      "note": "exec bun test src/review/dedupe.test.ts: 21 pass 0 fail"
+    },
+    "AC6": {
+      "at": "2026-10-17T03:52:30.435Z",
+      "note": "exec bun test coverage + slice-routing: 75 pass 0 fail"
+    },
+    "AC7": {
+      "at": "2026-10-17T03:52:30.595Z",
+      "note": "exec bun test ledger, review-ledger, managed: 218 pass 0 fail"
+    },
+    "AC8": {
+      "at": "2026-10-17T03:52:30.754Z",
+      "note": "exec bun test src/commands/review-plan.test.ts: 8 pass 0 fail"
+    },
+    "AC9": {
+      "at": "2026-10-17T03:52:30.912Z",
+      "note": "invariant bun test src/gdskills/: 8000 pass, 1 fail (install.test.ts read-only rules/core EACCES test, environmental, install.ts untouched by this flow)"
+    },
+    "AC10": {
+      "at": "2026-10-17T03:52:31.071Z",
+      "note": "judged: .metaproject/flows/458-2026-10-16-review-delta-rounds/eval/README.md (delta vs full on #1005/#992; owner chose the cheap second look)"
+    },
+    "AC11": {
+      "at": "2026-10-17T03:52:31.235Z",
+      "note": "exec npm view @mrciphersmith/keryx version -> 0.3.121 (>= 0.3.120 release, PR #1042); CI green on merged PR #1041"
+    },
+    "AC12": {
+      "at": "2026-10-17T03:52:31.399Z",
+      "note": "exec bun test review-next + result-parse: 26 pass 0 fail"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1041"
   },
   "baseBranch": "main",
   "owner": {
@@ -194,7 +243,7 @@
       "id": "T11",
       "title": "Live eval round 2 on a multi-round PR",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -202,13 +251,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "eval/README.md: delta vs full on #1005/#992, owner chose the cheap second look"
     },
     {
       "id": "T12",
       "title": "Release",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -216,7 +267,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "released in 0.3.120 (PR #1042)"
     },
     {
       "id": "T13",
@@ -352,6 +405,81 @@
       "at": "2026-10-16T09:37:26.325Z",
       "event": "task-done",
       "detail": "T13: L4: review next, lenient result parse, drivers, disposition schema, path check, model record"
+    },
+    {
+      "at": "2026-10-17T03:52:19.058Z",
+      "event": "task-done",
+      "detail": "T11: Live eval round 2 on a multi-round PR"
+    },
+    {
+      "at": "2026-10-17T03:52:19.235Z",
+      "event": "task-done",
+      "detail": "T12: Release"
+    },
+    {
+      "at": "2026-10-17T03:52:29.635Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: exec bun test src/review/prior-round.test.ts: 43 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:29.792Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: exec bun test src/review/publish.test.ts src/review/pr-comments.test.ts: 113 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:29.950Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: exec bun test prior-round + round-split: 70 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:30.111Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: exec bun test round-split ledger readiness: 170 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:30.277Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: exec bun test src/review/dedupe.test.ts: 21 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:30.435Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: exec bun test coverage + slice-routing: 75 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:30.595Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: exec bun test ledger, review-ledger, managed: 218 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:30.754Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: exec bun test src/commands/review-plan.test.ts: 8 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:30.912Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: invariant bun test src/gdskills/: 8000 pass, 1 fail (install.test.ts read-only rules/core EACCES test, environmental, install.ts untouched by this flow) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:31.071Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: judged: .metaproject/flows/458-2026-10-16-review-delta-rounds/eval/README.md (delta vs full on #1005/#992; owner chose the cheap second look) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:31.235Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: exec npm view @mrciphersmith/keryx version -> 0.3.121 (>= 0.3.120 release, PR #1042); CI green on merged PR #1041 (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:31.399Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: exec bun test review-next + result-parse: 26 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:35.487Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1041 (warning: PR is not a draft)"
     }
   ],
   "acKinds": {
@@ -402,5 +530,139 @@
       "kind": "exec",
       "check": "bun test src/review/review-next.test.ts src/review/result-parse.test.ts"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-17T03:52:29.635Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:29.792Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:29.950Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:30.111Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:30.277Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:30.435Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:30.595Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:30.754Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:30.912Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:31.071Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:31.235Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:31.399Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    }
+  ]
 }
