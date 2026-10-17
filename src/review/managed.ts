@@ -7,7 +7,7 @@ import { packageCoverageWarnings } from "./coverage";
 import { packageParityWarnings } from "./parity";
 import { roundRecordTampered } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
-import { renderSpendMarkdown } from "./dispatch-usage";
+import { withSpendSection } from "./dispatch-usage";
 import { INGEST_SCREENED_FILE, PENDING_RESEARCH, dispatchRuns, packageResearchErrors, type IngestScreened } from "./research";
 import { COVERAGE_MD_MARK, computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
@@ -547,8 +547,9 @@ export async function createManagedReviewPackage(
       renderDuplicatesMarkdown(deduped.merges),
   );
   await writeFileAtomic(path.join(packageDir, "coverage.md"), renderCoverage(coverage));
-  // Flow 460: the round's token spend, as research.json states it (unknown dispatches counted, never 0).
-  await writeFileAtomic(path.join(packageDir, "report.md"), renderReport(report, input.mode) + renderSpendMarkdown(input.research, report));
+  // Flow 460: the round's token spend, as research.json states it (unknown dispatches counted, never 0); a re-ingest
+  // replaces the section a report already holds.
+  await writeFileAtomic(path.join(packageDir, "report.md"), withSpendSection(renderReport(report, input.mode), input.research));
   // Under the decisions lock, like every other findings.json writer: a premise answer to a re-ingested package
   // rewrites the same file.
   await withOperatorDecisionsLock(packageDir, () => writeFileAtomic(

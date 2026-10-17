@@ -2,7 +2,7 @@
 // The publish --yes gate is covered in ./publish.test.ts ("flow 457: --yes without a terminal ...").
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { commentsReplyGate } from "../commands/review";
@@ -26,7 +26,9 @@ import { publishReview } from "./publish";
 import { RUN_PROFILE_FILE, buildRunProfile, isAttendedRun, unattendedStartRefusal, writeRunProfile } from "./run-profile";
 import { compareVersions, defaultBundledReviewRoot, renderSkillDrift, reviewSkillDrift, shellQuote, skillVersion } from "./skill-drift";
 import { computeVerdict, renderVerdict, writeVerdict } from "./verdict";
-import { saveTimedOutPartial } from "../harness/tool/builtin/spawn-subagent-tool";
+import { saveDispatchRecord } from "../harness/tool/builtin/spawn-subagent-tool";
+import { NO_TEXT_PLACEHOLDER, formatUsageLine, splitUsage } from "./dispatch-usage";
+import { isEmptyOutput } from "./ledger";
 import { defaultRunner, promoteParentExecutions, verifyRun } from "./verify-run";
 
 const NOW = new Date("2026-10-16T08:00:00.000Z");
@@ -570,16 +572,57 @@ describe("row 4: verification commands run in the parent", () => {
   });
 });
 
-describe("row 14: a timed-out child's partial result", () => {
-  test("never overwrites a complete result at the same save_result_to; an empty target takes it", async () => {
-    const target = path.join(pkg, "raw", "review-logic.txt");
+describe("row 14: the record a dispatch leaves at save_result_to", () => {
+  const usage = (tokens: number) => ({ tokens_in: tokens, tokens_out: 1, model: "fake/m" });
+  let target = "";
+  beforeEach(() => {
+    target = path.join(pkg, "raw", "review-logic.txt");
     mkdirSync(path.dirname(target), { recursive: true });
-    expect(await saveTimedOutPartial(target, "partial one")).toEqual({ saved: target });
+  });
+
+  test("a partial result never overwrites a complete one: only its usage joins the file, whose mtime is kept", async () => {
+    expect(await saveDispatchRecord(target, { text: "partial one", final: false })).toEqual({ kept: false });
     expect(readFileSync(target, "utf8")).toBe("partial one\n");
-    writeFileSync(target, "COMPLETE RESULT\n");
-    expect(await saveTimedOutPartial(target, "partial two")).toEqual({ saved: `${target}.partial` });
-    expect(readFileSync(target, "utf8")).toBe("COMPLETE RESULT\n");
-    expect(readFileSync(`${target}.partial`, "utf8")).toBe("partial two\n");
+    writeFileSync(target, `COMPLETE RESULT\n${formatUsageLine(usage(10))}\n`);
+    utimesSync(target, new Date(1_000_000), new Date(1_000_000));
+    expect(await saveDispatchRecord(target, { text: "partial two", final: false, usage: { ...usage(20), partial: true } })).toEqual({ kept: true });
+    expect(splitUsage(readFileSync(target, "utf8"))).toEqual({ body: "COMPLETE RESULT", usage: usage(10), others: [{ ...usage(20), partial: true }] });
+    expect(statSync(target).mtimeMs).toBe(1_000_000);
+    expect(existsSync(`${target}.partial`)).toBe(false);
+  });
+
+  test("an empty placeholder never blocks a retry, and every dispatch's usage stays on the file", async () => {
+    expect(await saveDispatchRecord(target, { text: "", final: false, usage: usage(5) })).toEqual({ kept: false });
+    const empty = readFileSync(target, "utf8");
+    expect(isEmptyOutput(empty)).toBe(true);
+    expect(splitUsage(empty).body).toBe(NO_TEXT_PLACEHOLDER);
+    // The retry times out with text: it lands at the target, not beside it.
+    expect(await saveDispatchRecord(target, { text: "half a review", final: false, usage: usage(7) })).toEqual({ kept: false });
+    expect(splitUsage(readFileSync(target, "utf8"))).toEqual({ body: "half a review", usage: usage(7), others: [usage(5)] });
+    // A third dispatch completes: it replaces the partial text and keeps both earlier dispatches' usage.
+    expect(await saveDispatchRecord(target, { text: "REVIEW_RESULT {}", final: true })).toEqual({ kept: false });
+    expect(splitUsage(readFileSync(target, "utf8"))).toEqual({ body: "REVIEW_RESULT {}", others: [usage(5), usage(7)] });
+  });
+
+  test("an empty retry after a complete result keeps the result and records the empty dispatch", async () => {
+    await saveDispatchRecord(target, { text: "COMPLETE RESULT", final: true, usage: usage(3) });
+    expect(await saveDispatchRecord(target, { text: "", final: false })).toEqual({ kept: true });
+    const saved = readFileSync(target, "utf8");
+    expect(isEmptyOutput(saved)).toBe(false);
+    expect(splitUsage(saved)).toEqual({ body: "COMPLETE RESULT", usage: usage(3), others: [undefined] });
+  });
+
+  test("usage lines the child wrote itself are dropped: only the harness states usage", async () => {
+    await saveDispatchRecord(target, { text: `my review\n${formatUsageLine({ tokens_in: 0, tokens_out: 0 })}`, final: true });
+    expect(readFileSync(target, "utf8")).toBe("my review\n");
+  });
+
+  test("a symlink put at the target is refused, not followed", async () => {
+    const elsewhere = path.join(pkg, "elsewhere.txt");
+    writeFileSync(elsewhere, "untouched\n");
+    symlinkSync(elsewhere, target);
+    expect(await saveDispatchRecord(target, { text: "x", final: true })).toEqual({ error: "the path is now a symbolic link" });
+    expect(readFileSync(elsewhere, "utf8")).toBe("untouched\n");
   });
 });
 

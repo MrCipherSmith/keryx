@@ -198,8 +198,8 @@ test("retry-plan --package: a late DONE result that names no slices covers none 
   let plan = JSON.parse(await nextWave());
   expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
   expect(plan.collectedLate).toBe(0);
-  // A finished reply that says it could not read a mandatory input covers nothing either.
-  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", summary: "I could not read the payload, so I reviewed the diff only", slices: ids })}\n`);
+  // A finished reply whose inputs_unreadable names a mandatory input covers nothing either.
+  await plantLate(ids, `REVIEW_RESULT: ${JSON.stringify({ reviewer: "review-logic", status: "DONE", summary: "reviewed the diff only", inputs_unreadable: ["payload"], slices: ids })}\n`);
   plan = JSON.parse(await nextWave());
   expect(plan.dispatch.map((d: { slice: string }) => d.slice)).toEqual(ids);
   expect(plan.collectedLate).toBe(0);

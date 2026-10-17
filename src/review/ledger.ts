@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { DISPLAY_ID_FORM, displayIdHasHash } from "./display-id";
 import { coverageErrors, skipLine, type ReviewMode, type ReviewerSkip } from "./coverage";
+import { coverageGateErrors } from "./coverage-complete";
 import { dispatchErrors } from "./dispatch";
 import { layersUsedFrom } from "./layers-usage";
 import { INGEST_SCREENED_FILE, type IngestScreened, packageCoverageErrors, researchErrors } from "./research";
@@ -10,40 +11,24 @@ import { type SliceManifest, packWavesByKind, waveBytesOf } from "./slice";
 import { ALWAYS_ROLE, DEEP_ROLES, ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 import { fixSliceCoverage, priorDispositionsOf } from "./round-split";
-import { type DispatchUsage, type RunUsage, type UsageTotals, splitUsage, usageFrom, usageTotals } from "./dispatch-usage";
+import { type DispatchUsage, type RunUsage, type UsageTotals, isEmptyRecord, splitUsage, usageFrom, usageTotals } from "./dispatch-usage";
 
 /** Statuses of `reviewer-finding.schema.json` that mean the reviewer finished what it was given. */
 const FINISHED = new Set(["DONE", "DONE_WITH_CONCERNS"]);
 const CLOSED = new Set(["finding", "refuted", "out-of-scope", "narrowed"]);
 
-/** The mandatory inputs of a reviewer dispatch: a reply that says it could not read one did not review what it was asked to. */
-const MANDATORY_INPUT = "(?:pr[_ -]?context(?:\\.json)?|result[_ -]?schema|(?:review(?:er)?[_ -])?schema|context[_ -]?file|payload|slice[_ -]?manifest)";
-/** Where a statement about the reviewer's own reading starts: the start of the summary or of a sentence, or a first-person subject. */
-const OWN_STATEMENT = "(?:^|[.;:!?]\\s+|\\b(?:I|we|this\\s+reviewer|the\\s+reviewer)\\s+)";
-const CANNOT = "(?:could\\s+not|couldn['\u2019]t|cannot|can['\u2019]t|did\\s+not|didn['\u2019]t|(?:was|were)\\s+unable\\s+to|unable\\s+to|failed\\s+to)";
-const INPUT_NAMED = `(?:the\\s+|my\\s+|its\\s+|this\\s+|any\\s+)?(?:dispatch(?:ed)?\\s+|mandatory\\s+)?${MANDATORY_INPUT}`;
-/**
- * Flow 460 D: the only phrasings that count as the reviewer saying it could not read a mandatory input. Each is anchored
- * to a statement about the reviewer's own reading (a sentence start or a first-person subject) and names the input right
- * next to a reading verb, so defect prose about a schema or a payload ("the payload parser is missing a guard",
- * "reviewer-finding.schema.json is missing a slices property", "pr-context is not passed to the light check",
- * "loadSchema cannot open the schema when\u2026") never matches. No gap of free text is allowed between the parts.
- */
-const UNREADABLE_INPUT = [
-  // "I could not read pr_context.json", "Unable to open the context file", "Failed to load the payload".
-  new RegExp(`${OWN_STATEMENT}${CANNOT}\\s+(?:read|open|load|access|find|parse)\\s+${INPUT_NAMED}\\b`, "im"),
-  // "The result schema could not be read", "The payload was unreadable", "The result schema was not found; \u2026".
-  new RegExp(`${OWN_STATEMENT}${INPUT_NAMED}(?:\\s+file)?\\s+(?:(?:could\\s+not|couldn['\u2019]t)\\s+be\\s+(?:read|opened|loaded|accessed|found|parsed)|was\\s+(?:unreadable|not\\s+readable)|was\\s+not\\s+found\\s*(?:[.;:,]|$))`, "im"),
-];
-/** How much of the matched statement the gap quotes back. */
+/** How much of the reviewer's own list of unreadable inputs the gap quotes back. */
 const CLAIM_QUOTE_CHARS = 120;
 
-/** Flow 460 D: the words of a reviewer reply that state a mandatory input could not be read, if it says so. */
-export function unreadableInputClaim(result: object): string | undefined {
-  const summary = (result as { summary?: unknown }).summary;
-  if (typeof summary !== "string" || summary.trim() === "") return undefined;
-  const hit = UNREADABLE_INPUT.map((re) => re.exec(summary)).find((m) => m !== null);
-  return hit ? hit[0].replace(/^[.;:!?\s]+/, "").trim().slice(0, CLAIM_QUOTE_CHARS) : undefined;
+/**
+ * Flow 460 D: the mandatory inputs a reviewer reply says it could not read, quoted for the gap, or undefined. Read only
+ * from the result's structured `inputs_unreadable` list (reviewer-finding.schema.json), never guessed from the summary's
+ * prose: a summary about a schema or a payload defect ("The payload could not be parsed when slices is empty.", "Did not
+ * find any schema regressions.") is never read as the reviewer's own reading failure.
+ */
+export function unreadableInputClaim(result: Pick<ParsedResult, "inputs_unreadable" | "status" | "summary">): string | undefined {
+  const named = Array.isArray(result.inputs_unreadable) ? result.inputs_unreadable.filter(text).map((input) => input.trim()) : [];
+  return named.length === 0 ? undefined : named.join(", ").slice(0, CLAIM_QUOTE_CHARS);
 }
 
 export type ParsedResult = {
@@ -61,6 +46,8 @@ export type ParsedResult = {
   prior_dispositions?: unknown;
   /** Flow 460: `{tokens_in, tokens_out, model}` when the result envelope carries it; a `KERYX_USAGE` line in the raw file wins. */
   usage?: unknown;
+  /** Flow 460 D: the mandatory inputs the reviewer could not read; a finished status with any is not a finished run. */
+  inputs_unreadable?: unknown;
 };
 
 export type RawFile = {
@@ -71,12 +58,14 @@ export type RawFile = {
   /** Slice assignment from the driver explicitly naming this result file. */
   assignedSlices?: string[];
   result?: ParsedResult;
-  /** True for a file a reviewer left empty ("(subagent produced no text)"): lost output, not a result to reconcile. */
+  /** True for a file a reviewer left empty (blank, or NO_TEXT_PLACEHOLDER): lost output, not a result to reconcile. */
   empty: boolean;
   /** Why no result was read from this file (what is missing), set by the loader when `result` is absent. */
   diagnosis?: string;
   /** Flow 460: the dispatch's token use, from the file's `KERYX_USAGE` line (see ./dispatch-usage.ts). */
   usage?: DispatchUsage | undefined;
+  /** The other dispatches saved to the same path (its `KERYX_USAGE_OTHER` lines); an undefined entry is unknown. */
+  otherUsage?: Array<DispatchUsage | undefined> | undefined;
 };
 
 export type Disposition = {
@@ -162,6 +151,13 @@ export type LedgerResult = {
 export const sha = (value: string | Uint8Array): string => createHash("sha256").update(value).digest("hex").slice(0, 12);
 
 const text = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
+
+/** A key that names an obligation: the obligation id itself, or a global id `<reviewId>#<obligation id>`. */
+const namesObligation = (key: unknown, oid: string): boolean => key === oid || (typeof key === "string" && key.endsWith(`#${oid}`));
+/** A canonical finding whose `id` or `global_id` is `key`. */
+const holdsKey = (finding: Record<string, unknown>, key: unknown): boolean => finding.id === key || finding.global_id === key;
+/** A canonical finding the duplicate merge folded `id` into (its `merged_from` entries are `<reviewId>#<display id>`). */
+const mergedFromHas = (finding: Record<string, unknown>, id: string): boolean => Array.isArray(finding.merged_from) && finding.merged_from.some((entry) => namesObligation(entry, id));
 
 /** A `{` followed by a quote or `}`: where a JSON object with keys, or an empty one, can start. A prose brace such as `{config}` or `{ to` does not match, so it never opens a candidate. */
 const OBJECT_START = /\{\s*["}]/y;
@@ -422,15 +418,19 @@ export function followUpsOf(result: ParsedResult, raw?: string): string[] {
   return [...new Set([...own, ...(raw === undefined ? [] : parentFollowUps(raw))])];
 }
 
+/** A blank reply or the no-text placeholder; a usage line (flow 460) records what it cost and does not make it a reply. */
 export function isEmptyOutput(reply: string): boolean {
-  // A usage line (flow 460) records what an empty reply cost; it does not make the reply non-empty.
-  const raw = splitUsage(reply).body;
-  return raw.trim() === "" || /^\(subagent produced no text\)$/.test(raw.trim());
+  return isEmptyRecord(reply);
 }
 
 /** A raw result's token use: the host's `KERYX_USAGE` line, else the result envelope's own `usage`; undefined is unknown. */
 export function rawUsage(raw: RawFile): DispatchUsage | undefined {
   return raw.usage ?? usageFrom(raw.result?.usage);
+}
+
+/** Every dispatch a raw file records, one entry each: the other ones saved to the same path, then the one whose reply it holds. */
+export function rawDispatchUsages(raw: RawFile): Array<DispatchUsage | undefined> {
+  return [...(raw.otherUsage ?? []), rawUsage(raw)];
 }
 
 const sliceIdsOf = (value: unknown): string[] => readSliceIds(value).ids;
@@ -595,7 +595,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   const derived = new Set<string>();
   // A raw finding the ingest merged into another reviewer's (flow 458 AC5) is found through `reported_by` + `merged_from`.
   const absorbedInto = (f: Record<string, unknown>, reviewer: string, id: string): boolean =>
-    Array.isArray(f.reported_by) && f.reported_by.includes(reviewer) && Array.isArray(f.merged_from) && f.merged_from.some((m) => m === id || (typeof m === "string" && m.endsWith(`#${id}`)));
+    Array.isArray(f.reported_by) && f.reported_by.includes(reviewer) && mergedFromHas(f, id);
   const canonicalByReviewer = (reviewer: string, id: string) => {
     const own = input.canonical.filter((f) => f.reviewer === reviewer && f.id === id);
     return own.length > 0 ? own : input.canonical.filter((f) => absorbedInto(f, reviewer, id));
@@ -604,13 +604,19 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   // obligation id itself). Such a finding links by that id, and one the duplicate merge folded into a survivor links to
   // the survivor through its `merged_from` (whose entries are `<reviewId>#<display id>`).
   const canonicalByObligation = (oid: string) => {
-    const own = input.canonical.filter((f) => f.id === oid || f.global_id === oid);
-    return own.length > 0 ? own : input.canonical.filter((f) => Array.isArray(f.merged_from) && f.merged_from.some((m) => m === oid || (typeof m === "string" && m.endsWith(`#${oid}`))));
+    const own = input.canonical.filter((f) => holdsKey(f, oid));
+    return own.length > 0 ? own : input.canonical.filter((f) => mergedFromHas(f, oid));
+  };
+  /** The canonical findings a raw finding resolves to: the same reviewer and id first, else by its obligation id. */
+  const resolveCanonical = (reviewer: string, fid: string, oid: string) => {
+    const byReviewer = canonicalByReviewer(reviewer, fid);
+    return byReviewer.length === 1 ? byReviewer : canonicalByObligation(oid);
   };
   const keyOf = (f: Record<string, unknown>): string | undefined => (text(f.global_id) ? f.global_id : text(f.id) ? f.id : undefined);
-  const resolvesOnce = (key: string | undefined): key is string => text(key) && input.canonical.filter((f) => f.id === key || f.global_id === key).length === 1;
-  const screenedAs = (reviewer: string, oid: string, fid: string) =>
-    (input.screened ?? []).find((entry) => entry.id === oid || (entry.reviewer === reviewer && entry.id === fid));
+  const resolvesOnce = (key: string | undefined): key is string => text(key) && input.canonical.filter((f) => holdsKey(f, key)).length === 1;
+  // Only the exact raw obligation (`<raw stem>:<id>`, or a global id ending in it) matches a screened entry. A reviewer's
+  // display ids restart in every wave, so the reviewer plus a bare id would close another wave's finding.
+  const screenedAs = (oid: string) => (input.screened ?? []).find((entry) => namesObligation(entry.id, oid) || namesObligation(entry.global_id, oid));
   for (const raw of attributed) {
     const reviewer = raw.result!.reviewer!;
     for (const finding of Array.isArray(raw.result!.findings) ? raw.result!.findings! : []) {
@@ -621,9 +627,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       derived.add(id);
       const base = { id, source: raw.name, question: `Is ${reviewer} finding ${fid} (${String(finding.problem ?? finding.title ?? "").slice(0, 100)}) real, and where is it reported?` };
       const given = input.dispositions.find((d) => d.id === id);
-      const byReviewer = canonicalByReviewer(reviewer, fid);
-      const byObligation = byReviewer.length === 1 ? [] : canonicalByObligation(id);
-      const hit = byReviewer.length === 1 ? byReviewer : byObligation;
+      const hit = resolveCanonical(reviewer, fid, id);
       const key = hit.length === 1 ? keyOf(hit[0]!) : undefined;
       const closure = closeWith(given, input.canonical, resolvesOnce(key) ? key : undefined);
       if (closure !== undefined) { obligations.push({ ...base, ...closure }); continue; }
@@ -632,7 +636,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
         obligations.push({ ...base, status: "finding", finding: key, evidence: `${raw.name}#sha256:${raw.hash}`, reason: merged ? `reported by ${reviewer} as ${fid}; review ingest merged it as a duplicate into canonical ${key}` : `reported by ${reviewer} as ${fid}; the same finding is canonical ${key}` });
         continue;
       }
-      const screened = screenedAs(reviewer, id, fid);
+      const screened = screenedAs(id);
       if (screened !== undefined) {
         obligations.push({ ...base, status: "out-of-scope", evidence: input.screenedEvidence ?? INGEST_SCREENED_FILE, reason: `review ingest's scope-B screen kept it out of findings.json (${screened.rule}): ${screened.detail}` });
         continue;
@@ -644,7 +648,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       const id = `${raw.name.replace(/^raw\//, "").replace(/\.txt$/, "")}:fu${at + 1}`;
       derived.add(id);
       const base = { id, source: raw.name, question: `Is the parent follow-up from ${reviewer} done or ruled out, and where is that recorded? ${followUp.slice(0, 200)}` };
-      const closure = closeWith(input.dispositions.find((d) => d.id === id), input.canonical, undefined);
+      const closure = closeWith(input.dispositions.find((d) => d.id === id), input.canonical);
       if (closure !== undefined) { obligations.push({ ...base, ...closure }); return; }
       obligations.push({ ...base, status: "unresolved" });
       gaps.push({ detail: `${id}: parent follow-up is open (${followUp.slice(0, 100)})`, next: `do it or rule it out, then add a disposition {"id":"${id}","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions` });
@@ -652,7 +656,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   }
   for (const given of input.dispositions) {
     if (text(given.id) && !derived.has(given.id) && text(given.source) && text(given.question)) {
-      const closure = closeWith(given, input.canonical, undefined);
+      const closure = closeWith(given, input.canonical);
       obligations.push({ id: given.id, source: given.source, question: given.question, ...(closure ?? { status: "unresolved" }) });
     }
   }
@@ -669,8 +673,9 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     }
   }
   const audit = manifest === undefined ? undefined : auditRecord(manifest, attributed);
-  // Every raw result is one dispatch, an empty or unparseable one included: it was paid for either way.
-  const usage = usageTotals(raws.map(rawUsage));
+  // Every dispatch counts, an empty or unparseable one included (it was paid for either way): one per raw result, plus
+  // each other dispatch a re-dispatch to the same path recorded on it.
+  const usage = usageTotals(raws.flatMap(rawDispatchUsages));
   return { ledger: { version: 1, scopeReviewed, rawReconciled: reconciled, obligations, dispatch, ...(audit === undefined ? {} : { audit }), usage }, gaps };
 }
 
@@ -679,7 +684,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
  * reported usage; otherwise the known sums with the count of dispatches that reported none, never folded in as 0.
  */
 function runUsage(mine: readonly RawFile[]): RunUsage | "unknown" {
-  const usages = mine.map(rawUsage);
+  const usages = mine.flatMap(rawDispatchUsages);
   const totals = usageTotals(usages);
   if (totals.known === 0) return "unknown";
   const model = [...usages].reverse().find((usage) => usage?.model !== undefined)?.model;
@@ -780,9 +785,9 @@ export function normalizeDispositions(given: unknown, options: { strict: boolean
  * canonical finding whose id (or global_id) is the row's own id, else to `defaultLink`, the canonical finding the raw
  * finding already resolves to; a link that resolves to no single canonical finding does not close.
  */
-function closeWith(given: Disposition | undefined, canonical: Array<Record<string, unknown>>, defaultLink: string | undefined): Record<string, unknown> | undefined {
+function closeWith(given: Disposition | undefined, canonical: Array<Record<string, unknown>>, defaultLink?: string): Record<string, unknown> | undefined {
   if (given === undefined || !CLOSED.has(String(given.status)) || !text(given.evidence) || !text(given.reason)) return undefined;
-  const matching = (key: unknown) => canonical.filter((f) => f.id === key || f.global_id === key);
+  const matching = (key: unknown) => canonical.filter((f) => holdsKey(f, key));
   let finding = given.finding;
   if (given.status === "finding" && !text(finding)) {
     const same = matching(given.id);
@@ -795,13 +800,15 @@ function closeWith(given: Disposition | undefined, canonical: Array<Record<strin
 }
 
 /**
- * The gate's validators over the ledger just built (research, dispatch, coverage). With a `packageDir` the coverage check
- * is the one `review complete` and `review readiness` run, with its options read from the package
- * (`packageCoverageErrors`, ./research.ts), so READY here is what complete accepts. Without one (a ledger built outside
- * a package) it runs with the options the caller passes.
+ * The gate's validators over the ledger just built (research, dispatch, coverage). With a `packageDir` they are the ones
+ * `review complete` runs (`packageResearchErrors`, ./research.ts): the coverage check with its options read from the
+ * package, then the layer/chunk completeness gate (`coverageGateErrors`) over this ledger, so READY here is what complete
+ * accepts. Without one (a ledger built outside a package) only the coverage check runs, with the options the caller passes.
  */
 export async function ledgerBlockers(ledger: LedgerResult["ledger"], canonical: unknown, options: { root: string; packageDir?: string | undefined; files: readonly string[] | undefined; changedLines?: number | undefined; blastRadius?: boolean | undefined; pendingMutants?: number | undefined }): Promise<string[]> {
   const dispatch = dispatchErrors(ledger.dispatch);
-  const coverage = dispatch.length > 0 ? [] : options.packageDir !== undefined ? await packageCoverageErrors(options.packageDir, ledger.dispatch) : await coverageErrors(ledger.dispatch, options);
-  return [...researchErrors(ledger, canonical), ...dispatch, ...coverage];
+  if (dispatch.length > 0) return [...researchErrors(ledger, canonical), ...dispatch];
+  if (options.packageDir === undefined) return [...researchErrors(ledger, canonical), ...await coverageErrors(ledger.dispatch, options)];
+  const coverage = await packageCoverageErrors(options.packageDir, ledger.dispatch);
+  return [...researchErrors(ledger, canonical), ...coverage, ...await coverageGateErrors(options.packageDir, ledger)];
 }
