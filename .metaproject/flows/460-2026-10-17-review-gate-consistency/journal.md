@@ -18,3 +18,5 @@
 - 2026-10-17T04:03:59.562Z - task-done: T5: L1 gates: package diff base/root, readiness runs coverage, override decisions count (A, B)
 - 2026-10-17T04:15:45.258Z - task-done: T8: L4 ingest keeps unplaceable quotes, delta e2e, token spend (G, H)
 - 2026-10-17T04:19:24.450Z - task-done: T7: L3 child results and artifacts reconcile (D, E, F)
+- 2026-10-17T07:55:48.359Z - task-added: T12: L5 ingest procedure defects (substring quotes, ids, --premises, links, closures, flow binding, stub, merged verdicts, filter_stats)
+- 2026-10-17T08:36:33.775Z - task-done: T12: L5 ingest procedure defects (substring quotes, ids, --premises, links, closures, flow binding, stub, merged verdicts, filter_stats)
