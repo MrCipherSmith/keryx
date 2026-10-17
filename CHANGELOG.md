@@ -13,6 +13,9 @@
 - A child subagent that ends with no text returns an error, not `Completed`; a DONE reply without `slices` under a slice manifest is not scope coverage; a reply saying it could not read a mandatory input is incomplete.
 - research.json lists "Not run: mutation (light round)" only when no mutation pass was recorded; an ingest with research lists the reviewers that ran in coverage.md and the manifest instead of `review-orchestrator`.
 - **`review ingest` no longer refuses a round for an unplaceable quote.** A finding whose quote is absent or matches several places is kept unanchored and flagged `quote_unlocated` (never relocated by similarity); the round is recorded, so the next `review plan` after a fix plans a delta round.
+- **A quote that is part of one line is placed.** A one-line quote that is an exact substring of exactly one line now anchors to it (`locator.method: substring`), after the exact and whitespace-collapsed passes; it used to be `quote_unlocated`. The reviewer-facing `quote` description says so.
+- **`review ingest --premises` is repeatable.** Duplicate claims for one finding are merged: agreeing claims collapse, disagreeing claims are dropped and listed as `duplicate-claim` in scope.md. A finding id may not hold `#`.
+- **A fix slice holds only fix lines and gets the fix roster.** `review plan` partitions a delta round so a FIX slice holds the hunks that touch a finding and is read by `review-logic`, `review-regression`, the findings' authors, `review-security-code` when a security finding is attached, and the verifier, no longer by the slice's own routing. `filter_stats` gains `merged_duplicates`, and `total - drops - merged_duplicates = retained`.
 
 ## [0.3.121] - 2026-10-16
 

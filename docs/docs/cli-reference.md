@@ -6671,12 +6671,13 @@ report, and into the disposition somebody later recorded against it. On a fix
 round the file has moved under the finding by construction, which is when the
 reported number is least trustworthy and most acted upon.
 
-Matching is exact first, then with whitespace collapsed, then it stops — nothing
+Matching is exact first, then with whitespace collapsed, then — for a one-line
+quote only — as an exact substring of exactly one line, then it stops — nothing
 fuzzy. Three outcomes, all recorded in `locator`:
 
 | Outcome | What it means |
 |---|---|
-| `derived` | The quote was found; `line` is where, and `reported_line` keeps whatever the reviewer claimed. |
+| `derived` | The quote was found; `line` is where, and `reported_line` keeps whatever the reviewer claimed. `locator.method` records which pass placed it: `exact`, `whitespace-normalised` or `substring`. |
 | `unlocatable` | It was not, and `line` is `null` rather than a number nobody checked. The `reason` says which: the file is absent at that commit, the quote does not appear, or it appears in more than one place. |
 | absent | The finding carries no quote — one about the round rather than a site. Its `line` is reported-only, and says so by carrying no locator. |
 

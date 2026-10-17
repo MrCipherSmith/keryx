@@ -644,7 +644,7 @@ status: draft
 target: report round6-review.md
 flow: none
 coverage: 1
-filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 dismissed_by_round=not-measured retained=3
+filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 merged_duplicates=0 dismissed_by_round=not-measured retained=3
   low_confidence: not measured — this pipeline has no confidence threshold …
   scope_b: not measured — no blast-radius record reached this ingest …
 ```
@@ -653,7 +653,7 @@ filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=
 same numbers `scope.md` shows a person, in a form something else can check.
 `not-measured` is not `0`: it means that stage did not run, and the reason is
 printed underneath. `status` exits **1** when the numbers do not add up (`total`
-minus the measured finding-stage drops must equal `retained`) or when a count is
+minus the measured finding-stage drops and `merged_duplicates` must equal `retained`) or when a count is
 absent with no reason recorded, so a stage that starts dropping findings without
 counting them is caught on the next status call rather than a release later.
 
@@ -953,7 +953,7 @@ status: draft
 target: report round6-review.md
 flow: none
 coverage: 1
-filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 dismissed_by_round=not-measured retained=3
+filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 merged_duplicates=0 dismissed_by_round=not-measured retained=3
   low_confidence: not measured — this pipeline has no confidence threshold …
   scope_b: not measured — no blast-radius record reached this ingest …
 ```
@@ -962,7 +962,7 @@ filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=
 same numbers `scope.md` shows a person, in a form something else can check.
 `not-measured` is not `0`: it means that stage did not run, and the reason is
 printed underneath. `status` exits **1** when the numbers do not add up (`total`
-minus the measured finding-stage drops must equal `retained`) or when a count is
+minus the measured finding-stage drops and `merged_duplicates` must equal `retained`) or when a count is
 absent with no reason recorded, so a stage that starts dropping findings without
 counting them is caught on the next status call rather than a release later.
 
