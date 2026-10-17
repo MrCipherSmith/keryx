@@ -624,3 +624,16 @@ describe("item 3 runs the coverage gate review complete runs (flow 460 AC1)", ()
     expect(item?.repair).toContain("coverage gate");
   });
 });
+
+describe("flow 460 F: coverage.md names what the dispatch record ran", () => {
+  test("a coverage.md that lists a stand-in instead of the dispatched reviewers fails item 6, and listing them passes", async () => {
+    writeResearch("repaired");
+    writeCoverageMd({ "review-orchestrator": "run" });
+    const stale = (await computeReadiness(pkg)).items.find((item) => item.id === "coverage-md")!;
+    expect(stale.status).toBe("fail");
+    expect(stale.evidence).toContain("omits");
+    expect(stale.evidence).toContain("review-logic");
+    writeCoverageMd(Object.fromEntries(REVIEWERS.map((name) => [name, "run"])));
+    expect((await computeReadiness(pkg)).items.find((item) => item.id === "coverage-md")!.status).toBe("pass");
+  });
+});

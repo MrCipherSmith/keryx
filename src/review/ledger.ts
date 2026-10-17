@@ -15,6 +15,21 @@ import { type DispatchUsage, type UsageTotals, splitUsage, usageFrom, usageTotal
 const FINISHED = new Set(["DONE", "DONE_WITH_CONCERNS"]);
 const CLOSED = new Set(["finding", "refuted", "out-of-scope", "narrowed"]);
 
+/** The mandatory inputs of a reviewer dispatch: a reply that says it could not read one did not review what it was asked to. */
+const MANDATORY_INPUT = "(?:pr[_ -]?context|result[_ -]?schema|(?:review(?:er)?[_ -])?schema|context[_ -]?file|payload|slice[_ -]?manifest)";
+const UNREADABLE = "(?:(?:could|can|did|was|were|is|are)(?:\\s+not|n['\u2019]t)|cannot|unable\\s+to|failed\\s+to|fail(?:s|ed)?\\s+to|missing|unreadable|not\\s+found|does\\s+not\\s+exist|no\\s+such\\s+file|permission\\s+denied)";
+const UNREADABLE_INPUT = [
+  new RegExp(`${UNREADABLE}[^.\\n]{0,80}\\b(?:read|open|load|access|find|parse)\\b[^.\\n]{0,80}\\b${MANDATORY_INPUT}\\b`, "i"),
+  new RegExp(`\\b${MANDATORY_INPUT}\\b[^.\\n]{0,80}${UNREADABLE}`, "i"),
+];
+
+/** Flow 460 D: the words of a reviewer reply that state a mandatory input could not be read, if it says so. */
+export function unreadableInputClaim(result: ParsedResult): string | undefined {
+  if (!text(result.summary)) return undefined;
+  const hit = UNREADABLE_INPUT.map((re) => re.exec(result.summary!)).find((m) => m !== null);
+  return hit ? hit[0].trim().slice(0, 120) : undefined;
+}
+
 export type ParsedResult = {
   reviewer?: string;
   status?: string;
@@ -85,6 +100,8 @@ export type LedgerInputs = {
   canonical: Array<Record<string, unknown>>;
   dispositions: Disposition[];
   manifestPath?: string;
+  /** True when the package holds a mutation record (`research-evidence/mutation-*.json`): the round did run mutation. */
+  mutationRecorded?: boolean | undefined;
   /**
    * Written to `dispatch.roles`: the roles the code that dispatched this package knew about. Absent for a package nothing
    * says that of, so a rebuild never turns an in-flight package into one that must have run a role it predates.
@@ -485,7 +502,8 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     const result = latest.result!;
     const status = String(result.status ?? "").toUpperCase();
     const asked = Array.isArray(result.needs_context) ? result.needs_context.filter(text) : [];
-    const finished = FINISHED.has(status) && asked.length === 0;
+    const unreadable = unreadableInputClaim(result);
+    const finished = FINISHED.has(status) && asked.length === 0 && unreadable === undefined;
     const run: Record<string, unknown> = { reviewer, executionId: `${reviewer}:${latest.hash}`, rawEvidence: `${latest.name}#sha256:${latest.hash}`, executionRequired: false, layersUsed: layersUsedFrom(input.toolLogs?.[reviewer]) };
     const recorded = [...mine].reverse().map((raw) => raw.result?.model).find(text) ?? input.models?.[reviewer];
     if (text(recorded)) run.model = recorded.trim();
@@ -497,11 +515,11 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     if (manifest !== undefined) {
       for (const raw of mine) {
         const reply = raw.result!;
-        const closed = FINISHED.has(String(reply.status).toUpperCase()) && (!Array.isArray(reply.needs_context) || reply.needs_context.filter(text).length === 0);
-        const assigned = raw.assignedSlices ?? (mine.length === 1 && input.payloadDispatchCounts?.[reviewer] === 1 ? input.payloadSlices[reviewer] : undefined);
+                const assigned = raw.assignedSlices ?? (mine.length === 1 && input.payloadDispatchCounts?.[reviewer] === 1 ? input.payloadSlices[reviewer] : undefined);
         if (assigned === undefined) continue;
         const allowed = new Set(assigned);
-        const ids = reply.slices === undefined && closed ? assigned : sliceIdsOf(reply.slices);
+        // Flow 460 D: a reply that names no `slices` claims none; a DONE status alone is not coverage of a manifest.
+        const ids = sliceIdsOf(reply.slices);
         for (const id of ids) if (allowed.has(id)) claimed.add(id);
       }
       for (const id of known?.covered ?? []) claimed.add(id);
@@ -515,7 +533,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       run.status = "incomplete";
       run.scopeComplete = false;
       run.executionReason = "not claimed: the reviewer did not finish its scope";
-      const why = asked.length > 0 ? `open needs_context (${asked.length}): ${asked.slice(0, 3).join(" | ")}` : status;
+      const why = asked.length > 0 ? `open needs_context (${asked.length}): ${asked.slice(0, 3).join(" | ")}` : unreadable !== undefined && FINISHED.has(status) ? `the reply states a mandatory input could not be read ("${unreadable}")` : status;
       const left = manifest === undefined ? undefined : wavesLeft(manifest, reviewer, seen);
       const tail = left === undefined || left.slices === 0 ? "" : `; ${left.slices} slice(s) uncovered, ${left.waves} wave(s) left`;
       gaps.push({ reviewer, detail: `${reviewer}: ${why}; scope not closed${tail}${droppedTail}`, next: retryNext(reviewer, latest, input.manifestPath), ...(left === undefined ? {} : { waves: left.waves }) });
@@ -546,7 +564,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   gaps.push(...fix.gaps);
 
   const unresolvedRules = selected.filter((r) => input.ruleFiles[r] === undefined);
-  const notRun = [...(input.depth === "light" ? ["Not run: mutation (light round)"] : []), ...skipped.map(skipLine)];
+  const notRun = [...(input.depth === "light" && input.mutationRecorded !== true ? ["Not run: mutation (light round)"] : []), ...skipped.map(skipLine)];
   const superseded = (input.superseded ?? []).map((entry) => ({ reviewer: entry.reviewer, reason: entry.reason }));
   const dispatch = { version: 1, mode: input.mode, ...(superseded.length === 0 ? {} : { superseded }), ...((input.supersedeNotes ?? []).length === 0 ? {} : { supersedeNotes: [...input.supersedeNotes!] }), ...(fixCovered.size === 0 ? {} : { fixSlicesCovered: [...fixCovered].sort() }), ...(priorDispositions.size === 0 ? {} : { priorDispositions: Object.fromEntries([...priorDispositions].sort(([a], [b]) => a.localeCompare(b))) }), ...(input.depth === "light" ? { depth: "light" } : input.depth === "full" ? { depth: "full" } : {}), ...(notRun.length === 0 ? {} : { notRun }), selected, ...(skipped.length === 0 ? {} : { skipped: skipped.map((skip) => ({ reviewer: skip.reviewer, reason: skip.reason })) }), ...(input.dispatchRoles === undefined || input.dispatchRoles.length === 0 ? {} : { roles: [...input.dispatchRoles] }), unresolvedRules, runs };
 

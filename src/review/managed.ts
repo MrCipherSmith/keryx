@@ -271,7 +271,7 @@ export async function createManagedReviewPackage(
   const { reviewId, packageDir } = await allocatePackage(input, flowMatch, at);
   // Before anything is written: an id that names packages in two places refuses here (review LG6-002, SEC6-001).
   const verifications = await ownPackageVerifications(input, packageDir);
-  const coverage = normalizeCoverage(input.coverage, input.reviewers);
+  const coverage = normalizeCoverage(input.coverage, input.reviewers, input.research);
   const report = await readReport(input);
   const reviewers = coverage.filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
   const reported = await normalizeFindings({
@@ -1194,12 +1194,39 @@ function buildManifest(args: {
   return manifest;
 }
 
+/**
+ * Flow 460 F: the reviewers a research record says were dispatched, with the status each ended in. With a research
+ * record and no explicit `--reviewers`, coverage lists these rather than a stand-in orchestrator that never reviewed.
+ */
+function coverageFromResearch(research: unknown): ReviewCoverageEntry[] {
+  const dispatch = research !== null && typeof research === "object" ? (research as { dispatch?: unknown }).dispatch : undefined;
+  const runs = dispatch !== null && typeof dispatch === "object" ? (dispatch as { runs?: unknown }).runs : undefined;
+  if (!Array.isArray(runs)) return [];
+  const seen = new Set<string>();
+  const entries: ReviewCoverageEntry[] = [];
+  for (const run of runs) {
+    if (run === null || typeof run !== "object") continue;
+    const { reviewer, status, notRunReason, executionReason } = run as Record<string, unknown>;
+    if (typeof reviewer !== "string" || reviewer.length === 0 || seen.has(reviewer)) continue;
+    seen.add(reviewer);
+    if (status === "complete") entries.push({ reviewer, status: "run", reason: "dispatched; the research ledger records it complete" });
+    else if (status === "incomplete") entries.push({ reviewer, status: "needs_context", reason: `dispatched; the research ledger records it incomplete${typeof executionReason === "string" ? ` (${executionReason})` : ""}` });
+    else entries.push({ reviewer, status: "failed", reason: `not run: ${typeof notRunReason === "string" ? notRunReason : "the research ledger records no result"}` });
+  }
+  return entries;
+}
+
 function normalizeCoverage(
   coverage: ReviewCoverageEntry[] | undefined,
   reviewers: string[] | undefined,
+  research?: unknown,
 ): ReviewCoverageEntry[] {
   if (coverage && coverage.length > 0) {
     return coverage;
+  }
+  if (!(reviewers && reviewers.length > 0)) {
+    const fromResearch = coverageFromResearch(research);
+    if (fromResearch.length > 0) return fromResearch;
   }
   const selected = reviewers && reviewers.length > 0 ? reviewers : ["review-orchestrator"];
   return selected.map((reviewer) => ({

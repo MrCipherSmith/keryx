@@ -7,7 +7,7 @@ import { writeFileAtomic } from "../lib/fs";
 import { DISPATCH_KNOWN_ROLES, skipDecision, skipLine, type ReviewerSkip, packageChangedLines, packageRoundDepth, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, projectRootOfPackage, requiredReviewers, type ReviewMode } from "../review/coverage";
 import { SLICE_MANIFEST_COPY } from "../review/coverage-complete";
 import { readToolLog } from "../review/layers-usage";
-import { pendingMutants } from "../review/mutate";
+import { packageHasMutationRecord, pendingMutants } from "../review/mutate";
 import { DISPOSITION_SCHEMA, normalizeDispositions, type LedgerGap, type RawFile, buildLedger, explainUnparsedResult, followUpsOf, isEmptyOutput, isReviewerResult, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
 import { type DriverFile, type DriverRecords, type ReplyNames, definitionCandidates, readDrivers, readJson } from "../review/driver-read";
 import { type RetryState, applyEscalations, emptyRetryState, escalationsFor, scopeFingerprint } from "../review/retry-plan";
@@ -309,6 +309,7 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     canonical,
     dispositions,
     manifestPath: path.relative(process.cwd(), manifestPath),
+    mutationRecorded: await packageHasMutationRecord(packageDir),
     skipped,
     superseded: required.excluded.filter((entry) => entry.reason.startsWith("superseded by ") || entry.reason.startsWith("overlap group ")),
     supersedeNotes: required.notes,

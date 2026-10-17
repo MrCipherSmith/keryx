@@ -1,5 +1,5 @@
 import { validateAgainstSchemaObject } from "../contracts/validator";
-import { READY_DISPATCH } from "./dispatch.test-helpers";
+import { READY_DISPATCH, READY_COVERAGE_MD } from "./dispatch.test-helpers";
 import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -50,6 +50,7 @@ test("real new package cannot close until research is resolved", async () => {
     await expect(completeManagedReview(dir, result.path)).rejects.toThrow("research scope census");
     expect(JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8")).status).not.toBe("closed");
     await writeFile(path.join(pkg, "research.json"), JSON.stringify(ready));
+    await writeFile(path.join(pkg, "coverage.md"), READY_COVERAGE_MD);
     expect((await completeManagedReview(dir, result.path)).manifest.status).toBe("closed");
     await writeFile(path.join(pkg, "research.json"), JSON.stringify({ ...ready, obligations: [{ ...obligation, status: "open" }] }));
     await expect(completeManagedReview(dir, result.path)).rejects.toThrow("unresolved research");
@@ -61,6 +62,7 @@ test("dropping artifacts.reviewerDispatch from the manifest does not skip the re
     const result = await createManagedReviewPackage({ cwd: dir, mode: "ingest", reportText: "# Review\nNo findings.\n- Not run: mutation pass\nEvidence level: static only — did not run: tests\n", reviewId: "undeclared-dispatch", target: { kind: "report", ref: "review.md" } });
     const pkg = path.resolve(dir, result.path);
     await writeFile(path.join(pkg, "research.json"), JSON.stringify(ready));
+    await writeFile(path.join(pkg, "coverage.md"), READY_COVERAGE_MD);
     await mkdir(path.join(pkg, "research-evidence"), { recursive: true });
     await writeFile(path.join(pkg, "research-evidence", "mutants.json"), JSON.stringify({ mutants: [{ id: "M1", file: "src/a.ts", anchor: "x", replacement: "y" }] }));
     const manifest = JSON.parse(await readFile(path.join(pkg, "manifest.json"), "utf8"));

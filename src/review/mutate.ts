@@ -354,6 +354,13 @@ export async function writeMutationEvidence(packageDir: string, record: Mutation
   return { json, md };
 }
 
+/** Whether the package holds a recorded mutation pass (`research-evidence/mutation-<n>.json`); a baseline-failed record does not count. */
+export async function packageHasMutationRecord(packageDir: string): Promise<boolean> {
+  const dir = path.join(packageDir, EVIDENCE_DIR);
+  if (!existsSync(dir)) return false;
+  return (await readdir(dir)).some((n) => /^mutation-\d+\.json$/.test(n));
+}
+
 /** Ids of the mutants a recorded pass has judged. An invalid row judged nothing, so it does not count. */
 export async function doneMutantIds(packageDir: string): Promise<Set<string>> {
   const dir = path.join(packageDir, EVIDENCE_DIR);

@@ -2311,6 +2311,28 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // of D2a's two internal reasons FIRST. No new detection here; this
         // only labels what `finishReason` (D2a) already computed.
         const status = subagentStatusForFinishReason(turnResult?.finishReason);
+        // Flow 460 E: a child that ended with no text and submitted nothing produced no result. It is an
+        // error outcome, never "Completed" with a placeholder summary the parent could read as success.
+        if (status === "Completed" && raw === "(subagent produced no text)" && turnResult?.submittedResult === undefined) {
+          emitFleetEvent({
+            kind: "upsert",
+            id: workerId,
+            label,
+            status: "failed",
+            detail: "empty-reply",
+            model: `${runModel.provider}/${runModel.model}`,
+            task,
+          });
+          await foldChildSlateAndCleanup("incomplete");
+          await fireSubagentStop("Error");
+          return {
+            status: "Error",
+            isError: true,
+            output:
+              `subagent ${label} (${workerId}) via ${runModel.provider}/${runModel.model} ended with no text and submitted no result; ` +
+              "treat the task as not done and re-dispatch it.",
+          };
+        }
         // PRD R9 guard: `status` is advisory for the PARENT MODEL's own
         // judgment only — do not add auto-retry/auto-extend logic here keyed
         // off it.
