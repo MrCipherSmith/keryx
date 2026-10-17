@@ -11,7 +11,7 @@
   "title": "Review gates agree: readiness, complete, overrides, nudges, child results and artifacts tell one story",
   "status": "in-progress",
   "createdAt": "2026-10-17T03:45:43.162Z",
-  "updatedAt": "2026-10-17T10:32:55.928Z",
+  "updatedAt": "2026-10-17T15:07:24.584Z",
   "source": {
     "type": "description",
     "ref": null
@@ -174,7 +174,7 @@
       "id": "T10",
       "title": "PR review clean",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6",
@@ -187,7 +187,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -349,6 +350,11 @@
       "at": "2026-10-17T10:32:55.928Z",
       "event": "task-done",
       "detail": "T13: L6 fix slices get the fix roster; fix hunks are the ones touching a finding"
+    },
+    {
+      "at": "2026-10-17T15:07:24.584Z",
+      "event": "task-done",
+      "detail": "T10: PR review clean"
     }
   ],
   "acKinds": {
