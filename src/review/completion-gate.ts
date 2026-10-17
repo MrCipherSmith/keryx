@@ -6,6 +6,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { resolveActiveReview } from "./active-review";
 import { reviewCompletionBlockers, reviewsRoot } from "./managed";
 
 export const MAX_REVIEW_GATE_CONTINUES = 20;
@@ -37,23 +38,45 @@ async function dirSignature(dir: string): Promise<string> {
   }
 }
 
+type PackageCandidate = { dir: string; mtime: number; id: string; root: string };
+
+const REVIEW_PACKAGE_PATH = /((?:[A-Za-z]:)?[^\s"'`<>|;&()]*?)\.metaproject[\\/]reviews[\\/]([^\\/\s"'`<>|;&()]+)/g;
+
 /**
- * The state `keryx review complete` is waiting on. `null` when a review-flow package was closed since
- * `since` (the run is done). Otherwise the newest open package, or — before `review start` has opened
- * one — a placeholder whose blocker is exactly that: a run that built scope and slices but never opened
- * a package is not finished either.
+ * Project roots (the directory holding `.metaproject`) this session's tool calls and results named
+ * through a review package path, e.g. the path `review start` printed. A relative path resolves
+ * against `cwd`, so a review nested under a subdirectory is found as well as one at `cwd`.
  */
-export async function findReviewGateState(cwd: string, since: number): Promise<OpenManagedReview | null> {
+export function sessionReviewRoots(
+  history: ReadonlyArray<{ toolCalls?: ReadonlyArray<{ arguments: string }> | undefined; content?: unknown }>,
+  cwd: string,
+): string[] {
+  const roots = new Set<string>();
+  const scan = (text: string): void => {
+    for (const match of text.matchAll(REVIEW_PACKAGE_PATH)) {
+      const prefix = match[1] ?? "";
+      roots.add(path.resolve(cwd, prefix === "" ? "." : prefix));
+    }
+  };
+  for (const message of history) {
+    if (typeof message.content === "string") scan(message.content);
+    for (const call of message.toolCalls ?? []) scan(call.arguments);
+  }
+  roots.delete(path.resolve(cwd));
+  return [...roots];
+}
+
+async function scanRoot(root: string, since: number): Promise<{ open: PackageCandidate[]; closedAt: number }> {
   let names: string[];
   try {
-    names = (await readdir(reviewsRoot(cwd), { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
+    names = (await readdir(reviewsRoot(root), { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
   } catch {
     names = [];
   }
-  let best: { dir: string; mtime: number; id: string } | null = null;
+  const open: PackageCandidate[] = [];
   let closedAt = 0;
   for (const name of names) {
-    const dir = path.join(reviewsRoot(cwd), name);
+    const dir = path.join(reviewsRoot(root), name);
     try {
       const manifest = JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")) as {
         mode?: string;
@@ -62,19 +85,57 @@ export async function findReviewGateState(cwd: string, since: number): Promise<O
       };
       if (manifest.mode !== "review-flow" && manifest.mode !== "ingest") continue;
       const info = await stat(path.join(dir, "manifest.json"));
-      // `ingest --review-id` flips the run's own package to mode ingest; an ingest draft from before this session is not this run's.
-      if (manifest.mode === "ingest" && manifest.status !== "closed" && info.mtimeMs < since) continue;
       if (manifest.status === "closed") {
         if (info.mtimeMs >= since) closedAt = Math.max(closedAt, info.mtimeMs);
         continue;
       }
-      if (best === null || info.mtimeMs > best.mtime) best = { dir, mtime: info.mtimeMs, id: manifest.reviewId ?? name };
+      // An open package whose manifest predates the session is another run's (a checkout carries old drafts); `ingest --review-id` flips the run's own package to mode ingest, which this covers too.
+      if (info.mtimeMs < since) continue;
+      open.push({ dir, mtime: info.mtimeMs, id: manifest.reviewId ?? name, root });
     } catch {
       continue;
     }
   }
+  return { open, closedAt };
+}
+
+/**
+ * The state `keryx review complete` is waiting on. `null` when a review-flow package was closed since
+ * `since` (the run is done). Otherwise the package this session is reviewing: the active-review pointer
+ * first, then the newest package opened since `since` under `cwd` or under a project root the session's
+ * own tool calls named (`extraRoots`). Before `review start` has opened one, a placeholder whose blocker
+ * is exactly that: a run that built scope and slices but never opened a package is not finished either.
+ * An open package older than `since` is never named.
+ */
+export async function findReviewGateState(
+  cwd: string,
+  since: number,
+  extraRoots: readonly string[] = [],
+): Promise<OpenManagedReview | null> {
+  const roots = [cwd, ...extraRoots.filter((r) => path.resolve(r) !== path.resolve(cwd))];
+  const candidates: PackageCandidate[] = [];
+  let closedAt = 0;
+  for (const root of roots) {
+    const scanned = await scanRoot(root, since);
+    candidates.push(...scanned.open);
+    closedAt = Math.max(closedAt, scanned.closedAt);
+  }
+  let best: PackageCandidate | null = null;
+  for (const root of roots) {
+    const pointer = await resolveActiveReview(root);
+    if (pointer === undefined || Date.parse(pointer.startedAt) < since) continue;
+    const manifestPath = path.join(pointer.dir, "manifest.json");
+    const manifest = await readFile(manifestPath, "utf8").then((t) => JSON.parse(t) as { reviewId?: string }).catch((): { reviewId?: string } => ({}));
+    const mtime = await stat(manifestPath).then((i) => i.mtimeMs).catch(() => 0);
+    best = { dir: pointer.dir, mtime, id: manifest.reviewId ?? pointer.id, root };
+    break;
+  }
+  if (best === null) {
+    for (const candidate of candidates) if (best === null || candidate.mtime > best.mtime) best = candidate;
+  }
   if (closedAt > 0 && (best === null || best.mtime < closedAt)) return null;
-  const working = await dirSignature(path.join(cwd, ".metaproject", "data", "review"));
+  const workingRoot = best?.root ?? cwd;
+  const working = await dirSignature(path.join(workingRoot, ".metaproject", "data", "review"));
   if (best === null) {
     return {
       reviewId: "(no package yet)",

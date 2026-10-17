@@ -1,6 +1,6 @@
 import { isTransportFailure } from "../harness/provider/provider-port";
 import { rememberArbiterSession } from "../review/arbiter-session";
-import { decideReviewGate, findReviewGateState, reviewRunSeenInHistory, sessionStartedAt } from "../review/completion-gate";
+import { decideReviewGate, findReviewGateState, reviewRunSeenInHistory, sessionReviewRoots, sessionStartedAt } from "../review/completion-gate";
 import { ENV_AUTONOMOUS_ANSWERS_FILE } from "../review/autonomous-answers";
 import { REFUSED_EARLIER, asksForReviewAuto, noteOperatorRefusal, operatorDenied, recordOperatorDenial, refusalFingerprint, reviewAutoActive, reviewAutoGrants, setReviewSystem } from "../review/review-system";
 import { classifyApprovalCause } from "./approval-cause";
@@ -3484,7 +3484,7 @@ async function runAgentTurnCore(
     if (subagentBudget !== undefined || deps.unattended === true) return false;
     const runSeen = reviewRunSeenInHistory(history);
     const open = runSeen
-      ? await findReviewGateState(process.cwd(), sessionStartedAt(history)).catch(() => null)
+      ? await findReviewGateState(process.cwd(), sessionStartedAt(history), sessionReviewRoots(history, process.cwd())).catch(() => null)
       : null;
     const gate = decideReviewGate({
       open,
