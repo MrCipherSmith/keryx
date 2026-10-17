@@ -6,6 +6,29 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 export const PENDING_RESEARCH = { version: 1, scopeReviewed: false, rawReconciled: false, obligations: [] };
 
+/**
+ * Flow 460: where `review ingest` records the findings it kept out of findings.json (the scope-B screen), relative to the
+ * package. `review ledger build` reads it and closes each such raw finding `out-of-scope` with the screen's reason, so an
+ * ingest that screens findings out does not leave the research ledger stale. (A finding the duplicate merge folded into
+ * another is found through the survivor's `merged_from` in findings.json.)
+ */
+export const INGEST_SCREENED_FILE = "research-evidence/ingest-screened.json";
+
+/** One finding the ingest screened out: its display id and global_id, who raised it, and the screen's rule and words. */
+export type IngestScreened = { id: string; global_id?: string | undefined; reviewer?: string | undefined; rule: string; detail: string };
+
+/** The screened findings of an {@link INGEST_SCREENED_FILE} record, read leniently: [] for anything that is not one. */
+export function ingestScreenedOf(record: unknown): IngestScreened[] {
+  const list = record !== null && typeof record === "object" && !Array.isArray(record) ? (record as { screened?: unknown }).screened : undefined;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((entry): IngestScreened[] => {
+    if (entry === null || typeof entry !== "object") return [];
+    const row = entry as Record<string, unknown>;
+    if (typeof row.id !== "string" || row.id === "" || typeof row.rule !== "string" || typeof row.detail !== "string") return [];
+    return [{ id: row.id, ...(typeof row.global_id === "string" ? { global_id: row.global_id } : {}), ...(typeof row.reviewer === "string" ? { reviewer: row.reviewer } : {}), rule: row.rule, detail: row.detail }];
+  });
+}
+
 /** One `dispatch.runs[]` entry of research.json as `ledger build` writes it (./ledger.ts `buildLedger`), read leniently. */
 export type DispatchRun = {
   reviewer: string;

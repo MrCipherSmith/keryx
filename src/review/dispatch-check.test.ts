@@ -40,6 +40,18 @@ const ROUTED_MODEL = {
   routed: true,
 };
 
+describe("checkDispatch finding ids (flow 460)", () => {
+  test("a known or prior finding whose display id holds '#' is refused with the id form ingest needs", async () => {
+    const known = { ...payload(ROUTED_MODEL), known_findings: [{ id: "review-logic-w1:F-001" }, { id: "review-logic-w1#F-002" }] };
+    const result = await checkDispatch([known]);
+    const idErrors = result.errors.filter((error) => error.code === "REVIEWER_INPUT_ID_FORM");
+    expect(idErrors).toHaveLength(1);
+    expect(idErrors[0]).toMatchObject({ reviewer: "review-logic", path: "$.known_findings[1]" });
+    expect(idErrors[0]?.message).toContain('a display id holds no "#"');
+    expect((await checkDispatch([{ ...payload(ROUTED_MODEL), known_findings: [{ id: "review-logic-w1:F-001" }] }])).ok).toBe(true);
+  });
+});
+
 describe("checkDispatch model block", () => {
   test("accepts the model block the generator emits for a routed pick", async () => {
     const result = await checkDispatch([payload(ROUTED_MODEL)]);

@@ -10,6 +10,7 @@ import { pendingMutants } from "../review/mutate";
 import { runCoverage } from "./review-chunks";
 import { assignRawDispatch, definitionCandidates, isReviewerReply, loadRaws, parseSkips, readDrivers, runLedger } from "./review-ledger";
 import { computeVerdict, renderVerdict } from "../review/verdict";
+import { INGEST_SCREENED_FILE, researchErrors } from "../review/research";
 
 describe("driver files and raw replies (flow 430 AC3, AC4)", () => {
   test("a rule file is found under definition, skill_path, or either key inside payload", () => {
@@ -139,6 +140,46 @@ describe("raw/ files through loadRaws and runLedger (flow 430 AC3, AC4)", () => 
   }
 
   const noBlock = (out: Out, file: string) => out.gaps.filter((gap) => gap.detail.includes(`raw/${file}`) && gap.detail.includes("no parseable REVIEW_RESULT block"));
+
+  test("flow 460: ingest's merges and screens close their raw findings with no hand-written rows", async () => {
+    const result = (findings: object[]) => `REVIEW_RESULT ${JSON.stringify({ reviewer: "review-logic", status: "DONE", summary: "s", findings, needs_context: [] })}`;
+    const raw = (id: string) => ({ id, severity: "minor", problem: `p ${id}`, impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" });
+    const { pkg, cleanup } = await fixture({ "review-logic-w1.txt": result([raw("F-001"), raw("F-002"), raw("F-003")]) });
+    try {
+      const gid = (id: string) => `2026-10-17-round#${id}`;
+      const canonical = [
+        { ...raw("review-logic-w1:F-001"), reviewer: "review-logic", global_id: gid("review-logic-w1:F-001") },
+        { ...raw("review-arch-w1:F-009"), reviewer: "review-architecture", global_id: gid("review-arch-w1:F-009"), merged_from: [gid("review-logic-w1:F-002")], reported_by: ["review-architecture", "review-logic"] },
+      ];
+      await writeFile(path.join(pkg, "findings.json"), JSON.stringify(canonical));
+      await mkdir(path.join(pkg, "research-evidence"), { recursive: true });
+      await writeFile(path.join(pkg, INGEST_SCREENED_FILE), JSON.stringify({ version: 1, screened: [{ id: "review-logic-w1:F-003", reviewer: "review-logic", rule: "outside-set", detail: "src/z.ts is outside the computed set" }] }));
+      const out = await build(pkg);
+      const obligations = out.ledger.obligations as Array<{ id: string; status: string; finding?: string; reason?: string }>;
+      expect(obligations.map((o) => [o.id, o.status, o.finding ?? null])).toEqual([
+        ["review-logic-w1:F-001", "finding", gid("review-logic-w1:F-001")],
+        ["review-logic-w1:F-002", "finding", gid("review-arch-w1:F-009")],
+        ["review-logic-w1:F-003", "out-of-scope", null],
+      ]);
+      expect(obligations[2]?.reason).toContain("outside-set");
+      // Readiness item 5 reads these through researchErrors: no obligation is open and every link resolves.
+      expect(researchErrors(out.ledger, canonical).filter((error) => error.includes("review-logic-w1"))).toEqual([]);
+      expect(out.ledger.rawReconciled).toBe(true);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("flow 460: canonical findings whose display id holds '#' are refused by ledger build, naming the id form", async () => {
+    const { pkg, cleanup } = await fixture({});
+    try {
+      await writeFile(path.join(pkg, "findings.json"), JSON.stringify([{ id: "review-logic-w1#F-001", reviewer: "review-logic" }]));
+      await expect(build(pkg)).rejects.toThrow('ledger build refused: 1 finding id(s) in');
+      await expect(build(pkg)).rejects.toThrow('a display id holds no "#"');
+    } finally {
+      await cleanup();
+    }
+  });
 
   test("a verification payload filed in raw/ is set aside, listed, kept on disk, and does not block the ledger", async () => {
     const { pkg, cleanup } = await fixture({ "verification.txt": '{"claims": []}' });

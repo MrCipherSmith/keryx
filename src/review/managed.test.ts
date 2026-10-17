@@ -205,6 +205,70 @@ test("review-flow creates standalone package under .metaproject/reviews", async 
   expect(coverage).toContain("status: skipped");
 });
 
+describe("flow 460: ingest procedure", () => {
+  const FINDING = { id: "review-logic-w1:F-001", reviewer: "review-logic", severity: "minor" as const, problem: "p", impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" as const };
+  const BLOCK = `# Round\n\n\`\`\`json keryx:findings\n${JSON.stringify([FINDING])}\n\`\`\`\n`;
+
+  test("ingest --flow --review-id of a review-flow package binds that package to the flow, with no second package", async () => {
+    await fresh();
+    const flowId = await createStartedFlow();
+    const reviewId = "2026-07-09-branch-managed-review";
+    const started = await createManagedReviewPackage({ cwd: ROOT, mode: "review-flow", reviewId, target: { kind: "branch", ref: "feature/x" }, now: new Date("2026-07-09T11:00:00Z") });
+    const ingested = await createManagedReviewPackage({ cwd: ROOT, mode: "ingest", flowId, reviewId, target: { kind: "branch", ref: "feature/x" }, reportText: BLOCK, now: new Date("2026-07-09T12:00:00Z") });
+    expect(ingested.path).toBe(started.path);
+    expect(ingested.manifest.flow?.id).toBe(flowId);
+    const onDisk = JSON.parse(await readFile(path.join(ROOT, started.path, "manifest.json"), "utf8")) as ManagedReviewManifest;
+    expect(onDisk.flow?.id).toBe(flowId);
+    expect(existsSync(path.join(ROOT, ".metaproject", "flows", "001-2026-07-09-managed-review-flow", "reviews", reviewId))).toBe(false);
+    // A re-ingest of the now-bound package stays in it.
+    const again = await createManagedReviewPackage({ cwd: ROOT, mode: "ingest", flowId, reviewId, target: { kind: "branch", ref: "feature/x" }, reportText: BLOCK, now: new Date("2026-07-09T13:00:00Z") });
+    expect(again.path).toBe(started.path);
+    expect(existsSync(path.join(ROOT, ".metaproject", "flows", "001-2026-07-09-managed-review-flow", "reviews", reviewId))).toBe(false);
+  });
+
+  test("ingest refuses the placeholder report `review start` writes, before writing anything", async () => {
+    await fresh();
+    const reviewId = "2026-07-09-stub";
+    const started = await createManagedReviewPackage({ cwd: ROOT, mode: "review-flow", reviewId, target: { kind: "branch", ref: "feature/x" }, now: new Date("2026-07-09T11:00:00Z") });
+    const stub = await readFile(path.join(ROOT, started.path, "report.md"), "utf8");
+    const before = await readFile(path.join(ROOT, started.path, "manifest.json"), "utf8");
+    await expect(createManagedReviewPackage({ cwd: ROOT, mode: "ingest", reviewId, target: { kind: "branch", ref: "feature/x" }, reportText: stub, now: new Date("2026-07-09T12:00:00Z") })).rejects.toThrow("it is a stub");
+    expect(await readFile(path.join(ROOT, started.path, "manifest.json"), "utf8")).toBe(before);
+    await expect(createManagedReviewPackage({ cwd: ROOT, mode: "ingest", reviewId: "2026-07-09-empty", target: { kind: "report", ref: "r.md" }, reportText: "  \n", now: new Date("2026-07-09T12:00:00Z") })).rejects.toThrow("it is empty");
+    expect(existsSync(path.join(ROOT, ".metaproject", "reviews", "2026-07-09-empty"))).toBe(false);
+    // An empty block is a round that found nothing, and ingests.
+    const clean = await createManagedReviewPackage({ cwd: ROOT, mode: "ingest", reviewId: "2026-07-09-clean", target: { kind: "report", ref: "r.md" }, reportText: "# Round\n\n```json keryx:findings\n[]\n```\n", now: new Date("2026-07-09T12:00:00Z") });
+    expect(JSON.parse(await readFile(path.join(ROOT, clean.path, "findings.json"), "utf8"))).toEqual([]);
+  });
+
+  test("a finding display id holding '#' is refused up front, naming the id form, and nothing is written", async () => {
+    await fresh();
+    const reviewId = "2026-07-09-hash";
+    await expect(
+      createManagedReviewPackage({ cwd: ROOT, mode: "ingest", reviewId, target: { kind: "report", ref: "r.md" }, reportText: "# Round\n", findings: [{ ...FINDING, id: "review-logic-w1#F-001" }], now: new Date("2026-07-09T12:00:00Z") }),
+    ).rejects.toThrow('1 finding id(s) in --findings hold "#": review-logic-w1#F-001. a display id holds no "#"');
+    expect(existsSync(path.join(ROOT, ".metaproject", "reviews", reviewId))).toBe(false);
+  });
+
+  test("ingest records what the scope-B screen kept out, for ledger build", async () => {
+    await fresh();
+    const result = await createManagedReviewPackage({
+      cwd: ROOT,
+      mode: "ingest",
+      reviewId: "2026-07-09-screened",
+      target: { kind: "report", ref: "r.md" },
+      reportText: "# Round\n",
+      findings: [FINDING, { ...FINDING, id: "review-regression-w1:F-001", reviewer: "review-regression", file: "src/far.ts" }],
+      blastRadius: { files: [{ path: "src/near.ts", hop: 1 }], changedFiles: ["src/a.ts"] } as unknown as BlastRadiusScreenInput,
+      now: new Date("2026-07-09T12:00:00Z"),
+    });
+    const record = JSON.parse(await readFile(path.join(ROOT, result.path, "research-evidence", "ingest-screened.json"), "utf8")) as { screened: Array<{ id: string; reviewer: string; rule: string; detail: string }> };
+    expect(record.screened.map((entry) => [entry.id, entry.reviewer])).toEqual([["review-regression-w1:F-001", "review-regression"]]);
+    expect(record.screened[0]?.rule).toBeTruthy();
+    expect(record.screened[0]?.detail).toBeTruthy();
+  });
+});
+
 test("ingest writes classified findings and skill learning decision", async () => {
   await fresh();
   const reportPath = path.join(ROOT, "review.md");

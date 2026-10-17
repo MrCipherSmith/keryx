@@ -6,7 +6,7 @@ import { readRoundRecord, renderRoundLine } from "./round-record";
 import { isEmptyOutput, isReviewerResult, parseReviewResult } from "./ledger";
 import { dispatchSkips, skipLine } from "./coverage";
 import { mergeVerifications, verificationClaims } from "./verification";
-import { PREMISES_FILE, applyPremiseDecisions, mergePremises, parsePremiseClaims, premiseHoldState } from "./premise";
+import { PREMISES_FILE, applyPremiseDecisions, mergePremises, parsePremiseClaimSets, premiseHoldState } from "./premise";
 import { readPremiseDecisions, type PremiseQuestionDecision } from "./operator-decisions";
 import { readRunProfile } from "./run-profile";
 import { testsNotRunWarning } from "./tests-to-run";
@@ -208,11 +208,11 @@ async function applyVerifierClaims(packageDir: string, entries: Loose[]): Promis
 }
 
 /** The package's premise claims file, parsed; `undefined` when it holds none or an unreadable one. */
-async function readPremiseClaimsFile(packageDir: string): Promise<ReturnType<typeof parsePremiseClaims>> {
+async function readPremiseClaimsFile(packageDir: string): Promise<ReturnType<typeof parsePremiseClaimSets>> {
   const source = await readJson(path.join(packageDir, PREMISES_FILE));
   if (source === undefined) return undefined;
   try {
-    return parsePremiseClaims(source);
+    return parsePremiseClaimSets(source);
   } catch {
     return undefined;
   }

@@ -8,6 +8,8 @@ import { DISPATCH_KNOWN_ROLES, skipDecision, skipLine, type ReviewerSkip, packag
 import { SLICE_MANIFEST_COPY } from "../review/coverage-complete";
 import { readToolLog } from "../review/layers-usage";
 import { packageHasMutationRecord } from "../review/mutate";
+import { hashedDisplayIdMessage, hashedDisplayIds } from "../review/display-id";
+import { INGEST_SCREENED_FILE, ingestScreenedOf } from "../review/research";
 import { DISPOSITION_SCHEMA, normalizeDispositions, type LedgerGap, type RawFile, buildLedger, explainUnparsedResult, followUpsOf, isEmptyOutput, isReviewerResult, ledgerBlockers, parseReviewResult, sha } from "../review/ledger";
 import { type DriverFile, type DriverRecords, type ReplyNames, definitionCandidates, readDrivers, readJson } from "../review/driver-read";
 import { type RetryState, applyEscalations, emptyRetryState, escalationsFor, scopeFingerprint } from "../review/retry-plan";
@@ -41,9 +43,18 @@ Per required reviewer: the latest raw result decides. DONE / DONE_WITH_CONCERNS 
 needs_context and every slice its path gate requires covered by its dispatched payloads is a
 complete run (source-only, executionRequired false); anything else — NEEDS_CONTEXT, BLOCKED,
 INCOMPLETE, missing slices, no result — stays incomplete or not-run, never declared complete.
-Each raw finding becomes an obligation, closed only by a matching canonical finding or a
-valid --dispositions entry ({id, status finding|refuted|out-of-scope|narrowed, evidence, reason,
-finding?, remains? — required for narrowed: what of the finding still stands}; default: the obligations already in research.json).
+Each raw finding becomes an obligation <raw stem>:<id> (raw/review-logic-w1.txt finding F-001 is
+review-logic-w1:F-001), closed only by a matching canonical finding or a valid --dispositions entry
+(default: the obligations already in research.json). Every entry needs id, status (finding|refuted|
+out-of-scope|narrowed), evidence and reason; status finding links to exactly one canonical finding
+(global_id or id) — "finding" may be omitted, and then it is the canonical finding whose id is the
+entry's id, else the one the raw finding already resolves to; status narrowed also needs remains
+(what of the finding still stands).
+With no entry, a raw finding closes by itself when the canonical findings hold it: the same reviewer
+and id, a canonical id equal to the obligation id, or a survivor whose merged_from lists it (review
+ingest merged it as a duplicate); one review ingest screened out of findings.json (scope B, recorded in
+research-evidence/ingest-screened.json) closes out-of-scope with the screen's reason.
+Finding ids hold no "#" (the global_id separator, <reviewId>#<id>): canonical findings with one are refused.
 --dispositions is a JSON array, or an object holding one under dispositions, items, results, data, entries or
 obligations; a row with no id, an unknown status or a narrowed row without remains refuses the build with the list of bad rows.
 Each reviewer's model (drivers/*.json "model", or "model" in its result) is listed after READY / NOT READY; none reads "model not recorded".
@@ -261,7 +272,11 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     if (hash === undefined) delete entry.contentHash;
     else entry.contentHash = hash;
   }
-  const canonical = (await readJson<Array<Record<string, unknown>>>(path.resolve(optionValue(rest, "--findings") ?? path.join(packageDir, "findings.json")))) ?? [];
+  const findingsSource = optionValue(rest, "--findings") ?? path.join(packageDir, "findings.json");
+  const canonical = (await readJson<Array<Record<string, unknown>>>(path.resolve(findingsSource))) ?? [];
+  // Flow 460: a display id holding "#" is refused here, where the canonical findings are first read, not at ingest.
+  const hashed = hashedDisplayIds(Array.isArray(canonical) ? canonical.map((finding) => finding?.id) : []);
+  if (hashed.length > 0) throw new Error(`ledger build refused: ${hashedDisplayIdMessage(hashed, findingsSource)} Nothing was built.`);
   const out = path.resolve(optionValue(rest, "--out") ?? path.join(packageDir, "research.json"));
   const dispositionSource = optionValue(rest, "--dispositions");
   const given = await readJson<unknown>(path.resolve(dispositionSource ?? out));
@@ -304,6 +319,9 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
   if (plan.refusal !== undefined) throw new Error(`ledger build refused: ${plan.refusal}`);
   const toolLogs: Record<string, string | undefined> = {};
   for (const reviewer of selected) toolLogs[reviewer] = await readToolLog(inputDir, reviewer, toolLogPaths[reviewer]);
+  // Flow 460: the findings `review ingest` screened out of findings.json, closed out-of-scope with the screen's reason.
+  const screenedFile = path.join(packageDir, INGEST_SCREENED_FILE);
+  const screened = ingestScreenedOf(await readJson<unknown>(screenedFile));
   const { ledger, gaps } = buildLedger({
     dispatchRoles: await knownDispatchRoles(out, replies.reviewers),
     mode,
@@ -325,6 +343,8 @@ export async function runLedger(args: string[], deps: { rejectUnknownFlags: (arg
     skipped,
     superseded: required.excluded.filter((entry) => entry.reason.startsWith("superseded by ") || entry.reason.startsWith("overlap group ")),
     supersedeNotes: required.notes,
+    screened,
+    screenedEvidence: path.relative(packageDir, screenedFile),
   });
   for (const driver of dropped) {
     gaps.push({ reviewer: driver.reviewer, detail: `drivers/${driver.file}: ${driver.unusable} slice entr${driver.unusable === 1 ? "y" : "ies"} without a usable id; none of this dispatch's slices counts as handed to ${driver.reviewer}`, next: `give every entry in drivers/${driver.file} an id string, or an object with an id` });

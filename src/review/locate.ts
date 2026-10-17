@@ -14,7 +14,9 @@
 //
 // Two rules keep the matcher from becoming a second guesser:
 //
-//   - Exact first, whitespace-normalised second, then give up. Nothing fuzzy.
+//   - Exact first, whitespace-normalised second, then (one-line quotes only) an
+//     exact substring of exactly one file line, then give up. Nothing fuzzy:
+//     no similarity, no proximity to the reported line.
 //     A near-match confidently anchored to the wrong site is worse than an
 //     honest `unlocatable`, because a wrong anchor is acted on and an admitted
 //     one is investigated.
@@ -58,12 +60,18 @@ export const MAX_LOCATE_FILE_BYTES = 4_000_000;
 export type UnlocatableKind = "absent" | "ambiguous" | "bound" | "empty";
 
 /** How a finding's `line` was arrived at. */
+/**
+ * How a quote was placed. `substring` (flow 460): a one-line quote, edges trimmed, that is an exact substring of exactly
+ * one line of the file — a reviewer quoting the middle of a long line. Still exact text, never a near-match.
+ */
+export type LocateMethod = "exact" | "whitespace-normalised" | "substring";
+
 export type LocatorRecord =
-  | { state: "derived"; method: "exact" | "whitespace-normalised"; line: number; reported_line?: number | null }
+  | { state: "derived"; method: LocateMethod; line: number; reported_line?: number | null }
   | { state: "unlocatable"; reason: string; reported_line?: number | null; kind?: UnlocatableKind | undefined; candidates?: number[] | undefined };
 
 export type LocateOutcome =
-  | { state: "derived"; method: "exact" | "whitespace-normalised"; line: number }
+  | { state: "derived"; method: LocateMethod; line: number }
   | { state: "unlocatable"; reason: string; kind?: UnlocatableKind | undefined; candidates?: number[] | undefined };
 
 /** Lines of `quote`, with blank edges dropped and common indentation removed. */
@@ -145,6 +153,23 @@ function findRuns(
   return hits;
 }
 
+/** Every 1-based line that holds `part` as an exact substring, stopping at {@link MAX_HITS}. */
+function findSubstring(haystack: readonly string[], part: string): number[] {
+  const hits: number[] = [];
+  if (part === "") {
+    return hits;
+  }
+  for (let index = 0; index < haystack.length; index += 1) {
+    if ((haystack[index] as string).includes(part)) {
+      hits.push(index + 1);
+      if (hits.length >= MAX_HITS) {
+        return hits;
+      }
+    }
+  }
+  return hits;
+}
+
 /** "at least 2 places (lines 1, 2)" — bounded, and honest that it stopped counting. */
 function ambiguity(hits: readonly number[], pass: string): LocateOutcome {
   return {
@@ -203,6 +228,19 @@ export function locateQuote(fileText: string, quote: string): LocateOutcome {
   }
   if (loose.length > 1) {
     return ambiguity(loose, " once whitespace is normalised ");
+  }
+
+  // Flow 460: a one-line quote lifted out of the middle of a line (19 of 21 unlocated quotes of one recorded round were
+  // exactly that). Placed only when it is an exact substring of ONE line; two lines holding it is `ambiguous`, as above.
+  if (needle.length === 1) {
+    const part = (needle[0] as string).trim();
+    const within = findSubstring(haystack, part);
+    if (within.length === 1) {
+      return { state: "derived", method: "substring", line: within[0] as number };
+    }
+    if (within.length > 1) {
+      return ambiguity(within, " as a substring of a line ");
+    }
   }
   return { state: "unlocatable", reason: "the quote does not appear in the file", kind: "absent" };
 }

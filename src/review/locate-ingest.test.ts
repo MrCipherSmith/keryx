@@ -87,6 +87,19 @@ test("AC1: the recorded line is derived from the quote, not taken from the revie
   expect(recorded?.quote).toBe("  return `hello ${trimmed}`;");
 });
 
+test("flow 460: a quote that is an exact substring of one line is located there, not flagged quote_unlocated", async () => {
+  const [recorded] = await ingest({ findings: [finding({ line: 40, quote: "`hello ${trimmed}`" })] });
+  expect(recorded?.line).toBe(3);
+  expect(recorded?.locator).toEqual({ state: "derived", method: "substring", reported_line: 40 });
+  expect(recorded?.quote_unlocated).toBeUndefined();
+});
+
+test("flow 460: a substring two lines hold stays ambiguous and flagged", async () => {
+  const [recorded] = await ingest({ findings: [finding({ line: 2, quote: "trimmed" })] });
+  expect(recorded?.line).toBeNull();
+  expect(recorded?.quote_unlocated).toEqual({ reason: "ambiguous", candidate_lines: [2, 3] });
+});
+
 test("AC2: a quote that is not in the tree yields unlocatable and NO line", async () => {
   const [recorded] = await ingest({
     findings: [finding({ line: 2, quote: "  return `howdy ${trimmed}`;" })],

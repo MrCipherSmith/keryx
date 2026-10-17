@@ -630,7 +630,7 @@ export type NormalizedReviewFinding = StructuredReviewFinding & {
  * the only thing that can later measure how far those claims drifted.
  */
 export type ReviewFindingLocator =
-  | { state: "derived"; method: "exact" | "whitespace-normalised"; reported_line?: number | null }
+  | { state: "derived"; method: "exact" | "whitespace-normalised" | "substring"; reported_line?: number | null }
   | { state: "unlocatable"; reason: string; reported_line?: number | null };
 
 export type ManagedReviewInput = {
@@ -705,7 +705,7 @@ export type ManagedReviewInput = {
    * merge is delete-only and must be able to receive, and visibly reject, a claim that
    * tried to carry something it may not.
    */
-  premises?: PremiseSource | undefined;
+  premises?: PremiseSource | readonly PremiseSource[] | undefined;
   /**
    * The §5.4 decision this round ran under, from
    * `keryx providers cross-family --json` (flow 209, AC2).

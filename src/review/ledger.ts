@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
+import { DISPLAY_ID_FORM, displayIdHasHash } from "./display-id";
 import { coverageErrors, skipLine, type ReviewMode, type ReviewerSkip } from "./coverage";
 import { dispatchErrors } from "./dispatch";
 import { layersUsedFrom } from "./layers-usage";
-import { packageCoverageErrors, researchErrors } from "./research";
+import { INGEST_SCREENED_FILE, type IngestScreened, packageCoverageErrors, researchErrors } from "./research";
 import { describeUnusableResult, holdsResultList, lenientReviewResult } from "./result-parse";
 import { readSliceIds, scopeFingerprint, sliceReadingNotes, type RetryState } from "./retry-plan";
 import { type SliceManifest, packWavesByKind, waveBytesOf } from "./slice";
@@ -132,6 +133,13 @@ export type LedgerInputs = {
   supersedeNotes?: readonly string[] | undefined;
   /** Findings a delta round carried over unchanged (`round.json` `carried`): kept in the record; they cover no fix slice. */
   carried?: ReadonlyArray<{ findingId: string; disposition: string }> | undefined;
+  /**
+   * Flow 460: the findings `review ingest` screened out of findings.json (scope-B floor, outside the blast radius), read
+   * from the package's {@link INGEST_SCREENED_FILE}. A raw finding among them closes `out-of-scope` with the screen's
+   * reason, so the ledger does not go stale when ingest removes a finding. `screenedEvidence` is the file it came from.
+   */
+  screened?: readonly IngestScreened[] | undefined;
+  screenedEvidence?: string | undefined;
 };
 
 export type LedgerResult = {
@@ -592,22 +600,41 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
     const own = input.canonical.filter((f) => f.reviewer === reviewer && f.id === id);
     return own.length > 0 ? own : input.canonical.filter((f) => absorbedInto(f, reviewer, id));
   };
+  // Flow 460: canonical findings are commonly named after the raw file and the reviewer's id (`<raw stem>:<id>`, the
+  // obligation id itself). Such a finding links by that id, and one the duplicate merge folded into a survivor links to
+  // the survivor through its `merged_from` (whose entries are `<reviewId>#<display id>`).
+  const canonicalByObligation = (oid: string) => {
+    const own = input.canonical.filter((f) => f.id === oid || f.global_id === oid);
+    return own.length > 0 ? own : input.canonical.filter((f) => Array.isArray(f.merged_from) && f.merged_from.some((m) => m === oid || (typeof m === "string" && m.endsWith(`#${oid}`))));
+  };
+  const keyOf = (f: Record<string, unknown>): string | undefined => (text(f.global_id) ? f.global_id : text(f.id) ? f.id : undefined);
+  const resolvesOnce = (key: string | undefined): key is string => text(key) && input.canonical.filter((f) => f.id === key || f.global_id === key).length === 1;
+  const screenedAs = (reviewer: string, oid: string, fid: string) =>
+    (input.screened ?? []).find((entry) => entry.id === oid || (entry.reviewer === reviewer && entry.id === fid));
   for (const raw of attributed) {
     const reviewer = raw.result!.reviewer!;
     for (const finding of Array.isArray(raw.result!.findings) ? raw.result!.findings! : []) {
       const fid = finding && typeof finding.id === "string" ? finding.id : undefined;
       if (fid === undefined) continue;
+      if (displayIdHasHash(fid)) gaps.push({ reviewer, detail: `${raw.name}: finding id "${fid}" holds "#"; ingest refuses it`, next: `have ${reviewer} re-emit its result with ids that hold no "#" (${DISPLAY_ID_FORM})` });
       const id = `${raw.name.replace(/^raw\//, "").replace(/\.txt$/, "")}:${fid}`;
       derived.add(id);
       const base = { id, source: raw.name, question: `Is ${reviewer} finding ${fid} (${String(finding.problem ?? finding.title ?? "").slice(0, 100)}) real, and where is it reported?` };
       const given = input.dispositions.find((d) => d.id === id);
-      const closure = closeWith(given, input.canonical);
+      const byReviewer = canonicalByReviewer(reviewer, fid);
+      const byObligation = byReviewer.length === 1 ? [] : canonicalByObligation(id);
+      const hit = byReviewer.length === 1 ? byReviewer : byObligation;
+      const key = hit.length === 1 ? keyOf(hit[0]!) : undefined;
+      const closure = closeWith(given, input.canonical, resolvesOnce(key) ? key : undefined);
       if (closure !== undefined) { obligations.push({ ...base, ...closure }); continue; }
-      const hit = canonicalByReviewer(reviewer, fid);
-      const link = hit.length === 1 ? hit[0]! : undefined;
-      const key = link === undefined ? undefined : (text(link.global_id) ? link.global_id : link.id);
-      if (text(key) && input.canonical.filter((f) => f.id === key || f.global_id === key).length === 1) {
-        obligations.push({ ...base, status: "finding", finding: key, evidence: `${raw.name}#sha256:${raw.hash}`, reason: `reported by ${reviewer} as ${fid}; the same finding is canonical ${key}` });
+      if (resolvesOnce(key)) {
+        const merged = hit[0]!.id !== fid && hit[0]!.id !== id && hit[0]!.global_id !== id;
+        obligations.push({ ...base, status: "finding", finding: key, evidence: `${raw.name}#sha256:${raw.hash}`, reason: merged ? `reported by ${reviewer} as ${fid}; review ingest merged it as a duplicate into canonical ${key}` : `reported by ${reviewer} as ${fid}; the same finding is canonical ${key}` });
+        continue;
+      }
+      const screened = screenedAs(reviewer, id, fid);
+      if (screened !== undefined) {
+        obligations.push({ ...base, status: "out-of-scope", evidence: input.screenedEvidence ?? INGEST_SCREENED_FILE, reason: `review ingest's scope-B screen kept it out of findings.json (${screened.rule}): ${screened.detail}` });
         continue;
       }
       obligations.push({ ...base, status: "unresolved" });
@@ -617,7 +644,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
       const id = `${raw.name.replace(/^raw\//, "").replace(/\.txt$/, "")}:fu${at + 1}`;
       derived.add(id);
       const base = { id, source: raw.name, question: `Is the parent follow-up from ${reviewer} done or ruled out, and where is that recorded? ${followUp.slice(0, 200)}` };
-      const closure = closeWith(input.dispositions.find((d) => d.id === id), input.canonical);
+      const closure = closeWith(input.dispositions.find((d) => d.id === id), input.canonical, undefined);
       if (closure !== undefined) { obligations.push({ ...base, ...closure }); return; }
       obligations.push({ ...base, status: "unresolved" });
       gaps.push({ detail: `${id}: parent follow-up is open (${followUp.slice(0, 100)})`, next: `do it or rule it out, then add a disposition {"id":"${id}","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"remains":… (narrowed only)} to --dispositions` });
@@ -625,7 +652,7 @@ export function buildLedger(input: LedgerInputs): LedgerResult {
   }
   for (const given of input.dispositions) {
     if (text(given.id) && !derived.has(given.id) && text(given.source) && text(given.question)) {
-      const closure = closeWith(given, input.canonical);
+      const closure = closeWith(given, input.canonical, undefined);
       obligations.push({ id: given.id, source: given.source, question: given.question, ...(closure ?? { status: "unresolved" }) });
     }
   }
@@ -704,7 +731,7 @@ export function auditRecord(manifest: SliceManifest, raws: readonly RawFile[]): 
 export const DISPOSITION_WRAPPER_KEYS: readonly string[] = ["dispositions", "items", "results", "data", "entries", "obligations"];
 
 /** The one schema of a `ledger build --dispositions` row, worded for an error. */
-export const DISPOSITION_SCHEMA = `{"id":"<raw/file.txt:Fn>","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"finding":… (status finding),"remains":… (status narrowed)}`;
+export const DISPOSITION_SCHEMA = `{"id":"<raw stem>:<Fn>","status":"finding|refuted|out-of-scope|narrowed","evidence":…,"reason":…,"finding":… (status finding; optional: defaults to the canonical finding whose id is the row's id, or the one the raw finding resolves to),"remains":… (status narrowed)}`;
 
 /**
  * The dispositions of a `--dispositions` input: an array, or an object holding one under a wrapper key (`dispositions`,
@@ -748,11 +775,23 @@ export function normalizeDispositions(given: unknown, options: { strict: boolean
   return { rows, bad };
 }
 
-function closeWith(given: Disposition | undefined, canonical: Array<Record<string, unknown>>): Record<string, unknown> | undefined {
+/**
+ * The closure a disposition gives, or undefined. A `status: finding` row with no `finding` link (flow 460) links to the
+ * canonical finding whose id (or global_id) is the row's own id, else to `defaultLink`, the canonical finding the raw
+ * finding already resolves to; a link that resolves to no single canonical finding does not close.
+ */
+function closeWith(given: Disposition | undefined, canonical: Array<Record<string, unknown>>, defaultLink: string | undefined): Record<string, unknown> | undefined {
   if (given === undefined || !CLOSED.has(String(given.status)) || !text(given.evidence) || !text(given.reason)) return undefined;
-  if (given.status === "finding" && !(text(given.finding) && canonical.filter((f) => f.id === given.finding || f.global_id === given.finding).length === 1)) return undefined;
+  const matching = (key: unknown) => canonical.filter((f) => f.id === key || f.global_id === key);
+  let finding = given.finding;
+  if (given.status === "finding" && !text(finding)) {
+    const same = matching(given.id);
+    const linked = same.length === 1 ? same[0]! : undefined;
+    finding = linked === undefined ? defaultLink : text(linked.global_id) ? linked.global_id : String(linked.id);
+  }
+  if (given.status === "finding" && !(text(finding) && matching(finding).length === 1)) return undefined;
   if (given.status === "narrowed" && !text(given.remains)) return undefined;
-  return { status: given.status, evidence: given.evidence, reason: given.reason, ...(given.status === "finding" ? { finding: given.finding } : {}), ...(given.status === "narrowed" ? { remains: given.remains } : {}) };
+  return { status: given.status, evidence: given.evidence, reason: given.reason, ...(given.status === "finding" ? { finding } : {}), ...(given.status === "narrowed" ? { remains: given.remains } : {}) };
 }
 
 /**

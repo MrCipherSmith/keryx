@@ -8,7 +8,7 @@ import { packageParityWarnings } from "./parity";
 import { roundRecordTampered } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
 import { renderSpendMarkdown } from "./dispatch-usage";
-import { PENDING_RESEARCH, dispatchRuns, packageResearchErrors } from "./research";
+import { INGEST_SCREENED_FILE, PENDING_RESEARCH, dispatchRuns, packageResearchErrors, type IngestScreened } from "./research";
 import { COVERAGE_MD_MARK, computeReadiness, readinessRefusal, waiveReadiness, withoutPartialHeader, type ReadinessReport } from "./readiness";
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
@@ -51,9 +51,10 @@ import {
   type ReviewFilterStats,
 } from "./filter-stats";
 import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
+import { hashedDisplayIdMessage, hashedDisplayIds } from "./display-id";
 import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
 import { flowReviewsRoot, reviewsRoot } from "./package-location";
-import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaims, previousFindingsUnreadable, renderPremiseMarkdown } from "./premise";
+import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaimSets, previousFindingsUnreadable, renderPremiseMarkdown } from "./premise";
 import { promoteParentExecutions } from "./verify-run";
 import { withOperatorDecisionsLock } from "./operator-decisions";
 import { repairMechanicalOmissions, type FindingRepair } from "./repair";
@@ -266,7 +267,7 @@ export async function createManagedReviewPackage(
 ): Promise<ManagedReviewPackageResult & { scopeBScreen: ScopeBScreenRecord; duplicates: DuplicateMerge[] }> {
   const at = (input.now ?? new Date()).toISOString();
   // Parsed first: a premise file of the wrong shape refuses the ingest before a package is allocated.
-  const premiseClaims = parsePremiseClaims(input.premises);
+  const premiseClaims = parsePremiseClaimSets(input.premises);
   const flowMatch = await resolvePackageFlow(input);
   const { reviewId, packageDir } = await allocatePackage(input, flowMatch, at);
   // Before anything is written: an id that names packages in two places refuses here (review LG6-002, SEC6-001).
@@ -276,7 +277,7 @@ export async function createManagedReviewPackage(
   // The attribution default for findings that name no reviewer comes from what the operator gave (or the orchestrator),
   // never from the research record: one finished reviewer there must not absorb the orchestrator's findings.
   const reviewers = normalizeCoverage(input.coverage, input.reviewers).filter((entry) => entry.status === "run").map((entry) => entry.reviewer);
-  const reported = await normalizeFindings({
+  const { findings: reported, from: findingsFrom } = await normalizeFindings({
     report,
     reportLabel: reportLabel(input),
     mode: input.mode,
@@ -284,6 +285,12 @@ export async function createManagedReviewPackage(
     source: input.findings,
     reviewers,
   });
+  // Flow 460: refused before anything is located, verified, merged or written.
+  refuseStubReport(input, report, findingsFrom, reported.length);
+  const hashed = hashedDisplayIds(reported.map((finding) => finding.id));
+  if (hashed.length > 0) {
+    throw new Error(`Refusing to ingest: ${hashedDisplayIdMessage(hashed, findingsFrom === "input" ? "--findings" : reportLabel(input))} Nothing was written.`);
+  }
   // Typing, filled in; judgement, still refused. Runs BEFORE `assignGlobalIds`,
   // because a finding with no `id` mints the key `<reviewId>#undefined` and five
   // of them then collide on it — which is how a round was lost to a field the
@@ -443,6 +450,7 @@ export async function createManagedReviewPackage(
     findingsCap: { counts: findingsCap.counts, drops: findingsCap.drops },
     externalRetained: scoped.external.length,
     ...(input.refuted === undefined ? {} : { roundDismissed: roundDismissed.length }),
+    duplicatesMerged: deduped.merges.reduce((sum, merge) => sum + merge.absorbed.length, 0),
   });
   const manifest = buildManifest({
     input,
@@ -547,6 +555,10 @@ export async function createManagedReviewPackage(
     path.join(packageDir, "findings.json"),
     `${JSON.stringify(findings.map(toContractFinding), null, 2)}\n`,
   ));
+  // Flow 460: what the scope-B screen kept out of findings.json, for `review ledger build` to close. Rewritten on every
+  // ingest (empty when nothing was screened), so a re-ingest never leaves an earlier screen's record behind.
+  await mkdir(path.join(packageDir, "research-evidence"), { recursive: true });
+  await writeFileAtomic(path.join(packageDir, INGEST_SCREENED_FILE), `${JSON.stringify({ version: 1, screened: screenedRecord(scopeB.record) }, null, 2)}\n`);
   await writeFileAtomic(path.join(packageDir, "learning.md"), renderLearning(findings));
   await writeFileAtomic(path.join(packageDir, "decisions.md"), renderDecisions(findings));
   // Last, and only once the package is complete. See {@link persistScreenRadius}.
@@ -668,6 +680,15 @@ async function screenScopeBFindings(
     },
     resolved,
   };
+}
+
+/** The scope-B rejections as {@link INGEST_SCREENED_FILE} records them. */
+function screenedRecord(record: ScopeBScreenRecord): IngestScreened[] {
+  return (record.screen?.rejected ?? []).flatMap((rejection): IngestScreened[] => {
+    const finding = rejection.finding;
+    if (typeof finding.id !== "string" || finding.id === "") return [];
+    return [{ id: finding.id, ...(typeof finding.global_id === "string" ? { global_id: finding.global_id } : {}), ...(typeof finding.reviewer === "string" ? { reviewer: finding.reviewer } : {}), rule: rejection.rule, detail: rejection.detail }];
+  });
 }
 
 type ResolvedScreenRadius = {
@@ -1239,6 +1260,10 @@ function normalizeCoverage(
   }));
 }
 
+/** The report `review start` writes before any reviewer has run: a placeholder, never a round's result. */
+const STUB_REPORT_LINE = "No reviewer findings recorded yet.";
+const STUB_REPORT = `# Managed Review Report\n\n${STUB_REPORT_LINE}\n`;
+
 async function readReport(input: ManagedReviewInput): Promise<string> {
   if (input.reportText !== undefined) {
     return input.reportText;
@@ -1255,7 +1280,7 @@ async function readReport(input: ManagedReviewInput): Promise<string> {
   if (input.mode === "ingest") {
     throw new Error("ingest requires --report or reportText");
   }
-  return `# Managed Review Report\n\nNo reviewer findings recorded yet.\n`;
+  return STUB_REPORT;
 }
 
 /** How to name the report in an error, so a refusal says which file to open. */
@@ -1292,9 +1317,9 @@ type NormalizeFindingsArgs = {
  * lossless by a better regex, which is why the structured array is taken from
  * the producer and the parser is demoted to reading what is already on disk.
  */
-async function normalizeFindings(args: NormalizeFindingsArgs): Promise<NormalizedReviewFinding[]> {
+async function normalizeFindings(args: NormalizeFindingsArgs): Promise<{ findings: NormalizedReviewFinding[]; from: "input" | "block" | "prose" }> {
   if (args.source !== undefined) {
-    return triage(fromStructuredSource(args.source, args.reviewers), args);
+    return { findings: triage(fromStructuredSource(args.source, args.reviewers), args), from: "input" };
   }
   // PRESENCE, not the parsed value. Branching on the value cannot tell "no
   // block" from "a block holding null", and both then fell through to the prose
@@ -1302,9 +1327,25 @@ async function normalizeFindings(args: NormalizeFindingsArgs): Promise<Normalize
   // prevent. `parseEmbeddedFindings` returns null only when no fence is there.
   const structured = parseEmbeddedFindings(args.report, args.reportLabel);
   if (structured !== null) {
-    return triage(fromStructuredSource(structured, args.reviewers), args);
+    return { findings: triage(fromStructuredSource(structured, args.reviewers), args), from: "block" };
   }
-  return triage(parseLegacyReport(args.report, args.reviewers), args);
+  return { findings: triage(parseLegacyReport(args.report, args.reviewers), args), from: "prose" };
+}
+
+/**
+ * Flow 460: `review ingest` of a stub — an empty report, or the placeholder `review start` writes into a package before
+ * any reviewer ran — that carries no `keryx:findings` block and no finding, with no `--findings` either, is not a clean
+ * round: ingesting it would record a reviewed round that found nothing. Refused before anything is written. A round
+ * that really found nothing says so in its own report, or with an empty block. (A prose report of an older round that
+ * found nothing is not a stub and still ingests.)
+ */
+function refuseStubReport(input: ManagedReviewInput, report: string, from: "input" | "block" | "prose", findings: number): void {
+  if (input.mode !== "ingest" || from !== "prose" || findings > 0) return;
+  const text = report.trim();
+  if (text !== "" && !text.includes(STUB_REPORT_LINE)) return;
+  throw new Error(
+    `Refusing to ingest ${reportLabel(input)}: it is ${report.trim() === "" ? "empty" : `the placeholder \`review start\` writes ("${STUB_REPORT_LINE}")`}, with no \`\`\`json keryx:findings block and no finding, so it is a stub, not a round's report. Point --report at the consolidated report (with its keryx:findings block), pass --findings <file>, or, for a round that found nothing, add an empty block (\`\`\`json keryx:findings / [] / \`\`\`). Nothing was written.`,
+  );
 }
 
 function triage(
@@ -2803,10 +2844,19 @@ async function allocatePackage(
   at: string,
 ): Promise<{ reviewId: string; packageDir: string }> {
   if (input.reviewId !== undefined) {
-    return {
-      reviewId: input.reviewId,
-      packageDir: packagePath(input.cwd, input.mode, input.reviewId, flowMatch),
-    };
+    const packageDir = packagePath(input.cwd, input.mode, input.reviewId, flowMatch);
+    // Flow 460: `review ingest --flow <id> --review-id <id>` of a package `review start` opened under the reviews root
+    // binds THAT package to the flow (the manifest records `flow`) instead of opening a second, empty-handed one in the
+    // flow's directory; a re-ingest of a package already bound to that flow stays there. A package of that id already
+    // in the flow's directory is ingested into as before, and a reviews-root directory that is neither is not touched.
+    if (input.mode === "ingest" && flowMatch !== null) {
+      const standalone = path.join(reviewsRoot(input.cwd), input.reviewId);
+      const recorded = await readManifestHead(standalone);
+      if (!(await pathExists(packageDir)) && (recorded?.mode === "review-flow" || recorded?.flowId === flowMatch.id)) {
+        return { reviewId: input.reviewId, packageDir: standalone };
+      }
+    }
+    return { reviewId: input.reviewId, packageDir };
   }
   const base = defaultReviewId(input.mode, input.target.kind, input.target.ref, at);
   for (let round = 1; round <= MAX_SAME_DAY_ROUNDS; round += 1) {
@@ -2819,6 +2869,16 @@ async function allocatePackage(
   throw new Error(
     `Refusing to record a ${MAX_SAME_DAY_ROUNDS + 1}th review round for "${base}" in one day. ${MAX_SAME_DAY_ROUNDS} rounds against one target is a repair loop that nothing stopped — run \`keryx review loop --flow <id>\`, or pass --review-id to name this round yourself.`,
   );
+}
+
+/** `manifest.mode` and `manifest.flow.id` of the package at `packageDir`, or undefined when it has no readable manifest. */
+async function readManifestHead(packageDir: string): Promise<{ mode: unknown; flowId: unknown } | undefined> {
+  try {
+    const manifest = JSON.parse(await readFile(path.join(packageDir, "manifest.json"), "utf8")) as { mode?: unknown; flow?: { id?: unknown } } | null;
+    return manifest === null || typeof manifest !== "object" ? undefined : { mode: manifest.mode, flowId: manifest.flow?.id };
+  } catch {
+    return undefined;
+  }
 }
 
 function matchesTarget(flow: FlowState, dir: string, kind: string, ref: string): boolean {
