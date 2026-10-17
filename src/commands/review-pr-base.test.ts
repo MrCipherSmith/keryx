@@ -44,4 +44,4 @@ test("the real reader returns origin/<base> for a branch name and nothing for a 
   expect(await readBase(pr, "main", 1)).toBe("null");
   expect(await readBase("--web", "main")).toBe("null");
   expect(await readBase(pr, "main", 0, true)).toBe("null");
-});
+}, 60_000); // six cold `bun` children each import review.ts (review LG-R5-003)

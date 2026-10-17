@@ -1530,7 +1530,9 @@ function failsAfterFirstRequest(root: string, text: string, usage: { inputTokens
   });
 }
 
-test("flow 460 (H): a child that fails with a thrown error records its dispatch once, as an incomplete record with partial usage (LG-002, LG-R4-002, RG4-005)", async () => {
+// The `recordSaved` guard (RG4-005: a throw after the dispatch already saved skips the catch's save) is not reached here:
+// this child throws before any save. It is defensive; no current code path saves and then throws (review NEW-TP5-003).
+test("flow 460 (H): a child that fails with a thrown error records its dispatch as an incomplete record with partial usage (LG-002, LG-R4-002)", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-saveusage-thrown-"));
   try {
     const withText = await failsAfterFirstRequest(root, "half a review", { inputTokens: 30, outputTokens: 4 }).invoke({ task: "review", mode: "read_only", save_result_to: "raw/review-logic.txt" });

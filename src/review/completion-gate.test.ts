@@ -538,6 +538,11 @@ describe("the shell reader: redirections, pipes and the ways keryx is run (LG-R3
       "tail -n 50 notes.md",
       "less notes.md",
       "more notes.md",
+      "less -n notes.md",
+      "less -c notes.md",
+      "less -m notes.md",
+      "more -c notes.md",
+      "cat -n notes.md",
       "grep path: notes.md",
       "grep -r path:",
       "grep -rh path: .",
@@ -667,8 +672,11 @@ describe("fileHash: a file unchanged since the last stop is not read again, a ch
     expect(hashedFileCount()).toBe(before + 1);
     // Unchanged: the remembered hash answers.
     expect(await fileHash(file, aged)).toBe(first);
-    // The same size, different bytes: the hash changes (the timestamps moved with the write).
+    // The same size, different bytes: the hash changes. The mtime is moved explicitly: a coarse filesystem clock can give
+    // both writes the same timestamps, which is the case the cache key cannot see (review LG-R5-002).
     await writeFile(file, "bbbb");
+    const moved = new Date(Date.now() - 120_000);
+    await utimes(file, moved, moved);
     const second = await fileHash(file, aged);
     expect(second).not.toBe(first);
     // A file written just now is inside the racy window: hashed again on every stop, never remembered.

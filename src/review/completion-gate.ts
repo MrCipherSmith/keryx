@@ -196,8 +196,20 @@ const KERYX_PACKAGE = /^(?:@mrciphersmith\/)?keryx(?:@[^\s/]+)?$/;
  * stdin filter: naming a file of its own, or searching a tree, prints something that is not keryx's output.
  */
 const PIPE_FILTERS: ReadonlySet<string> = new Set(["tee", "head", "tail", "cat", "grep", "less", "more"]);
-/** Options of the readers that consume the next word as their value, so it is not a file operand. */
-const READER_VALUE_OPTIONS: ReadonlySet<string> = new Set(["-n", "-c", "--lines", "--bytes", "-m", "--max-count", "-A", "-B", "-C", "--include", "--exclude"]);
+/**
+ * Options that consume the next word as their value, per reader, so that word is not a file operand. `cat`, `less` and
+ * `more` have none here: their `-n`, `-c`, `-m` are plain switches, and a word after one is a file (review LG-R5-001).
+ */
+const NO_VALUE_OPTIONS: ReadonlySet<string> = new Set();
+const HEAD_TAIL_VALUE_OPTIONS: ReadonlySet<string> = new Set(["-n", "-c", "--lines", "--bytes"]);
+const GREP_VALUE_OPTIONS: ReadonlySet<string> = new Set(["-m", "--max-count", "-A", "-B", "-C", "--include", "--exclude"]);
+const READER_VALUE_OPTIONS: Readonly<Record<string, ReadonlySet<string>>> = {
+  head: HEAD_TAIL_VALUE_OPTIONS,
+  tail: HEAD_TAIL_VALUE_OPTIONS,
+  cat: NO_VALUE_OPTIONS,
+  less: NO_VALUE_OPTIONS,
+  more: NO_VALUE_OPTIONS,
+};
 /** grep options that take the pattern (or the pattern file) from the option, so a file operand is every positional word. */
 const GREP_PATTERN_OPTIONS: ReadonlySet<string> = new Set(["-e", "--regexp", "-f", "--file"]);
 /** grep options that read a tree or a directory instead of stdin. */
@@ -402,11 +414,11 @@ function isPipeFilter(command: readonly string[]): boolean {
   if (!PIPE_FILTERS.has(program)) return false;
   const args = command.slice(1);
   if (program === "tee") return true;
-  if (program !== "grep") return readerOperands(args, READER_VALUE_OPTIONS).length === 0;
+  if (program !== "grep") return readerOperands(args, READER_VALUE_OPTIONS[program] ?? NO_VALUE_OPTIONS).length === 0;
   if (args.some((arg) => GREP_TREE_OPTION.test(arg))) return false;
   // The pattern is one positional word, unless an option supplies it; any further word is a file.
   const patternFromOption = args.some((arg) => GREP_PATTERN_OPTIONS.has(arg));
-  return readerOperands(args, new Set([...READER_VALUE_OPTIONS, ...GREP_PATTERN_OPTIONS])).length <= (patternFromOption ? 0 : 1);
+  return readerOperands(args, new Set([...GREP_VALUE_OPTIONS, ...GREP_PATTERN_OPTIONS])).length <= (patternFromOption ? 0 : 1);
 }
 
 /**
