@@ -1,13 +1,16 @@
 // Checks a worker's `project_context_applied` against the resolver output the
 // worker was dispatched with: every `must_read` entry has to be cited with the
 // sha256 the resolver pinned, and no resolved file may have changed since (the
-// standard must not move between the RED and the GREEN commit).
+// standard must not move between the RED and the GREEN commit). An entry promoted
+// by a declared condition also owes a proof of the reading: the declared anchor
+// and a summary in the section's own words (see ./reference-proof).
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { sha256Hex } from "./project-rules";
 import type { ContextEntry, ProjectContextResolution } from "./context-resolver";
 import { readProjectContextConfig, type ProjectContextEnforcement } from "./project-context-config";
+import { isPromoted, pickProofItem, proofFailures, type CitedItem, type ProofRule } from "./reference-proof";
 
 export type ResolvedMiss = {
   path: string;
@@ -16,6 +19,10 @@ export type ResolvedMiss = {
   expected: string;
   /** The sha256 the result cited, when it cited the path at all. */
   cited?: string;
+  /** Set when the entry was cited with the right hash but the proof of the reading failed; absent for a path/hash miss. */
+  rule?: ProofRule;
+  /** What is wrong and what is expected; continues the sentence "<path> (<reason>) ...". Present with {@link rule}. */
+  detail?: string;
 };
 
 export type ResolvedDrift = {
@@ -51,13 +58,20 @@ export async function readResolvedFile(file: string): Promise<ProjectContextReso
   return value as ProjectContextResolution;
 }
 
-function appliedOf(result: unknown): Map<string, string> {
-  const cited = new Map<string, string>();
+function appliedOf(result: unknown): Map<string, CitedItem[]> {
+  const cited = new Map<string, CitedItem[]>();
   const list = (result as { project_context_applied?: unknown } | null)?.project_context_applied;
   if (!Array.isArray(list)) return cited;
   for (const item of list) {
-    const entry = item as { path?: unknown; sha256?: unknown } | null;
-    if (typeof entry?.path === "string" && typeof entry.sha256 === "string") cited.set(entry.path, entry.sha256);
+    const entry = item as { path?: unknown; sha256?: unknown; how?: unknown; anchor?: unknown; summary?: unknown } | null;
+    if (typeof entry?.path !== "string" || typeof entry.sha256 !== "string") continue;
+    const kept: CitedItem = {
+      sha256: entry.sha256,
+      ...(typeof entry.how === "string" ? { how: entry.how } : {}),
+      ...(typeof entry.anchor === "string" ? { anchor: entry.anchor } : {}),
+      ...(typeof entry.summary === "string" ? { summary: entry.summary } : {}),
+    };
+    cited.set(entry.path, [...(cited.get(entry.path) ?? []), kept]);
   }
   return cited;
 }
@@ -70,6 +84,14 @@ async function currentSha(projectRoot: string, entryPath: string): Promise<strin
   }
 }
 
+/** The proof misses of a promoted entry; none when it was not cited at all (the path miss already says so). */
+async function proofMisses(projectRoot: string, entry: ContextEntry, items: readonly CitedItem[]): Promise<ResolvedMiss[]> {
+  const item = pickProofItem(items, entry.sha256);
+  if (item === undefined) return [];
+  const failures = await proofFailures({ projectRoot, entry, item });
+  return failures.map((failure) => ({ path: entry.path, reason: entry.reason, expected: entry.sha256, rule: failure.rule, detail: failure.detail }));
+}
+
 export async function checkResolvedContext(input: {
   projectRoot: string;
   resolved: ProjectContextResolution;
@@ -80,9 +102,15 @@ export async function checkResolvedContext(input: {
   const misses: ResolvedMiss[] = [];
   const drifted: ResolvedDrift[] = [];
   for (const entry of input.resolved.entries) {
+    const items = [entry.path, ...(entry.also_at ?? [])].flatMap((where) => cited.get(where) ?? []);
     if (entry.tier === "must_read") {
-      const shas = [entry.path, ...(entry.also_at ?? [])].flatMap((where) => (cited.has(where) ? [cited.get(where)!] : []));
+      // Flow 461 semantics: the last citation of each path is the one that counts for the hash.
+      const shas = [entry.path, ...(entry.also_at ?? [])].flatMap((where) => {
+        const last = cited.get(where)?.at(-1);
+        return last !== undefined ? [last.sha256] : [];
+      });
       if (!shas.includes(entry.sha256)) misses.push({ path: entry.path, reason: entry.reason, expected: entry.sha256, ...(shas[0] !== undefined ? { cited: shas[0] } : {}) });
+      if (isPromoted(entry)) misses.push(...(await proofMisses(input.projectRoot, entry, items)));
     }
     for (const where of [entry.path, ...(entry.also_at ?? [])]) {
       const current = await currentSha(input.projectRoot, where);
@@ -105,6 +133,10 @@ export function formatResolvedHeadline(report: ResolvedContextReport): string {
 export function formatResolvedReport(report: ResolvedContextReport): string[] {
   const lines: string[] = [];
   for (const miss of report.misses) {
+    if (miss.detail !== undefined) {
+      lines.push(`- project context miss: ${miss.path} (${miss.reason}) ${miss.detail}`);
+      continue;
+    }
     lines.push(
       miss.cited === undefined
         ? `- project context miss: ${miss.path} (${miss.reason}) is must_read and project_context_applied does not cite it (sha256 ${miss.expected})`

@@ -784,6 +784,31 @@ test("a skills_resolve_context result validates against the mirrored schema, and
   expect(Object.keys(schema.properties).sort()).toEqual(Object.keys(mirrored.properties).sort());
 });
 
+test("a resolve result with a promoted declared reference and an undeclared list validates against the mirrored schema", () => {
+  const mirrored = JSON.parse(
+    readFileSync(
+      path.join(import.meta.dir, "..", "..", "..", "docs", "requirements", "keryx-project-implementation-rules", "schemas", "skills-resolve-context-result.schema.json"),
+      "utf8",
+    ),
+  ) as Record<string, unknown>;
+  const promoted = {
+    kind: "contract",
+    source: "project",
+    path: "docs/STYLING.md",
+    sha256: "a".repeat(64),
+    bytes: 900,
+    reason: "condition:glob:src/**/*.css",
+    tier: "must_read",
+    description: "Tokens and spacing for every stylesheet.",
+    anchor: "Tokens",
+    section_bytes: 300,
+    condition: { globs: ["src/**/*.css"], keywords: ["styling"] },
+  };
+  const result = { ...RESOLVED, entries: [...RESOLVED.entries, promoted], undeclared: ["docs/THEMING.md"] };
+  expect(validateAgainstSchemaObject(mirrored, result).errors).toEqual([]);
+  expect(validateAgainstSchemaObject(mirrored, { ...result, entries: [{ ...promoted, condition: { globs: [] } }] }).valid).toBe(false);
+});
+
 // --- F-002 / F-007 (flow 234 review): the memory formatter's rendered text --
 // is the thing a model actually reads. Before this, nothing anywhere
 // asserted its output, so the boundary could (and did) silently drop every

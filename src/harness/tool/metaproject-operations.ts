@@ -1403,6 +1403,7 @@ const SKILLS_RESOLVE_CONTEXT_OUTPUT_SCHEMA: Record<string, unknown> = {
     entries: { type: "array" },
     budget: { type: "object" },
     warnings: { type: "array" },
+    undeclared: { type: "array" },
     error: { type: "string" },
   },
   required: ["schema", "for", "files", "entries", "budget", "warnings"],
