@@ -31,6 +31,8 @@ export type ContextEntry = {
   index?: true;
   linked?: true;
   shadows?: string;
+  /** Other project paths holding the same bytes (same sha256); citing any of them counts. */
+  also_at?: string[];
 };
 
 export type ContextBudget = { limitBytes: number; usedBytes: number; exceeded: boolean; limitSource: ProjectContextSource };
@@ -125,6 +127,9 @@ type RuleCandidate = {
   bytes: number;
   front: RuleFrontmatter;
   linked: boolean;
+  /** Every ref this content is reachable under; more than one after a same-sha256 merge. */
+  refs: string[];
+  alsoAt: string[];
 };
 
 async function listRuleFiles(projectRoot: string, relative = ""): Promise<string[]> {
@@ -158,7 +163,22 @@ async function readText(absolute: string): Promise<string | undefined> {
 
 function candidateOf(ref: string, pathValue: string, text: string, linked: boolean): RuleCandidate {
   const front = parseRuleFrontmatter(text);
-  return { ref, path: pathValue, text, sha256: sha256Hex(text), bytes: Buffer.byteLength(text), front: { ...front, globs: mergeBraceFragments(front.globs) }, linked };
+  return { ref, path: pathValue, text, sha256: sha256Hex(text), bytes: Buffer.byteLength(text), front: { ...front, globs: mergeBraceFragments(front.globs) }, linked, refs: [ref], alsoAt: [] };
+}
+
+const segments = (value: string): number => value.split("/").length;
+const withoutCorePrefix = (ref: string): string => (ref.startsWith("core/") ? ref.slice("core/".length) : ref);
+
+/** Two paths with one sha256 are one rule: the shallower path leads, the rest go to `alsoAt`. */
+function mergeSameContent(candidates: readonly RuleCandidate[]): RuleCandidate[] {
+  const bySha = new Map<string, RuleCandidate[]>();
+  for (const candidate of candidates) bySha.set(candidate.sha256, [...(bySha.get(candidate.sha256) ?? []), candidate]);
+  const merged: RuleCandidate[] = [];
+  for (const group of bySha.values()) {
+    const [primary, ...rest] = [...group].sort((a, b) => segments(a.path) - segments(b.path) || compare(a.path, b.path));
+    merged.push({ ...primary!, refs: group.map((member) => member.ref), alsoAt: rest.map((member) => member.path) });
+  }
+  return merged.sort((a, b) => compare(a.ref, b.ref));
 }
 
 async function collectProjectRules(projectRoot: string, warnings: string[]): Promise<RuleCandidate[]> {
@@ -185,7 +205,7 @@ async function collectProjectRules(projectRoot: string, warnings: string[]): Pro
     }
     candidates.push(candidateOf(ref, origin, text, true));
   }
-  return candidates;
+  return mergeSameContent(candidates);
 }
 
 type Selected = { candidate: RuleCandidate; reason: string; sortKey: [number, number]; shadows?: string };
@@ -198,7 +218,7 @@ function selectRules(
 ): Selected[] {
   const selected: Selected[] = [];
   for (const candidate of candidates) {
-    const shadowsPath = bundled.get(candidate.ref);
+    const shadowsPath = candidate.refs.map((ref) => bundled.get(ref)).find((found) => found !== undefined);
     const matching = candidate.front.globs.filter((glob) => files.some((file) => matchesAnyGlobWithBraces(file, [glob])));
     const base = { candidate, ...(shadowsPath !== undefined ? { shadows: shadowsPath } : {}) };
     if (matching.length > 0) {
@@ -218,6 +238,19 @@ function selectRules(
   return selected.sort(
     (a, b) => a.sortKey[0] - b.sortKey[0] || a.sortKey[1] - b.sortKey[1] || a.candidate.bytes - b.candidate.bytes || compare(a.candidate.path, b.candidate.path),
   );
+}
+
+/** One file name under two project paths with different content is a real conflict; both stay listed. */
+function conflictWarnings(selected: readonly RuleCandidate[]): string[] {
+  const byName = new Map<string, string[]>();
+  for (const candidate of selected) {
+    const name = withoutCorePrefix(candidate.ref);
+    byName.set(name, [...(byName.get(name) ?? []), candidate.path]);
+  }
+  return [...byName]
+    .filter(([, found]) => found.length > 1)
+    .sort((a, b) => compare(a[0], b[0]))
+    .map(([name, found]) => `${name}: found at ${found.join(" and ")} with different content; both are listed. Keep one copy or reconcile them.`);
 }
 
 function skillMatches(entry: ProjectSkillRegistryEntry, files: readonly string[], taskType: string | undefined): string | undefined {
@@ -283,25 +316,40 @@ async function bundledPaths(projectRoot: string, names: readonly string[]): Prom
 
 const CITATION = /`([^`\s]+\.mdc?)`/g;
 
+/** A rule cites `core/X.mdc` or `X.mdc` whichever way the project laid its rules out: the project rules folder as written, then with the `core/` prefix flipped, then the repo path as written. */
+function citationOptions(cite: string): string[] {
+  const flipped = cite.startsWith("core/") ? cite.slice("core/".length) : `core/${cite}`;
+  return [`${PROJECT_RULES_DIR}/${cite}`, `${PROJECT_RULES_DIR}/${flipped}`, cite];
+}
+
 async function collectContracts(projectRoot: string, cited: ReadonlyMap<string, string>, taken: ReadonlySet<string>, warnings: string[]): Promise<ContextEntry[]> {
   const rootReal = await realpath(projectRoot).catch(() => projectRoot);
   const entries: ContextEntry[] = [];
-  for (const [rel, by] of [...cited].sort((a, b) => compare(a[0], b[0]))) {
-    if (taken.has(rel)) continue;
-    const reject = (why: string): void => void warnings.push(`${rel}: cited by ${by} but ${why}; not listed.`);
-    if (path.isAbsolute(rel) || rel.split("/").includes("..")) {
+  const listed = new Set(taken);
+  for (const [cite, by] of [...cited].sort((a, b) => compare(a[0], b[0]))) {
+    const reject = (why: string): void => void warnings.push(`${cite}: cited by ${by} but ${why}; not listed.`);
+    if (path.isAbsolute(cite) || cite.split("/").includes("..")) {
       reject("is not a repo-relative path");
       continue;
     }
-    const absolute = path.join(projectRoot, rel);
-    let real: string;
-    try {
-      await lstat(absolute);
-      real = await realpath(absolute);
-    } catch {
+    let rel: string | undefined;
+    let real = "";
+    for (const option of citationOptions(cite)) {
+      try {
+        await lstat(path.join(projectRoot, option));
+        real = await realpath(path.join(projectRoot, option));
+        rel = option;
+        break;
+      } catch {
+        // try the next spelling
+      }
+    }
+    if (rel === undefined) {
       reject("does not exist");
       continue;
     }
+    if (listed.has(rel)) continue;
+    listed.add(rel);
     if (!isPathInside(rootReal, real)) {
       reject("resolves outside the project root");
       continue;
@@ -322,7 +370,7 @@ async function collectContracts(projectRoot: string, cited: ReadonlyMap<string, 
     }
     entries.push({ kind: "contract", source: "project", path: rel, sha256: sha256Hex(text), bytes: Buffer.byteLength(text), reason: `referenced-by:${by}`, tier: "on_demand" });
   }
-  return entries;
+  return entries.sort((a, b) => compare(a.path, b.path));
 }
 
 export async function resolveProjectContext(input: ResolveContextInput): Promise<ProjectContextResolution> {
@@ -366,8 +414,10 @@ export async function resolveProjectContext(input: ResolveContextInput): Promise
       ...(isIndex ? { index: true as const } : {}),
       ...(candidate.linked ? { linked: true as const } : {}),
       ...(shadows !== undefined ? { shadows } : {}),
+      ...(candidate.alsoAt.length > 0 ? { also_at: candidate.alsoAt } : {}),
     });
   }
+  warnings.push(...conflictWarnings(rules.map((rule) => rule.candidate)));
   for (const skill of skills) projectEntries.push({ ...skill, tier: fit(skill.bytes) ? "must_read" : "on_demand" });
 
   const shadowed = new Set(rules.flatMap((rule) => (rule.shadows !== undefined ? [rule.shadows] : [])));
@@ -380,7 +430,7 @@ export async function resolveProjectContext(input: ResolveContextInput): Promise
       if (!cited.has(rel)) cited.set(rel, candidate.path);
     }
   }
-  const taken = new Set([...projectEntries, ...bundled].map((entry) => entry.path));
+  const taken = new Set([...projectEntries, ...bundled].flatMap((entry) => [entry.path, ...(entry.also_at ?? [])]));
   const contracts = await collectContracts(projectRoot, cited, taken, warnings);
 
   if (exceeded) {

@@ -81,11 +81,13 @@ export async function checkResolvedContext(input: {
   const drifted: ResolvedDrift[] = [];
   for (const entry of input.resolved.entries) {
     if (entry.tier === "must_read") {
-      const sha = cited.get(entry.path);
-      if (sha !== entry.sha256) misses.push({ path: entry.path, reason: entry.reason, expected: entry.sha256, ...(sha !== undefined ? { cited: sha } : {}) });
+      const shas = [entry.path, ...(entry.also_at ?? [])].flatMap((where) => (cited.has(where) ? [cited.get(where)!] : []));
+      if (!shas.includes(entry.sha256)) misses.push({ path: entry.path, reason: entry.reason, expected: entry.sha256, ...(shas[0] !== undefined ? { cited: shas[0] } : {}) });
     }
-    const current = await currentSha(input.projectRoot, entry.path);
-    if (current !== entry.sha256) drifted.push({ path: entry.path, tier: entry.tier, pinned: entry.sha256, ...(current !== undefined ? { current } : {}) });
+    for (const where of [entry.path, ...(entry.also_at ?? [])]) {
+      const current = await currentSha(input.projectRoot, where);
+      if (current !== entry.sha256) drifted.push({ path: where, tier: entry.tier, pinned: entry.sha256, ...(current !== undefined ? { current } : {}) });
+    }
   }
   return {
     enforcement: config.enforcement,

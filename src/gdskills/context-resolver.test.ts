@@ -340,3 +340,61 @@ test("the last resolve is recorded and read back; a missing or unreadable record
   await writeFile(path.join(root, ".metaproject/data/skills/project-context/last.json"), "{broken", "utf8");
   expect(await readLastResolve(root)).toBeUndefined();
 });
+
+test("the same rule under two project paths with one sha256 is one entry, the second path goes to also_at", async () => {
+  const root = await project();
+  const text = ruleText({ globs: "src/**" });
+  await put(root, P("styling.mdc"), text);
+  await put(root, P("core/styling.mdc"), text);
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  const rules = result.entries.filter((entry) => entry.kind === "rule");
+  expect(rules).toHaveLength(1);
+  expect(rules[0]).toMatchObject({ path: P("styling.mdc"), sha256: sha256Hex(text), also_at: [P("core/styling.mdc")] });
+  expect(result.budget.usedBytes).toBe(Buffer.byteLength(text));
+  expect(result.warnings).toEqual([]);
+});
+
+test("duplicates keep the project-first order and the shadows record", async () => {
+  const root = await project();
+  await core(root, { "tdd-workflow.mdc": "tdd\n", "error-handling.mdc": "bundled errors\n" });
+  const text = ruleText({ globs: "src/**/*.ts" });
+  await put(root, P("core/error-handling.mdc"), text);
+  await put(root, P("error-handling.mdc"), text);
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], taskType: "fix", for: "implement" });
+  expect(paths(result.entries)).toEqual([P("error-handling.mdc"), C("tdd-workflow.mdc")]);
+  expect(result.entries[0]).toMatchObject({ shadows: C("error-handling.mdc"), also_at: [P("core/error-handling.mdc")] });
+});
+
+test("the same file name under two project paths with different sha256 stays two entries and warns about the conflict", async () => {
+  const root = await project();
+  await put(root, P("styling.mdc"), ruleText({ globs: "src/**", body: "flat\n" }));
+  await put(root, P("core/styling.mdc"), ruleText({ globs: "src/**", body: "nested\n" }));
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  expect(paths(result.entries.filter((entry) => entry.kind === "rule")).sort()).toEqual([P("core/styling.mdc"), P("styling.mdc")]);
+  expect(result.entries.every((entry) => entry.also_at === undefined)).toBe(true);
+  expect(result.warnings.join("\n")).toMatch(/styling\.mdc.*different content/);
+});
+
+test("a core/ citation finds the flat project rule, and a flat citation finds the core/ one, with no does-not-exist warning", async () => {
+  const root = await project();
+  await put(root, P("flat.mdc"), ruleText({ globs: "docs/**" }));
+  await put(root, P("core/nested.mdc"), ruleText({ globs: "docs/**" }));
+  await put(root, P("overlay.mdc"), ruleText({ globs: "src/**", body: "See `core/flat.mdc` and `nested.mdc`, then `core/gone.mdc`.\n" }));
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  const contracts = result.entries.filter((entry) => entry.kind === "contract");
+  expect(contracts.map((entry) => entry.path)).toEqual([P("core/nested.mdc"), P("flat.mdc")]);
+  expect(contracts.every((entry) => entry.tier === "on_demand")).toBe(true);
+  expect(result.warnings).toHaveLength(1);
+  expect(result.warnings[0]).toContain("core/gone.mdc");
+  expect(result.warnings[0]).toContain("does not exist");
+});
+
+test("a core/ citation of a rule that is already selected adds no second entry", async () => {
+  const root = await project();
+  await put(root, P("styling.mdc"), ruleText({ globs: "src/**" }));
+  await put(root, P("overlay.mdc"), ruleText({ globs: "src/**", body: "See `core/styling.mdc`.\n" }));
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  expect(result.entries.filter((entry) => entry.path === P("styling.mdc"))).toHaveLength(1);
+  expect(result.entries.some((entry) => entry.kind === "contract")).toBe(false);
+  expect(result.warnings).toEqual([]);
+});
