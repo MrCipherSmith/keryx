@@ -267,7 +267,7 @@ A long document your rules point at, such as `STYLING.md` or `THEMING.md`, can
 be required only when the task needs it. List it in
 `.metaproject/rules/project/references.json` with the globs and keywords that
 make it required and, optionally, the heading to read. `resolve-context
---task-text "<task>"` then promotes it to `must_read`, the worker names the
+--task-text '<task>'` then promotes it to `must_read`, the worker names the
 heading and writes a short summary of what it read, and `keryx skills
 references check` and `suggest` help you write the declarations. The summary
 check is a proxy: keryx cannot see what an agent opens, and a summary that

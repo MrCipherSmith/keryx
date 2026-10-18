@@ -38,10 +38,19 @@ export type ResolvedReferences = {
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Case-insensitive, whole-word match; "word" characters are letters, digits and underscore of any script. */
+const WORD_CHAR = /^[\p{L}\p{N}_]$/u;
+
+/**
+ * Case-insensitive, whole-word match; "word" characters are letters, digits and underscore of any script.
+ * A boundary is demanded only on a side where the keyword itself starts or ends with a word character,
+ * so `.css`, `@apply` and `c++` match where they stand while `css` does not match inside `css3`.
+ */
 export function keywordOccurs(text: string, keyword: string): boolean {
   if (keyword === "") return false;
-  return new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegExp(keyword)}(?![\\p{L}\\p{N}_])`, "iu").test(text);
+  const chars = Array.from(keyword);
+  const before = WORD_CHAR.test(chars[0] ?? "") ? "(?<![\\p{L}\\p{N}_])" : "";
+  const after = WORD_CHAR.test(chars[chars.length - 1] ?? "") ? "(?![\\p{L}\\p{N}_])" : "";
+  return new RegExp(`${before}${escapeRegExp(keyword)}${after}`, "iu").test(text);
 }
 
 /** The reason a declaration is promoted, or undefined when its condition does not match. Globs are tried before keywords. */

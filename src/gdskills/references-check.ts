@@ -13,13 +13,14 @@
 // points: it reads every rule under `.metaproject/rules/project/` (authoring is
 // about the whole project, not one task), and it takes `.md` documents only,
 // because a cited `.mdc` is another rule, not a document someone must be told to
-// read. A linked rule (registered in place, not copied) is not scanned.
+// read. A linked rule (registered in place, not copied) is scanned at its origin.
 
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { isPathInside } from "../lib/fs";
 import { CONTRACT_MAX_BYTES, listRuleRefs } from "./context-resolver";
-import { PROJECT_RULES_DIR } from "./project-rules";
+import { PROJECT_RULES_DIR, readProjectRuleRegistry } from "./project-rules";
+import { resolveOriginPath } from "./project-skills";
 import { isDocumentCitation, loadReferences, normaliseCitedPath, REFERENCES_PATH, type ReferenceDeclaration } from "./references-config";
 import { extractSection, markdownHeadings } from "./references-section";
 
@@ -93,11 +94,15 @@ type CitationScan = {
 async function scanCitations(projectRoot: string): Promise<CitationScan> {
   const cited = new Map<string, string[]>();
   const unreadableRules: string[] = [];
-  for (const ref of (await listRuleRefs(projectRoot)).sort(compare)) {
+  const copies = await listRuleRefs(projectRoot);
+  // `skills import --link` leaves no copy: the rule is read where it lives, as the resolver does.
+  const links = new Map((await readProjectRuleRegistry(projectRoot)).filter((entry) => entry.mode === "link" && !copies.includes(entry.ref)).map((entry) => [entry.ref, entry.origin]));
+  for (const ref of [...copies, ...links.keys()].sort(compare)) {
     const rulePath = `${PROJECT_RULES_DIR}/${ref}`;
+    const origin = links.get(ref);
     let text: string;
     try {
-      text = await readFile(path.join(projectRoot, rulePath), "utf8");
+      text = await readFile(origin === undefined ? path.join(projectRoot, rulePath) : resolveOriginPath(origin, projectRoot), "utf8");
     } catch {
       unreadableRules.push(rulePath);
       continue;

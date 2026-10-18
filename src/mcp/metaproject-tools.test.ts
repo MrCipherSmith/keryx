@@ -143,6 +143,35 @@ test("AC16: skills_resolve_context is listed as a read-only tool and a call retu
   }
 });
 
+// Flow 462: `task_text` is what lets a keyword promote a declared reference.
+test("skills_resolve_context hands task_text to the resolver, and leaves it out when blank or not a string", async () => {
+  const project = mkdtempSync(path.join(tmpdir(), "keryx-metaproject-tools-text-"));
+  try {
+    mkdirSync(path.join(project, ".metaproject", "rules", "project"), { recursive: true });
+    writeFileSync(path.join(project, ".metaproject", "metaproject.json"), "{}\n", "utf8");
+    writeFileSync(path.join(project, "THEMING.md"), "# Theming\n\n## Tokens\n\nColour roles come from semantic tokens only.\n", "utf8");
+    writeFileSync(
+      path.join(project, ".metaproject", "rules", "project", "references.json"),
+      JSON.stringify({
+        schema: 1,
+        references: [{ path: "THEMING.md", when: { keywords: ["dark mode"] }, anchor: "Tokens", description: "Theme tokens and dark mode, read before touching a colour." }],
+      }),
+      "utf8",
+    );
+    const tool = toMcpTools().find((t) => t.name === "skills_resolve_context");
+    const tierOf = async (extra: Record<string, unknown>): Promise<string | undefined> => {
+      const result = (await tool?.invoke(project, { files: ["src/a.ts"], for: "implement", ...extra })) as { entries: Array<{ path: string; tier: string }> };
+      return result.entries.find((entry) => entry.path === "THEMING.md")?.tier;
+    };
+    expect(await tierOf({ task_text: "Add a dark mode switch" })).toBe("must_read");
+    expect(await tierOf({ task_text: "   " })).toBe("on_demand");
+    expect(await tierOf({ task_text: 42 })).toBe("on_demand");
+    expect(await tierOf({})).toBe("on_demand");
+  } finally {
+    rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // R1-F4: `wiki_ask`'s MCP projection previously went through the shared
 // `op.invoke`, which never threads a bound MCP harness identity through to
 // `port.wikiAsk` at all — this asserts the identity now actually reaches

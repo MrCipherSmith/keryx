@@ -149,3 +149,30 @@ describe("markdownHeadings and slugifyHeading", () => {
     expect(slugifyHeading("Тема оформления")).toBe("тема-оформления");
   });
 });
+
+describe("heading line parsing", () => {
+  const headings = (line: string) => markdownHeadings(`${line}\n`).map((h) => [h.level, h.text]);
+
+  test("closing hashes, indentation and trailing blanks", () => {
+    expect(headings("## Alpha ##")).toEqual([[2, "Alpha"]]);
+    expect(headings("   ### Beta   ###   ")).toEqual([[3, "Beta"]]);
+    expect(headings("    # four spaces is code")).toEqual([]);
+    expect(headings("####### seven")).toEqual([]);
+    expect(headings("# C#")).toEqual([[1, "C#"]]);
+    expect(headings("# ##")).toEqual([]);
+    expect(headings("## ###")).toEqual([]);
+    expect(headings("#\ttabbed\t")).toEqual([[1, "tabbed"]]);
+  });
+
+  test("a heading followed by a very long run of blanks is scanned in linear time", () => {
+    const blanks = " ".repeat(120_000);
+    for (const text of [`# Title${blanks}x\n`, `# Title${blanks}\n`, `#${blanks}Title${blanks}#x\n`, `# Title${blanks}#\n`]) {
+      const started = performance.now();
+      markdownHeadings(text);
+      extractSection(text, "Title");
+      // The quadratic form took ~12 s for this input; a linear scan takes milliseconds.
+      expect(performance.now() - started).toBeLessThan(1000);
+    }
+    expect(markdownHeadings(`# Title${blanks}#\n`)[0]?.text).toBe("Title");
+  });
+});

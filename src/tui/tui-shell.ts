@@ -3932,6 +3932,8 @@ export async function launchTuiAgentShell(opts: {
   let liveDecisions: DecisionsSidebar | undefined;
   let liveResearchSync: ResearchSyncPanelHandle | undefined;
   let liveExternalDiff: ExternalDiffSidebar | undefined;
+  // Flow 462: the project-context feed polls on a timer; `onDestroy` is installed before the feed exists.
+  let stopProjectContextFeed: (() => void) | undefined;
   // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
   // is installed before the operator exists, and leaving the module-level
   // external bridge pointing at a destroyed shell would let a still-settling
@@ -4042,6 +4044,7 @@ export async function launchTuiAgentShell(opts: {
         liveDecisions?.dispose();
         liveResearchSync?.dispose();
         liveExternalDiff?.dispose();
+        stopProjectContextFeed?.();
         liveOps?.dispose();
         destroyed = true; // review r1 F6: the in-flight join (if any) must leave(), not paint
         foregroundOperation.cancel("renderer destroyed");
@@ -5289,6 +5292,7 @@ export async function launchTuiAgentShell(opts: {
       );
     };
     projectContextFeed.subscribe(refreshProjectContextSidebar);
+    stopProjectContextFeed = () => projectContextFeed.stop();
     const reloadProjectContext = (): Promise<ProjectContextStatus> => projectContextFeed.reload();
     void reloadProjectContext().catch(() => {});
     const showProjectContext = (tab?: "references"): void => {

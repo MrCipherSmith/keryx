@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { knownSubcommandsFor } from "../cli-registry";
 import { skillsCommand } from "./skills";
-import type { ReferencesCheckReport, ReferencesSuggestion } from "../gdskills/references-check";
+import { checkReferences, suggestReferences, type ReferencesCheckReport, type ReferencesSuggestion } from "../gdskills/references-check";
+import { sha256Hex, updateProjectRuleRegistry } from "../gdskills/project-rules";
 
 // Flow 462, T9: `keryx skills references check|suggest` and the import hint.
 // The analysis is tested through the router, the way an operator reaches it.
@@ -326,4 +327,36 @@ test("references suggest: skills import --rules --json stays pure JSON", async (
   const { source } = await importProject(RULE, { "STYLING.md": STYLING_DOC });
   const { out } = await capture(() => skillsCommand(["import", "--rules", source, "--json"]));
   expect(() => JSON.parse(out)).not.toThrow();
+});
+
+test("a rule imported with --link is scanned at its origin: suggest finds its citation and check does not call the declaration unused", async () => {
+  const root = await project({ rules: {}, references: [declaration()] });
+  const origin = await mkdtemp(path.join(tmpdir(), "keryx-linked-origin-"));
+  roots.push(origin);
+  const linkedRule = path.join(origin, "styling.mdc");
+  await writeFile(linkedRule, RULE, "utf8");
+  await writeFile(path.join(root, "OTHER.md"), "# Other\n\nText.\n", "utf8");
+  const second = path.join(origin, "other.mdc");
+  await writeFile(second, "---\ndescription: other\nglobs: src/**\nalwaysApply: false\n---\n\nRead `OTHER.md` first.\n", "utf8");
+  const entry = (ref: string, file: string, text: string) => ({
+    kind: "rule" as const,
+    ref,
+    path: `.metaproject/rules/project/${ref}`,
+    mode: "link" as const,
+    origin: file,
+    sha256: sha256Hex(text),
+    originSha256: sha256Hex(text),
+    description: "linked",
+    globs: [],
+    alwaysApply: false,
+    updatedAt: "2026-10-18T00:00:00.000Z",
+  });
+  await updateProjectRuleRegistry(root, {
+    upsert: [entry("styling.mdc", linkedRule, RULE), entry("other.mdc", second, "---\ndescription: other\nglobs: src/**\nalwaysApply: false\n---\n\nRead `OTHER.md` first.\n")],
+  });
+  const report = await checkReferences(root);
+  expect(report.findings.map((finding) => finding.code)).not.toContain("unused-declaration");
+  expect(report.findings.map((finding) => `${finding.code}:${finding.path}`)).toContain("undeclared-citation:OTHER.md");
+  const suggestion = await suggestReferences(root);
+  expect(suggestion.ok && suggestion.suggestion.references.map((entry) => entry.path)).toEqual(["OTHER.md"]);
 });

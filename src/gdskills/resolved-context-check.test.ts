@@ -293,6 +293,19 @@ test("summary: an anchored section that cannot be found in the file now is repor
   expect(report.drifted.map((drift) => drift.path)).toEqual([DOC]);
 });
 
+test("summary: a dead declared anchor makes the whole file the obligation, so a summary in the file's words passes and one outside them fails", async () => {
+  const { root, resolved, sha } = await docFixture({ anchor: "No such heading" });
+  const ok = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha, { anchor: "No such heading", summary: GOOD_SUMMARY }) });
+  expect(ok.misses).toEqual([]);
+  const bad = await checkResolvedContext({
+    projectRoot: root,
+    resolved,
+    result: cite(sha, { anchor: "No such heading", summary: "Looked over everything carefully, nothing unusual noticed anywhere at all" }),
+  });
+  expect(bad.misses.map((miss) => miss.rule)).toEqual(["summary-words"]);
+  expect(bad.misses[0]?.detail).toContain("whole file");
+});
+
 test("summary: an on_demand declared entry and a rule are not held to the proof, whatever they cite", async () => {
   const { root, resolved, sha } = await docFixture();
   const onDemand = demoted(resolved);

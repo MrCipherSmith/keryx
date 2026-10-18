@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "bun:test";
 import type { RecordedResolve } from "../gdskills/context-resolver";
 import type { ProjectContextStatus } from "../gdskills/project-context-status";
@@ -529,4 +530,50 @@ test("a host that declines to mount returns undefined", () => {
     onKeypress: () => () => {},
   });
   expect(out).toBeUndefined();
+});
+
+test("R2 a cited contract at a declared path is not that declaration's entry: only an entry carrying a condition counts", () => {
+  const cited: RefEntry = { kind: "contract", source: "project", path: STYLING.path, sha256: "q", bytes: 5, reason: "cited by AGENTS.mdc", tier: "must_read" };
+  const status: ProjectContextStatus = { ...S1, references: declared(), last: resolved([cited, onDemandTheming]) };
+  expect(renderProjectContextSidebarValue(status)).toBe("warn · 3 rules · refs 0/2");
+  const text = formatProjectReferencesLines(status).join("\n");
+  expect(text).toContain("not in the last resolve");
+  expect(text).not.toContain("promoted ·");
+});
+
+test("the shell stops the project-context feed when the renderer is destroyed", () => {
+  const source = readFileSync(new URL("./tui-shell.ts", import.meta.url), "utf8");
+  const onDestroy = source.slice(source.indexOf("onDestroy: () => {"), source.indexOf("onDestroy: () => {") + 2500);
+  expect(onDestroy).toContain("stopProjectContextFeed?.()");
+  expect(source).toContain("stopProjectContextFeed = () => projectContextFeed.stop()");
+});
+
+test("a references file with no declaration still tells the operator how to fill it", () => {
+  const empty: ProjectContextStatus = { ...S1, references: { state: "declared", declarations: [], findings: [] } };
+  const lines = formatProjectReferencesLines(empty);
+  expect(lines[0]).toBe("References: 0 declared, no resolve yet");
+  expect(lines).toContain(NO_REFERENCES_TEXT);
+  expect(renderProjectContextSidebarValue(empty)).toBe("warn · 3 rules · refs -/0");
+});
+
+test("control characters from a reference never reach the terminal: tab body and sidebar value are cleaned", () => {
+  const hostile: ReferenceDeclaration = {
+    path: "EVIL\u001b[2J.md",
+    when: { globs: [], keywords: ["bell\u0007"] },
+    anchor: "Head\u001b]0;pwned\u0007ing",
+    description: "line one\nline two \u009b31m",
+  };
+  const status: ProjectContextStatus = {
+    ...S1,
+    references: { state: "declared", declarations: [hostile], findings: [finding("anchor-not-found", "EVIL\u001b[2J.md")] },
+    last: resolved([refEntry(hostile, "declared")]),
+  };
+  // eslint-disable-next-line no-control-regex -- the point of the test
+  const control = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/;
+  const h = harness(status);
+  h.tab("references");
+  const text = h.text();
+  expect(control.test(text.replace(/\n/g, ""))).toBe(false);
+  expect(text).toContain("line one ⏎ line two");
+  expect(control.test(renderProjectContextSidebarValue(status) ?? "")).toBe(false);
 });

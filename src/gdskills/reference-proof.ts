@@ -59,7 +59,8 @@ async function currentSection(projectRoot: string, entry: ContextEntry): Promise
   }
   if (entry.anchor === undefined) return { ok: true, text, what: "the file" };
   const section = extractSection(text, entry.anchor);
-  if (!section.found) return { ok: false, why: `the anchored section "${entry.anchor}" cannot be found in ${entry.path} now (${section.reason})` };
+  // A dead anchor makes the whole file the obligation (the resolver says so); demanding the section's words would be an impossible proof.
+  if (!section.found) return { ok: true, text, what: `the file (the anchor "${entry.anchor}" is not found in it, so the whole file is the obligation)` };
   return { ok: true, text: section.text, what: `the section "${entry.anchor}"` };
 }
 

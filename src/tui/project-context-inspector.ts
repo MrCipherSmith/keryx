@@ -7,6 +7,7 @@
 
 import type { ProjectContextStatus } from "../gdskills/project-context-status";
 import { openModal, type ModalHandle, type OpenModalInput } from "./modal-host";
+import { cardSafe } from "../lib/card-safe";
 import { stylePlanText } from "./execution-plan-inspector";
 import { formatProjectReferencesLines, referencesSidebarSegment } from "./project-references-view";
 import { onThemeChange } from "./theme";
@@ -101,7 +102,7 @@ export function renderProjectContextSidebarValue(status: ProjectContextStatus): 
   if (refs !== undefined) parts.push(refs);
   if (status.last?.result.budget.exceeded === true) parts.push("cap exceeded");
   if (status.configError !== undefined) parts.push("config unreadable");
-  return parts.join(" · ");
+  return cardSafe(parts.join(" · "));
 }
 
 type Body = { add?(child: unknown): void; getChildren?(): unknown[]; remove?(child: unknown): void };
@@ -222,7 +223,8 @@ export function presentProjectContext(
         : tab === "references"
           ? formatProjectReferencesLines(status)
           : formatProjectContextStatusLines(status);
-    body.add(new Ctor(renderer, { id: `projectctx-${tab}`, content: stylePlanText(otui, lines.join("\n"), "plain") }));
+    // Reference descriptions, anchors and keywords are file text; control bytes must not reach the terminal.
+    body.add(new Ctor(renderer, { id: `projectctx-${tab}`, content: stylePlanText(otui, lines.map(cardSafe).join("\n"), "plain") }));
   };
 
   const handle = openModalFn(otui as never, chrome as never, {

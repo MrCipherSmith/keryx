@@ -746,7 +746,7 @@ FOR wave_index, wave_tasks in enumerate(WAVES):
 
   keryx job step <job-name> tests-creator --status in-progress      # wave 1 only
   # Step A — tests-creator (MANDATORY, run first)
-  keryx skills resolve-context --for test --files <task target_files, comma-joined> --task-type <task_type> --task-text "<task title and description>" --out <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
+  keryx skills resolve-context --for test --files <task target_files, comma-joined> --task-type <task_type> --task-text '<task title and description>' --out <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
   Dispatch one tests-creator per task in this wave, in a SINGLE turn (parallel), each carrying resolved_context_file.
   Wait for ALL of them. Collect TEST_SPECS[task_id] from each response, then per result:
     keryx skills contracts validate <task_id>-tests.json --schema tests-creator-output --resolved <that resolved file>
@@ -1304,7 +1304,7 @@ FOR iteration in [1, 2, 3]:
      previously_unresolved: <findings that were in UNRESOLVED_FINDINGS last iteration but still present>
          → Prefix: "These specific findings were NOT fixed in iteration <N-1>: [list]"
 
-  3. Re-run `keryx skills resolve-context --for implement` on the fix files (with `--task-text "<fix task description>"` and a fresh `--out`), then launch task-implementer
+  3. Re-run `keryx skills resolve-context --for implement` on the fix files (with `--task-text '<fix task description>'` and a fresh `--out`), then launch task-implementer
      with the fix prompt and `resolved_context_file` (subagent_type: "general-purpose"),
      on the model `keryx review tier --fix-attempt <N> --findings <n> --json` computes
   4. Run the sanity check (step 2.5.2 logic) — verify commits were made — and `contracts validate --resolved` on the result

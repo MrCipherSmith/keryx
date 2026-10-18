@@ -34,7 +34,6 @@ export type SectionResult = SectionFound | SectionMissing;
 
 type HeadingLine = MarkdownHeading & { start: number };
 
-const HEADING = /^ {0,3}(#{1,6})[ \t]+(.*?)[ \t]*$/;
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
 /** GitHub-style slug: lower case, punctuation dropped, spaces to hyphens. Letters of any script are kept. */
@@ -46,8 +45,38 @@ export function slugifyHeading(text: string): string {
     .replace(/\s/gu, "-");
 }
 
+const isBlank = (char: string | undefined): boolean => char === " " || char === "\t";
+
+/**
+ * Hand-written on purpose: the regex forms (`(.*?)[ \t]*$`, `[ \t]+#+$`) backtrack
+ * quadratically on a heading followed by a long run of spaces.
+ */
+function parseHeadingLine(line: string): { level: number; text: string } | undefined {
+  let pos = 0;
+  while (pos < 3 && line[pos] === " ") pos += 1;
+  const hashStart = pos;
+  while (line[pos] === "#") pos += 1;
+  const level = pos - hashStart;
+  if (level < 1 || level > 6 || !isBlank(line[pos])) return undefined;
+  while (isBlank(line[pos])) pos += 1;
+  let end = line.length;
+  while (end > pos && isBlank(line[end - 1])) end -= 1;
+  const text = line.slice(pos, end);
+  if (/[\r\u2028\u2029]/.test(text)) return undefined;
+  return { level, text };
+}
+
 function stripClosingHashes(text: string): string {
-  return text.replace(/[ \t]+#+$/, "").replace(/^#+$/, "").trim();
+  let hashes = text.length;
+  while (hashes > 0 && text[hashes - 1] === "#") hashes -= 1;
+  let stripped = text;
+  if (hashes < text.length && hashes > 0 && isBlank(text[hashes - 1])) {
+    let end = hashes;
+    while (end > 0 && isBlank(text[end - 1])) end -= 1;
+    stripped = text.slice(0, end);
+  }
+  if (stripped.length > 0 && /^#+$/.test(stripped)) stripped = "";
+  return stripped.trim();
 }
 
 /** Every ATX heading outside fenced code, with the byte offset of its line. Offsets keep CRLF intact. */
@@ -69,11 +98,11 @@ function scanHeadings(markdown: string): HeadingLine[] {
       fence = { marker: fenceMatch[1][0] ?? "`", length: fenceMatch[1].length };
       continue;
     }
-    const match = HEADING.exec(line);
-    if (match === null) continue;
-    const text = stripClosingHashes(match[2] ?? "");
+    const parsed = parseHeadingLine(line);
+    if (parsed === undefined) continue;
+    const text = stripClosingHashes(parsed.text);
     if (text === "") continue;
-    headings.push({ level: (match[1] ?? "").length, text, slug: slugifyHeading(text), start: lineStart });
+    headings.push({ level: parsed.level, text, slug: slugifyHeading(text), start: lineStart });
   }
   return headings;
 }
