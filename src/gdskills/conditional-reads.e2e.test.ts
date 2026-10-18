@@ -514,9 +514,10 @@ describe("scenario 3: an unrelated task", () => {
     expect(verdict.exitCode).toBe(0);
   });
 
-  test("the resolve is recorded with its task text for the TUI", async () => {
+  test("the resolve is recorded with the length of its task text, not the text", async () => {
     await resolve(UNRELATED);
     const recorded = await readLastResolve(root);
-    expect(recorded?.taskText).toBe(UNRELATED.taskText);
+    expect(recorded?.taskTextLength).toBe(Array.from(UNRELATED.taskText).length);
+    expect(JSON.stringify(recorded)).not.toContain(UNRELATED.taskText);
   });
 });

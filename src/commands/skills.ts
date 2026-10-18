@@ -2023,7 +2023,7 @@ Usage:
   --task-type   Adds the bundled rules for that task type (the task-implementer table).
   --task-text   What the task is about (title and description). Matched against the keywords of the
                 documents declared in .metaproject/rules/project/references.json; a match makes that
-                document must_read. Cut to ${TASK_TEXT_MAX_CHARS} characters, then recorded in the last-resolve record.
+                document must_read. Cut to ${TASK_TEXT_MAX_CHARS} characters; the last-resolve record keeps only its length.
   --max-bytes   Cap on project content that is must_read (default 131072, or
                 gdskills.projectContext.maxBytes in .metaproject/tasks.config.json). Over the cap,
                 later entries become on_demand and a warning goes to stderr.

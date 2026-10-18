@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { importProjectRules } from "./import-rules";
-import { type ContextEntry, readLastResolve, recordLastResolve, resolveProjectContext, TASK_TEXT_MAX_CHARS } from "./context-resolver";
+import { type ContextEntry, LAST_RESOLVE_PATH, readLastResolve, recordLastResolve, resolveProjectContext, TASK_TEXT_MAX_CHARS } from "./context-resolver";
 import { runResolveContextCommand } from "./resolve-context-command";
 import { sha256Hex } from "./project-rules";
 
@@ -417,34 +417,39 @@ async function declare(root: string, references: RefSpec[]): Promise<void> {
 const STYLING = ["# Styling", "", "Intro of the document.", "", "## Class conventions", "", "Use tokens, never raw colours.", "", "### Cascade", "", "Layers win over specificity.", "", "## Other topic", "", "Unrelated tail.", ""].join("\n");
 const SECTION = ["## Class conventions", "", "Use tokens, never raw colours.", "", "### Cascade", "", "Layers win over specificity.", "", ""].join("\n");
 
-test("task text is recorded with the last resolve, truncated to the stated limit, and left out when absent", async () => {
+test("task text: the last resolve records its length and whether it was cut, never the text, and nothing when absent", async () => {
   const root = await project();
   await importRules(root, { "any.mdc": ruleText({ globs: "src/**" }) });
   const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  const recordedFile = () => readFile(path.join(root, LAST_RESOLVE_PATH), "utf8");
 
-  await recordLastResolve(root, result, { taskText: "Fix the spacing of the card" });
-  expect(await readLastResolve(root)).toMatchObject({ taskText: "Fix the spacing of the card" });
+  const text = "Fix the spacing of the card, token sk-live-1234";
+  await recordLastResolve(root, result, { taskText: text });
+  expect(await readLastResolve(root)).toMatchObject({ taskTextLength: text.length });
   expect((await readLastResolve(root))?.taskTextTruncated).toBeUndefined();
+  expect(await recordedFile()).not.toContain("sk-live-1234");
 
-  await recordLastResolve(root, result, { taskText: "x".repeat(TASK_TEXT_MAX_CHARS + 50) });
+  await recordLastResolve(root, result, { taskText: `${"x".repeat(TASK_TEXT_MAX_CHARS + 50)}` });
   const long = await readLastResolve(root);
-  expect(long?.taskText).toHaveLength(TASK_TEXT_MAX_CHARS);
+  expect(long?.taskTextLength).toBe(TASK_TEXT_MAX_CHARS + 50);
   expect(long?.taskTextTruncated).toBe(true);
+  expect(await recordedFile()).not.toContain("xxxxxxxxxx");
 
   await recordLastResolve(root, result);
   expect(Object.keys((await readLastResolve(root)) ?? {})).toEqual(["recordedAt", "result"]);
 });
 
-test("task text from --task-text reaches the last-resolve record, and the resolve result itself does not carry it", async () => {
+test("task text from --task-text reaches the last-resolve record as a length only, and the resolve result itself does not carry it", async () => {
   const root = await project();
   await importRules(root, { "any.mdc": ruleText({ globs: "src/**" }) });
   const log = spyOn(console, "log").mockImplementation(() => undefined);
   try {
     const withText = await runResolveContextCommand(["--files", "src/a.ts", "--for", "implement", "--task-text", "Adjust the theme tokens"], root);
-    expect((await readLastResolve(root))?.taskText).toBe("Adjust the theme tokens");
+    expect((await readLastResolve(root))?.taskTextLength).toBe("Adjust the theme tokens".length);
+    expect(await readFile(path.join(root, LAST_RESOLVE_PATH), "utf8")).not.toContain("Adjust the theme tokens");
     const without = await runResolveContextCommand(["--files", "src/a.ts", "--for", "implement"], root);
     expect(JSON.stringify(withText)).toBe(JSON.stringify(without));
-    expect((await readLastResolve(root))?.taskText).toBeUndefined();
+    expect((await readLastResolve(root))?.taskTextLength).toBeUndefined();
   } finally {
     log.mockRestore();
   }

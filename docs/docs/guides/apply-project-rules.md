@@ -160,10 +160,12 @@ carries on. The file is also covered by a JSON schema,
 
 ### Resolve against the task
 
-Pass the task text with `--task-text`. It is cut at 4000 characters, and the cut
-text is what `last.json` records. When the text is cut and a declaration has
-keywords, the resolve warns that a keyword after the cut cannot promote a
-reference. A task that edits `src/button.tsx`:
+Pass the task text with `--task-text`. It is cut at 4000 characters before it is
+matched. `last.json` records only how long the text was and whether it was cut,
+never the text (it can hold secrets, and the file is not git-ignored); the
+reasons that matched are in the recorded entries. When the text is cut and a
+declaration has keywords, the resolve warns that a keyword after the cut cannot
+promote a reference. A task that edits `src/button.tsx`:
 
 ```console
 $ keryx skills resolve-context --files src/button.tsx --for implement \

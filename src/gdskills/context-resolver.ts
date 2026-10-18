@@ -67,7 +67,7 @@ export type ResolveContextInput = {
   taskText?: string;
 };
 
-/** The task text kept for matching and for the last-resolve record, in characters. */
+/** The most task text matched against keywords, in characters. */
 export const TASK_TEXT_MAX_CHARS = 4000;
 
 /** The text cut to {@link TASK_TEXT_MAX_CHARS} characters (code points, never half a pair), and whether it was cut. */
@@ -519,9 +519,9 @@ async function loadDeclarations(projectRoot: string, warnings: string[]): Promis
 export type RecordedResolve = {
   recordedAt: string;
   result: ProjectContextResolution;
-  /** The task text the resolve was given, cut to {@link TASK_TEXT_MAX_CHARS}; absent when none was given. */
-  taskText?: string;
-  /** True when {@link taskText} is a cut of a longer text. */
+  /** How many characters of task text the resolve was given; the text itself is never recorded (it can hold secrets and the file is not git-ignored). Absent when none was given. */
+  taskTextLength?: number;
+  /** True when the text was longer than {@link TASK_TEXT_MAX_CHARS} and only its start was matched. */
   taskTextTruncated?: true;
 };
 
@@ -532,7 +532,7 @@ export async function recordLastResolve(projectRoot: string, result: ProjectCont
     const record: RecordedResolve = {
       recordedAt: new Date().toISOString(),
       result,
-      ...(task !== undefined ? { taskText: task.text, ...(task.truncated ? { taskTextTruncated: true as const } : {}) } : {}),
+      ...(task !== undefined ? { taskTextLength: Array.from(options.taskText!).length, ...(task.truncated ? { taskTextTruncated: true as const } : {}) } : {}),
     };
     await writeContained(projectRoot, LAST_RESOLVE_PATH, `${JSON.stringify(record, null, 2)}\n`);
   } catch {

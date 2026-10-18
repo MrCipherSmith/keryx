@@ -11,12 +11,12 @@
   "title": "Conditional mandatory reads for documents cited by project rules",
   "status": "in-progress",
   "createdAt": "2026-10-18T08:31:22.923Z",
-  "updatedAt": "2026-10-18T09:57:51.214Z",
+  "updatedAt": "2026-10-18T14:42:11.357Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:60caf4f11bde866c2c8e0826b44ebfe5caeb2b9d6f5f04a34cd4e57e5a2bbff8",
+  "acChecksum": "sha256:6df58931168fe0ae50feaa9b99c336c61250b1a76b5bd36243c56b1e608d0fa4",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -464,6 +464,11 @@
       "at": "2026-10-18T09:57:51.214Z",
       "event": "ac-updated",
       "detail": "AC10: \"For an entry promoted by a condition the validator requires the cited anchor to equal the declared one, a summary of at least 40 characters, and at least two distinct words of five or more letters that occur in the anchored section (one required when the section has only one such word); each failure is reported as its own miss with the reason. [verify: exec `bun test src/gdskills/resolved-context-check.test.ts -t \"summary\"`]\" -> \"For an entry promoted by a condition the validator requires the cited anchor to equal the declared one, a summary of at least 40 characters, and at least three distinct words of five or more letters that occur in the anchored section (as many as the section holds when it has fewer than three); each failure is reported as its own miss with the reason. [verify: exec `bun test src/gdskills/resolved-context-check.test.ts -t \"summary\"`]\" (Operator decision, poll 213 (2026-10-18): raise the summary vocabulary threshold from two to three distinct words after the e2e test showed a foreign section can share two words)"
+    },
+    {
+      "at": "2026-10-18T14:42:11.357Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"`resolve-context` accepts the task text (CLI `--task-text`, and the same field in the MCP and flow-orchestrator call) and records it, truncated to a stated limit, in the last-resolve record. [verify: exec `bun test src/gdskills/context-resolver.test.ts -t \"task text\"`]\" -> \"`resolve-context` accepts the task text (CLI `--task-text`, and the same field in the MCP and flow-orchestrator call) and matches it against the declared keywords, cut to a stated limit. The last-resolve record keeps only the length of the task text given and whether it was cut, never the text itself (it may hold secrets; the file is not git-ignored); the matched reasons are already in the recorded result entries. [verify: exec `bun test src/gdskills/context-resolver.test.ts -t \"task text\"`]\" (Operator decision, poll 218 (2026-10-18): the last-resolve record must not hold the task text, which can carry secrets; record its length and the matched reasons only.)"
     }
   ],
   "acKinds": {

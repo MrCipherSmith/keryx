@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { knownSubcommandsFor } from "../cli-registry";
 import { skillsCommand } from "./skills";
+import { CONTRACT_MAX_BYTES } from "../gdskills/context-resolver";
 import { checkReferences, suggestReferences, type ReferencesCheckReport, type ReferencesSuggestion } from "../gdskills/references-check";
 import { sha256Hex, updateProjectRuleRegistry } from "../gdskills/project-rules";
 
@@ -139,7 +140,7 @@ test("references check: a declared document that resolves outside the project ro
 test("references check: a declared document over the size limit is an error", async () => {
   await project({
     references: [declaration({ anchor: undefined })],
-    files: { "STYLING.md": `# Styling\n\n${"x".repeat(262145)}\n` },
+    files: { "STYLING.md": `# Styling\n\n${"x".repeat(CONTRACT_MAX_BYTES + 1)}\n` },
   });
   const { report } = await check("--json");
   expect(codes(report, "error")).toEqual(["document-too-large:STYLING.md"]);

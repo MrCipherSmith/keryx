@@ -512,6 +512,58 @@ test("R7 the feed reloads on an interval and tells listeners only when the statu
   expect(stopped).toBe(1);
 });
 
+test("R7 a slow load is not overlapped by the next tick, and an older load that finishes last cannot overwrite a newer status", async () => {
+  let tick: (() => Promise<void>) | undefined;
+  const releases: Array<() => void> = [];
+  let loads = 0;
+  const warn = { ...S1, enforcement: "warn" as const };
+  const block = { ...S1, enforcement: "block" as const };
+  const statuses = [warn, block, warn, block];
+  const feed = createProjectContextFeed({
+    load: () => {
+      const status = structuredClone(statuses[loads] ?? statuses[statuses.length - 1]!);
+      loads += 1;
+      return new Promise<ProjectContextStatus>((resolve) => releases.push(() => resolve(status)));
+    },
+    interval: (run) => {
+      tick = run;
+      return () => {};
+    },
+  });
+  const seen: ProjectContextStatus[] = [];
+  feed.subscribe((status) => seen.push(status));
+
+  const first = tick?.();
+  await tick?.();
+  await tick?.();
+  expect(loads).toBe(1);
+
+  releases[0]?.();
+  await first;
+  expect(seen).toHaveLength(1);
+  expect(seen[0]?.enforcement).toBe("warn");
+
+  // Once the first has finished, the next tick loads again.
+  const second = tick?.();
+  expect(loads).toBe(2);
+  releases[1]?.();
+  await second;
+  expect(seen).toHaveLength(2);
+
+  // An explicit reload started earlier but finished after a later one is dropped.
+  const older = feed.reload();
+  const newer = feed.reload();
+  expect(loads).toBe(4);
+  releases[3]?.();
+  await newer;
+  expect(feed.current()?.enforcement).toBe("block");
+  releases[2]?.();
+  await older;
+  expect(feed.current()?.enforcement).toBe("block");
+  expect(seen.map((status) => status.enforcement)).toEqual(["warn", "block"]);
+  feed.stop();
+});
+
 test("/projectctx refs opens the modal on the References tab", () => {
   expect(parseProjectContextCommand("/projectctx refs")).toEqual({ kind: "open", tab: "references" });
   expect(parseProjectContextCommand("/projectctx")).toEqual({ kind: "open" });

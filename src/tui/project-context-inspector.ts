@@ -165,22 +165,34 @@ export function createProjectContextFeed(options: ProjectContextFeedOptions): Pr
   let failing = false;
   const listeners = new Set<(status: ProjectContextStatus) => void>();
 
+  let started = 0;
+  let applied = 0;
+  let polling = false;
+
   const reload = async (): Promise<ProjectContextStatus> => {
+    const mine = ++started;
     const next = await options.load();
-    if (!sameStatus(current, next)) {
+    // A load that began before the one already applied is older news, whatever order they finished in.
+    if (mine > applied && !sameStatus(current, next)) {
       current = next;
       for (const listener of [...listeners]) listener(next);
     }
+    applied = Math.max(applied, mine);
     return next;
   };
 
   const poll = async (): Promise<void> => {
+    // A load slower than the interval must not pile up another scan behind it.
+    if (polling) return;
+    polling = true;
     try {
       await reload();
       failing = false;
     } catch (error) {
       if (!failing) options.onError?.(error instanceof Error ? error.message : String(error));
       failing = true;
+    } finally {
+      polling = false;
     }
   };
 
