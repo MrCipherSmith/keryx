@@ -29,6 +29,7 @@ Usage:
                      [--memory-query "<query>"]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--verifications <file|->] [--verification-mode off|annotate|filter]
+                      [--premises <file|->]...
                       [--scope <scope.json>] [--refuted <file|->]
                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
                       [--parallel <n>] [--outstanding <n>]
@@ -579,6 +580,39 @@ recorded and **nothing is removed** — so the drop rate is a measured number be
 it costs a real finding. Every package's `scope.md` carries the stage counts:
 dropped by the pre-filter, refuted by the verifier, retained.
 
+## Ask whether the finding is a defect at all
+
+A finding can reproduce and still be wrong: the code may carry an explicit
+override, an exemption note or a sibling doing the same thing, and accepted
+platform practice may back it (media controls and timelines do not mirror in
+right-to-left layouts). The verifier cannot see that, because it checks facts.
+`review-premise` runs after it, on a clean context, and answers `upheld`,
+`downgraded`, `challenged` or `owner-decision` for each finding. Like the
+verifier it **can only hold or lower**, and it never dismisses anything.
+
+```bash
+keryx review ingest --report round7.md --ref round7 \
+  --verifications verifier-result.json \
+  --premises premise-result.json
+```
+
+`--premises` takes the judge's JSON, or a reply that holds it in one
+`` ```json keryx:premises `` block. A `challenged` or `owner-decision` finding is
+**held**: it is not an open blocker or major, it is not handed to a fixer, the
+verdict lists it as "awaiting operator", and readiness and the flow review gate
+fail until you answer. You decide it, at a terminal:
+
+```bash
+keryx review decide-premise --package .metaproject/reviews/round7 \
+  --finding LY-003 --answer dismiss --reason "platforms do not mirror media controls"
+```
+
+`--answer uphold` returns the finding to kept at its original severity;
+`--answer dismiss` records it `dismissed-incorrect` with your reason as the
+evidence. In keryx shell the agent asks you the same question as a
+`review_decide_premise` card. An agent's shell cannot answer for you: the command
+is refused without a terminal.
+
 ## Ingest a report someone already wrote
 
 ```bash
@@ -610,7 +644,7 @@ status: draft
 target: report round6-review.md
 flow: none
 coverage: 1
-filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 dismissed_by_round=not-measured retained=3
+filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 merged_duplicates=0 dismissed_by_round=not-measured retained=3
   low_confidence: not measured — this pipeline has no confidence threshold …
   scope_b: not measured — no blast-radius record reached this ingest …
 ```
@@ -619,9 +653,10 @@ filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=
 same numbers `scope.md` shows a person, in a form something else can check.
 `not-measured` is not `0`: it means that stage did not run, and the reason is
 printed underneath. `status` exits **1** when the numbers do not add up (`total`
-minus the measured finding-stage drops must equal `retained`) or when a count is
-absent with no reason recorded, so a stage that starts dropping findings without
-counting them is caught on the next status call rather than a release later.
+minus the measured finding-stage drops and `merged_duplicates` must equal
+`retained`) or when a count is absent with no reason recorded, so a stage that
+starts dropping findings without counting them is caught on the next status call
+rather than a release later.
 
 `dropped_prefilter` counts diff material — whole files and change blocks removed
 before anyone read them — so it is deliberately not summed with the rest.
@@ -728,9 +763,17 @@ you (once, interactively), or ends an unattended run with
 guess.
 
 `keryx review start --memory-query "<query>"` writes a `cleanContext` block into
-the manifest: the start time and the query of the memory stage. The orchestrator
-appends each of its tool calls to `<package>/tool-calls/orchestrator.jsonl`, and
-the tenth readiness item, `memory-outside-stage`, reads that log. A memory call
+the manifest: the start time and the query of the memory stage. keryx writes the
+orchestrator log, `<package>/tool-calls/orchestrator.jsonl`, itself: the agent
+does not append to it and must not edit it. `keryx review start` and
+`keryx review attach` mark the package as the active one (a small pointer in the
+project's data directory, `.metaproject/data/review-active/`, which is not
+committed), and from then on every `keryx memory` command, every MCP memory tool
+(`memory_search`, `memory_handoff`, `memory_propose`) and every memory call the
+keryx agent makes adds one line: the tool, its query, the time, the source (`cli`,
+`mcp` or `shell`) and who called. closing the package (`keryx review complete`) removes the pointer, and a
+pointer to a package that is missing or closed is ignored, so a finished review is
+never written to. The tenth readiness item, `memory-outside-stage`, reads that log. A memory call
 with another query, without `--status accepted`, any other memory command, or a
 stage call stamped before the round started, fails the item; the same query
 repeated does not. It blocks `review complete` and `review publish` like the
@@ -748,10 +791,31 @@ Three paths bring earlier work into a review on purpose, and they are kept:
 3. A reviewer's own `memory_search`, a lookup in the project's recorded lessons.
    The item never judges a reviewer's log.
 
-**Named limit.** keryx cannot prevent an agent runtime that loads its memory
+Who called is one of three things. In a `keryx shell` session the parent's own
+calls are `orchestrator`, and a call by a `spawn_subagent` child is recorded under
+the child's reviewer id (keryx puts `KERYX_REVIEW_CALLER` into the child's command
+environment only), so a reviewer's own lookup is never counted against the
+orchestrator. A call that reaches keryx from a host that names no caller, such as
+`keryx memory search` typed in another terminal or an MCP memory tool called by
+Claude Code or Codex directly, is `unattributed`. It does not block: it adds
+`warning: N unattributed memory call(s)` to the item's detail, and `review
+readiness`, `review status`, the Review depth tab and the sidebar show
+`orchestrator log: recorded, N unattributed`. A log that holds only its first line
+passes with "no memory call recorded"; no file at all passes with "no orchestrator
+tool log", as before, and those surfaces say `orchestrator log: none`.
+
+**Named limits.** keryx cannot prevent an agent runtime that loads its memory
 before the skill starts. The guarantee is instruction plus detection, not
 isolation, and reads of the agent's personal memory outside `keryx memory` are not
-visible to the log. With no orchestrator log the item passes and says so.
+visible to the log. Four things the automatic log does not do:
+
+- Only calls through keryx are visible. A memory read through a tool keryx does not
+  wrap is not in the log.
+- Unmarked calls outside the keryx shell are `unattributed`: keryx records them but
+  cannot say whether the orchestrator or a reviewer made them.
+- The log is not a sandbox. It records the calls; it does not stop them.
+- The log is a plain editable file. Anyone with write access to the package can
+  change it, so it is evidence of what keryx saw, not proof against tampering.
 
 ### Five gates that keep a report honest
 
@@ -759,7 +823,7 @@ visible to the log. With no orchestrator log the item passes and says so.
 - **Evidence level.** A report carries one line, `Evidence level: static only — did not run: <what>` or `Evidence level: ran — <what ran>`, and `complete` refuses a report without it. A package ingested before the field existed completes with a warning.
 - **Citations.** When a dismissal's rebuttal cites a rule or document, `review ingest` looks the path up in the tree (at the reviewed commit and as it stands) and, if it is not there, adds a `citation not found: <path>` line to the finding's evidence. The finding is never deleted.
 - **Narrowed.** A research obligation may close as `narrowed` with a `remains` text ("what is still open"). It counts as closed only with that text, and the report keeps it under "Refuted and narrowed" with its evidence.
-- **Locators at the SHA.** `review ingest` reads each finding's quote at its `path` at the reviewed SHA, not from the working tree, and refuses the ingest, naming the finding, when it does not resolve there. The report links the blob at that SHA.
+- **Locators at the SHA.** `review ingest` reads each finding's quote at its `path` at the reviewed SHA, not from the working tree. A quote absent from that file, or in it more than once, does not refuse the round (flow 460): the finding is kept with no line, never relocated by similarity, flagged `quote_unlocated` (with the candidate lines when ambiguous), listed in scope.md, and readiness item `quotes-located` fails until it has a disposition or the operator waives it. The ingest still refuses, naming the finding, a quote it could not check at all: the commit is not in the checkout, no file is named, or a size bound stopped the match. The report links the blob at that SHA.
 
 ### The one dismissal that teaches something
 
@@ -890,7 +954,7 @@ status: draft
 target: report round6-review.md
 flow: none
 coverage: 1
-filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 dismissed_by_round=not-measured retained=3
+filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 merged_duplicates=0 dismissed_by_round=not-measured retained=3
   low_confidence: not measured — this pipeline has no confidence threshold …
   scope_b: not measured — no blast-radius record reached this ingest …
 ```
@@ -899,9 +963,10 @@ filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=
 same numbers `scope.md` shows a person, in a form something else can check.
 `not-measured` is not `0`: it means that stage did not run, and the reason is
 printed underneath. `status` exits **1** when the numbers do not add up (`total`
-minus the measured finding-stage drops must equal `retained`) or when a count is
-absent with no reason recorded, so a stage that starts dropping findings without
-counting them is caught on the next status call rather than a release later.
+minus the measured finding-stage drops and `merged_duplicates` must equal
+`retained`) or when a count is absent with no reason recorded, so a stage that
+starts dropping findings without counting them is caught on the next status call
+rather than a release later.
 
 `dropped_prefilter` counts diff material — whole files and change blocks removed
 before anyone read them — so it is deliberately not summed with the rest.

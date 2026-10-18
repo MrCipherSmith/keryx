@@ -46,7 +46,7 @@ export type MutationRecord = {
   schemaVersion: 1;
   worktree: string;
   command: string;
-  baseline: { exitCode: number; ms: number };
+  baseline: { exitCode: number; ms: number; timedOut?: boolean | undefined; cwd?: string | undefined; tail?: string | undefined };
   mutants: MutantResult[];
   totals: Record<MutantStatus, number>;
   /** The most candidates this pass was allowed to run; absent when the pass ran with no cap. */
@@ -59,6 +59,29 @@ export const MUTANTS_SPEC = "mutants.json";
 export const EVIDENCE_DIR = "research-evidence";
 
 const SKIP_COPY = new Set([".git", "node_modules"]);
+
+/** Where the scratch copy goes by default, relative to the repository root. It is git-ignored and never copied into itself. */
+export const SCRATCH_DIR = path.join(".metaproject", "data", "review", "mutate-scratch");
+export type ScratchMode = "repo" | "tmp";
+export const SCRATCH_MODES: readonly ScratchMode[] = ["repo", "tmp"];
+const BASELINE_TAIL_LINES = 60;
+const OUTPUT_KEEP_CHARS = 256 * 1024;
+
+/** The last `lines` lines of `text`, without trailing blank lines. */
+export function tailLines(text: string, lines = BASELINE_TAIL_LINES): string {
+  return text.replace(/\s+$/, "").split(/\r?\n/).slice(-lines).join("\n");
+}
+
+/** A red or timed-out baseline. Carries the evidence record so the caller can persist the tail before failing. */
+export class BaselineError extends Error {
+  constructor(
+    message: string,
+    readonly record: MutationRecord,
+  ) {
+    super(message);
+    this.name = "BaselineError";
+  }
+}
 
 export function parseMutantSpec(raw: unknown): MutantSpec[] {
   const list = Array.isArray(raw) ? raw : (raw as { mutants?: unknown } | undefined)?.mutants;
@@ -84,10 +107,41 @@ export function parseMutantSpec(raw: unknown): MutantSpec[] {
   });
 }
 
-function runCommand(command: string, cwd: string, timeoutMs: number): Promise<{ exitCode: number; timedOut: boolean; ms: number }> {
+/** Process groups of the test commands running now; a signal kills them before the scratch copy goes. */
+const liveGroups = new Set<number>();
+
+function killLiveGroups(): void {
+  for (const pgid of liveGroups) {
+    try {
+      process.kill(-pgid, "SIGKILL");
+    } catch {
+      /* already gone */
+    }
+  }
+  liveGroups.clear();
+}
+
+/** The environment a test run gets: git cannot be pointed at another repository, so the ceiling holds. */
+function runEnv(scratchBase: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, GIT_CEILING_DIRECTORIES: [scratchBase, process.env.GIT_CEILING_DIRECTORIES].filter((value) => value !== undefined && value !== "").join(path.delimiter) };
+  for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY"]) delete env[name];
+  return env;
+}
+
+function runCommand(command: string, cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv): Promise<{ exitCode: number; timedOut: boolean; ms: number; output: string }> {
   return new Promise((resolve) => {
     const started = Date.now();
-    const child = spawn(command, { cwd, shell: true, stdio: "ignore", detached: true });
+    const child = spawn(command, { cwd, env, shell: true, stdio: ["ignore", "pipe", "pipe"], detached: true });
+    const group = child.pid;
+    if (group !== undefined) liveGroups.add(group);
+    // stdout and stderr are interleaved in arrival order; only the end is kept, so a chatty suite cannot grow memory without bound.
+    let output = "";
+    const collect = (chunk: Buffer) => {
+      output += chunk.toString("utf8");
+      if (output.length > OUTPUT_KEEP_CHARS) output = output.slice(-OUTPUT_KEEP_CHARS);
+    };
+    child.stdout?.on("data", collect);
+    child.stderr?.on("data", collect);
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
@@ -99,11 +153,13 @@ function runCommand(command: string, cwd: string, timeoutMs: number): Promise<{ 
     }, timeoutMs);
     child.on("close", (code) => {
       clearTimeout(timer);
-      resolve({ exitCode: code ?? 1, timedOut, ms: Date.now() - started });
+      if (group !== undefined) liveGroups.delete(group);
+      resolve({ exitCode: code ?? 1, timedOut, ms: Date.now() - started, output });
     });
     child.on("error", () => {
       clearTimeout(timer);
-      resolve({ exitCode: 127, timedOut, ms: Date.now() - started });
+      if (group !== undefined) liveGroups.delete(group);
+      resolve({ exitCode: 127, timedOut, ms: Date.now() - started, output });
     });
   });
 }
@@ -119,13 +175,40 @@ function lineOf(text: string, index: number): number {
   return line;
 }
 
-async function copyTree(source: string, target: string): Promise<void> {
-  await cp(source, target, {
-    recursive: true,
-    filter: (entry) => !SKIP_COPY.has(path.basename(entry)) || path.resolve(entry) === path.resolve(source),
-  });
+/**
+ * Copies the tree entry by entry instead of with one `cp`: the scratch directory can sit inside the
+ * tree being copied, and `cp` refuses a destination under its own source. `skip` holds absolute paths
+ * (the scratch directory) that are left out.
+ */
+async function copyTree(source: string, target: string, skip: ReadonlySet<string>): Promise<void> {
+  const walk = async (from: string, to: string): Promise<void> => {
+    await mkdir(to, { recursive: true });
+    for (const entry of await readdir(from, { withFileTypes: true })) {
+      const entryPath = path.join(from, entry.name);
+      if (SKIP_COPY.has(entry.name) || skip.has(entryPath)) continue;
+      if (entry.isDirectory()) await walk(entryPath, path.join(to, entry.name));
+      else await cp(entryPath, path.join(to, entry.name));
+    }
+  };
+  await walk(source, target);
   const modules = path.join(source, "node_modules");
   if (existsSync(modules)) await symlink(modules, path.join(target, "node_modules"), "dir");
+}
+
+const SIGNALS: readonly NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
+
+/** Runs `body`; on SIGINT or SIGTERM `cleanup` runs first and the signal is re-raised so the process still dies by it. */
+export async function withScratchSignalCleanup<T>(cleanup: () => Promise<void>, body: () => Promise<T>): Promise<T> {
+  const onSignal = (signal: NodeJS.Signals): void => {
+    for (const name of SIGNALS) process.off(name, onSignal);
+    void cleanup().catch(() => {}).finally(() => process.kill(process.pid, signal));
+  };
+  for (const name of SIGNALS) process.on(name, onSignal);
+  try {
+    return await body();
+  } finally {
+    for (const name of SIGNALS) process.off(name, onSignal);
+  }
 }
 
 /**
@@ -137,19 +220,44 @@ export async function runMutation(options: {
   command: string;
   mutants: readonly MutantSpec[];
   timeoutMs?: number | undefined;
+  /** Explicit directory to make the scratch copy in; wins over `scratch`. */
   scratchRoot?: string | undefined;
+  /** `repo` (default) puts the copy under `<worktree>/.metaproject/data/review/mutate-scratch` so ancestor node_modules still resolve; `tmp` uses the OS temp dir. */
+  scratch?: ScratchMode | undefined;
   /** Run at most this many candidates; the rest, and any that came out invalid, are counted in `not_reached` and stay pending. */
   cap?: number | undefined;
 }): Promise<MutationRecord> {
   const worktree = path.resolve(options.worktree);
   const timeoutMs = options.timeoutMs ?? 300_000;
-  const scratch = await mkdtemp(path.join(options.scratchRoot ?? tmpdir(), "keryx-mutate-"));
+  const scratchBase = options.scratchRoot !== undefined ? path.resolve(options.scratchRoot) : options.scratch === "tmp" ? tmpdir() : path.join(worktree, SCRATCH_DIR);
+  await mkdir(scratchBase, { recursive: true });
+  const scratch = await mkdtemp(path.join(scratchBase, "keryx-mutate-"));
+  // The copy has no .git; without a ceiling a git command run by the tests would walk up into the real repository.
+  const env = runEnv(scratchBase);
+  return withScratchSignalCleanup(async () => { killLiveGroups(); await rm(scratch, { recursive: true, force: true }); }, async () => {
   try {
     const copy = path.join(scratch, "tree");
-    await copyTree(worktree, copy);
-    const baseline = await runCommand(options.command, copy, timeoutMs);
-    if (baseline.exitCode !== 0 || baseline.timedOut)
-      throw new Error(`the baseline run of \`${options.command}\` ${baseline.timedOut ? "timed out" : `exited ${baseline.exitCode}`} on an unmodified copy; mutants would all read as killed, so none were run`);
+    await copyTree(worktree, copy, new Set([scratchBase, scratch]));
+    const baseline = await runCommand(options.command, copy, timeoutMs, env);
+    if (baseline.exitCode !== 0 || baseline.timedOut) {
+      const tail = tailLines(baseline.output);
+      const what = baseline.timedOut ? `timed out after ${timeoutMs} ms` : `exited ${baseline.exitCode}`;
+      const message = [
+        `the baseline run of \`${options.command}\` ${what} on an unmodified copy; mutants would all read as killed, so none were run`,
+        `baseline command: ${options.command}`,
+        `baseline cwd: ${copy}`,
+        `last ${BASELINE_TAIL_LINES} lines of output:`,
+        tail === "" ? "(no output)" : tail,
+      ].join("\n");
+      throw new BaselineError(message, {
+        schemaVersion: 1,
+        worktree,
+        command: options.command,
+        baseline: { exitCode: baseline.exitCode, ms: baseline.ms, timedOut: baseline.timedOut, cwd: copy, tail },
+        mutants: [],
+        totals: { killed: 0, survived: 0, invalid: 0, timeout: 0 },
+      });
+    }
 
     const results: MutantResult[] = [];
     const cap = options.cap === undefined ? undefined : Math.max(0, Math.floor(options.cap));
@@ -177,7 +285,7 @@ export async function runMutation(options: {
       await writeFile(target, original.slice(0, first) + mutant.replacement + original.slice(first + mutant.anchor.length), "utf8");
       ran += 1;
       try {
-        const run = await runCommand(options.command, copy, timeoutMs);
+        const run = await runCommand(options.command, copy, timeoutMs, env);
         results.push({ ...base, line: lineOf(original, first), status: run.timedOut ? "timeout" : run.exitCode === 0 ? "survived" : "killed", exitCode: run.exitCode, ms: run.ms });
       } finally {
         await writeFile(target, original, "utf8");
@@ -189,6 +297,7 @@ export async function runMutation(options: {
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }
+  });
 }
 
 export function renderMutationTable(record: MutationRecord): string {
@@ -211,6 +320,9 @@ export function renderMutationTable(record: MutationRecord): string {
     "",
     `Command: \`${record.command}\` (baseline exit ${record.baseline.exitCode}, ${record.baseline.ms} ms). Run in a scratch copy; the worktree was not written.`,
     "",
+    ...(record.baseline.tail === undefined
+      ? []
+      : [`Baseline ${record.baseline.timedOut ? "timed out" : `failed (exit ${record.baseline.exitCode})`}; no mutant ran. cwd: \`${record.baseline.cwd ?? "-"}\`. Last output:`, "", "```", record.baseline.tail.replace(/```/g, "'"), "```", ""]),
     `Killed ${t.killed}, survived ${t.survived}, timeout ${t.timeout}, invalid ${t.invalid}.`,
     "",
     line(columns.map((c) => c.header)),
@@ -223,25 +335,48 @@ export function renderMutationTable(record: MutationRecord): string {
   ].join("\n");
 }
 
-/** Writes `mutation-<n>.json` and `.md` into `<package>/research-evidence/`. */
+/**
+ * Writes `mutation-<n>.json` and `.md` into `<package>/research-evidence/`. A record whose baseline failed
+ * (it carries the output tail) goes under `mutation-baseline-<n>` instead, so nothing that counts mutation
+ * passes by the `mutation` prefix reads a run that judged no mutant as a pass.
+ */
 export async function writeMutationEvidence(packageDir: string, record: MutationRecord): Promise<{ json: string; md: string }> {
   const dir = path.join(packageDir, EVIDENCE_DIR);
   await mkdir(dir, { recursive: true });
-  const taken = (await readdir(dir)).map((n) => /^mutation-(\d+)\.json$/.exec(n)?.[1]).filter((n): n is string => n !== undefined).map(Number);
+  const baseline = record.baseline.tail !== undefined;
+  const pattern = baseline ? BASELINE_RECORD_FILE : MUTATION_RECORD_FILE;
+  const stem = baseline ? "mutation-baseline" : "mutation";
+  const taken = (await readdir(dir)).map((n) => pattern.exec(n)?.[1]).filter((n): n is string => n !== undefined).map(Number);
   const n = (taken.length ? Math.max(...taken) : 0) + 1;
-  const json = path.join(dir, `mutation-${n}.json`);
-  const md = path.join(dir, `mutation-${n}.md`);
+  const json = path.join(dir, `${stem}-${n}.json`);
+  const md = path.join(dir, `${stem}-${n}.md`);
   await writeFile(json, `${JSON.stringify(record, null, 2)}\n`, "utf8");
   await writeFile(md, renderMutationTable(record), "utf8");
   return { json, md };
+}
+
+/** A recorded mutation pass, `mutation-<n>.json`; the number is captured. A baseline-failed record does not match. */
+const MUTATION_RECORD_FILE = /^mutation-(\d+)\.json$/;
+/** A record whose baseline failed, `mutation-baseline-<n>.json`: it judged no mutant. */
+const BASELINE_RECORD_FILE = /^mutation-baseline-(\d+)\.json$/;
+
+/** The names of the package's recorded mutation passes in `research-evidence/`; [] when there is none. */
+async function mutationRecordNames(packageDir: string): Promise<string[]> {
+  const dir = path.join(packageDir, EVIDENCE_DIR);
+  if (!existsSync(dir)) return [];
+  return (await readdir(dir)).filter((n) => MUTATION_RECORD_FILE.test(n));
+}
+
+/** Whether the package holds a recorded mutation pass (`research-evidence/mutation-<n>.json`); a baseline-failed record does not count. */
+export async function packageHasMutationRecord(packageDir: string): Promise<boolean> {
+  return (await mutationRecordNames(packageDir)).length > 0;
 }
 
 /** Ids of the mutants a recorded pass has judged. An invalid row judged nothing, so it does not count. */
 export async function doneMutantIds(packageDir: string): Promise<Set<string>> {
   const dir = path.join(packageDir, EVIDENCE_DIR);
   const done = new Set<string>();
-  if (!existsSync(dir)) return done;
-  for (const name of (await readdir(dir)).filter((n) => /^mutation-\d+\.json$/.test(n))) {
+  for (const name of await mutationRecordNames(packageDir)) {
     try {
       const record = JSON.parse(await readFile(path.join(dir, name), "utf8")) as MutationRecord;
       for (const m of record.mutants) if (m.status !== "invalid") done.add(m.id);

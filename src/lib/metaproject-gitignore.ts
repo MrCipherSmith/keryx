@@ -413,6 +413,9 @@ export function renderMetaprojectGitignoreBlock(): string {
 # Recommendation journal (flow 392): what the human chose and why they deviated.
 # Personal runtime state, written 0o600.
 .metaproject/data/decisions/
+# \`keryx review mutate\` runs the project's tests in a scratch copy of the tree under here; it is
+# removed when the run ends, but a killed run can leave it behind.
+.metaproject/data/review/mutate-scratch/
 `;
 }
 

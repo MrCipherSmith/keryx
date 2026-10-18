@@ -117,7 +117,7 @@ export const TOOL_LOG_DIR = "tool-calls";
 export const ORCHESTRATOR_LOG = "orchestrator";
 
 /** One call into the memory layer: what it asked, and whether it asked for accepted entries only. */
-export type MemoryCall = { search: boolean; accepted: boolean; query?: string; time?: string; summary: string };
+export type MemoryCall = { search: boolean; accepted: boolean; query?: string; time?: string; caller?: string; summary: string };
 
 const SEARCH_VALUE_FLAGS: ReadonlySet<string> = new Set(["--module", "--entity", "--status", "--limit", "--scope", "--kind"]);
 
@@ -167,7 +167,8 @@ export function memoryCalls(log: string): MemoryCall[] {
       return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
     };
     const input = { ...args(entry.input), ...args(entry.arguments) };
-    const base = { ...(time === undefined ? {} : { time }) };
+    const caller = typeof entry.caller === "string" && entry.caller.trim() !== "" ? entry.caller.trim() : undefined;
+    const base = { ...(time === undefined ? {} : { time }), ...(caller === undefined ? {} : { caller }) };
     if (mcpName !== undefined && /memory_search$/.test(mcpName)) {
       const query = typeof input.query === "string" && input.query.trim() !== "" ? input.query : undefined;
       calls.push({ search: true, accepted: input.status === "accepted", ...(query === undefined ? {} : { query }), ...base, summary: `${mcpName}${query === undefined ? "" : ` "${query}"`}` });

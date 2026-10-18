@@ -1,4 +1,5 @@
 import { READY_DISPATCH } from "./dispatch.test-helpers";
+import { COVERAGE_MD_MARK } from "./coverage-md";
 import { afterEach, describe, test, expect } from "bun:test";
 import { appendFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
@@ -19,6 +20,10 @@ import {
   type ScopeBScreenRecord,
 } from "./managed";
 import type { BlastRadiusScreenInput } from "./blast-radius";
+import { readFlowReviewRounds } from "./loop";
+import { readReviewRounds } from "../flow/review-gate";
+import { readFlowReviewManifests } from "../governance/spend";
+import { flowPackageDirs, readStandalonePackages } from "./package-location";
 import {
   FINDING_DISPOSITION_STATES,
   MANAGED_REVIEW_MODES,
@@ -27,6 +32,7 @@ import {
   REVIEW_TARGET_KINDS,
 } from "./types";
 import type { ManagedReviewInput, ManagedReviewManifest, StructuredReviewFinding } from "./types";
+import { withSpendSection } from "./dispatch-usage";
 
 let ROOT = "";
 const ORIGINAL_CWD = process.cwd();
@@ -202,6 +208,84 @@ test("review-flow creates standalone package under .metaproject/reviews", async 
   expect(result.manifest.flow).toBeUndefined();
   const coverage = await readFile(path.join(ROOT, result.path, "coverage.md"), "utf8");
   expect(coverage).toContain("status: skipped");
+});
+
+describe("flow 460: ingest procedure", () => {
+  const FINDING = { id: "review-logic-w1:F-001", reviewer: "review-logic", severity: "minor" as const, problem: "p", impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" as const };
+  const BLOCK = `# Round\n\n\`\`\`json keryx:findings\n${JSON.stringify([FINDING])}\n\`\`\`\n`;
+
+  test("ingest --flow --review-id of a review-flow package binds that package to the flow, with no second package", async () => {
+    await fresh();
+    const flowId = await createStartedFlow();
+    const reviewId = "2026-07-09-branch-managed-review";
+    const started = await createManagedReviewPackage({ cwd: ROOT, mode: "review-flow", reviewId, target: { kind: "branch", ref: "feature/x" }, now: new Date("2026-07-09T11:00:00Z") });
+    const ingested = await createManagedReviewPackage({ cwd: ROOT, mode: "ingest", flowId, reviewId, target: { kind: "branch", ref: "feature/x" }, reportText: BLOCK, now: new Date("2026-07-09T12:00:00Z") });
+    expect(ingested.path).toBe(started.path);
+    expect(ingested.manifest.flow?.id).toBe(flowId);
+    const onDisk = JSON.parse(await readFile(path.join(ROOT, started.path, "manifest.json"), "utf8")) as ManagedReviewManifest;
+    expect(onDisk.flow?.id).toBe(flowId);
+    expect(existsSync(path.join(ROOT, ".metaproject", "flows", "001-2026-07-09-managed-review-flow", "reviews", reviewId))).toBe(false);
+    // A re-ingest of the now-bound package stays in it.
+    const again = await createManagedReviewPackage({ cwd: ROOT, mode: "ingest", flowId, reviewId, target: { kind: "branch", ref: "feature/x" }, reportText: BLOCK, now: new Date("2026-07-09T13:00:00Z") });
+    expect(again.path).toBe(started.path);
+    expect(existsSync(path.join(ROOT, ".metaproject", "flows", "001-2026-07-09-managed-review-flow", "reviews", reviewId))).toBe(false);
+    // Every reader of the flow's rounds sees the bound round, the same way (REG-001): the loop detector, the flow review
+    // gate (`flow complete`'s require_clean_round) and flow spend.
+    const flowDir = "001-2026-07-09-managed-review-flow";
+    expect((await readFlowReviewRounds(ROOT, flowDir)).map((round) => round.label)).toEqual([reviewId]);
+    expect((await readReviewRounds(ROOT, flowDir)).map((round) => round.reviewId)).toEqual([reviewId]);
+    expect((await readFlowReviewManifests(ROOT, flowDir)).map((manifest) => manifest.reviewId)).toEqual([reviewId]);
+    // An unbound standalone package is not the flow's.
+    await createManagedReviewPackage({ cwd: ROOT, mode: "review-flow", reviewId: "2026-07-09-other", target: { kind: "branch", ref: "feature/y" }, now: new Date("2026-07-09T14:00:00Z") });
+    expect((await readFlowReviewManifests(ROOT, flowDir)).map((manifest) => manifest.reviewId)).toEqual([reviewId]);
+    // A pass over many flows reads the standalone heads once and hands them over: the same answer (HL-R3-002).
+    const standalone = await readStandalonePackages(ROOT);
+    expect(standalone.map(({ dir }) => path.basename(dir)).sort()).toEqual([reviewId, "2026-07-09-other"]);
+    expect(await flowPackageDirs(ROOT, flowDir, standalone)).toEqual(await flowPackageDirs(ROOT, flowDir));
+    expect((await readFlowReviewManifests(ROOT, flowDir, standalone)).map((manifest) => manifest.reviewId)).toEqual([reviewId]);
+  });
+
+  test("ingest refuses the placeholder report `review start` writes, before writing anything", async () => {
+    await fresh();
+    const reviewId = "2026-07-09-stub";
+    const started = await createManagedReviewPackage({ cwd: ROOT, mode: "review-flow", reviewId, target: { kind: "branch", ref: "feature/x" }, now: new Date("2026-07-09T11:00:00Z") });
+    const stub = await readFile(path.join(ROOT, started.path, "report.md"), "utf8");
+    const before = await readFile(path.join(ROOT, started.path, "manifest.json"), "utf8");
+    await expect(createManagedReviewPackage({ cwd: ROOT, mode: "ingest", reviewId, target: { kind: "branch", ref: "feature/x" }, reportText: stub, now: new Date("2026-07-09T12:00:00Z") })).rejects.toThrow("it is a stub");
+    expect(await readFile(path.join(ROOT, started.path, "manifest.json"), "utf8")).toBe(before);
+    await expect(createManagedReviewPackage({ cwd: ROOT, mode: "ingest", reviewId: "2026-07-09-empty", target: { kind: "report", ref: "r.md" }, reportText: "  \n", now: new Date("2026-07-09T12:00:00Z") })).rejects.toThrow("it is empty");
+    expect(existsSync(path.join(ROOT, ".metaproject", "reviews", "2026-07-09-empty"))).toBe(false);
+    // An empty block is a round that found nothing, and ingests.
+    const clean = await createManagedReviewPackage({ cwd: ROOT, mode: "ingest", reviewId: "2026-07-09-clean", target: { kind: "report", ref: "r.md" }, reportText: "# Round\n\n```json keryx:findings\n[]\n```\n", now: new Date("2026-07-09T12:00:00Z") });
+    expect(JSON.parse(await readFile(path.join(ROOT, clean.path, "findings.json"), "utf8"))).toEqual([]);
+  });
+
+  test("a finding display id holding '#' is refused up front, naming the id form, and nothing is written", async () => {
+    await fresh();
+    const reviewId = "2026-07-09-hash";
+    await expect(
+      createManagedReviewPackage({ cwd: ROOT, mode: "ingest", reviewId, target: { kind: "report", ref: "r.md" }, reportText: "# Round\n", findings: [{ ...FINDING, id: "review-logic-w1#F-001" }], now: new Date("2026-07-09T12:00:00Z") }),
+    ).rejects.toThrow('1 finding id(s) in --findings hold "#": review-logic-w1#F-001. a display id holds no "#"');
+    expect(existsSync(path.join(ROOT, ".metaproject", "reviews", reviewId))).toBe(false);
+  });
+
+  test("ingest records what the scope-B screen kept out, for ledger build", async () => {
+    await fresh();
+    const result = await createManagedReviewPackage({
+      cwd: ROOT,
+      mode: "ingest",
+      reviewId: "2026-07-09-screened",
+      target: { kind: "report", ref: "r.md" },
+      reportText: "# Round\n",
+      findings: [FINDING, { ...FINDING, id: "review-regression-w1:F-001", reviewer: "review-regression", file: "src/far.ts" }],
+      blastRadius: { files: [{ file: "src/near.ts", hop: 1, fanIn: 1, via: "src/a.ts", path: ["src/near.ts", "src/a.ts"], source: "graph", isTest: false }], changedFiles: ["src/a.ts"] } satisfies BlastRadiusScreenInput,
+      now: new Date("2026-07-09T12:00:00Z"),
+    });
+    const record = JSON.parse(await readFile(path.join(ROOT, result.path, "research-evidence", "ingest-screened.json"), "utf8")) as { screened: Array<{ id: string; reviewer: string; rule: string; detail: string }> };
+    expect(record.screened.map((entry) => [entry.id, entry.reviewer])).toEqual([["review-regression-w1:F-001", "review-regression"]]);
+    expect(record.screened[0]?.rule).toBeTruthy();
+    expect(record.screened[0]?.detail).toBeTruthy();
+  });
 });
 
 test("ingest writes classified findings and skill learning decision", async () => {
@@ -1203,7 +1287,7 @@ test("disposition is declared in the strict contract and DELIBERATELY not in the
 function findingsFrom(
   reviewer: string,
   count: number,
-  severity: StructuredReviewFinding["severity"] = "minor",
+  severity: StructuredReviewFinding["severity"] = "info",
 ): StructuredReviewFinding[] {
   return Array.from({ length: count }, (_, index) => ({
     ...FULL_FINDING,
@@ -1243,7 +1327,16 @@ test("AC10: the ingest names every truncated finding in scope.md, with a count",
   }
 });
 
-test("AC5: blockers survive an ingest that truncates the same reviewer's minors", async () => {
+test("AC5 (owner decision 2026-10-16): an ingest keeps every minor and major finding; only info notes are capped", async () => {
+  await fresh();
+  const { findings } = await ingestFindings("2026-10-16-cap-minors", {
+    findings: [...findingsFrom("review-logic", 14, "minor"), ...findingsFrom("review-style", 12, "info")],
+  });
+  expect(findings.filter((finding) => finding.severity === "minor")).toHaveLength(14);
+  expect(findings.filter((finding) => finding.severity === "info")).toHaveLength(10);
+});
+
+test("AC5: blockers survive an ingest that truncates the same reviewer's info notes", async () => {
   await fresh();
   const { findings } = await ingestFindings("2026-08-30-cap-blockers", {
     findings: [
@@ -1258,7 +1351,7 @@ test("AC5: blockers survive an ingest that truncates the same reviewer's minors"
 
   expect(findings.filter((finding) => finding.severity === "blocker")).toHaveLength(2);
   // Ten ordinary findings survive ALONGSIDE the blockers, not instead of two of them.
-  expect(findings.filter((finding) => finding.severity === "minor")).toHaveLength(10);
+  expect(findings.filter((finding) => finding.severity === "info")).toHaveLength(10);
 });
 
 test("AC5: the cap never touches the dismissal records", async () => {
@@ -1784,6 +1877,7 @@ test("R2-05: without a terminal the waiver is refused and nothing is written", a
     await reviewCommand(["complete", pkg, "--waive-coverage", "skip the far files, generated"], { isTerminal: () => false });
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("needs a terminal");
+    expect(errors.join("\n")).toContain("review_waive_coverage");
   } finally {
     console.error = logError;
     process.exitCode = 0;
@@ -1830,6 +1924,136 @@ test("R1-10: `--waive-coverage` is a human-confirmation command the approval flo
   expect(touchesCoverageWaiver('keryx review complete --package p --waive-coverage "skip them all"')).toBe(true);
   expect(touchesHumanConfirmation("bun run src/cli.ts review complete p --waive-coverage 'x y z'")).toBe(true);
   expect(touchesCoverageWaiver("keryx review complete --package p")).toBe(false);
+});
+
+describe("ingest into an existing package defaults to its recorded head (flow 458 AC7)", () => {
+  async function git(...args: string[]): Promise<string> {
+    const proc = Bun.spawn(["git", ...args], { cwd: ROOT, stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_COMMITTER_NAME: "t" } });
+    const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+    if (code !== 0) throw new Error(`git ${args.join(" ")}: ${err}`);
+    return out.trim();
+  }
+
+  async function commit(message: string): Promise<string> {
+    await writeFile(path.join(ROOT, "file.txt"), `${message}\n`, "utf8");
+    await git("add", "file.txt");
+    await git("commit", "-q", "-m", message);
+    return git("rev-parse", "HEAD");
+  }
+
+  const ingest = (head?: string) =>
+    createManagedReviewPackage({
+      cwd: ROOT,
+      mode: "ingest",
+      reviewId: "2026-10-16-head",
+      target: { kind: "branch", ref: "feature", ...(head === undefined ? {} : { head }) },
+      reportText: "# Round\n",
+      findings: [],
+      now: new Date("2026-10-16T12:00:00Z"),
+    });
+
+  test("a re-ingest with no --head records the package head, not the moved checkout", async () => {
+    await fresh();
+    await git("init", "-q");
+    const first = await commit("one");
+    const created = await ingest();
+    expect(created.manifest.target.head).toBe(first);
+    const second = await commit("two");
+    expect(second).not.toBe(first);
+    const again = await ingest();
+    expect(again.manifest.target.head).toBe(first);
+    // An explicit --head still wins.
+    expect((await ingest(second)).manifest.target.head).toBe(second);
+  });
+
+  test("a recorded head this checkout does not have is refused, naming the commit", async () => {
+    await fresh();
+    await git("init", "-q");
+    await commit("one");
+    const created = await ingest();
+    const manifestFile = path.join(ROOT, created.path, "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+    manifest.target.head = "0123456789abcdef0123456789abcdef01234567";
+    await writeFile(manifestFile, JSON.stringify(manifest), "utf8");
+    await expect(ingest()).rejects.toThrow("0123456789ab, and that commit is not in this checkout");
+  });
+});
+
+describe("flow 460 F: coverage reconciles with the dispatch record", () => {
+  const research = (extra: Record<string, unknown> = {}) => ({
+    version: 1, scopeReviewed: true, rawReconciled: true, obligations: [],
+    dispatch: { ...READY_DISPATCH, selected: ["review-logic", "review-style"], runs: [
+      { ...READY_DISPATCH.runs[0], reviewer: "review-logic", executionId: "a" },
+      { reviewer: "review-style", executionId: "b", status: "not-run", notRunReason: "never dispatched", scopeComplete: false },
+    ] },
+    ...extra,
+  });
+  const ingest = (input: Partial<ManagedReviewIngestInput>) =>
+    createManagedReviewPackage({ cwd: ROOT, mode: "ingest", reviewId: "2026-10-17-cov", target: { kind: "branch", ref: "feature" }, reportText: "# Round\n", findings: [], now: new Date("2026-10-17T12:00:00Z"), ...input });
+
+  test("research without --reviewers lists the reviewers that ran, with their status, in the manifest and coverage.md", async () => {
+    await fresh();
+    const created = await ingest({ research: research() });
+    expect(created.manifest.coverage.map((entry) => `${entry.reviewer}:${entry.status}`)).toEqual(["review-logic:run", "review-style:failed"]);
+    const md = await readFile(path.join(ROOT, created.path, "coverage.md"), "utf8");
+    expect(md).toContain("reviewer: review-logic");
+    expect(md).toContain("reviewer: review-style");
+    expect(md).not.toContain("review-orchestrator");
+  });
+
+  test("an explicit --reviewers list still wins, and no research keeps the orchestrator stand-in", async () => {
+    await fresh();
+    const named = await ingest({ research: research(), reviewers: ["review-logic"], reviewId: "2026-10-17-cov-named" });
+    expect(named.manifest.coverage.map((entry) => entry.reviewer)).toEqual(["review-logic"]);
+    const bare = await ingest({ research: undefined, reviewId: "2026-10-17-cov-bare" });
+    expect(bare.manifest.coverage.map((entry) => entry.reviewer)).toEqual(["review-orchestrator"]);
+  });
+
+  test("a routed-out role is listed as not dispatched, and coverage.md carries the flow 460 mark readiness reads", async () => {
+    await fresh();
+    const routed = research();
+    routed.dispatch.runs.push({ ...READY_DISPATCH.runs[0], reviewer: "review-architecture", executionId: "c", routedOut: true } as (typeof routed.dispatch.runs)[number]);
+    const created = await ingest({ research: routed });
+    const entry = created.manifest.coverage.find((item) => item.reviewer === "review-architecture");
+    expect(entry).toMatchObject({ status: "run" });
+    expect(entry?.reason).toContain("routed out");
+    expect(entry?.reason).not.toContain("dispatched;");
+    const md = await readFile(path.join(ROOT, created.path, "coverage.md"), "utf8");
+    expect(md).toContain(COVERAGE_MD_MARK);
+  });
+
+  test("one finished reviewer in the research record does not absorb a finding that names no reviewer", async () => {
+    await fresh();
+    const created = await ingest({ research: research(), findings: [{ ...FULL_FINDING, reviewer: undefined } as unknown as StructuredReviewFinding] });
+    const findings = JSON.parse(await readFile(path.join(ROOT, created.path, "findings.json"), "utf8")) as Array<{ reviewer: string }>;
+    expect(findings.map((finding) => finding.reviewer)).toEqual(["review-orchestrator"]);
+  });
+
+  test("a status the ledger never writes is named as such, not reported as 'not run'; a reviewer name with a newline is dropped", async () => {
+    await fresh();
+    const odd = research();
+    odd.dispatch.runs.push({ reviewer: "review-highload", executionId: "d", status: "compelte", scopeComplete: true } as (typeof odd.dispatch.runs)[number]);
+    odd.dispatch.runs.push({ reviewer: "review-x\nstatus: run", executionId: "e", status: "complete" } as (typeof odd.dispatch.runs)[number]);
+    const created = await ingest({ research: odd });
+    const entry = created.manifest.coverage.find((item) => item.reviewer === "review-highload");
+    expect(entry).toMatchObject({ status: "failed" });
+    expect(entry?.reason).toContain('unrecognised status "compelte"');
+    expect(created.manifest.coverage.some((item) => item.reviewer.includes("\n"))).toBe(false);
+  });
+});
+
+describe("flow 460: the token spend section is this ingest's (LG-004)", () => {
+  test("a re-ingest of the package's own report.md replaces the earlier spend section, never keeps a stale total", () => {
+    const research = { usage: { dispatches: 2, known: 2, unknown: 0, tokens_in: 30, tokens_out: 4, complete: true } };
+    const earlier = "# Round\n\nbody\n\n## Token spend\n\ntoken spend: 1 in, 1 out over 1 dispatch(es)\n";
+    const replaced = withSpendSection(earlier, research);
+    expect(replaced).not.toContain("1 in, 1 out");
+    expect(replaced.match(/## Token spend/g)).toHaveLength(1);
+    const middle = withSpendSection("# Round\n\n## Token spend\n\nold line\n\n## Findings\n\nf\n", research);
+    expect(middle).not.toContain("old line");
+    expect(middle).toContain("## Findings\n\nf");
+    expect(withSpendSection("# Round\n\nno spend\n", {})).toBe("# Round\n\nno spend\n");
+  });
 });
 
 // These synthetic fixtures exercise disposition/ingest, not outstanding research.

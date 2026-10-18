@@ -106,6 +106,16 @@ describe("compareReference", () => {
     expect(compareReference(items, await loadPackageEvidence(pkg)).items[0]!.class).toBe("A");
   });
 
+  test("a baseline-failure evidence file is not a mutation pass", async () => {
+    const pkg = path.join(dir, "red");
+    await mkdir(path.join(pkg, "research-evidence"), { recursive: true });
+    await writeFile(path.join(pkg, "findings.json"), "[]");
+    await writeFile(path.join(pkg, "research-evidence", "mutation-baseline-1.json"), "{}");
+    await writeFile(path.join(pkg, "research-evidence", "mutation-baseline-1.md"), "x");
+    const items = parseReferenceReport(REPORT).filter((i) => i.id === "M1");
+    expect(compareReference(items, await loadPackageEvidence(pkg)).items[0]!.class).toBe("E");
+  });
+
   test("the rendering prints a row per item and the totals", async () => {
     const pkg = await writePackage({ mutation: true });
     const text = renderComparison(compareReference(parseReferenceReport(REPORT), await loadPackageEvidence(pkg)));

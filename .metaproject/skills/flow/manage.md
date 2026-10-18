@@ -18,7 +18,11 @@ data and status.
    rewrites or appends one line itself (logged; audit trail either way).
 5. Completion decision is yours alone: after the user selects the PR path,
    create the PR, run the bounded review/fix loop, and merge it only after the
-   review is clean and required checks are green. The merge target must be the
+   review is clean and required checks are green. Each round is
+   `keryx review start` on the PR's new head: it detects the previous round
+   and reviews the delta (fix changes with a small roster and the prior
+   findings, new changes as round 1) - never a whole-branch range or `--all`
+   per round. The merge target must be the
    base branch captured when the flow branch was created. Only after verifying
    that merge may you run `keryx flow implemented <id> --pr <url>`.
    Never accept work without a PR and confirmed merge; never let the

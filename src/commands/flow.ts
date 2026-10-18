@@ -1727,7 +1727,7 @@ export async function runConfirm(args: string[], seams: FlowConfirmSeams = {}): 
   if (!terminal) {
     throw new Error(
       "flow confirm: needs an interactive terminal on both stdin and stdout, and refuses to run from a pipe, " +
-        "an MCP or ACP client, or an unattended run. Run it yourself, in a terminal.",
+        "an MCP or ACP client, or an unattended run. Inside keryx shell, call the flow_confirm tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.",
     );
   }
   const flow = await getService().get({ cwd, id });

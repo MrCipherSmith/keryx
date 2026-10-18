@@ -23,14 +23,20 @@ whose status is `implemented`.
    git commit` has run; the gate checks only that `flow.json` is in `HEAD`). The
    flow folder is committed in the same PR as the code; the commit at closing
    is a rule to follow, not one the gate checks. A
-   flow created with `--require-confirmation` needs one more gate: run
-   `keryx flow confirm <id>` in your own terminal first (a typed challenge
-   mints a short-lived, single-use token - it proves an interactive step ran
-   outside the agent's tool roster, not that a human did), then pass it as
+   flow created with `--require-confirmation` needs one more gate: get
+   a token first: in keryx shell call the `flow_confirm` tool (the operator
+   answers it as a card; never send the operator to a terminal), outside it run
+   `keryx flow confirm <id>` in a terminal (a typed challenge). The token is
+   short-lived and single-use; it proves an interactive step ran, not that a
+   human did. Then pass it as
    `--confirm-token <token>`. On pass this also appends a completion
    signature.
 4. Gates fail -> flow auto-returns to in-progress with fix notes:
    - small fixes: run a fix agent, then re-run the review/fix loop from step 2;
+     the next review round is just `keryx review start` on the new head - it
+     detects the round and reviews the delta (fix changes with a small roster
+     and the prior findings, new changes as round 1); never pass a whole-branch
+     range or `--all` per round;
    - large fixes: describe what is wrong in the journal and relaunch the
      implementor/orchestrator against the updated plan.
    - a flow left stuck in `completing` (a crash or an interrupted attempt,

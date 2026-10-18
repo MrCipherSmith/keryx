@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { MIN_SLICE_MAX_BYTES, type SliceEntry, type SliceManifest, packWaves, resliceText, waveBytesOf } from "./slice";
+import { MIN_SLICE_MAX_BYTES, type SliceEntry, type SliceManifest, packWaves, packWavesByKind, resliceText, waveBytesOf } from "./slice";
+import { escalateSlice } from "./slice-routing";
 import { type WaveSummary, requiredSlices, sliceGraph, summarizeWaves } from "./waves";
 
 /** Statuses that mean the reviewer did not finish its scope. INCOMPLETE is not a schema status; a reviewer that ran out of rounds reports it. */
@@ -21,6 +22,8 @@ export type ReviewerRetryState = {
   covered?: string[];
   /** The open questions of the last NEEDS_CONTEXT this reviewer sent, normalised; a second one that repeats them shows no progress. */
   questions?: string[];
+  /** Hashes of the raw replies already counted (`review next`, `retry-plan --result <file>`): a reply is never counted twice. */
+  processed?: string[];
 };
 
 export type RetryState = {
@@ -38,7 +41,12 @@ export type ReviewerResult = {
   /** The slices this result covered: id strings, or objects carrying an `id` (reviewers write both). An object whose `status` is set and not done-like does not cover its slice. */
   slices?: unknown;
   needs_context?: string[];
+  /** The reviewer's findings; a major-or-worse one on a light slice re-opens that slice deep. */
+  findings?: unknown;
 };
+
+/** A light slice a finding re-opens deep: the core roles join it. */
+export type Escalation = { slice: string; finding: string; severity: string; by: string };
 
 export type RetryDecision = "accepted" | "retry" | "context" | "wave" | "not-run";
 
@@ -64,12 +72,68 @@ export type RetryPlan = {
   /** Consecutive results with no new coverage, this one included. */
   stalls: number;
   state: RetryState;
+  /** Light slices this result's major-or-worse findings re-open deep; apply with {@link applyEscalations}. */
+  escalations: Escalation[];
 };
 
-/** Retry children do not change the original scope identity. Missing content identity fails closed. */
+/** Severities that re-open a light slice deep. */
+export const ESCALATING_SEVERITIES: ReadonlySet<string> = new Set(["blocker", "critical", "major", "high"]);
+
+const fileOfLocation = (value: unknown): string | undefined => {
+  if (typeof value !== "string" || value.trim() === "") return undefined;
+  return value.trim().replace(/:\d+(?:[-:]\d+)*$/, "").replace(/#L\d+(?:-L?\d+)?$/, "");
+};
+
+/**
+ * The light slices a result's major-or-worse findings land on. A finding names its slice (`slice` / `slices`), or its
+ * file (`file`, `location`, `path`); a file is matched against the slices the reviewer covered or was assigned first,
+ * then against any original slice holding that file. Deep slices are already read by the core set and never escalate.
+ */
+export function escalationsFor(manifest: SliceManifest, reviewer: string, findings: unknown, near: readonly string[]): Escalation[] {
+  if (!Array.isArray(findings)) return [];
+  const originals = manifest.slices.filter((entry) => entry.retryOf === undefined);
+  const byId = new Map(originals.map((entry) => [entry.id, entry]));
+  const out = new Map<string, Escalation>();
+  findings.forEach((raw, index) => {
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return;
+    const finding = raw as Record<string, unknown>;
+    const severity = String(finding.severity ?? "").trim().toLowerCase();
+    if (!ESCALATING_SEVERITIES.has(severity)) return;
+    const id = typeof finding.id === "string" && finding.id !== "" ? finding.id : `finding-${index + 1}`;
+    const named = [finding.slice, ...(Array.isArray(finding.slices) ? finding.slices : [])].filter((value): value is string => typeof value === "string" && byId.has(value));
+    let targets = named;
+    if (targets.length === 0) {
+      const file = fileOfLocation(finding.file) ?? fileOfLocation(finding.path) ?? fileOfLocation(finding.location);
+      if (file === undefined) return;
+      const holding = originals.filter((entry) => entry.files.includes(file));
+      const close = holding.filter((entry) => near.includes(entry.id));
+      targets = (close.length > 0 ? close : holding).map((entry) => entry.id);
+    }
+    for (const slice of targets) {
+      if (byId.get(slice)?.depth === "light" && !out.has(slice)) out.set(slice, { slice, finding: id, severity, by: reviewer });
+    }
+  });
+  return [...out.values()];
+}
+
+/** The manifest with each escalated slice re-opened deep. */
+export function applyEscalations(manifest: SliceManifest, escalations: readonly Escalation[]): SliceManifest {
+  if (escalations.length === 0) return manifest;
+  const bySlice = new Map(escalations.map((entry) => [entry.slice, entry]));
+  return { ...manifest, slices: manifest.slices.map((entry) => {
+    const hit = bySlice.get(entry.id);
+    return hit === undefined ? entry : escalateSlice(entry, hit.by, hit.finding);
+  }) };
+}
+
+/**
+ * Retry children do not change the original scope identity, and neither does routing: who owns a slice and how deep it is
+ * read (roles, depth, risk, audit, escalation) is not what the slice holds, so re-opening a slice deep keeps every
+ * reviewer's recorded progress. Missing content identity fails closed.
+ */
 export function scopeFingerprint(manifest: SliceManifest, read?: (entry: SliceEntry) => string): string | undefined {
   const originals = manifest.slices.filter((entry) => entry.retryOf === undefined);
-  const slices = originals.map((entry) => {
+  const slices = originals.map(({ roles: _roles, depth: _depth, risk: _risk, audit: _audit, escalated: _escalated, ...entry }) => {
     const contentHash = read === undefined ? entry.contentHash : createHash("sha256").update(read(entry)).digest("hex");
     return { ...entry, contentHash };
   });
@@ -219,13 +283,14 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
   const wanted = input.sliceIds ?? requiredSlices(manifest, reviewer);
   const open = graph.open(wanted.filter((id) => ids.has(id)), graph.accounted(covered));
   const budget = waveBytesOf(manifest);
+  const escalations = escalationsFor(manifest, reviewer, result.findings, [...reported, ...wanted]);
 
   const remember = (over: Partial<ReviewerRetryState>): void => {
     const asked = asksForContext ? questions : known?.questions;
-    state.reviewers[reviewer] = { attempt: priorRounds, status: evaluated ? status : (known?.status ?? ""), notRun: false, stalls, covered: [...covered].sort(), ...(asked === undefined ? {} : { questions: asked }), ...over };
+    state.reviewers[reviewer] = { attempt: priorRounds, status: evaluated ? status : (known?.status ?? ""), notRun: false, stalls, covered: [...covered].sort(), ...(asked === undefined ? {} : { questions: asked }), ...(known?.processed === undefined ? {} : { processed: known.processed }), ...over };
   };
   const plan = (decision: RetryDecision, reason: string, extra: Partial<RetryPlan> = {}): RetryPlan => {
-    const waves = packWaves(open, budget);
+    const waves = packWavesByKind(open, budget);
     return {
       decision,
       reviewer,
@@ -238,6 +303,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
       progress,
       stalls,
       state,
+      escalations,
       ...extra,
     };
   };
@@ -263,7 +329,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
       return notRun(`${stalls} results in a row covered no new slice; ${open.length} assigned slice(s) are still open`);
     }
     remember({});
-    const waves = packWaves(open, budget);
+    const waves = packWavesByKind(open, budget);
     const summary = summarizeWaves(waves);
     return plan("wave", `${status || "no result"}; ${summary.slices} slice(s) are uncovered — dispatch the next wave (${summary.waves} left), no attempt is spent`);
   }
@@ -290,7 +356,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
     remember({ attempt: rounds });
     const needsContext = asStrings(result.needs_context).filter((item) => item.trim() !== "");
     const redo = open.length > 0 ? open : graph.open(wanted.filter((id) => ids.has(id)), new Set());
-    const waves = packWaves(redo, budget);
+    const waves = packWavesByKind(redo, budget);
     return plan("context", `${status}; answer ${needsContext.length || "its"} open question(s) and re-dispatch ${progress ? "the uncovered slices" : "the same slices"} — the scope is not closed`, {
       needsContext,
       wave: waves[0] ?? [],
@@ -304,7 +370,7 @@ export function planRetry(input: PlanRetryInput): RetryPlan {
 
   if (progress) {
     remember({ attempt: rounds });
-    const waves = packWaves(open, budget);
+    const waves = packWavesByKind(open, budget);
     const summary = summarizeWaves(waves);
     return plan("retry", `${status}, but it covered new slices; hand out the next wave of the ${summary.slices} still uncovered (${summary.waves} left), no attempt is spent`);
   }

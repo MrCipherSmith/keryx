@@ -5,9 +5,13 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
-import { computeReadiness, renderReadiness } from "../review/readiness";
+import { recordLogStart, recordOrchestratorCall } from "../review/orchestrator-log";
+import { READINESS_ITEMS, computeReadiness, renderReadiness } from "../review/readiness";
 import { formatReviewDepthLines, loadReviewDepth, renderReviewReadinessText } from "./review-panel";
 import { isReviewReadinessCommand, projectReviewsReadinessLines } from "./reviews-inspector";
+
+/** The ordinal the checklist prints for the item these tests fail, read from the checklist itself. */
+const memoryItem = READINESS_ITEMS.find((entry) => entry.id === "memory-outside-stage")?.number;
 
 const roots: string[] = [];
 const cwd = process.cwd();
@@ -113,13 +117,13 @@ describe("the memory-outside-stage item on every surface", () => {
     return root;
   }
 
-  test("the checklist has ten items and the depth block, /review readiness and the sidebar name the failing one", async () => {
+  test("the checklist has every READINESS_ITEMS entry and the depth block, /review readiness and the sidebar name the failing one", async () => {
     const root = await withStrayRead();
     const rows = await loadReviewDepth(root);
-    expect(rows[0]?.readiness?.items).toHaveLength(10);
+    expect(rows[0]?.readiness?.items.map((item) => item.id)).toEqual(READINESS_ITEMS.map((entry) => entry.id));
     expect(rows[0]?.readiness?.items.find((item) => item.id === "memory-outside-stage")?.status).toBe("fail");
     expect(formatReviewDepthLines(rows).join("\n")).toContain("memory-outside-stage:");
-    expect(renderReviewReadinessText(rows)).toContain("10. [FAIL  ] memory-outside-stage");
+    expect(renderReviewReadinessText(rows)).toContain(`${memoryItem}. [FAIL  ] memory-outside-stage`);
     expect(projectReviewsReadinessLines(rows, 120)[0]).toContain("memory-outside-stage");
   });
 
@@ -137,7 +141,48 @@ describe("the memory-outside-stage item on every surface", () => {
     }
     const output = lines.join("\n");
     expect(output).toContain("memory-outside-stage");
-    expect(output).toContain("10. [FAIL  ] memory-outside-stage");
+    expect(output).toContain(`${memoryItem}. [FAIL  ] memory-outside-stage`);
     expect(output).toContain('--waive memory-outside-stage "<operator quote>"');
+  });
+});
+
+// Flow 454 AC7: recorded versus no log, and the unattributed count, in the same words on every surface.
+describe("the orchestrator log note on every surface", () => {
+  async function surfaces(root: string): Promise<{ depth: string; readinessText: string; sidebar: string; status: string; readiness: string }> {
+    const rows = await loadReviewDepth(root);
+    process.chdir(root);
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = (...parts: unknown[]) => void lines.push(parts.join(" "));
+    let status: string;
+    let readiness: string;
+    try {
+      await reviewCommand(["status", "pr7-r1"], { isTerminal: () => false });
+      status = lines.splice(0).join("\n");
+      await reviewCommand(["readiness", "pr7-r1"], { isTerminal: () => false });
+      readiness = lines.splice(0).join("\n");
+    } finally {
+      console.log = original;
+    }
+    return { depth: formatReviewDepthLines(rows).join("\n"), readinessText: renderReviewReadinessText(rows), sidebar: projectReviewsReadinessLines(rows, 200).join("\n"), status, readiness };
+  }
+
+  test("no log file: none, on the checklist, the status, the depth tab, the TUI text and the sidebar", async () => {
+    const { root } = await project();
+    const all = await surfaces(root);
+    for (const text of Object.values(all)) expect(text).toContain("orchestrator log: none");
+    for (const text of Object.values(all)) expect(text).not.toContain("orchestrator log: recorded");
+  });
+
+  test("a log keryx wrote: recorded, with the unattributed count when there is one", async () => {
+    const { root, dir } = await project();
+    await recordLogStart(dir);
+    const quiet = await surfaces(root);
+    for (const text of Object.values(quiet)) expect(text).toContain("orchestrator log: recorded");
+    for (const text of Object.values(quiet)) expect(text).not.toContain("unattributed memory");
+
+    await recordOrchestratorCall(dir, { source: "cli", caller: "unattributed", command: "keryx memory search \"who\"" });
+    const noisy = await surfaces(root);
+    for (const text of Object.values(noisy)) expect(text).toContain("orchestrator log: recorded, 1 unattributed");
   });
 });

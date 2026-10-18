@@ -21,7 +21,7 @@ import { validateAgentDefinition, type AgentDefinition } from "../agents";
 import { isNotFound, isPathInside, pathExists, withFileLock } from "../lib/fs";
 import { removeContained, writeContained } from "../lib/contained-write";
 import { loadReviewLearningConfigSafe, type ReviewLearningConfig } from "../review/review-learning";
-import { appendDecision } from "./decisions";
+import { appendDecision, type DecisionConfirmation } from "./decisions";
 import { assertInsideLearningRoot, graduationDir, learningDataDir, projectLockPath } from "./paths";
 import { gateReviewerText, loginKeywordSet, mayCarryReviewerText, stripReviewerCommentTriggerPrefix } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
@@ -76,6 +76,8 @@ export interface ApplyGraduationOptions {
   isTerminal: boolean;
   /** Typed confirmation (e.g. "type the proposal id to confirm"), read by the CLI layer. */
   confirm: () => Promise<boolean>;
+  /** Flow 456: recorded in the decision log when the operator answered a shell card instead of a terminal. */
+  confirmation?: DecisionConfirmation;
   now?: Date;
   env?: NodeJS.ProcessEnv;
   homeDir?: string;
@@ -738,7 +740,7 @@ const PROPOSAL_ID_PATTERN = /^grad-(skill|agent|rule)-[0-9a-f]{12}$/;
 /** Minimal read-only tool vocabulary for a graduated agent candidate (W2 vocabulary, `../agents/tools.ts`). */
 const GRADUATED_AGENT_TOOLS: readonly string[] = ["read_file", "list_dir", "search_code"];
 
-async function readProposal(root: string, proposalId: string): Promise<GraduationProposalFile> {
+export async function readProposal(root: string, proposalId: string): Promise<GraduationProposalFile> {
   if (!PROPOSAL_ID_PATTERN.test(proposalId)) {
     throw new LearningGraduateError("invalid-proposal-id", `"${proposalId}" is not a well-formed graduation proposal id`);
   }
@@ -900,7 +902,7 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
   if (!opts.isTerminal) {
     throw new LearningGraduateError(
       "graduate-apply-requires-terminal",
-      "keryx learn graduate apply needs an interactive terminal; there is no bypass flag or environment variable.",
+      "keryx learn graduate apply needs an interactive terminal; there is no bypass flag or environment variable. Inside keryx shell, call the learn_graduate tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.",
     );
   }
 
@@ -1029,7 +1031,14 @@ export async function applyGraduation(root: string, proposalId: string, opts: Ap
   const actor = resolveActor(root, env);
   await appendDecision(
     root,
-    { action: "graduate-apply", id: proposalId, actor, tty: true, at: now.toISOString() },
+    {
+      action: "graduate-apply",
+      id: proposalId,
+      actor,
+      tty: true,
+      at: now.toISOString(),
+      ...(opts.confirmation !== undefined ? { confirmation: opts.confirmation } : {}),
+    },
     { ...storeOptions, scope: "project" as LearningScope },
   );
 

@@ -112,12 +112,23 @@ export interface MemoryLayerRecord {
 /** Where `prHead` came from: the caller, the package manifest's `target.head`, or the checkout's HEAD. */
 export type HeadSource = "input" | "manifest" | "checkout";
 
+/**
+ * Where `base` came from (flow 457): the caller, the manifest's `target.base`,
+ * the manifest's `target.ref` naming a commit, the pull request's base on its
+ * host, the merge base with the default branch, or — only when none of those
+ * answered — `<head>~1`, which is announced as a warning because a one-commit
+ * base is the wrong range for any pull request of more than one commit.
+ */
+export type BaseSource = "input" | "manifest" | "target-ref" | "pr" | "merge-base" | "fallback";
+
 export interface LayersFile {
   version: typeof LAYERS_VERSION;
   refreshedAt: string;
   prHead: string | null;
   headSource?: HeadSource;
   base: string | null;
+  /** Absent on a record written before it existed. */
+  baseSource?: BaseSource;
   /** The commit the package graph was built from. Equals `prHead` or the graph layer is `failed`. */
   graphCommit: string | null;
   graph: GraphLayerRecord;
@@ -135,7 +146,13 @@ export interface LayerDeps {
   /** Writes `layers.json`; a test replaces it to stop the refresh in its last phase. */
   writeLayers(file: string, text: string): Promise<void>;
   now(): Date;
+  /** The base commit of pull request `ref` on its host, or `null` when it cannot be asked. */
+  prBase(projectRoot: string, ref: string): Promise<string | null>;
+  /** Where a fallback is announced. */
+  warn(message: string): void;
 }
+
+const PR_BASE_TIMEOUT_MS = 10_000;
 
 export const defaultLayerDeps: LayerDeps = {
   async git(cwd, args) {
@@ -157,6 +174,19 @@ export const defaultLayerDeps: LayerDeps = {
   },
   writeLayers: writeFileAtomic,
   now: () => new Date(),
+  async prBase(projectRoot, ref) {
+    try {
+      const { stdout } = await execFileAsync("gh", ["pr", "view", ref, "--json", "baseRefOid", "--jq", ".baseRefOid"], {
+        cwd: projectRoot,
+        timeout: PR_BASE_TIMEOUT_MS,
+      });
+      const sha = stdout.trim();
+      return /^[0-9a-f]{40,64}$/i.test(sha) ? sha : null;
+    } catch {
+      return null;
+    }
+  },
+  warn: (message) => console.error(message),
 };
 
 export interface RefreshLayersInput {
@@ -216,14 +246,69 @@ export async function waitForLayersRefresh(packageDir: string, timeoutMs = LOCK_
 
 const COMMIT_ID = /^[0-9a-f]{7,64}$/i;
 
-async function manifestTarget(packageDir: string): Promise<{ head: string | null; ref: string | null }> {
-  const manifest = await readJsonFileOr<{ target?: { head?: unknown; ref?: unknown } } | null>(path.join(packageDir, MANIFEST_FILE), null);
+async function manifestTarget(packageDir: string): Promise<{ head: string | null; ref: string | null; kind: string | null; base: string | null }> {
+  const manifest = await readJsonFileOr<{ target?: { head?: unknown; ref?: unknown; kind?: unknown; base?: unknown } } | null>(
+    path.join(packageDir, MANIFEST_FILE),
+    null,
+  );
   const head = manifest?.target?.head;
   const ref = manifest?.target?.ref;
+  const kind = manifest?.target?.kind;
+  const base = manifest?.target?.base;
   return {
     head: typeof head === "string" && COMMIT_ID.test(head) ? head : null,
     ref: typeof ref === "string" && ref !== "" ? ref : null,
+    kind: typeof kind === "string" ? kind : null,
+    base: typeof base === "string" && base !== "" ? base : null,
   };
+}
+
+const DEFAULT_BRANCH_CANDIDATES = ["origin/HEAD", "origin/main", "origin/master", "main", "master"];
+
+/**
+ * The base a package's range starts from, and where it came from. `<head>~1` is
+ * the last resort and is announced: a pull request of several commits measured
+ * from its head's parent is a different, smaller change than the one reviewed.
+ */
+export async function resolveLayersBase(
+  input: { projectRoot: string; packageDir: string; prHead: string | null; base?: string | undefined },
+  deps: Pick<LayerDeps, "git" | "prBase" | "warn">,
+): Promise<{ base: string | null; source: BaseSource | null }> {
+  if (input.base !== undefined) return { base: (await resolveCommit(input.projectRoot, input.base, deps)) ?? input.base, source: "input" };
+  const prHead = input.prHead;
+  if (prHead === null) return { base: null, source: null };
+  const target = await manifestTarget(input.packageDir);
+  const usable = (commit: string | null): commit is string => commit !== null && commit !== prHead;
+  if (target.base !== null) {
+    const commit = await resolveCommit(input.projectRoot, target.base, deps);
+    if (usable(commit)) return { base: commit, source: "manifest" };
+  }
+  if (target.ref !== null) {
+    // A branch target's ref IS the reviewed branch: its tip is the head or a descendant, never a base. Any other ref is
+    // a base only when it is an ancestor of the head; otherwise the diff would run backwards over later commits.
+    const commit = target.kind === "branch" ? null : await resolveCommit(input.projectRoot, target.ref, deps);
+    if (usable(commit)) {
+      const ancestor = await deps.git(input.projectRoot, ["merge-base", "--is-ancestor", "--end-of-options", commit, prHead]);
+      if (ancestor !== null) return { base: commit, source: "target-ref" };
+      deps.warn(`layers: target ref ${target.ref} (${commit.slice(0, 12)}) is not an ancestor of the head ${prHead.slice(0, 12)}; not used as the base.`);
+    }
+    if (target.kind === "pr") {
+      const remote = await deps.prBase(input.projectRoot, target.ref);
+      const local = remote === null ? null : await resolveCommit(input.projectRoot, remote, deps);
+      if (usable(local)) return { base: local, source: "pr" };
+    }
+  }
+  for (const candidate of DEFAULT_BRANCH_CANDIDATES) {
+    const branch = await resolveCommit(input.projectRoot, candidate, deps);
+    if (branch === null) continue;
+    const mergeBase = await deps.git(input.projectRoot, ["merge-base", "--end-of-options", prHead, branch]);
+    if (mergeBase !== null && /^[0-9a-f]{40,64}$/.test(mergeBase) && mergeBase !== prHead) return { base: mergeBase, source: "merge-base" };
+  }
+  deps.warn(
+    `layers: no pull request base is known for ${input.packageDir} (no --base, no manifest target.base, no resolvable PR base, no merge base with a default branch); ` +
+      `falling back to ${prHead.slice(0, 12)}~1, which covers only the head commit. Pass --base <sha> to measure the whole change.`,
+  );
+  return { base: `${prHead}~1`, source: "fallback" };
 }
 
 /** The commit the package reviews, from its manifest's `target.head`; `null` when it records none. */
@@ -567,13 +652,10 @@ export async function refreshLayers(input: RefreshLayersInput): Promise<LayersFi
   }
   // One spelling of the head everywhere: the full commit, so a short sha or a branch name compares equal to the graph's commit.
   if (prHead !== null) prHead = (await resolveCommit(input.projectRoot, prHead, deps)) ?? prHead;
-  let base: string | null = null;
-  if (input.base !== undefined) {
-    base = (await resolveCommit(input.projectRoot, input.base, deps)) ?? input.base;
-  } else if (prHead !== null) {
-    const fromTarget = target.ref === null ? null : await resolveCommit(input.projectRoot, target.ref, deps);
-    base = fromTarget ?? `${prHead}~1`;
-  }
+  const { base, source: baseSource } = await resolveLayersBase(
+    { projectRoot: input.projectRoot, packageDir: input.packageDir, prHead, ...(input.base === undefined ? {} : { base: input.base }) },
+    deps,
+  );
 
   await writeSelfIgnoringDir(path.join(input.packageDir, LAYERS_DIR));
   return withFileLock(
@@ -607,6 +689,7 @@ export async function refreshLayers(input: RefreshLayersInput): Promise<LayersFi
           prHead,
           headSource,
           base,
+          ...(baseSource === null ? {} : { baseSource }),
           graphCommit: graph.commit,
           graph,
           wiki,

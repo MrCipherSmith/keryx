@@ -11,7 +11,7 @@
 // re-enters Review/Consent at the new scope.
 import { spawnSync } from "node:child_process";
 import { loadReviewLearningConfigSafe } from "../review/review-learning";
-import { appendDecision } from "./decisions";
+import { appendDecision, type DecisionConfirmation } from "./decisions";
 import { gateReviewerText } from "./reviewer-id";
 import { scanLearnedText } from "./scan";
 import { createPattern, readIndex, readPattern, type StoreEnvOptions } from "./store";
@@ -32,6 +32,8 @@ export interface PromotePatternOptions {
   isTerminal: boolean;
   /** Typed confirmation (e.g. "type the pattern id to confirm"), read by the CLI layer. */
   confirm: () => Promise<boolean>;
+  /** Flow 456: recorded in the decision log when the operator answered a shell card instead of a terminal. */
+  confirmation?: DecisionConfirmation;
   now?: Date;
   env?: NodeJS.ProcessEnv;
   homeDir?: string;
@@ -109,7 +111,7 @@ export async function promotePattern(root: string, id: string, opts: PromotePatt
   if (!opts.isTerminal) {
     throw new LearningPromoteError(
       "promote-requires-terminal",
-      "keryx learn promote needs an interactive terminal; there is no bypass flag or environment variable.",
+      "keryx learn promote needs an interactive terminal; there is no bypass flag or environment variable. Inside keryx shell, call the learn_promote tool: the operator answers it as a card. Outside keryx shell, run this command in a terminal.",
     );
   }
 
@@ -207,7 +209,11 @@ export async function promotePattern(root: string, id: string, opts: PromotePatt
   await createPattern(root, promoted, { ...storeOptions, replaceableStatuses: ["rejected", "expired", "superseded"] });
 
   const actor = resolveActor(root, env);
-  await appendDecision(root, { action: "promote", id, actor, tty: true, at: nowIso }, { ...storeOptions, scope: "project" });
+  await appendDecision(
+    root,
+    { action: "promote", id, actor, tty: true, at: nowIso, ...(opts.confirmation !== undefined ? { confirmation: opts.confirmation } : {}) },
+    { ...storeOptions, scope: "project" },
+  );
 
   return { id, scope: "user", status: "candidate" };
 }

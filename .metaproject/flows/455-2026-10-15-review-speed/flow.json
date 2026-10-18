@@ -1,0 +1,504 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "455",
+  "slug": "review-speed",
+  "title": "Reviews finish faster, complete, with an early verdict",
+  "status": "implemented",
+  "createdAt": "2026-10-15T11:21:50.411Z",
+  "updatedAt": "2026-10-15T13:50:43.283Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:75b568f039c8f7d5caef4649499bb62515a140ead5c6b76d78fc3aded0b04e03",
+  "acConfirmed": {
+    "AC12": {
+      "at": "2026-10-15T13:50:43.283Z",
+      "note": "npm latest = 0.3.118 (release run 38743164813, tag v0.3.118 on 1675e4336)"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1029"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Создавай план, спецификацию, запускай фло: эффект: ревью должны проходить быстрее и качественнее и до завершения. Что проверить и как: я буду проводить ревью, через 2-3 дня смогу дать ответ.",
+    "source": "claude-code session 2026-10-15, after post-mortem of vantage-frontend PR #7927/#7931"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "split into T5-T10 per work area"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "each implement task ships its own tests"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T11 (verify + review + PR)"
+    },
+    {
+      "id": "T5",
+      "title": "A: mutate scratch under repo + baseline output on failure",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-15T11:26:09.956Z",
+            "outcome": "started",
+            "detail": "455-T5 sonnet worker"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "B: retry-plan --package collects late results",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-15T11:26:10.104Z",
+            "outcome": "started",
+            "detail": "455-T6 sonnet worker"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "C: review verdict interim command",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "D: required --depth, light-round mutation waiver, estimate",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "E: dispatch-check paths, required --package, help, start graph timeout",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Skill review-orchestrator update (both copies)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T6",
+        "T7",
+        "T8",
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Verify + review round + PR",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T10"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-15T12:00:08.158Z",
+            "outcome": "started",
+            "detail": "review round 1: 1 blocker, 3 major; fix lanes 1+2"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Patch release after merge; record version",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Owner live check in vantage-frontend",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-15T11:21:50.411Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-15T11:25:20.040Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-15T11:25:20.185Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-15T11:25:20.340Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-15T11:25:20.485Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-15T11:25:20.634Z",
+      "event": "task-added",
+      "detail": "T5: A: mutate scratch under repo + baseline output on failure"
+    },
+    {
+      "at": "2026-10-15T11:25:20.773Z",
+      "event": "task-added",
+      "detail": "T6: B: retry-plan --package collects late results"
+    },
+    {
+      "at": "2026-10-15T11:25:20.924Z",
+      "event": "task-added",
+      "detail": "T7: C: review verdict interim command"
+    },
+    {
+      "at": "2026-10-15T11:25:21.072Z",
+      "event": "task-added",
+      "detail": "T8: D: required --depth, light-round mutation waiver, estimate"
+    },
+    {
+      "at": "2026-10-15T11:25:21.213Z",
+      "event": "task-added",
+      "detail": "T9: E: dispatch-check paths, required --package, help, start graph timeout"
+    },
+    {
+      "at": "2026-10-15T11:25:21.363Z",
+      "event": "task-added",
+      "detail": "T10: Skill review-orchestrator update (both copies)"
+    },
+    {
+      "at": "2026-10-15T11:25:21.505Z",
+      "event": "task-added",
+      "detail": "T11: Verify + review round + PR"
+    },
+    {
+      "at": "2026-10-15T11:25:21.651Z",
+      "event": "task-added",
+      "detail": "T12: Patch release after merge; record version"
+    },
+    {
+      "at": "2026-10-15T11:25:21.790Z",
+      "event": "task-added",
+      "detail": "T13: Owner live check in vantage-frontend"
+    },
+    {
+      "at": "2026-10-15T11:25:27.433Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-15T11:25:27.577Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-15T11:25:35.566Z",
+      "event": "ac-updated",
+      "detail": "AC2: \"When the mutate baseline exits non-zero or times out, the command fails with exit code ≠ 0 AND prints the baseline command, its cwd and the last lines of its stdout/stderr; the same tail is written to the mutation evidence file. A test with a deliberately failing baseline asserts the printed tail. [verify: exec `bun test src/review/mutate.test.ts`] · sensitive: failure-scenario\" -> \"When the mutate baseline exits non-zero or times out, the command fails with exit code ≠ 0 AND prints the baseline command, its cwd and the last lines of its stdout/stderr; the same tail is written to the mutation evidence file. A test with a deliberately failing baseline asserts the printed tail. · sensitive: failure-scenario [verify: exec `bun test src/review/mutate.test.ts`]\" (move sensitive tag before the verify marker so the kind parses)"
+    },
+    {
+      "at": "2026-10-15T11:25:35.706Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"`keryx review retry-plan --package <dir> --next-wave` reads the package's raw results and does not hand out a slice whose result for that reviewer already exists and parses as DONE or DONE_WITH_CONCERNS; it reports how many late results it collected. A test plants a finished result file and asserts the slice is absent from the next wave, and that a malformed file does not count as covered. [verify: exec `bun test src/review/retry-plan.test.ts src/commands/review-slice.test.ts`] · sensitive: failure-scenario\" -> \"keryx review retry-plan --package <dir> --next-wave reads the package raw results and does not hand out a slice whose result for that reviewer already exists and parses as DONE or DONE_WITH_CONCERNS; it reports how many late results it collected. A test plants a finished result file and asserts the slice is absent from the next wave, and that a malformed file does not count as covered. · sensitive: failure-scenario [verify: exec `bun test src/review/retry-plan.test.ts src/commands/review-slice.test.ts`]\" (move sensitive tag before the verify marker so the kind parses)"
+    },
+    {
+      "at": "2026-10-15T11:25:35.849Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"On a light round, `review complete` does not refuse for pending mutants and records \"Not run: mutation (light round)\"; on a full attended round the existing mutation refusal is unchanged. [verify: exec `bun test src/review/coverage.test.ts src/review/coverage-complete.test.ts`] · sensitive: revert\" -> \"On a light round, review complete does not refuse for pending mutants and records \"Not run: mutation (light round)\"; on a full attended round the existing mutation refusal is unchanged. · sensitive: revert [verify: exec `bun test src/review/coverage.test.ts src/review/coverage-complete.test.ts`]\" (move sensitive tag before the verify marker so the kind parses)"
+    },
+    {
+      "at": "2026-10-15T11:25:35.997Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"`review dispatch-check` fails with `REVIEWER_INPUT_PATH_MISSING`, naming the field, when `skill_path`, `context_doc` or another file path in the payload does not exist, and passes when they exist. [verify: exec `bun test src/review/dispatch-check.test.ts`] · sensitive: failure-scenario\" -> \"review dispatch-check fails with REVIEWER_INPUT_PATH_MISSING, naming the field, when skill_path, context_doc or another file path in the payload does not exist, and passes when they exist. · sensitive: failure-scenario [verify: exec `bun test src/review/dispatch-check.test.ts`]\" (move sensitive tag before the verify marker so the kind parses)"
+    },
+    {
+      "at": "2026-10-15T11:26:09.956Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 455-T5 sonnet worker"
+    },
+    {
+      "at": "2026-10-15T11:26:10.104Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 455-T6 sonnet worker"
+    },
+    {
+      "at": "2026-10-15T11:28:44.249Z",
+      "event": "task-done",
+      "detail": "T6: B: retry-plan --package collects late results"
+    },
+    {
+      "at": "2026-10-15T11:29:08.010Z",
+      "event": "task-done",
+      "detail": "T5: A: mutate scratch under repo + baseline output on failure"
+    },
+    {
+      "at": "2026-10-15T11:32:48.042Z",
+      "event": "task-done",
+      "detail": "T7: C: review verdict interim command"
+    },
+    {
+      "at": "2026-10-15T11:40:18.917Z",
+      "event": "task-done",
+      "detail": "T8: D: required --depth, light-round mutation waiver, estimate"
+    },
+    {
+      "at": "2026-10-15T11:50:49.943Z",
+      "event": "task-done",
+      "detail": "T9: E: dispatch-check paths, required --package, help, start graph timeout"
+    },
+    {
+      "at": "2026-10-15T11:52:14.093Z",
+      "event": "task-done",
+      "detail": "T10: Skill review-orchestrator update (both copies)"
+    },
+    {
+      "at": "2026-10-15T12:00:08.158Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — review round 1: 1 blocker, 3 major; fix lanes 1+2"
+    },
+    {
+      "at": "2026-10-15T12:22:33.077Z",
+      "event": "task-done",
+      "detail": "T11: Verify + review round + PR"
+    },
+    {
+      "at": "2026-10-15T13:50:40.017Z",
+      "event": "task-done",
+      "detail": "T12: Patch release after merge; record version"
+    },
+    {
+      "at": "2026-10-15T13:50:43.116Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1029 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-15T13:50:43.283Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: npm latest = 0.3.118 (release run 38743164813, tag v0.3.118 on 1675e4336) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/mutate.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/review/retry-plan.test.ts src/commands/review-slice.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/review/verdict.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/coverage.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/coverage.test.ts src/review/coverage-complete.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/review/estimate.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/review/dispatch-check.test.ts"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/commands/review-help.test.ts src/commands/review-layers.test.ts"
+    },
+    "AC10": {
+      "kind": "invariant",
+      "check": "bun test src/gdskills/"
+    },
+    "AC11": {
+      "kind": "invariant",
+      "check": "bun run typecheck && bun run lint && bun run test:core"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "npm view @mrciphersmith/keryx version"
+    },
+    "AC13": {
+      "kind": "judged"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-15T13:50:43.283Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:75b568f039c8f7d5caef4649499bb62515a140ead5c6b76d78fc3aded0b04e03"
+    }
+  ]
+}

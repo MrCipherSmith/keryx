@@ -1,0 +1,174 @@
+{
+ "pr": 424,
+ "round": 1,
+ "diff": "input.round1-be825deab.diff",
+ "head": "be825deabcac4d1c71efcf5deb172300a2cb4072",
+ "slices": 6,
+ "waves": "w1=slice-01..04 (47367B), w2=slice-05..06 (26598B); NEW: role subsets per manifest",
+ "note": "Both arms ran interleaved under a shared 20-concurrent-subagent cap (other sessions also used slots), so per-arm wall time is approximate; agent_time_s_sum is the cleaner cost proxy.",
+ "old": {
+  "dispatches": 18,
+  "wall_s_last_output_from_start": 408,
+  "agent_time_s_sum": 1172,
+  "longest_dispatch_s": 163,
+  "approx_tokens": 1648174,
+  "truth_total": 8,
+  "found_any": 4,
+  "found_major": 1,
+  "recall_any": 0.5,
+  "recall_major": 0.125,
+  "found_ids": [
+   "R1-ARCH-001",
+   "R1-ARCH-002",
+   "R1-LOGIC-002",
+   "R1-SEC-001"
+  ],
+  "found_major_ids": [
+   "R1-ARCH-001"
+  ],
+  "missed": [
+   "R1-SEC-002",
+   "R1-SEC-003",
+   "R1-LOGIC-001",
+   "R1-LOGIC-003"
+  ],
+  "matches": {
+   "R1-SEC-001": {
+    "sev": "minor",
+    "by": [
+     "logic-w1#5 (concatenated screen unmappable to comment id)",
+     "security-code-w1#1 (info)"
+    ]
+   },
+   "R1-ARCH-001": {
+    "sev": "major",
+    "by": [
+     "logic-w1#1",
+     "regression-w1#0"
+    ]
+   },
+   "R1-ARCH-002": {
+    "sev": "minor",
+    "by": [
+     "architecture-w1#0 (inter-skill contract is free-text constraint strings)",
+     "regression-w1#4"
+    ]
+   },
+   "R1-LOGIC-002": {
+    "sev": "minor",
+    "by": [
+     "logic-w1#3",
+     "regression-w1#2",
+     "regression-w2#1",
+     "testing-practices-w1#4"
+    ]
+   }
+  },
+  "confirmed_extras": [
+   "X1",
+   "X2"
+  ]
+ },
+ "new": {
+  "dispatches": 13,
+  "wall_s_last_output_from_start": 379,
+  "agent_time_s_sum": 778,
+  "longest_dispatch_s": 136,
+  "approx_tokens": 1138086,
+  "truth_total": 8,
+  "found_any": 6,
+  "found_major": 1,
+  "recall_any": 0.75,
+  "recall_major": 0.125,
+  "found_ids": [
+   "R1-ARCH-001",
+   "R1-ARCH-002",
+   "R1-LOGIC-002",
+   "R1-LOGIC-003",
+   "R1-SEC-001",
+   "R1-SEC-002"
+  ],
+  "found_major_ids": [
+   "R1-LOGIC-003"
+  ],
+  "missed": [
+   "R1-SEC-003",
+   "R1-LOGIC-001"
+  ],
+  "matches": {
+   "R1-SEC-001": {
+    "sev": "info",
+    "by": [
+     "security-code-w1#3 (<collected-bodies> finding cannot map to a comment id)"
+    ]
+   },
+   "R1-SEC-002": {
+    "sev": "minor",
+    "by": [
+     "security-code-w1#0 (completion: outcome A skips human consent, no confirmation evidence required)"
+    ]
+   },
+   "R1-ARCH-001": {
+    "sev": "minor",
+    "by": [
+     "architecture-w1#2",
+     "logic-w1#3"
+    ]
+   },
+   "R1-ARCH-002": {
+    "sev": "minor",
+    "by": [
+     "architecture-w1#3 (partial: constraint keyed on free text, producer wording differs)",
+     "architecture-w1#4"
+    ]
+   },
+   "R1-LOGIC-002": {
+    "sev": "minor",
+    "by": [
+     "architecture-w1#1",
+     "logic-w2#0"
+    ]
+   },
+   "R1-LOGIC-003": {
+    "sev": "major",
+    "by": [
+     "logic-w1#1 (new needs-clarification verdict after re-collection has no disposition row)"
+    ]
+   }
+  },
+  "confirmed_extras": [
+   "X1",
+   "X2"
+  ]
+ },
+ "extras_verified": {
+  "X1": {
+   "line": "comment_ids subset + --fix: Step 10 reply pass re-collects all unhandled comments and buildReplyPass refuses the pass, so excluded comments abort it after the merge",
+   "verdict": "confirm",
+   "old": [
+    "logic-w1#0 (major)"
+   ],
+   "new": [
+    "logic-w1#0 (major)"
+   ]
+  },
+  "X2": {
+   "line": "output contract fix.flow_status enum (initialized/in_progress/failed) does not match FLOW_STATUSES; the skill's own in-progress stop state fails its schema",
+   "verdict": "confirm",
+   "old": [
+    "logic-w1#2 (major)",
+    "logic-w2#0 (major)"
+   ],
+   "new": [
+    "logic-w1#2 (major)"
+   ]
+  }
+ },
+ "verdict": {
+  "recall_any": "NEW 6/8 vs OLD 4/8",
+  "recall_major": "NEW 1/8 vs OLD 1/8",
+  "confirmed_extras": "NEW 2 vs OLD 2 (same two)",
+  "cost": "NEW 13 dispatches / 1.14M tokens vs OLD 18 / 1.65M (-31% tokens)",
+  "summary": "NEW is not worse: higher any-severity recall, equal major recall (different item), same confirmed extras, ~31% cheaper."
+ }
+}

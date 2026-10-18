@@ -1,0 +1,28 @@
+[
+ {
+  "id": "F-066",
+  "reviewer": "review-security-code",
+  "severity": "major",
+  "file": "src/lib/trust-routine-command.ts",
+  "line": 110,
+  "quote": "return words.some(isExecWord) || words.some(isShellSpelledOption);",
+  "problem": "The round 1 fix for F-058 (isShellSpelledOption) catches only dash-leading words that contain a backslash, brace or dollar. splitWords does not honour a backslash inside double quotes and does not expand $IFS, brace lists or $'..', so the words the gate judges differ from the words the shell hands to git. isTrustRoutineCommand returns true for commands that make git write or truncate a file.",
+  "impact": "Trigger: an agent or a pasted command such as `git log -S \"\\\"\" --output=X`, `git diff HEAD$IFS--output=X`, `git diff \"HEAD\"$IFS\"--output=X\"`, `git diff $'\\x2d\\x2doutput=X'` (bash) or `git diff {HEAD,--output=X}` (bash) is auto-approved by the trust/review-auto routine-command gate without a prompt. Outcome: git writes or truncates an arbitrary file, X. The plain `git diff --output=X` control is correctly refused. Reproduced by the orchestrator, review-security-code and the Wave C verifier (all five cases).",
+  "suggested_fix": "Fail closed on any unquoted dollar, backslash, open brace or close brace in the git read rows and the keryx review rows, or compute the shell's real words. Fix the backslash-in-double-quote handling in splitWords. Add a pinned row in src/lib/trust-routine-command.test.ts for each of the five spellings.",
+  "evidence": "orch/gate.ts and gate2.ts in the scratchpad t5pkg-r2 directory print `true` for the five commands above and `false` for the plain control. The git side was confirmed by running the commands in a scratch repo, where the file X was created. mutation-2.md shows the existing mutants are all killed, so the gap is a missing spelling, not a weak assertion.",
+  "confidence": "high"
+ },
+ {
+  "id": "F-067",
+  "reviewer": "review-security-code",
+  "severity": "major",
+  "file": "src/gdgraph/staleness.ts",
+  "line": 240,
+  "quote": "const diff = await gitCmd(cwd, [\"diff\", \"--name-only\", \"-z\", fromCommit, toCommit]);",
+  "problem": "src/gdgraph/staleness.ts:240 passes provenance.commit to `git diff --name-only -z <fromCommit> <toCommit>` with neither assertGitRevision nor --end-of-options. readProvenance only checks typeof commit === \"string\", and .metaproject/data/gdgraph/.provenance.json is a tracked repository file. The PR's scan test exempts this file with a false reason (\"operands are commits recorded in the graph provenance\"), so the PR's claim to have closed the ref-to-git class does not hold.",
+  "impact": "Trigger: a committed .provenance.json containing {\"commit\":\"--output=<path>\"} and any `keryx gdgraph find <query>` run or opening the TUI inspector, both of which call checkGraphStaleness. Outcome: git runs `git diff --name-only -z --output=<path> HEAD` and writes or truncates <path>. Reproduced by the orchestrator in scratch repos, by review-logic (`keryx gdgraph find a`), review-security-code, review-architecture and the Wave C verifier.",
+  "suggested_fix": "Spell the call as `[\"diff\", \"--name-only\", \"-z\", ...revisionOperand(fromCommit), toCommit]` inside a try/catch that returns [] on a rejected value, and validate that commit is hex in readProvenance (src/sync/provenance.ts ~235-249). Remove the false ALLOWED entry at src/commands/review-revision-operand.test.ts:184 and add a behavioural row with a hostile provenance file.",
+  "evidence": "orch/stale.ts with scratch repos orch/repo and orch/repo2 (graph file at .metaproject/data/gdgraph/storage/nodes.jsonl, two commits) created the target file. mutation-2 does not cover staleness.ts and the scan test skips the file, so nothing in the suite would fail.",
+  "confidence": "high"
+ }
+]

@@ -1,0 +1,7 @@
+{"round":2,"head":"f5d3385f","truth":["F-066 major trust-routine-command.ts:110","F-067 major gdgraph/staleness.ts:240"],
+"round_json":{"mode":"delta","source":"local-package","previous":"round1 c75f0091","fixHunks":63,"newHunks":0,"priorFindings":9},
+"delta":{"dispatches":7,"bytes_per_dispatch":87428,"approx_tokens":"~860k (5 measured 620k, 2 estimated)","found_F066_any":false,"found_F066_major":false,"found_F067_any":false,"found_F067_major":false,"blocker_major":0,"minor":3,"info":4,"prior_fixed":"F-057..F-064 fixed, F-065 info open"},
+"full":{"dispatches":9,"slices":3,"bytes":39902,"approx_tokens":"~807k measured","found_F066_any":false,"found_F066_major":false,"found_F067_any":false,"found_F067_major":false,"blocker_major":0,"minor":13,"info":4},
+"f067_outside_delta":true,"f067_outside_full_branch_diff":true,
+"extras_confirmed_blocker_major":{"delta":0,"full":0},"verifiers_run":0,
+"notes":"Security-code returned only info/none in both arms. Related but not matching: delta logic/regression and full logic minors flag isShellSpelledOption OVER-refusal (opposite of F-066 under-catch). Full arm diff excludes .metaproject/reviews; tree needed the new managed-review schema copied in; round detection needed --target 4839dbec (round-1 manifest ref)."}

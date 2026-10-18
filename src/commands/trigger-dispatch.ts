@@ -76,7 +76,7 @@ import type {
 } from "../trigger/record";
 import { NETWORK_ON_WARNING } from "../trigger/describe";
 import { reserveTriggerSpend } from "../trigger/run";
-import { UNATTENDED_EXCLUDED_TOOLS, unattendedRefusal } from "../trigger/unattended";
+import { isUnattendedExcludedTool, unattendedRefusal } from "../trigger/unattended";
 
 const execFileAsync = promisify(execFile);
 
@@ -139,7 +139,7 @@ export function buildUnattendedRoster(
   }),
 ): InteractiveTool[] {
   const tools = [...builtinReadOnlyTools(worktree), shellExecTool(worktree, runner), applyPatchTool(worktree)];
-  const excluded = tools.filter((tool) => UNATTENDED_EXCLUDED_TOOLS.includes(tool.definition.name));
+  const excluded = tools.filter((tool) => isUnattendedExcludedTool(tool.definition.name));
   if (excluded.length > 0) {
     throw new Error(`unattended roster must not offer: ${excluded.map((t) => t.definition.name).join(", ")}`);
   }
@@ -633,6 +633,11 @@ async function dispatchLocked(
     );
   }
 
+  // Flow 457 (security review B1): a review task takes the same path as every other task below: containment,
+  // spend reservation and attempt record first. It is NOT handed to the autonomous review runner, which would run
+  // in the real project root, with no budget and no attempt. An unattended agent cannot dispatch reviewers, so a
+  // review task ends blocked here, as before flow 457.
+
   // --- 3. containment (AC13, and flow 301 AC12) — decided before anything is written --
   // Flow 301 (AC12): every run's worktree lives under one 0700 parent, and that parent
   // is hidden inside the sandbox below — the same protection `agentTaskScratchParent`/
@@ -839,6 +844,8 @@ async function dispatchLocked(
         unattended: true,
         // An unattended run keeps the `ask` limit whatever its entry's mode: the larger limits (trust 200, auto 200) are for an operator at the keyboard.
         maxRounds: resolveAgentMaxRounds(process.env, "ask"),
+        // Nor does it get trust mode's plan follow-through nudges: nobody is there to stop them.
+        planFollowThrough: false,
         hardDeny: unattendedRefusal,
         ...(shellHooks !== undefined ? { hooks: shellHooks } : {}),
       };

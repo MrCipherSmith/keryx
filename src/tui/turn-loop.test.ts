@@ -186,6 +186,17 @@ describe("AC1: a slash command queued behind a turn does not strand the question
     expect(h.said).toEqual([]);
   });
 
+  for (const line of ["/sessions abc123", "/rewind"]) {
+    test(`${line.split(" ")[0]} replaces the session too, so it is refused while busy and queues nothing`, () => {
+      const h = harness();
+      h.submit("question");
+      h.submit(line);
+      h.submit("follow-up");
+      expect(h.loop.queue.map((item) => item.question)).toEqual(["follow-up"]);
+      h.settleTurn();
+      expect(h.ran.map((r) => r.line)).toEqual(["question", "follow-up"]);
+    });
+  }
   test("/queue remove between the slash command and the settle drains the replaced queue, not a stale one", () => {
     const h = harness();
     h.busy = true;

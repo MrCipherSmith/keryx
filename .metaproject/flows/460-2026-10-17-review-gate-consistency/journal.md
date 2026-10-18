@@ -1,0 +1,29 @@
+# Flow Journal
+
+- 2026-10-17T03:45:43.162Z - flow created
+- 2026-10-17T03:47:33.699Z - task-done: T2: Implement per plan
+- 2026-10-17T03:47:33.848Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-17T03:47:34.000Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-17T03:47:34.153Z - task-done: T1: Collect remaining context
+- 2026-10-17T03:47:34.301Z - task-added: T5: L1 gates: package diff base/root, readiness runs coverage, override decisions count (A, B)
+- 2026-10-17T03:47:34.451Z - task-added: T6: L2 nudge names this session's review (C)
+- 2026-10-17T03:47:34.606Z - task-added: T7: L3 child results and artifacts reconcile (D, E, F)
+- 2026-10-17T03:47:34.756Z - task-added: T8: L4 ingest keeps unplaceable quotes, delta e2e, token spend (G, H)
+- 2026-10-17T03:47:34.908Z - task-added: T9: Close flows 458 and 459 (I)
+- 2026-10-17T03:47:35.062Z - task-added: T10: PR review clean
+- 2026-10-17T03:47:35.229Z - task-added: T11: CHANGELOG, release 0.3.122
+- 2026-10-17T03:47:35.402Z - frozen: 9 criteria; checksum recorded
+- 2026-10-17T03:47:35.559Z - started
+- 2026-10-17T03:54:05.947Z - task-done: T6: L2 nudge names this session's review (C)
+- 2026-10-17T04:03:59.562Z - task-done: T5: L1 gates: package diff base/root, readiness runs coverage, override decisions count (A, B)
+- 2026-10-17T04:15:45.258Z - task-done: T8: L4 ingest keeps unplaceable quotes, delta e2e, token spend (G, H)
+- 2026-10-17T04:19:24.450Z - task-done: T7: L3 child results and artifacts reconcile (D, E, F)
+- 2026-10-17T07:55:48.359Z - task-added: T12: L5 ingest procedure defects (substring quotes, ids, --premises, links, closures, flow binding, stub, merged verdicts, filter_stats)
+- 2026-10-17T08:36:33.775Z - task-done: T12: L5 ingest procedure defects (substring quotes, ids, --premises, links, closures, flow binding, stub, merged verdicts, filter_stats)
+- 2026-10-17T08:45:06.969Z - task-added: T13: L6 fix slices get the fix roster; fix hunks are the ones touching a finding
+
+## 2026-10-17 — PR #1045 round 2 plan (owner approval in chat)
+
+`review plan` detected round 2 by itself (source local-package, delta dff7a38..HEAD) — G works on a live PR. After L6 the plan is fix 1 slice/10, new 4 slices/35 (L5 code), second-look 5/10 = 55 dispatches, over the 40 threshold. The owner has no terminal for `review confirm-plan`; the owner approved running all 55 in chat (question tool, 2026-10-17). The package's plan confirmation stays unrecorded in keryx.
+- 2026-10-17T10:20:09.921Z - ac-updated: AC6: "An ingest whose report has findings with unplaceable quotes (absent, or matching several places) records the round: those findings are kept unanchored and flagged `quote_unlocated` (never relocated by similarity), listed in scope.md and by readiness; the round is recorded so the next `review plan` after a fix commit detects it and plans a delta round with the fix roster. Tests including the plan → ingest → fix → plan sequence. · sensitive: failure-scenario [verify: exec `bun test src/review/managed.test.ts src/commands/review-plan.test.ts`]" -> "An ingest whose report has findings with unplaceable quotes (absent, or matching several places) records the round: those findings are kept unanchored and flagged `quote_unlocated` (never relocated by similarity), listed in scope.md and by readiness; the round is recorded so the next `review plan` after a fix commit detects it and plans a delta round with the fix roster. Tests including the plan → ingest → fix → plan sequence. · sensitive: failure-scenario [verify: exec `bun test src/review/managed.test.ts src/commands/review-plan.test.ts src/commands/review-plan.e2e.test.ts`]" (review RG-001 (round 2): the plan → ingest → fix → plan test moved to review-plan.e2e.test.ts (repo convention for real-git tests))
+- 2026-10-17T10:32:55.928Z - task-done: T13: L6 fix slices get the fix roster; fix hunks are the ones touching a finding

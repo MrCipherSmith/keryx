@@ -77,11 +77,12 @@ flowchart TD
   C --> D["flow-init context enrichment"]
   D --> E["freeze AC + start flow"]
   E --> F["dispatch tests-creator / task-implementer"]
-  F --> G["code-verifier + review-orchestrator"]
+  F --> FG{"first green: ask operator - open PR or harden first"}
+  FG --> G["code-verifier + review-orchestrator"]
   G --> H{"All tasks, checks, review OK?"}
   H -- "no" --> F
   H -- "yes" --> I{"Ask user how to finish"}
-  I -- "create PR" --> J["create PR and run review/fix loop"]
+  I -- "create PR" --> J["create PR; each round = review start on the new head (delta)"]
   J --> K{"review clean, PR mergeable?"}
   K -- "no, attempts < 5" --> J
   K -- "no, attempts = 5 or repetition detected" --> R["enrich context and change fix strategy"]
@@ -177,9 +178,7 @@ Record attempts as they happen, not only on resume:
 keryx flow task attempt <id> <Tn> --outcome started|failed|blocked [--detail "<what happened>"]
 ```
 
-`attempts.count` is append-only and lives in `flow.json`. A counter that lives
-only in the orchestrator's context resets to zero exactly when the loop bound
-matters most, which makes it not a counter.
+`attempts.count` is append-only and lives in `flow.json`. A counter that lives only in the orchestrator's context resets to zero exactly when the loop bound matters most, which makes it not a counter.
 
 ### 0.1 Route
 
@@ -244,39 +243,29 @@ Write or update:
 - `tasks.md` - task definitions grouped by context, test, implement, review, docs;
 - `acceptance-criteria.md` - verifiable `ACn` criteria, each ending in one marker: [verify: exec `<command>`] or [verify: invariant `<command>`] (a backticked command), [verify: judged] (a human checks: live run, operator decision, text quality), or [verify: none — <reason>]. If a kind is unclear, ask the operator ONE question listing the criteria with proposed kinds, before `flow freeze`. Behaviour with an external dependency or a failure path gets its own failure-scenario criterion with an observable result (saved, error visible, retry creates no duplicate); a check claimed to catch a regression carries `· sensitive: revert|mutation|failure-scenario` and the confirm note carries `evidence: <ref>` (revert/mutation run or failure-scenario reference).
 
+### UI or state scope: a state × event matrix in plan.md
+
+When the scope touches UI, a store, or other code that holds state across events, `plan.md` carries a state × event matrix before `flow freeze`. Rows are the states the surface can be in (for example loading, loaded, empty, missing, first-load failed, refresh failed); columns are the events that reach it (for example the user switches selection, unmount, workspace or context change, retry). Each cell is one line: what the user sees and which state survives, citing the project's styling/UX rules where they decide it. Every non-trivial cell gets an `ACn` row, or one AC per group of cells with the same result; a cell that is genuinely "no change" needs none. List only the states and events the change reaches:
+
+| state \ event | user switches selection | unmount | retry |
+|---|---|---|---|
+| loading | drop the stale response; loading shows for the new one | no state write after unmount | — |
+| refresh failed | keep loaded data; the error does not follow to the new selection | — | re-fetch; error stays inline until success |
+
+It does not apply when the scope holds no UI or state (CLI output, pure functions, docs, build config): write `State × event matrix: not applicable — <why>` in `plan.md`. The matrix is what workers and fix rounds check behavior against; a choice no cell decides is a `behavior_changes` entry for the operator (Phase 2).
+
 ### A verification step in the plan is a task, not a sentence
 
-Every check the plan says must happen before the work is accepted - run the
-thing end to end, confirm two components agree, exercise the path no test
-covers - is added with `keryx flow task add` and closed with
-`keryx flow task done`. Prose in `plan.md` blocks nothing, and an
-orchestrator that wrote the step is the same one deciding whether to run it.
+Every check the plan says must happen before the work is accepted - run the thing end to end, confirm two components agree, exercise the path no test covers - is added with `keryx flow task add` and closed with `keryx flow task done`. Prose in `plan.md` blocks nothing, and an orchestrator that wrote the step is the same one deciding whether to run it.
 
-The failure this prevents is specific and has happened: a plan listed
-"confirm both components agree on the same input" as step 5, the
-implementation shipped without it, and review found that the two did not
-agree at all - the change could not work in production. The check had been
-identified correctly and then skipped, because nothing made skipping it
-visible.
+The failure this prevents is specific and has happened: a plan listed "confirm both components agree on the same input" as step 5, the implementation shipped without it, and review found that the two did not agree at all - the change could not work in production. The check had been identified correctly and then skipped, because nothing made skipping it visible.
 
-Tasks are the mechanism for this. `keryx flow complete` runs a `tasks` gate
-over them, so an unrun verification step keeps the flow open instead of being
-quietly dropped.
+Tasks are the mechanism for this. `keryx flow complete` runs a `tasks` gate over them, so an unrun verification step keeps the flow open instead of being quietly dropped.
 
-Know the gate's exact scope, because for years this file claimed a gate that
-did not exist and 24 completed flows shipped with an open task:
+Know the gate's exact scope, because for years this file claimed a gate that did not exist and 24 completed flows shipped with an open task:
 
-- the gate is **opt-in per flow package**, keyed on `gates.tasks` in
-  `flow.json`, which `keryx flow init` writes for every flow it creates. A
-  package created before the gate landed does not carry the flag, and for it
-  the gate reports `skipped` and blocks nothing;
-- a task fails the gate when its status is not `done`; when its disposition is
-  `failed`; when its disposition is `blocked` (terminal, but the work did not
-  happen — and the harness emits this disposition on its own for a run that
-  ended blocked); when its disposition is `skipped` with no recorded reason; or
-  when its disposition is a value this build does not recognise. An
-  unrecognised disposition FAILS rather than falling through: a gate whose
-  default for the unknown case is "pass" is not a gate;
+- the gate is **opt-in per flow package**, keyed on `gates.tasks` in `flow.json`, which `keryx flow init` writes for every flow it creates. A package created before the gate landed does not carry the flag, and for it the gate reports `skipped` and blocks nothing;
+- a task fails the gate when its status is not `done`; when its disposition is `failed`; when its disposition is `blocked` (terminal, but the work did not happen — and the harness emits this disposition on its own for a run that ended blocked); when its disposition is `skipped` with no recorded reason; or when its disposition is a value this build does not recognise. An unrecognised disposition FAILS rather than falling through: a gate whose default for the unknown case is "pass" is not a gate;
 - to close a task as deliberately not needed, record why:
 
   ```bash
@@ -284,6 +273,8 @@ did not exist and 24 completed flows shipped with an open task:
   ```
 
 Read the `tasks` line in the `flow complete` output. If it says `skipped`, the gate did not run and the task list is yours to verify by hand.
+
+**A flow sourced from a finding: check its premise before freeze.** A follow-up issue filed from a review, or an external review comment, is a premise to check, not a settled requirement. Before `flow freeze`, dispatch `review-premise` with `source: follow-up-issue` or `external-comment` and the finding shaped as its Input Contract `source` row says (the issue number or the comment's `C-NNN` as `id`, its URL as `url`). Skip it when the dispatch says the premise is already recorded (`review-pr-feedback` rule 7 sends a `premise:` constraint). No review package exists, so no `ingest` or `decide-premise` runs: save its claims as `<flow-dir>/premise/<n>.json`, and apply every refusal of the merge by hand, as that `source` row lists them (`PREMISE_REJECTION_REASONS`, `src/review/premise.ts`): a refused claim leaves the finding upheld. On `challenged` or `owner-decision` ask the operator its question with its options (`ask_user` in keryx shell, the host's question tool elsewhere), journal their answer, and plan only what the operator upholds.
 
 Then freeze and start (`--yes`: the operator already answered the kinds question, so the freeze must not prompt):
 
@@ -389,11 +380,7 @@ fi
 keryx flow task done <id> <Tn>
 ```
 
-Why each path is checked on its own: `git status --porcelain --` with no path
-lists the whole tree, `git add` fails on a path that is neither on disk nor
-tracked, and `git commit` with nothing staged exits 1. The trailing
-`-- "${PENDING[@]}"` commits only these paths, so a file another lane staged is
-not swept into this commit.
+Why each path is checked on its own: `git status --porcelain --` with no path lists the whole tree, `git add` fails on a path that is neither on disk nor tracked, and `git commit` with nothing staged exits 1. The trailing `-- "${PENDING[@]}"` commits only these paths, so a file another lane staged is not swept into this commit.
 
 If new work is discovered:
 
@@ -415,6 +402,8 @@ properly formatted `subagent-result`.
 | `BLOCKED` | `keryx flow block <id> --reason "<worker reason>"`; resolve or escalate one concise question, then `flow unblock` and re-dispatch. |
 | `FAILED` | Emitted by harness **child** workers (`src/harness/child/contract.ts`), never by skill workers — `task-implementer` maps its own `failed` onto `BLOCKED`. Retry once with the same dispatch. If it fails again, block the flow and surface the error to the user. |
 
+**A `behavior_changes` entry with `needs_operator: true` is a question, not a concern to journal.** task-implementer lists every user-visible tradeoff it made (message wording, error placement, state reset) there. Before accepting that result, ask the operator with the question tool — one question per entry, the implemented choice and each of its `alternatives` as options — and record the answer in `journal.md`. An answer other than the implemented one is a fix task on the same `Tn` before the boundary commit, not a review finding later.
+
 Carry `run_id`/`dispatch_id` across retries so the flow journal stays traceable,
 and record every dispatch against the task's persisted counter so a session
 restart does not reset the budget:
@@ -432,7 +421,8 @@ Before accepting implementation:
 1. Run focused tests for touched scope.
 2. Run `code-verifier`.
 3. Run `keryx health run` when Code Health is enabled.
-4. Check the bounds, then run `review-orchestrator` with relevant domains — in this session,
+4. **First-green gate, once per flow.** The first time every implement/test task is `done` and steps 1–3 pass, ask the operator one question (question tool, options) before any review round: `issue AC met — open the PR with the standard review`, or `harden first` with each extra matrix cell or failure path you would add as its own option. Record the answer in `journal.md`; picked hardening becomes `keryx flow task add` tasks (plus `keryx flow ac update` when it adds criteria) before review. A dispatched run has no operator: it takes the standard review and journals that the dispatch answered the gate.
+5. Check the bounds, then run `review-orchestrator` with relevant domains — in this session,
    never handed whole to one subagent: one without a dispatch tool returns `STATUS: BLOCKED`.
    ```bash
    keryx review budget --spent <usd-so-far> --full --outstanding <subagents still running, 0 if none>
@@ -440,16 +430,16 @@ Before accepting implementation:
    A non-zero exit means the spend ceiling (3 USD by default) has been reached:
    **stop and ask the user** rather than dispatching another fan-out — never shrink the fan-out to fit.
    Dispatch prompts point at sources (files, SHAs, the PR) and never paraphrase a contract.
+   Every round opens with `keryx review start` on the current head, never a hand-built range (Phase 4 loop, step 1).
 
-   `--outstanding` is the part that matters here. `review-orchestrator` runs inline
-   in this session and dispatches reviewers in parallel; keryx cannot observe other
-   subagents. Passing the count still running is the only thing that makes the
-   concurrency cap mean anything; omit it and the cap bounds the reviewer fan-out
-   alone, which the review record then states plainly. Add `--full` for `--all`.
+   `--outstanding` is the part that matters here. `review-orchestrator` runs inline in this session and dispatches reviewers in parallel; keryx cannot observe other subagents. Passing the count still running is the only thing that makes the concurrency cap mean anything; omit it and the cap bounds the reviewer fan-out alone, which the review record then states plainly. Add `--full` for `--all`.
 
-5. If findings require code changes, dispatch fix work through `task-implementer`
-   and record the fix task in the flow.
-6. Close the skill-learning loop (see `rules/core/skill-lifecycle.mdc`). Collect
+6. If findings require code changes, run a fix round through `task-implementer`, recorded as a flow fix task:
+   - **Scope freeze.** A fix round fixes the round's findings and nothing else. Hardening, refactors or new cells a fix suggests go to the operator as a question (as in step 4); never grow scope inside a fix round.
+   - **Red probes → ONE implementer.** When reviewers left red probes (failing tests or commands on the findings), pass them as `test_case_specs` to one `task-implementer` dispatch — no separate `tests-creator` task. `tests-creator` runs only for a new contract no probe covers.
+   - **A held finding is not fixed.** A finding `review-premise` held (`challenged` or `owner-decision`) is neither fixable nor clean: it never goes into `fix_context.review_feedback` and it blocks the loop until answered. Ask the operator about it as `review-orchestrator` "Wave D" says (the card in keryx shell; elsewhere the question tool, then the exact `keryx review decide-premise` command for them to run in their terminal) and journal the recorded answer; only an upheld finding enters a fix round, carrying `premise_verdict` and `premise_answer` as task-implementer's `FIX_CONTEXT` defines them. A dispatched run leaves it held and journals it.
+   - **`suggested_fix` is a hypothesis.** Pass each finding's `id` and `suggested_fix` in `fix_context.review_feedback`; the implementer reproduces the finding (red), checks the suggestion against the state × event matrix, then fixes (task-implementer 1.3). Journal every `suggested_fix diverged` / `did not reproduce` note it returns.
+7. Close the skill-learning loop (see `rules/core/skill-lifecycle.mdc`). Collect
    the `skill_drift` fields from task-implementer results and the
    `## Skill Learning` block from review-orchestrator. For each flagged
    project-skill, dispatch a subagent — on a cheaper / non-flagship model if one
@@ -536,18 +526,12 @@ the bound plus an escalation — never an unbounded loop.
 
 ### PR review/fix loop
 
-1. Run the relevant `review-orchestrator` checks against the PR and current
-   branch state.
-2. If findings or required check failures remain, create or update a flow fix
-   task, dispatch `task-implementer`, push the fix, and run review again.
+1. Each round — the first and every one after a fix — is `keryx review start` on the PR's current head, then `review-orchestrator` from that package. `review start` finds the previous round itself (local package, git history, the PR's round block, the flow package) and, when the previous reviewed head is an ancestor, reviews the delta: fix changes with a small roster (logic, regression, the findings' authors, security-code when a security finding is attached, the content roles of the fix lines themselves, the verifier) and the prior findings attached, new changes as round 1, unchanged code carried with its dispositions. Never pass a whole-branch range or `--all` per round; `<package>/round.json` records the round, its source and its mode.
+2. If findings (held ones aside: Phase 3 step 6) or required check failures remain, run a fix round under Phase 3 step 6 (flow fix task, `task-implementer`), push the fix, and run the next round as in step 1.
 
    **A required check failure is not automatically a fix task.** When `review.jev.ci_triage` is on, run `keryx review ci-triage --run <id> --json` on each failed run first: `top: flaky` (or a `deterministic` override) → rerun once (`gh run rerun --failed <id>`), record it in `journal.md`, and treat a second failure as `real-regression` regardless; `top: real-regression` → investigate and fix as usual; `top: infra` → report it in the completion notes and leave the code alone. The verdict is advisory only — never the sole reason to skip a fix task.
 
-   **The threshold is `minor`.** The loop exits when the round reports zero
-   findings at `blocker`, `major` or `minor`; `info` does not hold it. State the
-   remaining `info` findings in the completion report rather than fixing them
-   under a loop that was not opened for them. A caller may lower the threshold in
-   `constraints`; it cannot raise it to merge over a `minor`.
+   **The threshold is `minor`.** The loop exits when the round reports zero findings at `blocker`, `major` or `minor` that are not held, and no held finding awaits the operator; `info` does not hold it. A held finding counts as neither fixable nor clean: while one is unanswered, run no fix round for it and stop to ask (unattended: stop and report the held list). State the remaining `info` findings in the completion report rather than fixing them under a loop that was not opened for them. A caller may lower the threshold in `constraints`; it cannot raise it to merge over a `minor`.
 3. Allow at most **five** review/fix attempts for the current approach. Count
    an attempt when review/check results are available, including a clean result,
    and record it with `keryx flow task attempt <id> <Tn> --outcome ...` so the
@@ -628,7 +612,7 @@ keryx flow complete <id>
 
 Completion is allowed only after the PR merge has been confirmed. The merge
 target must be the base branch captured when the flow was created; do not
-silently retarget or close against another branch. The flow folder is committed in the same PR as the code; the commit at closing is a rule to follow, not one the gate checks. `flow complete` fails the `folder-committed` gate while the flow's `flow.json` is not in `HEAD` (flows created from 0.3.53 on; commit it with `git add .metaproject/flows/<dir> && git commit`, then run `flow complete` again). `flow init` and `flow renumber` avoid numbers used on known remote branches, and `keryx flow check` reports a clash with a remote branch (repair with `keryx flow renumber <dir> --to <free id> --reason "<why>"`) and warns about a folder that is not committed. Flows created since the owner gate fail completion while no owner is set (`keryx flow owner set <id> --owner "<name>" --reason "<why>"`); `ac confirm` and `flow complete` append a signature — `--signed-by "<name>"` names the signer, otherwise `KERYX_ACTOR` or the local git identity is recorded, as a claim. A flow created with `--require-confirmation` needs one more gate — `--confirm-token <token>` from `keryx flow confirm <id>`, a short-lived single-use token minted by a typed challenge in a terminal; it proves an interactive step ran outside the agent's tool roster, not that a human ran it. A flow left stuck in `completing` by a crash or interrupted attempt (never a normal gate failure) recovers with `keryx flow recover <id> --reason "<why>"`.
+silently retarget or close against another branch. The flow folder is committed in the same PR as the code; the commit at closing is a rule to follow, not one the gate checks. `flow complete` fails the `folder-committed` gate while the flow's `flow.json` is not in `HEAD` (flows created from 0.3.53 on; commit it with `git add .metaproject/flows/<dir> && git commit`, then run `flow complete` again). `flow init` and `flow renumber` avoid numbers used on known remote branches, and `keryx flow check` reports a clash with a remote branch (repair with `keryx flow renumber <dir> --to <free id> --reason "<why>"`) and warns about a folder that is not committed. Flows created since the owner gate fail completion while no owner is set (`keryx flow owner set <id> --owner "<name>" --reason "<why>"`); `ac confirm` and `flow complete` append a signature — `--signed-by "<name>"` names the signer, otherwise `KERYX_ACTOR` or the local git identity is recorded, as a claim. A flow created with `--require-confirmation` needs one more gate — `--confirm-token <token>` from `keryx flow confirm <id>`, a short-lived single-use token. In keryx shell call the `flow_confirm` tool (the operator answers it as a card; never send the operator to a terminal); outside it, a typed challenge in a terminal mints it. It proves an interactive step ran, not that a human ran it. A flow left stuck in `completing` by a crash or interrupted attempt (never a normal gate failure) recovers with `keryx flow recover <id> --reason "<why>"`.
 
 If gates fail, the CLI returns the flow to `in-progress`. Add a journal note,
 create fix tasks, and repeat Phase 2.
@@ -691,4 +675,8 @@ Stop and re-read this skill if you are thinking:
 | "The worker returned BLOCKED twice — faster if I implement this task myself." | The implementer never self-accepts and the orchestrator never implements. Block the flow, escalate one concise question, then unblock and re-dispatch. Doing the work here erases the boundary the whole flow model rests on. |
 | "Verification is described in the plan, so it will happen." | A verification step in the plan is a task, not a sentence. If it is not a task with a status, nothing records whether it ran, and the flow reaches `implemented` with an unrun gate. |
 | "The review fan-out is cheap, so the budget check can wait." | `keryx review budget --spent … --outstanding …` gates the fan-out, and `review-orchestrator` runs inline in this same main session, where keryx cannot see the in-flight subagents; declare them with `--outstanding`. Skipping the check means the cap bounds nothing. |
+| "The reviewer wrote the fix; applying it is the fastest close." | A `suggested_fix` is a hypothesis. Most majors in a long fix loop are introduced by fixes: reproduce the finding red, check the suggestion against the state × event matrix, then fix (Phase 3 step 6). |
+| "The finding came from a review, so its premise is settled." | A finding can reproduce and still not be a defect. Never pass a held finding in `fix_context.review_feedback`; ask the operator as `review-orchestrator` "Wave D" says (Phase 3 step 6); a flow sourced from a finding runs `review-premise` before freeze (Phase 1). |
+| "While I'm in this code, the fix round can also harden the empty state." | Scope freeze: a fix round fixes findings. New hardening is an operator decision at the first-green gate or as an explicit question, never silent growth. |
+| "The implementer journaled its UX choice, so it is decided." | A `behavior_changes` entry with `needs_operator: true` is decided by the operator, asked with options before the result is accepted (Phase 2). A journal line decides nothing. |
 | "I'll set the verification kind later." | An `unclassified` criterion cannot become data afterwards without a recorded rewrite: `keryx flow ac update <id> --criterion ACn --text "…" --reason "<why>"`. Put the `[verify: …]` marker on every criterion before `flow freeze`. |

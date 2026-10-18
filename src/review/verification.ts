@@ -456,7 +456,7 @@ function claimName(claim: VerificationClaimInput): string {
  * folded, and `review-logician` still reads as a different actor because nothing
  * here does prefix matching.
  */
-function actorKey(name: string): string {
+export function actorKey(name: string): string {
   return name
     .toLowerCase()
     .replace(/\s*\([^)]*\)\s*$/, "")

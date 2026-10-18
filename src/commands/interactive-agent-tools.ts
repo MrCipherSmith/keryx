@@ -2,6 +2,7 @@
 // Adding a tool here is the only way either surface gets it.
 
 import { scheduleTools, type ScheduleToolBinding } from "./schedule-tools";
+import { operatorConfirmTools, type OperatorConfirmBinding } from "./operator-confirm-tools";
 import { randomUUID } from "node:crypto";
 import { buildBusTools } from "../bus/agent-tools";
 import type { BusClient } from "../bus/client";
@@ -31,6 +32,7 @@ import type { ServerCatalog } from "../mcp-servers/catalog";
 import type { ServerState } from "../mcp-servers/manager";
 import { createMcpInteractiveTools } from "../mcp-servers/tools";
 import { journaledAskUser } from "../tui/ask-user-bridge";
+import { CALLER_ORCHESTRATOR, withOrchestratorLog } from "../review/orchestrator-log";
 import { buildProjectTools } from "./project-tools";
 
 export type InteractiveAgentToolsInput = {
@@ -136,6 +138,12 @@ export type InteractiveAgentToolsInput = {
    * card. Omitted → no schedule tools, the same way `bus` is scoped.
    */
   schedules?: ScheduleToolBinding;
+  /**
+   * Flow 456 (AC1): the operator-confirmed gates (`./operator-confirm-tools.ts`), each a yes/no card the
+   * operator answers in the shell. Like `schedules`, only the interactive shell passes it; subagents,
+   * side workers and unattended runs never get these tools.
+   */
+  operatorConfirm?: OperatorConfirmBinding;
 };
 
 /**
@@ -216,7 +224,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     ...metaprojectTools,
     webFetchTool({ cwd: input.cwd }),
     webSearchTool(input.searchController, { cwd: input.cwd }),
-    shellExecTool(input.cwd, undefined, jobRegistry),
+    withOrchestratorLog(shellExecTool(input.cwd, undefined, jobRegistry), { cwd: input.cwd, caller: CALLER_ORCHESTRATOR }),
     // Flow 266: the task tools proper, plus the two old names kept as
     // deprecated aliases for one release. `observer` is what decides whether a
     // read counts as delivery — this roster is the MAIN session's, so its copy
@@ -250,6 +258,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     historySearchTool(getSessionDir),
     ...executionPlanTools(getSessionDir),
     ...(input.schedules === undefined ? [] : scheduleTools(input.schedules)),
+    ...(input.operatorConfirm === undefined ? [] : operatorConfirmTools(input.operatorConfirm)),
     // Flow 274 T6: main-agent-only bus tools (specification §7.1). Never
     // reached by a subagent or external child — neither tool-build path calls
     // this factory (see `spawn-subagent-tool.ts`, which builds its own child

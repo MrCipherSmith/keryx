@@ -38,6 +38,7 @@ import {
   fixtureKey,
   guardGitHubRequest,
   parseGhJson,
+  parseRoundBlocks,
   partitionExternalFindings,
   parsePullRequest,
   postReplyPass,
@@ -46,6 +47,7 @@ import {
   readPrCommentState,
   recordSeenComments,
   renderPrCommentsMarkdown,
+  renderRoundBlock,
   routeReply,
   splitSentences,
   unansweredComments,
@@ -606,7 +608,7 @@ test("AC9: the per-reviewer findings cap does not truncate external comments", a
   const internal = Array.from({ length: 6 }, (_, index) => ({
     id: `F-${index}`,
     reviewer: "review-logic",
-    severity: "minor" as const,
+    severity: "info" as const,
     problem: `internal ${index}`,
     impact: "x",
     suggested_fix: "y",
@@ -2019,5 +2021,51 @@ describe("a reply pass refuses a target the answers do not describe", () => {
     expect(
       parsePullRequest({ state: "closed", merged: true, merged_at: "2026-09-15T10:00:00Z", head: { sha: "ABCDEF1" } }),
     ).toEqual({ state: "closed", merged: true, mergedAt: "2026-09-15T10:00:00Z", headSha: "abcdef1" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Flow 458 AC2 — the keryx round block in our own comments
+// ---------------------------------------------------------------------------
+
+describe("flow 458: the keryx round block", () => {
+  const roundBlock = (round: number, head: string): string =>
+    renderRoundBlock({ v: 1, round, reviewId: `pr7-r${round}`, reviewedHead: head, findings: [{ id: "F-1", file: "src/a.ts", line: 3, severity: "major", status: "open" }] });
+
+  test("collect reads the block from our own review, keeps that review self-authored, and never plans a reply to it", async () => {
+    const ours = {
+      id: 950,
+      user: user("keryx-bot"),
+      state: "COMMENTED",
+      body: `# Review\n\nF-1 \`src/a.ts:3\`\n\n${roundBlock(2, "abcdef1234567")}\n`,
+      html_url: "https://github.com/acme/app/pull/7#pullrequestreview-950",
+      submitted_at: "2026-08-02T10:00:00Z",
+    };
+    const forged = { ...ours, id: 951, user: user("mallory"), body: roundBlock(9, "1234567abcdef") };
+    const base = fixtures();
+    const port = createFixturePort({ ...base, "pull-reviews": [...(base["pull-reviews"] as unknown[]), ours, forged] });
+    const result = await collect(port);
+    expect(result.roundBlocks).toEqual([
+      { v: 1, round: 2, reviewId: "pr7-r2", reviewedHead: "abcdef1234567", findings: [{ id: "F-1", file: "src/a.ts", line: 3, severity: "major", status: "open" }], commentId: "review:950", submittedAt: "2026-08-02T10:00:00Z", url: ours.html_url },
+    ]);
+    expect(result.skipped.find((skip) => skip.id === "review:950")?.reason).toBe("self-authored");
+    expect(result.comments.some((comment) => comment.id === "review:950")).toBe(false);
+    // Somebody else's block is just a comment: collected like any other, never read as our round.
+    expect(result.comments.some((comment) => comment.id === "review:951")).toBe(true);
+    expect(port.posts).toEqual([]);
+    expect(renderPrCommentsMarkdown({ repo: REPO, number: PR, round: 3, result })).toContain(
+      "keryx round blocks in our own comments (read, never replied to): 1; latest round 2 (pr7-r2)",
+    );
+  });
+
+  test("a malformed, wrong-version or wrongly-shaped block is skipped, never thrown", () => {
+    const body = [
+      "<!-- keryx:round {not json} -->",
+      '<!-- keryx:round {"v":2,"round":1,"reviewId":"x","reviewedHead":null,"findings":[]} -->',
+      '<!-- keryx:round {"v":1,"round":0,"reviewId":"x","reviewedHead":null,"findings":[]} -->',
+      '<!-- keryx:round {"v":1,"round":1,"reviewId":"ok","reviewedHead":"not-a-sha","findings":[{"id":"F-1","severity":"weird","status":"open"},{"id":"F-2","severity":"minor","status":"open","quoteSha256":"short"}]} -->',
+    ].join("\n");
+    expect(parseRoundBlocks(body)).toEqual([{ v: 1, round: 1, reviewId: "ok", reviewedHead: null, findings: [{ id: "F-2", severity: "minor", status: "open" }] }]);
+    expect(parseRoundBlocks("no block here")).toEqual([]);
   });
 });

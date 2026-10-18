@@ -11,6 +11,18 @@ export const MIN_SLICE_MAX_BYTES = 200;
  */
 export const DEFAULT_WAVE_BYTES = 60_000;
 
+/** The slice kinds in the order their waves are handed out; a slice with no kind (a first round, a re-cut piece) is `new`. */
+export const WAVE_KIND_ORDER = ["fix", "second-look", "new"] as const;
+
+/**
+ * Pack waves per slice kind: a dispatch carries one kind (fix slices come with the prior findings they answer, second-look
+ * and new slices do not), so fix, second-look and new slices are never in the same wave. The one packing the drivers,
+ * `retry-plan --next-wave`, `review next`, the ledger and the estimate all use. Without kinds it is {@link packWaves}.
+ */
+export function packWavesByKind<T extends { bytes: number; kind?: "fix" | "new" | "second-look" | undefined }>(entries: readonly T[], budget: number): T[][] {
+  return WAVE_KIND_ORDER.flatMap((kind) => packWaves(entries.filter((entry) => (entry.kind ?? "new") === kind), budget));
+}
+
 export type SliceSplit = "domain" | "file" | "hunk";
 
 export type SliceEntry = {
@@ -26,7 +38,23 @@ export type SliceEntry = {
   retryOf?: string[];
   attempt?: number;
   reviewer?: string;
+  /** Roles that own this slice, chosen from its content by `slice-routing.ts`. Absent: every role owns it unless its path gate rules it out. */
+  roles?: string[];
+  /** `deep` slices are read by the full core set; `light` ones by their content roles only. */
+  depth?: SliceDepth;
+  /** Why the slice got its depth: a 0-1 score and the facts behind it. */
+  risk?: { score: number; why: string[] };
+  /** A light slice sampled to run deep, so the light routing is measured against a deep read. */
+  audit?: boolean;
+  /** Set when a major-or-worse finding on this light slice re-opened it deep. */
+  escalated?: { by: string; finding: string };
+  /** Delta round (flow 458): `fix` answers prior findings (`findingIds`), `new` is code no prior finding touched. Absent in a first round. */
+  kind?: "fix" | "new" | "second-look";
+  /** The prior findings a fix slice answers. */
+  findingIds?: string[];
 };
+
+export type SliceDepth = "deep" | "light";
 
 export type SliceOmission = {
   path: string;
@@ -62,9 +90,23 @@ export function byteLength(text: string): number {
   return encoder.encode(text).length;
 }
 
-/** The total a dispatch may carry: the manifest's own, else the default, never below one slice. */
-export function waveBytesOf(manifest: Pick<SliceManifest, "maxBytes" | "waveBytes">): number {
-  return manifest.waveBytes ?? Math.max(manifest.maxBytes, DEFAULT_WAVE_BYTES);
+const positiveNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
+
+/** Why a manifest gives no usable wave budget (neither a positive `waveBytes` nor a positive `maxBytes`), or undefined when it does. */
+export function manifestSizeProblem(manifest: Partial<Pick<SliceManifest, "maxBytes" | "waveBytes">>): string | undefined {
+  if (positiveNumber(manifest.waveBytes) || positiveNumber(manifest.maxBytes)) return undefined;
+  return "the slice manifest records neither waveBytes nor maxBytes, so no wave budget can be checked; re-run `keryx review slice` to write a manifest with its sizes";
+}
+
+/**
+ * The total a dispatch may carry: the manifest's own, else the default, never below one slice. Never NaN: a manifest with
+ * neither size is refused here instead of turning every byte comparison against it into a silent pass.
+ */
+export function waveBytesOf(manifest: Partial<Pick<SliceManifest, "maxBytes" | "waveBytes">>): number {
+  if (positiveNumber(manifest.waveBytes)) return manifest.waveBytes;
+  const problem = manifestSizeProblem(manifest);
+  if (problem !== undefined) throw new Error(problem);
+  return Math.max(manifest.maxBytes as number, DEFAULT_WAVE_BYTES);
 }
 
 /** Cut an ordered list of slices into dispatches of at most `budget` bytes; a slice over the budget travels alone. */
@@ -367,6 +409,32 @@ export function validateWaveBytes(value: number, maxBytes: number): number {
 }
 
 /**
+ * The ledger omissions of a set of regions, judged per file over ALL of that file's regions — the same judgement
+ * `buildSlices` makes. A caller that cuts one source into several `buildSlices` calls (a delta round's fix and new
+ * regions) classifies here first, so a large json is judged on its whole diff and recorded once with its full size.
+ */
+export function ledgerOmissions(regions: readonly ScopedRegion[]): SliceOmission[] {
+  const omissions: SliceOmission[] = [];
+  for (const [filePath, fileRegions] of regionsByFile(regions)) {
+    const bytes = sectionsBytes(fileRegions.map(regionSection));
+    const ledger = classifyLedger(filePath, bytes);
+    if (ledger !== null) omissions.push({ path: filePath, reason: ledger.reason, detail: ledger.detail, bytes });
+  }
+  return omissions;
+}
+
+/** Regions grouped by file, in first-seen order; each file's list grows in place (linear in the regions). */
+function regionsByFile(regions: readonly ScopedRegion[]): Map<string, ScopedRegion[]> {
+  const byFile = new Map<string, ScopedRegion[]>();
+  for (const region of regions) {
+    const list = byFile.get(region.path);
+    if (list === undefined) byFile.set(region.path, [region]);
+    else list.push(region);
+  }
+  return byFile;
+}
+
+/**
  * Cut scope A into slices of at most `maxBytes` each.
  *
  * Domains keep their files together; a domain larger than the ceiling is cut by
@@ -382,15 +450,7 @@ export function buildSlices(
   const prefix = options.prefix ?? "slice";
   const dir = options.dir === undefined || options.dir === "" ? "" : `${options.dir.replace(/\/+$/, "")}/`;
 
-  const byFile = new Map<string, ScopedRegion[]>();
-  for (const region of source.regions) {
-    const list = byFile.get(region.path);
-    if (list === undefined) {
-      byFile.set(region.path, [region]);
-    } else {
-      list.push(region);
-    }
-  }
+  const byFile = regionsByFile(source.regions);
 
   const omissions: SliceOmission[] = [];
   for (const drop of source.drops) {

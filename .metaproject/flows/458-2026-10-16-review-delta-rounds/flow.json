@@ -1,0 +1,668 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "458",
+  "slug": "review-delta-rounds",
+  "title": "Fix rounds review the delta, flows plan states up front, review lines dedupe",
+  "status": "implemented",
+  "createdAt": "2026-10-16T06:30:13.529Z",
+  "updatedAt": "2026-10-17T03:52:35.487Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-17T03:52:29.635Z",
+      "note": "exec bun test src/review/prior-round.test.ts: 43 pass 0 fail"
+    },
+    "AC2": {
+      "at": "2026-10-17T03:52:29.792Z",
+      "note": "exec bun test src/review/publish.test.ts src/review/pr-comments.test.ts: 113 pass 0 fail"
+    },
+    "AC3": {
+      "at": "2026-10-17T03:52:29.950Z",
+      "note": "exec bun test prior-round + round-split: 70 pass 0 fail"
+    },
+    "AC4": {
+      "at": "2026-10-17T03:52:30.111Z",
+      "note": "exec bun test round-split ledger readiness: 170 pass 0 fail"
+    },
+    "AC5": {
+      "at": "2026-10-17T03:52:30.277Z",
+      "note": "exec bun test src/review/dedupe.test.ts: 21 pass 0 fail"
+    },
+    "AC6": {
+      "at": "2026-10-17T03:52:30.435Z",
+      "note": "exec bun test coverage + slice-routing: 75 pass 0 fail"
+    },
+    "AC7": {
+      "at": "2026-10-17T03:52:30.595Z",
+      "note": "exec bun test ledger, review-ledger, managed: 218 pass 0 fail"
+    },
+    "AC8": {
+      "at": "2026-10-17T03:52:30.754Z",
+      "note": "exec bun test src/commands/review-plan.test.ts: 8 pass 0 fail"
+    },
+    "AC9": {
+      "at": "2026-10-17T03:52:30.912Z",
+      "note": "invariant bun test src/gdskills/: 8000 pass, 1 fail (install.test.ts read-only rules/core EACCES test, environmental, install.ts untouched by this flow)"
+    },
+    "AC10": {
+      "at": "2026-10-17T03:52:31.071Z",
+      "note": "judged: .metaproject/flows/458-2026-10-16-review-delta-rounds/eval/README.md (delta vs full on #1005/#992; owner chose the cheap second look)"
+    },
+    "AC11": {
+      "at": "2026-10-17T03:52:31.235Z",
+      "note": "exec npm view @mrciphersmith/keryx version -> 0.3.121 (>= 0.3.120 release, PR #1042); CI green on merged PR #1041"
+    },
+    "AC12": {
+      "at": "2026-10-17T03:52:31.399Z",
+      "note": "exec bun test review-next + result-parse: 26 pass 0 fail"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1041"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Фло 458, делать сразу (Recommended) / Дельта, 3–4 роли (Recommended)",
+    "source": "claude-code session 2026-10-16, after the vantage-frontend PR #7955 cost report (13.5 h, 12.4M tokens, 0.3.117)"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by lane tasks"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by lane tasks"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by lane tasks"
+    },
+    {
+      "id": "T5",
+      "title": "L1a: prior-round discovery from all sources, publish block, collect parses own block, round.json",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "L2: dedupe + canonical severity, supersedes/overlap groups, ledger root/skips, ingest head",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "L1b: split FIX/NEW, rosters, split coverage/readiness/ledger/estimate, review plan",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "L3a: flow-orchestrator matrix, gate, behavior_changes, hypotheses, one implementer",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "L3b: review-orchestrator + other orchestrators use start's delta; read-only reviewers",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Review round + PR + merge",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Live eval round 2 on a multi-round PR",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "eval/README.md: delta vs full on #1005/#992, owner chose the cheap second look"
+    },
+    {
+      "id": "T12",
+      "title": "Release",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "released in 0.3.120 (PR #1042)"
+    },
+    {
+      "id": "T13",
+      "title": "L4: review next, lenient result parse, drivers, disposition schema, path check, model record",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-16T06:30:13.529Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-16T06:37:01.005Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-16T06:37:01.162Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-16T06:37:01.312Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-16T06:37:01.465Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-16T06:37:01.630Z",
+      "event": "task-added",
+      "detail": "T5: L1a: prior-round discovery from all sources, publish block, collect parses own block, round.json"
+    },
+    {
+      "at": "2026-10-16T06:37:01.779Z",
+      "event": "task-added",
+      "detail": "T6: L2: dedupe + canonical severity, supersedes/overlap groups, ledger root/skips, ingest head"
+    },
+    {
+      "at": "2026-10-16T06:37:01.929Z",
+      "event": "task-added",
+      "detail": "T7: L1b: split FIX/NEW, rosters, split coverage/readiness/ledger/estimate, review plan"
+    },
+    {
+      "at": "2026-10-16T06:37:02.097Z",
+      "event": "task-added",
+      "detail": "T8: L3a: flow-orchestrator matrix, gate, behavior_changes, hypotheses, one implementer"
+    },
+    {
+      "at": "2026-10-16T06:37:02.265Z",
+      "event": "task-added",
+      "detail": "T9: L3b: review-orchestrator + other orchestrators use start's delta; read-only reviewers"
+    },
+    {
+      "at": "2026-10-16T06:37:02.426Z",
+      "event": "task-added",
+      "detail": "T10: Review round + PR + merge"
+    },
+    {
+      "at": "2026-10-16T06:37:02.574Z",
+      "event": "task-added",
+      "detail": "T11: Live eval round 2 on a multi-round PR"
+    },
+    {
+      "at": "2026-10-16T06:37:02.721Z",
+      "event": "task-added",
+      "detail": "T12: Release"
+    },
+    {
+      "at": "2026-10-16T06:37:02.872Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-16T06:37:03.020Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-16T06:52:51.832Z",
+      "event": "task-done",
+      "detail": "T9: L3b: review-orchestrator + other orchestrators use start's delta; read-only reviewers"
+    },
+    {
+      "at": "2026-10-16T07:01:04.974Z",
+      "event": "task-done",
+      "detail": "T5: L1a: prior-round discovery from all sources, publish block, collect parses own block, round.json"
+    },
+    {
+      "at": "2026-10-16T07:16:49.045Z",
+      "event": "task-done",
+      "detail": "T6: L2: dedupe + canonical severity, supersedes/overlap groups, ledger root/skips, ingest head"
+    },
+    {
+      "at": "2026-10-16T07:23:01.441Z",
+      "event": "task-done",
+      "detail": "T8: L3a: flow-orchestrator matrix, gate, behavior_changes, hypotheses, one implementer"
+    },
+    {
+      "at": "2026-10-16T07:32:29.819Z",
+      "event": "task-done",
+      "detail": "T7: L1b: split FIX/NEW, rosters, split coverage/readiness/ledger/estimate, review plan"
+    },
+    {
+      "at": "2026-10-16T08:40:48.951Z",
+      "event": "task-done",
+      "detail": "T10: Review round + PR + merge"
+    },
+    {
+      "at": "2026-10-16T09:07:35.340Z",
+      "event": "ac-updated",
+      "detail": "AC12: \"(new)\" -> \"Claude Code run lessons (vantage-frontend #7956, 0.3.118): one command `keryx review next --package <dir>` returns the next dispatches for the whole package (all reviewers, missing slices, waves) so no per-reviewer retry-plan polling is needed; reviewer results are parsed leniently (fenced JSON, a list of results, trailing prose) with a precise error when unusable; `review slice --package` writes one driver per reviewer x wave with absolute slice paths; dispositions have one schema (wrapper keys normalised, `remains` required for narrowed) validated at ledger build; a finding whose file does not exist at the reviewed head is flagged at ingest; drivers and raw results record the reviewer model. Tests per item. [verify: exec `bun test src/review/review-next.test.ts src/review/result-parse.test.ts`]\" (owner: include the #7956 Claude Code run lessons in flow 458 before the release)"
+    },
+    {
+      "at": "2026-10-16T09:07:35.483Z",
+      "event": "task-added",
+      "detail": "T13: L4: review next, lenient result parse, drivers, disposition schema, path check, model record"
+    },
+    {
+      "at": "2026-10-16T09:37:26.325Z",
+      "event": "task-done",
+      "detail": "T13: L4: review next, lenient result parse, drivers, disposition schema, path check, model record"
+    },
+    {
+      "at": "2026-10-17T03:52:19.058Z",
+      "event": "task-done",
+      "detail": "T11: Live eval round 2 on a multi-round PR"
+    },
+    {
+      "at": "2026-10-17T03:52:19.235Z",
+      "event": "task-done",
+      "detail": "T12: Release"
+    },
+    {
+      "at": "2026-10-17T03:52:29.635Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: exec bun test src/review/prior-round.test.ts: 43 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:29.792Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: exec bun test src/review/publish.test.ts src/review/pr-comments.test.ts: 113 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:29.950Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: exec bun test prior-round + round-split: 70 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:30.111Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: exec bun test round-split ledger readiness: 170 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:30.277Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: exec bun test src/review/dedupe.test.ts: 21 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:30.435Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: exec bun test coverage + slice-routing: 75 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:30.595Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: exec bun test ledger, review-ledger, managed: 218 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:30.754Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: exec bun test src/commands/review-plan.test.ts: 8 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:30.912Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: invariant bun test src/gdskills/: 8000 pass, 1 fail (install.test.ts read-only rules/core EACCES test, environmental, install.ts untouched by this flow) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:31.071Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: judged: .metaproject/flows/458-2026-10-16-review-delta-rounds/eval/README.md (delta vs full on #1005/#992; owner chose the cheap second look) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:31.235Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: exec npm view @mrciphersmith/keryx version -> 0.3.121 (>= 0.3.120 release, PR #1042); CI green on merged PR #1041 (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:31.399Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: exec bun test review-next + result-parse: 26 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:35.487Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1041 (warning: PR is not a draft)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/prior-round.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/publish.test.ts src/review/pr-comments.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/review/prior-round.test.ts src/review/round-split.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/review/round-split.test.ts src/review/ledger.test.ts src/review/readiness.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/review/dedupe.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/review/coverage.test.ts src/review/slice-routing.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/review/ledger.test.ts src/commands/review-ledger.test.ts src/review/managed.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/commands/review-plan.test.ts"
+    },
+    "AC9": {
+      "kind": "invariant",
+      "check": "bun test src/gdskills/"
+    },
+    "AC10": {
+      "kind": "judged"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "npm view @mrciphersmith/keryx version"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "bun test src/review/review-next.test.ts src/review/result-parse.test.ts"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-17T03:52:29.635Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:29.792Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:29.950Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:30.111Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:30.277Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:30.435Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:30.595Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:30.754Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:30.912Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:31.071Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:31.235Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    },
+    {
+      "at": "2026-10-17T03:52:31.399Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:3d052507b3c5f6a1d73ad27169ca88c7250a7a286d6a019d18a4cf7dc49d36a5"
+    }
+  ]
+}

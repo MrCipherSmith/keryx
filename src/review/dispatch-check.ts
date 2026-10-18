@@ -1,15 +1,21 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type JsonSchema, validateJson } from "../gdskills/contracts";
-import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, byteLength, waveBytesOf } from "./slice";
+import { DISPLAY_ID_FORM, displayIdHasHash } from "./display-id";
+import { DEFAULT_SLICE_MAX_BYTES, type SliceManifest, byteLength, manifestSizeProblem, waveBytesOf } from "./slice";
 
 export type DispatchCheckCode =
   | "REVIEWER_INPUT_INVALID"
   | "REVIEWER_INPUT_NO_SLICE"
   | "REVIEWER_INPUT_SLICE_UNKNOWN"
   | "REVIEWER_INPUT_TOO_LARGE"
-  | "REVIEWER_INPUT_NO_PR_CONTEXT";
+  | "REVIEWER_INPUT_NO_PR_CONTEXT"
+  | "REVIEWER_INPUT_PATH_MISSING"
+  | "REVIEWER_INPUT_MANIFEST_UNSIZED"
+  | "REVIEWER_INPUT_PLAN_UNCONFIRMED"
+  | "REVIEWER_INPUT_ID_FORM";
 
 export type DispatchCheckError = {
   code: DispatchCheckCode;
@@ -47,7 +53,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Payload fields that name a file the reviewer is told to read; inline text fields (diff, file_contents) are not paths. */
+const PATH_FIELDS = ["skill_path", "context_doc"] as const;
+
 export type CheckDispatchOptions = {
+  /** Whether a path named by a payload field exists. Defaults to the filesystem, relative paths resolved against the cwd as the pr_context check does. */
+  pathExists?: (filePath: string) => boolean;
   /** Ceiling for what one dispatch carries in total. Defaults to the manifest's wave budget. */
   maxBytes?: number;
   manifest?: SliceManifest;
@@ -55,7 +66,22 @@ export type CheckDispatchOptions = {
   pathBytes?: (slicePath: string) => number | undefined;
   /** Set for a pull-request review: every payload must name the collected `pr-context.md`, and it must be readable. */
   prContext?: { exists: (contextPath: string) => boolean };
+  /**
+   * The round's plan: when it is over the operator threshold and no plan confirmation is recorded, every payload is
+   * refused (`planGateRefusal` in estimate.ts says what to do).
+   */
+  plan?: { refusal: string | undefined };
 };
+
+/** The finding ids a payload hands its reviewer, with where each sits: `known_findings[].id`, `prior_findings[].finding.id`. */
+function findingIdsOf(payload: unknown): Array<{ field: "known_findings" | "prior_findings"; at: number; id: unknown }> {
+  if (!isRecord(payload)) return [];
+  const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+  return [
+    ...list(payload.known_findings).map((entry, at) => ({ field: "known_findings" as const, at, id: isRecord(entry) ? entry.id : undefined })),
+    ...list(payload.prior_findings).map((entry, at) => ({ field: "prior_findings" as const, at, id: isRecord(entry) && isRecord(entry.finding) ? entry.finding.id : undefined })),
+  ];
+}
 
 /**
  * Refuse a reviewer payload that a bounded reviewer cannot finish.
@@ -68,14 +94,43 @@ export type CheckDispatchOptions = {
  * wave has to fit what a reviewer can finish before its child deadline.
  */
 export async function checkDispatch(payloads: readonly unknown[], options: CheckDispatchOptions = {}): Promise<DispatchCheckResult> {
+  const unsized = options.maxBytes === undefined && options.manifest !== undefined ? manifestSizeProblem(options.manifest) : undefined;
+  if (unsized !== undefined) {
+    // Without a size every byte comparison below would be against NaN and pass; refuse the whole check instead.
+    return { ok: false, checked: payloads.length, maxBytes: 0, errors: [{ code: "REVIEWER_INPUT_MANIFEST_UNSIZED", reviewer: "manifest", message: unsized }] };
+  }
   const maxBytes = options.maxBytes ?? (options.manifest === undefined ? DEFAULT_SLICE_MAX_BYTES : waveBytesOf(options.manifest));
   const schema = await loadReviewerInputSchema();
   const errors: DispatchCheckError[] = [];
+  if (options.plan?.refusal !== undefined) {
+    errors.push({ code: "REVIEWER_INPUT_PLAN_UNCONFIRMED", reviewer: "plan", message: options.plan.refusal });
+  }
+  const pathExists = options.pathExists ?? ((filePath: string) => existsSync(path.resolve(filePath)));
 
   for (const [index, payload] of payloads.entries()) {
     const reviewer = isRecord(payload) && typeof payload.reviewer === "string" && payload.reviewer !== "" ? payload.reviewer : `payload[${index}]`;
     for (const problem of await validateJson(payload, schema)) {
       errors.push({ code: "REVIEWER_INPUT_INVALID", reviewer, path: problem.path, message: problem.message });
+    }
+    if (isRecord(payload)) {
+      for (const field of PATH_FIELDS) {
+        const value = payload[field];
+        if (typeof value === "string" && value !== "" && !pathExists(value)) {
+          errors.push({
+            code: "REVIEWER_INPUT_PATH_MISSING",
+            reviewer,
+            path: `$.${field}`,
+            message: `${field} ${value} does not exist; the reviewer would be rejected at dispatch. Fix the path or omit the field`,
+          });
+        }
+      }
+    }
+    // Flow 460: a finding handed to the reviewer is named by a display id it will echo back; one holding "#" would
+    // only fail at ingest, after the whole round, when its global_id is minted.
+    for (const { field, at, id } of findingIdsOf(payload)) {
+      if (displayIdHasHash(id)) {
+        errors.push({ code: "REVIEWER_INPUT_ID_FORM", reviewer, path: `$.${field}[${at}]`, message: `finding id "${id}": ${DISPLAY_ID_FORM}` });
+      }
     }
     if (options.prContext !== undefined) {
       const contextPath = isRecord(payload) && typeof payload.pr_context === "string" ? payload.pr_context : "";

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { READY_DISPATCH } from "./dispatch.test-helpers";
+import { READY_DISPATCH, READY_COVERAGE_MD } from "./dispatch.test-helpers";
 import { parseEvidenceLevel } from "./evidence-level";
 import { completeManagedReview, createManagedReviewPackage } from "./managed";
 
@@ -18,6 +18,7 @@ async function ingest(reportText: string): Promise<{ pkg: string; ref: string }>
   const result = await createManagedReviewPackage({ cwd: dir, mode: "ingest", reportText, reviewId: "evidence-level", target: { kind: "report", ref: "review.md" } });
   const pkg = path.resolve(dir, result.path);
   await writeFile(path.join(pkg, "research.json"), JSON.stringify(ready));
+  await writeFile(path.join(pkg, "coverage.md"), READY_COVERAGE_MD);
   return { pkg, ref: result.path };
 }
 

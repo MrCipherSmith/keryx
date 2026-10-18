@@ -58,6 +58,10 @@ test("the managed block ignores the recommendation journal", () => {
   expect(renderMetaprojectGitignoreBlock()).toContain(".metaproject/data/decisions/\n");
 });
 
+test("the managed block ignores the mutation scratch directory", () => {
+  expect(renderMetaprojectGitignoreBlock()).toContain(".metaproject/data/review/mutate-scratch/\n");
+});
+
 // R700-06/R700-10: skills stocktake writes dated reports plus a cache file
 // under .metaproject/data/skills/stocktake/ — per-machine runtime output,
 // not something a project commits.

@@ -466,7 +466,14 @@ dismiss id as the cancel id. It reads syntax, not offsets or counts, so a mechan
 split that moves a picker together with its call still passes; P2 should point it at
 the new files rather than convert it.
 
+`commands/operator-confirm-rosters.test.ts` (flow 456) reads `commands/shell.ts` once, to
+check that of the two `buildInteractiveAgentTools` calls only the TUI's carries the
+`operatorConfirm` binding and the readline shell's does not. The readline closure is not
+mountable, so the absence of the binding is not observable; when the closure becomes
+mountable, replace it with a roster test on the readline shell.
+
 ```text
+commands/operator-confirm-rosters.test.ts | commands/shell.ts | 1
 commands/prune-archive-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-bus.test.ts | commands/shell.ts | 2
 commands/shell-grant-refresh.test.ts | commands/shell.ts | 1

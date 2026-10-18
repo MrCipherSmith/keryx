@@ -1,0 +1,29 @@
+{
+  "source": "flow 457 eval ground truth (PR #424 round 1, PR #1005)",
+  "findings": [
+    {
+      "id": "R1-ARCH-002",
+      "severity": "major",
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "line": null,
+      "reviewer": "review-architecture",
+      "summary": "The dispatch contract travelled as unvalidated free text through constraints[]; base_branch had no typed carrier at any hop; the schema was not in the CONTRACTS registry."
+    },
+    {
+      "id": "R2-ARCH-102",
+      "severity": "major",
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "line": null,
+      "reviewer": "review-architecture",
+      "summary": "The round-2 if/then fenced the typed route while the same commit's constraint table documented an untyped one: a payload carrying only constraints: [\"completion: outcome A\"] validated clean."
+    },
+    {
+      "id": "F-067",
+      "severity": "major",
+      "file": "src/gdgraph/staleness.ts",
+      "line": 240,
+      "reviewer": "review-security-code",
+      "summary": "staleness.ts passes provenance.commit to git diff without assertGitRevision/--end-of-options; provenance.json is a tracked file, readProvenance only checks typeof string; scan test exempts it with a false reason"
+    }
+  ]
+}

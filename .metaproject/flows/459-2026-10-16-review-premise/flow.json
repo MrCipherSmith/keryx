@@ -1,0 +1,531 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "459",
+  "slug": "review-premise",
+  "title": "Review findings get an independent premise check before anyone acts on them",
+  "status": "implemented",
+  "createdAt": "2026-10-16T11:39:19.756Z",
+  "updatedAt": "2026-10-17T03:52:38.074Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8b96e54ec840d4f339a17d0c511de0c55363a201171a96e8bfbd0a976b69a648",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-17T03:52:31.561Z",
+      "note": "exec bun test src/review/premise.test.ts: 71 pass 0 fail"
+    },
+    "AC2": {
+      "at": "2026-10-17T03:52:31.719Z",
+      "note": "exec bun test verdict readiness review-gate dedupe: 150 pass 0 fail"
+    },
+    "AC3": {
+      "at": "2026-10-17T03:52:31.877Z",
+      "note": "exec bun test premise-decision, review-operator-cli, operator-confirm-review-tools: 83 pass 0 fail"
+    },
+    "AC4": {
+      "at": "2026-10-17T03:52:32.038Z",
+      "note": "invariant bun test src/gdskills/ (8000 pass, 1 unrelated environmental fail in install.test.ts) + coverage.test.ts & skills.bundled-verify.test.ts 61 pass 0 fail"
+    },
+    "AC5": {
+      "at": "2026-10-17T03:52:32.196Z",
+      "note": "invariant bun test review-skills-iron-laws.test.ts 18 pass 0 fail; src/gdskills/ 8000 pass, 1 unrelated environmental fail"
+    },
+    "AC6": {
+      "at": "2026-10-17T03:52:32.356Z",
+      "note": "invariant bun test src/gdskills/: 8000 pass, 1 unrelated environmental fail (install.test.ts read-only dir EACCES)"
+    },
+    "AC7": {
+      "at": "2026-10-17T03:52:32.516Z",
+      "note": "judged: .metaproject/flows/459-2026-10-16-review-premise/eval/README.md and owner decision in journal.md (Принять как есть)"
+    },
+    "AC8": {
+      "at": "2026-10-17T03:52:32.680Z",
+      "note": "exec npm view @mrciphersmith/keryx version -> 0.3.121 (PR #1044)"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1043"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the lane tasks in plan.md"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the lane tasks in plan.md"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the lane tasks in plan.md"
+    },
+    {
+      "id": "T5",
+      "title": "L1 code core: premise claims, delete-only merge, held findings in verdict/readiness/gate/dedupe",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-16T11:46:27.181Z",
+            "outcome": "started",
+            "detail": "459-T5 sonnet worktree lane L1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-16T11:46:27.335Z",
+            "outcome": "started",
+            "detail": "459-T6 opus worktree lane L3"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "L2 operator + CLI: premise-question decision, decide-premise card, flags, tier, catalog, docs",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-16T12:09:31.742Z",
+            "outcome": "started",
+            "detail": "459-T7 sonnet worktree lane L2"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Live eval: #7849 fixture + #992/#1005 controls",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "PR review round(s) clean",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR #1043 review rounds ran and the PR merged (merge ba680b56a)"
+    },
+    {
+      "id": "T10",
+      "title": "CHANGELOG, release 0.3.121",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "released in 0.3.121 (PR #1044)"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-16T11:39:19.756Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-16T11:45:27.901Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-16T11:45:28.049Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-16T11:45:28.198Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-16T11:45:28.346Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-16T11:45:28.496Z",
+      "event": "task-added",
+      "detail": "T5: L1 code core: premise claims, delete-only merge, held findings in verdict/readiness/gate/dedupe"
+    },
+    {
+      "at": "2026-10-16T11:45:28.644Z",
+      "event": "task-added",
+      "detail": "T6: L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators"
+    },
+    {
+      "at": "2026-10-16T11:45:28.799Z",
+      "event": "task-added",
+      "detail": "T7: L2 operator + CLI: premise-question decision, decide-premise card, flags, tier, catalog, docs"
+    },
+    {
+      "at": "2026-10-16T11:45:28.947Z",
+      "event": "task-added",
+      "detail": "T8: Live eval: #7849 fixture + #992/#1005 controls"
+    },
+    {
+      "at": "2026-10-16T11:45:29.103Z",
+      "event": "task-added",
+      "detail": "T9: PR review round(s) clean"
+    },
+    {
+      "at": "2026-10-16T11:45:29.253Z",
+      "event": "task-added",
+      "detail": "T10: CHANGELOG, release 0.3.121"
+    },
+    {
+      "at": "2026-10-16T11:45:29.556Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-16T11:45:29.707Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-16T11:46:27.181Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 459-T5 sonnet worktree lane L1"
+    },
+    {
+      "at": "2026-10-16T11:46:27.335Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 459-T6 opus worktree lane L3"
+    },
+    {
+      "at": "2026-10-16T12:04:21.666Z",
+      "event": "task-done",
+      "detail": "T6: L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators"
+    },
+    {
+      "at": "2026-10-16T12:09:31.586Z",
+      "event": "task-done",
+      "detail": "T5: L1 code core: premise claims, delete-only merge, held findings in verdict/readiness/gate/dedupe"
+    },
+    {
+      "at": "2026-10-16T12:09:31.742Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 459-T7 sonnet worktree lane L2"
+    },
+    {
+      "at": "2026-10-16T12:43:37.426Z",
+      "event": "task-done",
+      "detail": "T7: L2 operator + CLI: premise-question decision, decide-premise card, flags, tier, catalog, docs"
+    },
+    {
+      "at": "2026-10-16T12:43:37.574Z",
+      "event": "task-done",
+      "detail": "T8: Live eval: #7849 fixture + #992/#1005 controls"
+    },
+    {
+      "at": "2026-10-17T03:52:19.397Z",
+      "event": "task-done",
+      "detail": "T9: PR review round(s) clean"
+    },
+    {
+      "at": "2026-10-17T03:52:19.549Z",
+      "event": "task-done",
+      "detail": "T10: CHANGELOG, release 0.3.121"
+    },
+    {
+      "at": "2026-10-17T03:52:31.561Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: exec bun test src/review/premise.test.ts: 71 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:31.719Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: exec bun test verdict readiness review-gate dedupe: 150 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:31.877Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: exec bun test premise-decision, review-operator-cli, operator-confirm-review-tools: 83 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:32.038Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: invariant bun test src/gdskills/ (8000 pass, 1 unrelated environmental fail in install.test.ts) + coverage.test.ts & skills.bundled-verify.test.ts 61 pass 0 fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:32.196Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: invariant bun test review-skills-iron-laws.test.ts 18 pass 0 fail; src/gdskills/ 8000 pass, 1 unrelated environmental fail (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:32.356Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: invariant bun test src/gdskills/: 8000 pass, 1 unrelated environmental fail (install.test.ts read-only dir EACCES) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:32.516Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: judged: .metaproject/flows/459-2026-10-16-review-premise/eval/README.md and owner decision in journal.md (Принять как есть) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:32.680Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: exec npm view @mrciphersmith/keryx version -> 0.3.121 (PR #1044) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-17T03:52:38.074Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1043 (warning: PR is not a draft)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/review/premise.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/review/verdict.test.ts src/review/readiness.test.ts src/flow/review-gate.test.ts src/review/dedupe.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/review/premise-decision.test.ts src/commands/review-operator-cli.test.ts src/commands/operator-confirm-review-tools.test.ts"
+    },
+    "AC4": {
+      "kind": "invariant",
+      "check": "bun test src/gdskills/ src/review/coverage.test.ts src/commands/skills.bundled-verify.test.ts"
+    },
+    "AC5": {
+      "kind": "invariant",
+      "check": "bun test src/gdskills/review-skills-iron-laws.test.ts src/gdskills/"
+    },
+    "AC6": {
+      "kind": "invariant",
+      "check": "bun test src/gdskills/"
+    },
+    "AC7": {
+      "kind": "judged"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "npm view @mrciphersmith/keryx version"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-17T03:52:31.561Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:8b96e54ec840d4f339a17d0c511de0c55363a201171a96e8bfbd0a976b69a648"
+    },
+    {
+      "at": "2026-10-17T03:52:31.719Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:8b96e54ec840d4f339a17d0c511de0c55363a201171a96e8bfbd0a976b69a648"
+    },
+    {
+      "at": "2026-10-17T03:52:31.877Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:8b96e54ec840d4f339a17d0c511de0c55363a201171a96e8bfbd0a976b69a648"
+    },
+    {
+      "at": "2026-10-17T03:52:32.038Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:8b96e54ec840d4f339a17d0c511de0c55363a201171a96e8bfbd0a976b69a648"
+    },
+    {
+      "at": "2026-10-17T03:52:32.196Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:8b96e54ec840d4f339a17d0c511de0c55363a201171a96e8bfbd0a976b69a648"
+    },
+    {
+      "at": "2026-10-17T03:52:32.356Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:8b96e54ec840d4f339a17d0c511de0c55363a201171a96e8bfbd0a976b69a648"
+    },
+    {
+      "at": "2026-10-17T03:52:32.516Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:8b96e54ec840d4f339a17d0c511de0c55363a201171a96e8bfbd0a976b69a648"
+    },
+    {
+      "at": "2026-10-17T03:52:32.680Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:8b96e54ec840d4f339a17d0c511de0c55363a201171a96e8bfbd0a976b69a648"
+    }
+  ]
+}

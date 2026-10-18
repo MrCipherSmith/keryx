@@ -17,6 +17,7 @@ import { existsSync } from "node:fs";
 import { isCompiledBinaryEntry } from "../../../lib/self-invocation";
 import { SAFE_BUN_SPAWN_ARGS } from "../../../lib/safe-exec";
 import { resolve } from "node:path";
+import { ENV_REVIEW_CALLER, ENV_REVIEW_RECORDED } from "../../../review/orchestrator-log";
 import {
   METAPROJECT_OPERATIONS,
   formatAffected,
@@ -125,10 +126,22 @@ export function keryxSelfCommand(
  * project root, capturing bounded stdout. Never throws — a failure or a missing
  * binary becomes `{ isError: true }`.
  */
-export function makeKeryxRunner(root: string, command: readonly string[] = keryxSelfCommand()): KeryxRunner {
+export function makeKeryxRunner(
+  root: string,
+  command: readonly string[] = keryxSelfCommand(),
+  reviewCaller?: string,
+): KeryxRunner {
+  // Flow 454: the tool layer above this runner records a memory call itself, so the `keryx` process it starts
+  // must not record it again; a review child's runner names its child, the orchestrator's never carries a marker.
+  const { [ENV_REVIEW_CALLER]: _inherited, ...inherited } = process.env;
+  const env = {
+    ...inherited,
+    [ENV_REVIEW_RECORDED]: "1",
+    ...(reviewCaller === undefined ? {} : { [ENV_REVIEW_CALLER]: reviewCaller }),
+  };
   return async (args) => {
     try {
-      const proc = Bun.spawn([...command, ...args], { cwd: root, stdout: "pipe", stderr: "pipe" });
+      const proc = Bun.spawn([...command, ...args], { cwd: root, env, stdout: "pipe", stderr: "pipe" });
       const [stdout, stderr] = await Promise.all([
         new Response(proc.stdout).text(),
         new Response(proc.stderr).text(),

@@ -38,7 +38,7 @@ import { syncCommand } from "./commands/sync";
 import { printSkillsHelpFor, skillVerifySkillCommand, skillsCommand } from "./commands/skills";
 import { healthCommand } from "./commands/health";
 import { testCommand } from "./commands/test";
-import { memoryCommand } from "./commands/memory";
+import { memoryCliEntry } from "./commands/memory";
 import { flowCommand, printFlowHelp } from "./commands/flow";
 import { jobCommand } from "./commands/job";
 import { printReviewHelpFor, reviewCommand } from "./commands/review";
@@ -153,7 +153,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   health: healthCommand,
   metrics: metricsCommand,
   test: testCommand,
-  memory: memoryCommand,
+  memory: memoryCliEntry,
   flow: flowCommand,
   job: jobCommand,
   review: reviewCommand,

@@ -49,7 +49,7 @@ describe("AC1: start questions, once, after the context pack and the scope", () 
   test("Step 5 of the workflow is the start questions, with their three defaults", () => {
     const step5 = SKILL.split("\n").find((line) => line.startsWith("- [ ] Step 5:")) ?? "";
     expect(step5).toContain("Start questions, once, after Steps 1 and 3");
-    expect(step5).toContain("reviewers (default `--all`)");
+    expect(step5).toContain("reviewers (default: the set `keryx review required --depth auto` prints; `--all` only when the operator asks)");
     expect(step5).toContain("counterpart verification (default on)");
     expect(step5).toContain("model plan");
   });
@@ -57,10 +57,10 @@ describe("AC1: start questions, once, after the context pack and the scope", () 
   test("the main file asks after Steps 1 and 3, in one interaction, with the defaults", () => {
     expect(START_MAIN).toContain("Ask once, after the context pack (Step 1) and the scope (Step 3), in one interaction");
     expect(START_MAIN).toContain("`AskUserQuestion` call on Claude Code");
-    expect(START_MAIN).toContain("**Reviewers** — default `--all`");
+    expect(START_MAIN).toContain("**Reviewers** — default the set `keryx review required --depth auto` prints");
     expect(START_MAIN).toContain("ON by default even with no link");
     expect(START_MAIN).toContain("accept (default), all `deep`, or custom. Once per round.");
-    expect(START_MAIN).toContain("Unattended rounds ask nothing: `--all`, counterpart verified, computed models");
+    expect(START_MAIN).toContain("Unattended rounds ask nothing: the `required --depth auto` set, counterpart verified, computed models");
   });
 
   test("the lettered prompt for other hosts defaults to the same answers", () => {
@@ -97,10 +97,14 @@ describe("AC2: the counterpart is re-read every round, and asked for when it can
 });
 
 describe("AC3: a gating round never reviews alone", () => {
-  test("a host without a dispatch tool returns BLOCKED with nested_dispatch_unavailable", () => {
+  // Flow 457 (AC9): a host with no spawn tool now hands the round to `keryx review run --autonomous`;
+  // only a nested session at the depth limit still returns BLOCKED nested_dispatch_unavailable.
+  test("a host without a dispatch tool runs the autonomous runner; the depth limit returns BLOCKED", () => {
     const dispatching = section(SKILL, "## Dispatching Reviewers");
-    expect(dispatching).toContain("returns `STATUS: BLOCKED` (`nested_dispatch_unavailable`) and never reviews alone");
-    expect(START_MAIN).toContain("returns `STATUS: BLOCKED` (`nested_dispatch_unavailable`) instead of reviewing alone");
+    expect(dispatching).toContain("a host without a dispatch tool runs `keryx review run --autonomous`");
+    expect(dispatching).toContain("returns `STATUS: BLOCKED` (`nested_dispatch_unavailable`), and neither reviews alone");
+    expect(START_MAIN).toContain("a host with no spawn tool runs `keryx review run --autonomous`");
+    expect(START_MAIN).toContain("returns `STATUS: BLOCKED` (`nested_dispatch_unavailable`), instead of reviewing alone");
     expect(DEPTH).toContain("**No dispatch tool, no review.**");
     expect(DEPTH).toContain("A gating round runs the composition the start questions\nselected.");
   });

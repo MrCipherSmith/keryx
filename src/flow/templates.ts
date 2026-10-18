@@ -143,8 +143,9 @@ tracker reporting.
   --text "<criterion>"\` to rewrite/append one line)
 - \`keryx flow implemented <id> --pr <url>\`
 - \`keryx flow complete <id> [--comment] [--signed-by "<name>"] [--confirm-token <token>]\`
-- \`keryx flow confirm <id> [--merged]\` (mints a short-lived, single-use
-  terminal confirmation token; only for a flow created with
+- \`keryx flow confirm <id> [--merged]\` (in keryx shell the \`flow_confirm\` tool
+  does this as an operator card; mints a short-lived, single-use
+  confirmation token; only for a flow created with
   \`flow init --require-confirmation\` or \`completion.require_confirmation:
   true\`)
 - \`keryx flow recover <id> --reason "<why>"\` (moves a flow stuck in
@@ -223,8 +224,9 @@ the work.
 - \`flow init --require-confirmation\` (or \`completion.require_confirmation:
   true\`) makes \`flow complete\` also need \`--confirm-token <token>\` from
   \`keryx flow confirm <id>\` — a short-lived, single-use token minted by a
-  typed challenge in a terminal. It proves an interactive step ran outside the
-  agent's tool roster, not that a human ran it. A flow stuck in \`completing\`
+  typed challenge in a terminal. In keryx shell call the \`flow_confirm\` tool
+  instead: the operator answers it as a card; never send the operator to a
+  terminal. It proves an interactive step ran, not that a human ran it. A flow stuck in \`completing\`
   (never a normal gate failure) moves back with \`flow recover <id> --reason
   "<why>"\`.
 
@@ -372,7 +374,11 @@ data and status.
    rewrites or appends one line itself (logged; audit trail either way).
 5. Completion decision is yours alone: after the user selects the PR path,
    create the PR, run the bounded review/fix loop, and merge it only after the
-   review is clean and required checks are green. The merge target must be the
+   review is clean and required checks are green. Each round is
+   \`keryx review start\` on the PR's new head: it detects the previous round
+   and reviews the delta (fix changes with a small roster and the prior
+   findings, new changes as round 1) - never a whole-branch range or \`--all\`
+   per round. The merge target must be the
    base branch captured when the flow branch was created. Only after verifying
    that merge may you run \`keryx flow implemented <id> --pr <url>\`.
    Never accept work without a PR and confirmed merge; never let the
@@ -414,14 +420,20 @@ whose status is \`implemented\`.
    git commit\` has run; the gate checks only that \`flow.json\` is in \`HEAD\`). The
    flow folder is committed in the same PR as the code; the commit at closing
    is a rule to follow, not one the gate checks. A
-   flow created with \`--require-confirmation\` needs one more gate: run
-   \`keryx flow confirm <id>\` in your own terminal first (a typed challenge
-   mints a short-lived, single-use token - it proves an interactive step ran
-   outside the agent's tool roster, not that a human did), then pass it as
+   flow created with \`--require-confirmation\` needs one more gate: get
+   a token first: in keryx shell call the \`flow_confirm\` tool (the operator
+   answers it as a card; never send the operator to a terminal), outside it run
+   \`keryx flow confirm <id>\` in a terminal (a typed challenge). The token is
+   short-lived and single-use; it proves an interactive step ran, not that a
+   human did. Then pass it as
    \`--confirm-token <token>\`. On pass this also appends a completion
    signature.
 4. Gates fail -> flow auto-returns to in-progress with fix notes:
    - small fixes: run a fix agent, then re-run the review/fix loop from step 2;
+     the next review round is just \`keryx review start\` on the new head - it
+     detects the round and reviews the delta (fix changes with a small roster
+     and the prior findings, new changes as round 1); never pass a whole-branch
+     range or \`--all\` per round;
    - large fixes: describe what is wrong in the journal and relaunch the
      implementor/orchestrator against the updated plan.
    - a flow left stuck in \`completing\` (a crash or an interrupted attempt,

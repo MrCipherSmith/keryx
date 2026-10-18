@@ -1,0 +1,70 @@
+{
+  "pr": 939,
+  "reviewedHead": "ede409d5a9d9a5403f51b3f12edc6ac4704d805c",
+  "model": "opus (reviewers and verifier)",
+  "plan": {
+    "slices": 14,
+    "deep": 2,
+    "light": 12,
+    "audit": 2,
+    "auditSlices": ["slice-01", "slice-05"],
+    "dispatchesActual": 20,
+    "dispatchesPlanEvalNew": 19,
+    "dispatchesNote": "the manifest also routes review-regression to the 2 deep slices; plan-eval's role list leaves it out, so 19 vs 20",
+    "dispatchesOldPlan": 36,
+    "reduction": 0.444,
+    "verifierDispatches": 1,
+    "wallTimeMinutes": 5,
+    "approxSubagentTokens": 1950000
+  },
+  "recall": {
+    "truthDefects": 6,
+    "truthEntries": 8,
+    "foundAtMajor": { "defects": ["D5"], "count": 1, "rate": 0.167 },
+    "foundAnySeverity": {
+      "entries": ["D1-a", "D1-b", "D2-a", "D3", "D5"],
+      "defects": ["D1", "D2", "D3", "D5"],
+      "count": 4,
+      "rate": 0.667
+    },
+    "matches": {
+      "D1-a": { "severity": "minor", "by": ["review-logic-5 F-001", "review-logic-5 F-004 (info)", "review-clean-code-1 CC-2"] },
+      "D1-b": { "severity": "minor", "by": ["review-logic-2 F-001"] },
+      "D2-a": { "severity": "minor", "by": ["review-logic-3 F-002"] },
+      "D2-b": { "severity": null, "by": [], "partial": "review-style-1 STY-003 / review-style-3 STY3-004 flag that the preflight copies drifted (format and depth clause), not the different spawn-tool names" },
+      "D3": { "severity": "minor", "by": ["review-logic-2 F-002", "review-style-2 F-002", "review-style-4 F-003"] },
+      "D4": { "severity": null, "by": [], "near": "review-highload-2 HL-2 flags the missing default backoff in nextAfterRateLimit, not the unbounded retry-after" },
+      "D5": { "severity": "major", "by": ["review-regression-1 RR1-001"] },
+      "D6": { "severity": null, "by": [] }
+    },
+    "missed": {
+      "D2-b": "reviewer miss: slice-08 was routed to architecture, logic and style; style noticed the drift but not the tool names",
+      "D4": "reviewer miss: slice-14 was routed to highload, which read the same function and reported a different weakness",
+      "D6": "reviewer miss: slice-10 was routed to architecture, logic and style; none flagged the 'Done when' rule",
+      "severity": "D1, D2-a and D3 were found but rated minor, so they would not gate the round"
+    },
+    "routingMisses": 0,
+    "depthNote": "every truth slice was light. The two deep slices were audit samples with no truth defects, so deep reading was never applied where the defects were."
+  },
+  "extra": {
+    "majorFindingsNotInTruth": 1,
+    "findings": [
+      { "id": "review-architecture-1 ARCH-1", "file": ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md", "line": 24, "verdict": "refuted", "why": "the preflight blocks only without the Agent tool or a spent depth budget; Claude Code nests 3 deep, so review-pr-feedback --fix still fits; only a stale sentence remains at review-orchestrator SKILL.md:392" }
+    ],
+    "confirmed": 0,
+    "refuted": 1,
+    "unverifiable": 0,
+    "precision": 0.0,
+    "notes": "RR1-001 is counted as matching truth D5 (same Path Mode file-listing command at SKILL.md:816-819). The verifier confirmed it at major and found more: the module-name form cannot run at all ('no pattern given'), and the directory form prints summary headers and stops at 120 entries."
+  },
+  "verdict": {
+    "knownDefects": "worse",
+    "knownDefectsWhy": "the old round found 6/6 defects at major. This run found 1/6 at major and 4/6 at any severity",
+    "confirmedExtras": "equal",
+    "confirmedExtrasWhy": "no confirmed new major findings; the one extra was refuted",
+    "overall": "worse",
+    "cost": "20 dispatches vs 36 (-44%)"
+  },
+  "rawMajorFindings": 2,
+  "rawFindingsTotal": 69
+}
