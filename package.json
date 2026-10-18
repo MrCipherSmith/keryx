@@ -54,6 +54,7 @@
     "check": "bun run lint && bun run typecheck && bun run typecheck:scripts && bun test",
     "check:core": "bun run lint && bun run typecheck && bun run typecheck:scripts && bun run test:core",
     "docs:build": "mkdocs build --strict",
+    "docs:check": "bun run check:doc-links && bun run check:retired-spellings && bun test src/cli-reference-coverage.test.ts src/standard/commands-by-task.test.ts src/standard/help-groups.test.ts",
     "check:doc-links": "bun scripts/check-doc-links.ts",
     "check:retired-spellings": "bun scripts/check-retired-cli-spellings.ts",
     "baseline:review-precision": "bun scripts/review-precision-baseline.ts",
