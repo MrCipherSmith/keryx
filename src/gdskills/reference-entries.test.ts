@@ -11,6 +11,15 @@ test("keywordOccurs: a keyword starting or ending with a symbol still matches wh
   expect(keywordOccurs("USE @APPLY", "@apply")).toBe(true);
 });
 
+test("keywordOccurs: no boundary is demanded on a symbol edge, one is kept on the word side", () => {
+  expect(keywordOccurs("fix styles.css please", ".css")).toBe(true);
+  expect(keywordOccurs("a@apply", "@apply")).toBe(true);
+  expect(keywordOccurs("c++x", "c++")).toBe(true);
+  expect(keywordOccurs("xc++", "c++")).toBe(false);
+  expect(keywordOccurs("the .cssx file", ".css")).toBe(false);
+  expect(keywordOccurs("the .css3 file", ".css")).toBe(false);
+});
+
 test("keywordOccurs: a word keyword is a whole word, digits and underscore count as word characters", () => {
   expect(keywordOccurs("fix the css", "css")).toBe(true);
   expect(keywordOccurs("fix the css.", "css")).toBe(true);

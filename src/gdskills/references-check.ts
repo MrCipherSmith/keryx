@@ -91,6 +91,14 @@ type CitationScan = {
   unreadableRules: string[];
 };
 
+// A link origin is an arbitrary path from the registry, and the TUI polls this scan: only a regular
+// file within the contract cap is read (a device or FIFO would buffer without end or block).
+async function readRuleText(file: string): Promise<string> {
+  const info = await stat(file);
+  if (!info.isFile() || info.size > CONTRACT_MAX_BYTES) throw new Error("not a readable rule file");
+  return readFile(file, "utf8");
+}
+
 async function scanCitations(projectRoot: string): Promise<CitationScan> {
   const cited = new Map<string, string[]>();
   const unreadableRules: string[] = [];
@@ -102,7 +110,7 @@ async function scanCitations(projectRoot: string): Promise<CitationScan> {
     const origin = links.get(ref);
     let text: string;
     try {
-      text = await readFile(origin === undefined ? path.join(projectRoot, rulePath) : resolveOriginPath(origin, projectRoot), "utf8");
+      text = await readRuleText(origin === undefined ? path.join(projectRoot, rulePath) : resolveOriginPath(origin, projectRoot));
     } catch {
       unreadableRules.push(rulePath);
       continue;

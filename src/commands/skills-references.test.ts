@@ -361,3 +361,26 @@ test("a rule imported with --link is scanned at its origin: suggest finds its ci
   const suggestion = await suggestReferences(root);
   expect(suggestion.ok && suggestion.suggestion.references.map((entry) => entry.path)).toEqual(["OTHER.md"]);
 });
+
+test("a rule imported with --link whose origin is not a regular file is reported unreadable and never read", async () => {
+  const root = await project({ rules: {}, references: [declaration()] });
+  await updateProjectRuleRegistry(root, {
+    upsert: [
+      {
+        kind: "rule" as const,
+        ref: "device.mdc",
+        path: ".metaproject/rules/project/device.mdc",
+        mode: "link" as const,
+        origin: "/dev/zero",
+        sha256: sha256Hex("x"),
+        originSha256: sha256Hex("x"),
+        description: "linked",
+        globs: [],
+        alwaysApply: false,
+        updatedAt: "2026-10-18T00:00:00.000Z",
+      },
+    ],
+  });
+  const report = await checkReferences(root);
+  expect(report.findings.map((finding) => `${finding.code}:${finding.path}`)).toContain("rule-unreadable:.metaproject/rules/project/device.mdc");
+});
