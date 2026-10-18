@@ -85,7 +85,7 @@ function testGate(state: { ceiling: number; refuse?: string }) {
       return { output: `ceiling lifted to ${String(input["to"])}` };
     },
   };
-  return { spec, applied, tool: operatorConfirmTool(spec, { projectRoot: "/nonexistent-root", now: () => NOW }) };
+  return { spec, applied, tool: operatorConfirmTool(spec, { projectRoot: "/nonexistent-root", now: () => NOW, env: {} }) };
 }
 
 const CARD = ["Lift the test ceiling from 25 to 31?", "current ceiling: 25", "new ceiling: 31", "subject: package pkg-1"];
