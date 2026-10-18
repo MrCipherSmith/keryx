@@ -211,6 +211,24 @@ test("references check: a schema violation names the entry", async () => {
   expect(report?.findings.some((entry) => entry.severity === "error" && entry.message.includes('references[0] ("STYLING.md")'))).toBe(true);
 });
 
+test("references check: two declarations of one document are an error naming both entries", async () => {
+  await project({ references: [declaration(), declaration({ anchor: "Spacing" })] });
+  const { report } = await check("--json");
+  expect(process.exitCode).toBe(1);
+  expect(codes(report, "error")).toEqual([`invalid-file:.metaproject/rules/project/references.json`]);
+  expect(report?.findings[0]?.message).toContain("references[1]");
+  expect(report?.findings[0]?.message).toContain("references[0]");
+});
+
+test("references check: a rule citing ./STYLING.md counts as citing the declared document", async () => {
+  await project({
+    rules: { "styling.mdc": RULE.replace("`STYLING.md`", "`./STYLING.md`") },
+    references: [declaration()],
+  });
+  const { report } = await check("--json");
+  expect(report?.findings).toEqual([]);
+});
+
 test("references check: --json carries the same findings the text report prints", async () => {
   await project({ references: [declaration({ description: "short", anchor: "Missing" })] });
   const json = await check("--json");

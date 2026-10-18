@@ -546,6 +546,44 @@ test("undeclared citations keep the flow 461 on_demand contract entry and are li
   expect(result.undeclared).toEqual(["THEMING.md"]);
 });
 
+test("a rule that cites a declared document as ./STYLING.md does not list it twice or call it undeclared, and a cited .mdc is a contract but not an undeclared document", async () => {
+  const root = await project();
+  await put(root, "STYLING.md", STYLING);
+  await put(root, "THEMING.md", "# Theming\n");
+  await put(root, "notes/OTHER.mdc", "other rule\n");
+  await importRules(root, { "overlay.mdc": ruleText({ globs: "src/**", body: "See `./STYLING.md`, `./THEMING.md` and `notes/OTHER.mdc`.\n" }) });
+  await declare(root, [{ path: "STYLING.md", globs: ["docs/**"] }]);
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  expect(result.entries.filter((entry) => entry.path.endsWith("STYLING.md"))).toHaveLength(1);
+  expect(result.entries.find((entry) => entry.path === "STYLING.md")).toMatchObject({ tier: "on_demand", reason: "declared" });
+  expect(result.entries.find((entry) => entry.path === "THEMING.md")).toMatchObject({ kind: "contract", reason: `referenced-by:${P("overlay.mdc")}` });
+  expect(result.entries.find((entry) => entry.path === "notes/OTHER.mdc")).toMatchObject({ kind: "contract", tier: "on_demand" });
+  expect(result.undeclared).toEqual(["THEMING.md"]);
+});
+
+test("a task text over the cut warns that a keyword after the cut cannot promote; a text that fits, or a project without keywords or a references file, gets no warning", async () => {
+  const root = await project();
+  await put(root, "STYLING.md", STYLING);
+  await declare(root, [{ path: "STYLING.md", keywords: ["tailwind"], anchor: "Class conventions" }]);
+  const resolve = (taskText: string) => resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement", taskText });
+
+  const cut = await resolve(`${"x ".repeat(TASK_TEXT_MAX_CHARS)}tailwind`);
+  expect(cut.entries[0]).toMatchObject({ path: "STYLING.md", tier: "on_demand" });
+  const warning = cut.warnings.join("\n");
+  expect(warning).toContain(`${TASK_TEXT_MAX_CHARS} characters`);
+  expect(warning).toContain("keyword after the cut");
+
+  const exact = await resolve(`${"x ".repeat(TASK_TEXT_MAX_CHARS / 2 - 4)}tailwind`);
+  expect(exact.entries[0]).toMatchObject({ tier: "must_read", reason: "condition:keyword:tailwind" });
+  expect(exact.warnings.join("\n")).not.toContain("keyword after the cut");
+
+  await declare(root, [{ path: "STYLING.md", globs: ["docs/**"] }]);
+  expect((await resolve("y ".repeat(TASK_TEXT_MAX_CHARS))).warnings.join("\n")).not.toContain("keyword after the cut");
+
+  const bare = await project();
+  expect((await resolveProjectContext({ projectRoot: bare, files: [], for: "implement", taskText: "y ".repeat(TASK_TEXT_MAX_CHARS) })).warnings).toEqual([]);
+});
+
 test("without a references file the result is byte-identical whatever the task text, and carries no undeclared list", async () => {
   const root = await project();
   await put(root, "STYLING.md", STYLING);

@@ -75,7 +75,7 @@ With an anchor, the obligation is the section from that heading to the next head
 
 ### 5.4 Authoring help
 
-- `keryx skills references check`: undeclared citations (warning), declared file missing or outside the root or over the size limit (error), anchor not found (error), description under 20 characters (warning), declaration that no rule cites and that has no globs/keywords match possible (warning).
+- `keryx skills references check`: two declarations of one normalised path (error, naming both), undeclared citations (warning), declared file missing or outside the root or over the size limit (error), anchor not found (error), description under 20 characters (warning), declaration that no rule cites and that has no globs/keywords match possible (warning).
 - `keryx skills references suggest`: prints a JSON skeleton for every undeclared citation: path, size, the headings found as anchor candidates, empty `description`. Writes nothing.
 - `keryx skills import --rules` ends with the count of undeclared citations and the command to run.
 

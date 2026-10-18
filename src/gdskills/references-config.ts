@@ -48,7 +48,7 @@ export const REFERENCES_SCHEMA = {
   $id: "https://keryx.dev/schemas/references.schema.json",
   title: "Keryx conditional reference declarations",
   description:
-    ".metaproject/rules/project/references.json. See README.md section 5.1. Each entry declares a document that project rules cite, where it applies (file globs and task keywords), the section that matters (anchor) and what it governs. A path must be relative and stay inside the project root; JSON Schema cannot express that normalisation, so the loader (src/gdskills/references-config.ts) also rejects a path that escapes the root.",
+    ".metaproject/rules/project/references.json. See README.md section 5.1. Each entry declares a document that project rules cite, where it applies (file globs and task keywords), the section that matters (anchor) and what it governs. A path must be relative and stay inside the project root; JSON Schema cannot express that normalisation, so the loader (src/gdskills/references-config.ts) also rejects a path that escapes the root. Each document is declared once: two entries whose normalised paths are equal make the file invalid, which JSON Schema cannot express either.",
   type: "object",
   additionalProperties: false,
   required: ["schema", "references"],
@@ -123,6 +123,19 @@ function normaliseRelativePath(raw: string): { path: string } | { problem: strin
   if (normal === ".." || normal.startsWith("../")) return { problem: "path escapes the project root" };
   if (normal === ".") return { problem: "path names the project root, not a document" };
   return { path: normal };
+}
+
+/** A path a rule cites, as the project spells it: posix, normalised, never absolute and never climbing out of the root. */
+export function normaliseCitedPath(cited: string): string | undefined {
+  const posix = cited.replace(/\\/g, "/");
+  if (posix.startsWith("/") || /^[A-Za-z]:/.test(posix)) return undefined;
+  const normal = path.posix.normalize(posix);
+  return normal === ".." || normal.startsWith("../") ? undefined : normal;
+}
+
+/** A cited path that names a document someone must be told to read: a `.md` outside the rules folder (a `.mdc` or a file under the rules folder is another rule). */
+export function isDocumentCitation(relative: string): boolean {
+  return relative.endsWith(".md") && !relative.startsWith(".metaproject/rules/");
 }
 
 function stringList(value: unknown, field: string, who: string, errors: string[]): string[] | undefined {
@@ -221,9 +234,17 @@ export function parseReferences(input: unknown): ParseReferencesResult {
     return { ok: false, errors };
   }
   const references: ReferenceDeclaration[] = [];
+  const firstIndexOf = new Map<string, number>();
   entries.forEach((raw: unknown, index) => {
     const entry = parseEntry(raw, index, errors);
-    if (entry !== undefined) references.push(entry);
+    if (entry === undefined) return;
+    const first = firstIndexOf.get(entry.path);
+    if (first !== undefined) {
+      errors.push(`references[${index}] ("${entry.path}"): the same document is already declared by references[${first}]; declare each document once, with one anchor`);
+      return;
+    }
+    firstIndexOf.set(entry.path, index);
+    references.push(entry);
   });
   return errors.length > 0 ? { ok: false, errors } : { ok: true, references };
 }
@@ -248,7 +269,7 @@ export async function loadReferences(projectRoot: string): Promise<LoadReference
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     return { ok: false, errors: [`${REFERENCES_PATH}: is not valid JSON (${reason})`] };

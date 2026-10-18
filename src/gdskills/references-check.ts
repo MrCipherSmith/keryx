@@ -7,21 +7,20 @@
 // document. Expected failures come back as values (a finding, `ok: false`);
 // nothing here throws for a missing or unreadable file.
 //
-// Citation scan. The resolver (context-resolver.ts) has its own scan for the
-// contracts a *selected* rule cites; it is private to that module and another
-// worker is editing it, so this one is a small independent copy of the same
-// idea with two deliberate differences: it reads every rule under
-// `.metaproject/rules/project/` (authoring is about the whole project, not one
-// task), and it takes `.md` documents only, because a cited `.mdc` is another
-// rule, not a document someone must be told to read. A linked rule (registered
-// in place, not copied) is not scanned.
+// Citation scan. The resolver (context-resolver.ts) scans the contracts a
+// *selected* rule cites; both normalise a cited path and decide what counts as a
+// document with the helpers in references-config.ts. This scan differs on two
+// points: it reads every rule under `.metaproject/rules/project/` (authoring is
+// about the whole project, not one task), and it takes `.md` documents only,
+// because a cited `.mdc` is another rule, not a document someone must be told to
+// read. A linked rule (registered in place, not copied) is not scanned.
 
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { isPathInside } from "../lib/fs";
 import { CONTRACT_MAX_BYTES, listRuleRefs } from "./context-resolver";
 import { PROJECT_RULES_DIR } from "./project-rules";
-import { loadReferences, REFERENCES_PATH, type ReferenceDeclaration } from "./references-config";
+import { isDocumentCitation, loadReferences, normaliseCitedPath, REFERENCES_PATH, type ReferenceDeclaration } from "./references-config";
 import { extractSection, markdownHeadings } from "./references-section";
 
 export const MIN_DESCRIPTION_CHARACTERS = 20;
@@ -85,14 +84,6 @@ const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const lengthOf = (text: string): number => [...text.trim()].length;
 const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
-/** A cited path as the project spells it: posix, normalised, never absolute and never climbing out of the root. */
-function projectRelative(cited: string): string | undefined {
-  const posix = cited.replace(/\\/g, "/");
-  if (posix.startsWith("/") || /^[A-Za-z]:/.test(posix)) return undefined;
-  const normal = path.posix.normalize(posix);
-  return normal === ".." || normal.startsWith("../") ? undefined : normal;
-}
-
 type CitationScan = {
   /** Every project-relative `.md` path a rule cites, with the rules that cite it. */
   cited: Map<string, string[]>;
@@ -112,7 +103,7 @@ async function scanCitations(projectRoot: string): Promise<CitationScan> {
       continue;
     }
     for (const match of text.matchAll(DOCUMENT_CITATION)) {
-      const relative = projectRelative(match[1] ?? "");
+      const relative = normaliseCitedPath(match[1] ?? "");
       if (relative === undefined) continue;
       const by = cited.get(relative) ?? [];
       if (!by.includes(rulePath)) by.push(rulePath);
@@ -152,8 +143,7 @@ type Undeclared = { path: string; bytes: number; text: string };
 async function undeclaredCitations(projectRoot: string, rootReal: string, cited: ReadonlyMap<string, string[]>, declared: ReadonlySet<string>): Promise<Undeclared[]> {
   const found: Undeclared[] = [];
   for (const relative of [...cited.keys()].sort(compare)) {
-    // A `.md` file under the rules folder is a rule, not a document someone must be told to read.
-    if (declared.has(relative) || relative.startsWith(".metaproject/rules/")) continue;
+    if (declared.has(relative) || !isDocumentCitation(relative)) continue;
     const inspection = await inspectDocument(projectRoot, rootReal, relative);
     if (inspection.status === "ok") found.push({ path: relative, bytes: inspection.bytes, text: inspection.text });
   }

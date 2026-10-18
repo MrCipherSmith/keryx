@@ -155,6 +155,27 @@ describe("parseReferences", () => {
   test("an empty list is valid", () => {
     expect(parseReferences({ schema: 1, references: [] })).toEqual({ ok: true, references: [] });
   });
+
+  test("two declarations of one document are an error naming both entries and the path, even with different anchors or spellings", () => {
+    const result = parseReferences(
+      doc(
+        { ...GOOD_ENTRY, anchor: "Class conventions" },
+        { path: "A.md", when: { globs: ["src/**"] }, description: "Another document." },
+        { ...GOOD_ENTRY, path: "./docs/../STYLING.md", anchor: "Tailwind cascade" },
+      ),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('references[2] ("STYLING.md")');
+    expect(result.errors[0]).toContain("references[0]");
+    expect(result.errors[0]).toContain("declare each document once");
+  });
+
+  test("distinct documents may share a condition and an anchor", () => {
+    const result = parseReferences(doc({ ...GOOD_ENTRY, path: "A.md" }, { ...GOOD_ENTRY, path: "B.md" }));
+    expect(result.ok).toBe(true);
+  });
 });
 
 describe("loadReferences", () => {
@@ -171,6 +192,13 @@ describe("loadReferences", () => {
     expect(result.present).toBe(true);
     expect(result.references).toHaveLength(1);
     expect(result.references[0]?.path).toBe("STYLING.md");
+  });
+
+  test("a leading byte order mark (an editor on Windows adds one) does not make the file invalid", async () => {
+    const root = await project(`\uFEFF${JSON.stringify(doc(GOOD_ENTRY))}`);
+    const result = await loadReferences(root);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.references).toHaveLength(1);
   });
 
   test("invalid JSON is an error naming the file, not a throw", async () => {

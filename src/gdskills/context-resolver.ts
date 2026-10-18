@@ -10,7 +10,7 @@ import { writeContained } from "../lib/contained-write";
 import { matchesAnyGlobWithBraces } from "../lib/glob";
 import { resolveMaxBytes, type ProjectContextSource } from "./project-context-config";
 import { resolveReferences } from "./reference-entries";
-import { loadReferences, REFERENCES_PATH, type ReferenceCondition, type ReferenceDeclaration } from "./references-config";
+import { isDocumentCitation, loadReferences, normaliseCitedPath, REFERENCES_PATH, type ReferenceCondition, type ReferenceDeclaration } from "./references-config";
 import { PROJECT_RULES_DIR, projectRulePathFor, readProjectRuleRegistry, sha256Hex, type ProjectRuleRegistryEntry } from "./project-rules";
 import { PROJECT_SKILLS_MANIFEST_PATH, resolveOriginPath, type ProjectSkillRegistryEntry } from "./project-skills";
 import { parseRuleFrontmatter, type RuleFrontmatter } from "./rule-frontmatter";
@@ -455,16 +455,23 @@ export async function resolveProjectContext(input: ResolveContextInput): Promise
   const cited = new Map<string, string>();
   for (const { candidate } of rules) {
     for (const match of candidate.text.matchAll(CITATION)) {
-      const rel = match[1]!;
+      // A spelling that cannot be normalised (absolute, climbing out) stays raw so the contract pass can refuse it by name.
+      const rel = normaliseCitedPath(match[1]!) ?? match[1]!;
       if (!cited.has(rel)) cited.set(rel, candidate.path);
     }
   }
   const taken = new Set([...projectEntries, ...bundled].flatMap((entry) => [entry.path, ...(entry.also_at ?? [])]));
+  const task = truncateTaskText(input.taskText ?? "");
+  if (task.truncated && (declarations ?? []).some((declaration) => declaration.when.keywords.length > 0)) {
+    warnings.push(
+      `the task text is longer than ${TASK_TEXT_MAX_CHARS} characters; only the first ${TASK_TEXT_MAX_CHARS} were matched against the keywords of declared references, so a keyword after the cut cannot promote a reference. Put what the task is about first, or match by files.`,
+    );
+  }
   const references = await resolveReferences({
     projectRoot,
     declarations: declarations ?? [],
     files,
-    taskText: truncateTaskText(input.taskText ?? "").text,
+    taskText: task.text,
     taken,
     maxFileBytes: CONTRACT_MAX_BYTES,
   });
@@ -495,7 +502,7 @@ export async function resolveProjectContext(input: ResolveContextInput): Promise
     entries: [...projectEntries, ...references.entries, ...contracts, ...bundled],
     budget: { limitBytes: cap.limitBytes, usedBytes: total, exceeded: exceeded || overCap, limitSource: cap.limitSource },
     warnings,
-    ...(declarations !== undefined ? { undeclared: contracts.map((contract) => contract.path) } : {}),
+    ...(declarations !== undefined ? { undeclared: contracts.map((contract) => contract.path).filter(isDocumentCitation) } : {}),
   };
 }
 

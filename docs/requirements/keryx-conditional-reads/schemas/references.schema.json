@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://keryx.dev/schemas/references.schema.json",
   "title": "Keryx conditional reference declarations",
-  "description": ".metaproject/rules/project/references.json. See README.md section 5.1. Each entry declares a document that project rules cite, where it applies (file globs and task keywords), the section that matters (anchor) and what it governs. A path must be relative and stay inside the project root; JSON Schema cannot express that normalisation, so the loader (src/gdskills/references-config.ts) also rejects a path that escapes the root.",
+  "description": ".metaproject/rules/project/references.json. See README.md section 5.1. Each entry declares a document that project rules cite, where it applies (file globs and task keywords), the section that matters (anchor) and what it governs. A path must be relative and stay inside the project root; JSON Schema cannot express that normalisation, so the loader (src/gdskills/references-config.ts) also rejects a path that escapes the root. Each document is declared once: two entries whose normalised paths are equal make the file invalid, which JSON Schema cannot express either.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "references"],

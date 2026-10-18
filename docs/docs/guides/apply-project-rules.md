@@ -149,6 +149,9 @@ overwrites them.
   its slug, and the first match wins. Without `anchor` the whole file is required.
 - `description` is shown next to the entry, so a worker can see why it is there.
 - A property that is not listed here is an error.
+- Declare each document once, with one `anchor`. Two entries for the same path
+  (`STYLING.md` and `./STYLING.md` count as the same path) make the file
+  invalid, and the error names both entries.
 
 A missing `references.json` means no declarations. A malformed one does not stop
 anything: no reference is promoted, the resolver prints a warning, and the task
@@ -158,7 +161,9 @@ carries on. The file is also covered by a JSON schema,
 ### Resolve against the task
 
 Pass the task text with `--task-text`. It is cut at 4000 characters, and the cut
-text is what `last.json` records. A task that edits `src/button.tsx`:
+text is what `last.json` records. When the text is cut and a declaration has
+keywords, the resolve warns that a keyword after the cut cannot promote a
+reference. A task that edits `src/button.tsx`:
 
 ```console
 $ keryx skills resolve-context --files src/button.tsx --for implement \
@@ -189,8 +194,11 @@ Details that can surprise you:
 - An `anchor` that is not found falls back to the whole file, with a warning.
 - A declared file that is missing, outside the project, larger than 262144 bytes,
   or already listed as a rule is left out, with a warning.
-- When a `references.json` exists, the result also lists `undeclared`: documents
-  that a project rule names but that have no declaration.
+- When a `references.json` exists, the result also lists `undeclared`: `.md`
+  documents that a project rule names but that have no declaration. A cited
+  `.mdc` file or a file under the rules folder is another rule and is not listed
+  there. A rule may spell the path `./STYLING.md`; it is the same document as
+  `STYLING.md`.
 
 ### What the worker must return
 
