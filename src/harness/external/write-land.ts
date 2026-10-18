@@ -153,7 +153,7 @@ function refuse(reason: LandRefusal, detail: string): LandResult {
   return { kind: "refused", reason, detail };
 }
 
-function decisionBody(decision: Record<string, string>): string {
+function decisionBody(decision: Record<string, string | number>): string {
   return `${JSON.stringify({ ...decision, at: new Date().toISOString() }, null, 2)}\n`;
 }
 
@@ -170,7 +170,7 @@ export async function landWriteRun(
     readonly confirmedPatchHash: string;
     readonly allowFlagged?: boolean;
     /** Flow 456: how the yes arrived (`tui-card`) and the card text it answered; stored in the decision file. */
-    readonly confirmation?: { readonly confirmedVia: string; readonly quote: string };
+    readonly confirmation?: { readonly confirmedVia: string; readonly quote: string; readonly pressedBy?: number; readonly pressedAt?: string };
   },
   deps: WriteLandDeps = {},
 ): Promise<LandResult> {
@@ -226,7 +226,7 @@ export async function landWriteRun(
         decision: "landed",
         branch,
         commit,
-        ...(input.confirmation !== undefined ? { confirmedVia: input.confirmation.confirmedVia, quote: input.confirmation.quote } : {}),
+        ...(input.confirmation !== undefined ? { confirmedVia: input.confirmation.confirmedVia, quote: input.confirmation.quote, ...(input.confirmation.pressedBy !== undefined ? { pressedBy: input.confirmation.pressedBy } : {}), ...(input.confirmation.pressedAt !== undefined ? { pressedAt: input.confirmation.pressedAt } : {}) } : {}),
       }),
     );
     if (!won) {

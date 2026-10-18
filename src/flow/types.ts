@@ -779,7 +779,7 @@ export interface FlowService {
     id: string;
     merged?: boolean | undefined;
     /** Flow 456: set by the shell's yes/no card; recorded in the token store. Absent for the terminal verb. */
-    confirmation?: { confirmedVia: string; quote: string } | undefined;
+    confirmation?: { confirmedVia: string; quote: string; pressedBy?: number | undefined; pressedAt?: string | undefined } | undefined;
     /**
      * Flow 456: the criteria checksum and completion target the operator was SHOWN on the card. Checked
      * under the flow lock; if either changed since, nothing is minted.

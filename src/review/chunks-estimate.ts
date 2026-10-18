@@ -9,7 +9,7 @@ import { pathExists, writeFileAtomic } from "../lib/fs";
 import { CHUNK_REVIEWER, CHUNK_TIER, computeChunkPass, ensureChunkPlan, readChunkPlan, withChunkStateLock } from "./chunks";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "./blast-radius";
 import { readJsonFileOr, readJsonObjectFile } from "../lib/json";
-import type { ConfirmedVia } from "./types";
+import { cardPressFields, type CardPress, type ConfirmedVia } from "./types";
 
 export const CHUNK_ESTIMATE_FILE = "chunk-estimate.json";
 /** The file automatic review mode (flow 429) leaves in its package; `commands/automatic-review.ts` takes its name from here. */
@@ -111,7 +111,7 @@ export async function estimateChunkRun(packageDir: string, projectRoot: string, 
 export type ChunkMode = "automatic" | "interactive";
 export type ChunkDecision = "proceed" | "ask-once" | "wait-for-yes";
 
-export type ChunkAnswer = { value: "yes" | "no"; quote: string; at: string; confirmedVia?: ConfirmedVia | undefined };
+export type ChunkAnswer = { value: "yes" | "no"; quote: string; at: string; confirmedVia?: ConfirmedVia | undefined } & CardPress;
 
 export type ChunkEstimateRecord = {
   schemaVersion: 1;
@@ -157,12 +157,12 @@ export function recordChunkEstimate(packageDir: string, estimate: ChunkEstimate,
   });
 }
 
-export async function answerChunkEstimate(packageDir: string, value: "yes" | "no", quote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia): Promise<ChunkEstimateRecord> {
+export async function answerChunkEstimate(packageDir: string, value: "yes" | "no", quote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia, press?: CardPress): Promise<ChunkEstimateRecord> {
   if (quote.trim() === "") throw new Error("The answer needs the operator's own words (--quote).");
   return withChunkStateLock(packageDir, async () => {
     const previous = await readChunkEstimate(packageDir);
     if (previous === undefined) throw new Error("No chunk estimate is recorded; run `keryx review chunks estimate` first.");
-    const record: ChunkEstimateRecord = { ...previous, asked: true, answer: { value, quote: quote.trim(), at: now.toISOString(), ...(confirmedVia === undefined ? {} : { confirmedVia }) } };
+    const record: ChunkEstimateRecord = { ...previous, asked: true, answer: { value, quote: quote.trim(), at: now.toISOString(), ...(confirmedVia === undefined ? {} : { confirmedVia }), ...cardPressFields(press) } };
     await writeFileAtomic(path.join(packageDir, CHUNK_ESTIMATE_FILE), `${JSON.stringify(record, null, 2)}\n`);
     return record;
   });

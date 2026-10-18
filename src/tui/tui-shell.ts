@@ -43,7 +43,7 @@ import { resetOperatorDenials } from "../review/review-system";
 // is defensive: it returns `false` (caller falls back to the readline shell)
 // whenever there is no TTY, the package is absent, or the renderer fails to init.
 import { describeAutomaticReviewMode } from "../commands/automatic-review";
-import type { AgentDeps, AgentIO } from "../commands/agent";
+import type { AgentDeps, AgentIO, ApprovalResponse } from "../commands/agent";
 import {
   describeReasoningEffortSource,
   describeRoundLimit,
@@ -578,6 +578,11 @@ export const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([
  * `../harness/tool/builtin/interactive-tools.ts`) — so this module stays free
  * of importing those types just for this one check.
  */
+/** Flow 464: an approval answered in the topic, carrying the pressing Telegram user and the press time. */
+function remoteApproval(fingerprint: string, fromId: number | undefined): Extract<ApprovalResponse, { approved: boolean }> {
+  return { approved: true, fingerprint, via: "remote", ...(fromId !== undefined ? { pressedBy: fromId } : {}), pressedAt: new Date().toISOString() };
+}
+
 export function isToolAvailableToSideWorker(tool: { definition: { risk?: string; name: string } }): boolean {
   return tool.definition.risk === "read" && !SIDE_WORKER_DENIED_TOOL_NAMES.has(tool.definition.name);
 }
@@ -6069,7 +6074,7 @@ export async function launchTuiAgentShell(opts: {
       );
       if (decision !== "allow") return false;
       // Flow 456: answered in the topic — an operator-confirmed card records `confirmedVia: "remote-card"`.
-      return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint, via: "remote" } : true;
+      return meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, answer.fromId) : true;
     };
     // Flow 419 (AC1, AC2): an approval the shell raises for a turn typed here is also posted to the topic
     // the moment the dock opens (a call that is auto-approved never gets there). The first answer wins: a
@@ -6101,7 +6106,7 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.(allowed ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied in Telegram.\n`);
         if (!allowed) return false;
         // Flow 456: the topic answered first — an operator-confirmed card records `confirmedVia: "remote-card"`.
-        return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint, via: "remote" } : true;
+        return meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, outcome.answer.fromId) : true;
       };
     io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));
 

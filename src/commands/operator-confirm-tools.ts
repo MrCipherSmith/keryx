@@ -53,6 +53,10 @@ export interface OperatorConfirmation {
   /** ISO time of the answer (when `invoke` ran, right after the yes). */
   readonly at: string;
   readonly confirmedVia: ConfirmedVia;
+  /** Flow 464: the Telegram user id that pressed the button. Present only when `confirmedVia` is `"remote-card"`. */
+  readonly pressedBy?: number;
+  /** Flow 464: ISO time of that press. Present only when `confirmedVia` is `"remote-card"`. */
+  readonly pressedAt?: string;
   readonly subject: string;
   /** The card exactly as shown, title first. */
   readonly card: readonly string[];
@@ -101,7 +105,16 @@ export interface OperatorConfirmBinding {
   readonly projectRoot: string;
   readonly now?: () => Date;
   readonly env?: Readonly<Record<string, string | undefined>>;
+  /**
+   * Flow 464 (AC2): the Telegram user ids allowed to answer a card from the topic (`allowedUserIds` of the remote
+   * config). The hub already drops a press from any other id; this is the second check, at the record. Absent or
+   * returning nothing, no remote answer is accepted.
+   */
+  readonly allowedUserIds?: () => readonly number[] | undefined;
 }
+
+/** Flow 464: a remote card answer counts for one hour after the card was asked. */
+export const REMOTE_CARD_TTL_MS = 60 * 60 * 1000;
 
 /** Appended to every spec's description, so the model never tells the operator to go to a terminal. */
 export const OPERATOR_CONFIRM_NOTE =
@@ -143,7 +156,13 @@ export function operatorConfirmTool<P>(spec: OperatorConfirmSpec<P>, binding: Op
   // The card whose yes is pending, keyed by its one-time token. Held only here.
   const pending = new Map<
     string,
-    { readonly input: string; readonly card: OperatorCard; readonly shown: readonly string[]; readonly prepared: P | undefined }
+    {
+      readonly input: string;
+      readonly card: OperatorCard;
+      readonly shown: readonly string[];
+      readonly prepared: P | undefined;
+      readonly issuedAt: number;
+    }
   >();
   const key = (input: Record<string, unknown>): string => JSON.stringify(input);
 
@@ -170,7 +189,7 @@ export function operatorConfirmTool<P>(spec: OperatorConfirmSpec<P>, binding: Op
       const card: OperatorCard = { title: built.title, lines: [...built.lines], subject: built.subject };
       const shown = renderOperatorCard(card);
       const token = randomUUID();
-      pending.set(token, { input: key(input), card, shown, prepared: built.prepared });
+      pending.set(token, { input: key(input), card, shown, prepared: built.prepared, issuedAt: now().getTime() });
       return { card: shown, title: card.title, token };
     },
     confirmationDeclined: (token) => {
@@ -179,15 +198,33 @@ export function operatorConfirmTool<P>(spec: OperatorConfirmSpec<P>, binding: Op
     invoke: async (input, ctx): Promise<InteractiveToolResult> => {
       const token = ctx?.confirmationToken;
       const entry = token === undefined ? undefined : pending.get(token);
-      if (token !== undefined) pending.delete(token);
+      const refuse = (why: string): InteractiveToolResult => ({ output: `${spec.name}: ${why} — nothing was changed`, isError: true });
       if (entry === undefined || entry.input !== key(input)) {
-        return { output: `${spec.name}: no operator-confirmed card for this request — nothing was changed`, isError: true };
+        if (token !== undefined) pending.delete(token);
+        return refuse("no operator-confirmed card for this request");
+      }
+      pending.delete(token as string);
+      const remote = ctx?.confirmationVia === "remote";
+      let pressedBy: number | undefined;
+      let pressedAt: string | undefined;
+      if (remote) {
+        pressedBy = ctx?.confirmationPressedBy;
+        pressedAt = ctx?.confirmationPressedAt;
+        const allowed = binding.allowedUserIds?.();
+        if (pressedBy === undefined || pressedAt === undefined) return refuse("the remote answer did not say who pressed it");
+        if (allowed === undefined || !allowed.includes(pressedBy)) {
+          return refuse(`Telegram user ${pressedBy} is not on the allowed list`);
+        }
+        if (now().getTime() - entry.issuedAt > REMOTE_CARD_TTL_MS) {
+          return refuse("the card is older than 1 hour; ask again");
+        }
       }
       const confirmation: OperatorConfirmation = {
         quote: `${entry.card.title}: yes`,
         answer: "yes",
         at: now().toISOString(),
-        confirmedVia: ctx?.confirmationVia === "remote" ? "remote-card" : "tui-card",
+        confirmedVia: remote ? "remote-card" : "tui-card",
+        ...(remote ? { pressedBy: pressedBy as number, pressedAt: pressedAt as string } : {}),
         subject: entry.card.subject,
         card: entry.shown,
       };

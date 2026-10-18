@@ -72,6 +72,9 @@ export type StoredConfirmationToken = {
    */
   confirmedVia?: string | undefined;
   confirmationQuote?: string | undefined;
+  /** Flow 464: the Telegram user id that pressed the remote card and the time of the press. */
+  pressedBy?: number | undefined;
+  pressedAt?: string | undefined;
 };
 
 export type ConfirmationTokenFailure =
@@ -114,7 +117,7 @@ function sha256(text: string): string {
 export async function mintConfirmationToken(
   cwd: string,
   dir: string,
-  binding: { flowId: string; acChecksum: string; target: string; confirmedVia?: string; confirmationQuote?: string },
+  binding: { flowId: string; acChecksum: string; target: string; confirmedVia?: string; confirmationQuote?: string; pressedBy?: number; pressedAt?: string },
   deps: { now: () => Date; randomToken?: () => string },
 ): Promise<{ token: string; stored: StoredConfirmationToken }> {
   // The flow id is the token's visible prefix, so a token pasted into the wrong
@@ -134,6 +137,8 @@ export async function mintConfirmationToken(
     expiresAt: new Date(mintedAt.getTime() + CONFIRMATION_TOKEN_TTL_MS).toISOString(),
     ...(binding.confirmedVia !== undefined ? { confirmedVia: binding.confirmedVia } : {}),
     ...(binding.confirmationQuote !== undefined ? { confirmationQuote: binding.confirmationQuote } : {}),
+    ...(binding.pressedBy !== undefined ? { pressedBy: binding.pressedBy } : {}),
+    ...(binding.pressedAt !== undefined ? { pressedAt: binding.pressedAt } : {}),
   };
   await writeFileAtomic(confirmTokenPath(cwd, dir), `${JSON.stringify(stored, null, 2)}\n`);
   return { token, stored };

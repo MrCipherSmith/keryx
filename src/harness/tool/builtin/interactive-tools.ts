@@ -63,6 +63,9 @@ export interface InteractiveToolContext {
    * only together with {@link confirmationToken}; a tool that records the operator's decision labels it from here.
    */
   confirmationVia?: "local" | "remote";
+  /** Flow 464 (AC1): the Telegram user id that pressed the remote card, and when. Set only with `confirmationVia: "remote"`. */
+  confirmationPressedBy?: number;
+  confirmationPressedAt?: string;
   /**
    * Flow 425: untrusted external content was read earlier in this turn. `ask_user` copies it onto the question, so
    * the review arbiter can tell a question that may have been shaped by that content and never decide it.

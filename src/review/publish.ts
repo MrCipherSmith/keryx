@@ -12,7 +12,7 @@ import { findingStatus, quoteSha256, readRoundNumber } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
 import { computeVerdict, type VerdictFinding } from "./verdict";
 import { computeReadiness, failingItems, readinessRefusal, type ReadinessOptions, type ReadinessReport } from "./readiness";
-import type { ConfirmedVia, ManagedReviewManifest } from "./types";
+import { cardPressFields, type CardPress, type ConfirmedVia, type ManagedReviewManifest } from "./types";
 
 export const REVIEW_EVENTS = ["COMMENT", "REQUEST_CHANGES", "APPROVE"] as const;
 export type ReviewEvent = (typeof REVIEW_EVENTS)[number];
@@ -30,7 +30,7 @@ export type PublishOptions = {
   now?: (() => Date) | undefined;
   /** Set when the operator's yes came from a card instead of the terminal prompt; recorded in published.json. */
   confirmedVia?: ConfirmedVia | undefined;
-};
+} & CardPress;
 
 export type PublishResult = { readiness: ReadinessReport; body: string; event: ReviewEvent; partial: boolean; posted: boolean; registryWarning?: string | undefined };
 
@@ -172,7 +172,7 @@ export async function publishReview(packageDir: string, options: PublishOptions)
   if (!result.ok) throw new Error(`GitHub refused the review: ${result.detail}`);
   await writeFileAtomic(
     path.join(packageDir, "published.json"),
-    `${JSON.stringify({ pr: manifest.target.ref, reviewId: manifest.reviewId, head: reviewedHead, round: roundBlock.round, event, partial, failing: failing.map((item) => item.id), time: (options.now?.() ?? new Date()).toISOString(), ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }) }, null, 2)}\n`,
+    `${JSON.stringify({ pr: manifest.target.ref, reviewId: manifest.reviewId, head: reviewedHead, round: roundBlock.round, event, partial, failing: failing.map((item) => item.id), time: (options.now?.() ?? new Date()).toISOString(), ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }), ...cardPressFields(options) }, null, 2)}\n`,
   );
   // Flow 458: keryx's own record that it finished (and posted) this round, outside the repository (./round-registry.ts).
   const registered = recordFinishedRound(packageDir, "publish");

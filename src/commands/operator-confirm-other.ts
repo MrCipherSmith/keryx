@@ -106,8 +106,13 @@ function limited(lines: readonly string[]): string[] {
   return [...lines.slice(0, MAX_LISTED), `  ... and ${lines.length - MAX_LISTED} more`];
 }
 
-function record(confirmation: OperatorConfirmation): { confirmedVia: string; quote: string } {
-  return { confirmedVia: confirmation.confirmedVia, quote: confirmation.quote };
+function record(confirmation: OperatorConfirmation): { confirmedVia: string; quote: string; pressedBy?: number; pressedAt?: string } {
+  return {
+    confirmedVia: confirmation.confirmedVia,
+    quote: confirmation.quote,
+    ...(confirmation.pressedBy === undefined ? {} : { pressedBy: confirmation.pressedBy }),
+    ...(confirmation.pressedAt === undefined ? {} : { pressedAt: confirmation.pressedAt }),
+  };
 }
 
 /** Run `fn` with console output captured, and `process.exitCode` put back. The CLI verbs print; a tool returns text. */
@@ -617,7 +622,7 @@ export function scheduleDecisionLogPath(projectRoot: string): string {
 
 async function recordScheduleDecision(
   projectRoot: string,
-  line: { action: string; name: string; quote: string; confirmedVia: string; at: string },
+  line: { action: string; name: string; quote: string; confirmedVia: string; at: string; pressedBy?: number; pressedAt?: string },
 ): Promise<void> {
   const file = scheduleDecisionLogPath(projectRoot);
   await mkdir(path.dirname(file), { recursive: true });

@@ -27,6 +27,7 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { cardSafe } from "../lib/card-safe";
+import { cardPressFields } from "../review/types";
 import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/service";
 import { placeReviewPath } from "../lib/review-path-flags";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
@@ -146,7 +147,7 @@ function chunksAnswerSpec(): OperatorConfirmSpec<ChunksPrepared> {
       }
       // The CLI records the estimate before it answers (`chunks estimate`), so a first answer finds a record to extend.
       await recordChunkEstimate(prepared.dir, estimate, chunkModeOf(prepared.dir));
-      const record = await answerChunkEstimate(prepared.dir, prepared.answer, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia);
+      const record = await answerChunkEstimate(prepared.dir, prepared.answer, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia, cardPressFields(confirmation));
       return { output: `chunk run answered ${record.answer?.value ?? prepared.answer} by the operator (${confirmation.confirmedVia}, ${confirmation.at}); ${estimate.chunks} pass(es) against a ceiling of ${estimate.maxPasses}` };
     },
   };
@@ -225,6 +226,7 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
         post: post(),
         now: () => new Date(confirmation.at),
         confirmedVia: confirmation.confirmedVia,
+        ...cardPressFields(confirmation),
         // Only the body, the target and the verdict the operator saw are posted. The event is fixed from `prepared`
         // above; the target is re-read from the manifest, which a background job may have retargeted.
         confirm: async (body, targetRef) => {
@@ -282,7 +284,7 @@ function waiveCoverageSpec(): OperatorConfirmSpec<CoveragePrepared> {
       if (now.length !== prepared.files.length || now.some((file, index) => file !== prepared.files[index])) {
         return { output: "The uncovered files changed after the card was shown; nothing was recorded. Ask again.", isError: true };
       }
-      const waiver = await recordCoverageWaiver(prepared.dir, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia);
+      const waiver = await recordCoverageWaiver(prepared.dir, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia, cardPressFields(confirmation));
       if (waiver === undefined) return { output: "No coverage waiver was recorded: the package holds no dispatch record or nothing is uncovered.", isError: true };
       return { output: `coverage waived by the operator (${waiver.confirmedVia ?? "unknown"}, ${waiver.time}): ${waiver.files.length} file(s) not reviewed. Run \`keryx review complete\` to close the review.` };
     },
@@ -345,7 +347,7 @@ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<Read
       if (current === undefined || current.status !== "fail" || current.evidence !== prepared.evidence) {
         return { output: "The readiness item changed after the card was shown; nothing was recorded. Ask again.", isError: true };
       }
-      const added = await waiveReadiness(prepared.dir, [prepared.item], confirmation.quote, { ...readiness(), now: new Date(confirmation.at), confirmedVia: confirmation.confirmedVia });
+      const added = await waiveReadiness(prepared.dir, [prepared.item], confirmation.quote, { ...readiness(), now: new Date(confirmation.at), confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation) });
       return { output: `readiness item waived by the operator (${confirmation.confirmedVia}, ${confirmation.at}): ${added.map((waiver) => waiver.item).join(", ")}. Run \`keryx review complete\` to close the review.` };
     },
   };
@@ -432,7 +434,7 @@ function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionP
       if (JSON.stringify(again) !== JSON.stringify(prepared.subject)) {
         return { output: "The head, the unrun mutants or the reviewer set changed after the card was shown; nothing was recorded. Ask again.", isError: true };
       }
-      await recordOperatorDecision(prepared.dir, { kind, quote: confirmation.quote, reason: prepared.reason, confirmedVia: confirmation.confirmedVia, at: confirmation.at, subject: prepared.subject });
+      await recordOperatorDecision(prepared.dir, { kind, quote: confirmation.quote, reason: prepared.reason, confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation), at: confirmation.at, subject: prepared.subject });
       return { output: `${mutation ? "mutation pass waived" : "reviewer-set override recorded"} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json` };
     },
   };
@@ -554,7 +556,7 @@ function confirmPlanSpec(): OperatorConfirmSpec<PlanPrepared> {
       if (prepared === undefined) return { output: "review_confirm_plan: nothing prepared for this card", isError: true };
       const estimate = await estimatePlan(prepared.dir);
       if (planKeyOf(estimate) !== prepared.planKey) return { output: "The plan changed after the card was shown; nothing was recorded. Ask again.", isError: true };
-      const record = await recordPlanConfirmation(prepared.dir, estimate, { quote: confirmation.quote, confirmedVia: confirmation.confirmedVia, at: confirmation.at });
+      const record = await recordPlanConfirmation(prepared.dir, estimate, { quote: confirmation.quote, confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation), at: confirmation.at });
       return { output: `plan confirmed by the operator (${record.confirmedVia}, ${record.at}): ${record.dispatches} dispatch(es), ${record.minutes[0]}-${record.minutes[1]} min` };
     },
   };
@@ -627,7 +629,7 @@ function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
       const warnings: string[] = [];
       await answerPremiseQuestion(
         prepared.dir,
-        { finding: again.finding, answer: prepared.answer, reason: prepared.reason, quote: confirmation.quote, at: confirmation.at, confirmedVia: confirmation.confirmedVia },
+        { finding: again.finding, answer: prepared.answer, reason: prepared.reason, quote: confirmation.quote, at: confirmation.at, confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation) },
         { cwd: ctx.projectRoot, warn: (line) => warnings.push(`warning: ${line}`) },
       );
       return { output: [`premise question on ${prepared.finding} answered ${prepared.answer} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json and findings.json`, ...warnings].join("\n") };

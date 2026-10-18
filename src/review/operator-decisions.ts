@@ -18,7 +18,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
-import type { ConfirmedVia } from "./types";
+import { cardPressFields, type CardPress, type ConfirmedVia } from "./types";
 
 export const OPERATOR_DECISIONS_FILE = "operator-decisions.json";
 /**
@@ -57,7 +57,7 @@ export type OperatorDecision = {
   confirmedVia: OperatorDecisionVia;
   at: string;
   subject?: OperatorDecisionSubject | undefined;
-};
+} & CardPress;
 
 /**
  * What the operator was shown when answering a premise question: the finding's severity, the judge's verdict, and a
@@ -84,7 +84,7 @@ export type PremiseQuestionDecision = {
   subject: PremiseDecisionSubject;
   /** Set when the answer was copied from an earlier round's package for a carried finding (flow 459): that package's path. */
   carriedFrom?: string | undefined;
-};
+} & CardPress;
 
 /** What a writer passes: the store fills in the kind and the actor, so both writers record the same convention. */
 export type PremiseDecisionInput = Omit<PremiseQuestionDecision, "kind" | "actor">;
@@ -230,6 +230,7 @@ export async function recordPremiseDecisionAfter<A>(
     at: input.at,
     actor: PREMISE_DECISION_ACTOR,
     confirmedVia: input.confirmedVia,
+    ...cardPressFields(input),
     subject: input.subject,
     ...(input.carriedFrom === undefined ? {} : { carriedFrom: input.carriedFrom }),
   };
@@ -274,7 +275,7 @@ export async function confirmedDecision(packageDir: string, kind: OperatorDecisi
 export async function recordOperatorDecision(packageDir: string, decision: OperatorDecision): Promise<OperatorDecision> {
   if (!validGateDecision(decision)) throw new Error("an operator decision needs a kind, the operator's words, a reason, how it was confirmed and the time");
   const subject = decision.subject === undefined ? undefined : { ...(decision.subject.head === undefined ? {} : { head: decision.subject.head }), items: [...new Set(decision.subject.items)].sort() };
-  const entry: OperatorDecision = { ...decision, quote: decision.quote.trim(), reason: decision.reason.trim(), ...(subject === undefined ? {} : { subject }) };
+  const entry: OperatorDecision = { ...decision, quote: decision.quote.trim(), reason: decision.reason.trim(), ...cardPressFields(decision), ...(subject === undefined ? {} : { subject }) };
   await withOperatorDecisionsLock(packageDir, () => appendDecision(packageDir, entry));
   return decision;
 }

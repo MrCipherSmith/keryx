@@ -19,6 +19,8 @@ import { operatorConfirmTool, operatorConfirmToolNames } from "./operator-confir
 
 const NOW = new Date("2026-10-15T19:00:00.000Z");
 const PR = "https://github.com/Presight-AI/vantage-frontend/pull/7932";
+const ALLOWED_ID = 446593035;
+const PRESSED_AT = "2026-10-15T19:00:05.000Z";
 
 let root: string;
 let pkg: string;
@@ -32,7 +34,7 @@ const post = async (ref: string, event: ReviewEvent, body: string): Promise<Post
 function tool(name: string): InteractiveTool {
   const spec = buildReviewConfirmSpecs({ prLookup: async () => null, prFiles: async () => null, postReview: post }).find((entry) => entry.name === name);
   if (spec === undefined) throw new Error(`no spec ${name}`);
-  return operatorConfirmTool(spec, { projectRoot: root, now: () => NOW, env: {} });
+  return operatorConfirmTool(spec, { projectRoot: root, now: () => NOW, env: {}, allowedUserIds: () => [ALLOWED_ID] });
 }
 
 type Asked = { card: readonly string[]; title: string; token: string };
@@ -48,9 +50,10 @@ const asked = (value: Asked | { error: string }): Asked => {
   return value;
 };
 
-async function yes(t: InteractiveTool, input: Record<string, unknown>, via?: "remote"): Promise<{ output: string; isError?: boolean; card: readonly string[] }> {
+async function yes(t: InteractiveTool, input: Record<string, unknown>, via?: "remote", pressedBy: number = ALLOWED_ID): Promise<{ output: string; isError?: boolean; card: readonly string[] }> {
   const card = asked(await ask(t, input));
-  const result = await t.invoke(input, { confirmationToken: card.token, ...(via === undefined ? {} : { confirmationVia: via }) } as never);
+  const press = via === undefined ? {} : { confirmationVia: via, confirmationPressedBy: pressedBy, confirmationPressedAt: PRESSED_AT };
+  const result = await t.invoke(input, { confirmationToken: card.token, ...press } as never);
   return { output: result.output, isError: result.isError ?? false, card: card.card };
 }
 
@@ -123,6 +126,8 @@ describe("review_chunks_answer", () => {
     const answer = (await readChunkEstimate(pkg))?.answer;
     expect(answer?.value).toBe("no");
     expect(answer?.confirmedVia).toBe("remote-card");
+    expect(answer?.pressedBy).toBe(ALLOWED_ID);
+    expect(answer?.pressedAt).toBe(PRESSED_AT);
   });
 
   test("a no changes nothing: the card was built, the tool was never invoked, no estimate is on disk", async () => {
@@ -415,7 +420,7 @@ describe("review_decide_premise", () => {
     const t = tool("review_decide_premise");
     const result = await yes(t, { package: pkg, finding: "pr7932-r1#LY-003", answer: "uphold", reason: "mirror it" }, "remote");
     expect(result.card[0]).toBe("Uphold finding pr7932-r1#LY-003 in .metaproject/reviews/pr7932-r1 at major?");
-    expect(readJson("operator-decisions.json").decisions[0]).toMatchObject({ answer: "uphold", confirmedVia: "remote-card" });
+    expect(readJson("operator-decisions.json").decisions[0]).toMatchObject({ answer: "uphold", confirmedVia: "remote-card", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT });
     expect((await computeVerdict(pkg)).open.map((entry) => [entry.id, entry.severity])).toEqual([["LY-003", "major"]]);
   });
 
@@ -459,5 +464,85 @@ describe("review_decide_premise", () => {
       expect(result.isError).toBe(true);
       expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
     }
+  });
+});
+
+// Flow 464 (AC3): the plan and premise cards answer through the remote card, per tool, both paths, "no" included.
+describe("review_confirm_plan and review_decide_premise through the remote card", () => {
+  const held = heldFinding({ global_id: "pr7932-r1#LY-003", premise: heldPremise({ question: "Should the timeline mirror?" }) });
+
+  function overThresholdPackage(): void {
+    put("manifest.json", {
+      schemaVersion: 1,
+      reviewId: "pr7932-r1",
+      mode: "review-flow",
+      status: "draft",
+      target: { kind: "pr", ref: PR },
+      artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
+      coverage: [],
+    });
+    put("findings.json", [held]);
+    writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ reviewPlan: { maxDispatches: 1, maxMinutes: 1 } }));
+  }
+
+  const planFile = (): Record<string, any> | undefined => (existsSync(path.join(pkg, "plan-confirmation.json")) ? readJson("plan-confirmation.json") : undefined);
+  const premiseInput = { package: "", finding: "LY-003", answer: "dismiss", reason: "platforms do not mirror" };
+
+  test("confirm_plan: a local yes records tui-card with no press; a remote yes records remote-card, who and when", async () => {
+    overThresholdPackage();
+    const t = tool("review_confirm_plan");
+    expect((await yes(t, { package: pkg })).isError).toBe(false);
+    expect(planFile()).toMatchObject({ confirmedVia: "tui-card" });
+    expect(planFile()?.["pressedBy"]).toBeUndefined();
+    rmSync(path.join(pkg, "plan-confirmation.json"));
+    const remote = await yes(t, { package: pkg }, "remote");
+    expect(remote.isError).toBe(false);
+    expect(planFile()).toMatchObject({ confirmedVia: "remote-card", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT });
+  });
+
+  test("confirm_plan: a no, local or remote, records nothing", async () => {
+    overThresholdPackage();
+    const t = tool("review_confirm_plan");
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      t.confirmationDeclined!(asked(await ask(t, { package: pkg })).token);
+      expect(planFile()).toBeUndefined();
+    }
+  });
+
+  test("confirm_plan: a remote yes from an id outside the allowed list records nothing and says why", async () => {
+    overThresholdPackage();
+    const result = await yes(tool("review_confirm_plan"), { package: pkg }, "remote", 1234);
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("Telegram user 1234 is not on the allowed list");
+    expect(planFile()).toBeUndefined();
+  });
+
+  test("decide_premise: a local yes records tui-card with no press; a remote yes records remote-card, who and when", async () => {
+    overThresholdPackage();
+    const t = tool("review_decide_premise");
+    const input = { ...premiseInput, package: pkg };
+    expect((await yes(t, input)).isError).toBe(false);
+    expect(readJson("operator-decisions.json").decisions[0]).toMatchObject({ confirmedVia: "tui-card" });
+    expect(readJson("operator-decisions.json").decisions[0].pressedBy).toBeUndefined();
+    expect((await yes(t, { ...input, answer: "uphold" }, "remote")).isError).toBe(false);
+    const decisions = readJson("operator-decisions.json").decisions;
+    expect(decisions.at(-1)).toMatchObject({ answer: "uphold", confirmedVia: "remote-card", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT });
+  });
+
+  test("decide_premise: a no, local or remote, records nothing", async () => {
+    overThresholdPackage();
+    const t = tool("review_decide_premise");
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      t.confirmationDeclined!(asked(await ask(t, { ...premiseInput, package: pkg })).token);
+      expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
+    }
+  });
+
+  test("decide_premise: a remote yes from an id outside the allowed list records nothing and says why", async () => {
+    overThresholdPackage();
+    const result = await yes(tool("review_decide_premise"), { ...premiseInput, package: pkg }, "remote", 1234);
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("Telegram user 1234 is not on the allowed list");
+    expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
   });
 });

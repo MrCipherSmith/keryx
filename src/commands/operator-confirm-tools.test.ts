@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { runAgentTurn, type AgentDeps, type AgentIO, type ApprovalMeta, type ApprovalResponse } from "./agent";
 import {
+  REMOTE_CARD_TTL_MS,
   operatorConfirmTool,
   operatorConfirmToolNames,
   operatorConfirmTools,
@@ -57,9 +58,14 @@ function scripted(toolName: string, input: Record<string, unknown>): ProviderPor
 }
 
 const NOW = new Date("2026-10-15T18:30:00.000Z");
+const ALLOWED = [446593035];
+const PRESSED_AT = "2026-10-15T18:30:00.000Z";
 
 /** The test gate: lifts a counter's ceiling. Its card reads "state" the test controls. */
-function testGate(state: { ceiling: number; refuse?: string }) {
+function testGate(
+  state: { ceiling: number; refuse?: string },
+  binding: { allowedUserIds?: () => readonly number[] | undefined; now?: () => Date } = {},
+) {
   const applied: { input: Record<string, unknown>; confirmation: OperatorConfirmation; prepared: { ceiling: number } | undefined }[] = [];
   const spec: OperatorConfirmSpec<{ ceiling: number }> = {
     name: "test_lift_ceiling",
@@ -85,7 +91,7 @@ function testGate(state: { ceiling: number; refuse?: string }) {
       return { output: `ceiling lifted to ${String(input["to"])}` };
     },
   };
-  return { spec, applied, tool: operatorConfirmTool(spec, { projectRoot: "/nonexistent-root", now: () => NOW }) };
+  return { spec, applied, tool: operatorConfirmTool(spec, { projectRoot: "/nonexistent-root", now: () => NOW, ...binding }) };
 }
 
 const CARD = ["Lift the test ceiling from 25 to 31?", "current ceiling: 25", "new ceiling: 31", "subject: package pkg-1"];
@@ -97,8 +103,9 @@ async function turn(options: {
   unattended?: boolean;
   state?: { ceiling: number; refuse?: string };
   trustedMcpTools?: Map<string, string>;
+  allowedUserIds?: readonly number[];
 }) {
-  const gate = testGate(options.state ?? { ceiling: 25 });
+  const gate = testGate(options.state ?? { ceiling: 25 }, { allowedUserIds: () => options.allowedUserIds ?? ALLOWED });
   const asked: { tool: string; meta: ApprovalMeta | undefined }[] = [];
   const autoApproved: string[] = [];
   const history: NormalizedMessage[] = [];
@@ -136,6 +143,13 @@ async function turn(options: {
 }
 
 const yes = (meta: ApprovalMeta | undefined): ApprovalResponse => ({ approved: true, fingerprint: meta!.fingerprint });
+const remoteYes = (meta: ApprovalMeta | undefined, pressedBy: number = ALLOWED[0]!): ApprovalResponse => ({
+  approved: true,
+  fingerprint: meta!.fingerprint,
+  via: "remote",
+  pressedBy,
+  pressedAt: PRESSED_AT,
+});
 
 afterEach(() => {
   setReviewSystem("inherit");
@@ -173,10 +187,33 @@ describe("AC1: the driver asks for an operator-confirm card in every mode", () =
     expect(result.toolOutput).toContain("ceiling lifted to 31");
   });
 
-  test("a yes answered in the remote topic is recorded as remote-card", async () => {
-    const result = await turn({ mode: "ask", answer: (meta) => ({ approved: true, fingerprint: meta!.fingerprint, via: "remote" }) });
+  test("a yes answered in the remote topic is recorded as remote-card, with who pressed and when", async () => {
+    const result = await turn({ mode: "ask", answer: remoteYes });
     expect(result.applied).toHaveLength(1);
-    expect(result.applied[0]!.confirmation.confirmedVia).toBe("remote-card");
+    const confirmation = result.applied[0]!.confirmation;
+    expect(confirmation.confirmedVia).toBe("remote-card");
+    expect(confirmation.pressedBy).toBe(ALLOWED[0]);
+    expect(confirmation.pressedAt).toBe(PRESSED_AT);
+  });
+
+  test("a yes pressed in this shell records neither pressedBy nor pressedAt", async () => {
+    const result = await turn({ mode: "ask", answer: yes });
+    const confirmation = result.applied[0]!.confirmation;
+    expect(confirmation.confirmedVia).toBe("tui-card");
+    expect("pressedBy" in confirmation).toBe(false);
+    expect("pressedAt" in confirmation).toBe(false);
+  });
+
+  test("a remote yes from an id outside the allowed list applies nothing and says why", async () => {
+    const result = await turn({ mode: "ask", answer: (meta) => remoteYes(meta, 1234), allowedUserIds: ALLOWED });
+    expect(result.applied).toEqual([]);
+    expect(result.toolOutput).toContain("Telegram user 1234 is not on the allowed list — nothing was changed");
+  });
+
+  test("a remote yes with no allowed list bound applies nothing", async () => {
+    const result = await turn({ mode: "ask", answer: remoteYes, allowedUserIds: [] });
+    expect(result.applied).toEqual([]);
+    expect(result.toolOutput).toContain("not on the allowed list");
   });
 
   test("a yes for a different call (fingerprint mismatch) is a no", async () => {
@@ -274,6 +311,93 @@ describe("AC1: the card's token is single-use and bound to the input", () => {
     const gate = testGate({ ceiling: 25 });
     expect(gate.tool.definition.risk).toBe("write");
     expect(gate.tool.definition.description).toContain("you cannot confirm it");
+  });
+});
+
+describe("AC2: a remote answer is accepted only for this question, once, within an hour", () => {
+  const remote = (token: string, extra: { pressedBy?: number } = {}) => ({
+    confirmationToken: token,
+    confirmationVia: "remote" as const,
+    confirmationPressedBy: extra.pressedBy ?? ALLOWED[0]!,
+    confirmationPressedAt: PRESSED_AT,
+  });
+  const issue = async (gate: ReturnType<typeof testGate>, to = 31) => {
+    const confirmation = await gate.tool.confirmation!({ to });
+    if ("error" in confirmation) throw new Error(confirmation.error);
+    return confirmation.token!;
+  };
+
+  test("an allowed id, this question's token, unused, inside the hour is accepted", async () => {
+    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
+    const result = await gate.tool.invoke({ to: 31 }, remote(await issue(gate)));
+    expect(result.isError).toBe(false);
+    expect(gate.applied).toHaveLength(1);
+  });
+
+  test("an id that is not allowed is refused, says why, and changes nothing", async () => {
+    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
+    const result = await gate.tool.invoke({ to: 31 }, remote(await issue(gate), { pressedBy: 777 }));
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("Telegram user 777 is not on the allowed list — nothing was changed");
+    expect(gate.applied).toEqual([]);
+  });
+
+  test("another question's token is refused, changes nothing, and is spent", async () => {
+    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
+    const token = await issue(gate, 31);
+    const result = await gate.tool.invoke({ to: 99 }, remote(token));
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("no operator-confirmed card for this request — nothing was changed");
+    expect(gate.applied).toEqual([]);
+    expect((await gate.tool.invoke({ to: 31 }, remote(token))).isError).toBe(true);
+  });
+
+  test("a replay of a used token is refused", async () => {
+    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
+    const token = await issue(gate);
+    expect((await gate.tool.invoke({ to: 31 }, remote(token))).isError).toBe(false);
+    const replay = await gate.tool.invoke({ to: 31 }, remote(token));
+    expect(replay.isError).toBe(true);
+    expect(replay.output).toContain("nothing was changed");
+    expect(gate.applied).toHaveLength(1);
+  });
+
+  test("a token older than one hour is refused, says why, and is spent", async () => {
+    let clock = NOW.getTime();
+    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED, now: () => new Date(clock) });
+    const token = await issue(gate);
+    clock += REMOTE_CARD_TTL_MS + 1;
+    const result = await gate.tool.invoke({ to: 31 }, remote(token));
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("older than 1 hour");
+    expect(gate.applied).toEqual([]);
+    expect((await gate.tool.invoke({ to: 31 }, remote(token))).isError).toBe(true);
+  });
+
+  test("a token exactly at the hour is still accepted", async () => {
+    let clock = NOW.getTime();
+    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED, now: () => new Date(clock) });
+    const token = await issue(gate);
+    clock += REMOTE_CARD_TTL_MS;
+    expect((await gate.tool.invoke({ to: 31 }, remote(token))).isError).toBe(false);
+  });
+
+  test("a remote answer that does not say who pressed it is refused", async () => {
+    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
+    const token = await issue(gate);
+    const result = await gate.tool.invoke({ to: 31 }, { confirmationToken: token, confirmationVia: "remote" });
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("did not say who pressed it");
+    expect(gate.applied).toEqual([]);
+  });
+
+  test("an answer that did not come through the bridge (tool-result text, no token) applies nothing", async () => {
+    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
+    await issue(gate);
+    const result = await gate.tool.invoke({ to: 31 }, { confirmationVia: "remote", confirmationPressedBy: ALLOWED[0]!, confirmationPressedAt: PRESSED_AT });
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("no operator-confirmed card for this request — nothing was changed");
+    expect(gate.applied).toEqual([]);
   });
 });
 
