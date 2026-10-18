@@ -90,9 +90,10 @@ not a hardcoded `cat`/`ls`/`find` invocation).
 - Fixture/factory patterns (how test data is created)
 - Before/after hook usage
 
+**1.2b Load test-convention rules, project first.** Read the testing rules the task touches (`testing-conventions`, `tdd-workflow`, and any rule the task names) in this order: `.metaproject/rules/project/<rule>.mdc` first, then `.metaproject/rules/core/<rule>.mdc`. A project rule with the same name replaces the bundled one; a project rule with a different name adds to it. Take the list from `workspace.resolved_context_file` when the task carries one, otherwise run `keryx skills resolve-context --for test --files <target_files, comma-joined> --out <project-relative path>`; read its `must_read` entries in full and record each in `project_context_applied` with the resolver's `sha256`. Where a project test convention and a bundled one conflict, the project wins. A project skill only supplements these steps; it never replaces this skill.
+
 **1.3 Identify test file naming:**
-- Pattern: `<component>.test.ts`, `<service>.spec.ts`, `test_<module>.py`, etc.
-- Location: co-located with source or in `__tests__`/`tests/` directory
+- Pattern (`<component>.test.ts`, `<service>.spec.ts`, `test_<module>.py`) and location (co-located, or `__tests__`/`tests/`)
 
 **Output of Phase 1:**
 ```
@@ -200,7 +201,6 @@ The generated tests MUST:
   ```typescript
   // Use todo() for unimplemented tests
   it.todo('<test description>');
-  
   // OR use a stub assertion that fails
   it('<test description>', () => {
     expect(true).toBe(false); // RED: remove this when implementing
@@ -265,6 +265,8 @@ TEST_CASE_SPECS:
           type: happy_path | edge_case | error_path
           status: written  # test file exists, test is RED
 
+  project_context_applied: [{path: <rule path, project first>, sha256: <resolver's sha256>, how: read|followed|n/a}]
+
   run_command: "<command to run just these tests>"
   expected_result: "all failing (RED phase)"
   notes: "<any test design decisions or assumptions>"
@@ -285,12 +287,10 @@ all_criteria_covered: true | false (with explanation)
 
 When `task-implementer` receives a task that includes `test_case_specs`:
 
-1. Read the test files (already committed as RED)
-2. Run the tests — confirm they FAIL
-3. Implement code until all tests are GREEN
-4. Commit the implementation
-5. Re-run tests — confirm GREEN
-6. Report SUCCESS
+1. Read the test files (already committed as RED) and run them — confirm they FAIL
+2. Implement code until all tests are GREEN
+3. Commit the implementation, re-run tests — confirm GREEN
+4. Report SUCCESS
 
 This ensures the TDD cycle is maintained end-to-end.
 

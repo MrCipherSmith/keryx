@@ -1060,7 +1060,7 @@ async function runTask(args: string[]): Promise<void> {
     const taskId = positional(args, 2);
     if (!id || !taskId) {
       throw new Error(
-        'Usage: keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"] [--ac AC1,AC2] [--evidence <path|ref>,...]',
+        'Usage: keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"] [--ac AC1,AC2] [--evidence <path|ref>,...] [--result <result.json> --resolved <resolved.json>]',
       );
     }
     const disposition = parseDisposition(optionValue(args, "--disposition"));
@@ -1072,6 +1072,8 @@ async function runTask(args: string[]): Promise<void> {
     // was.
     const acRefs = listOption(args, "--ac");
     const evidenceRefs = listOption(args, "--evidence");
+    const resultFile = optionValue(args, "--result");
+    const resolvedFile = optionValue(args, "--resolved");
     const flow = await getService().taskDone({
       cwd: process.cwd(),
       id,
@@ -1080,6 +1082,7 @@ async function runTask(args: string[]): Promise<void> {
       reason,
       acRefs,
       evidenceRefs,
+      projectContext: { resultFile, resolvedFile },
     });
     const done = flow.tasks.filter((task) => task.status === "done").length;
     console.log(`  ${style.green(symbols.ok)} Task ${style.bold(taskId.toUpperCase())} done ${style.dim(`(${done}/${flow.tasks.length})`)}`);

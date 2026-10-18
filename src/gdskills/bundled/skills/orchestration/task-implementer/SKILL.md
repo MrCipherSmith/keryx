@@ -173,9 +173,15 @@ Before you rely on a project-skill's guidance, confirm it still matches the code
 - `keryx skills route <target_file>` — find the project-skill for this module/entity (if any).
 - If one exists: `keryx skills verify <module>/<skill>` — classifies it `fresh | stale | needs-review | blocked`.
 - If it is **not `fresh`**: do not follow it blindly. Verify each claim against the code you read in Phase 2, and note the drift in `notes` (Phase 6.1) so the orchestrator can trigger `skills learn`.
+- If it is **`fresh`**: apply it. Its rules, templates and conventions for the target are part of the task, not background reading, and they supplement this skill's phases: a project skill never replaces a phase, the TDD order or the output contract. Where it and a bundled rule disagree, the project skill wins; say so in `notes`.
 - If no skill exists for a non-trivial module you had to reverse-engineer, note that too — it's a candidate for `skills create`.
 
 This step is read-only and inline; do not spawn a subagent for it.
+
+**2.0c Resolve the project's standard (before 2.1):**
+- Use `workspace.resolved_context_file` when given; otherwise run `keryx skills resolve-context --for implement --files <target_files, comma-joined> --task-type <task_type> --out <project-relative path>`.
+- Read every `must_read` entry in full, project entries first; read `on_demand` ones only when the work touches them. A project rule listed with `shadows` replaces the bundled one. An entry with `also_at` is one file under several paths: citing any of them, with the entry's sha256, counts.
+- Cite what you used in `project_context_applied` (6.1) with the resolver's `sha256`; `n/a` needs a reason in `notes`. Never edit a resolved file: `keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <resolved.json>` fails on drift.
 
 **2.1 Read all target files:**
 - Read each file from `target_files` in full
@@ -183,25 +189,18 @@ This step is read-only and inline; do not spawn a subagent for it.
 - Read the `context` field for additional type/signature info
 
 **2.2 Read existing tests and stories:**
-- `existing_tests` and `existing_stories` are arrays and default to `[]`
-  (`input-contract.schema.json`). Empty means none; the string `"none"` is not a
-  legal value and a request carrying it is refused by 1.4
+- `existing_tests` and `existing_stories` default to `[]`; the string `"none"` is not a legal value and 1.4 refuses it
 - Read each file listed in either array
 - Understand existing test patterns (describe/it structure, mocks, fixtures) and, for every file in `existing_stories`, the story patterns it uses (`Meta`/`StoryObj` shape, how variants are declared, how callbacks are stubbed) — 4.4 builds on what you record here
 
 **2.3 Read module neighbors:**
 - List sibling files in the same directory as each target file
 - Read 2-3 similar files to understand module patterns (naming, exports, structure)
-- Pay attention to:
-  - Import aliases used (e.g., `@components`, `@utils`)
-  - Export patterns (named vs default)
-  - TypeScript patterns (interfaces vs types, generics usage)
-  - Component patterns (observer wrapping, props interface naming)
-  - Store patterns (makeObservable(this), explicit decorators, private fields before public fields, thin public @action.bound UI actions, non-mutating public helpers, private API methods, runInAction inside private mutation blocks after await)
+- Pay attention to import aliases, named vs default exports, interfaces vs types, observer wrapping and props naming, and store patterns (makeObservable(this), explicit decorators, private fields before public, thin public @action.bound UI actions, non-mutating public helpers, private API methods, runInAction after await)
 
 **2.4 Load relevant rules (from `module_patterns` or by detection):**
 
-Based on what you're implementing, load and follow the relevant project rules.
+Rules `resolve-context` listed are already read (2.0c); load the rest by what you're implementing.
 
 **Always load (all task types):**
 - `tdd-workflow.mdc` — red-green-refactor, STATUS: DONE requires passing tests
@@ -224,8 +223,7 @@ Based on what you're implementing, load and follow the relevant project rules.
 - `async`/`await` or queue code → `async-patterns.mdc`
 - New architectural layers or modules → `clean-architecture.mdc`
 
-Rules live at `.metaproject/rules/core/<rule>.mdc` on every harness — that is the
-one tree `keryx init` installs and the one every build of this skill reads.
+Resolve every rule above project first, bundled second: read `.metaproject/rules/project/<rule>.mdc` when it exists, otherwise `.metaproject/rules/core/<rule>.mdc`. A project rule with the same name replaces the bundled one (never read both as if they agreed). `.metaproject/rules/core/` is the tree `keryx init` installs and `keryx update` overwrites, so a project's own rules live only in `rules/project/`.
 
 ### Phase 3: PLAN
 
@@ -427,6 +425,7 @@ Write full JSON to `<JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json`:
   "story_result": "<pass|build error: details|not applicable>",
   "acceptance_criteria_met": "<all|partial: list of unmet criteria|none>",
   "skill_drift": "<none | stale: <module>/<skill> — <what diverged> | missing: <module> should have a project-skill>",
+  "project_context_applied": [{ "path": "<as the resolver printed it>", "sha256": "<resolver's sha256>", "how": "read|followed|n/a" }],
   "noticed_not_touched": [{ "what": "<problem>", "where": "<path|symbol>" }],
   "assumptions": ["<what you assumed where the task did not say>"],
   "behavior_changes": [{ "description": "<what now behaves differently>", "user_visible": true, "needs_operator": true, "alternatives": ["<option you did not take>"] }],

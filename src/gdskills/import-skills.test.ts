@@ -873,6 +873,33 @@ describe("frontmatter is read from the frontmatter block only", () => {
     expect((await importProjectSkills({ projectRoot: cwd, from: file, dryRun: true })).imported[0]?.module).toBe("review");
   });
 
+  // Flow 461 (AC4): implementation and testing are modules of their own.
+  test.each(["implementation", "testing"])("category %s imports without --module into its own module directory", async (category) => {
+    const dir = path.join(source, "skills", `house-${category}`);
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      path.join(dir, "SKILL.md"),
+      `---\nname: house-${category}\ndescription: "Use when writing ${category} code."\nmetadata:\n  category: ${category}\n---\n\nbody\n`,
+      "utf8",
+    );
+    const result = await importProjectSkills({ projectRoot: cwd, from: dir });
+    expect(result.imported[0]).toMatchObject({
+      module: category,
+      name: `house-${category}`,
+      status: "imported",
+      path: `.metaproject/project-skills/${category}/house-${category}`,
+    });
+    expect(await Bun.file(path.join(cwd, result.imported[0]!.path, "SKILL.md")).exists()).toBe(true);
+  });
+
+  test("an unknown category still asks for --module and the hint lists the new values", async () => {
+    const file = path.join(source, "one.md");
+    await writeFile(file, "---\nname: helper\nmetadata:\n  category: house-conventions\n---\n\nbody\n", "utf8");
+    await expect(importProjectSkills({ projectRoot: cwd, from: file, dryRun: true })).rejects.toThrow(
+      /cannot infer module for helper\. Pass --module review\|quality\|orchestration\|implementation\|testing/,
+    );
+  });
+
   test("a category nested under another mapping in metadata does not choose the module (G-011)", async () => {
     const file = path.join(source, "one.md");
     await writeFile(file, "---\nname: one\ncategory: quality\nmetadata:\n  nested:\n    category: review\n---\n\nbody\n", "utf8");

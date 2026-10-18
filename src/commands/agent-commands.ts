@@ -424,6 +424,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 461: project rules and implementation context — the last resolve, the cap,
+    // and whether a missing `project_context_applied` only warns or blocks. TUI-only.
+    name: "/projectctx",
+    description: "Project rules for implementation: last resolve, context cap, warn/block enforcement — /projectctx [warn|block]",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 346: the EXTERNAL switch — blocks/allows sending private work
     // (code, diffs, CI logs, prompts) to Jev/TypeSafe and other listed
     // providers/models. Bare `/external` prints state/source/effective-list

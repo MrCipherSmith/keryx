@@ -87,6 +87,18 @@ test("the edit guard is read from the project", async () => {
   expect(snapshot.editGuard).toBe(true);
 });
 
+test("the project rules check is read from the project, and an unreadable config is flagged", async () => {
+  const fresh = await loadSettingsSnapshot(cwd, { permissionMode: "ask", plan: false }, configDir);
+  expect(fresh.projectContext).toEqual({ enforcement: "warn", maxBytes: 131072 });
+  mkdirSync(join(cwd, ".metaproject"), { recursive: true });
+  writeFileSync(join(cwd, ".metaproject", "tasks.config.json"), JSON.stringify({ gdskills: { projectContext: { enforcement: "block", maxBytes: 8192 } } }));
+  const set = await loadSettingsSnapshot(cwd, { permissionMode: "ask", plan: false }, configDir);
+  expect(set.projectContext).toEqual({ enforcement: "block", maxBytes: 8192 });
+  writeFileSync(join(cwd, ".metaproject", "tasks.config.json"), "{ nope");
+  const broken = await loadSettingsSnapshot(cwd, { permissionMode: "ask", plan: false }, configDir);
+  expect(broken.projectContext.configError).toBe(true);
+});
+
 test("a project's external-provider override is reported with its source", async () => {
   await writeProjectExternalSetting(cwd, "off");
   const snapshot = await loadSettingsSnapshot(cwd, { permissionMode: "ask", plan: false }, configDir);

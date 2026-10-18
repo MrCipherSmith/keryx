@@ -82,6 +82,7 @@
 //      definition-of-done, ...). `--rules <paths>` always overrides — an
 //      operator who explicitly names a process doc still gets it checked.
 import { frontmatterScalar as frontmatterScalarIn } from "../gdskills/skill-frontmatter";
+import { matchesAnyGlob } from "../lib/glob";
 import { extractReferenceClauses, type ReferenceClause } from "./conform-clauses";
 import { hunkClauseFacts, hunkRedactedStateText } from "./conform-state";
 import { estimateTokens } from "./cost";
@@ -293,34 +294,7 @@ export function isPlaceholderClauseText(text: string): boolean {
 // file, by declared path globs and/or stack_requires — pure, deterministic.
 // ---------------------------------------------------------------------------
 
-/** Translate one glob (`src/core/**`, `*.ts`, `**\/*.test.ts`) into an anchored RegExp. `**` matches across path separators; `*` does not. */
-export function globToRegExp(glob: string): RegExp {
-  let source = "";
-  for (let i = 0; i < glob.length; i += 1) {
-    const ch = glob[i];
-    if (ch === "*" && glob[i + 1] === "*") {
-      source += ".*";
-      i += 1;
-      // Swallow one following slash so `src/**/*.ts` and `src/**.ts` behave alike.
-      if (glob[i + 1] === "/") i += 1;
-      continue;
-    }
-    if (ch === "*") {
-      source += "[^/]*";
-      continue;
-    }
-    if (ch === "?") {
-      source += "[^/]";
-      continue;
-    }
-    source += ch!.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-  }
-  return new RegExp(`^${source}$`);
-}
-
-export function matchesAnyGlob(filePath: string, globs: readonly string[]): boolean {
-  return globs.some((glob) => globToRegExp(glob).test(filePath));
-}
+export { globToRegExp, matchesAnyGlob } from "../lib/glob";
 
 export interface ApplicabilityDecision {
   readonly applicable: boolean;
