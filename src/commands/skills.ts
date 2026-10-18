@@ -67,7 +67,9 @@ import {
 } from "../gdskills/import-skills";
 import { runSkillsImportRulesCommand } from "../gdskills/import-rules";
 import { checkResolvedContext, formatResolvedHeadline, formatResolvedReport, readResolvedFile, RESOLVED_SCHEMAS } from "../gdskills/resolved-context-check";
+import { TASK_TEXT_MAX_CHARS } from "../gdskills/context-resolver";
 import { runResolveContextCommand } from "../gdskills/resolve-context-command";
+import { printReferencesHelp, referencesCommand } from "./skills-references";
 import { runSkillsRemoveRuleCommand } from "../gdskills/remove-rules";
 import { runSkillsUpdateRulesCommand } from "../gdskills/update-rules";
 import { printSkillsRemoveHelp, runSkillsRemoveCommand } from "../gdskills/remove-skill";
@@ -172,6 +174,11 @@ export async function skillsCommand(args: string[]): Promise<void> {
       console.error(error instanceof Error ? error.message : String(error));
       process.exitCode = 1;
     }
+    return;
+  }
+
+  if (command === "references") {
+    await referencesCommand(args.slice(1));
     return;
   }
 
@@ -1838,6 +1845,7 @@ const SKILLS_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["uninstall", printUninstallHelp],
   ["route", printRouteHelp],
   ["resolve-context", printResolveContextHelp],
+  ["references", printReferencesHelp],
   ["inspect", printInspectHelp],
   ["create", () => printCreateHelp("create")],
   ["generate", () => printCreateHelp("generate")],
@@ -1869,6 +1877,8 @@ Usage:
   keryx skills route <query-or-target>
   keryx skills resolve-context --files <file>[,<file>...] --for implement|test|review
       [--task-type <type>] [--max-bytes <n>] [--out <path>] [--json]
+  keryx skills references check [--json]
+  keryx skills references suggest
   keryx skills catalog [--profile minimal|recommended|full|custom]
   keryx skills install [--profile minimal|recommended|full|custom]
   keryx skills install --profile <manifest-profile> [--with <component>]... [--without <component>]...
@@ -1903,6 +1913,7 @@ Commands:
   inspect   Inspect one registered project skill
   route     Route a query or target to matching project skills
   resolve-context  List the project rules and skills a worker must read for these files (project first)
+  references  Check the conditional-read declarations (references.json) or print a skeleton for undeclared citations
   catalog  Print bundled gdskills catalog for a profile
   install   Install bundled gdskills into .metaproject (legacy profile), or resolve/apply a
             profile->modules/components install-manifest plan (--with/--without/--target/
@@ -2004,12 +2015,15 @@ no model is asked. A successful resolve exits 0 whatever the budget says.
 Usage:
   keryx skills resolve-context --files <file>[,<file>...] --for implement|test|review
       [--task-type ui_component|store_logic|service_api|fix|mixed]
-      [--max-bytes <4096..1048576>] [--out <path>] [--json]
+      [--task-text <text>] [--max-bytes <4096..1048576>] [--out <path>] [--json]
 
   --files       Target files, repo-relative; commas or a repeated flag.
   --for         implement: rules and implementation skills; test: rules and testing skills;
                 review: project rules only.
   --task-type   Adds the bundled rules for that task type (the task-implementer table).
+  --task-text   What the task is about (title and description). Matched against the keywords of the
+                documents declared in .metaproject/rules/project/references.json; a match makes that
+                document must_read. Cut to ${TASK_TEXT_MAX_CHARS} characters, then recorded in the last-resolve record.
   --max-bytes   Cap on project content that is must_read (default 131072, or
                 gdskills.projectContext.maxBytes in .metaproject/tasks.config.json). Over the cap,
                 later entries become on_demand and a warning goes to stderr.

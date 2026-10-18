@@ -19,6 +19,7 @@ import {
   type ProjectRuleRegistryEntry,
 } from "./project-rules";
 import { assertProjectWritesContained, PROJECT_SKILLS_MANIFEST_PATH, resolveOriginPath } from "./project-skills";
+import { undeclaredCitationHint } from "./references-check";
 import { parseRuleFrontmatter } from "./rule-frontmatter";
 
 export type ImportProjectRulesOptions = {
@@ -266,6 +267,13 @@ export async function runSkillsImportRulesCommand(args: string[]): Promise<void>
     allowFlagged: args.includes("--allow-flagged"),
     link: args.includes("--link"),
   });
-  console.log(args.includes("--json") ? JSON.stringify(result, null, 2) : renderImportProjectRulesMarkdown(result));
+  const json = args.includes("--json");
+  console.log(json ? JSON.stringify(result, null, 2) : renderImportProjectRulesMarkdown(result));
+  // Documents the imported rules cite but nothing declares: say how many, and how to start (flow 462).
+  // Text output only, so --json stays one parseable document.
+  if (!json) {
+    const hint = await undeclaredCitationHint(process.cwd());
+    if (hint.length > 0) console.log(`\n${hint.join("\n")}`);
+  }
   exitNonZeroOnRuleRefusal(result);
 }
