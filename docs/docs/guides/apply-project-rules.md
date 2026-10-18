@@ -257,9 +257,9 @@ ends with `N errors, M warnings`. It exits 1 on an error:
 | `unused-declaration` (no project rule names the document), `undeclared-citation` (a rule names a document with no declaration), `rule-unreadable` | warning |
 
 A missing `references.json` is not an error. `--json` prints the same findings
-as JSON. The citation scan looks for backticked `X.md` names in project rules
-and in rules imported with `--link` (read at their origin); bundled rules are
-not scanned.
+as JSON. The citation scan looks for backticked `X.md` names (`X.md#heading`
+cites `X.md`) in project rules and in rules imported with `--link` (read at
+their origin); bundled rules are not scanned.
 
 To start a file, `keryx skills references suggest` prints a skeleton for every
 document that a project rule names and `references.json` does not declare. It

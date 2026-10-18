@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### A project rule under `rules/project/core/` replaces its bundled twin
+
+- **Fixed:** `keryx skills resolve-context` treats a project rule at `.metaproject/rules/project/core/<name>.mdc` as replacing the bundled `.metaproject/rules/core/<name>.mdc`, as it already did for `rules/project/<name>.mdc`: the entry carries `shadows` (reason `replaces-bundled` when nothing else selects it) and the bundled rule is no longer listed. `keryx skills import` puts a cited rule that keryx also ships in that slot, so a worker used to get both conflicting files as `must_read`, and a project copy whose globs matched nothing was left out entirely.
+
+### A citation with a heading anchor cites its document
+
+- **Fixed:** a backticked citation that carries a heading anchor, such as `` `docs/x.md#some-heading` `` or `` `core/x.mdc#part` ``, now counts as a citation of the file. `keryx skills resolve-context` lists it as a `referenced-by` contract, and `keryx skills references check` / `suggest` see it, so a declared document cited only by `path#anchor` is no longer reported as `unused-declaration`.
+
 ## [0.3.123] - 2026-10-18
 
 ### Conditional mandatory reads for documents cited by project rules (flow 462, PR #1048)

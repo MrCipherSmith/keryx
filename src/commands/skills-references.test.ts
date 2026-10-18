@@ -231,6 +231,16 @@ test("references check: a rule citing ./STYLING.md counts as citing the declared
   expect(report?.findings).toEqual([]);
 });
 
+test("references check: a rule citing docs/x.md#some-heading counts as citing the declared docs/x.md", async () => {
+  await project({
+    rules: { "styling.mdc": RULE.replace("`STYLING.md`", "`docs/x.md#some-heading`") },
+    files: { "docs/x.md": STYLING_DOC },
+    references: [declaration({ path: "docs/x.md" })],
+  });
+  const { report } = await check("--json");
+  expect(report?.findings).toEqual([]);
+});
+
 test("references check: --json carries the same findings the text report prints", async () => {
   await project({ references: [declaration({ description: "short", anchor: "Missing" })] });
   const json = await check("--json");

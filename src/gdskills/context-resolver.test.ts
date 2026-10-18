@@ -94,6 +94,19 @@ test("a project rule with a bundled name is read even when its globs do not matc
   expect(result.entries.map((entry) => [entry.path, entry.reason, entry.tier])).toEqual([[P("error-handling.mdc"), "replaces-bundled", "must_read"]]);
 });
 
+test("a project rule under rules/project/core/ shadows the bundled rule of the same name, as a flat one does", async () => {
+  const root = await project();
+  await core(root, { "tdd-workflow.mdc": "tdd\n", "frontend-assistant.mdc": "bundled frontend\n", "storybook-guidelines.mdc": "bundled stories\n" });
+  await importRules(root, { "core/storybook-guidelines.mdc": ruleText({ globs: "src/**/*.tsx" }), "core/frontend-assistant.mdc": ruleText({ globs: "docs/**" }) });
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.tsx"], taskType: "ui_component", for: "implement" });
+  expect(result.entries.map((entry) => [entry.path, entry.reason, entry.shadows])).toEqual([
+    [P("core/storybook-guidelines.mdc"), "glob:src/**/*.tsx", C("storybook-guidelines.mdc")],
+    [P("core/frontend-assistant.mdc"), "replaces-bundled", C("frontend-assistant.mdc")],
+    [C("tdd-workflow.mdc"), "bundled-default", undefined],
+  ]);
+  expect(result.warnings).toEqual([]);
+});
+
 test("selection: glob match, brace globs, a small alwaysApply rule, a task type; a rule that matches nothing is absent", async () => {
   const root = await project();
   await importRules(root, {
@@ -290,6 +303,21 @@ test("a repo-relative .md path cited in backticks is listed as an on_demand cont
   expect(claudeEntry).toMatchObject({ source: "project", tier: "on_demand", reason: `referenced-by:${P("overlay.mdc")}`, sha256: sha256Hex(claude) });
   expect(result.budget.exceeded).toBe(false);
   expect(result.entries.findIndex((entry) => entry.kind === "contract")).toBeGreaterThan(0);
+});
+
+test("a citation with a heading anchor, `docs/x.md#some-heading` or `core/nested.mdc#part`, cites the file itself", async () => {
+  const root = await project();
+  const doc = "# X\n\n## Some heading\n\nBody.\n";
+  const nested = ruleText({ globs: "docs/**" });
+  await put(root, "docs/x.md", doc);
+  await put(root, P("core/nested.mdc"), nested);
+  await importRules(root, { "overlay.mdc": ruleText({ globs: "src/**", body: "See `docs/x.md#some-heading` and `core/nested.mdc#part`.\n" }) });
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  expect(result.entries.filter((entry) => entry.kind === "contract").map((entry) => [entry.path, entry.reason, entry.sha256])).toEqual([
+    [P("core/nested.mdc"), `referenced-by:${P("overlay.mdc")}`, sha256Hex(nested)],
+    ["docs/x.md", `referenced-by:${P("overlay.mdc")}`, sha256Hex(doc)],
+  ]);
+  expect(result.warnings).toEqual([]);
 });
 
 test("a cited path that is absolute, climbs out, escapes through a symlink, is a directory, is too large or is missing is not listed and warns", async () => {
