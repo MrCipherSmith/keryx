@@ -224,7 +224,11 @@ describe("/reviews — the readline equivalent of the TUI modal", () => {
     } as unknown as MetaprojectPort;
     await runAgentRepl(
       linesFrom(...lines, "/exit"),
-      { printPrompt: () => {}, safeBoundary: undefined, write: (s) => out.push(s) },
+      {
+        printPrompt: () => {}, safeBoundary: undefined, write: (s) => out.push(s),
+        // Fixtures must never report into the operator's live Orca pane.
+        orcaReporter: { report: () => {}, release: async () => {} },
+      },
       deps,
       port,
       { cwd: root, enabled: false },

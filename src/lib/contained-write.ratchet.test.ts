@@ -398,6 +398,16 @@ describe("contained-write ratchet", () => {
 
       const absolute = path.isAbsolute(file) ? file : path.join(repoRoot, file);
       const source = await readFile(absolute, "utf8");
+      if (posixRel === "src/integrations/orca-report.ts") {
+        // Not a whole-file exemption: only one nonblocking READ is allowed.
+        // Any other raw writer, another open, or changed flags still fails.
+        expect(detectRawWrites(source)).toEqual(['imports raw "openSync" from node:fs/promises']);
+        expect(source.match(/\bopenSync\s*\(/g)?.length).toBe(1);
+        expect(source).toContain("openSync(env.ORCA_AGENT_HOOK_ENDPOINT, constants.O_RDONLY | constants.O_NONBLOCK)");
+        expect(source).toContain("!stat.isFile() || stat.size > 16_384");
+        expect(source).toContain("if (size > 16_384)");
+        continue;
+      }
       for (const hit of detectRawWrites(source)) {
         violations.push(`${posixRel}: ${hit}`);
       }

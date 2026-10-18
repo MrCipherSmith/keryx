@@ -406,7 +406,7 @@ import { DECISION_SOURCES } from "../decisions/service";
 import { raceAskUser } from "./ask-user-race";
 import { askUserSessionId, journaledPick, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
-import { createOrcaReporter } from "../integrations/orca-report";
+import { createOrcaReporter } from "../integrations/service";
 import { ASK_USER_CANCEL, type AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
 import { showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";

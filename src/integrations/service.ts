@@ -1,3 +1,6 @@
+export { createOrcaReporter } from "./orca-report";
+export type { OrcaReporter, OrcaState } from "./orca-report";
+
 // Flow 305 (W5-a): the public door of `src/integrations`. Everything outside
 // this directory that needs the registry imports from here.
 //

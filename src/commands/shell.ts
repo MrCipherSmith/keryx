@@ -57,7 +57,7 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
 import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interactive-agent-tools";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
-import { createOrcaReporter, type OrcaReporter } from "../integrations/orca-report";
+import { createOrcaReporter, type OrcaReporter } from "../integrations/service";
 import { approvalCauseLine, causeOfMeta } from "./approval-cause";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
 import {
@@ -2820,6 +2820,8 @@ async function runAgentReplWithOrca(
       startSpinner();
       busWorking = true;
       activeTurnAbort = new AbortController();
+      orcaTurnActive = true;
+      rich.orcaReporter?.report("working");
       try {
         if (finalizing) return;
         const abort = new AbortController();
@@ -2836,6 +2838,8 @@ async function runAgentReplWithOrca(
         activeAgentFlight = undefined;
         activeAgentAbort = undefined;
         activeTurnAbort = undefined;
+        orcaTurnActive = false;
+        rich.orcaReporter?.report("idle");
         busWorking = false;
         endBlock();
         stopSpinner();
