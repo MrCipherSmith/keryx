@@ -701,6 +701,23 @@ test("skills_resolve_context passes the validated input to the port and prints t
   expect(result.output).toContain(".metaproject/rules/project/styling.mdc — project rule, glob:src/**, 100 bytes, sha256 abcdef012345");
 });
 
+test("skills_resolve_context passes task_text to the port as taskText and drops a blank one", async () => {
+  const seen: unknown[] = [];
+  const port: MetaprojectPort = {
+    ...recordingPort().port,
+    skillsResolveContext: async (input) => {
+      seen.push(input);
+      return RESOLVED;
+    },
+  };
+  await op("skills_resolve_context").invoke(port, { files: ["src/a.ts"], for: "implement", task_text: "Adjust the theme tokens" });
+  await op("skills_resolve_context").invoke(port, { files: ["src/a.ts"], for: "implement", task_text: "   " });
+  expect(seen).toEqual([
+    { files: ["src/a.ts"], for: "implement", taskText: "Adjust the theme tokens" },
+    { files: ["src/a.ts"], for: "implement" },
+  ]);
+});
+
 test("skills_resolve_context refuses a missing 'files' or a bad 'for' without calling the port", async () => {
   let calls = 0;
   const port: MetaprojectPort = {

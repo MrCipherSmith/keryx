@@ -9,6 +9,8 @@ import { isPathInside, pathExists } from "../lib/fs";
 import { writeContained } from "../lib/contained-write";
 import { matchesAnyGlobWithBraces } from "../lib/glob";
 import { resolveMaxBytes, type ProjectContextSource } from "./project-context-config";
+import { resolveReferences } from "./reference-entries";
+import { loadReferences, REFERENCES_PATH, type ReferenceCondition, type ReferenceDeclaration } from "./references-config";
 import { PROJECT_RULES_DIR, projectRulePathFor, readProjectRuleRegistry, sha256Hex, type ProjectRuleRegistryEntry } from "./project-rules";
 import { PROJECT_SKILLS_MANIFEST_PATH, resolveOriginPath, type ProjectSkillRegistryEntry } from "./project-skills";
 import { parseRuleFrontmatter, type RuleFrontmatter } from "./rule-frontmatter";
@@ -33,6 +35,12 @@ export type ContextEntry = {
   shadows?: string;
   /** Other project paths holding the same bytes (same sha256); citing any of them counts. */
   also_at?: string[];
+  /** Declared references only: the section that matters, from `references.json`. */
+  anchor?: string;
+  /** Declared references with an anchor: UTF-8 size of the section, the bytes the obligation and the budget count. */
+  section_bytes?: number;
+  /** Declared references only: where the document applies, so an `on_demand` entry says why it was not required. */
+  condition?: ReferenceCondition;
 };
 
 export type ContextBudget = { limitBytes: number; usedBytes: number; exceeded: boolean; limitSource: ProjectContextSource };
@@ -44,6 +52,8 @@ export type ProjectContextResolution = {
   entries: ContextEntry[];
   budget: ContextBudget;
   warnings: string[];
+  /** Present only when the project has a references file: cited documents it does not declare. */
+  undeclared?: string[];
 };
 
 export type ResolveContextInput = {
@@ -53,7 +63,18 @@ export type ResolveContextInput = {
   for: ContextFor;
   /** The `--max-bytes` flag. */
   maxBytes?: number;
+  /** What the task is about; matched against the keywords of declared references. Cut to {@link TASK_TEXT_MAX_CHARS}. */
+  taskText?: string;
 };
+
+/** The task text kept for matching and for the last-resolve record, in characters. */
+export const TASK_TEXT_MAX_CHARS = 4000;
+
+/** The text cut to {@link TASK_TEXT_MAX_CHARS} characters (code points, never half a pair), and whether it was cut. */
+export function truncateTaskText(text: string): { text: string; truncated: boolean } {
+  const chars = Array.from(text);
+  return chars.length > TASK_TEXT_MAX_CHARS ? { text: chars.slice(0, TASK_TEXT_MAX_CHARS).join(""), truncated: true } : { text, truncated: false };
+}
 
 /** An always-apply rule bigger than this is a routing index: listed, never read in full up front. */
 export const INDEX_THRESHOLD_BYTES = 30720;
@@ -322,11 +343,18 @@ function citationOptions(cite: string): string[] {
   return [`${PROJECT_RULES_DIR}/${cite}`, `${PROJECT_RULES_DIR}/${flipped}`, cite];
 }
 
-async function collectContracts(projectRoot: string, cited: ReadonlyMap<string, string>, taken: ReadonlySet<string>, warnings: string[]): Promise<ContextEntry[]> {
+async function collectContracts(
+  projectRoot: string,
+  cited: ReadonlyMap<string, string>,
+  taken: ReadonlySet<string>,
+  declared: ReadonlySet<string>,
+  warnings: string[],
+): Promise<ContextEntry[]> {
   const rootReal = await realpath(projectRoot).catch(() => projectRoot);
   const entries: ContextEntry[] = [];
   const listed = new Set(taken);
   for (const [cite, by] of [...cited].sort((a, b) => compare(a[0], b[0]))) {
+    if (declared.has(cite)) continue;
     const reject = (why: string): void => void warnings.push(`${cite}: cited by ${by} but ${why}; not listed.`);
     if (path.isAbsolute(cite) || cite.split("/").includes("..")) {
       reject("is not a repo-relative path");
@@ -385,6 +413,7 @@ export async function resolveProjectContext(input: ResolveContextInput): Promise
   const candidates = await collectProjectRules(projectRoot, warnings);
   const rules = selectRules(candidates, files, input.taskType, shadowable);
   const skills = await collectSkills(projectRoot, input.for, files, input.taskType);
+  const declarations = await loadDeclarations(projectRoot, warnings);
 
   let used = 0;
   let exceeded = false;
@@ -431,7 +460,17 @@ export async function resolveProjectContext(input: ResolveContextInput): Promise
     }
   }
   const taken = new Set([...projectEntries, ...bundled].flatMap((entry) => [entry.path, ...(entry.also_at ?? [])]));
-  const contracts = await collectContracts(projectRoot, cited, taken, warnings);
+  const references = await resolveReferences({
+    projectRoot,
+    declarations: declarations ?? [],
+    files,
+    taskText: truncateTaskText(input.taskText ?? "").text,
+    taken,
+    maxFileBytes: CONTRACT_MAX_BYTES,
+  });
+  warnings.push(...references.warnings);
+  const declaredPaths = new Set(references.entries.map((entry) => entry.path));
+  const contracts = await collectContracts(projectRoot, cited, new Set([...taken, ...declaredPaths]), new Set((declarations ?? []).map((declaration) => declaration.path)), warnings);
 
   if (exceeded) {
     warnings.push(
@@ -439,22 +478,55 @@ export async function resolveProjectContext(input: ResolveContextInput): Promise
     );
   }
 
+  // A promoted reference is an obligation: the cap never demotes it, it only says so.
+  const total = used + references.promotedBytes;
+  const overCap = total > cap.limitBytes;
+  if (references.promotedBytes > 0 && overCap) {
+    const promoted = references.entries.filter((entry) => entry.tier === "must_read").map((entry) => `${entry.path} (${entry.section_bytes ?? entry.bytes} bytes)`);
+    warnings.push(
+      `promoted references ${promoted.join(", ")} bring the must_read total to ${total} bytes, over the ${cap.limitBytes}-byte cap (${cap.limitSource}); they stay must_read because a matched reference is an obligation. Raise gdskills.projectContext.maxBytes in .metaproject/tasks.config.json (or pass --max-bytes) or narrow the declared anchors.`,
+    );
+  }
+
   return {
     schema: 1,
     for: input.for,
     files,
-    entries: [...projectEntries, ...contracts, ...bundled],
-    budget: { limitBytes: cap.limitBytes, usedBytes: used, exceeded, limitSource: cap.limitSource },
+    entries: [...projectEntries, ...references.entries, ...contracts, ...bundled],
+    budget: { limitBytes: cap.limitBytes, usedBytes: total, exceeded: exceeded || overCap, limitSource: cap.limitSource },
     warnings,
+    ...(declarations !== undefined ? { undeclared: contracts.map((contract) => contract.path) } : {}),
   };
 }
 
-export type RecordedResolve = { recordedAt: string; result: ProjectContextResolution };
+/** The project's declarations, or undefined when there is no usable references file (a bad one warns and reads as absent). */
+async function loadDeclarations(projectRoot: string, warnings: string[]): Promise<ReferenceDeclaration[] | undefined> {
+  const loaded = await loadReferences(projectRoot);
+  if (!loaded.ok) {
+    for (const message of loaded.errors) warnings.push(`${message}; conditional references are ignored. Fix ${REFERENCES_PATH} (\`keryx skills references check\` lists every problem).`);
+    return undefined;
+  }
+  return loaded.present ? loaded.references : undefined;
+}
+
+export type RecordedResolve = {
+  recordedAt: string;
+  result: ProjectContextResolution;
+  /** The task text the resolve was given, cut to {@link TASK_TEXT_MAX_CHARS}; absent when none was given. */
+  taskText?: string;
+  /** True when {@link taskText} is a cut of a longer text. */
+  taskTextTruncated?: true;
+};
 
 /** Best effort: the TUI reads this, so a failed write must not fail a resolve. */
-export async function recordLastResolve(projectRoot: string, result: ProjectContextResolution): Promise<void> {
+export async function recordLastResolve(projectRoot: string, result: ProjectContextResolution, options: { taskText?: string } = {}): Promise<void> {
   try {
-    const record: RecordedResolve = { recordedAt: new Date().toISOString(), result };
+    const task = options.taskText !== undefined && options.taskText.trim() !== "" ? truncateTaskText(options.taskText) : undefined;
+    const record: RecordedResolve = {
+      recordedAt: new Date().toISOString(),
+      result,
+      ...(task !== undefined ? { taskText: task.text, ...(task.truncated ? { taskTextTruncated: true as const } : {}) } : {}),
+    };
     await writeContained(projectRoot, LAST_RESOLVE_PATH, `${JSON.stringify(record, null, 2)}\n`);
   } catch {
     // nothing to do: the record is a convenience

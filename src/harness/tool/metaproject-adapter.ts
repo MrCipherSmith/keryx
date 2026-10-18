@@ -1378,6 +1378,7 @@ export function createMetaprojectAdapter(
           for: input.for,
           ...(input.taskType !== undefined ? { taskType: input.taskType } : {}),
           ...(input.maxBytes !== undefined ? { maxBytes: input.maxBytes } : {}),
+          ...(input.taskText !== undefined ? { taskText: input.taskText } : {}),
         });
       } catch (cause) {
         return {
