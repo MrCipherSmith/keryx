@@ -860,6 +860,7 @@ export interface MetaprojectPort {
     for: "implement" | "test" | "review";
     taskType?: string;
     maxBytes?: number;
+    taskText?: string;
   }): Promise<SkillsResolveContextResult>;
 
   // --- additive OPTIONAL read operation: flow 242 (forgetting) lane C -------

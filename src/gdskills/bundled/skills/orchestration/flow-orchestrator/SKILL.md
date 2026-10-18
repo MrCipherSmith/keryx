@@ -320,7 +320,7 @@ auto-commit off (task-implementer's `automation.auto_commit: false`). A
 `subagent-dispatch` has no `automation` field, so the setting travels as the
 explicit constraint below — never as the worker's default, which is `true`.
 
-Before every `test`, `implement` and fix dispatch, run `keryx skills resolve-context --for test|implement --files <the task's target files, comma-joined> --task-type <type> --out .metaproject/flows/<dir>/resolved/<Tn>.<for>.json` (a fix dispatch re-resolves on the new head) and pass that path as `resolved_context_file`: a `context_refs` entry plus the constraint below. Before accepting the reply, run `keryx skills contracts validate <result.json> --schema task-implementer-output|tests-creator-output --resolved <that file>`; under `gdskills.projectContext.enforcement: block` a miss is a refusal, under `warn` journal it.
+Before every `test`, `implement` and fix dispatch, run `keryx skills resolve-context --for test|implement --files <the task's target files, comma-joined> --task-type <type> --task-text '<the task's title and description>' --out .metaproject/flows/<dir>/resolved/<Tn>.<for>.json` (a fix dispatch re-resolves on the new head) and pass that path as `resolved_context_file`: a `context_refs` entry plus the constraint below. Write the text single-quoted (a `'` inside it becomes `'\''`): double quotes let the shell run any backtick or `$(...)` a task description contains. `--task-text` (the harness and MCP field is `task_text`) is what lets a keyword of a document declared in `references.json` match; without it only globs promote. A promoted entry comes back as `must_read` with reason `condition:glob:<g>` or `condition:keyword:<k>`, and its `project_context_applied` item must carry the `path`, the `sha256` of the whole file as pinned, the declared `anchor`, a `summary` (at least 40 characters, in the worker's own words, reusing at least three distinct words of five or more letters from the anchored section) and `how` `read` or `followed`, never `n/a`. Before accepting the reply, run `keryx skills contracts validate <result.json> --schema task-implementer-output|tests-creator-output --resolved <that file>`; under `gdskills.projectContext.enforcement: block` a miss is a refusal, under `warn` journal it.
 
 Dispatch payload, bound to the flow (map `target_skill` from the routing table):
 
@@ -343,7 +343,7 @@ Dispatch payload, bound to the flow (map `target_skill` from the routing table):
   "constraints": [
     "Never edit flow.json.",
     "Never edit frozen acceptance criteria.",
-    "resolved_context_file: .metaproject/flows/<dir>/resolved/<Tn>.<for>.json — read its must_read entries and cite each in project_context_applied.",
+    "resolved_context_file: .metaproject/flows/<dir>/resolved/<Tn>.<for>.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
     "Return a subagent-result; first line must be STATUS:.",
     "Follow rules/core/git-concurrency.mdc: never git stash; never git add -A.",
     "Root: <worktree_path>. Before the first write run `cd <worktree_path> && pwd && git branch --show-current`; run every git command as `git -C <worktree_path>`.",

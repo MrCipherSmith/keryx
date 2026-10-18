@@ -442,7 +442,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/projectctx",
     group: "Managed work",
-    summary: "Project rules for implementation: the last resolve, the context cap and warn/block enforcement — /projectctx [warn|block].",
+    summary: "Project rules for implementation: the last resolve, the context cap, warn/block enforcement and conditional references — /projectctx [warn|block|refs].",
   },
   {
     kind: "slash",

@@ -1,7 +1,8 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { skillsCommand } from "../commands/skills";
 import { sha256Hex } from "../gdskills/project-rules";
 import { createFlowService } from "./service";
 import type { FlowService } from "./types";
@@ -114,4 +115,113 @@ test("--result without --resolved (or the reverse) is an error in any mode", asy
   const f = await fixture("warn");
   await expect(f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: "result.json" } })).rejects.toThrow(/go together/);
   await expect(f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resolvedFile: "resolved.json" } })).rejects.toThrow(/go together/);
+});
+
+// --- conditional reads (flow 462): the proof of a promoted document, through task done and the standalone check ---
+
+const DOC = "docs/STYLING.md";
+const DOC_TEXT = "# Styling\n\n## Tokens\n\nUse design tokens instead of hex values. Spacing follows the spacing scale.\n\n## Layout\n\nGrid containers carry the gutters.\n";
+const GOOD_SUMMARY = "Use design tokens instead of hex values and follow the spacing scale";
+const BAD_SUMMARY = "I read the whole document carefully and it was all fine really";
+
+async function promotedFiles(root: string, summary: string): Promise<{ result: string; resolved: string }> {
+  const sha = sha256Hex(DOC_TEXT);
+  await mkdir(path.join(root, "docs"), { recursive: true });
+  await writeFile(path.join(root, DOC), DOC_TEXT, "utf8");
+  const resolved = {
+    schema: 1,
+    for: "implement",
+    files: ["src/a.css"],
+    entries: [
+      {
+        kind: "contract",
+        source: "project",
+        path: DOC,
+        sha256: sha,
+        bytes: DOC_TEXT.length,
+        reason: "condition:glob:src/**/*.css",
+        tier: "must_read",
+        anchor: "Tokens",
+        condition: { globs: ["src/**/*.css"], keywords: [] },
+      },
+    ],
+  };
+  const result = {
+    task_id: "task-2",
+    task_name: "Style the form",
+    task_type: "ui_component",
+    status: "success",
+    project_context_applied: [{ path: DOC, sha256: sha, how: "read", anchor: "Tokens", summary }],
+  };
+  await writeFile(path.join(root, "resolved.json"), JSON.stringify(resolved), "utf8");
+  await writeFile(path.join(root, "result.json"), JSON.stringify(result), "utf8");
+  return { result: "result.json", resolved: "resolved.json" };
+}
+
+async function standalone(root: string, files: { result: string; resolved: string }): Promise<{ exitCode: number; lines: string[] }> {
+  const originalCwd = process.cwd();
+  const originalExitCode = process.exitCode;
+  const lines: string[] = [];
+  const logSpy = spyOn(console, "log").mockImplementation((...parts: unknown[]) => void lines.push(parts.join(" ")));
+  const errSpy = spyOn(console, "error").mockImplementation((...parts: unknown[]) => void lines.push(parts.join(" ")));
+  process.exitCode = 0;
+  try {
+    process.chdir(root);
+    await skillsCommand(["contracts", "validate", files.result, "--schema", "task-implementer-output", "--resolved", files.resolved]);
+    return { exitCode: Number(process.exitCode ?? 0), lines };
+  } finally {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+    process.chdir(originalCwd);
+    process.exitCode = originalExitCode ?? 0;
+  }
+}
+
+test("block: a promoted document cited with a summary that shares no words with the section is refused, and the standalone check exits 1 with the same lines", async () => {
+  const f = await fixture("block");
+  const files = await promotedFiles(f.root, BAD_SUMMARY);
+  const refusal = await f.service
+    .taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: files.result, resolvedFile: files.resolved } })
+    .then(() => undefined, (error: unknown) => error as Error);
+  expect(refusal?.message).toContain("project context: 1 miss(es), 0 drifted (enforcement block)");
+  const refused = (refusal?.message ?? "").split("\n").slice(1);
+  expect(refused).toHaveLength(1);
+  expect(refused[0]).toContain(`project context miss: ${DOC} (condition:glob:src/**/*.css) has a summary that shares 0 distinct word(s)`);
+  expect(await taskStatus(f, "T2")).not.toBe("done");
+
+  const check = await standalone(f.root, files);
+  expect(check.exitCode).toBe(1);
+  expect(check.lines.filter((line) => line.startsWith("- project context"))).toEqual(refused);
+});
+
+test("block: a promoted document cited with its anchor and a summary in the section's words closes the task, and the standalone check exits 0", async () => {
+  const f = await fixture("block");
+  const files = await promotedFiles(f.root, GOOD_SUMMARY);
+  await f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: files.result, resolvedFile: files.resolved } });
+  expect(await taskStatus(f, "T2")).toBe("done");
+  expect((await standalone(f.root, files)).exitCode).toBe(0);
+});
+
+test("warn: the same proof miss passes with exit 0 and the lines go to the flow journal and the standalone output", async () => {
+  const f = await fixture("warn");
+  const files = await promotedFiles(f.root, BAD_SUMMARY);
+  await f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: files.result, resolvedFile: files.resolved } });
+  expect(await taskStatus(f, "T2")).toBe("done");
+  const journal = await readFile(path.join(f.root, f.dir, "journal.md"), "utf8");
+  expect(journal).toContain("1 miss(es), 0 drifted (enforcement warn)");
+  expect(journal).toContain(`miss: ${DOC} (condition:glob:src/**/*.css) has a summary that shares 0 distinct word(s)`);
+
+  const check = await standalone(f.root, files);
+  expect(check.exitCode).toBe(0);
+  expect(check.lines.join("\n")).toContain(`- project context miss: ${DOC} (condition:glob:src/**/*.css) has a summary that shares 0 distinct word(s)`);
+});
+
+test("block: editing a promoted document between resolve and close is drift and refuses the task", async () => {
+  const f = await fixture("block");
+  const files = await promotedFiles(f.root, GOOD_SUMMARY);
+  await writeFile(path.join(f.root, DOC), `${DOC_TEXT}\nA late edit.\n`, "utf8");
+  const refusal = f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: files.result, resolvedFile: files.resolved } });
+  await expect(refusal).rejects.toThrow(/1 drifted/);
+  await expect(refusal).rejects.toThrow(new RegExp(`project context drift: ${DOC.replace(/\./g, "\\.")} \\(must_read\\)`));
+  expect((await standalone(f.root, files)).exitCode).toBe(1);
 });

@@ -1,0 +1,562 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "462",
+  "slug": "conditional-reads",
+  "title": "Conditional mandatory reads for documents cited by project rules",
+  "status": "in-progress",
+  "createdAt": "2026-10-18T08:31:22.923Z",
+  "updatedAt": "2026-10-18T14:42:11.357Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6df58931168fe0ae50feaa9b99c336c61250b1a76b5bd36243c56b1e608d0fa4",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "то есть я так понимаю что когда мы их импортируем в эти файлы которые идут в project rules должны не только ссылки хэши но и правильное грамотное описание чтобы агент мог понять и когда ему нужно читать основное правило и что он обязан его прочитать чтобы он сходил по ссылке именно вычитал",
+    "source": "helyx-channel message 212151, 2026-10-18T07:15:20Z (voice, transcribed); poll 211 answers"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "context collected by the PRD/TRD author in docs/requirements/keryx-conditional-reads and context.md"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by tasks T5-T13 per plan.md steps"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are written inside each implement task (TDD per task)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T8",
+        "T9",
+        "T10",
+        "T11",
+        "T12",
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "S1 references.json schema, loader, section extraction",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-18T08:47:53.700Z",
+            "outcome": "started",
+            "detail": "462-T5 dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "S2 resolver: task text, promotion, cap, undeclared",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-18T08:55:03.924Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "S3 output schemas anchor+summary and synced copies",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-18T08:47:54.136Z",
+            "outcome": "started",
+            "detail": "462-T7 dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "S4 validator: anchor, summary check, drift, enforcement",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-18T09:02:24.800Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "S5 CLI skills references check|suggest, import hint",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-18T08:55:04.419Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "S6 TUI: sidebar counter, References tab, /projectctx refs, TUI-states",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-18T09:19:19.633Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "S7 orchestrator and worker skill instructions",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-18T09:13:13.175Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "S8 docs: README, docs site, CLI reference",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-18T09:30:51.671Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "S9 e2e fixture, live-run runbook",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-18T09:19:20.174Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-18T08:31:22.923Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-18T08:46:27.492Z",
+      "event": "frozen",
+      "detail": "22 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-18T08:47:09.797Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-18T08:47:10.264Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-18T08:47:10.722Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-18T08:47:11.184Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-18T08:47:11.650Z",
+      "event": "task-added",
+      "detail": "T5: S1 references.json schema, loader, section extraction"
+    },
+    {
+      "at": "2026-10-18T08:47:12.107Z",
+      "event": "task-added",
+      "detail": "T6: S2 resolver: task text, promotion, cap, undeclared"
+    },
+    {
+      "at": "2026-10-18T08:47:12.581Z",
+      "event": "task-added",
+      "detail": "T7: S3 output schemas anchor+summary and synced copies"
+    },
+    {
+      "at": "2026-10-18T08:47:13.018Z",
+      "event": "task-added",
+      "detail": "T8: S4 validator: anchor, summary check, drift, enforcement"
+    },
+    {
+      "at": "2026-10-18T08:47:13.474Z",
+      "event": "task-added",
+      "detail": "T9: S5 CLI skills references check|suggest, import hint"
+    },
+    {
+      "at": "2026-10-18T08:47:13.939Z",
+      "event": "task-added",
+      "detail": "T10: S6 TUI: sidebar counter, References tab, /projectctx refs, TUI-states"
+    },
+    {
+      "at": "2026-10-18T08:47:14.446Z",
+      "event": "task-added",
+      "detail": "T11: S7 orchestrator and worker skill instructions"
+    },
+    {
+      "at": "2026-10-18T08:47:14.892Z",
+      "event": "task-added",
+      "detail": "T12: S8 docs: README, docs site, CLI reference"
+    },
+    {
+      "at": "2026-10-18T08:47:15.367Z",
+      "event": "task-added",
+      "detail": "T13: S9 e2e fixture, live-run runbook"
+    },
+    {
+      "at": "2026-10-18T08:47:24.446Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13 (was empty) — review follows every implement/test/docs task"
+    },
+    {
+      "at": "2026-10-18T08:47:53.700Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 462-T5 dispatch"
+    },
+    {
+      "at": "2026-10-18T08:47:54.136Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 462-T7 dispatch"
+    },
+    {
+      "at": "2026-10-18T08:54:53.493Z",
+      "event": "task-done",
+      "detail": "T5: S1 references.json schema, loader, section extraction"
+    },
+    {
+      "at": "2026-10-18T08:54:53.998Z",
+      "event": "task-done",
+      "detail": "T7: S3 output schemas anchor+summary and synced copies"
+    },
+    {
+      "at": "2026-10-18T08:55:03.924Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1)"
+    },
+    {
+      "at": "2026-10-18T08:55:04.419Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1)"
+    },
+    {
+      "at": "2026-10-18T09:02:18.603Z",
+      "event": "task-done",
+      "detail": "T6: S2 resolver: task text, promotion, cap, undeclared"
+    },
+    {
+      "at": "2026-10-18T09:02:24.800Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1)"
+    },
+    {
+      "at": "2026-10-18T09:12:45.640Z",
+      "event": "task-done",
+      "detail": "T8: S4 validator: anchor, summary check, drift, enforcement"
+    },
+    {
+      "at": "2026-10-18T09:13:13.175Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1)"
+    },
+    {
+      "at": "2026-10-18T09:18:56.256Z",
+      "event": "task-done",
+      "detail": "T11: S7 orchestrator and worker skill instructions"
+    },
+    {
+      "at": "2026-10-18T09:18:56.790Z",
+      "event": "task-done",
+      "detail": "T9: S5 CLI skills references check|suggest, import hint"
+    },
+    {
+      "at": "2026-10-18T09:19:19.633Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1)"
+    },
+    {
+      "at": "2026-10-18T09:19:20.174Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1)"
+    },
+    {
+      "at": "2026-10-18T09:26:59.128Z",
+      "event": "task-done",
+      "detail": "T13: S9 e2e fixture, live-run runbook"
+    },
+    {
+      "at": "2026-10-18T09:30:50.482Z",
+      "event": "task-done",
+      "detail": "T10: S6 TUI: sidebar counter, References tab, /projectctx refs, TUI-states"
+    },
+    {
+      "at": "2026-10-18T09:30:51.671Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1)"
+    },
+    {
+      "at": "2026-10-18T09:36:38.411Z",
+      "event": "task-done",
+      "detail": "T12: S8 docs: README, docs site, CLI reference"
+    },
+    {
+      "at": "2026-10-18T09:57:51.214Z",
+      "event": "ac-updated",
+      "detail": "AC10: \"For an entry promoted by a condition the validator requires the cited anchor to equal the declared one, a summary of at least 40 characters, and at least two distinct words of five or more letters that occur in the anchored section (one required when the section has only one such word); each failure is reported as its own miss with the reason. [verify: exec `bun test src/gdskills/resolved-context-check.test.ts -t \"summary\"`]\" -> \"For an entry promoted by a condition the validator requires the cited anchor to equal the declared one, a summary of at least 40 characters, and at least three distinct words of five or more letters that occur in the anchored section (as many as the section holds when it has fewer than three); each failure is reported as its own miss with the reason. [verify: exec `bun test src/gdskills/resolved-context-check.test.ts -t \"summary\"`]\" (Operator decision, poll 213 (2026-10-18): raise the summary vocabulary threshold from two to three distinct words after the e2e test showed a foreign section can share two words)"
+    },
+    {
+      "at": "2026-10-18T14:42:11.357Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"`resolve-context` accepts the task text (CLI `--task-text`, and the same field in the MCP and flow-orchestrator call) and records it, truncated to a stated limit, in the last-resolve record. [verify: exec `bun test src/gdskills/context-resolver.test.ts -t \"task text\"`]\" -> \"`resolve-context` accepts the task text (CLI `--task-text`, and the same field in the MCP and flow-orchestrator call) and matches it against the declared keywords, cut to a stated limit. The last-resolve record keeps only the length of the task text given and whether it was cut, never the text itself (it may hold secrets; the file is not git-ignored); the matched reasons are already in the recorded result entries. [verify: exec `bun test src/gdskills/context-resolver.test.ts -t \"task text\"`]\" (Operator decision, poll 218 (2026-10-18): the last-resolve record must not hold the task text, which can carry secrets; record its length and the matched reasons only.)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/references-config.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/context-resolver.test.ts src/gdskills/resolved-context-check.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/context-resolver.test.ts -t \"task text\""
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/context-resolver.test.ts -t \"glob promotes\""
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/context-resolver.test.ts -t \"keyword promotes\""
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/references-section.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/context-resolver.test.ts -t \"cap keeps promoted\""
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/context-resolver.test.ts -t \"undeclared\""
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/output-schema.test.ts"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/resolved-context-check.test.ts -t \"summary\""
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/resolved-context-check.test.ts -t \"hash and n/a\""
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/resolved-context-check.test.ts src/flow/task-project-context.test.ts"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/resolved-context-check.test.ts -t \"drift\""
+    },
+    "AC14": {
+      "kind": "exec",
+      "check": "bun test src/commands/skills-references.test.ts -t \"check\""
+    },
+    "AC15": {
+      "kind": "exec",
+      "check": "bun test src/commands/skills-references.test.ts -t \"suggest\""
+    },
+    "AC16": {
+      "kind": "exec",
+      "check": "bun test src/tui/project-context-inspector.test.ts"
+    },
+    "AC17": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/skill-sync.test.ts"
+    },
+    "AC18": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/conditional-reads.e2e.test.ts"
+    },
+    "AC19": {
+      "kind": "exec",
+      "check": "bun run docs:check"
+    },
+    "AC20": {
+      "kind": "judged"
+    },
+    "AC21": {
+      "kind": "exec",
+      "check": "bun run check"
+    },
+    "AC22": {
+      "kind": "judged"
+    }
+  }
+}

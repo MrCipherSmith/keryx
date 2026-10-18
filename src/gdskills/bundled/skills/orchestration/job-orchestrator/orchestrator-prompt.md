@@ -129,13 +129,15 @@ All subsequent operations ONLY in the worktree directory.
 WAVES = dependency_order from ANALYSIS_RESULT (already topologically sorted)
 
 FOR wave_index, wave_tasks in enumerate(WAVES):
-  1. keryx skills resolve-context --for test --files <target_files> --task-type <type> --out <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
+  1. keryx skills resolve-context --for test --files <target_files> --task-type <type> --task-text '<task title and description, each ' written as '\''>' --out <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
      Dispatch one tests-creator per task, in a SINGLE turn (parallel), each carrying
      resolved_context_file. Wait for all; per result run
      keryx skills contracts validate <result.json> --schema tests-creator-output --resolved <that file>
      Load skill: skills/gdskills/quality/tests-creator/SKILL.md
   2. Parallel safety check: tasks sharing a target_file run sequentially.
   3. keryx skills resolve-context --for implement ... --out <...>/<task_id>.implement.resolved.json
+     A promoted entry (reason condition:glob:<g> or condition:keyword:<k>) needs path, sha256, the declared anchor, a summary
+     (40+ characters, own words) and how read|followed in the worker's project_context_applied; validate refuses it otherwise.
      Dispatch one task-implementer per task, in a SINGLE turn (parallel), each carrying
      resolved_context_file. Wait for all; per result run
      keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <that file>
@@ -183,7 +185,7 @@ ingest carrying a scope-B finding without it is refused. Severities are
 
 If `blocker` or `major` findings exist:
 1. Group by file
-2. Re-run `keryx skills resolve-context --for implement` on the fix files, then launch task-implementer (`task_type: "fix"`) with the findings and `resolved_context_file`
+2. Re-run `keryx skills resolve-context --for implement` on the fix files (with `--task-text '<fix task description, each ' written as '\''>'`), then launch task-implementer (`task_type: "fix"`) with the findings and `resolved_context_file`
 3. Run the sanity check — verify commits were made — and `contracts validate --resolved` on the result
 4. Run the NEXT managed round: `keryx review plan --target branch --ref <feature-branch> --head <new-head>` (or `review start`) on the new head, then review-orchestrator. The round, range and prior findings come from `round.json`: no own range, no `--all` per round, no whole-branch re-review.
 5. Disposition every finding of the previous round:

@@ -261,7 +261,18 @@ a human wants to look at it (`keryx dash`):
 `.metaproject/rules/project/`. When an agent is about to write code or tests,
 `keryx skills resolve-context` lists which rules and skills it must read —
 yours before the bundled ones — and the task is checked against what the agent
-says it read (`warn` by default, `block` on request). See
+says it read (`warn` by default, `block` on request).
+
+A long document your rules point at, such as `STYLING.md` or `THEMING.md`, can
+be required only when the task needs it. List it in
+`.metaproject/rules/project/references.json` with the globs and keywords that
+make it required and, optionally, the heading to read. `resolve-context
+--task-text '<task>'` then promotes it to `must_read`, the worker names the
+heading and writes a short summary of what it read, and `keryx skills
+references check` and `suggest` help you write the declarations. The summary
+check is a proxy: keryx cannot see what an agent opens, and a summary that
+reuses the section's words passes. How often a document is required depends on
+how broad its globs and keywords are. See
 [Make agents follow my project's own rules](https://github.com/MrCipherSmith/keryx/blob/main/docs/docs/guides/apply-project-rules.md).
 
 ## The agent harness

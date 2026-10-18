@@ -1403,6 +1403,7 @@ const SKILLS_RESOLVE_CONTEXT_OUTPUT_SCHEMA: Record<string, unknown> = {
     entries: { type: "array" },
     budget: { type: "object" },
     warnings: { type: "array" },
+    undeclared: { type: "array" },
     error: { type: "string" },
   },
   required: ["schema", "for", "files", "entries", "budget", "warnings"],
@@ -1972,7 +1973,9 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     description:
       "Resolve which project rules and project skills must be read before writing, testing or reviewing code in " +
       "the given files (`keryx skills resolve-context`). Input: { files: string[], for: \"implement\"|\"test\"|" +
-      "\"review\", task_type?: string, max_bytes?: integer }. Returns must_read and on_demand entries, project " +
+      "\"review\", task_type?: string, task_text?: string, max_bytes?: integer }. Pass the task's title and " +
+      "description as task_text: a document declared in references.json whose keyword occurs in it becomes must_read. " +
+      "Returns must_read and on_demand entries, project " +
       "first and bundled second, each with its path, sha256 and the reason it matched, plus the byte budget. " +
       "Read every must_read entry in full and cite each in the result's `project_context_applied`.",
     inputSchema: {
@@ -1981,6 +1984,7 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
         files: { type: "array", items: { type: "string" }, minItems: 1 },
         for: { type: "string", enum: ["implement", "test", "review"] },
         task_type: { type: "string" },
+        task_text: { type: "string" },
         max_bytes: { type: "integer", minimum: 1 },
       },
       required: ["files", "for"],
@@ -2001,12 +2005,14 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       }
       const taskType = typeof input.task_type === "string" && input.task_type !== "" ? input.task_type : undefined;
       const maxBytes = typeof input.max_bytes === "number" && Number.isInteger(input.max_bytes) && input.max_bytes > 0 ? input.max_bytes : undefined;
+      const taskText = typeof input.task_text === "string" && input.task_text.trim() !== "" ? input.task_text : undefined;
       return formatSkillsResolveContext(
         await port.skillsResolveContext({
           files,
           for: forWhat,
           ...(taskType !== undefined ? { taskType } : {}),
           ...(maxBytes !== undefined ? { maxBytes } : {}),
+          ...(taskText !== undefined ? { taskText } : {}),
         }),
       );
     },

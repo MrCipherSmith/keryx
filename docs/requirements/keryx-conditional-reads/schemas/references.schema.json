@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/references.schema.json",
+  "title": "Keryx conditional reference declarations",
+  "description": ".metaproject/rules/project/references.json. See README.md section 5.1. Each entry declares a document that project rules cite, where it applies (file globs and task keywords), the section that matters (anchor) and what it governs. A path must be relative and stay inside the project root; JSON Schema cannot express that normalisation, so the loader (src/gdskills/references-config.ts) also rejects a path that escapes the root. Each document is declared once: two entries whose normalised paths are equal make the file invalid, which JSON Schema cannot express either.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "references"],
+  "properties": {
+    "schema": { "const": 1 },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "when", "description"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?![/\\\\])(?![A-Za-z]:).+$",
+            "description": "Project-relative path of the document; absolute paths and paths escaping the root are rejected."
+          },
+          "when": {
+            "type": "object",
+            "additionalProperties": false,
+            "anyOf": [{ "required": ["globs"] }, { "required": ["keywords"] }],
+            "properties": {
+              "globs": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "minLength": 1, "pattern": "\\S" },
+                "description": "Globs matched against the task's files; a match promotes the reference."
+              },
+              "keywords": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "minLength": 1, "pattern": "\\S" },
+                "description": "Words matched case-insensitively, on a word boundary, against the task text."
+              }
+            }
+          },
+          "anchor": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S",
+            "description": "Heading text or slug of the section that matters; without it the whole file is the obligation."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S",
+            "description": "What the document governs and when to read it."
+          }
+        }
+      }
+    }
+  }
+}

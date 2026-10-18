@@ -115,7 +115,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/guard` | Opt-in turn guard: after a turn, checks whether the request was done and catches a reply that contradicts the tools — /guard [on\|off]. |
 | `/route` | Opt-in routing classifier: each request runs on its routing category's model — /route [on\|off]. |
 | `/editguard` | Jev EDIT GUARD status, threshold and recent flags for the Claude Code PostToolUse hook, with a toggle. |
-| `/projectctx` | Project rules for implementation: the last resolve, the context cap and warn/block enforcement — /projectctx [warn\|block]. |
+| `/projectctx` | Project rules for implementation: the last resolve, the context cap, warn/block enforcement and conditional references — /projectctx [warn\|block\|refs]. |
 | `/jevprofile` | Every review.jev.* setting next to its measured verdict; toggle one or apply the recommended profile. |
 | `/plan` | Toggle read-only mode — /plan [on\|off]. |
 | `/goal` | Deterministically start a goal — /goal <text> [--workspace <id>] [--auto [N]]. |

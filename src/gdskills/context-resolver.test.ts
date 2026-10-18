@@ -1,9 +1,10 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { importProjectRules } from "./import-rules";
-import { type ContextEntry, readLastResolve, recordLastResolve, resolveProjectContext } from "./context-resolver";
+import { type ContextEntry, LAST_RESOLVE_PATH, readLastResolve, recordLastResolve, resolveProjectContext, TASK_TEXT_MAX_CHARS } from "./context-resolver";
+import { runResolveContextCommand } from "./resolve-context-command";
 import { sha256Hex } from "./project-rules";
 
 const roots: string[] = [];
@@ -397,4 +398,238 @@ test("a core/ citation of a rule that is already selected adds no second entry",
   expect(result.entries.filter((entry) => entry.path === P("styling.mdc"))).toHaveLength(1);
   expect(result.entries.some((entry) => entry.kind === "contract")).toBe(false);
   expect(result.warnings).toEqual([]);
+});
+
+// --- flow 462: conditional mandatory reads ---------------------------------------------
+
+type RefSpec = { path: string; globs?: string[]; keywords?: string[]; anchor?: string; description?: string };
+
+async function declare(root: string, references: RefSpec[]): Promise<void> {
+  const body = references.map((ref) => ({
+    path: ref.path,
+    when: { ...(ref.globs !== undefined ? { globs: ref.globs } : {}), ...(ref.keywords !== undefined ? { keywords: ref.keywords } : {}) },
+    ...(ref.anchor !== undefined ? { anchor: ref.anchor } : {}),
+    description: ref.description ?? "What the document governs and when to read it.",
+  }));
+  await put(root, ".metaproject/rules/project/references.json", `${JSON.stringify({ schema: 1, references: body }, null, 2)}\n`);
+}
+
+const STYLING = ["# Styling", "", "Intro of the document.", "", "## Class conventions", "", "Use tokens, never raw colours.", "", "### Cascade", "", "Layers win over specificity.", "", "## Other topic", "", "Unrelated tail.", ""].join("\n");
+const SECTION = ["## Class conventions", "", "Use tokens, never raw colours.", "", "### Cascade", "", "Layers win over specificity.", "", ""].join("\n");
+
+test("task text: the last resolve records its length and whether it was cut, never the text, and nothing when absent", async () => {
+  const root = await project();
+  await importRules(root, { "any.mdc": ruleText({ globs: "src/**" }) });
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  const recordedFile = () => readFile(path.join(root, LAST_RESOLVE_PATH), "utf8");
+
+  const text = "Fix the spacing of the card, token sk-live-1234";
+  await recordLastResolve(root, result, { taskText: text });
+  expect(await readLastResolve(root)).toMatchObject({ taskTextLength: text.length });
+  expect((await readLastResolve(root))?.taskTextTruncated).toBeUndefined();
+  expect(await recordedFile()).not.toContain("sk-live-1234");
+
+  await recordLastResolve(root, result, { taskText: `${"x".repeat(TASK_TEXT_MAX_CHARS + 50)}` });
+  const long = await readLastResolve(root);
+  expect(long?.taskTextLength).toBe(TASK_TEXT_MAX_CHARS + 50);
+  expect(long?.taskTextTruncated).toBe(true);
+  expect(await recordedFile()).not.toContain("xxxxxxxxxx");
+
+  await recordLastResolve(root, result);
+  expect(Object.keys((await readLastResolve(root)) ?? {})).toEqual(["recordedAt", "result"]);
+});
+
+test("task text from --task-text reaches the last-resolve record as a length only, and the resolve result itself does not carry it", async () => {
+  const root = await project();
+  await importRules(root, { "any.mdc": ruleText({ globs: "src/**" }) });
+  const log = spyOn(console, "log").mockImplementation(() => undefined);
+  try {
+    const withText = await runResolveContextCommand(["--files", "src/a.ts", "--for", "implement", "--task-text", "Adjust the theme tokens"], root);
+    expect((await readLastResolve(root))?.taskTextLength).toBe("Adjust the theme tokens".length);
+    expect(await readFile(path.join(root, LAST_RESOLVE_PATH), "utf8")).not.toContain("Adjust the theme tokens");
+    const without = await runResolveContextCommand(["--files", "src/a.ts", "--for", "implement"], root);
+    expect(JSON.stringify(withText)).toBe(JSON.stringify(without));
+    expect((await readLastResolve(root))?.taskTextLength).toBeUndefined();
+  } finally {
+    log.mockRestore();
+  }
+});
+
+test("a declared reference whose glob promotes it is must_read with the glob as reason, the anchor, the description, the section size and the hash of the whole file", async () => {
+  const root = await project();
+  await put(root, "STYLING.md", STYLING);
+  await declare(root, [{ path: "STYLING.md", globs: ["src/**/*.css"], keywords: ["tailwind"], anchor: "Class conventions", description: "Class naming and the cascade." }]);
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/app.css"], for: "implement" });
+  expect(result.entries).toHaveLength(1);
+  expect(result.entries[0]).toMatchObject({
+    kind: "contract",
+    source: "project",
+    path: "STYLING.md",
+    tier: "must_read",
+    reason: "condition:glob:src/**/*.css",
+    anchor: "Class conventions",
+    description: "Class naming and the cascade.",
+    section_bytes: Buffer.byteLength(SECTION),
+    sha256: sha256Hex(STYLING),
+    bytes: Buffer.byteLength(STYLING),
+  });
+  expect(result.budget.usedBytes).toBe(Buffer.byteLength(SECTION));
+  expect(result.budget.exceeded).toBe(false);
+  expect(result.warnings).toEqual([]);
+});
+
+test("a declared reference whose keyword promotes it matches the task text case-insensitively on a word boundary; a task matching neither keeps description, anchor and condition on_demand", async () => {
+  const root = await project();
+  await put(root, "STYLING.md", STYLING);
+  await declare(root, [{ path: "STYLING.md", globs: ["src/**/*.css"], keywords: ["tailwind", "z-index"], anchor: "Class conventions", description: "Class naming." }]);
+  const resolve = (taskText?: string) => resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement", ...(taskText !== undefined ? { taskText } : {}) });
+
+  const hit = await resolve("Migrate the TAILWIND config.");
+  expect(hit.entries[0]).toMatchObject({ path: "STYLING.md", tier: "must_read", reason: "condition:keyword:tailwind", anchor: "Class conventions", section_bytes: Buffer.byteLength(SECTION) });
+  expect((await resolve("fix the z-index of the modal")).entries[0]).toMatchObject({ tier: "must_read", reason: "condition:keyword:z-index" });
+
+  for (const text of ["tailwinds are mentioned", "the pretailwind thing", undefined, ""]) {
+    const miss = await resolve(text);
+    expect(miss.entries).toHaveLength(1);
+    expect(miss.entries[0]).toMatchObject({
+      path: "STYLING.md",
+      tier: "on_demand",
+      description: "Class naming.",
+      anchor: "Class conventions",
+      condition: { globs: ["src/**/*.css"], keywords: ["tailwind", "z-index"] },
+    });
+    expect(miss.budget.usedBytes).toBe(0);
+  }
+});
+
+test("a reference whose anchor is missing falls back to the whole file and warns at resolve time", async () => {
+  const root = await project();
+  await put(root, "STYLING.md", STYLING);
+  await declare(root, [{ path: "STYLING.md", globs: ["src/**"], anchor: "No such heading" }]);
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  expect(result.entries[0]).toMatchObject({ tier: "must_read", section_bytes: Buffer.byteLength(STYLING), anchor: "No such heading" });
+  expect(result.budget.usedBytes).toBe(Buffer.byteLength(STYLING));
+  const warning = result.warnings.join("\n");
+  expect(warning).toContain("STYLING.md");
+  expect(warning).toContain("No such heading");
+  expect(warning).toContain("whole file");
+});
+
+test("cap keeps promoted references: an over-cap promoted reference stays must_read and the warning gives the sizes, while rules keep flow 461 behaviour", async () => {
+  const root = await project();
+  await put(root, "STYLING.md", ruleText({ size: 10000 }));
+  await put(root, "THEMING.md", ruleText({ size: 6000 }));
+  await importRules(root, { "small.mdc": ruleText({ globs: "src/**", size: 2000 }) });
+  await declare(root, [
+    { path: "STYLING.md", globs: ["src/**"] },
+    { path: "THEMING.md", globs: ["docs/**"] },
+  ]);
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement", maxBytes: 4096 });
+  expect(result.entries.map((entry) => [entry.path, entry.tier])).toEqual([
+    [P("small.mdc"), "must_read"],
+    ["STYLING.md", "must_read"],
+    ["THEMING.md", "on_demand"],
+  ]);
+  expect(result.budget).toEqual({ limitBytes: 4096, usedBytes: 12000, exceeded: true, limitSource: "flag" });
+  const warning = result.warnings.join("\n");
+  expect(warning).toContain("STYLING.md");
+  expect(warning).toContain("10000");
+  expect(warning).toContain("4096");
+  expect(warning).toContain("12000");
+});
+
+test("undeclared citations keep the flow 461 on_demand contract entry and are listed as undeclared; a declared one is not listed twice", async () => {
+  const root = await project();
+  await put(root, "STYLING.md", STYLING);
+  await put(root, "THEMING.md", "# Theming\n");
+  await importRules(root, { "overlay.mdc": ruleText({ globs: "src/**", body: "See `STYLING.md` and `THEMING.md`.\n" }) });
+  await declare(root, [{ path: "STYLING.md", globs: ["docs/**"], description: "Class naming." }]);
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  expect(result.entries.filter((entry) => entry.path === "STYLING.md")).toHaveLength(1);
+  expect(result.entries.find((entry) => entry.path === "STYLING.md")).toMatchObject({ tier: "on_demand", description: "Class naming." });
+  expect(result.entries.find((entry) => entry.path === "THEMING.md")).toMatchObject({ kind: "contract", tier: "on_demand", reason: `referenced-by:${P("overlay.mdc")}` });
+  expect(result.undeclared).toEqual(["THEMING.md"]);
+});
+
+test("a rule that cites a declared document as ./STYLING.md does not list it twice or call it undeclared, and a cited .mdc is a contract but not an undeclared document", async () => {
+  const root = await project();
+  await put(root, "STYLING.md", STYLING);
+  await put(root, "THEMING.md", "# Theming\n");
+  await put(root, "notes/OTHER.mdc", "other rule\n");
+  await importRules(root, { "overlay.mdc": ruleText({ globs: "src/**", body: "See `./STYLING.md`, `./THEMING.md` and `notes/OTHER.mdc`.\n" }) });
+  await declare(root, [{ path: "STYLING.md", globs: ["docs/**"] }]);
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  expect(result.entries.filter((entry) => entry.path.endsWith("STYLING.md"))).toHaveLength(1);
+  expect(result.entries.find((entry) => entry.path === "STYLING.md")).toMatchObject({ tier: "on_demand", reason: "declared" });
+  expect(result.entries.find((entry) => entry.path === "THEMING.md")).toMatchObject({ kind: "contract", reason: `referenced-by:${P("overlay.mdc")}` });
+  expect(result.entries.find((entry) => entry.path === "notes/OTHER.mdc")).toMatchObject({ kind: "contract", tier: "on_demand" });
+  expect(result.undeclared).toEqual(["THEMING.md"]);
+});
+
+test("a task text over the cut warns that a keyword after the cut cannot promote; a text that fits, or a project without keywords or a references file, gets no warning", async () => {
+  const root = await project();
+  await put(root, "STYLING.md", STYLING);
+  await declare(root, [{ path: "STYLING.md", keywords: ["tailwind"], anchor: "Class conventions" }]);
+  const resolve = (taskText: string) => resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement", taskText });
+
+  const cut = await resolve(`${"x ".repeat(TASK_TEXT_MAX_CHARS)}tailwind`);
+  expect(cut.entries[0]).toMatchObject({ path: "STYLING.md", tier: "on_demand" });
+  const warning = cut.warnings.join("\n");
+  expect(warning).toContain(`${TASK_TEXT_MAX_CHARS} characters`);
+  expect(warning).toContain("keyword after the cut");
+
+  const exact = await resolve(`${"x ".repeat(TASK_TEXT_MAX_CHARS / 2 - 4)}tailwind`);
+  expect(exact.entries[0]).toMatchObject({ tier: "must_read", reason: "condition:keyword:tailwind" });
+  expect(exact.warnings.join("\n")).not.toContain("keyword after the cut");
+
+  await declare(root, [{ path: "STYLING.md", globs: ["docs/**"] }]);
+  expect((await resolve("y ".repeat(TASK_TEXT_MAX_CHARS))).warnings.join("\n")).not.toContain("keyword after the cut");
+
+  const bare = await project();
+  expect((await resolveProjectContext({ projectRoot: bare, files: [], for: "implement", taskText: "y ".repeat(TASK_TEXT_MAX_CHARS) })).warnings).toEqual([]);
+});
+
+test("without a references file the result is byte-identical whatever the task text, and carries no undeclared list", async () => {
+  const root = await project();
+  await put(root, "STYLING.md", STYLING);
+  await importRules(root, { "overlay.mdc": ruleText({ globs: "src/**", body: "See `STYLING.md`.\n" }) });
+  const plain = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  const withText = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement", taskText: "tailwind everywhere" });
+  expect(JSON.stringify(withText)).toBe(JSON.stringify(plain));
+  expect("undeclared" in plain).toBe(false);
+  expect(plain.entries.find((entry) => entry.path === "STYLING.md")).toMatchObject({ tier: "on_demand", reason: `referenced-by:${P("overlay.mdc")}` });
+});
+
+test("a malformed references file warns with its own messages, and the resolve carries on as flow 461 would", async () => {
+  const root = await project();
+  await put(root, "STYLING.md", STYLING);
+  await importRules(root, { "overlay.mdc": ruleText({ globs: "src/**", body: "See `STYLING.md`.\n" }) });
+  await put(root, ".metaproject/rules/project/references.json", "{ not json");
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  expect(result.warnings.join("\n")).toContain("references.json");
+  expect(result.warnings.join("\n")).toContain("not valid JSON");
+  expect(result.entries.find((entry) => entry.path === "STYLING.md")).toMatchObject({ tier: "on_demand" });
+  expect("undeclared" in result).toBe(false);
+
+  await put(root, ".metaproject/rules/project/references.json", JSON.stringify({ schema: 1, references: [{ path: "STYLING.md", when: {}, description: "x" }] }));
+  const invalid = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  expect(invalid.warnings.join("\n")).toContain('references[0] ("STYLING.md")');
+});
+
+test("a declared reference whose file is missing, outside the root or a directory is not listed and warns", async () => {
+  const root = await project();
+  await mkdir(path.join(root, "dir.md"), { recursive: true });
+  const outside = await mkdtemp(path.join(tmpdir(), "keryx-context-outside-"));
+  roots.push(outside);
+  await writeFile(path.join(outside, "secret.md"), "secret\n", "utf8");
+  await symlink(path.join(outside, "secret.md"), path.join(root, "escape.md"));
+  await declare(root, [
+    { path: "missing.md", globs: ["src/**"] },
+    { path: "dir.md", globs: ["src/**"] },
+    { path: "escape.md", globs: ["src/**"] },
+  ]);
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  expect(result.entries).toEqual([]);
+  const warnings = result.warnings.join("\n");
+  for (const name of ["missing.md", "dir.md", "escape.md"]) expect(warnings).toContain(name);
 });

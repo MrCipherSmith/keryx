@@ -292,6 +292,7 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "inspect",
       "route",
       "resolve-context",
+      "references",
       "create",
       "generate",
       "import",

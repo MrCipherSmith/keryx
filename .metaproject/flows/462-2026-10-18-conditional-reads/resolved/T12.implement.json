@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "for": "implement",
+  "files": [
+    "README.md"
+  ],
+  "entries": [
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/tdd-workflow.mdc",
+      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
+      "bytes": 3891,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/error-handling.mdc",
+      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
+      "bytes": 5675,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/solid-principles.mdc",
+      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
+      "bytes": 5733,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/code-style-patterns.mdc",
+      "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e",
+      "bytes": 2747,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/frontend-assistant.mdc",
+      "sha256": "6daaf0844b502f97ffeb99f1a9d3686a8962bcf8754b52cfe09b8c6c22187ce7",
+      "bytes": 1121,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/storybook-guidelines.mdc",
+      "sha256": "3f58a2049abb427f8985521f8e3e9384cd9d88e315761955bf1ee6d8a6d9e423",
+      "bytes": 1056,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/mobx-store-template.mdc",
+      "sha256": "3cd27263b0aae1161b592801739df60b6112e8ba4f2b06d1ae17cef685c783cc",
+      "bytes": 19666,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/nestjs-dto.mdc",
+      "sha256": "cc7f279aad31f3df6bb157bf30af8150ac60c2f9846973baeef036be37394051",
+      "bytes": 1414,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    },
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/api-contracts.mdc",
+      "sha256": "f124ab1a3f31af1a67e0620f9e750c1f111a1b94bd8e48f58139c53e1919551a",
+      "bytes": 6112,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    }
+  ],
+  "budget": {
+    "limitBytes": 131072,
+    "usedBytes": 0,
+    "exceeded": false,
+    "limitSource": "default"
+  },
+  "warnings": []
+}

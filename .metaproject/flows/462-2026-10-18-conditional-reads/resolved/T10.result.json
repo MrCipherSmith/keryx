@@ -1,0 +1,67 @@
+{
+  "task_id": "task-10",
+  "task_name": "TUI: ProjectCtx refs segment, /projectctx References tab, /projectctx refs (AC16)",
+  "task_type": "ui_component",
+  "status": "success",
+  "description": "Sidebar ProjectCtx gains refs <promoted>/<declared> (with !<k> for check problems, - before a resolve, ? for an invalid file); the /projectctx modal gets a References tab (condition, anchor, promotion status and reason per declaration, plus the problems of keryx skills references check); /projectctx refs opens it; a polling feed repaints the sidebar and the open tab on a new resolve; TUI-states.md is authoritative and every row has a render test.",
+  "files_created": ["src/tui/project-references-view.ts"],
+  "files_modified": [
+    "src/tui/project-context-inspector.ts",
+    "src/tui/project-context-inspector.test.ts",
+    "src/tui/tui-shell.ts",
+    "src/gdskills/project-context-status.ts",
+    "src/gdskills/project-context-status.test.ts",
+    "src/commands/agent-commands.ts",
+    "src/standard/help-groups.ts",
+    "docs/docs/commands-by-task.md",
+    "docs/docs/cli-reference.md",
+    "docs/requirements/keryx-conditional-reads/TUI-states.md"
+  ],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "pass",
+  "type_check_result": "pass",
+  "test_result": "pass for bun test src/tui/project-context-inspector.test.ts (25 passed), src/gdskills/project-context-status.test.ts (9 passed), src/standard and src/commands/agent-commands.test.ts; bun test src/tui: 2 failures in src/tui/ci-triage-source.test.ts (not opted in cases), a file this task did not touch",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "behavior_changes": [
+    {
+      "description": "The References tab is always present in /projectctx, including a project with no references file, where it shows one line naming `keryx skills references suggest` (TUI-states R0). Status and Last resolve tab text and the sidebar line are unchanged without a references file.",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": ["Hide the tab until a references file exists (then /projectctx refs would have nothing to open)"]
+    },
+    {
+      "description": "The usage line of an invalid /projectctx argument now reads [warn|block|refs]; the existing parse test was updated for it.",
+      "user_visible": true,
+      "needs_operator": false
+    },
+    {
+      "description": "The ProjectCtx line is now shown when the project has a references file even with no rules and no recorded resolve (warn · 0 rules · refs -/<n>).",
+      "user_visible": true,
+      "needs_operator": false
+    }
+  ],
+  "assumptions": [
+    "A declared reference is told apart from a cited contract by the resolver entry's condition field; only declared entries count towards <promoted>.",
+    "A references file with zero declarations is shown as refs -/0 (or 0/0), not hidden, so undeclared-citation problems can surface.",
+    "A resolve recorded by a worker outside the TUI is picked up by polling the status every 5 seconds (unref'd interval, same pattern as the decisions and approvals sidebars)."
+  ],
+  "not_touched": [
+    { "path": "src/gdskills/context-resolver.ts", "reason": "out of scope: resolver and validator are not changed by this task" },
+    { "path": "src/gdskills/conditional-reads.e2e.test.ts", "reason": "owned by T13" },
+    { "path": "src/tui/settings-model.ts", "reason": "the settings row keeps its [warn|block] usage; refs is not a setting" }
+  ],
+  "noticed_not_touched": [
+    { "what": "Two tests fail in this environment: loadCiTriageList and runCiTriageForItem 'not opted in' cases see gh being called", "where": "src/tui/ci-triage-source.test.ts" }
+  ],
+  "project_context_applied": [
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c", "how": "read" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b", "how": "read" },
+    { "path": ".metaproject/rules/core/code-style-patterns.mdc", "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e", "how": "read" },
+    { "path": ".metaproject/rules/core/frontend-assistant.mdc", "sha256": "6daaf0844b502f97ffeb99f1a9d3686a8962bcf8754b52cfe09b8c6c22187ce7", "how": "n/a" },
+    { "path": ".metaproject/rules/core/storybook-guidelines.mdc", "sha256": "3f58a2049abb427f8985521f8e3e9384cd9d88e315761955bf1ee6d8a6d9e423", "how": "n/a" }
+  ],
+  "notes": "Rules read in full. tdd-workflow: tests written first and seen failing, then code. error-handling: the status loader returns problems as values (invalid / findings), the feed reports a failing poll once and never swallows it; no new catch rethrows were needed. solid-principles: the References text lives in its own module (project-references-view.ts), the feed is separate from the modal. code-style-patterns: strict types, no any. frontend-assistant (React/MobX/Ant Design) and storybook-guidelines do not apply to this opentui terminal UI: read, n/a. tsc was run through `keryx ctx run -- node <repo>/node_modules/typescript/bin/tsc --noEmit` because a bare tsc process is killed (SIGTERM) in this session."
+}

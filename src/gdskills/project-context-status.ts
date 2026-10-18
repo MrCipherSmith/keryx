@@ -13,6 +13,17 @@ import {
   type ProjectContextConfig,
 } from "./project-context-config";
 import { readProjectRuleRegistry } from "./project-rules";
+import { checkReferences, type ReferencesFinding } from "./references-check";
+import { loadReferences, type ReferenceDeclaration } from "./references-config";
+
+/**
+ * The conditional references of the project (flow 462). Absent from the status
+ * when the project has no `references.json`, so a project without one reads
+ * exactly as before.
+ */
+export type ProjectReferencesStatus =
+  | { state: "invalid"; /** Validation messages; each names the file and the entry. */ errors: string[] }
+  | { state: "declared"; declarations: ReferenceDeclaration[]; /** What `keryx skills references check` reports. */ findings: ReferencesFinding[] };
 
 export type ProjectContextStatus = {
   enforcement: ProjectContextConfig["enforcement"];
@@ -27,6 +38,8 @@ export type ProjectContextStatus = {
   last?: RecordedResolve;
   /** Set when `last.json` exists but cannot be used. */
   lastError?: string;
+  /** Set when the project has a references file. */
+  references?: ProjectReferencesStatus;
 };
 
 async function configProblem(projectRoot: string): Promise<string | undefined> {
@@ -58,13 +71,22 @@ async function readLast(projectRoot: string): Promise<{ last?: RecordedResolve; 
   }
 }
 
+async function readReferences(projectRoot: string): Promise<{ references?: ProjectReferencesStatus }> {
+  const loaded = await loadReferences(projectRoot);
+  if (!loaded.ok) return { references: { state: "invalid", errors: loaded.errors } };
+  if (!loaded.present) return {};
+  const report = await checkReferences(projectRoot);
+  return { references: { state: "declared", declarations: loaded.references, findings: report.findings } };
+}
+
 export async function loadProjectContextStatus(projectRoot: string): Promise<ProjectContextStatus> {
-  const [config, configError, refs, registry, last] = await Promise.all([
+  const [config, configError, refs, registry, last, references] = await Promise.all([
     readProjectContextConfig(projectRoot),
     configProblem(projectRoot),
     listRuleRefs(projectRoot),
     readProjectRuleRegistry(projectRoot),
     readLast(projectRoot),
+    readReferences(projectRoot),
   ]);
   const copied = new Set(refs);
   const linked = registry.filter((entry) => entry.mode === "link" && !copied.has(entry.ref));
@@ -77,5 +99,6 @@ export async function loadProjectContextStatus(projectRoot: string): Promise<Pro
     linkedCount: linked.length,
     ...(configError !== undefined ? { configError } : {}),
     ...last,
+    ...references,
   };
 }

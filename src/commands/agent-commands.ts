@@ -427,7 +427,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // Flow 461: project rules and implementation context — the last resolve, the cap,
     // and whether a missing `project_context_applied` only warns or blocks. TUI-only.
     name: "/projectctx",
-    description: "Project rules for implementation: last resolve, context cap, warn/block enforcement — /projectctx [warn|block]",
+    description: "Project rules for implementation: last resolve, context cap, warn/block enforcement, conditional references — /projectctx [warn|block|refs]",
     modes: AGENT_ONLY,
   },
   {

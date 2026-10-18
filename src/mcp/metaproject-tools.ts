@@ -125,11 +125,13 @@ async function invokeStructured(
       }
       const taskType = stringParam(params, "task_type");
       const maxBytes = typeof params.max_bytes === "number" && Number.isInteger(params.max_bytes) && params.max_bytes > 0 ? params.max_bytes : undefined;
+      const taskText = stringParam(params, "task_text");
       return port.skillsResolveContext({
         files,
         for: forWhat,
         ...(taskType !== undefined && taskType !== "" ? { taskType } : {}),
         ...(maxBytes !== undefined ? { maxBytes } : {}),
+        ...(taskText !== undefined && taskText.trim() !== "" ? { taskText } : {}),
       });
     }
     default:

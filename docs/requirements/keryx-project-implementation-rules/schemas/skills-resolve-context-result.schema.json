@@ -23,6 +23,11 @@
       }
     },
     "warnings": { "type": "array", "items": { "type": "string" } },
+    "undeclared": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Present only when the project has a references file: documents a rule cites that the file does not declare (they stay on_demand)."
+    },
     "error": { "type": "string", "description": "Set when the resolve could not run; the other fields are then empty." }
   },
   "definitions": {
@@ -36,13 +41,28 @@
         "path": { "type": "string", "description": "Project-relative, posix; absolute for a linked rule whose origin is outside the project." },
         "sha256": { "type": "string" },
         "bytes": { "type": "integer", "minimum": 0 },
-        "reason": { "type": "string", "description": "glob:<g>, always, task-type:<t>, replaces-bundled, route, bundled-default or referenced-by:<path>." },
+        "reason": {
+          "type": "string",
+          "description": "glob:<g>, always, task-type:<t>, replaces-bundled, route, bundled-default, referenced-by:<path>, or for a declared reference condition:glob:<g>, condition:keyword:<k> or declared (not promoted)."
+        },
         "tier": { "enum": ["must_read", "on_demand"] },
         "description": { "type": "string" },
         "index": { "const": true },
         "linked": { "const": true },
         "shadows": { "type": "string", "description": "The bundled rule this project rule replaces." },
-        "also_at": { "type": "array", "items": { "type": "string" }, "description": "Other project paths with the same sha256; citing any of them counts." }
+        "also_at": { "type": "array", "items": { "type": "string" }, "description": "Other project paths with the same sha256; citing any of them counts." },
+        "anchor": { "type": "string", "description": "Declared references only: heading text or slug of the section that matters, as declared in references.json." },
+        "section_bytes": { "type": "integer", "minimum": 0, "description": "Declared references with an anchor: UTF-8 size of the anchored section, the bytes the obligation and the budget count." },
+        "condition": {
+          "type": "object",
+          "required": ["globs", "keywords"],
+          "additionalProperties": false,
+          "description": "Declared references only: where the document applies, so an on_demand entry says why it was not required.",
+          "properties": {
+            "globs": { "type": "array", "items": { "type": "string" } },
+            "keywords": { "type": "array", "items": { "type": "string" } }
+          }
+        }
       }
     }
   }

@@ -3,7 +3,7 @@ import { writeContained } from "../lib/contained-write";
 import { type ContextFor, type ProjectContextResolution, recordLastResolve, resolveProjectContext } from "./context-resolver";
 
 const USAGE =
-  "Usage: keryx skills resolve-context --files <file>[,<file>...] --for implement|test|review [--task-type <type>] [--max-bytes <n>] [--out <path>] [--json]";
+  "Usage: keryx skills resolve-context --files <file>[,<file>...] --for implement|test|review [--task-type <type>] [--task-text <text>] [--max-bytes <n>] [--out <path>] [--json]";
 
 const FOR_VALUES: readonly ContextFor[] = ["implement", "test", "review"];
 
@@ -18,7 +18,7 @@ export function renderResolutionMarkdown(result: ProjectContextResolution): stri
     const group = result.entries.filter((entry) => entry.tier === tier);
     lines.push("", `## ${tier} (${group.length})`);
     for (const entry of group) {
-      const flags = [entry.index ? "index" : "", entry.linked ? "linked" : "", entry.shadows ? `shadows ${entry.shadows}` : "", entry.also_at ? `also at ${entry.also_at.join(", ")}` : ""].filter(Boolean);
+      const flags = [entry.index ? "index" : "", entry.linked ? "linked" : "", entry.shadows ? `shadows ${entry.shadows}` : "", entry.also_at ? `also at ${entry.also_at.join(", ")}` : "", entry.anchor ? `anchor "${entry.anchor}"${entry.section_bytes !== undefined ? `, section ${entry.section_bytes} bytes` : ""}` : ""].filter(Boolean);
       lines.push(`- ${entry.path} — ${entry.source} ${entry.kind}, ${entry.reason}, ${entry.bytes} bytes, sha256 ${entry.sha256.slice(0, 12)}${flags.length > 0 ? ` (${flags.join("; ")})` : ""}`);
     }
   }
@@ -37,6 +37,7 @@ export async function runResolveContextCommand(args: string[], projectRoot: stri
   const rawMax = optionValue(args, "--max-bytes");
   const maxBytes = rawMax === undefined ? undefined : Number(rawMax);
   const taskType = optionValue(args, "--task-type");
+  const taskText = optionValue(args, "--task-text");
 
   const result = await resolveProjectContext({
     projectRoot,
@@ -44,8 +45,9 @@ export async function runResolveContextCommand(args: string[], projectRoot: stri
     for: forValue as ContextFor,
     ...(taskType !== undefined && taskType !== "" ? { taskType } : {}),
     ...(maxBytes !== undefined ? { maxBytes } : {}),
+    ...(taskText !== undefined && taskText.trim() !== "" ? { taskText } : {}),
   });
-  await recordLastResolve(projectRoot, result);
+  await recordLastResolve(projectRoot, result, taskText !== undefined ? { taskText } : {});
 
   const json = `${JSON.stringify(result, null, 2)}\n`;
   const outPath = optionValue(args, "--out");
