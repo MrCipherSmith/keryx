@@ -3554,8 +3554,13 @@ Both the cap and the enforcement mode live in `.metaproject/tasks.config.json`:
 | `gdskills.projectContext.maxBytes` | integer 4096..1048576, default 131072 | Cap on project-sourced content per task. Entries that fit are `must_read`; the rest are listed `on_demand` with their description and `budget.exceeded` is set with one warning that names this key. Rules are never cut. `resolve-context --max-bytes` overrides it for one call. A value outside the range reads as the default and warns. |
 
 The default install writes neither key and reads as `warn` with 128 KiB. The
-mode can also be changed from the TUI: `/projectctx [warn|block]` opens the
-inspector (Status and Last resolve tabs, `e` toggles the mode) and the
+mode can also be changed from the TUI: `/projectctx [warn|block|refs]` opens the
+inspector (Status, Last resolve and References tabs, `e` toggles the mode;
+`/projectctx refs` opens it on the References tab, which lists each declared
+conditional reference with its condition, anchor, promotion status, reason and
+the problems `keryx skills references check` finds; the sidebar line gains
+`refs <promoted>/<declared>`, `!<k>` for problems and `?` for an invalid
+references file) and the
 settings modal has a `Project rules check` row under Safety that shows the
 mode and, beside it, the cap (the cap itself is edited in the config file). The sidebar shows a
 `ProjectCtx` line once the project has imported rules or a recorded resolve.

@@ -219,6 +219,7 @@ import { writeProjectContextEnforcement } from "../gdskills/project-context-conf
 import { loadProjectContextStatus, type ProjectContextStatus } from "../gdskills/project-context-status";
 import {
   PROJECT_CONTEXT_CONFIG_REFUSAL,
+  createProjectContextFeed,
   isProjectContextCommand,
   openProjectContext,
   parseProjectContextCommand,
@@ -5265,10 +5266,16 @@ export async function launchTuiAgentShell(opts: {
     // Settings, rule count and the last recorded resolve live in PROJECT files;
     // `loadProjectContextStatus` never throws, so the first paint is async but safe.
     const projectContextDir = (): string => opts.session?.cwd ?? process.cwd();
-    let projectContextStatus: ProjectContextStatus | undefined;
+    // Flow 462: the feed also polls, so a resolve recorded by a worker moves the `refs`
+    // counters and an open tab without reopening anything.
+    const projectContextFeed = createProjectContextFeed({
+      load: () => loadProjectContextStatus(projectContextDir()),
+      onError: (message) => io.onSystem?.(`projectctx: ${message}\n`),
+    });
     const refreshProjectContextSidebar = (): void => {
       clearTranscriptChildren(sbProjectCtx);
-      const value = projectContextStatus === undefined ? undefined : renderProjectContextSidebarValue(projectContextStatus);
+      const current = projectContextFeed.current();
+      const value = current === undefined ? undefined : renderProjectContextSidebarValue(current);
       if (value === undefined) return;
       sbProjectCtx.add(new otui.TextRenderable(r, { id: "sb-project-ctx-k", content: otui.t`${dimChunk(otui, "ProjectCtx")}`, marginTop: 1 }));
       sbProjectCtx.add(
@@ -5281,19 +5288,17 @@ export async function launchTuiAgentShell(opts: {
         }),
       );
     };
-    const reloadProjectContext = async (): Promise<ProjectContextStatus> => {
-      const next = await loadProjectContextStatus(projectContextDir());
-      projectContextStatus = next;
-      refreshProjectContextSidebar();
-      return next;
-    };
+    projectContextFeed.subscribe(refreshProjectContextSidebar);
+    const reloadProjectContext = (): Promise<ProjectContextStatus> => projectContextFeed.reload();
     void reloadProjectContext().catch(() => {});
-    const showProjectContext = (): void => {
+    const showProjectContext = (tab?: "references"): void => {
       void reloadProjectContext()
         .then((initial) => {
           openProjectContext(otui, chrome, {
             initial,
+            ...(tab !== undefined ? { initialTab: tab } : {}),
             loadStatus: reloadProjectContext,
+            subscribe: projectContextFeed.subscribe,
             setEnforcement: (mode) => writeProjectContextEnforcement(projectContextDir(), mode),
             onKeypress: (handler) => onKeypress(r, handler),
             inputBlocked: () => chrome.keyboardOwnedElsewhere(),
@@ -9349,7 +9354,7 @@ export async function launchTuiAgentShell(opts: {
           } else if (parsed.kind === "set") {
             void setProjectContextEnforcement(parsed.mode);
           } else {
-            showProjectContext();
+            showProjectContext(parsed.tab);
           }
           return;
         }
