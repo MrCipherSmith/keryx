@@ -11,7 +11,7 @@
   "title": "Project rules and skills are applied first when code and tests are written",
   "status": "in-progress",
   "createdAt": "2026-10-17T18:22:54.675Z",
-  "updatedAt": "2026-10-17T19:57:06.315Z",
+  "updatedAt": "2026-10-18T08:08:33.107Z",
   "source": {
     "type": "description",
     "ref": null
@@ -113,6 +113,10 @@
     "AC21": {
       "at": "2026-10-17T19:57:06.106Z",
       "note": "verify green 2026-10-17: cli-reference-coverage + cli-docs-structure + project-reviewers + rule-references + reviewers + vantage fixture + group-subcommands-flow, 80 pass 0 fail; tsc clean"
+    },
+    "AC22": {
+      "at": "2026-10-18T08:08:33.107Z",
+      "note": "live-run-result.md + green CI on PR 1047"
     }
   },
   "pr": {
@@ -487,6 +491,11 @@
       "at": "2026-10-17T19:57:06.315Z",
       "event": "task-done",
       "detail": "T10: Docs, reviewer non-regression, Vantage fixture, live-run runbook (AC19-AC22)"
+    },
+    {
+      "at": "2026-10-18T08:08:33.107Z",
+      "event": "ac-confirmed",
+      "detail": "AC22: live-run-result.md + green CI on PR 1047 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     }
   ],
   "acKinds": {
@@ -853,6 +862,17 @@
         "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
       },
       "criterion": "AC21",
+      "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
+    },
+    {
+      "at": "2026-10-18T08:08:33.107Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC22",
       "acChecksum": "sha256:37c9fe4e01bfaf703d0be51dfb0b1407c1e90e51d3abaaca56d8e300ad01975b"
     }
   ]
