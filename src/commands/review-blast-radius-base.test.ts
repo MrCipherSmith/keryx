@@ -12,7 +12,12 @@ import { changedFilesArgv, radiusDiffArgv, radiusRange } from "../review/radius-
 
 const CLI = path.join(import.meta.dir, "..", "cli.ts");
 /** The fixture commits take the committer from the environment (or git's own config); none is hard-coded here. */
-const IDENTITY = { GIT_AUTHOR_NAME: "t", GIT_COMMITTER_NAME: "t" };
+const IDENTITY = {
+  GIT_AUTHOR_NAME: "t",
+  GIT_AUTHOR_EMAIL: "t@example.com",
+  GIT_COMMITTER_NAME: "t",
+  GIT_COMMITTER_EMAIL: "t@example.com",
+};
 
 let repo: string;
 let baseSha: string;

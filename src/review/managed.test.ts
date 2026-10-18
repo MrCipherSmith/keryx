@@ -1928,7 +1928,7 @@ test("R1-10: `--waive-coverage` is a human-confirmation command the approval flo
 
 describe("ingest into an existing package defaults to its recorded head (flow 458 AC7)", () => {
   async function git(...args: string[]): Promise<string> {
-    const proc = Bun.spawn(["git", ...args], { cwd: ROOT, stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_COMMITTER_NAME: "t" } });
+    const proc = Bun.spawn(["git", ...args], { cwd: ROOT, stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.com", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.com" } });
     const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
     if (code !== 0) throw new Error(`git ${args.join(" ")}: ${err}`);
     return out.trim();
