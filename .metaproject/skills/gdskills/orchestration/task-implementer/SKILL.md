@@ -179,9 +179,9 @@ Before you rely on a project-skill's guidance, confirm it still matches the code
 This step is read-only and inline; do not spawn a subagent for it.
 
 **2.0c Resolve the project's standard (before 2.1):**
-- Use `workspace.resolved_context_file` when given; otherwise run `keryx skills resolve-context --for implement --files <target_files, comma-joined> --task-type <task_type> --out <project-relative path>`.
+- Use `workspace.resolved_context_file` when given; otherwise run `keryx skills resolve-context --for implement --files <target_files, comma-joined> --task-type <task_type> --task-text "<task.description>" --out <project-relative path>` (`--task-text` lets a declared keyword promote a document).
 - Read every `must_read` entry in full, project entries first; read `on_demand` ones only when the work touches them. A project rule listed with `shadows` replaces the bundled one. An entry with `also_at` is one file under several paths: citing any of them, with the entry's sha256, counts.
-- Cite what you used in `project_context_applied` (6.1) with the resolver's `sha256`; `n/a` needs a reason in `notes`. Never edit a resolved file: `keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <resolved.json>` fails on drift.
+- An entry with reason `condition:glob:<g>` or `condition:keyword:<k>` was promoted by a declared condition and carries an `anchor`, a `description` and `section_bytes`: read the anchored section in full. Its `project_context_applied` item needs the `path`, the `sha256` of the whole file as pinned, the `anchor` exactly as declared, a `summary` and `how` `read` or `followed`, never `n/a`. Write the `summary` in your own words, at least 40 characters, naming at least two distinct words of five or more letters taken from the anchored section; `contracts validate --resolved` rejects a copied hash without it. Cite what you used in `project_context_applied` (6.1) with the resolver's `sha256`; `n/a` needs a reason in `notes`. Never edit a resolved file: `keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <resolved.json>` fails on drift.
 
 **2.1 Read all target files:**
 - Read each file from `target_files` in full
@@ -425,7 +425,7 @@ Write full JSON to `<JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json`:
   "story_result": "<pass|build error: details|not applicable>",
   "acceptance_criteria_met": "<all|partial: list of unmet criteria|none>",
   "skill_drift": "<none | stale: <module>/<skill> — <what diverged> | missing: <module> should have a project-skill>",
-  "project_context_applied": [{ "path": "<as the resolver printed it>", "sha256": "<resolver's sha256>", "how": "read|followed|n/a" }],
+  "project_context_applied": [{ "path": "<as the resolver printed it>", "sha256": "<resolver's sha256>", "how": "read|followed|n/a", "anchor": "<declared heading; promoted entries only>", "summary": "<own words, 40+ chars; promoted entries only>" }],
   "noticed_not_touched": [{ "what": "<problem>", "where": "<path|symbol>" }],
   "assumptions": ["<what you assumed where the task did not say>"],
   "behavior_changes": [{ "description": "<what now behaves differently>", "user_visible": true, "needs_operator": true, "alternatives": ["<option you did not take>"] }],
