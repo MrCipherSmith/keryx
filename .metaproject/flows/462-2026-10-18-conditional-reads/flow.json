@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true,
@@ -9,14 +9,14 @@
   "id": "462",
   "slug": "conditional-reads",
   "title": "Conditional mandatory reads for documents cited by project rules",
-  "status": "initializing",
+  "status": "ready",
   "createdAt": "2026-10-18T08:31:22.923Z",
-  "updatedAt": "2026-10-18T08:31:22.923Z",
+  "updatedAt": "2026-10-18T08:46:27.492Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:7329f52b680f07c9323361e67620630cc4b041232675768b4fac3c57fb52030b",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -37,34 +37,159 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-10-18T08:31:22.923Z",
       "event": "created"
+    },
+    {
+      "at": "2026-10-18T08:46:27.492Z",
+      "event": "frozen",
+      "detail": "22 criteria; checksum recorded"
     }
-  ]
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/references-config.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/context-resolver.test.ts src/gdskills/resolved-context-check.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/context-resolver.test.ts -t \"task text\""
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/context-resolver.test.ts -t \"glob promotes\""
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/context-resolver.test.ts -t \"keyword promotes\""
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/references-section.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/context-resolver.test.ts -t \"cap keeps promoted\""
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/context-resolver.test.ts -t \"undeclared\""
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/output-schema.test.ts"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/resolved-context-check.test.ts -t \"summary\""
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/resolved-context-check.test.ts -t \"hash and n/a\""
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/resolved-context-check.test.ts src/flow/task-project-context.test.ts"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/resolved-context-check.test.ts -t \"drift\""
+    },
+    "AC14": {
+      "kind": "exec",
+      "check": "bun test src/commands/skills-references.test.ts -t \"check\""
+    },
+    "AC15": {
+      "kind": "exec",
+      "check": "bun test src/commands/skills-references.test.ts -t \"suggest\""
+    },
+    "AC16": {
+      "kind": "exec",
+      "check": "bun test src/tui/project-context-inspector.test.ts"
+    },
+    "AC17": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/skill-sync.test.ts"
+    },
+    "AC18": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/conditional-reads.e2e.test.ts"
+    },
+    "AC19": {
+      "kind": "exec",
+      "check": "bun run docs:check"
+    },
+    "AC20": {
+      "kind": "judged"
+    },
+    "AC21": {
+      "kind": "exec",
+      "check": "bun run check"
+    },
+    "AC22": {
+      "kind": "judged"
+    }
+  }
 }
