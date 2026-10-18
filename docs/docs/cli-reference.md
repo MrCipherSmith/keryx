@@ -243,6 +243,15 @@ Neither form runs the commands.
 Start the interactive agent shell. This is the TUI agent harness; bare `keryx`
 prints CLI usage and does **not** start it. Sessions are per-project.
 
+Set `KERYX_SHELL_STARTUP_TRACE` to a JSONL destination for opt-in startup timings.
+See [Diagnose shell startup](guides/shell-startup.md) for fields and limitations.
+The interactive shell allows at most three retries per pending model round for
+OpenAI HTTP 403 with the exact message
+`Our servers are currently overloaded. Please try again later.`, using cancellable
+backoff. Other transient errors do not reset the counter. Ordinary authorization
+failures do not qualify; non-interactive behavior is unchanged.
+
+
 ```
 keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
             [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat]
