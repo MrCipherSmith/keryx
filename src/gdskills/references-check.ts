@@ -80,7 +80,8 @@ type Inspection =
   | { status: "ok"; bytes: number; text: string }
   | { status: "missing" | "outside-root" | "not-file" | "too-large" | "unreadable"; detail?: string };
 
-const DOCUMENT_CITATION = /`([^`\s]+\.md)`/g;
+/** A backticked `.md` path, with or without a `#heading` anchor; only the path is captured. */
+const DOCUMENT_CITATION = /`([^`\s#]+\.md)(?:#[^`\s]*)?`/g;
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const lengthOf = (text: string): number => [...text.trim()].length;
 const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? "" : "s"}`;

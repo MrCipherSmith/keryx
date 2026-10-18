@@ -336,7 +336,8 @@ async function bundledPaths(projectRoot: string, names: readonly string[]): Prom
   return map;
 }
 
-const CITATION = /`([^`\s]+\.mdc?)`/g;
+/** A backticked `.md`/`.mdc` path, with or without a `#heading` anchor; only the path is captured. */
+const CITATION = /`([^`\s#]+\.mdc?)(?:#[^`\s]*)?`/g;
 
 /** A rule cites `core/X.mdc` or `X.mdc` whichever way the project laid its rules out: the project rules folder as written, then with the `core/` prefix flipped, then the repo path as written. */
 function citationOptions(cite: string): string[] {

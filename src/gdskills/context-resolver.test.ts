@@ -305,6 +305,21 @@ test("a repo-relative .md path cited in backticks is listed as an on_demand cont
   expect(result.entries.findIndex((entry) => entry.kind === "contract")).toBeGreaterThan(0);
 });
 
+test("a citation with a heading anchor, `docs/x.md#some-heading` or `core/nested.mdc#part`, cites the file itself", async () => {
+  const root = await project();
+  const doc = "# X\n\n## Some heading\n\nBody.\n";
+  const nested = ruleText({ globs: "docs/**" });
+  await put(root, "docs/x.md", doc);
+  await put(root, P("core/nested.mdc"), nested);
+  await importRules(root, { "overlay.mdc": ruleText({ globs: "src/**", body: "See `docs/x.md#some-heading` and `core/nested.mdc#part`.\n" }) });
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.ts"], for: "implement" });
+  expect(result.entries.filter((entry) => entry.kind === "contract").map((entry) => [entry.path, entry.reason, entry.sha256])).toEqual([
+    [P("core/nested.mdc"), `referenced-by:${P("overlay.mdc")}`, sha256Hex(nested)],
+    ["docs/x.md", `referenced-by:${P("overlay.mdc")}`, sha256Hex(doc)],
+  ]);
+  expect(result.warnings).toEqual([]);
+});
+
 test("a cited path that is absolute, climbs out, escapes through a symlink, is a directory, is too large or is missing is not listed and warns", async () => {
   const root = await project();
   const outside = await mkdtemp(path.join(tmpdir(), "keryx-context-resolver-out-"));
