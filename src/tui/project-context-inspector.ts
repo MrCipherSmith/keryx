@@ -75,6 +75,7 @@ export function formatProjectContextLastLines(status: ProjectContextStatus): str
     for (const entry of entries) {
       lines.push(`  ${entry.path} [${entry.source}] ${entry.reason}`);
       if (entry.shadows !== undefined) lines.push(`    shadows ${entry.shadows}`);
+      if (entry.also_at !== undefined) lines.push(`    also at ${entry.also_at.join(", ")}`);
     }
   }
   if (result.warnings.length > 0) {

@@ -41,7 +41,8 @@
         "description": { "type": "string" },
         "index": { "const": true },
         "linked": { "const": true },
-        "shadows": { "type": "string", "description": "The bundled rule this project rule replaces." }
+        "shadows": { "type": "string", "description": "The bundled rule this project rule replaces." },
+        "also_at": { "type": "array", "items": { "type": "string" }, "description": "Other project paths with the same sha256; citing any of them counts." }
       }
     }
   }

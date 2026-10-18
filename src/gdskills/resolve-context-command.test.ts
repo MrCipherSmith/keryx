@@ -47,6 +47,14 @@ test("--json prints the resolution and records it as the last resolve", async ()
   expect(process.exitCode).toBe(originalExitCode);
 });
 
+test("the text report names the other paths of a merged duplicate rule", async () => {
+  const root = await project();
+  await mkdir(path.join(root, ".metaproject/rules/project/core"), { recursive: true });
+  await writeFile(path.join(root, ".metaproject/rules/project/core/styling.mdc"), await readFile(path.join(root, ".metaproject/rules/project/styling.mdc"), "utf8"), "utf8");
+  await runResolveContextCommand(["--files", "src/a.ts", "--for", "implement"], root);
+  expect(out.join("\n")).toContain("also at .metaproject/rules/project/core/styling.mdc");
+});
+
 test("--out writes the same JSON to a file inside the project and prints where", async () => {
   const root = await project();
   await runResolveContextCommand(["--files=src/a.ts", "--for=test", "--out", ".metaproject/data/resolved.json"], root);

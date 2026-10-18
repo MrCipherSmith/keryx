@@ -36,7 +36,7 @@ const recorded = (exceeded: boolean): RecordedResolve => ({
     files: ["src/a.ts"],
     entries: [
       { kind: "rule", source: "project", path: ".metaproject/rules/project/AGENTS.mdc", sha256: "x", bytes: 10, reason: "always", tier: "must_read" },
-      { kind: "rule", source: "project", path: ".metaproject/rules/project/big.mdc", sha256: "y", bytes: 99, reason: "glob:src/**", tier: "on_demand", shadows: "bundled/x.mdc" },
+      { kind: "rule", source: "project", path: ".metaproject/rules/project/big.mdc", sha256: "y", bytes: 99, reason: "glob:src/**", tier: "on_demand", shadows: "bundled/x.mdc", also_at: ["copy/y.mdc"] },
     ],
     budget: { limitBytes: 131072, usedBytes: 109, exceeded, limitSource: "default" },
     warnings: ["something odd"],
@@ -179,6 +179,7 @@ test("last resolve lines: none, unreadable, tiers with shadows and warnings", ()
   expect(text).toContain("on_demand (1):");
   expect(text).toContain("AGENTS.mdc [project] always");
   expect(text).toContain("shadows bundled/x.mdc");
+  expect(text).toContain("also at copy/y.mdc");
   expect(text).toContain("warnings (1):");
   expect(text).toContain("something odd");
 });

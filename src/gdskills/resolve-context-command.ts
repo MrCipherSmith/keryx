@@ -18,7 +18,7 @@ export function renderResolutionMarkdown(result: ProjectContextResolution): stri
     const group = result.entries.filter((entry) => entry.tier === tier);
     lines.push("", `## ${tier} (${group.length})`);
     for (const entry of group) {
-      const flags = [entry.index ? "index" : "", entry.linked ? "linked" : "", entry.shadows ? `shadows ${entry.shadows}` : ""].filter(Boolean);
+      const flags = [entry.index ? "index" : "", entry.linked ? "linked" : "", entry.shadows ? `shadows ${entry.shadows}` : "", entry.also_at ? `also at ${entry.also_at.join(", ")}` : ""].filter(Boolean);
       lines.push(`- ${entry.path} — ${entry.source} ${entry.kind}, ${entry.reason}, ${entry.bytes} bytes, sha256 ${entry.sha256.slice(0, 12)}${flags.length > 0 ? ` (${flags.join("; ")})` : ""}`);
     }
   }
