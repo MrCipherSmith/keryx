@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Shell startup, recovery and source scanning (PR #1035)
+
+- **Added:** opt-in JSONL diagnostics via `KERYX_SHELL_STARTUP_TRACE`: startup stages and event-loop timer lateness. See [Diagnose shell startup](docs/docs/guides/shell-startup.md).
+- **Changed:** orientation reuses one Git status result per preparation and removes an unused branch probe. No cross-preparation cache; failed checks remain unknown. No fixed speedup or complete animation-stall fix is guaranteed.
+- **Fixed:** interactive OpenAI recovery allows at most three retries per pending model round for HTTP 403 with the exact message `Our servers are currently overloaded. Please try again later.`, using cancellable backoff. Other transient errors do not reset the counter. Ordinary authorization failures do not qualify; non-interactive behavior is unchanged.
+- **Fixed:** filesystem JavaScript/TypeScript scans use optional parser context to distinguish `.env` property access from private-file references. Missing context or invalid syntax retains conservative findings with a warning; ambiguous matches remain. Output checks and secret redaction are unchanged. Misleading key/address examples were removed from shell UI source.
+
 ## [0.3.122] - 2026-10-17
 
 ### Added

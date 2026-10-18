@@ -109,3 +109,28 @@ should print `{"outcome":{"kind":"completed","exitCode":0, …}}`.
 
 - [Architecture › Containment](../architecture.md) — the tier diagram.
 - [CLI reference › harness](../cli-reference.md) — every flag.
+
+## Compare hook and source scans
+
+Containment and security scanning are separate layers. Filesystem JavaScript/
+TypeScript scans use optional parser context to distinguish `process.env`-style
+property access from references to a file named `.env`. This is not a blanket
+source-code exemption: real file references and ambiguous matches remain.
+Missing parser context or invalid syntax retains conservative findings with a
+warning. Output checks and secret redaction are unchanged.
+
+If a hook disagrees with a checkout's scanner, compare runtime and arguments:
+
+```bash
+command -v keryx
+keryx --version
+keryx security scan src/commands/shell.ts --source trusted-project --json
+# Development checkout with Bun and dependencies installed:
+bun src/cli.ts security scan src/commands/shell.ts --source trusted-project --json
+```
+
+Inspect the hook to establish which executable it invokes. An installed runtime
+need not contain an unmerged fix, even if its version number is higher.
+`keryx update --hooks` does not compile a checkout's scanner into the installed
+CLI. Compare parser warnings too; do not bypass hooks or dismiss a finding
+solely because another scan is clean.

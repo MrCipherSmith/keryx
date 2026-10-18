@@ -1,3 +1,4 @@
+import { startShellStartupTrace } from "../lib/shell-startup-trace";
 import { replayPreservationOutbox, replayProjectPreservationOutboxes } from "../sac/service";
 import { createShellFinalizer, preservationProgress } from "../session/shell-finalizer";
 // Interactive `keryx` shell REPL (flow 021, T6 / AC1-AC4).
@@ -239,7 +240,7 @@ const CONNECT_GUIDANCE = [
   "To use Anthropic (claude-*) models, set the ANTHROPIC_API_KEY environment",
   "variable before launching keryx, e.g.:",
   "",
-  "  export ANTHROPIC_API_KEY=your-anthropic-key",
+  "  export ANTHROPIC_API_KEY=<key>",
   "",
   "keryx reads ANTHROPIC_API_KEY from the environment only — it never stores,",
   "logs, or echoes the key. Then run /provider to pick the anthropic provider.",
@@ -1380,7 +1381,7 @@ function oauthCredentialsFor(name: string): { credentials?: Record<string, strin
   return { credentials: { ...process.env, [envKey]: grant.access } };
 }
 
-/** Build the bundled detect+pick selector wired to real `fetch` + `process.env`. */
+/** Build the bundled detect+pick selector using the real HTTP client and environment. */
 function realSelectProviderModel(
   baseUrl: string | undefined,
   cacheDir: string | undefined,
@@ -4059,217 +4060,230 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // the bus is unaffected.
       bus?: { client: () => BusClient | undefined },
     ): Promise<AgentDeps> => {
-      // Finding 1 fix (fix round, code review of PR #306): this parameter
-      // used to be `getSessionDir: () => string | undefined`, matching only
-      // what `buildInteractiveAgentTools` needs — but `createSpawnSubagentTool`
-      // below never received ANY slate ref at all, so SLATE-6's child-slate
-      // fold mechanism silently never fired for a real `keryx shell` TUI
-      // session (there was no `slateSession`/`getSlateSession` field passed
-      // to it whatsoever). Widened to match `tui-shell.ts`'s own widened
-      // `opts.makeAgentDeps` contract (see that file's doc comment); the
-      // `.dir`-only shape `buildInteractiveAgentTools` still wants is derived
-      // locally right below, not threaded in from the caller.
-      const getSessionDir = (): string | undefined => getSlateSession()?.dir;
-      // Rebuilt on launch and on every `/model` switch, so this is the live session.
-      exportCallerSession(sel.provider, sel.model);
-      const agentProvider = tuiProviderFactory(sel.provider, sel.model, sel.baseUrl);
-      // flow 268: resolved fresh on every `makeAgentDeps` call (launch,
-      // `/model`, `/connect`) — same lifecycle as `agentProvider` above. `{}`
-      // for a native adapter with no OpenAI-compatible registry entry.
-      const resolvedModelParams = resolveProviderModelParamsByName(
-        sel.provider,
-        loadShellConfig(runtime.cacheDir),
-        runtime.cacheDir,
-      );
-      let orient: string;
+      const trace = startShellStartupTrace("shell.make-agent-deps");
       try {
-        orient = await buildOrientation(cwd);
-      } catch {
-        orient = "";
-      }
-      const metaprojectPort = createMetaprojectAdapter(cwd);
-      // MAE multi-agent: parent can spawn bounded subagents (ledger + fleet events).
-      let resetSubagentBudget: (() => void) | undefined;
-      const spawnTool = createSpawnSubagentTool({
-        cwd,
-        onFleetEvent: emitSubagentFleet,
-        // Flow 306 (W6 T13): wire the TUI session's own hook runtime through
-        // so `SubagentStart`/`SubagentStop` actually fire for a real `keryx
-        // shell` TUI session, and — for the native/internal child path — so
-        // the child's own tool calls run under `hooks.forChild(...)` too.
-        // `getShellHooks()` is the same lazily-built-once runtime `deps.hooks`
-        // below is populated from; called here (not just later) is safe: it
-        // is idempotent (returns the cached `shellHooks` once built).
-        ...((): { hooks: HookRuntime } | Record<string, never> => {
-          const h = getShellHooks();
-          return h !== undefined ? { hooks: h.runtime } : {};
-        })(),
-        onLedgerReady: (controls) => {
-          resetSubagentBudget = controls.resetBudget;
-        },
-        getParentModel: () => ({
-          providerId: sel.provider,
-          modelId: sel.model,
+        // Finding 1 fix (fix round, code review of PR #306): this parameter
+        // used to be `getSessionDir: () => string | undefined`, matching only
+        // what `buildInteractiveAgentTools` needs — but `createSpawnSubagentTool`
+        // below never received ANY slate ref at all, so SLATE-6's child-slate
+        // fold mechanism silently never fired for a real `keryx shell` TUI
+        // session (there was no `slateSession`/`getSlateSession` field passed
+        // to it whatsoever). Widened to match `tui-shell.ts`'s own widened
+        // `opts.makeAgentDeps` contract (see that file's doc comment); the
+        // `.dir`-only shape `buildInteractiveAgentTools` still wants is derived
+        // locally right below, not threaded in from the caller.
+        const getSessionDir = (): string | undefined => getSlateSession()?.dir;
+        // Rebuilt on launch and on every `/model` switch, so this is the live session.
+        exportCallerSession(sel.provider, sel.model);
+        const agentProvider = tuiProviderFactory(sel.provider, sel.model, sel.baseUrl);
+        // flow 268: resolved fresh on every `makeAgentDeps` call (launch,
+        // `/model`, `/connect`) — same lifecycle as `agentProvider` above. `{}`
+        // for a native adapter with no OpenAI-compatible registry entry.
+        const resolvedModelParams = resolveProviderModelParamsByName(
+          sel.provider,
+          loadShellConfig(runtime.cacheDir),
+          runtime.cacheDir,
+        );
+        trace.mark("provider-config");
+        let orient: string;
+        try {
+          orient = await buildOrientation(cwd);
+        } catch {
+          orient = "";
+        }
+        trace.mark("orientation");
+        const metaprojectPort = createMetaprojectAdapter(cwd);
+        trace.mark("metaproject-adapter");
+        // MAE multi-agent: parent can spawn bounded subagents (ledger + fleet events).
+        let resetSubagentBudget: (() => void) | undefined;
+        const spawnTool = createSpawnSubagentTool({
+          cwd,
+          onFleetEvent: emitSubagentFleet,
+          // Flow 306 (W6 T13): wire the TUI session's own hook runtime through
+          // so `SubagentStart`/`SubagentStop` actually fire for a real `keryx
+          // shell` TUI session, and — for the native/internal child path — so
+          // the child's own tool calls run under `hooks.forChild(...)` too.
+          // `getShellHooks()` is the same lazily-built-once runtime `deps.hooks`
+          // below is populated from; called here (not just later) is safe: it
+          // is idempotent (returns the cached `shellHooks` once built).
+          ...((): { hooks: HookRuntime } | Record<string, never> => {
+            const h = getShellHooks();
+            return h !== undefined ? { hooks: h.runtime } : {};
+          })(),
+          onLedgerReady: (controls) => {
+            resetSubagentBudget = controls.resetBudget;
+          },
+          getParentModel: () => ({
+            providerId: sel.provider,
+            modelId: sel.model,
+            ...(sel.baseUrl !== undefined ? { baseUrl: sel.baseUrl } : {}),
+          }),
+          makeProvider: (providerId, modelId, childBaseUrl) =>
+            tuiProviderFactory(providerId, modelId, childBaseUrl ?? sel.baseUrl),
+          // The allowlist AND the candidate set for tier resolution. `models` is
+          // carried through rather than mapped away: `buildTierMap`
+          // (src/gdskills/model-tier.ts) ranks exactly these ids to place a
+          // child's `model_tier` relative to this session's own model, so
+          // flattening a `DetectedProvider` to `{ name }` here starved discovery
+          // at the source and made every tier resolve to the session model.
+          // Keyed by name so the session's provider is always present (it is the
+          // one a child inherits) and a detected entry replaces the placeholder
+          // in place, keeping detection order.
+          getDetectedProviders: () => {
+            const byName = new Map<string, { name: string; models: readonly string[] }>();
+            byName.set(sel.provider, { name: sel.provider, models: [] });
+            for (const d of tuiDetected) {
+              byName.set(d.name, { name: d.name, models: d.models ?? [] });
+            }
+            return mergeLiveCodexModels([...byName.values()], startLiveCodexModels().models());
+          },
+          getRankHints: (providerId) => loadRankHints(providerId),
+          // Flow 358: when the size words and version cannot settle a `model_tier`
+          // (ranking refused, or only an older-generation larger class above the
+          // session), a one-shot call on this provider's light tier orders the
+          // discovered models. Its answer is cached on disk by catalogue hash and
+          // recorded as `agent-ranked`; any failure keeps the session model.
+          tierRank: createTierRankHost(),
+          // Finding 1 fix: thread the LIVE getter through so a dispatched
+          // subagent's Seeds/Anchors actually fold into this TUI session's
+          // slate once it opens — `createSpawnSubagentTool` calls this at fold
+          // time, not once at construction, so it correctly observes a slate
+          // that opens AFTER this tool instance is built (see that file's own
+          // `SpawnSubagentToolDeps.getSlateSession` doc comment).
+          getSlateSession,
+          // External agent runtime (flow 176). Lazy: the gate reads config and the
+          // project manifest, and this tool is built synchronously. Off by
+          // default, so the common path resolves to a `Denied` with a named
+          // reason and nothing is ever spawned.
+          // The three seams flow 176 T18 added, all of them routed through the
+          // module-level bridge in `tui/external-bridge.ts` for the same reason
+          // `emitBackgroundJob` above is: this factory is built before any
+          // renderer exists and must work identically in a readline session that
+          // never mounts one.
+          //
+          // `approve` is NOT optional-in-practice. `externalAgents.spawnDecision`
+          // defaults to "ask" and `createRunExternal` fails closed with no
+          // approver, so before this line every model-initiated external spawn was
+          // denied on a correctly-configured machine and the feature could not run
+          // at all. `approveExternalSpawn` still refuses — with a named reason —
+          // whenever no interactive host has registered itself, so a headless or
+          // non-interactive session cannot self-approve.
+          runExternal: createLazyRunExternal({
+            cwd,
+            observer: externalRunBridgeObserver,
+            approve: approveExternalSpawn,
+            // The shell renders the live transcript and offers a per-addressee
+            // message queue, so a steerable run pays for its open stdin pipe.
+            // Without this every run launches one-shot and the operator's
+            // messages can only ever reach the child by resume — which is what
+            // §7.5's stdin route existed for.
+            steerable: true,
+          }),
+        });
+        // A rebuild owns its probe, so late responses cannot change another model.
+        // Do not wait for a network request behind the TUI startup indicator.
+        trace.mark("spawn-tool-and-hooks");
+        const limits = startSessionLimits({
+          provider: sel.provider,
+          model: sel.model,
           ...(sel.baseUrl !== undefined ? { baseUrl: sel.baseUrl } : {}),
-        }),
-        makeProvider: (providerId, modelId, childBaseUrl) =>
-          tuiProviderFactory(providerId, modelId, childBaseUrl ?? sel.baseUrl),
-        // The allowlist AND the candidate set for tier resolution. `models` is
-        // carried through rather than mapped away: `buildTierMap`
-        // (src/gdskills/model-tier.ts) ranks exactly these ids to place a
-        // child's `model_tier` relative to this session's own model, so
-        // flattening a `DetectedProvider` to `{ name }` here starved discovery
-        // at the source and made every tier resolve to the session model.
-        // Keyed by name so the session's provider is always present (it is the
-        // one a child inherits) and a detected entry replaces the placeholder
-        // in place, keeping detection order.
-        getDetectedProviders: () => {
-          const byName = new Map<string, { name: string; models: readonly string[] }>();
-          byName.set(sel.provider, { name: sel.provider, models: [] });
-          for (const d of tuiDetected) {
-            byName.set(d.name, { name: d.name, models: d.models ?? [] });
-          }
-          return mergeLiveCodexModels([...byName.values()], startLiveCodexModels().models());
-        },
-        getRankHints: (providerId) => loadRankHints(providerId),
-        // Flow 358: when the size words and version cannot settle a `model_tier`
-        // (ranking refused, or only an older-generation larger class above the
-        // session), a one-shot call on this provider's light tier orders the
-        // discovered models. Its answer is cached on disk by catalogue hash and
-        // recorded as `agent-ranked`; any failure keeps the session model.
-        tierRank: createTierRankHost(),
-        // Finding 1 fix: thread the LIVE getter through so a dispatched
-        // subagent's Seeds/Anchors actually fold into this TUI session's
-        // slate once it opens — `createSpawnSubagentTool` calls this at fold
-        // time, not once at construction, so it correctly observes a slate
-        // that opens AFTER this tool instance is built (see that file's own
-        // `SpawnSubagentToolDeps.getSlateSession` doc comment).
-        getSlateSession,
-        // External agent runtime (flow 176). Lazy: the gate reads config and the
-        // project manifest, and this tool is built synchronously. Off by
-        // default, so the common path resolves to a `Denied` with a named
-        // reason and nothing is ever spawned.
-        // The three seams flow 176 T18 added, all of them routed through the
-        // module-level bridge in `tui/external-bridge.ts` for the same reason
-        // `emitBackgroundJob` above is: this factory is built before any
-        // renderer exists and must work identically in a readline session that
-        // never mounts one.
-        //
-        // `approve` is NOT optional-in-practice. `externalAgents.spawnDecision`
-        // defaults to "ask" and `createRunExternal` fails closed with no
-        // approver, so before this line every model-initiated external spawn was
-        // denied on a correctly-configured machine and the feature could not run
-        // at all. `approveExternalSpawn` still refuses — with a named reason —
-        // whenever no interactive host has registered itself, so a headless or
-        // non-interactive session cannot self-approve.
-        runExternal: createLazyRunExternal({
-          cwd,
-          observer: externalRunBridgeObserver,
-          approve: approveExternalSpawn,
-          // The shell renders the live transcript and offers a per-addressee
-          // message queue, so a steerable run pays for its open stdin pipe.
-          // Without this every run launches one-shot and the operator's
-          // messages can only ever reach the child by resume — which is what
-          // §7.5's stdin route existed for.
-          steerable: true,
-        }),
-      });
-      // A rebuild owns its probe, so late responses cannot change another model.
-      // Do not wait for a network request behind the TUI startup indicator.
-      const limits = startSessionLimits({
-        provider: sel.provider,
-        model: sel.model,
-        ...(sel.baseUrl !== undefined ? { baseUrl: sel.baseUrl } : {}),
-        ...(runtime.cacheDir !== undefined ? { configDir: runtime.cacheDir } : {}),
-      });
-      const deps = {
-        provider: agentProvider,
-        providerId: sel.provider,
-        modelId: sel.model,
-        controlNonce,
-        tools: buildInteractiveAgentTools({
-          cwd,
-          metaprojectPort,
-          searchController: searchProviderController,
-          spawnTool,
-          getSessionDir,
-          jobRegistry,
-          mcp: getMcpRuntime(),
-          ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
-          // Flow 274 (agent bus P3, T6/T7 contract); review r1 F2 (AC9): the
-          // wrapper is passed whenever the caller (`tui-shell.ts`) even
-          // attempts to join a bus — side workers pass `undefined` instead
-          // (review r1 F9) — but `buildInteractiveAgentTools` itself now
-          // gates actual INCLUSION on `bus.client() !== undefined` at build
-          // time, so `bus_list`/`bus_send` are absent from the very first
-          // call (before any join has settled) and only appear once
-          // `tui-shell.ts`'s join-success rebuild calls this again with
-          // `busClientRef.client()` finally resolving.
-          ...(bus !== undefined ? { bus } : {}),
-          // Flow 295 (AC7): the TUI's approver renders schedule_create's card.
-          schedules: { projectRoot: cwd, defaults: () => ({ provider: sel.provider, model: sel.model }) },
-          // Flow 456 (AC1): the operator's decisions as yes/no cards instead of a terminal.
-          operatorConfirm: { projectRoot: cwd },
-        }),
-        // The EXISTING runtime, never a new one. `/mcp` is a read-only
-        // view; opening it must not be the thing that spawns every
-        // configured server, which calling `getMcpRuntime()` here would
-        // do for `--chat` sessions that never build a tool list.
-        mcpRuntime: () => mcpRuntime,
-        // No `maxRounds` here on purpose: the turn resolves its own limit from
-        // the live permission mode (40 in ask, 200 in trust and auto), and an
-        // explicit value would pin it for the whole session.
-        // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's
-        // per-provider override (`resolvedModelParams.maxOutputTokens`,
-        // resolved above via `resolveProviderModelParamsByName` — an
-        // operator-saved `ShellConfig.modelParams[provider]` override, else
-        // the provider's own `CustomCompatProvider.maxOutputTokens`; absent
-        // for a built-in with no override) > the operator's persisted global
-        // setting > DEFAULT_MAX_OUTPUT_TOKENS. Routed through
-        // `resolvedModelParams` (rather than a second, independent
-        // `providerByName(...).maxOutputTokens` lookup) so there is exactly
-        // one computation of the provider's effective override — see
-        // `resolveAgentMaxOutputTokens`'s doc comment.
-        maxOutputTokens: resolveAgentMaxOutputTokens({
-          providerMaxOutputTokens: resolvedModelParams.maxOutputTokens,
-          globalMaxOutputTokens: loadShellConfig(runtime.cacheDir).maxOutputTokens,
-        }),
-        // Precedence: this session's `/reasoning` override (set below, via
-        // `setReasoningOverride`) > KERYX_REASONING_EFFORT env > the
-        // operator's persisted global setting > "off". See
-        // `resolveReasoningEffort`'s doc comment.
-        reasoningEffort: resolveReasoningEffort({
-          sessionOverride: reasoningSessionOverride,
-          globalEffort: loadShellConfig(runtime.cacheDir).reasoningEffort,
-        }),
-        idSeq: () => randomUUID(),
-        askUser: journaledAskUser(cwd),
-        sweepBackgroundJobs: () => jobRegistry.sweepAll(),
-        jobRegistry,
-        ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
-        getContextWindow: limits.getContextWindow,
-        ...(Object.keys(resolvedModelParams).length > 0 ? { modelParams: resolvedModelParams } : {}),
-        ...((): { hooks: ShellHookContext } | Record<string, never> => {
-          const h = getShellHooks();
-          return h !== undefined ? { hooks: h } : {};
-        })(),
-      };
-      // The instruction is built from the roster it describes, so it never
-      // names a tool this session was not given.
-      return {
-        ...deps,
-        systemInstruction: buildAgentSystemInstruction(orient, {
+          ...(runtime.cacheDir !== undefined ? { configDir: runtime.cacheDir } : {}),
+        });
+        trace.mark("session-limits");
+        const deps = {
+          provider: agentProvider,
           providerId: sel.provider,
           modelId: sel.model,
-          toolNames: interactiveAgentToolNames(deps.tools),
-          // Flow 274 (T6/T7 contract): true only once `bus.client()` actually
-          // resolves. `tui-shell.ts` rebuilds via this same function right
-          // after its own join settles, so a session that starts before the
-          // join finishes (always true for the FIRST call) still ends up
-          // with the conduct block once that rebuild runs.
-          busJoined: bus?.client() !== undefined,
-        }),
-      };
+          controlNonce,
+          tools: buildInteractiveAgentTools({
+            cwd,
+            metaprojectPort,
+            searchController: searchProviderController,
+            spawnTool,
+            getSessionDir,
+            jobRegistry,
+            mcp: getMcpRuntime(),
+            ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
+            // Flow 274 (agent bus P3, T6/T7 contract); review r1 F2 (AC9): the
+            // wrapper is passed whenever the caller (`tui-shell.ts`) even
+            // attempts to join a bus — side workers pass `undefined` instead
+            // (review r1 F9) — but `buildInteractiveAgentTools` itself now
+            // gates actual INCLUSION on `bus.client() !== undefined` at build
+            // time, so `bus_list`/`bus_send` are absent from the very first
+            // call (before any join has settled) and only appear once
+            // `tui-shell.ts`'s join-success rebuild calls this again with
+            // `busClientRef.client()` finally resolving.
+            ...(bus !== undefined ? { bus } : {}),
+            // Flow 295 (AC7): the TUI's approver renders schedule_create's card.
+            schedules: { projectRoot: cwd, defaults: () => ({ provider: sel.provider, model: sel.model }) },
+            // Flow 456 (AC1): operator decisions as yes/no cards instead of a terminal.
+            operatorConfirm: { projectRoot: cwd },
+          }),
+          // The EXISTING runtime, never a new one. `/mcp` is a read-only
+          // view; opening it must not be the thing that spawns every
+          // configured server, which calling `getMcpRuntime()` here would
+          // do for `--chat` sessions that never build a tool list.
+          mcpRuntime: () => mcpRuntime,
+          // No `maxRounds` here on purpose: the turn resolves its own limit from
+          // the live permission mode (40 in ask, 200 in trust and auto), and an
+          // explicit value would pin it for the whole session.
+          // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's
+          // per-provider override (`resolvedModelParams.maxOutputTokens`,
+          // resolved above via `resolveProviderModelParamsByName` — an
+          // operator-saved `ShellConfig.modelParams[provider]` override, else
+          // the provider's own `CustomCompatProvider.maxOutputTokens`; absent
+          // for a built-in with no override) > the operator's persisted global
+          // setting > DEFAULT_MAX_OUTPUT_TOKENS. Routed through
+          // `resolvedModelParams` (rather than a second, independent
+          // `providerByName(...).maxOutputTokens` lookup) so there is exactly
+          // one computation of the provider's effective override — see
+          // `resolveAgentMaxOutputTokens`'s doc comment.
+          maxOutputTokens: resolveAgentMaxOutputTokens({
+            providerMaxOutputTokens: resolvedModelParams.maxOutputTokens,
+            globalMaxOutputTokens: loadShellConfig(runtime.cacheDir).maxOutputTokens,
+          }),
+          // Precedence: this session's `/reasoning` override (set below, via
+          // `setReasoningOverride`) > KERYX_REASONING_EFFORT env > the
+          // operator's persisted global setting > "off". See
+          // `resolveReasoningEffort`'s doc comment.
+          reasoningEffort: resolveReasoningEffort({
+            sessionOverride: reasoningSessionOverride,
+            globalEffort: loadShellConfig(runtime.cacheDir).reasoningEffort,
+          }),
+          idSeq: () => randomUUID(),
+          askUser: journaledAskUser(cwd),
+          sweepBackgroundJobs: () => jobRegistry.sweepAll(),
+          jobRegistry,
+          ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
+          getContextWindow: limits.getContextWindow,
+          ...(Object.keys(resolvedModelParams).length > 0 ? { modelParams: resolvedModelParams } : {}),
+          ...((): { hooks: ShellHookContext } | Record<string, never> => {
+            const h = getShellHooks();
+            return h !== undefined ? { hooks: h } : {};
+          })(),
+        };
+        trace.mark("tools-mcp-and-config");
+        // The instruction is built from the roster it describes, so it never
+        // names a tool this session was not given.
+        const result = {
+          ...deps,
+          systemInstruction: buildAgentSystemInstruction(orient, {
+            providerId: sel.provider,
+            modelId: sel.model,
+            toolNames: interactiveAgentToolNames(deps.tools),
+            // Flow 274 (T6/T7 contract): true only once `bus.client()` actually
+            // resolves. `tui-shell.ts` rebuilds via this same function right
+            // after its own join settles, so a session that starts before the
+            // join finishes (always true for the FIRST call) still ends up
+            // with the conduct block once that rebuild runs.
+            busJoined: bus?.client() !== undefined,
+          }),
+        };
+        trace.mark("system-instruction");
+        return result;
+      } finally {
+        trace.finish();
+      }
     };
     const redetect = (): Promise<DetectedProvider[]> =>
       detectProviders({

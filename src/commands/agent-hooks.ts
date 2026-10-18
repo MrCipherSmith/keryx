@@ -1,3 +1,4 @@
+import { startShellStartupTrace } from "../lib/shell-startup-trace";
 // Production wiring for `keryx shell`'s lifecycle hook runtime (flow 306, W6, T9).
 //
 // `src/harness/hooks/` (T5) is the standalone, side-effect-free runtime —
@@ -240,72 +241,88 @@ export interface BuildShellHookRuntimeOptions {
  */
 export function buildShellHookRuntime(opts: BuildShellHookRuntimeOptions): ShellHookContext | undefined {
   const env = opts.env ?? process.env;
-  if (env.KERYX_HOOKS === "off") {
-    return undefined;
-  }
-  const clock = opts.clock ?? (() => new Date().toISOString());
-  // Review finding 11: share the resolver with `keryx hooks` (`./hooks.ts`)
-  // instead of reading `os.homedir()` unconditionally — see
-  // `resolveHooksHomeDir`'s own doc comment.
-  const homeDir = resolveHooksHomeDir(env, opts.homeDir);
-  const loaded = loadHookConfig({
-    projectRoot: opts.projectRoot,
-    homeDir,
-    projectTrust: {
-      ...(opts.configDir !== undefined ? { configDir: opts.configDir } : {}),
-      ...(opts.trustRoot !== undefined ? { trustRoot: opts.trustRoot } : {}),
-    },
-  });
-  const noticeSurface: HookNoticeSurface = opts.noticeSurface ?? (opts.interactive ? "terminal" : "headless");
-  const notices = formatHookLoadNotices(loaded, {
-    projectRoot: opts.projectRoot,
-    userFile: path.join(homeDir, ".keryx", "hooks.json"),
-    surface: noticeSurface,
-  });
-  let registrations: readonly HookRegistration[] | undefined;
-  let runtime: HookRuntime;
-  if (loaded.ok) {
-    registrations = loaded.registrations;
-    runtime = createHookRuntime({
-      registrations,
-      runner: createRealHookRunner({ projectRoot: opts.projectRoot }),
-      clock,
-      profileId: opts.profileId,
-      interactive: opts.interactive,
-      sessionId: opts.sessionId,
-      runId: opts.runId,
+  const trace = startShellStartupTrace("hooks.build", env);
+  try {
+    if (env.KERYX_HOOKS === "off") {
+      trace.mark("hooks-disabled");
+      return undefined;
+    }
+    const clock = opts.clock ?? (() => new Date().toISOString());
+    // Review finding 11: share the resolver with `keryx hooks` (`./hooks.ts`)
+    // instead of reading `os.homedir()` unconditionally — see
+    // `resolveHooksHomeDir`'s own doc comment.
+    const homeDir = resolveHooksHomeDir(env, opts.homeDir);
+    trace.mark("home");
+    const loaded = loadHookConfig({
       projectRoot: opts.projectRoot,
-      // T20: the real `keryx.impact-evidence` port (W8's gate) for every
-      // production session. Tests that build a runtime through this function
-      // get the real provider too (it is harmless/no-op unless
-      // `.metaproject/security.config.json` enables it) — a test that wants a
-      // fake instead constructs `createHookRuntime` directly with its own
-      // `ports`, as `harness/hooks/runtime.test.ts` already does.
-      // Fix round 3 (F-005/hermeticity): forward the SAME resolved `env` this
-      // function already checked `KERYX_HOOKS` against, rather than letting
-      // the adapter fall back to the real `process.env` global for W8's own
-      // `KERYX_DISABLE_IMPACT_GATE` kill switch — a test (or a future caller)
-      // can now flip that switch via the injectable `env` option instead of
-      // mutating global state.
-      ports: {
-        impactEvidence: createShellImpactEvidenceProvider({ profile: opts.profileId, root: opts.projectRoot, env }),
-        // W3 T6: the real observation sink for every production session —
-        // harmless unless `keryx.learning-observer`'s builtin registrations
-        // fire, and disabled entirely by `KERYX_LEARNING=off` (checked inside
-        // the sink itself, same as this function's own `KERYX_HOOKS=off`
-        // check above).
-        learningSink: opts.learningSink ?? createLearningObservationSink(opts.projectRoot, { env }),
+      homeDir,
+      projectTrust: {
+        ...(opts.configDir !== undefined ? { configDir: opts.configDir } : {}),
+        ...(opts.trustRoot !== undefined ? { trustRoot: opts.trustRoot } : {}),
       },
     });
-  } else {
-    opts.onConfigError?.(loaded.diagnostics);
-    runtime = createInvalidConfigRuntime(opts.interactive);
+    trace.mark("config");
+    const noticeSurface: HookNoticeSurface = opts.noticeSurface ?? (opts.interactive ? "terminal" : "headless");
+    const notices = formatHookLoadNotices(loaded, {
+      projectRoot: opts.projectRoot,
+      userFile: path.join(homeDir, ".keryx", "hooks.json"),
+      surface: noticeSurface,
+    });
+    trace.mark("notices");
+    let registrations: readonly HookRegistration[] | undefined;
+    let runtime: HookRuntime;
+    if (loaded.ok) {
+      registrations = loaded.registrations;
+      const runner = createRealHookRunner({ projectRoot: opts.projectRoot });
+      trace.mark("runner");
+      const impactEvidence = createShellImpactEvidenceProvider({ profile: opts.profileId, root: opts.projectRoot, env });
+      trace.mark("impact-evidence");
+      const learningSink = opts.learningSink ?? createLearningObservationSink(opts.projectRoot, { env });
+      trace.mark("learning-sink");
+      runtime = createHookRuntime({
+        registrations,
+        runner,
+        clock,
+        profileId: opts.profileId,
+        interactive: opts.interactive,
+        sessionId: opts.sessionId,
+        runId: opts.runId,
+        projectRoot: opts.projectRoot,
+        // T20: the real `keryx.impact-evidence` port (W8's gate) for every
+        // production session. Tests that build a runtime through this function
+        // get the real provider too (it is harmless/no-op unless
+        // `.metaproject/security.config.json` enables it) — a test that wants a
+        // fake instead constructs `createHookRuntime` directly with its own
+        // `ports`, as `harness/hooks/runtime.test.ts` already does.
+        // Fix round 3 (F-005/hermeticity): forward the SAME resolved `env` this
+        // function already checked `KERYX_HOOKS` against, rather than letting
+        // the adapter fall back to the real `process.env` global for W8's own
+        // `KERYX_DISABLE_IMPACT_GATE` kill switch — a test (or a future caller)
+        // can now flip that switch via the injectable `env` option instead of
+        // mutating global state.
+        ports: {
+          impactEvidence,
+          // W3 T6: the real observation sink for every production session —
+          // harmless unless `keryx.learning-observer`'s builtin registrations
+          // fire, and disabled entirely by `KERYX_LEARNING=off` (checked inside
+          // the sink itself, same as this function's own `KERYX_HOOKS=off`
+          // check above).
+          learningSink,
+        },
+      });
+    } else {
+      opts.onConfigError?.(loaded.diagnostics);
+      runtime = createInvalidConfigRuntime(opts.interactive);
+    }
+    trace.mark("runtime");
+    let noticesTaken = false;
+    const takeNotices = (): readonly string[] => {
+      if (noticesTaken) return [];
+      noticesTaken = true;
+      return notices;
+    };
+    return { runtime, sessionId: opts.sessionId, runId: opts.runId, notices, takeNotices };
+  } finally {
+    trace.finish();
   }
-  let noticesTaken = false;
-  const takeNotices = (): readonly string[] => {
-    if (noticesTaken) return [];
-    noticesTaken = true;
-    return notices;
-  };
-  return { runtime, sessionId: opts.sessionId, runId: opts.runId, notices, takeNotices };
 }

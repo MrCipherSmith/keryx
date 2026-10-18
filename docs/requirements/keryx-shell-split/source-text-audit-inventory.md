@@ -443,6 +443,19 @@ archive-enabled options branch. They still require `slateSession` and literal
 `pruneArchive: true` together, without fixed character windows that unrelated
 recovery options can outgrow. The three source-reader sites are unchanged.
 
+### Added by flow 454 (source security scan regression)
+
+`security/source-scan.test.ts` reads both god-files at two sites and runs the
+real filesystem security scanner over temporary copies. It checks complete
+coverage, no warnings or findings, and a passing gate, so legitimate environment
+property access does not regress into private-file publication findings.
+
+This is a behavioural scanner test coupled to the two fixture paths, not a
+substring or layout assertion. Cosmetic edits do not break it unless they
+change the scan result. When the shell is split, point it at the resulting
+source modules (or scan their directory) to retain the regression coverage;
+no shell injection seam is needed.
+
 ## Manifest
 
 Checked by `src/shell-source-audits.test.ts`, which re-runs the scan this
@@ -479,6 +492,7 @@ commands/shell.test.ts | commands/shell.ts | 5
 decisions/coverage.test.ts | commands/shell.ts, tui/tui-shell.ts | 5
 harness/search/connection-message.test.ts | commands/shell.ts, tui/tui-shell.ts | 2
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
+security/source-scan.test.ts | commands/shell.ts, tui/tui-shell.ts | 2
 tui/boot-animation.test.ts | tui/tui-shell.ts | 2
 tui/busy-dispatch.test.ts | tui/tui-shell.ts | 4
 tui/connect-provider-buttons.test.ts | tui/tui-shell.ts | 1
