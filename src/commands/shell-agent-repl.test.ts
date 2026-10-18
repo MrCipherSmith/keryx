@@ -7,6 +7,7 @@ import { busLeasesFromClient, readlineAgentHelpText, runAgentRepl } from "./shel
 import { waitForRecovery, type AgentDeps, type InteractiveRecovery } from "./agent";
 import { scriptedProvider as recoveryProvider } from "./agent.test-helpers";
 import type { ShellEvent, ShellEventSink } from "./shell-events";
+import type { OrcaReporter, OrcaState } from "../integrations/orca-report";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { ShellSessionOpts } from "./shell-types";
 import type { BusClient } from "../bus/client";
@@ -111,6 +112,7 @@ async function repl(
     recovery?: InteractiveRecovery;
     signal?: AbortSignal;
     events?: ShellEventSink;
+    orcaReporter?: OrcaReporter;
   } = {},
 ): Promise<string> {
   const out: string[] = [];
@@ -120,6 +122,7 @@ async function repl(
       printPrompt: () => {},
       safeBoundary: undefined,
       write: (s) => out.push(s),
+      ...(opts.orcaReporter === undefined ? {} : { orcaReporter: opts.orcaReporter }),
       ...(opts.recovery === undefined ? {} : { recovery: opts.recovery }),
       ...(opts.signal === undefined ? {} : { signal: opts.signal }),
       ...(opts.onCompletionWaitersSize !== undefined
@@ -1713,5 +1716,60 @@ describe("PR 992 round 3 — readline refusal memory and self-answer line", () =
       if (saved === undefined) delete process.env.KERYX_DATA_DIR;
       else process.env.KERYX_DATA_DIR = saved;
     }
+  });
+});
+
+// Exercise the actual readline loop, not its source text.
+describe("Orca readline lifecycle", () => {
+  function recorder(): { states: OrcaState[]; reporter: OrcaReporter } {
+    const states: OrcaState[] = [];
+    return { states, reporter: {
+      report: state => { states.push(state); },
+      release: async () => { states.push("stopped"); },
+    } };
+  }
+  test("each turn reports working/idle, exit releases once", async () => {
+    const { provider } = recoveryProvider([
+      [{ kind: "text_delta", text: "one" }, { kind: "model_end" }],
+      [{ kind: "text_delta", text: "two" }, { kind: "model_end" }],
+    ]);
+    const { states, reporter } = recorder();
+    await repl(["hello", "again", "/exit"], { orcaReporter: reporter,
+      deps: fakeDeps({ provider, tools: [], idSeq: () => randomUUID() }) });
+    expect(states).toEqual(["idle", "working", "idle", "working", "idle", "stopped"]);
+  });
+  test("slash commands and EOF do not create working turns", async () => {
+    const { states, reporter } = recorder();
+    await repl(["/help"], { orcaReporter: reporter });
+    expect(states).toEqual(["idle", "stopped"]);
+  });
+  test.each(["y", "n"])("approval is blocked until operator answers %s", async answer => {
+    const { states, reporter } = recorder();
+    const deps = fakeDeps({
+      provider: toolCallProvider("shell_exec", JSON.stringify({ command: "echo demo" })),
+      tools: [fakeShellExecTool()], idSeq: () => randomUUID(), maxRounds: 2,
+    });
+    await repl(["go", answer, "/exit"], { deps, orcaReporter: reporter });
+    expect(states).toEqual(["idle", "working", "blocked", "working", "idle", "stopped"]);
+  });
+  test("recovery stays working until aborted turn ends", async () => {
+    const controller = new AbortController();
+    const { states, reporter } = recorder();
+    const { provider } = recoveryProvider([
+      [{ kind: "provider_error", error: { kind: "unavailable", retryable: true, message: "offline" } }],
+    ]);
+    await repl(["go"], { deps: fakeDeps({ provider, tools: [], idSeq: () => randomUUID() }),
+      signal: controller.signal, orcaReporter: reporter,
+      recovery: { wait: async () => { expect(states).toEqual(["idle", "working"]); controller.abort(); } },
+    });
+    expect(states).toEqual(["idle", "working", "idle", "stopped"]);
+  });
+  test("input failure still releases", async () => {
+    const { states, reporter } = recorder();
+    async function* broken(): AsyncIterable<string> { throw new Error("broken input"); }
+    await expect(runAgentRepl(broken(), { printPrompt() {}, safeBoundary: undefined, orcaReporter: reporter, write() {} },
+      fakeDeps(), fakePort(), { cwd, enabled: false }, undefined, undefined, undefined,
+      path.join(root, "config"))).rejects.toThrow("broken input");
+    expect(states).toEqual(["idle", "stopped"]);
   });
 });

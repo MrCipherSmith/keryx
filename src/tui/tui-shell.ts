@@ -406,6 +406,7 @@ import { DECISION_SOURCES } from "../decisions/service";
 import { raceAskUser } from "./ask-user-race";
 import { askUserSessionId, journaledPick, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
+import { createOrcaReporter } from "../integrations/orca-report";
 import { ASK_USER_CANCEL, type AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
 import { showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
@@ -3879,6 +3880,9 @@ export async function launchTuiAgentShell(opts: {
   // Surfaces this pane's lifecycle to a herdr workspace (working/idle/blocked).
   // No-op unless the shell was launched inside a herdr pane.
   const herdr = createHerdrReporter();
+  const orca = createOrcaReporter({
+    onError: () => { process.stderr.write("[orca] event delivery unavailable; disabled for this session\n"); },
+  });
   /** Session-scoped allow patterns (plus persisted permissions.json). */
   // Empty on purpose: `evaluateShellApproval` loads the saved list on every call, and tracks what it loaded so a removal reaches this set.
   const sessionShellAllow = new Set<string>();
@@ -4831,6 +4835,7 @@ export async function launchTuiAgentShell(opts: {
         model: `${currentSel.provider}/${currentSel.model}`,
       });
       herdr.report(herdrStateFor(status));
+      orca.report(herdrStateFor(status));
     };
     // Idle main agent visible from launch.
     setMainAgent("queued", "ready");
@@ -10484,6 +10489,7 @@ export async function launchTuiAgentShell(opts: {
       releaseLease: () => sessionLease.release(),
     });
     await herdr.release(); // hand the pane back to herdr (no-op outside herdr)
+    await orca.release();
     try {
       renderer?.destroy();
     } catch {
