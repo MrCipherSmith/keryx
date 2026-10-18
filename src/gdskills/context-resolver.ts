@@ -239,7 +239,8 @@ function selectRules(
 ): Selected[] {
   const selected: Selected[] = [];
   for (const candidate of candidates) {
-    const shadowsPath = candidate.refs.map((ref) => bundled.get(ref)).find((found) => found !== undefined);
+    // `core/<name>.mdc` is the slot `keryx skills import` gives a cited rule keryx also ships: it replaces the bundled `<name>.mdc` as a flat one does.
+    const shadowsPath = candidate.refs.map((ref) => bundled.get(ref) ?? bundled.get(withoutCorePrefix(ref))).find((found) => found !== undefined);
     const matching = candidate.front.globs.filter((glob) => files.some((file) => matchesAnyGlobWithBraces(file, [glob])));
     const base = { candidate, ...(shadowsPath !== undefined ? { shadows: shadowsPath } : {}) };
     if (matching.length > 0) {

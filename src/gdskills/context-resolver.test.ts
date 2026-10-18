@@ -94,6 +94,19 @@ test("a project rule with a bundled name is read even when its globs do not matc
   expect(result.entries.map((entry) => [entry.path, entry.reason, entry.tier])).toEqual([[P("error-handling.mdc"), "replaces-bundled", "must_read"]]);
 });
 
+test("a project rule under rules/project/core/ shadows the bundled rule of the same name, as a flat one does", async () => {
+  const root = await project();
+  await core(root, { "tdd-workflow.mdc": "tdd\n", "frontend-assistant.mdc": "bundled frontend\n", "storybook-guidelines.mdc": "bundled stories\n" });
+  await importRules(root, { "core/storybook-guidelines.mdc": ruleText({ globs: "src/**/*.tsx" }), "core/frontend-assistant.mdc": ruleText({ globs: "docs/**" }) });
+  const result = await resolveProjectContext({ projectRoot: root, files: ["src/a.tsx"], taskType: "ui_component", for: "implement" });
+  expect(result.entries.map((entry) => [entry.path, entry.reason, entry.shadows])).toEqual([
+    [P("core/storybook-guidelines.mdc"), "glob:src/**/*.tsx", C("storybook-guidelines.mdc")],
+    [P("core/frontend-assistant.mdc"), "replaces-bundled", C("frontend-assistant.mdc")],
+    [C("tdd-workflow.mdc"), "bundled-default", undefined],
+  ]);
+  expect(result.warnings).toEqual([]);
+});
+
 test("selection: glob match, brace globs, a small alwaysApply rule, a task type; a rule that matches nothing is absent", async () => {
   const root = await project();
   await importRules(root, {
