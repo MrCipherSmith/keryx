@@ -65,6 +65,6 @@ async function readResultFile(file: string): Promise<unknown> {
   try {
     return JSON.parse(await readFile(file, "utf8")) as unknown;
   } catch (error) {
-    throw new Error(`--result ${file}: cannot read it as JSON (${error instanceof Error ? error.message : String(error)}).`);
+    throw new Error(`--result ${file}: cannot read it as JSON (${error instanceof Error ? error.message : String(error)}).`, { cause: error });
   }
 }

@@ -42,7 +42,7 @@ export async function readResolvedFile(file: string): Promise<ProjectContextReso
   try {
     parsed = JSON.parse(await readFile(file, "utf8"));
   } catch (error) {
-    throw new Error(`--resolved ${file}: cannot read it as JSON (${error instanceof Error ? error.message : String(error)}).`);
+    throw new Error(`--resolved ${file}: cannot read it as JSON (${error instanceof Error ? error.message : String(error)}).`, { cause: error });
   }
   const value = parsed as Partial<ProjectContextResolution> | null;
   if (value === null || typeof value !== "object" || value.schema !== 1 || !Array.isArray(value.entries)) {
