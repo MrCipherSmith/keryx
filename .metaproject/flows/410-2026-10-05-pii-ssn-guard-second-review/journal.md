@@ -27,3 +27,6 @@
 - 2026-10-07T04:59:04.740Z - ac-confirmed: AC6: operator confirmed in polls 117 and 118 (2026-10-07). Rounds 906, 909, r02, r03, round 5 and round 6 (plus its carry-forward) are in the package, every finding has a terminal disposition; the head-commit condition was lifted by the operator's own decision (polls 108-112). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-07T04:59:04.948Z - ac-confirmed: AC7: operator confirmed in polls 117 and 118 (2026-10-07). Confirmed earlier in poll 97; the items are in the description of flow 409. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-07T04:59:05.164Z - ac-confirmed: AC8: operator confirmed in polls 117 and 118 (2026-10-07). logic-R3-2 accepted as residual by the operator (poll 99); flow 261 journal marks its four earlier rounds as reconstructed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:20:58.596Z - completing
+- 2026-10-18T18:21:06.454Z - completion-attempt-recorded: attempt 1: passed
+- 2026-10-18T18:21:06.459Z - done: all gates passed

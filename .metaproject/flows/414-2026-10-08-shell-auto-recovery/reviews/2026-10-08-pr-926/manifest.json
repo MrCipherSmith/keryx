@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-10-08-pr-926",
+  "mode": "attach-review",
+  "status": "closed",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/926",
+    "head": "b081ab6175c6050b2f47036af5398dd9ef9e05c5"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/414-2026-10-08-shell-auto-recovery/reviews/2026-10-08-pr-926/scope.md",
+    "coverage": ".metaproject/flows/414-2026-10-08-shell-auto-recovery/reviews/2026-10-08-pr-926/coverage.md",
+    "report": ".metaproject/flows/414-2026-10-08-shell-auto-recovery/reviews/2026-10-08-pr-926/report.md",
+    "findings": ".metaproject/flows/414-2026-10-08-shell-auto-recovery/reviews/2026-10-08-pr-926/findings.json",
+    "learning": ".metaproject/flows/414-2026-10-08-shell-auto-recovery/reviews/2026-10-08-pr-926/learning.md",
+    "decisions": ".metaproject/flows/414-2026-10-08-shell-auto-recovery/reviews/2026-10-08-pr-926/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-logic",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-security-code",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-testing-practices",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-10-08T11:40:00.000Z",
+  "updatedAt": "2026-10-08T11:40:00.000Z",
+  "flow": {
+    "id": "414",
+    "path": ".metaproject/flows/414-2026-10-08-shell-auto-recovery"
+  }
+}

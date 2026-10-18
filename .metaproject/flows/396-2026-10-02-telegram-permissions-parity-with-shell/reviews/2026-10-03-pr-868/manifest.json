@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-10-03-pr-868",
+  "mode": "attach-review",
+  "status": "closed",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/868",
+    "head": "a5ed19f90237116888fdcc132c2a2598239032d5"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/396-2026-10-02-telegram-permissions-parity-with-shell/reviews/2026-10-03-pr-868/scope.md",
+    "coverage": ".metaproject/flows/396-2026-10-02-telegram-permissions-parity-with-shell/reviews/2026-10-03-pr-868/coverage.md",
+    "report": ".metaproject/flows/396-2026-10-02-telegram-permissions-parity-with-shell/reviews/2026-10-03-pr-868/report.md",
+    "findings": ".metaproject/flows/396-2026-10-02-telegram-permissions-parity-with-shell/reviews/2026-10-03-pr-868/findings.json",
+    "learning": ".metaproject/flows/396-2026-10-02-telegram-permissions-parity-with-shell/reviews/2026-10-03-pr-868/learning.md",
+    "decisions": ".metaproject/flows/396-2026-10-02-telegram-permissions-parity-with-shell/reviews/2026-10-03-pr-868/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-logic",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-security-code",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-testing-practices",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-10-03T07:22:07.000Z",
+  "updatedAt": "2026-10-03T07:22:07.000Z",
+  "flow": {
+    "id": "396",
+    "path": ".metaproject/flows/396-2026-10-02-telegram-permissions-parity-with-shell"
+  }
+}

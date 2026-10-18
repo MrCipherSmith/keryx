@@ -50,7 +50,11 @@ export const githubAdapter: TrackerAdapter = {
       if (result.exitCode !== 0) {
         return null;
       }
-      const parsed = JSON.parse(result.stdout) as { title?: string; body?: string };
+      const jsonStart = result.stdout.indexOf("{");
+      if (jsonStart === -1) {
+        return null;
+      }
+      const parsed = JSON.parse(result.stdout.slice(jsonStart)) as { title?: string; body?: string };
       return { title: parsed.title ?? "", body: parsed.body ?? "" };
     } catch {
       return null;
@@ -77,7 +81,11 @@ export const githubAdapter: TrackerAdapter = {
       if (view.exitCode !== 0) {
         return { exists: false, isDraft: false, checksGreen: null, headSha: null, baseRefName: null, state: null };
       }
-      const parsed = JSON.parse(view.stdout) as {
+      const jsonStart = view.stdout.indexOf("{");
+      if (jsonStart === -1) {
+        return { exists: false, isDraft: false, checksGreen: null, headSha: null, baseRefName: null, state: null };
+      }
+      const parsed = JSON.parse(view.stdout.slice(jsonStart)) as {
         isDraft?: boolean;
         headRefOid?: string;
         baseRefName?: string;

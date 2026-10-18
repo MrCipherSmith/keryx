@@ -28,15 +28,15 @@ _the pre-filter ran and dropped nothing_
 
 ### Refuted by the verifier
 
-verification_mode: off
-claims_received: 0
-claims_applied: 0
+verification_mode: annotate
+claims_received: 3
+claims_applied: 3
 claims_rejected: 0
 verdicts_capped_to_unverifiable: 0
 confirmed: 0
-refuted: 0
+refuted: 3
 unverifiable: 0
-unverified: 8
+unverified: 5
 
 ### Retained
 

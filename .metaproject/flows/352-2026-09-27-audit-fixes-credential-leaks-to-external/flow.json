@@ -8,9 +8,9 @@
   "id": "352",
   "slug": "audit-fixes-credential-leaks-to-external",
   "title": "Audit fixes: credential leaks to external agents and web redirects, sub-agent cancel, shell lease",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-09-27T14:53:18.244Z",
-  "updatedAt": "2026-09-27T18:18:10.530Z",
+  "updatedAt": "2026-10-18T13:58:41.294Z",
   "source": {
     "type": "description",
     "ref": null
@@ -342,6 +342,20 @@
       "at": "2026-09-27T18:18:10.530Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/770 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-18T13:58:32.902Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-18T13:58:41.271Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: passed"
+    },
+    {
+      "at": "2026-10-18T13:58:41.294Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "signatures": [
@@ -432,6 +446,17 @@
       },
       "criterion": "AC8",
       "acChecksum": "sha256:0e89bfc02624422443cc2e538eb982068171587061b59f1250f5661d248e8676"
+    },
+    {
+      "at": "2026-10-18T13:58:41.294Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:0e89bfc02624422443cc2e538eb982068171587061b59f1250f5661d248e8676",
+      "headCommit": "4a1487cf7ddfe285560e2fcc552e0bd6de8f206c"
     }
   ],
   "completionAttempts": [
@@ -537,6 +562,63 @@
         }
       ],
       "passed": false,
+      "acChecksum": "sha256:0e89bfc02624422443cc2e538eb982068171587061b59f1250f5661d248e8676"
+    },
+    {
+      "at": "2026-10-18T13:58:41.271Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "7 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "skipped",
+          "detail": "folder-committed gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
       "acChecksum": "sha256:0e89bfc02624422443cc2e538eb982068171587061b59f1250f5661d248e8676"
     }
   ]

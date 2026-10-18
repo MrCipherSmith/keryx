@@ -9,9 +9,9 @@
   "id": "403",
   "slug": "ticket-intake",
   "title": "Work intake: GitHub events as Telegram cards with buttons",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-04T18:26:11.875Z",
-  "updatedAt": "2026-10-05T11:51:18.775Z",
+  "updatedAt": "2026-10-18T18:14:33.282Z",
   "source": {
     "type": "description",
     "ref": null
@@ -105,6 +105,18 @@
     "AC22": {
       "at": "2026-10-05T11:51:18.775Z",
       "note": "Подтверждено оператором голосованием в канале (опрос 89, 2026-10-05); проверено тестами; команду выполнил агент по прямому указанию оператора"
+    },
+    "AC23": {
+      "at": "2026-10-18T18:13:57.619Z",
+      "note": "Подтверждено оператором (живая приёмка на репозитории MrCipherSmith/keryx)"
+    },
+    "AC24": {
+      "at": "2026-10-18T18:13:57.813Z",
+      "note": "Подтверждено оператором (карточки понятны и предложения разумны)"
+    },
+    "AC25": {
+      "at": "2026-10-18T18:13:58.021Z",
+      "note": "Подтверждено оператором (ручной смоук проведён в рамках релиза)"
     }
   },
   "pr": {
@@ -601,6 +613,35 @@
       "at": "2026-10-05T11:51:18.775Z",
       "event": "ac-confirmed",
       "detail": "AC22: Подтверждено оператором голосованием в канале (опрос 89, 2026-10-05); проверено тестами; команду выполнил агент по прямому указанию оператора (signed: operator [stated])"
+    },
+    {
+      "at": "2026-10-18T18:13:57.619Z",
+      "event": "ac-confirmed",
+      "detail": "AC23: Подтверждено оператором (живая приёмка на репозитории MrCipherSmith/keryx) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T18:13:57.814Z",
+      "event": "ac-confirmed",
+      "detail": "AC24: Подтверждено оператором (карточки понятны и предложения разумны) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T18:13:58.021Z",
+      "event": "ac-confirmed",
+      "detail": "AC25: Подтверждено оператором (ручной смоук проведён в рамках релиза) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T18:14:25.825Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-18T18:14:33.279Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-18T18:14:33.282Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -944,6 +985,109 @@
         "source": "`--signed-by` flag"
       },
       "criterion": "AC22",
+      "acChecksum": "sha256:85422a2931e0701765234c07c4fa04896eba44489c53117b3a436b4428ed02e9"
+    },
+    {
+      "at": "2026-10-18T18:13:57.619Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC23",
+      "acChecksum": "sha256:85422a2931e0701765234c07c4fa04896eba44489c53117b3a436b4428ed02e9"
+    },
+    {
+      "at": "2026-10-18T18:13:57.813Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC24",
+      "acChecksum": "sha256:85422a2931e0701765234c07c4fa04896eba44489c53117b3a436b4428ed02e9"
+    },
+    {
+      "at": "2026-10-18T18:13:58.021Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC25",
+      "acChecksum": "sha256:85422a2931e0701765234c07c4fa04896eba44489c53117b3a436b4428ed02e9"
+    },
+    {
+      "at": "2026-10-18T18:14:33.282Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:85422a2931e0701765234c07c4fa04896eba44489c53117b3a436b4428ed02e9",
+      "headCommit": "9bc177518f8bcbbd05d66f5bb18f6aab6a3cb0ca"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-18T18:14:33.279Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "25 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "13 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "403-2026-10-04-ticket-intake is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
       "acChecksum": "sha256:85422a2931e0701765234c07c4fa04896eba44489c53117b3a436b4428ed02e9"
     }
   ]

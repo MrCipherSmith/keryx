@@ -9,19 +9,60 @@
   "id": "414",
   "slug": "shell-auto-recovery",
   "title": "Shell automatically resumes interrupted agent turns after connectivity or provider recovery",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-08T09:44:53.533Z",
-  "updatedAt": "2026-10-08T11:04:27.204Z",
+  "updatedAt": "2026-10-18T18:27:06.277Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:1947b2d07fb4de14ec64fe7eca266118e6858e87419c1859b8fb2314aca749bb",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-18T18:25:43.968Z",
+      "note": "Real readline REPL emits one turn_start and no early turn_end while waiting; completes without another prompt; verified by test in PR 926"
+    },
+    "AC2": {
+      "at": "2026-10-18T18:25:44.194Z",
+      "note": "Scripted 18-failure outage succeeds on attempt 19 with maxRounds=1; verified by test in PR 926"
+    },
+    "AC3": {
+      "at": "2026-10-18T18:25:44.412Z",
+      "note": "Provisional text/reasoning/replay absent from checkpoint snapshots and retried messages; verified by test in PR 926"
+    },
+    "AC4": {
+      "at": "2026-10-18T18:25:44.663Z",
+      "note": "Complete arguments followed by error invoke no tool; prior successful write invokes/approves exactly once; verified by test in PR 926"
+    },
+    "AC5": {
+      "at": "2026-10-18T18:25:44.881Z",
+      "note": "Production abortable wait, cancellation before retry and mid-output pass; verified by test in PR 926"
+    },
+    "AC6": {
+      "at": "2026-10-18T18:25:45.127Z",
+      "note": "maxRounds=1 survives long outage; prior tools/approval preserved; usage forwarded; verified by test in PR 926"
+    },
+    "AC7": {
+      "at": "2026-10-18T18:25:45.416Z",
+      "note": "Generic 403 authentication/invalid_request fixtures do not retry; access guidance asserted; verified by test in PR 926"
+    },
+    "AC8": {
+      "at": "2026-10-18T18:25:45.648Z",
+      "note": "Readline events prove no success-looking end during recovery; headless OpenTUI frame shows recovering/interrupted; verified by test in PR 926"
+    },
+    "AC9": {
+      "at": "2026-10-18T18:25:45.881Z",
+      "note": "26 deterministic recovery tests plus real readline and headless renderer tests; verified by test in PR 926"
+    },
+    "AC10": {
+      "at": "2026-10-18T18:25:46.228Z",
+      "note": "README and docs/docs/shell-recovery.md explain policy, defaults and boundaries; verified in PR 926"
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/926"
   },
-  "baseBranch": "fix/tui-input-latency",
+  "baseBranch": "main",
   "outcomeAuthor": "agent",
   "tasks": [
     {
@@ -210,6 +251,75 @@
       "at": "2026-10-08T11:04:27.204Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/926 (tracker unavailable: existence not verified)"
+    },
+    {
+      "at": "2026-10-18T18:25:19.328Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (repository owner)"
+    },
+    {
+      "at": "2026-10-18T18:25:43.968Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Real readline REPL emits one turn_start and no early turn_end while waiting; completes without another prompt; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:25:44.194Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Scripted 18-failure outage succeeds on attempt 19 with maxRounds=1; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:25:44.413Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Provisional text/reasoning/replay absent from checkpoint snapshots and retried messages; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:25:44.663Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Complete arguments followed by error invoke no tool; prior successful write invokes/approves exactly once; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:25:44.881Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Production abortable wait, cancellation before retry and mid-output pass; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:25:45.127Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: maxRounds=1 survives long outage; prior tools/approval preserved; usage forwarded; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:25:45.417Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Generic 403 authentication/invalid_request fixtures do not retry; access guidance asserted; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:25:45.648Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Readline events prove no success-looking end during recovery; headless OpenTUI frame shows recovering/interrupted; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:25:45.881Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: 26 deterministic recovery tests plus real readline and headless renderer tests; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:25:46.228Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: README and docs/docs/shell-recovery.md explain policy, defaults and boundaries; verified in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:26:58.326Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-18T18:27:06.263Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-18T18:27:06.277Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -243,5 +353,192 @@
     "AC10": {
       "kind": "unclassified"
     }
-  }
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "signatures": [
+    {
+      "at": "2026-10-18T18:25:43.968Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:1947b2d07fb4de14ec64fe7eca266118e6858e87419c1859b8fb2314aca749bb"
+    },
+    {
+      "at": "2026-10-18T18:25:44.194Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:1947b2d07fb4de14ec64fe7eca266118e6858e87419c1859b8fb2314aca749bb"
+    },
+    {
+      "at": "2026-10-18T18:25:44.412Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:1947b2d07fb4de14ec64fe7eca266118e6858e87419c1859b8fb2314aca749bb"
+    },
+    {
+      "at": "2026-10-18T18:25:44.663Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:1947b2d07fb4de14ec64fe7eca266118e6858e87419c1859b8fb2314aca749bb"
+    },
+    {
+      "at": "2026-10-18T18:25:44.881Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:1947b2d07fb4de14ec64fe7eca266118e6858e87419c1859b8fb2314aca749bb"
+    },
+    {
+      "at": "2026-10-18T18:25:45.127Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:1947b2d07fb4de14ec64fe7eca266118e6858e87419c1859b8fb2314aca749bb"
+    },
+    {
+      "at": "2026-10-18T18:25:45.416Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:1947b2d07fb4de14ec64fe7eca266118e6858e87419c1859b8fb2314aca749bb"
+    },
+    {
+      "at": "2026-10-18T18:25:45.648Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:1947b2d07fb4de14ec64fe7eca266118e6858e87419c1859b8fb2314aca749bb"
+    },
+    {
+      "at": "2026-10-18T18:25:45.881Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:1947b2d07fb4de14ec64fe7eca266118e6858e87419c1859b8fb2314aca749bb"
+    },
+    {
+      "at": "2026-10-18T18:25:46.228Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:1947b2d07fb4de14ec64fe7eca266118e6858e87419c1859b8fb2314aca749bb"
+    },
+    {
+      "at": "2026-10-18T18:27:06.276Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:1947b2d07fb4de14ec64fe7eca266118e6858e87419c1859b8fb2314aca749bb",
+      "headCommit": "b081ab6175c6050b2f47036af5398dd9ef9e05c5"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-18T18:27:06.263Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "10 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "7 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "414-2026-10-08-shell-auto-recovery is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:1947b2d07fb4de14ec64fe7eca266118e6858e87419c1859b8fb2314aca749bb"
+    }
+  ]
 }

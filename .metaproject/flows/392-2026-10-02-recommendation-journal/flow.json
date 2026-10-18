@@ -9,9 +9,9 @@
   "id": "392",
   "slug": "recommendation-journal",
   "title": "Recommendation journal: что рекомендовал агент и что выбрал человек",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-02T11:54:20.132Z",
-  "updatedAt": "2026-10-02T15:53:32.718Z",
+  "updatedAt": "2026-10-18T18:03:39.632Z",
   "source": {
     "type": "description",
     "ref": null
@@ -57,6 +57,10 @@
     "AC10": {
       "at": "2026-10-02T15:53:32.718Z",
       "note": "bun test src/flow passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on; the two flow-390 tails fixed inside this flow (originSet carry-over, bounded /flow origin summary)"
+    },
+    "AC11": {
+      "at": "2026-10-18T18:03:08.089Z",
+      "note": "keryx decisions report: 134/20 decisions, 13/5 blind (reached)"
     }
   },
   "pr": {
@@ -240,6 +244,25 @@
       "at": "2026-10-02T15:53:32.718Z",
       "event": "ac-confirmed",
       "detail": "AC10: bun test src/flow passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on; the two flow-390 tails fixed inside this flow (originSet carry-over, bounded /flow origin summary) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:03:08.089Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: keryx decisions report: 134/20 decisions, 13/5 blind (reached) (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T18:03:32.165Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-18T18:03:39.629Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-18T18:03:39.632Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -397,6 +420,87 @@
         "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
       },
       "criterion": "AC10",
+      "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c"
+    },
+    {
+      "at": "2026-10-18T18:03:08.089Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c"
+    },
+    {
+      "at": "2026-10-18T18:03:39.632Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c",
+      "headCommit": "c95f530a99769b480496beb2e37a29940700060b"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-18T18:03:39.629Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "392-2026-10-02-recommendation-journal is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 6 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
       "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c"
     }
   ]

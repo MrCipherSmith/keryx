@@ -73,3 +73,17 @@ report are unchanged by this repair. The prior implemented label does not prove
 a reviewed merge. No flow completion, worktree commit, push, merge, tag, release
 or authentication switch was performed. Generated graph outputs were preserved
 outside the worktree and restored; unrelated artifacts were preserved.
+- 2026-10-18T18:25:19.328Z - owner-set: not set -> MrCipherSmith (repository owner)
+- 2026-10-18T18:25:43.968Z - ac-confirmed: AC1: Real readline REPL emits one turn_start and no early turn_end while waiting; completes without another prompt; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:25:44.194Z - ac-confirmed: AC2: Scripted 18-failure outage succeeds on attempt 19 with maxRounds=1; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:25:44.413Z - ac-confirmed: AC3: Provisional text/reasoning/replay absent from checkpoint snapshots and retried messages; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:25:44.663Z - ac-confirmed: AC4: Complete arguments followed by error invoke no tool; prior successful write invokes/approves exactly once; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:25:44.881Z - ac-confirmed: AC5: Production abortable wait, cancellation before retry and mid-output pass; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:25:45.127Z - ac-confirmed: AC6: maxRounds=1 survives long outage; prior tools/approval preserved; usage forwarded; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:25:45.417Z - ac-confirmed: AC7: Generic 403 authentication/invalid_request fixtures do not retry; access guidance asserted; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:25:45.648Z - ac-confirmed: AC8: Readline events prove no success-looking end during recovery; headless OpenTUI frame shows recovering/interrupted; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:25:45.881Z - ac-confirmed: AC9: 26 deterministic recovery tests plus real readline and headless renderer tests; verified by test in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:25:46.228Z - ac-confirmed: AC10: README and docs/docs/shell-recovery.md explain policy, defaults and boundaries; verified in PR 926 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:26:58.326Z - completing
+- 2026-10-18T18:27:06.263Z - completion-attempt-recorded: attempt 1: passed
+- 2026-10-18T18:27:06.277Z - done: all gates passed

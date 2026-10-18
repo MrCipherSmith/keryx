@@ -8,3 +8,15 @@
 - 2026-10-12T05:57:45.315Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-10-12T05:58:31.785Z - task-done: T4: Self-review and prepare draft PR
 - 2026-10-12T05:58:34.181Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/978 (base: main)
+- 2026-10-18T18:30:25.626Z - ac-confirmed: AC1: Mirrored approval prompts with options verified by src/remote/approval-mirror.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:30:26.206Z - ac-confirmed: AC2: Resolution in both orders verified by src/remote/approval-mirror.test.ts and src/tui/approval-mirror.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:30:26.794Z - ac-confirmed: AC3: Prompt reminders after stated interval verified by src/remote/prompt-reminder.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:30:27.681Z - ac-confirmed: AC4: Commands taking effect and queueing verified by src/remote/command-queued.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:30:28.734Z - ac-confirmed: AC5: Progress notes at wave boundaries verified by src/remote/progress-notes.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:30:29.430Z - ac-confirmed: AC6: Status questions answered from session state verified by src/remote/progress-notes.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:30:30.250Z - ac-confirmed: AC7: Topic archival on shell close and exit verified by src/remote/lifecycle.test.ts and orphan.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:30:31.010Z - ac-confirmed: AC8: Validated against fake Bot API test suite and operator review (PR #978) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:30:31.839Z - ac-confirmed: AC9: Docs updated across README, guide and CLI reference; mkdocs build --strict passed (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:30:55.038Z - completing
+- 2026-10-18T18:31:02.926Z - completion-attempt-recorded: attempt 1: passed
+- 2026-10-18T18:31:02.942Z - done: all gates passed

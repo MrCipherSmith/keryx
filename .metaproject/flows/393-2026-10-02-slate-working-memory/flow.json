@@ -9,9 +9,9 @@
   "id": "393",
   "slug": "slate-working-memory",
   "title": "Slate as the model's working memory: bounded request built from Anchors/Course/Trail/Seeds with point-recall tools",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-02T07:47:58.219Z",
-  "updatedAt": "2026-10-03T18:15:05.533Z",
+  "updatedAt": "2026-10-18T18:05:53.764Z",
   "source": {
     "type": "description",
     "ref": null
@@ -568,6 +568,20 @@
       "at": "2026-10-03T18:15:05.533Z",
       "event": "ac-confirmed",
       "detail": "AC14 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:05:46.212Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-18T18:05:53.762Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-18T18:05:53.764Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -767,6 +781,76 @@
         "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
       },
       "criterion": "AC14",
+      "acChecksum": "sha256:419086076d5d368a3891a9c6678efadd0af8a433fc88ed7a06e2fbabb9d21b45"
+    },
+    {
+      "at": "2026-10-18T18:05:53.764Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:419086076d5d368a3891a9c6678efadd0af8a433fc88ed7a06e2fbabb9d21b45",
+      "headCommit": "2c8a6133817cfba318f1a1358b207de83f8bfd3e"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-18T18:05:53.762Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "14 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "15 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "393-2026-10-02-slate-working-memory is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
       "acChecksum": "sha256:419086076d5d368a3891a9c6678efadd0af8a433fc88ed7a06e2fbabb9d21b45"
     }
   ]

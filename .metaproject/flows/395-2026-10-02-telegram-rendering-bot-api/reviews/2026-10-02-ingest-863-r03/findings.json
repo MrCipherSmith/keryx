@@ -16,7 +16,16 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-10-02-ingest-863-r03#F1"
+    "global_id": "2026-10-02-ingest-863-r03#F1",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: Alex Smith; operator accepted live probe results and verified rendering spike"
+    },
+    "verification": {
+      "verdict": "confirmed",
+      "method": "inspection",
+      "evidence": "confirmed probe status; accepted by operator"
+    }
   },
   {
     "id": "F2",
@@ -28,7 +37,16 @@
     "evidence": "mkdocs absent on the reviewer's machine; mkdocs.yml unchanged.",
     "confidence": "medium",
     "file": "src/remote/rendering-docs.test.ts",
-    "global_id": "2026-10-02-ingest-863-r03#F2"
+    "global_id": "2026-10-02-ingest-863-r03#F2",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: Alex Smith; confirmed CI mkdocs step is green"
+    },
+    "verification": {
+      "verdict": "confirmed",
+      "method": "inspection",
+      "evidence": "confirmed CI docs check passed"
+    }
   },
   {
     "id": "F3",

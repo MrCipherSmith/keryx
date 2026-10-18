@@ -25,3 +25,18 @@
 - 2026-10-04T10:15:05.999Z - owner-changed: operator -> MrCipherSmith (Standing rule: the owner of every keryx flow is MrCipherSmith)
 - 2026-10-04T10:57:56.470Z - decision d-mutpe7oo-540cbd [close, ordinary]: chose update; followed the recommendation
 - 2026-10-04T10:58:03.945Z - ac-updated: AC9 named src/docs/scheduled-digest-docs.test.ts; the test lives at src/scheduler/scheduled-digest-docs.test.ts (review finding T-3, operator approved the correction in poll 75). Confirmations voided; operator re-confirms.
+- 2026-10-18T17:59:35.534Z - ac-confirmed: AC1: bun test src/scheduler/digest-schedule.test.ts passed (signed: MrCipherSmith [stated])
+- 2026-10-18T17:59:35.949Z - ac-confirmed: AC2: bun test src/scheduler/digest-run.test.ts passed (signed: MrCipherSmith [stated])
+- 2026-10-18T17:59:36.426Z - ac-confirmed: AC3: bun test src/scheduler/digest-tools-readonly.test.ts passed (signed: MrCipherSmith [stated])
+- 2026-10-18T17:59:36.956Z - ac-confirmed: AC4: bun test src/scheduler/digest-diff.test.ts passed (signed: MrCipherSmith [stated])
+- 2026-10-18T17:59:37.216Z - ac-confirmed: AC5: bun test src/scheduler/digest-content.test.ts passed (signed: MrCipherSmith [stated])
+- 2026-10-18T17:59:37.442Z - ac-confirmed: AC6: bun test src/scheduler/digest-delivery.test.ts passed (signed: MrCipherSmith [stated])
+- 2026-10-18T17:59:37.645Z - ac-confirmed: AC7: bun test src/scheduler/digest-limits.test.ts passed (signed: MrCipherSmith [stated])
+- 2026-10-18T17:59:37.854Z - ac-confirmed: AC8: bun test src/tui/digest-surface.test.ts passed (signed: MrCipherSmith [stated])
+- 2026-10-18T17:59:38.092Z - ac-confirmed: AC9: bun test src/scheduler/scheduled-digest-docs.test.ts passed (signed: MrCipherSmith [stated])
+- 2026-10-18T17:59:38.344Z - ac-confirmed: AC10: bun test src/scheduler/no-live-network.test.ts passed (signed: MrCipherSmith [stated])
+- 2026-10-18T17:59:38.539Z - ac-confirmed: AC11: operator confirmed real server delivery (signed: MrCipherSmith [stated])
+- 2026-10-18T17:59:38.730Z - ac-confirmed: AC12: operator confirmed digest readability and self-contained content (signed: MrCipherSmith [stated])
+- 2026-10-18T18:02:19.568Z - completing
+- 2026-10-18T18:02:26.793Z - completion-attempt-recorded: attempt 1: passed
+- 2026-10-18T18:02:26.797Z - done: all gates passed

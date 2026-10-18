@@ -6,7 +6,7 @@
   "target": {
     "kind": "report",
     "ref": "33a3591b~1",
-    "head": "33a3591b"
+    "head": "4a1487cf7ddfe285560e2fcc552e0bd6de8f206c"
   },
   "artifacts": {
     "scope": ".metaproject/flows/352-2026-09-27-audit-fixes-credential-leaks-to-external/reviews/2026-09-27-branch-33a3591b-1/scope.md",

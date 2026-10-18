@@ -67,3 +67,7 @@ All new tests pass; every local failure reproduces on clean main, so none is cau
 - 2026-10-11T08:11:44.413Z - ac-confirmed: AC5: src/commands/verify-kind-creation-paths.test.ts drives intake through the real flow init handler and goal autoProvisionFlow; CI green (signed: claude-agent (session 2026-10-11) [stated])
 - 2026-10-11T08:11:44.562Z - ac-confirmed: AC6: src/commands/research-sync-kinds.test.ts incl. runResearchSync wiring and 7-day window; CI green (signed: claude-agent (session 2026-10-11) [stated])
 - 2026-10-11T08:11:44.712Z - ac-confirmed: AC7: git diff --stat of #957 against its merge-base touches no flow dir other than 422 (signed: claude-agent (session 2026-10-11) [stated])
+- 2026-10-18T18:31:59.407Z - ac-confirmed: AC8: Verified by inspection: flows 423-425 created after merge carry verification kinds on criteria (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:33:16.286Z - completing
+- 2026-10-18T18:33:23.403Z - completion-attempt-recorded: attempt 1: passed
+- 2026-10-18T18:33:23.406Z - done: all gates passed

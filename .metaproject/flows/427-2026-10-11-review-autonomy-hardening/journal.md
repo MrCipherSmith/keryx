@@ -8,3 +8,16 @@
 - 2026-10-11T17:20:35.043Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-10-12T20:11:47.917Z - task-done: T4: Self-review and prepare draft PR
 - 2026-10-12T20:11:50.456Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/975 (warning: PR is not a draft)
+- 2026-10-18T18:34:19.294Z - ac-confirmed: AC1: Verified by bun test src/review/ledger.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:34:19.863Z - ac-confirmed: AC2: Verified by bun test src/review/slice-dispatch.test.ts src/commands/review-slice.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:34:20.438Z - ac-confirmed: AC3: Operator confirmation: write/delegate rejection persists until auto-approval on untrustedOrigin change (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:34:21.011Z - ac-confirmed: AC4: Verified by bun test src/tui/ask-user-bridge-arbiter.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:34:21.618Z - ac-confirmed: AC5: Verified by bun test src/review/ledger.test.ts src/commands/review-slice.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:34:22.263Z - ac-confirmed: AC6: Verified by bun test src/review/slice-dispatch.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:34:22.862Z - ac-confirmed: AC7: Verified by bun test src/commands/review-arbiter.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:34:23.419Z - ac-confirmed: AC8: Verified by bun test src/review/completion-gate.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:34:24.049Z - ac-confirmed: AC9: 8 regressions and deterministic lifecycle fixture pass in PR #975 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T19:42:35.548Z - confirmation-minted: token 54dadbc28ee4, expires 2026-10-18T19:52:35.522Z
+- 2026-10-18T19:42:48.596Z - completing
+- 2026-10-18T19:42:56.690Z - completion-attempt-recorded: attempt 1: passed
+- 2026-10-18T19:42:56.696Z - done: all gates passed

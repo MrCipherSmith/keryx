@@ -21,3 +21,7 @@
 - 2026-10-02T15:53:31.867Z - ac-confirmed: AC9: bun test src/decisions passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-02T15:53:32.317Z - ac-confirmed: AC8: bun test src/tui passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on; /decisions modal and sb-decisions sidebar row shipped in 0.3.62 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-02T15:53:32.718Z - ac-confirmed: AC10: bun test src/flow passed in CI on PR #856 at c95f530a (18 of 18 checks), reviewed in five independent rounds with every finding acted on; the two flow-390 tails fixed inside this flow (originSet carry-over, bounded /flow origin summary) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-18T18:03:08.089Z - ac-confirmed: AC11: keryx decisions report: 134/20 decisions, 13/5 blind (reached) (signed: MrCipherSmith [stated])
+- 2026-10-18T18:03:32.165Z - completing
+- 2026-10-18T18:03:39.629Z - completion-attempt-recorded: attempt 1: passed
+- 2026-10-18T18:03:39.632Z - done: all gates passed

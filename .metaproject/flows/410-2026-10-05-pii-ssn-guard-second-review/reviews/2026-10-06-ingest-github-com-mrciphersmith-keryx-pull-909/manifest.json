@@ -6,7 +6,7 @@
   "target": {
     "kind": "report",
     "ref": "https://github.com/MrCipherSmith/keryx/pull/909",
-    "head": "5d7fe70bf5589ce3fad915d733fe7ff5d00de459"
+    "head": "f6068a19dd369d117e39aa8a99333fbec626b399"
   },
   "artifacts": {
     "scope": ".metaproject/flows/410-2026-10-05-pii-ssn-guard-second-review/reviews/2026-10-06-ingest-github-com-mrciphersmith-keryx-pull-909/scope.md",

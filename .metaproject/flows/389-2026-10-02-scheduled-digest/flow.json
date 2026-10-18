@@ -9,15 +9,64 @@
   "id": "389",
   "slug": "scheduled-digest",
   "title": "Scheduled agent: GitHub and board digest on a schedule",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-02T04:37:18.590Z",
-  "updatedAt": "2026-10-04T10:58:03.945Z",
+  "updatedAt": "2026-10-18T18:02:26.797Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-18T17:59:35.534Z",
+      "note": "bun test src/scheduler/digest-schedule.test.ts passed"
+    },
+    "AC2": {
+      "at": "2026-10-18T17:59:35.949Z",
+      "note": "bun test src/scheduler/digest-run.test.ts passed"
+    },
+    "AC3": {
+      "at": "2026-10-18T17:59:36.426Z",
+      "note": "bun test src/scheduler/digest-tools-readonly.test.ts passed"
+    },
+    "AC4": {
+      "at": "2026-10-18T17:59:36.956Z",
+      "note": "bun test src/scheduler/digest-diff.test.ts passed"
+    },
+    "AC5": {
+      "at": "2026-10-18T17:59:37.216Z",
+      "note": "bun test src/scheduler/digest-content.test.ts passed"
+    },
+    "AC6": {
+      "at": "2026-10-18T17:59:37.442Z",
+      "note": "bun test src/scheduler/digest-delivery.test.ts passed"
+    },
+    "AC7": {
+      "at": "2026-10-18T17:59:37.645Z",
+      "note": "bun test src/scheduler/digest-limits.test.ts passed"
+    },
+    "AC8": {
+      "at": "2026-10-18T17:59:37.854Z",
+      "note": "bun test src/tui/digest-surface.test.ts passed"
+    },
+    "AC9": {
+      "at": "2026-10-18T17:59:38.092Z",
+      "note": "bun test src/scheduler/scheduled-digest-docs.test.ts passed"
+    },
+    "AC10": {
+      "at": "2026-10-18T17:59:38.344Z",
+      "note": "bun test src/scheduler/no-live-network.test.ts passed"
+    },
+    "AC11": {
+      "at": "2026-10-18T17:59:38.539Z",
+      "note": "operator confirmed real server delivery"
+    },
+    "AC12": {
+      "at": "2026-10-18T17:59:38.730Z",
+      "note": "operator confirmed digest readability and self-contained content"
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/848"
   },
@@ -215,6 +264,80 @@
       "at": "2026-10-04T10:58:03.945Z",
       "event": "ac-updated",
       "detail": "AC9 named src/docs/scheduled-digest-docs.test.ts; the test lives at src/scheduler/scheduled-digest-docs.test.ts (review finding T-3, operator approved the correction in poll 75). Confirmations voided; operator re-confirms."
+    },
+    {
+      "at": "2026-10-18T17:59:35.534Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: bun test src/scheduler/digest-schedule.test.ts passed (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T17:59:35.949Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: bun test src/scheduler/digest-run.test.ts passed (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T17:59:36.426Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: bun test src/scheduler/digest-tools-readonly.test.ts passed (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T17:59:36.956Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: bun test src/scheduler/digest-diff.test.ts passed (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T17:59:37.216Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: bun test src/scheduler/digest-content.test.ts passed (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T17:59:37.442Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: bun test src/scheduler/digest-delivery.test.ts passed (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T17:59:37.645Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: bun test src/scheduler/digest-limits.test.ts passed (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T17:59:37.854Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: bun test src/tui/digest-surface.test.ts passed (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T17:59:38.092Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: bun test src/scheduler/scheduled-digest-docs.test.ts passed (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T17:59:38.344Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: bun test src/scheduler/no-live-network.test.ts passed (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T17:59:38.539Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: operator confirmed real server delivery (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T17:59:38.730Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: operator confirmed digest readability and self-contained content (signed: MrCipherSmith [stated])"
+    },
+    {
+      "at": "2026-10-18T18:02:19.568Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-18T18:02:26.793Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-18T18:02:26.797Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -402,7 +525,209 @@
       },
       "criterion": "AC12",
       "acChecksum": "sha256:428559805d3f27ccf04d21b7a3a69a3e856aff44300bdd89e455ed5593ed0026"
+    },
+    {
+      "at": "2026-10-18T17:59:35.534Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649"
+    },
+    {
+      "at": "2026-10-18T17:59:35.949Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649"
+    },
+    {
+      "at": "2026-10-18T17:59:36.426Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649"
+    },
+    {
+      "at": "2026-10-18T17:59:36.956Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649"
+    },
+    {
+      "at": "2026-10-18T17:59:37.216Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649"
+    },
+    {
+      "at": "2026-10-18T17:59:37.442Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649"
+    },
+    {
+      "at": "2026-10-18T17:59:37.645Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649"
+    },
+    {
+      "at": "2026-10-18T17:59:37.854Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649"
+    },
+    {
+      "at": "2026-10-18T17:59:38.092Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649"
+    },
+    {
+      "at": "2026-10-18T17:59:38.344Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649"
+    },
+    {
+      "at": "2026-10-18T17:59:38.539Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649"
+    },
+    {
+      "at": "2026-10-18T17:59:38.730Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649"
+    },
+    {
+      "at": "2026-10-18T18:02:26.797Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649",
+      "headCommit": "6c933b537bf77aa0a7c77df1af17b52ae88f47bd"
     }
   ],
-  "baseBranch": "main"
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-10-18T18:02:26.793Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "12 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "389-2026-10-02-scheduled-digest is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:2dff90b49cc85c648a08771a8295096891cb7e14f7a5825d9448ffddb48a4649"
+    }
+  ]
 }

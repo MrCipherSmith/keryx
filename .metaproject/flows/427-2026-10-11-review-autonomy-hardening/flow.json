@@ -10,15 +10,52 @@
   "id": "427",
   "slug": "review-autonomy-hardening",
   "title": "Надёжность и безопасность автономного review",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-11T15:21:56.625Z",
-  "updatedAt": "2026-10-12T20:11:50.456Z",
+  "updatedAt": "2026-10-18T19:42:56.696Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-18T18:34:19.294Z",
+      "note": "Verified by bun test src/review/ledger.test.ts"
+    },
+    "AC2": {
+      "at": "2026-10-18T18:34:19.863Z",
+      "note": "Verified by bun test src/review/slice-dispatch.test.ts src/commands/review-slice.test.ts"
+    },
+    "AC3": {
+      "at": "2026-10-18T18:34:20.438Z",
+      "note": "Operator confirmation: write/delegate rejection persists until auto-approval on untrustedOrigin change"
+    },
+    "AC4": {
+      "at": "2026-10-18T18:34:21.011Z",
+      "note": "Verified by bun test src/tui/ask-user-bridge-arbiter.test.ts"
+    },
+    "AC5": {
+      "at": "2026-10-18T18:34:21.618Z",
+      "note": "Verified by bun test src/review/ledger.test.ts src/commands/review-slice.test.ts"
+    },
+    "AC6": {
+      "at": "2026-10-18T18:34:22.263Z",
+      "note": "Verified by bun test src/review/slice-dispatch.test.ts"
+    },
+    "AC7": {
+      "at": "2026-10-18T18:34:22.862Z",
+      "note": "Verified by bun test src/commands/review-arbiter.test.ts"
+    },
+    "AC8": {
+      "at": "2026-10-18T18:34:23.419Z",
+      "note": "Verified by bun test src/review/completion-gate.test.ts"
+    },
+    "AC9": {
+      "at": "2026-10-18T18:34:24.049Z",
+      "note": "8 regressions and deterministic lifecycle fixture pass in PR #975"
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/975"
   },
@@ -137,6 +174,70 @@
       "at": "2026-10-12T20:11:50.456Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/975 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-18T18:34:19.294Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Verified by bun test src/review/ledger.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:34:19.863Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Verified by bun test src/review/slice-dispatch.test.ts src/commands/review-slice.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:34:20.438Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Operator confirmation: write/delegate rejection persists until auto-approval on untrustedOrigin change (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:34:21.011Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Verified by bun test src/tui/ask-user-bridge-arbiter.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:34:21.618Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Verified by bun test src/review/ledger.test.ts src/commands/review-slice.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:34:22.263Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Verified by bun test src/review/slice-dispatch.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:34:22.862Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Verified by bun test src/commands/review-arbiter.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:34:23.419Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Verified by bun test src/review/completion-gate.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:34:24.049Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: 8 regressions and deterministic lifecycle fixture pass in PR #975 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T19:42:35.548Z",
+      "event": "confirmation-minted",
+      "detail": "token 54dadbc28ee4, expires 2026-10-18T19:52:35.522Z"
+    },
+    {
+      "at": "2026-10-18T19:42:48.596Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-18T19:42:56.690Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-18T19:42:56.696Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -174,5 +275,187 @@
     "AC9": {
       "kind": "judged"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-18T18:34:19.294Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb"
+    },
+    {
+      "at": "2026-10-18T18:34:19.863Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb"
+    },
+    {
+      "at": "2026-10-18T18:34:20.438Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb"
+    },
+    {
+      "at": "2026-10-18T18:34:21.011Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb"
+    },
+    {
+      "at": "2026-10-18T18:34:21.618Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb"
+    },
+    {
+      "at": "2026-10-18T18:34:22.263Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb"
+    },
+    {
+      "at": "2026-10-18T18:34:22.862Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb"
+    },
+    {
+      "at": "2026-10-18T18:34:23.419Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb"
+    },
+    {
+      "at": "2026-10-18T18:34:24.049Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb"
+    },
+    {
+      "at": "2026-10-18T19:42:56.696Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb",
+      "headCommit": "8190719d533a51be7de953f4be8942a0ee3f258d",
+      "confirmation": {
+        "mechanism": "terminal-token",
+        "tokenRef": "54dadbc28ee4",
+        "mintedAt": "2026-10-18T19:42:35.522Z",
+        "consumedAt": "2026-10-18T19:42:56.694Z",
+        "boundTo": {
+          "kind": "complete",
+          "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb",
+          "target": "pr:https://github.com/MrCipherSmith/keryx/pull/975"
+        }
+      }
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-18T19:42:56.690Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "427-2026-10-11-review-autonomy-hardening is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "pass",
+          "detail": "terminal token 54dadbc28ee4, minted 2026-10-18T19:42:35.522Z for this criteria checksum (an interactive confirmation step, not proof of who ran it)"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb"
+    }
+  ]
 }

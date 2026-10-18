@@ -9,9 +9,9 @@
   "id": "412",
   "slug": "pii-detector-separator-and-glue-misses-f",
   "title": "PII detector: separator and glue misses found in review round 6",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-07T03:34:23.592Z",
-  "updatedAt": "2026-10-07T08:31:44.590Z",
+  "updatedAt": "2026-10-18T18:24:13.981Z",
   "source": {
     "type": "description",
     "ref": null
@@ -198,6 +198,20 @@
       "at": "2026-10-07T08:31:44.590Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-18T18:24:03.058Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-18T18:24:13.975Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-18T18:24:13.981Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -286,7 +300,77 @@
       },
       "criterion": "AC5",
       "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
+    },
+    {
+      "at": "2026-10-18T18:24:13.981Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93",
+      "headCommit": "632126cb1cfa77d0b5dfd8abdac86608d6bc7703"
     }
   ],
-  "baseBranch": "main"
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-10-18T18:24:13.975Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "6 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "412-2026-10-07-pii-detector-separator-and-glue-misses-f is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 3 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:7c86630ed7eae2f5537225063c30902c422b138a139ab39e0bd73178e5eb6e93"
+    }
+  ]
 }

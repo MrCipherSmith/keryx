@@ -6,7 +6,7 @@
   "target": {
     "kind": "report",
     "ref": "863",
-    "head": "25e6fb45"
+    "head": "42dc573102beed55bf2187b886a72a3c7eb14b27"
   },
   "artifacts": {
     "scope": ".metaproject/flows/395-2026-10-02-telegram-rendering-bot-api/reviews/2026-10-02-ingest-863-r03/scope.md",
@@ -53,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-10-02T17:12:28.762Z",
-  "updatedAt": "2026-10-02T17:12:28.762Z",
+  "createdAt": "2026-10-02T19:30:00.000Z",
+  "updatedAt": "2026-10-02T19:30:00.000Z",
   "flow": {
     "id": "395",
     "path": ".metaproject/flows/395-2026-10-02-telegram-rendering-bot-api"

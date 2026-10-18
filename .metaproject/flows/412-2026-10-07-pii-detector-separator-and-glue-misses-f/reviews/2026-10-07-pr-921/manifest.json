@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-10-07-pr-921",
+  "mode": "attach-review",
+  "status": "closed",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/921",
+    "head": "632126cb1cfa77d0b5dfd8abdac86608d6bc7703"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/412-2026-10-07-pii-detector-separator-and-glue-misses-f/reviews/2026-10-07-pr-921/scope.md",
+    "coverage": ".metaproject/flows/412-2026-10-07-pii-detector-separator-and-glue-misses-f/reviews/2026-10-07-pr-921/coverage.md",
+    "report": ".metaproject/flows/412-2026-10-07-pii-detector-separator-and-glue-misses-f/reviews/2026-10-07-pr-921/report.md",
+    "findings": ".metaproject/flows/412-2026-10-07-pii-detector-separator-and-glue-misses-f/reviews/2026-10-07-pr-921/findings.json",
+    "learning": ".metaproject/flows/412-2026-10-07-pii-detector-separator-and-glue-misses-f/reviews/2026-10-07-pr-921/learning.md",
+    "decisions": ".metaproject/flows/412-2026-10-07-pii-detector-separator-and-glue-misses-f/reviews/2026-10-07-pr-921/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-logic",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-security-code",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-testing-practices",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-10-07T08:40:00.000Z",
+  "updatedAt": "2026-10-07T08:40:00.000Z",
+  "flow": {
+    "id": "412",
+    "path": ".metaproject/flows/412-2026-10-07-pii-detector-separator-and-glue-misses-f"
+  }
+}

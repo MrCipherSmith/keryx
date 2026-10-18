@@ -9,12 +9,12 @@
     "head": "05ce88515a820cd6e185d320fef74cd3b34f6611"
   },
   "artifacts": {
-    "scope": ".metaproject/flows/410-2026-10-05-pii-ssn-guard-second-review/reviews/2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02/scope.md",
-    "coverage": ".metaproject/flows/410-2026-10-05-pii-ssn-guard-second-review/reviews/2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02/coverage.md",
-    "report": ".metaproject/flows/410-2026-10-05-pii-ssn-guard-second-review/reviews/2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02/report.md",
-    "findings": ".metaproject/flows/410-2026-10-05-pii-ssn-guard-second-review/reviews/2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02/findings.json",
-    "learning": ".metaproject/flows/410-2026-10-05-pii-ssn-guard-second-review/reviews/2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02/learning.md",
-    "decisions": ".metaproject/flows/410-2026-10-05-pii-ssn-guard-second-review/reviews/2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02/decisions.md"
+    "scope": ".metaproject/flows/412-2026-10-07-pii-detector-separator-and-glue-misses-f/reviews/2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02/scope.md",
+    "coverage": ".metaproject/flows/412-2026-10-07-pii-detector-separator-and-glue-misses-f/reviews/2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02/coverage.md",
+    "report": ".metaproject/flows/412-2026-10-07-pii-detector-separator-and-glue-misses-f/reviews/2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02/report.md",
+    "findings": ".metaproject/flows/412-2026-10-07-pii-detector-separator-and-glue-misses-f/reviews/2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02/findings.json",
+    "learning": ".metaproject/flows/412-2026-10-07-pii-detector-separator-and-glue-misses-f/reviews/2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02/learning.md",
+    "decisions": ".metaproject/flows/412-2026-10-07-pii-detector-separator-and-glue-misses-f/reviews/2026-10-07-ingest-github-com-mrciphersmith-keryx-pull-916-r02/decisions.md"
   },
   "coverage": [
     {
@@ -56,7 +56,7 @@
   "createdAt": "2026-10-07T04:33:18.468Z",
   "updatedAt": "2026-10-07T04:33:23.521Z",
   "flow": {
-    "id": "410",
-    "path": ".metaproject/flows/410-2026-10-05-pii-ssn-guard-second-review"
+    "id": "412",
+    "path": ".metaproject/flows/412-2026-10-07-pii-detector-separator-and-glue-misses-f"
   }
 }

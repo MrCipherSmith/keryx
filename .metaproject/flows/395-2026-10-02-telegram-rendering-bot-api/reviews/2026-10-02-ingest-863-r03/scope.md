@@ -21,14 +21,14 @@ This is NOT `dropped 0`: nothing ran, so nothing is known.
 ### Refuted by the verifier
 
 verification_mode: annotate
-claims_received: 0
-claims_applied: 0
+claims_received: 2
+claims_applied: 2
 claims_rejected: 0
 verdicts_capped_to_unverifiable: 0
-confirmed: 0
+confirmed: 2
 refuted: 0
 unverifiable: 0
-unverified: 4
+unverified: 2
 
 ### Retained
 

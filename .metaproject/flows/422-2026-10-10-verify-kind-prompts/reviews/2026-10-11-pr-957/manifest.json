@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-10-11-pr-957",
+  "mode": "attach-review",
+  "status": "closed",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/957",
+    "head": "9df3af029dd6ca2f4d0d97a3b83892a76f503f74"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/422-2026-10-10-verify-kind-prompts/reviews/2026-10-11-pr-957/scope.md",
+    "coverage": ".metaproject/flows/422-2026-10-10-verify-kind-prompts/reviews/2026-10-11-pr-957/coverage.md",
+    "report": ".metaproject/flows/422-2026-10-10-verify-kind-prompts/reviews/2026-10-11-pr-957/report.md",
+    "findings": ".metaproject/flows/422-2026-10-10-verify-kind-prompts/reviews/2026-10-11-pr-957/findings.json",
+    "learning": ".metaproject/flows/422-2026-10-10-verify-kind-prompts/reviews/2026-10-11-pr-957/learning.md",
+    "decisions": ".metaproject/flows/422-2026-10-10-verify-kind-prompts/reviews/2026-10-11-pr-957/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-logic",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-security-code",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-testing-practices",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-10-11T08:05:00.000Z",
+  "updatedAt": "2026-10-11T08:05:00.000Z",
+  "flow": {
+    "id": "422",
+    "path": ".metaproject/flows/422-2026-10-10-verify-kind-prompts"
+  }
+}

@@ -9,9 +9,9 @@
   "id": "410",
   "slug": "pii-ssn-guard-second-review",
   "title": "PII: second review of the ssn identifier guard (rounds, fixes and verifier)",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-05T19:27:49.847Z",
-  "updatedAt": "2026-10-07T04:59:05.164Z",
+  "updatedAt": "2026-10-18T18:21:06.459Z",
   "source": {
     "type": "description",
     "ref": null
@@ -266,6 +266,20 @@
       "at": "2026-10-07T04:59:05.164Z",
       "event": "ac-confirmed",
       "detail": "AC8: operator confirmed in polls 117 and 118 (2026-10-07). logic-R3-2 accepted as residual by the operator (poll 99); flow 261 journal marks its four earlier rounds as reconstructed. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:20:58.596Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-18T18:21:06.454Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-18T18:21:06.459Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -437,6 +451,76 @@
         "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
       },
       "criterion": "AC8",
+      "acChecksum": "sha256:04c7ce04ac760848088de37d0a5e7330ef0e09fc2771897969bc066053994807"
+    },
+    {
+      "at": "2026-10-18T18:21:06.459Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:04c7ce04ac760848088de37d0a5e7330ef0e09fc2771897969bc066053994807",
+      "headCommit": "f6068a19dd369d117e39aa8a99333fbec626b399"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-18T18:21:06.454Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "410-2026-10-05-pii-ssn-guard-second-review is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 5 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
       "acChecksum": "sha256:04c7ce04ac760848088de37d0a5e7330ef0e09fc2771897969bc066053994807"
     }
   ]

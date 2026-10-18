@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "hash": "54dadbc28ee43c3747b1750798cc9ecc6c3f206d085ea68c9793f30315786208",
+  "tokenRef": "54dadbc28ee4",
+  "flowId": "427",
+  "kind": "complete",
+  "acChecksum": "sha256:dd6ccbaf8486016aa8fcdd6ad2b55475a430868c5212795092ad3226e28d13bb",
+  "target": "pr:https://github.com/MrCipherSmith/keryx/pull/975",
+  "mintedAt": "2026-10-18T19:42:35.522Z",
+  "expiresAt": "2026-10-18T19:52:35.522Z",
+  "usedAt": "2026-10-18T19:42:56.694Z"
+}

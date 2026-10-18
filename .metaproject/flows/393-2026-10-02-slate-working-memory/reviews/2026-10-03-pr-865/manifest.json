@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-10-03-pr-865",
+  "mode": "attach-review",
+  "status": "closed",
+  "target": {
+    "kind": "pr",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/865",
+    "head": "2c8a6133817cfba318f1a1358b207de83f8bfd3e"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/393-2026-10-02-slate-working-memory/reviews/2026-10-03-pr-865/scope.md",
+    "coverage": ".metaproject/flows/393-2026-10-02-slate-working-memory/reviews/2026-10-03-pr-865/coverage.md",
+    "report": ".metaproject/flows/393-2026-10-02-slate-working-memory/reviews/2026-10-03-pr-865/report.md",
+    "findings": ".metaproject/flows/393-2026-10-02-slate-working-memory/reviews/2026-10-03-pr-865/findings.json",
+    "learning": ".metaproject/flows/393-2026-10-02-slate-working-memory/reviews/2026-10-03-pr-865/learning.md",
+    "decisions": ".metaproject/flows/393-2026-10-02-slate-working-memory/reviews/2026-10-03-pr-865/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-logic",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-security-code",
+      "status": "run",
+      "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-testing-practices",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "createdAt": "2026-10-03T08:53:52.000Z",
+  "updatedAt": "2026-10-03T08:53:52.000Z",
+  "flow": {
+    "id": "393",
+    "path": ".metaproject/flows/393-2026-10-02-slate-working-memory"
+  }
+}

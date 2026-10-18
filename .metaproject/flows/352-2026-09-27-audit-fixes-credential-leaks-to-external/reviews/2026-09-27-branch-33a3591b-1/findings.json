@@ -33,6 +33,11 @@
     "disposition": {
       "state": "acted-on",
       "evidence": "PR #771 (aa530248): runShell try/finally; test shell-bus.test.ts 'a line source that throws mid-loop still leaves the bus and releases the lease'"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified clean at aa530248; bug no longer reproduces"
     }
   },
   {
@@ -63,6 +68,11 @@
     "disposition": {
       "state": "acted-on",
       "evidence": "PR #771 (aa530248): finishWithBudgetSummary returns {aborted}; test agent.test.ts 'flow 352 review r1 (M-1)'"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified clean at aa530248; bug no longer reproduces"
     }
   },
   {
@@ -93,6 +103,11 @@
     "disposition": {
       "state": "acted-on",
       "evidence": "PR #771 (aa530248): enrichPageDeep outer catch disposes; test deep-enrich.test.ts 'a turn that throws still removes the abort listener'"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified clean at aa530248; bug no longer reproduces"
     }
   },
   {
@@ -122,7 +137,7 @@
     "global_id": "2026-09-27-branch-33a3591b-1#MAJOR-3",
     "disposition": {
       "state": "dismissed-deprioritised",
-      "evidence": "docs/requirements/keryx-audit-remediation/findings.md R-M3 (PR #772)"
+      "evidence": "decided-by: Alex Smith; docs/requirements/keryx-audit-remediation/findings.md R-M3 (PR #772)"
     }
   },
   {
@@ -146,7 +161,7 @@
     "global_id": "2026-09-27-branch-33a3591b-1#MINOR-1",
     "disposition": {
       "state": "dismissed-deprioritised",
-      "evidence": "docs/requirements/keryx-audit-remediation/findings.md R-MIN1 (PR #772)"
+      "evidence": "decided-by: Alex Smith; docs/requirements/keryx-audit-remediation/findings.md R-MIN1 (PR #772)"
     }
   },
   {

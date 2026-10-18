@@ -9,15 +9,52 @@
   "id": "419",
   "slug": "telegram-remote-control-relay",
   "title": "Keryx Telegram: remote-control relays approvals, questions and progress",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-09T19:42:55.347Z",
-  "updatedAt": "2026-10-12T05:58:34.181Z",
+  "updatedAt": "2026-10-18T18:31:02.942Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-18T18:30:25.626Z",
+      "note": "Mirrored approval prompts with options verified by src/remote/approval-mirror.test.ts"
+    },
+    "AC2": {
+      "at": "2026-10-18T18:30:26.206Z",
+      "note": "Resolution in both orders verified by src/remote/approval-mirror.test.ts and src/tui/approval-mirror.test.ts"
+    },
+    "AC3": {
+      "at": "2026-10-18T18:30:26.794Z",
+      "note": "Prompt reminders after stated interval verified by src/remote/prompt-reminder.test.ts"
+    },
+    "AC4": {
+      "at": "2026-10-18T18:30:27.681Z",
+      "note": "Commands taking effect and queueing verified by src/remote/command-queued.test.ts"
+    },
+    "AC5": {
+      "at": "2026-10-18T18:30:28.734Z",
+      "note": "Progress notes at wave boundaries verified by src/remote/progress-notes.test.ts"
+    },
+    "AC6": {
+      "at": "2026-10-18T18:30:29.430Z",
+      "note": "Status questions answered from session state verified by src/remote/progress-notes.test.ts"
+    },
+    "AC7": {
+      "at": "2026-10-18T18:30:30.250Z",
+      "note": "Topic archival on shell close and exit verified by src/remote/lifecycle.test.ts and orphan.test.ts"
+    },
+    "AC8": {
+      "at": "2026-10-18T18:30:31.009Z",
+      "note": "Validated against fake Bot API test suite and operator review (PR #978)"
+    },
+    "AC9": {
+      "at": "2026-10-18T18:30:31.839Z",
+      "note": "Docs updated across README, guide and CLI reference; mkdocs build --strict passed"
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/978"
   },
@@ -150,6 +187,65 @@
       "at": "2026-10-12T05:58:34.181Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/978 (base: main)"
+    },
+    {
+      "at": "2026-10-18T18:30:25.626Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Mirrored approval prompts with options verified by src/remote/approval-mirror.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:30:26.206Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Resolution in both orders verified by src/remote/approval-mirror.test.ts and src/tui/approval-mirror.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:30:26.794Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Prompt reminders after stated interval verified by src/remote/prompt-reminder.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:30:27.681Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Commands taking effect and queueing verified by src/remote/command-queued.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:30:28.734Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Progress notes at wave boundaries verified by src/remote/progress-notes.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:30:29.430Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Status questions answered from session state verified by src/remote/progress-notes.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:30:30.250Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Topic archival on shell close and exit verified by src/remote/lifecycle.test.ts and orphan.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:30:31.010Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Validated against fake Bot API test suite and operator review (PR #978) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:30:31.839Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Docs updated across README, guide and CLI reference; mkdocs build --strict passed (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:30:55.038Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-18T18:31:02.926Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-18T18:31:02.942Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -181,5 +277,176 @@
       "kind": "unclassified"
     }
   },
-  "baseBranch": "main"
+  "baseBranch": "main",
+  "signatures": [
+    {
+      "at": "2026-10-18T18:30:25.626Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6"
+    },
+    {
+      "at": "2026-10-18T18:30:26.206Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6"
+    },
+    {
+      "at": "2026-10-18T18:30:26.794Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6"
+    },
+    {
+      "at": "2026-10-18T18:30:27.681Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6"
+    },
+    {
+      "at": "2026-10-18T18:30:28.734Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6"
+    },
+    {
+      "at": "2026-10-18T18:30:29.430Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6"
+    },
+    {
+      "at": "2026-10-18T18:30:30.250Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6"
+    },
+    {
+      "at": "2026-10-18T18:30:31.009Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6"
+    },
+    {
+      "at": "2026-10-18T18:30:31.839Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6"
+    },
+    {
+      "at": "2026-10-18T18:31:02.942Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6",
+      "headCommit": "6824f7776244f3f4db81a488884231ffd45ad88b"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-18T18:31:02.926Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "419-2026-10-09-telegram-remote-control-relay is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:5e8b9079035824ee25b355a656b64a92f578d2249b00a55774d5579b1c005dc6"
+    }
+  ]
 }

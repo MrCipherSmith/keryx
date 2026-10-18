@@ -8,9 +8,9 @@
   "id": "422",
   "slug": "verify-kind-prompts",
   "title": "Verification kind is asked for at every criterion: template, flow and flow-orchestrator skills, freeze warning",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-10T20:06:52.448Z",
-  "updatedAt": "2026-10-11T08:11:44.712Z",
+  "updatedAt": "2026-10-18T18:33:23.406Z",
   "source": {
     "type": "description",
     "ref": null
@@ -44,6 +44,10 @@
     "AC7": {
       "at": "2026-10-11T08:11:44.712Z",
       "note": "git diff --stat of #957 against its merge-base touches no flow dir other than 422"
+    },
+    "AC8": {
+      "at": "2026-10-18T18:31:59.407Z",
+      "note": "Verified by inspection: flows 423-425 created after merge carry verification kinds on criteria"
     }
   },
   "pr": {
@@ -494,6 +498,25 @@
       "at": "2026-10-11T08:11:44.712Z",
       "event": "ac-confirmed",
       "detail": "AC7: git diff --stat of #957 against its merge-base touches no flow dir other than 422 (signed: claude-agent (session 2026-10-11) [stated])"
+    },
+    {
+      "at": "2026-10-18T18:31:59.407Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Verified by inspection: flows 423-425 created after merge carry verification kinds on criteria (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-18T18:33:16.286Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-18T18:33:23.403Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-18T18:33:23.406Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -605,6 +628,87 @@
         "source": "`--signed-by` flag"
       },
       "criterion": "AC7",
+      "acChecksum": "sha256:02557864d6c44c05851d39d733db3d99aeba0c3ada05203419cba0f9c87cfd3b"
+    },
+    {
+      "at": "2026-10-18T18:31:59.407Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:02557864d6c44c05851d39d733db3d99aeba0c3ada05203419cba0f9c87cfd3b"
+    },
+    {
+      "at": "2026-10-18T18:33:23.406Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:02557864d6c44c05851d39d733db3d99aeba0c3ada05203419cba0f9c87cfd3b",
+      "headCommit": "9df3af029dd6ca2f4d0d97a3b83892a76f503f74"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-18T18:33:23.403Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "12 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "skipped",
+          "detail": "folder-committed gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
       "acChecksum": "sha256:02557864d6c44c05851d39d733db3d99aeba0c3ada05203419cba0f9c87cfd3b"
     }
   ]
