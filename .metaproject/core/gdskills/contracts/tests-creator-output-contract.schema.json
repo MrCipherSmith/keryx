@@ -95,7 +95,9 @@
         "properties": {
           "path": { "type": "string", "minLength": 1, "description": "Repo-relative path exactly as the resolver printed it" },
           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The resolver's sha256 of the file" },
-          "how": { "type": "string", "enum": ["read", "followed", "n/a"] }
+          "how": { "type": "string", "enum": ["read", "followed", "n/a"] },
+          "anchor": { "type": "string", "description": "Optional. The heading of the section read, exactly as the resolver printed it for an entry promoted by a declared condition (flow 462)" },
+          "summary": { "type": "string", "description": "Optional. What the section says, in the worker's own words; for a promoted entry `keryx skills contracts validate --resolved` checks it against the anchored section (flow 462)" }
         }
       }
     },
