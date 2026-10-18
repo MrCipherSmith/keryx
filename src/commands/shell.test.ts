@@ -908,6 +908,7 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "shell_task_wait",
     "skill_load",
     "skills_catalog",
+    "skills_resolve_context",
     "slate_note",
     "slate_read",
     "slate_trail",

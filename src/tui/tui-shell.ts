@@ -214,6 +214,16 @@ import {
 } from "./jev-edit-guard-inspector";
 import { readJevEditGuardConfig, writeJevEditGuardEnabled } from "../review/jev-edit-guard-config";
 import { editGuardTodayStats, readEditGuardLogRecords, recentEditGuardFlags } from "../review/jev-edit-guard-log";
+// flow 461: the project rules/implementation context line and `/projectctx` modal.
+import { writeProjectContextEnforcement } from "../gdskills/project-context-config";
+import { loadProjectContextStatus, type ProjectContextStatus } from "../gdskills/project-context-status";
+import {
+  PROJECT_CONTEXT_CONFIG_REFUSAL,
+  isProjectContextCommand,
+  openProjectContext,
+  parseProjectContextCommand,
+  renderProjectContextSidebarValue,
+} from "./project-context-inspector";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
 import {
@@ -4431,6 +4441,10 @@ export async function launchTuiAgentShell(opts: {
     // paint happens after an async read rather than synchronously here.
     const sbEditGuard = new otui.BoxRenderable(r, { id: "sb-edit-guard", flexDirection: "column", flexShrink: 0 });
     sidebar.add(sbEditGuard);
+    // Flow 461: "ProjectCtx" row — hidden while there are no project rules and
+    // no recorded resolve; filled by `refreshProjectContextSidebar` below.
+    const sbProjectCtx = new otui.BoxRenderable(r, { id: "sb-project-ctx", flexDirection: "column", flexShrink: 0 });
+    sidebar.add(sbProjectCtx);
     // Flow 346: "External" row — always shows one line ("external: on" /
     // "external: off"), unlike the zero-rows-while-off idiom above, since
     // this is a general switch worth seeing even in its default state.
@@ -5245,6 +5259,64 @@ export async function launchTuiAgentShell(opts: {
         })
         .catch((error: unknown) => {
           io.onSystem?.(`editguard: ${error instanceof Error ? error.message : String(error)}\n`);
+        });
+
+    // --- flow 461: project rules and implementation context --------------------
+    // Settings, rule count and the last recorded resolve live in PROJECT files;
+    // `loadProjectContextStatus` never throws, so the first paint is async but safe.
+    const projectContextDir = (): string => opts.session?.cwd ?? process.cwd();
+    let projectContextStatus: ProjectContextStatus | undefined;
+    const refreshProjectContextSidebar = (): void => {
+      clearTranscriptChildren(sbProjectCtx);
+      const value = projectContextStatus === undefined ? undefined : renderProjectContextSidebarValue(projectContextStatus);
+      if (value === undefined) return;
+      sbProjectCtx.add(new otui.TextRenderable(r, { id: "sb-project-ctx-k", content: otui.t`${dimChunk(otui, "ProjectCtx")}`, marginTop: 1 }));
+      sbProjectCtx.add(
+        new otui.TextRenderable(r, {
+          id: "sb-project-ctx-v",
+          content: otui.t`${dimChunk(otui, value)}`,
+          onMouseDown: () => {
+            showProjectContext();
+          },
+        }),
+      );
+    };
+    const reloadProjectContext = async (): Promise<ProjectContextStatus> => {
+      const next = await loadProjectContextStatus(projectContextDir());
+      projectContextStatus = next;
+      refreshProjectContextSidebar();
+      return next;
+    };
+    void reloadProjectContext().catch(() => {});
+    const showProjectContext = (): void => {
+      void reloadProjectContext()
+        .then((initial) => {
+          openProjectContext(otui, chrome, {
+            initial,
+            loadStatus: reloadProjectContext,
+            setEnforcement: (mode) => writeProjectContextEnforcement(projectContextDir(), mode),
+            onKeypress: (handler) => onKeypress(r, handler),
+            inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+            onError: (message) => io.onSystem?.(`${message.startsWith("projectctx:") ? message : `projectctx: ${message}`}\n`),
+          });
+        })
+        .catch((error: unknown) => {
+          io.onSystem?.(`projectctx: ${error instanceof Error ? error.message : String(error)}\n`);
+        });
+    };
+    const setProjectContextEnforcement = (mode: "warn" | "block"): Promise<void> =>
+      loadProjectContextStatus(projectContextDir())
+        .then(async (current) => {
+          if (current.configError !== undefined) {
+            io.onSystem?.(`${PROJECT_CONTEXT_CONFIG_REFUSAL}\n`);
+            return;
+          }
+          await writeProjectContextEnforcement(projectContextDir(), mode);
+          await reloadProjectContext();
+          io.onSystem?.(`ProjectCtx: ${mode}\n`);
+        })
+        .catch((error: unknown) => {
+          io.onSystem?.(`projectctx: ${error instanceof Error ? error.message : String(error)}\n`);
         });
 
     // --- flow 346: the EXTERNAL switch ---------------------------------------
@@ -7888,6 +7960,7 @@ export async function launchTuiAgentShell(opts: {
         plan: runPlanCommand,
         guard: setGuardEnabled,
         editGuard: setEditGuardEnabled,
+        projectContext: setProjectContextEnforcement,
         route: setRoutingEnabled,
         external: setExternalEnabled,
         externalAgents: (arg) => runExternalAgentsCommand(arg, sessionCwd),
@@ -9267,6 +9340,17 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           showEditGuard();
+          return;
+        }
+        if (isProjectContextCommand(command.name)) {
+          const parsed = parseProjectContextCommand(line);
+          if (parsed.kind === "invalid") {
+            io.onSystem?.(`${parsed.message}\n`);
+          } else if (parsed.kind === "set") {
+            void setProjectContextEnforcement(parsed.mode);
+          } else {
+            showProjectContext();
+          }
           return;
         }
         if (isRenderingCommand(command.name)) {

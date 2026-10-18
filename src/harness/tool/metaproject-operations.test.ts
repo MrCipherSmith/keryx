@@ -3,7 +3,7 @@ import path from "node:path";
 import { expect, test } from "bun:test";
 import { validateAgainstSchemaObject } from "../../contracts/validator";
 import { toMcpTools } from "../../mcp/metaproject-tools";
-import type { MetaprojectPort } from "./metaproject-port";
+import type { MetaprojectPort, SkillsResolveContextResult } from "./metaproject-port";
 import {
   formatMemory,
   formatTestRelated,
@@ -48,6 +48,7 @@ const EXPECTED_NAMES = [
   "search_code",
   "skill_load",
   "skills_catalog",
+  "skills_resolve_context",
   "test_related",
   "wiki_ask",
   "wiki_backlinks",
@@ -656,6 +657,114 @@ test("a skill_load result validates against skill-load-result.schema.json", () =
   const validation = validateAgainstSchemaObject(schema, result);
   expect(validation.errors).toEqual([]);
   expect(validation.valid).toBe(true);
+});
+
+// --- skills_resolve_context (docs/requirements/keryx-project-implementation-rules) ---
+
+const RESOLVED: SkillsResolveContextResult = {
+  schema: 1,
+  for: "implement",
+  files: ["src/a.ts"],
+  entries: [
+    {
+      kind: "rule",
+      source: "project",
+      path: ".metaproject/rules/project/styling.mdc",
+      sha256: "abcdef0123456789abcdef",
+      bytes: 100,
+      reason: "glob:src/**",
+      tier: "must_read",
+    },
+  ],
+  budget: { limitBytes: 131072, usedBytes: 100, exceeded: false, limitSource: "default" },
+  warnings: [],
+};
+
+test("skills_resolve_context passes the validated input to the port and prints the CLI Markdown", async () => {
+  const seen: unknown[] = [];
+  const port: MetaprojectPort = {
+    ...recordingPort().port,
+    skillsResolveContext: async (input) => {
+      seen.push(input);
+      return RESOLVED;
+    },
+  };
+  const result = await op("skills_resolve_context").invoke(port, {
+    files: ["src/a.ts", "", 3],
+    for: "implement",
+    task_type: "ui_component",
+    max_bytes: 4096,
+  });
+  expect(result.isError).toBe(false);
+  expect(seen).toEqual([{ files: ["src/a.ts"], for: "implement", taskType: "ui_component", maxBytes: 4096 }]);
+  expect(result.output).toContain("# skills resolve-context (implement)");
+  expect(result.output).toContain(".metaproject/rules/project/styling.mdc — project rule, glob:src/**, 100 bytes, sha256 abcdef012345");
+});
+
+test("skills_resolve_context refuses a missing 'files' or a bad 'for' without calling the port", async () => {
+  let calls = 0;
+  const port: MetaprojectPort = {
+    ...recordingPort().port,
+    skillsResolveContext: async () => {
+      calls += 1;
+      return RESOLVED;
+    },
+  };
+  expect((await op("skills_resolve_context").invoke(port, { for: "implement" })).output).toContain("'files'");
+  expect((await op("skills_resolve_context").invoke(port, { files: [], for: "implement" })).isError).toBe(true);
+  expect((await op("skills_resolve_context").invoke(port, { files: ["a.ts"], for: "deploy" })).output).toContain("implement, test or review");
+  expect(calls).toBe(0);
+});
+
+test("skills_resolve_context surfaces a port error as an error result, and an absent method as 'not available'", async () => {
+  const failing: MetaprojectPort = {
+    ...recordingPort().port,
+    skillsResolveContext: async () => ({ ...RESOLVED, entries: [], error: "boom" }),
+  };
+  const failed = await op("skills_resolve_context").invoke(failing, { files: ["a.ts"], for: "test" });
+  expect(failed).toEqual({ output: "skills_resolve_context failed: boom", isError: true });
+
+  const missing = await op("skills_resolve_context").invoke(recordingPort().port, { files: ["a.ts"], for: "test" });
+  expect(missing.isError).toBe(true);
+  expect(missing.output).toMatch(/not available/);
+});
+
+test("skills_resolve_context is a gdskills-module read op present in all three projections (agent/harness/MCP)", () => {
+  const descriptor = METAPROJECT_OPERATIONS.find((o) => o.name === "skills_resolve_context");
+  expect(descriptor?.module).toBe("gdskills");
+  expect(descriptor?.risk).toBe("read");
+
+  const { port } = recordingPort();
+  expect(toInteractiveTools(METAPROJECT_OPERATIONS, port).map((t) => t.definition.name)).toContain("skills_resolve_context");
+  expect(toToolDefinitions(METAPROJECT_OPERATIONS).map((d) => d.toolId)).toContain("metaproject:skills_resolve_context");
+  expect(toMcpTools(METAPROJECT_OPERATIONS, () => port).map((t) => t.name)).toContain("skills_resolve_context");
+});
+
+test("a skills_resolve_context result validates against the mirrored schema, and the in-code output schema names the same fields", () => {
+  const mirrored = JSON.parse(
+    readFileSync(
+      path.join(
+        import.meta.dir,
+        "..",
+        "..",
+        "..",
+        "docs",
+        "requirements",
+        "keryx-project-implementation-rules",
+        "schemas",
+        "skills-resolve-context-result.schema.json",
+      ),
+      "utf8",
+    ),
+  ) as { required: string[]; properties: Record<string, unknown> };
+  const validation = validateAgainstSchemaObject(mirrored as Record<string, unknown>, RESOLVED);
+  expect(validation.errors).toEqual([]);
+  expect(validation.valid).toBe(true);
+  expect(validateAgainstSchemaObject(mirrored as Record<string, unknown>, { ...RESOLVED, for: "deploy" }).valid).toBe(false);
+
+  const schema = op("skills_resolve_context").outputSchema as { required: string[]; properties: Record<string, unknown> };
+  expect([...schema.required].sort()).toEqual([...mirrored.required].sort());
+  expect(Object.keys(schema.properties).sort()).toEqual(Object.keys(mirrored.properties).sort());
 });
 
 // --- F-002 / F-007 (flow 234 review): the memory formatter's rendered text --

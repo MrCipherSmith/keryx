@@ -175,6 +175,7 @@ import {
   renderTasksDoc,
 } from "./templates";
 import type { NextTaskDecision } from "./machine";
+import { checkTaskProjectContext } from "./task-project-context";
 import type {
   FlowCheckResult,
   FlowCompleteResult,
@@ -1144,13 +1145,22 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
-    async taskDone({ cwd, id, taskId, disposition, reason, acRefs, evidenceRefs, runLink }): Promise<FlowState> {
+    async taskDone({ cwd, id, taskId, disposition, reason, acRefs, evidenceRefs, runLink, projectContext }): Promise<FlowState> {
       return mutate(cwd, id, async ({ dir, flow }) => {
       await assertAcIntact(cwd, dir, flow);
       const task = flow.tasks.find((item) => item.id.toUpperCase() === taskId.toUpperCase());
       if (!task) {
         throw new Error(`Task not found: ${taskId}. Known: ${flow.tasks.map((t) => t.id).join(", ")}`);
       }
+      // Before any change to the task, so a refusal leaves the record as found.
+      const contextCheck = await checkTaskProjectContext({
+        taskId: task.id,
+        kind: task.kind,
+        disposition: disposition ?? task.disposition ?? "completed",
+        projectRoot: cwd,
+        resultFile: projectContext?.resultFile,
+        resolvedFile: projectContext?.resolvedFile,
+      });
       task.status = "done";
       // Disposition is distinct from status (TM-01 §6). Honor an explicit
       // disposition; otherwise default a completed task to "completed".
@@ -1210,7 +1220,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       if (task.disposition === "failed" || task.disposition === "blocked") {
         recordAttempt(task, task.disposition, now(), task.dispositionReason);
       }
-      return save(cwd, dir, flow, "task-done", `${task.id}: ${task.title}`);
+      return save(cwd, dir, flow, "task-done", `${task.id}: ${task.title}${contextCheck.journal ? ` — ${contextCheck.journal}` : ""}`);
       });
     },
 

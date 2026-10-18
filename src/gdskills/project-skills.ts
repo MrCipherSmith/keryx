@@ -44,16 +44,26 @@ export type CreateProjectSkillOptions = {
    */
   version?: string | undefined;
   format?: ProjectSkillFormat | undefined;
+  /**
+   * The task types (`ui_component`, `store_logic`, `service_api`, `fix`, `mixed`,
+   * or a project's own) this skill supplements the implementer for; recorded in
+   * the registry for `keryx skills resolve-context`.
+   */
+  taskTypes?: string[] | undefined;
   dryRun?: boolean | undefined;
 };
 
 export type ProjectSkillRegistryEntry = {
+  /** Absent on a registry written before flow 461; read as `skill`. */
+  kind?: "skill";
   module: string;
   name: string;
   target: string;
   path: string;
   version: string;
   status: "active";
+  /** Absent when the skill declares none. */
+  taskTypes?: string[];
   updatedAt: string;
 };
 
@@ -251,12 +261,14 @@ export async function createProjectSkill(
       });
 
       await updateManifest(projectRoot, {
+        kind: "skill",
         module: moduleName,
         name: skillName,
         target: options.target,
         path: relativeSkillPath,
         version: options.version ?? VERSION,
         status: "active",
+        ...(options.taskTypes !== undefined && options.taskTypes.length > 0 ? { taskTypes: options.taskTypes } : {}),
         updatedAt: new Date().toISOString(),
       });
       await updateSkillsCatalog(projectRoot);

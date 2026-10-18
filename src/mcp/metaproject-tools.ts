@@ -116,6 +116,22 @@ async function invokeStructured(
       const k = typeof params.k === "number" ? params.k : undefined;
       return port.wikiAsk({ question, ...(k !== undefined ? { k } : {}), harnessIdentity });
     }
+    case "skills_resolve_context": {
+      // Structured, so an MCP caller gets the same record `keryx skills resolve-context --json` prints.
+      const files = Array.isArray(params.files) ? params.files.filter((f): f is string => typeof f === "string" && f.trim() !== "") : [];
+      const forWhat = params.for;
+      if (port.skillsResolveContext === undefined || files.length === 0 || (forWhat !== "implement" && forWhat !== "test" && forWhat !== "review")) {
+        return op.invoke(port, params);
+      }
+      const taskType = stringParam(params, "task_type");
+      const maxBytes = typeof params.max_bytes === "number" && Number.isInteger(params.max_bytes) && params.max_bytes > 0 ? params.max_bytes : undefined;
+      return port.skillsResolveContext({
+        files,
+        for: forWhat,
+        ...(taskType !== undefined && taskType !== "" ? { taskType } : {}),
+        ...(maxBytes !== undefined ? { maxBytes } : {}),
+      });
+    }
     default:
       // Any operation without a bespoke structured case (flows 043/044: graph_path,
       // test_related, health_status, graph_symbol, repomap) is invoked via

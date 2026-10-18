@@ -42,6 +42,7 @@ import {
   type RepomapOptions,
   type RepomapResult as GdgraphRepomapResult,
 } from "../../gdgraph/repomap";
+import { resolveProjectContext } from "../../gdskills/context-resolver";
 import { parseSkillFrontmatter } from "../../gdskills/skill-frontmatter";
 import { createMemoryService } from "../../memory/service";
 import { acceptedCurrentSearchFilters, clipAutomaticRecallText, MAX_AUTOMATIC_RECALL_RESULTS } from "../../memory/relevant";
@@ -78,6 +79,7 @@ import type {
   SkillLoadResult,
   SkillsCatalogEntry,
   SkillsCatalogResult,
+  SkillsResolveContextResult,
   TestRelatedResult,
   WikiAskResult,
   WikiBacklinksResult,
@@ -1366,6 +1368,28 @@ export function createMetaprojectAdapter(
       // (additionalProperties: false), so there is nowhere to put one anyway.
       const skills = await walkSkillCatalog(cwd);
       return { skills, generatedAt: deps.now() };
+    },
+
+    async skillsResolveContext(input): Promise<SkillsResolveContextResult> {
+      try {
+        return await resolveProjectContext({
+          projectRoot: cwd,
+          files: input.files,
+          for: input.for,
+          ...(input.taskType !== undefined ? { taskType: input.taskType } : {}),
+          ...(input.maxBytes !== undefined ? { maxBytes: input.maxBytes } : {}),
+        });
+      } catch (cause) {
+        return {
+          schema: 1,
+          for: input.for,
+          files: [],
+          entries: [],
+          budget: { limitBytes: 0, usedBytes: 0, exceeded: false, limitSource: "default" },
+          warnings: [],
+          error: errorMessage(cause),
+        };
+      }
     },
 
     async loadSkill(input): Promise<SkillLoadResult> {

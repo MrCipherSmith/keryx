@@ -660,6 +660,8 @@ export interface FlowService {
     /** Acceptance-criterion ids this task addresses (v2 field, previously unwritable). */
     acRefs?: string[] | undefined;
     runLink?: TaskRunLink | undefined;
+    /** The worker's result and the resolve-context output it was dispatched with; checked for implement/test tasks. */
+    projectContext?: { resultFile?: string | undefined; resolvedFile?: string | undefined } | undefined;
   }): Promise<FlowState>;
   /**
    * Record one execution attempt against a task: increments `attempts.count`

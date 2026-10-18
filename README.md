@@ -240,7 +240,7 @@ affected graph supplies deterministically, in one command.
 ├── memory/               # lessons, decisions, constraints, known mistakes
 ├── skills/               # bundled agent skills and routing
 ├── project-skills/       # skills generated from your own modules
-├── rules/                # your AGENTS.md / CLAUDE.md as project rules
+├── rules/                # bundled rules; rules/project/ holds yours and is read first
 ├── data/gdgraph/         # graph artifacts, module map, query results
 ├── data/testing/         # test context, related tests, normalized reports
 ├── data/health/          # normalized health artifacts and trends
@@ -254,6 +254,15 @@ a human wants to look at it (`keryx dash`):
 <p align="center">
   <img src="https://raw.githubusercontent.com/MrCipherSmith/keryx/main/docs/assets/dashboard.png" alt="The keryx dashboard: health score, attention signals, and the enabled modules" width="880">
 </p>
+
+### Your rules, applied first
+
+`keryx skills import --rules <dir>` copies your rule files into
+`.metaproject/rules/project/`. When an agent is about to write code or tests,
+`keryx skills resolve-context` lists which rules and skills it must read —
+yours before the bundled ones — and the task is checked against what the agent
+says it read (`warn` by default, `block` on request). See
+[Make agents follow my project's own rules](https://github.com/MrCipherSmith/keryx/blob/main/docs/docs/guides/apply-project-rules.md).
 
 ## The agent harness
 

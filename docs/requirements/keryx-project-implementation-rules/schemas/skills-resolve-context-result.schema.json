@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "keryx-project-implementation-rules/skills-resolve-context-result.schema.json",
+  "title": "SkillsResolveContextResult",
+  "description": "Output contract for the skills_resolve_context MetaprojectOperation: the record `keryx skills resolve-context --json` prints, plus an `error` that stands in for a throw.",
+  "type": "object",
+  "required": ["schema", "for", "files", "entries", "budget", "warnings"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": 1 },
+    "for": { "enum": ["implement", "test", "review"] },
+    "files": { "type": "array", "items": { "type": "string" } },
+    "entries": { "type": "array", "items": { "$ref": "#/definitions/ContextEntry" } },
+    "budget": {
+      "type": "object",
+      "required": ["limitBytes", "usedBytes", "exceeded", "limitSource"],
+      "additionalProperties": false,
+      "properties": {
+        "limitBytes": { "type": "integer", "minimum": 0 },
+        "usedBytes": { "type": "integer", "minimum": 0 },
+        "exceeded": { "type": "boolean", "description": "A signal to raise gdskills.projectContext.maxBytes; no rule is cut." },
+        "limitSource": { "enum": ["default", "config", "flag"] }
+      }
+    },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "error": { "type": "string", "description": "Set when the resolve could not run; the other fields are then empty." }
+  },
+  "definitions": {
+    "ContextEntry": {
+      "type": "object",
+      "required": ["kind", "source", "path", "sha256", "bytes", "reason", "tier"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["rule", "skill", "contract"] },
+        "source": { "enum": ["project", "bundled"] },
+        "path": { "type": "string", "description": "Project-relative, posix; absolute for a linked rule whose origin is outside the project." },
+        "sha256": { "type": "string" },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "reason": { "type": "string", "description": "glob:<g>, always, task-type:<t>, replaces-bundled, route, bundled-default or referenced-by:<path>." },
+        "tier": { "enum": ["must_read", "on_demand"] },
+        "description": { "type": "string" },
+        "index": { "const": true },
+        "linked": { "const": true },
+        "shadows": { "type": "string", "description": "The bundled rule this project rule replaces." },
+        "also_at": { "type": "array", "items": { "type": "string" }, "description": "Other project paths with the same sha256; citing any of them counts." }
+      }
+    }
+  }
+}

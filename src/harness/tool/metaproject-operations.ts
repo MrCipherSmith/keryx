@@ -17,6 +17,7 @@
 // docs/requirements/keryx-metaproject-native/schemas/metaproject-operation.schema.json.
 
 import { STALE_NOTE, UNKNOWN_NOTE } from "../../gdgraph/staleness";
+import { renderResolutionMarkdown } from "../../gdskills/resolve-context-command";
 import {
   RANKING_SCORE_LABEL,
   formatRankingScore,
@@ -38,6 +39,7 @@ import type {
   RepomapResult,
   SkillLoadResult,
   SkillsCatalogResult,
+  SkillsResolveContextResult,
   TestRelatedResult,
   WikiAskResult,
   WikiBacklinksResult,
@@ -358,6 +360,15 @@ export function formatSkillLoad(result: SkillLoadResult): InteractiveToolResult 
     return { output: `skill_load: no skill found for '${result.name}'.`, isError: true };
   }
   return { output: result.content, isError: false };
+}
+
+/** Render a structured `skillsResolveContext` result: the same Markdown `keryx skills resolve-context` prints. */
+export function formatSkillsResolveContext(result: SkillsResolveContextResult): InteractiveToolResult {
+  if (result.error !== undefined) {
+    return { output: `skills_resolve_context failed: ${result.error}`, isError: true };
+  }
+  const warnings = result.warnings.map((warning) => `warning: ${warning}`);
+  return { output: [renderResolutionMarkdown(result).trimEnd(), ...warnings].join("\n"), isError: false };
 }
 
 // --- object result schemas (structured tool output) ---------------------------
@@ -1382,6 +1393,21 @@ const SKILL_LOAD_OUTPUT_SCHEMA: Record<string, unknown> = {
   required: ["name", "path", "content", "found"],
 };
 
+// Mirrors docs/requirements/keryx-project-implementation-rules/schemas/skills-resolve-context-result.schema.json
+const SKILLS_RESOLVE_CONTEXT_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    schema: { type: "integer" },
+    for: { type: "string", enum: ["implement", "test", "review"] },
+    files: { type: "array" },
+    entries: { type: "array" },
+    budget: { type: "object" },
+    warnings: { type: "array" },
+    error: { type: "string" },
+  },
+  required: ["schema", "for", "files", "entries", "budget", "warnings"],
+};
+
 export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
   {
     name: "search_code",
@@ -1937,6 +1963,52 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
         return name.error;
       }
       return formatSkillLoad(await port.loadSkill({ name: name.value }));
+    },
+  },
+  {
+    name: "skills_resolve_context",
+    risk: "read",
+    module: "gdskills",
+    description:
+      "Resolve which project rules and project skills must be read before writing, testing or reviewing code in " +
+      "the given files (`keryx skills resolve-context`). Input: { files: string[], for: \"implement\"|\"test\"|" +
+      "\"review\", task_type?: string, max_bytes?: integer }. Returns must_read and on_demand entries, project " +
+      "first and bundled second, each with its path, sha256 and the reason it matched, plus the byte budget. " +
+      "Read every must_read entry in full and cite each in the result's `project_context_applied`.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        files: { type: "array", items: { type: "string" }, minItems: 1 },
+        for: { type: "string", enum: ["implement", "test", "review"] },
+        task_type: { type: "string" },
+        max_bytes: { type: "integer", minimum: 1 },
+      },
+      required: ["files", "for"],
+      additionalProperties: false,
+    },
+    outputSchema: SKILLS_RESOLVE_CONTEXT_OUTPUT_SCHEMA,
+    invoke: async (port, input) => {
+      if (port.skillsResolveContext === undefined) {
+        return { output: "skills_resolve_context is not available in this session.", isError: true };
+      }
+      const files = Array.isArray(input.files) ? input.files.filter((file): file is string => typeof file === "string" && file.trim() !== "") : [];
+      if (files.length === 0) {
+        return { output: "skills_resolve_context requires a non-empty 'files' array of strings", isError: true };
+      }
+      const forWhat = input.for;
+      if (forWhat !== "implement" && forWhat !== "test" && forWhat !== "review") {
+        return { output: "skills_resolve_context requires 'for' to be implement, test or review", isError: true };
+      }
+      const taskType = typeof input.task_type === "string" && input.task_type !== "" ? input.task_type : undefined;
+      const maxBytes = typeof input.max_bytes === "number" && Number.isInteger(input.max_bytes) && input.max_bytes > 0 ? input.max_bytes : undefined;
+      return formatSkillsResolveContext(
+        await port.skillsResolveContext({
+          files,
+          for: forWhat,
+          ...(taskType !== undefined ? { taskType } : {}),
+          ...(maxBytes !== undefined ? { maxBytes } : {}),
+        }),
+      );
     },
   },
   // --- flow 242 (forgetting) lane C: additive OPTIONAL read operation --------

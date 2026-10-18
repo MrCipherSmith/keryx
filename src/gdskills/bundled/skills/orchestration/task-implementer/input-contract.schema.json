@@ -134,6 +134,11 @@
         "context_path": {
           "type": "string",
           "description": "Job context document read at the start of Phase 2, e.g. .metaproject/jobs/<job_name>/ai/context.md"
+        },
+        "resolved_context_file": {
+          "type": "string",
+          "description": "Output of `keryx skills resolve-context --for implement --out <path>` for this task, made by the dispatcher. Present => Phase 2 reads its `must_read` entries instead of resolving again, and the result must carry `project_context_applied`. Absent => Phase 2 runs the resolver itself.",
+          "examples": [".metaproject/data/flows/461/task-1.resolved.json"]
         }
       }
     },

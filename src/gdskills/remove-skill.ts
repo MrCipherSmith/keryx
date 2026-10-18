@@ -719,6 +719,13 @@ Remove a project skill: the inverse of \`keryx skills create\` and
 
 Usage:
   keryx skills remove <module>/<name> [--dry-run] [--json]
+  keryx skills remove --rule <ref> [--dry-run] [--json]
+
+--rule removes a rule \`keryx skills import --rules\` registered: its copy under
+.metaproject/rules/project/, the directories that leaves empty, and its registry
+entry. A linked rule loses its entry only; its origin file is never touched. A
+file under rules/project/ that was not imported, and anything under rules/core/,
+is refused and left alone.
 
 Removes, in this order, and lists each as removed or absent:
   - the verification report under .metaproject/data/gdskills/reports/

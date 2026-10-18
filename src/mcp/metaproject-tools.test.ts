@@ -1,7 +1,8 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { runResolveContextCommand } from "../gdskills/resolve-context-command";
 import { toMcpTools } from "./metaproject-tools";
 import { METAPROJECT_OPERATIONS } from "../harness/tool/metaproject-operations";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
@@ -52,6 +53,7 @@ test("every unified metaproject tool is invocable via MCP (no 'unknown operation
     repomap: {},
     wiki_ask: { question: "how?" },
     wiki_backlinks: { file: "src/x.ts" },
+    skills_resolve_context: { files: ["src/a.ts"], for: "implement" },
   };
 
   for (const tool of tools) {
@@ -101,6 +103,42 @@ test("R1-F4: memory_search filters hits by the bound harness identity in context
     };
     expect(asCodex.hits.length).toBe(1);
   } finally {
+    rmSync(project, { recursive: true, force: true });
+  }
+});
+
+// AC16: the resolver is an MCP tool, and a call returns the same entries as the CLI.
+test("AC16: skills_resolve_context is listed as a read-only tool and a call returns the CLI's entries", async () => {
+  const project = mkdtempSync(path.join(tmpdir(), "keryx-metaproject-tools-ctx-"));
+  const logSpy = spyOn(console, "log").mockImplementation(() => undefined);
+  try {
+    mkdirSync(path.join(project, ".metaproject", "rules", "project"), { recursive: true });
+    writeFileSync(path.join(project, ".metaproject", "metaproject.json"), "{}\n", "utf8");
+    writeFileSync(
+      path.join(project, ".metaproject", "rules", "project", "styling.mdc"),
+      "---\ndescription: styling\nglobs: src/**\nalwaysApply: false\n---\nUse tokens.\n",
+      "utf8",
+    );
+
+    const tools = toMcpTools();
+    const tool = tools.find((t) => t.name === "skills_resolve_context");
+    expect(tool).toBeDefined();
+    expect(tool?.mutating).toBe(false);
+    expect(tool?.module).toBe("gdskills");
+    expect((tool?.inputSchema as { required?: string[] }).required).toEqual(["files", "for"]);
+
+    const viaMcp = (await tool?.invoke(project, { files: ["src/a.ts", "src/b.ts"], for: "implement" })) as {
+      entries: Array<{ path: string }>;
+      budget: unknown;
+    };
+    const viaCli = await runResolveContextCommand(["--files", "src/a.ts,src/b.ts", "--for", "implement", "--json"], project);
+    expect(viaMcp).toEqual(viaCli);
+    expect(viaMcp.entries.map((entry) => entry.path)).toEqual([".metaproject/rules/project/styling.mdc"]);
+
+    const refused = (await tool?.invoke(project, { files: ["src/a.ts"], for: "deploy" })) as { output?: string; isError?: boolean };
+    expect(refused.isError).toBe(true);
+  } finally {
+    logSpy.mockRestore();
     rmSync(project, { recursive: true, force: true });
   }
 });
