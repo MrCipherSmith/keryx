@@ -57,6 +57,7 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
 import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interactive-agent-tools";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
+import { createOrcaReporter, type OrcaReporter } from "../integrations/service";
 import { approvalCauseLine, causeOfMeta } from "./approval-cause";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
 import {
@@ -1711,7 +1712,18 @@ function formatUsage(usage: NormalizedUsage | undefined): string {
  * real `configDir` can observe what gets persisted without touching the
  * operator's actual permissions file.
  */
-export async function runAgentRepl(
+export async function runAgentRepl(...args: Parameters<typeof runAgentReplWithOrca>): Promise<void> {
+  const orca = args[1].orcaReporter ?? createOrcaReporter({
+    onError: () => { process.stderr.write("[orca] event delivery unavailable; disabled for this session\n"); },
+  });
+  args[1] = { ...args[1], orcaReporter: orca };
+  try {
+    orca.report("idle");
+    await runAgentReplWithOrca(...args);
+  } finally { await orca.release(); }
+}
+
+async function runAgentReplWithOrca(
   lines: AsyncIterable<string>,
   rich: {
     printPrompt: () => void;
@@ -1736,6 +1748,7 @@ export async function runAgentRepl(
     signal?: AbortSignal;
     /** Deterministic interactive recovery test seams. */
     recovery?: import("./agent").InteractiveRecovery;
+    orcaReporter?: OrcaReporter;
   },
   deps: AgentDeps,
   metaprojectPort: MetaprojectPort,
@@ -1834,9 +1847,15 @@ export async function runAgentRepl(
   // A SINGLE line consumer shared by the main loop and the approval prompt, so an
   // approval read (mid-turn, while the main loop is suspended) never races it.
   const iterator = lines[Symbol.asyncIterator]();
+  let orcaTurnActive = false;
   const readLine = async (): Promise<string | undefined> => {
-    const next = await iterator.next();
-    return next.done ? undefined : next.value;
+    if (orcaTurnActive) rich.orcaReporter?.report("blocked");
+    try {
+      const next = await iterator.next();
+      return next.done ? undefined : next.value;
+    } finally {
+      if (orcaTurnActive) rich.orcaReporter?.report("working");
+    }
   };
 
   // Flow 265 (AC7): the MAIN loop's consumer — the next operator line OR the
@@ -2686,6 +2705,8 @@ export async function runAgentRepl(
     syncArchive();
     rewindRecorder.beginTurn({ archiveIndex: archive.length, prompt: operatorLine });
     events?.emit({ type: "turn_start", prompt: operatorLine, provider: deps.providerId, model: deps.modelId });
+    orcaTurnActive = true;
+    rich.orcaReporter?.report("working");
     deps.resetSubagentBudget?.();
     startSpinner();
     busWorking = true;
@@ -2722,6 +2743,8 @@ export async function runAgentRepl(
         ...(turnError === undefined ? {} : { errorMessage: turnError }),
       };
       events?.emit(end);
+      orcaTurnActive = false;
+      rich.orcaReporter?.report("idle");
     }
     if (finalizing) return;
     flushSessionCheckpoint();
@@ -2797,6 +2820,8 @@ export async function runAgentRepl(
       startSpinner();
       busWorking = true;
       activeTurnAbort = new AbortController();
+      orcaTurnActive = true;
+      rich.orcaReporter?.report("working");
       try {
         if (finalizing) return;
         const abort = new AbortController();
@@ -2813,6 +2838,8 @@ export async function runAgentRepl(
         activeAgentFlight = undefined;
         activeAgentAbort = undefined;
         activeTurnAbort = undefined;
+        orcaTurnActive = false;
+        rich.orcaReporter?.report("idle");
         busWorking = false;
         endBlock();
         stopSpinner();

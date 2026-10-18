@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "463",
+  "slug": "orca-keryx-patcher",
+  "title": "Deferred: reproducible Orca Keryx host patcher (stock Orca unsupported)",
+  "status": "initializing",
+  "createdAt": "2026-10-18T11:30:47.936Z",
+  "updatedAt": "2026-10-18T11:30:47.936Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "во фло в керикс опиши патчер и что пока нет поддержки, мы пока не будем его делать",
+    "source": "interactive operator request 2026-10-18"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-18T11:30:47.936Z",
+      "event": "created"
+    }
+  ]
+}

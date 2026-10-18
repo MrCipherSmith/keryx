@@ -3,10 +3,11 @@ import { randomUUID } from "node:crypto";
 import { hostname, tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { busLeasesFromClient, readlineAgentHelpText, runAgentRepl } from "./shell";
+import { busLeasesFromClient, readlineAgentHelpText, runAgentRepl as realRunAgentRepl } from "./shell";
 import { waitForRecovery, type AgentDeps, type InteractiveRecovery } from "./agent";
 import { scriptedProvider as recoveryProvider } from "./agent.test-helpers";
 import type { ShellEvent, ShellEventSink } from "./shell-events";
+import type { OrcaReporter, OrcaState } from "../integrations/orca-report";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { ShellSessionOpts } from "./shell-types";
 import type { BusClient } from "../bus/client";
@@ -38,6 +39,16 @@ import type { NormalizedEvent, ProviderDescription, ProviderPort } from "../harn
 //
 // The two seams that made this file possible are an `export` keyword and
 // `rich.write`; neither changes what production does.
+
+// Fixtures must not inherit a live Orca reporter from the parent terminal.
+// Lifecycle tests explicitly inject recorders instead.
+function runAgentRepl(...args: Parameters<typeof realRunAgentRepl>): ReturnType<typeof realRunAgentRepl> {
+  args[1] = {
+    ...args[1],
+    orcaReporter: args[1].orcaReporter ?? { report() {}, async release() {} },
+  };
+  return realRunAgentRepl(...args);
+}
 
 let root: string;
 let cwd: string;
@@ -111,6 +122,7 @@ async function repl(
     recovery?: InteractiveRecovery;
     signal?: AbortSignal;
     events?: ShellEventSink;
+    orcaReporter?: OrcaReporter;
   } = {},
 ): Promise<string> {
   const out: string[] = [];
@@ -120,6 +132,7 @@ async function repl(
       printPrompt: () => {},
       safeBoundary: undefined,
       write: (s) => out.push(s),
+      ...(opts.orcaReporter === undefined ? {} : { orcaReporter: opts.orcaReporter }),
       ...(opts.recovery === undefined ? {} : { recovery: opts.recovery }),
       ...(opts.signal === undefined ? {} : { signal: opts.signal }),
       ...(opts.onCompletionWaitersSize !== undefined
@@ -356,7 +369,7 @@ function fakeJobRegistry(): { registry: JobRegistry; fire: () => void; drained: 
 }
 
 /** Drives the real REPL over a queue the test can keep pushing to, with a REAL bus join (`sessionOpts.enabled: true`). */
-function runningRepl(opts: { deps: AgentDeps; configDir?: string }): {
+function runningRepl(opts: { deps: AgentDeps; configDir?: string; orcaReporter?: OrcaReporter }): {
   push: (line: string) => void;
   output: () => string;
   prompts: () => number;
@@ -369,7 +382,7 @@ function runningRepl(opts: { deps: AgentDeps; configDir?: string }): {
   const busBox: { current: BusClient | undefined } = { current: undefined };
   const done = runAgentRepl(
     q.lines,
-    { printPrompt: () => { prompts += 1; }, safeBoundary: undefined, write: (s) => out.push(s) },
+    { printPrompt: () => { prompts += 1; }, safeBoundary: undefined, write: (s) => out.push(s), ...(opts.orcaReporter === undefined ? {} : { orcaReporter: opts.orcaReporter }) },
     opts.deps,
     fakePort(),
     { cwd, enabled: true, busBox },
@@ -628,7 +641,12 @@ describe("flow 265 AC7/AC8 — readline wakes on a task completion (was a source
     // is actually run with.
     const jobs = fakeJobRegistry();
     const model = echoProvider();
+    const states: OrcaState[] = [];
     const session = runningRepl({
+      orcaReporter: {
+        report: (state) => { states.push(state); },
+        release: async () => { states.push("stopped"); },
+      },
       deps: {
         providerId: "s",
         modelId: "m",
@@ -658,6 +676,8 @@ describe("flow 265 AC7/AC8 — readline wakes on a task completion (was a source
     }, `the idle wake to be taken\n${session.output()}`);
     await waitUntil(() => model.texts().length >= 1, `the idle wake to reach the model\n${session.output()}`);
     expect(model.texts()[0]).toContain('task_id="job-1"');
+    await waitUntil(() => states.at(-1) === "idle" && states.includes("working"), "completion turn to report idle");
+    expect(states.slice(-2)).toEqual(["working", "idle"]);
 
     // BOUNDARY — an operator line's own turn carries the TYPED text, not a
     // notification: proves the two paths are distinguishable, not that
@@ -668,6 +688,7 @@ describe("flow 265 AC7/AC8 — readline wakes on a task completion (was a source
 
     session.push("/exit");
     await session.done;
+    expect(states.at(-1)).toBe("stopped");
   });
 
   test("consecutive auto-wakes are capped, and an operator line resets the counter", async () => {
@@ -1713,5 +1734,60 @@ describe("PR 992 round 3 — readline refusal memory and self-answer line", () =
       if (saved === undefined) delete process.env.KERYX_DATA_DIR;
       else process.env.KERYX_DATA_DIR = saved;
     }
+  });
+});
+
+// Exercise the actual readline loop, not its source text.
+describe("Orca readline lifecycle", () => {
+  function recorder(): { states: OrcaState[]; reporter: OrcaReporter } {
+    const states: OrcaState[] = [];
+    return { states, reporter: {
+      report: state => { states.push(state); },
+      release: async () => { states.push("stopped"); },
+    } };
+  }
+  test("each turn reports working/idle, exit releases once", async () => {
+    const { provider } = recoveryProvider([
+      [{ kind: "text_delta", text: "one" }, { kind: "model_end" }],
+      [{ kind: "text_delta", text: "two" }, { kind: "model_end" }],
+    ]);
+    const { states, reporter } = recorder();
+    await repl(["hello", "again", "/exit"], { orcaReporter: reporter,
+      deps: fakeDeps({ provider, tools: [], idSeq: () => randomUUID() }) });
+    expect(states).toEqual(["idle", "working", "idle", "working", "idle", "stopped"]);
+  });
+  test("slash commands and EOF do not create working turns", async () => {
+    const { states, reporter } = recorder();
+    await repl(["/help"], { orcaReporter: reporter });
+    expect(states).toEqual(["idle", "stopped"]);
+  });
+  test.each(["y", "n"])("approval is blocked until operator answers %s", async answer => {
+    const { states, reporter } = recorder();
+    const deps = fakeDeps({
+      provider: toolCallProvider("shell_exec", JSON.stringify({ command: "echo demo" })),
+      tools: [fakeShellExecTool()], idSeq: () => randomUUID(), maxRounds: 2,
+    });
+    await repl(["go", answer, "/exit"], { deps, orcaReporter: reporter });
+    expect(states).toEqual(["idle", "working", "blocked", "working", "idle", "stopped"]);
+  });
+  test("recovery stays working until aborted turn ends", async () => {
+    const controller = new AbortController();
+    const { states, reporter } = recorder();
+    const { provider } = recoveryProvider([
+      [{ kind: "provider_error", error: { kind: "unavailable", retryable: true, message: "offline" } }],
+    ]);
+    await repl(["go"], { deps: fakeDeps({ provider, tools: [], idSeq: () => randomUUID() }),
+      signal: controller.signal, orcaReporter: reporter,
+      recovery: { wait: async () => { expect(states).toEqual(["idle", "working"]); controller.abort(); } },
+    });
+    expect(states).toEqual(["idle", "working", "idle", "stopped"]);
+  });
+  test("input failure still releases", async () => {
+    const { states, reporter } = recorder();
+    async function* broken(): AsyncIterable<string> { throw new Error("broken input"); }
+    await expect(runAgentRepl(broken(), { printPrompt() {}, safeBoundary: undefined, orcaReporter: reporter, write() {} },
+      fakeDeps(), fakePort(), { cwd, enabled: false }, undefined, undefined, undefined,
+      path.join(root, "config"))).rejects.toThrow("broken input");
+    expect(states).toEqual(["idle", "stopped"]);
   });
 });
