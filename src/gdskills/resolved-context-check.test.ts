@@ -164,7 +164,7 @@ test("summary: fewer than 40 characters is its own miss, counted after trimming,
   expect(absent.misses[0]?.detail).toContain("no summary");
 });
 
-test("summary: fewer than two distinct section words of five letters or more is a miss, and a repeated word counts once", async () => {
+test("summary: fewer than three distinct section words of five letters or more is a miss, and a repeated word counts once", async () => {
   const { root, resolved, sha } = await docFixture();
   const none = await checkResolvedContext({
     projectRoot: root,
@@ -181,12 +181,31 @@ test("summary: fewer than two distinct section words of five letters or more is 
   });
   expect(one.misses.map((miss) => miss.rule)).toEqual(["summary-words"]);
   expect(one.misses[0]?.detail).toContain("1 distinct");
-  expect(one.misses[0]?.detail).toContain("2 required");
+  expect(one.misses[0]?.detail).toContain("3 required");
+});
+
+test("summary: exactly two shared words is a miss, three pass", async () => {
+  const { root, resolved, sha } = await docFixture();
+  const two = await checkResolvedContext({
+    projectRoot: root,
+    resolved,
+    result: cite(sha, { summary: "Design tokens matter a lot here, said the team to everybody" }),
+  });
+  expect(two.misses.map((miss) => miss.rule)).toEqual(["summary-words"]);
+  expect(two.misses[0]?.detail).toContain("2 distinct");
+  expect(two.misses[0]?.detail).toContain("3 required");
+
+  const three = await checkResolvedContext({
+    projectRoot: root,
+    resolved,
+    result: cite(sha, { summary: "Design tokens and the scale matter a lot here, said the team" }),
+  });
+  expect(three.misses).toEqual([]);
 });
 
 test("summary: words are compared case-insensitively and a word shorter than five letters never counts", async () => {
   const { root, resolved, sha } = await docFixture();
-  const upper = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha, { summary: "DESIGN TOKENS REPLACE the colour literals everywhere, ok" }) });
+  const upper = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha, { summary: "DESIGN TOKENS REPLACE the COLOURS everywhere, SPACING too, ok" }) });
   expect(upper.misses).toEqual([]);
 
   const short = await checkResolvedContext({ projectRoot: root, resolved, result: cite(sha, { summary: "Use hex from the come only and then some more of it, and so on" }) });
@@ -213,7 +232,7 @@ test("summary: the words come from the anchored section only, not from the rest 
   expect(report.misses.map((miss) => miss.rule)).toEqual(["summary-words"]);
 });
 
-test("summary: a section with one qualifying word requires one, and a section with none requires only the length", async () => {
+test("summary: a section with fewer than three qualifying words requires as many as it holds, and a section with none requires only the length", async () => {
   const one = await docFixture({ text: "## Tiny\n\nTokens only.\n", anchor: "Tiny" });
   const withWord = await checkResolvedContext({
     projectRoot: one.root,

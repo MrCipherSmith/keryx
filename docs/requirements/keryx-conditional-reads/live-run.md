@@ -221,7 +221,7 @@ k skills contracts validate a-fake.json --schema task-implementer-output \
 
 ```
 project context: 1 miss(es), 0 drifted (enforcement warn)
-- project context miss: STYLING.md (condition:glob:src/**/*.tsx) has a summary that shares 0 distinct word(s) of 5 or more letters with the section "<ваш якорь>"; 2 required. Write the summary in the wording of the text you read
+- project context miss: STYLING.md (condition:glob:src/**/*.tsx) has a summary that shares 0 distinct word(s) of 5 or more letters with the section "<ваш якорь>"; 3 required. Write the summary in the wording of the text you read
 ```
 
 Дополнительно, по желанию, каждый вариант отдельно:

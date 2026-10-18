@@ -12,7 +12,7 @@ import type { ContextEntry } from "./context-resolver";
 import { extractSection } from "./references-section";
 
 export const SUMMARY_MIN_CHARS = 40;
-export const SUMMARY_MIN_SHARED_WORDS = 2;
+export const SUMMARY_MIN_SHARED_WORDS = 3;
 export const WORD_MIN_LETTERS = 5;
 
 export type ProofRule = "how" | "anchor" | "summary-length" | "summary-words";

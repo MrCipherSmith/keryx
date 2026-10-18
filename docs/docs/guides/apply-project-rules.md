@@ -216,9 +216,9 @@ condition, a miss is recorded when:
 1. `how` is `n/a`.
 2. `anchor` differs from the declared one.
 3. `summary` is shorter than 40 characters.
-4. `summary` shares fewer than two distinct words of five or more letters
-   with the section (or fewer than the section has, if it has only one such
-   word). Words in any script count.
+4. `summary` shares fewer than three distinct words of five or more letters
+   with the section (or all of them, if the section holds fewer than three
+   such words). Words in any script count.
 
 A file that changed after it was resolved is counted separately, as drift. A
 miss is one line, and the headline counts both:
@@ -282,7 +282,7 @@ of `/projectctx` (`/projectctx refs`) show the same state.
 ### What this does not prove
 
 - **The proof is a proxy.** Keryx cannot see what an agent opened. A summary
-  passes when it has 40 characters and shares two distinctive words with the
+  passes when it has 40 characters and shares three distinctive words with the
   section, and an agent that read nothing can sometimes do that: two sections
   of a style guide easily share words such as "never" and "component". The check
   catches a missing, empty or generic answer. It does not show that the agent

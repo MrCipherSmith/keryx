@@ -379,7 +379,7 @@ describe("scenario 1: a styling file is touched", () => {
     expect(warned.exitCode).toBe(0);
     expect(warned.out).toContain("project context: 1 miss(es), 0 drifted (enforcement warn)");
     expect(warned.out).toContain(
-      `- project context miss: ${STYLING_PATH} (condition:glob:src/**/*.tsx) has a summary that shares 0 distinct word(s) of 5 or more letters with the section "${STYLING_ANCHOR}"; 2 required. Write the summary in the wording of the text you read`,
+      `- project context miss: ${STYLING_PATH} (condition:glob:src/**/*.tsx) has a summary that shares 0 distinct word(s) of 5 or more letters with the section "${STYLING_ANCHOR}"; 3 required. Write the summary in the wording of the text you read`,
     );
 
     await writeProjectFile(CONFIG_PATH, `${JSON.stringify({ gdskills: { projectContext: { enforcement: "block" } } })}\n`);
@@ -453,7 +453,7 @@ describe("scenario 2: only the theme keyword matches", () => {
     const verdict = await validate(THEME_KEYWORD, resolved, buildResult(resolved.resolution, "fabricated"), "fabricated");
     expect(verdict.out).toContain("project context: 1 miss(es), 0 drifted (enforcement warn)");
     expect(verdict.out).toContain(
-      `- project context miss: ${THEMING_PATH} (condition:keyword:theme) has a summary that shares 0 distinct word(s) of 5 or more letters with the section "${THEMING_ANCHOR}"; 2 required.`,
+      `- project context miss: ${THEMING_PATH} (condition:keyword:theme) has a summary that shares 0 distinct word(s) of 5 or more letters with the section "${THEMING_ANCHOR}"; 3 required.`,
     );
   });
 
@@ -466,8 +466,8 @@ describe("scenario 2: only the theme keyword matches", () => {
     const borrowed = (stylingCascade.found ? stylingCascade.text : "").split("\n").find((line) => line.startsWith("The cascade contract")) ?? "";
     const themingSection = extractSection(themingText, THEMING_ANCHOR);
     const themingWords = distinctWords(themingSection.found ? themingSection.text : "");
-    // Precondition, so the test says what it proves: the borrowed text overlaps by fewer than 2 words.
-    expect([...distinctWords(borrowed)].filter((word) => themingWords.has(word)).length).toBeLessThan(2);
+    // Precondition, so the test says what it proves: the borrowed text overlaps by fewer than 3 words.
+    expect([...distinctWords(borrowed)].filter((word) => themingWords.has(word)).length).toBeLessThan(3);
     const wrong = applied.map((item) => (item["path"] === THEMING_PATH ? { ...item, summary: borrowed } : item));
     const verdict = await validate(THEME_KEYWORD, resolved, { ...result, project_context_applied: wrong }, "wrong-document");
     expect(verdict.out).toContain(`${THEMING_PATH} (condition:keyword:theme) has a summary that shares`);

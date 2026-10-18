@@ -71,7 +71,7 @@ With an anchor, the obligation is the section from that heading to the next head
 
 ### 5.3 Proof
 
-`project_context_applied` items gain optional `anchor` and `summary`. They are required for entries promoted by a condition. `how` keeps its enum (`read|followed|n/a`) so every existing result stays valid. The validator, in addition to the path and hash check of flow 461, requires: the anchor equals the declared one; the summary has at least 40 characters; it contains at least two distinct words of five or more letters that occur in the anchored section. A miss is reported with the reason; `enforcement: block` makes it exit 1, and `flow task done` refuses it as for other misses.
+`project_context_applied` items gain optional `anchor` and `summary`. They are required for entries promoted by a condition. `how` keeps its enum (`read|followed|n/a`) so every existing result stays valid. The validator, in addition to the path and hash check of flow 461, requires: the anchor equals the declared one; the summary has at least 40 characters; it contains at least three distinct words of five or more letters that occur in the anchored section. A miss is reported with the reason; `enforcement: block` makes it exit 1, and `flow task done` refuses it as for other misses.
 
 ### 5.4 Authoring help
 
@@ -89,7 +89,7 @@ Sidebar `ProjectCtx` gains `refs <promoted>/<declared>` after a resolve. The `/p
 |---|---|
 | Keywords too broad promote everything and fill the cap | the obligation is one anchored section, not the file; the over-cap warning and the Last resolve tab show the cost; keywords are the project's own and `check` flags a keyword shorter than 4 characters |
 | Keywords too narrow miss a real case | glob is an independent trigger; the unmatched reference stays listed with its description |
-| Summary check false positive (non-English section, very short section) | words are compared case-insensitively on letters of any script; a section with fewer than two qualifying words requires only the length rule; warn mode first |
+| Summary check false positive (non-English section, very short section) | words are compared case-insensitively on letters of any script; a section with fewer than three qualifying words requires only as many shared words as it holds (none: only the length rule); warn mode first |
 | A worker fabricates a plausible summary | possible; the check raises the cost and the journal keeps the summary for review. Stated in the docs, not hidden |
 | Declarations drift from the documents | `check` reports dead anchors; the hash pin catches edits between resolve and validate (AC13) |
 
