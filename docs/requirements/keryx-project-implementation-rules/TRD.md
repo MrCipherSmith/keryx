@@ -135,6 +135,14 @@ Per the operator's rule, the full suite runs on GitHub CI, not locally; local ru
 - Found while writing the docs: the CLI router (`src/lib/group-subcommands.ts`) did not list `resolve-context`, so `keryx skills resolve-context` answered `Unknown command` from the command line while direct calls passed. It is listed now and a test compares the dispatch with the list.
 - Section 6 (P1–P4, Vantage thin-overlay compatibility) is a proposal and is not implemented.
 
+### 5.2 Fixes after the live run on vantage-frontend (`live-run-result.md`)
+
+The live run found two resolver defects. The acceptance criteria are unchanged.
+
+- Duplicates. The reviewer installer's copies in `rules/project/core/` sat next to the imported rules in `rules/project/`, so every rule was listed twice with one sha256 and the cap counted it twice. Project rules with equal sha256 are now one entry: the path with fewer segments leads and the others go to `also_at`. The `shadows` record and the project-first order are kept (a bundled name shadowed through any of the paths still counts). The validator accepts a `project_context_applied` citation of the primary path or any `also_at` path, and still compares the sha256; drift is checked on every path. Equal file name (ignoring a leading `core/`) with different sha256 is a real conflict: both entries stay and the resolver warns.
+- `core/` citations. A rule citing `core/X.mdc` when the file lies flat as `rules/project/X.mdc` (or the reverse) warned `does not exist`. A citation is now looked up in `rules/project/` as written, then with the `core/` prefix flipped, then repo-relative as written. The listed contract carries the path that was found, a rule already in the entries is not listed again, and the warning remains only when the file is nowhere.
+- On the real vantage-frontend (`skills resolve-context --files src/components/AppErrorScreen.tsx --for implement`): 3 project rules each with one `also_at`, no repeated path or sha256, budget 29,762 of 131,072 bytes, no `core/` warning. One warning is left on purpose: `coverage.md` is cited bare while the file is under `openspec/changes/…`.
+
 ## 6. Совместимость с Vantage thin-overlay и унификация
 
 Source: vantage-ai-assistant `main` at 8c967fb (PR #16, `chore/thin-overlays-drift-sync`), read 2026-10-17: `README.md`, `scripts/project-drift.ts`, `scripts/keryx-upgrade.sh`, `skills/keryx-reviewer-setup/scripts/setup.sh`, `skills/vantage-rules-sync/SKILL.md`, `project-sources.json`. This section is a proposal for the operator. It changes no frozen AC (AC1-AC24) and no code of this flow.
