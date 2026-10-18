@@ -366,6 +366,14 @@ each call (parse, list, revoke, withheld reason, marker) is tested directly in
 `mcp-servers/approval-render.trust.test.ts` and
 `commands/agent-permission-mode.test.ts`.
 
+### Added by flow 462 (conditional reads), review r02
+
+`tui/project-context-inspector.test.ts` reads `tui-shell.ts` once to pin that the
+renderer's `onDestroy` calls `stopProjectContextFeed?.()` and that the stop
+hook is bound to `projectContextFeed.stop()`. There is no seam that runs
+`launchTuiAgentShell` headlessly; the feed's own polling, in-flight guard and
+stop behaviour are tested directly in the same test file.
+
 ### Added by flow 387 (shell token economy), review r3 F-032
 
 `commands/prune-archive-wiring.test.ts` reads both god-files, three sites in all:
@@ -480,6 +488,7 @@ tui/external-operator.test.ts | tui/tui-shell.ts | 1
 tui/help-first-run.test.ts | tui/tui-shell.ts | 1
 tui/main-queue.test.ts | tui/tui-shell.ts | 1
 tui/mcp-trust-shell-wiring.test.ts | tui/tui-shell.ts | 1
+tui/project-context-inspector.test.ts | tui/tui-shell.ts | 1
 tui/provider-catalog-startup.test.ts | tui/tui-shell.ts | 1
 tui/remote-queue-wiring.test.ts | tui/tui-shell.ts | 1
 tui/routing-classifier-shell-wiring.test.ts | tui/tui-shell.ts | 1
