@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.3.123] - 2026-10-18
+
+### Conditional mandatory reads for documents cited by project rules (flow 462, PR #1048)
+
+- **Added:** `.metaproject/rules/project/references.json` (schema 1) declares, per cited document, a path, `when.globs` and `when.keywords`, an anchor and a description. A second declaration of one normalised path is refused; a malformed file warns and turns promotion off, it never blocks.
+- **Added:** `keryx skills resolve-context --task-text '<text>'` (text beyond 4000 characters is truncated with a warning) promotes a declared reference from `on_demand` to `must_read` when a glob matches a touched path or a keyword occurs in the task text (keywords starting with `.` or `@` match). The entry carries its reason: `condition:glob:<g>`, `condition:keyword:<k>` or `declared`. Promoted entries are never dropped by the byte cap. A dead anchor falls back to the whole file with a warning.
+- **Added:** proof of reading is checked by `contracts validate`: path, sha256 pin and drift, an anchor equal to the declared one, and a summary of at least 40 characters that shares at least three distinct words of five or more letters with the anchored section (fewer when the section has fewer). `how: n/a` counts as a miss. The check is a vocabulary proxy, not proof of understanding.
+- **Added:** `keryx skills references check [--json]` (declarations, anchors, citations, linked imports scanned at their origin with a size cap) and `keryx skills references suggest` (writes no file).
+- **Added:** TUI: sidebar `refs p/n`, a References tab, `/projectctx refs`, states R0–R7; polling does not overlap a load still in flight; reference text is sanitised before it is rendered.
+- **Changed:** the flow-orchestrator, task-implementer, tests-creator, job-orchestrator and orchestrator-prompt skills pass `--task-text` single-quoted with `'` written as `'\''`; docs, README and a live-run runbook (`docs/requirements/keryx-conditional-reads/live-run.md`) updated; `docs:check` script added.
+- **Changed:** `last.json` of the resolver records only `taskTextLength` and `taskTextTruncated`, never the task text (acceptance criterion AC3 amended).
+
 ### Shell startup, recovery and source scanning (PR #1035)
 
 - **Added:** opt-in JSONL diagnostics via `KERYX_SHELL_STARTUP_TRACE`: startup stages and event-loop timer lateness. See [Diagnose shell startup](docs/docs/guides/shell-startup.md).
