@@ -1,0 +1,40 @@
+STATUS: DONE_WITH_CONCERNS
+
+Slice slice-01 holds only non-code files (the review-finding schema, four skills in both copies, README, flow records, gdgraph artifacts). A non-code change has an empty graph radius, so the blast-radius set could not answer the question here; I checked the dependents by reading instead. I was given no blast-radius record, so I cannot say whether the cap dropped files. No blocker or major regression found. Checked and clean: both schema copies (`.metaproject/core/gdskills/contracts/review-finding.schema.json` and `src/gdskills/contracts/review-finding.schema.json`) are byte-identical; the four skills are byte-identical between `.metaproject/skills/gdskills` and `src/gdskills/bundled/skills`; line counts 2197 / 1572 / 180 equal the ceilings in `src/gdskills/skill-length-ceilings.ts` (lines 112, 174, 178); `hostQuestion` keys in the schema (source, ref, questionText, answerText, time) match `HostQuestion` in `src/review/types.ts:113`; `applyPremiseDecision` (`src/review/premise.ts:693-701`) writes only keys the schema's `additionalProperties:false` allows; the README anchor `limitations.md#a-host-question-is-a-weaker-proof-than-a-card` exists (`docs/docs/limitations.md:210`); the readiness-waiver schema (`docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json:202`, enum tui-card/remote-card) is untouched and matches the decision that waivers stay on card/terminal. One minor inconsistency left in sibling skills (below).
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "No regression found in slice-01 (schema, skills, README, flow records). The radius of non-code files is empty and unresolved, so I read the dependents by hand. One minor leftover: sibling skills that point at the changed Wave D text still tell the agent to send the operator to a terminal for acts that now have a host-question path. No blast-radius record was supplied, so cap truncation is unknown.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "RG-001",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+      "line": 440,
+      "quote": "the question tool, then the exact `keryx review decide-premise` command for them to run in their terminal",
+      "problem": "The change rewrote review-orchestrator Wave D and Operator decisions, review-premise and job-orchestrator to say: ask with the host's question tool, record with `--answered-by`, never send the operator to a terminal for decide-premise, confirm-plan, waive-mutation and override-reviewers. Sibling sites that point at that same text were left on the old instruction: flow-orchestrator SKILL.md:440 ('...then the exact `keryx review decide-premise` command for them to run in their terminal', same line in src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md), review-orchestrator SKILL.md:124 ('`review_override_reviewers`, or `keryx review override-reviewers` in their terminal'), and the Hosts table row for operator decisions, which now reads 'AskUserQuestion, then the verb' for every operator decision although complete, publish, waive-readiness, waive-coverage and chunks estimate have no host-question path.",
+      "impact": "An agent that enters through flow-orchestrator or reads only the Hosts table gets two opposite instructions for the same act (terminal versus host question). The old terminal path still works, so nothing breaks; the cost is the operator being sent to a terminal that AC9 says the skills no longer do, or an agent trying `--answered-by` on `review complete`, which the CLI refuses.",
+      "suggested_fix": "Edit flow-orchestrator SKILL.md:440 and review-orchestrator SKILL.md:124 (both copies each) to say 'recorded with `keryx review <verb> --answered-by ...` (Wave D)', and narrow the Hosts-table row to 'for confirm-plan, waive-mutation, override-reviewers, decide-premise'. review-orchestrator SKILL.md and job-orchestrator sit exactly at their line ceilings, so the edits must not add lines.",
+      "evidence": "Read of flow-orchestrator SKILL.md:440 and review-orchestrator SKILL.md:124 in the working tree at head 5974c97; neither line appears in slice-01.diff, while the hunks for the Hosts table and Wave D do. Changed anchor whose wording moved: review-orchestrator SKILL.md 'Operator decisions' and Wave D, job-orchestrator SKILL.md Wave D pointer.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "dedupe_key": "skills-stale-terminal-instruction-for-host-question-acts",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md:440",
+          "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:440",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:124",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:124"
+        ],
+        "enumeration_method": "keryx ctx rg for decide-premise|confirm-plan|waive-mutation|override-reviewers and for 'in their terminal|their own terminal|never send ... to a terminal' over .metaproject/skills, src/gdskills/bundled, .metaproject/rules and .metaproject/project-skills; 34 matches in 14 files, each read; the other matches (feature-dev, review-pr-feedback, flow-orchestrator:274, review-premise:65) only name the premise check and carry no terminal instruction"
+      }
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```

@@ -1,0 +1,27 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Slices 02 and 03 (head 5444f96e4) close S-401 for model-supplied text: reasonOf and completionDispositions now refuse any text cardSafe would rewrite or that holds Cf/Zl/Zp characters, evidence (300) and finding (200) are capped, and dispositionLine shows the evidence unclipped, so shown equals stored for those fields; the removed list and preview caps (LISTED_FILES, MAX_LISTED, REPLY_PREVIEW, body preview) leave whole-list cards that fail closed through operatorCardTooLongForTopic (no remote buttons) while the shell dock prints every line. One gap of the same class remains: shownBody, which now carries the whole review body and every reply body, applies only the cardSafe test and does not refuse the characters hiddenInCard was extended to catch (zero-width, tag characters, U+2028/2029), so a posted body can hold text the card does not show.",
+  "findings": [
+    {
+      "id": "S-1301",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 64,
+      "quote": "const bad = lines.findIndex((line) => cardSafe(line) !== line);",
+      "problem": "shownBody, which replaced the body preview in review_publish (line 208-220) and the reply preview in review_comments_reply (line 510), refuses a body only when cardSafe(line) differs from the line. cardSafe (src/lib/card-safe.ts:15) removes C0/C1 controls and the bidi marks U+200E/200F/202A-202E/2066-2069, but not zero-width space U+200B, word joiner U+2060, BOM U+FEFF, the Unicode tag block U+E0000-E007F, variation selectors, or the line/paragraph separators U+2028/U+2029. The same commit made hiddenInCard (line 672) refuse exactly these classes (/[\\p{Cf}\\p{Zl}\\p{Zp}]/u) for the model-supplied reason and dispositions, so the rule 'what is shown equals what is stored/posted' is applied to those fields and not to the largest text the card now claims to show 'whole'. The body is posted unchanged (prepared.body = result.body, line 224), and the split at line 63 splits only on CR/LF, so a U+2028 stays inside one 'shown' line.",
+      "impact": "Attacker action: a PR author (or a reviewer finding the agent writes) puts invisible characters into text that reaches the review body or a reply body, for example tag characters U+E0020-E007E that encode an ASCII instruction after a visible sentence, or a code line in the PR that carries them and that a reviewer quotes into a finding. review_publish (or review_comments_reply) draws a card that says 'shown whole', the operator reads a clean body and presses yes, and the posted comment carries the hidden text. Keryx and other agents later read PR comments (comments collect, fix rounds), so the hidden text is a prompt-injection channel approved under an operator press; this is the failure S-401/S-402 were raised against (operator answers a decision they could not read in full), left open for the bodies. U+2028/2029 can also draw a line break in a remote mirror and so a fake card line. Not remote code execution; the effect is hidden content in an operator-approved public post.",
+      "suggested_fix": "Apply one visibility rule to every posted or stored text the card shows. In shownBody refuse, or show as a visible marker such as <U+E0041>, the characters that draw nothing and can carry data: Cf except ZWJ/ZWNJ/VS16 inside emoji and Indic/Persian words (U+200B, U+2060, U+FEFF, U+E0000-E007F), Zl/Zp, and variation selectors outside U+FE0F. Splitting on /\\r\\n|\\r|\\n|\\u2028|\\u2029/ is not enough because cardSafe does not remove those. Reuse the same predicate for hiddenInCard so the two cannot drift, extend it to U+FE00-FE0F/E0100-E01EF, U+034F, U+3164, U+FFA0 and U+2800, and add tests next to the existing evidence cases (review-tools.test.ts:769-771) for a body and a reply body with U+200B, U+E0041 and U+2028 that expect a refusal or a visible marker and no post.",
+      "evidence": "Static reading at head 5444f96e4, no run. operator-confirm-review.ts:61-67 shownBody uses only cardSafe(line) !== line; card-safe.ts:15 character class lists U+200E, U+200F, U+202A-202E, U+2066-2069 only; operator-confirm-review.ts:672 hiddenInCard adds /[\\p{Cf}\\p{Zl}\\p{Zp}]/u; callers of shownBody at :208 (review body) and :510 (each reply body); posted text is prepared.body (:224) / the dry-run requests (:518, compared whole at :528). operator-confirm-review-tools.test.ts:228-233 tests a body with an escape or bidi character only, :769-780 tests zero-width characters only on evidence, so no test covers a body with U+200B or a tag character. cardSafe('a\\u200Bb') returns the input unchanged, so shownBody returns it as a clean line.",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "slices": ["slice-02", "slice-03"],
+  "questions": []
+}
+```

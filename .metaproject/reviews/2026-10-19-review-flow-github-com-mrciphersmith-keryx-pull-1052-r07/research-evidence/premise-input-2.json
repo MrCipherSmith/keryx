@@ -1,0 +1,125 @@
+{
+  "judge": "review-premise",
+  "source": "round",
+  "branch": "docs/flow-helyx-operator-confirm",
+  "base_sha": "062aa9c36484e7b7f6b8a1dd6140671330646e66",
+  "head": "5444f96e4ce2f5b00cb0dea390a818e5ca182c23",
+  "findings": [
+    {
+      "id": "CC-702",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "source": "round",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 63,
+      "quote": "const lines = text.trimEnd().split(/\\r?\\n/).map((line) => line.replace(/\\t/g, \" \"));",
+      "problem": "One character gets three outcomes on three sites of one rule. shownBody (63) turns a tab into a space and accepts it (comment at line 61: 'a tab shows as a space and is fine'), so the card shows 'col one' while the posted body holds the tab. hiddenInCard treats a tab as rewritten because cardSafe maps it to a space (card-safe.ts:16), so evidence, finding and reason with a tab are refused, and quoteWhole (764) appends the 'hides or rewrites' marker for a quote with a tab.",
+      "impact": "Low: a tab is visible whitespace. But shown differs from stored for bodies, the property S-401/S-402 asked to remove, and the invariant is no longer one rule a reader can state. Principle: Clean Code E1.",
+      "suggested_fix": "Pick one policy. Either treat a tab as hidden everywhere (drop the replace at line 63 and let the shared predicate refuse it), or give the predicate a tab-allowed variant for bodies and quotes and state in one comment next to hiddenInCard that a tab is shown as one space by design.",
+      "also_reported_as": []
+    },
+    {
+      "id": "CC-703",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "source": "round",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 691,
+      "quote": "function completionDispositions(input: Record<string, unknown>): FindingDispositionRecord[] | { refusal: string } {",
+      "problem": "completionDispositions grew to 28 lines with 9 early returns (lines 691-718): shape check, count cap, then per-entry parsing (finding, state, evidence type), two length caps and the hidden-text loop, all in one loop body with a nested tuple loop at 712-714. Each S-401/S-402 rule landed as another return { refusal } in the same body. Two abstraction levels, batch and one entry.",
+      "impact": "Each further rule makes the function harder to test per entry and to read; the caps and the hidden-text check are spread across the body instead of sitting beside MAX_DISPOSITION_*. Principle: Clean Code B1 (20-40 lines, mixed abstraction).",
+      "suggested_fix": "Extract dispositionRecord(entry: unknown, index: number): FindingDispositionRecord | { refusal: string } holding the per-entry checks; completionDispositions keeps the array and count checks and the loop.",
+      "also_reported_as": [
+        "review-clean-code-w2:CC-8-3",
+        "review-style-w1:ST-702"
+      ]
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "source": "round",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 282,
+      "quote": "...listFiles(files.map(cardSafe)),",
+      "problem": "The r07 commit establishes 'the card shows what is stored' with three policies: refuse (reason :377, dispositions :712-714, bodies :65), mark (waiver quotes, quoteWhole :763-765) and, for lists, silently rewrite. Coverage files are shown through listFiles(files.map(cardSafe)) at :282 while prepared.files (:286) and recordCoverageWaiver (:298) keep the raw paths. Mutant ids are shown through cardSafe(subject.items.join(...)) at :415 while the raw ids go into prepared.subject (:421). Reviewers left out are shown at :434 and stored in the subject at :439. The waiver item is shown through cardSafe at :736. The commit removed the truncation (LISTED_FILES and others) but not the rewrite.",
+      "impact": "File names in a PR are chosen by the PR author and git allows control and bidi characters in them. A name the card rewrites (ESC stripped, U+202E removed, newline turned into the visible marker) is recorded raw after the operator pressed yes, so the 'lists' member of the class named in the round request is only half closed. Needs a hostile file name to matter. Not a regression of this delta.",
+      "suggested_fix": "Add a shown-list helper built on the shared hiddenInCard (see F-001) that returns the items as stored or, like quoteWhole, appends '[N entries hold characters this card hides or rewrites]'. Use it at :282, :415, :434 and :736.",
+      "also_reported_as": [
+        "review-logic-w7:L13-002",
+        "review-security-code-w1:F-705",
+        "review-testing-practices-w1:T-708",
+        "review-architecture-w1:F-004",
+        "review-security-code-w1:F-704"
+      ]
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "source": "round",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 178,
+      "quote": "\"Same effect as `keryx review publish`; the operator sees the target, the verdict and the start of the body first.\",",
+      "problem": "The review_publish tool description still promises a preview ('the start of the body') but the card now builds 'body: N characters, M lines, shown whole:' and spreads every body line (:219-220); the BODY_PREVIEW_* caps are gone in slice-03. The review_comments_reply description (:483-484) already says 'sees every reply'.",
+      "impact": "The description is model-facing, so it misstates the contract the agent plans around. It also does not tell the agent that a body too long for a Telegram topic goes to the dock only (operatorCardTooLongForTopic, tui-shell.ts:6029-6032). Documentation drift only.",
+      "suggested_fix": "Reword to 'the operator sees the target, the verdict and the whole body first; a body too long for a Telegram topic is answered at the terminal'. Check the bundled skill text and docs that quote the preview wording.",
+      "also_reported_as": [
+        "review-logic-w1:L7-005",
+        "review-pr-contract-w1:PC-701"
+      ]
+    },
+    {
+      "id": "PC-702",
+      "reviewer": "review-pr-contract",
+      "severity": "minor",
+      "source": "round",
+      "file": "CHANGELOG.md",
+      "line": 9,
+      "quote": "a `review_complete` card in keryx shell shows the reviewed head SHA, the evidence level and every waiver with its operator quote",
+      "problem": "PR body claim: \"Docs: TM-04 section, review guides, cli-reference, review skills.\" The delta adds model-visible behaviour described in no document: operator-confirm-review.ts:664-669 (MAX_DISPOSITION_FINDING_CHARS = 200, MAX_DISPOSITION_EVIDENCE_CHARS = 300, HIDDEN_IN_CARD) and :377 (`reason ${HIDDEN_IN_CARD}`), :708-713 (refusals `dispositions[i]: evidence is N characters; the card shows it whole, so the limit is 300`, `finding is longer than 200 characters`, and the control/escape/newline/bidi/zero-width refusal). The same hiddenInCard refusal now applies to the reason of review_waive_mutation, review_override_reviewers and review_decide_premise. Publish body, reply bodies and file/mutant/reviewer lists lose their clips (slice-03 removes LISTED_FILES, BODY_PREVIEW_*, REPLY_PREVIEW) and are shown whole.",
+      "impact": "A reader or an agent learns the 300/200-character limit and the plain-single-line rule only from a refusal. Nothing in the docs is contradicted; the limits are undocumented. Same class as the open F5-08 (docs lag the card's dispositions input).",
+      "suggested_fix": "Extend CHANGELOG.md:9, the cli-reference review-acts paragraph and TM-04 section 6a with one clause: the card shows the stored text whole, refuses disposition evidence over 300 characters, a finding id over 200, and text holding control, escape, newline, bidi or zero-width characters.",
+      "also_reported_as": []
+    },
+    {
+      "id": "L8-001",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "source": "round",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 136,
+      "quote": "an agent never runs `keryx review complete`; that command is for a human in a terminal",
+      "problem": "The 'Done when' rule makes a managed round done only when the `review_complete` card has been answered and forbids the agent to run `keryx review complete`. The card tools are registered only for the interactive keryx shell (operatorConfirmSpecs is consumed by buildInteractiveAgentTools; the keryx MCP server lists no card tool). The Hosts table and the 'Operator decisions' bullet give the exact terminal command for the operator on Claude Code and AGENTS.md hosts, but the commands listed for them contain `keryx review complete <package> --waive <item>` and `--waive-coverage` only, never the plain close, and no sentence says that on such a host the operator runs `keryx review complete <package>` after the waivers. SKILL.detail.md also says 'An agent completes a review only through that card' while the same paragraph says the operator runs the command 'outside keryx shell'.",
+      "impact": "An orchestrator running on Claude Code or Codex reads a completion condition it cannot satisfy and a prohibition on the only command that satisfies it. It either stops with the round never closed, or runs the command anyway and violates the stated rule. This is a documentation gap, not a code defect: nothing in the CLI refuses a non-TTY plain `review complete`.",
+      "suggested_fix": "Add to 'Done when' (both skill copies and SKILL.detail.md 'Readiness') one clause for hosts without cards: 'outside keryx shell give the operator `keryx review complete <package>` to run in their terminal and wait; unattended, record Not run', and list the plain close next to the other terminal commands in the 'Operator decisions' bullet.",
+      "also_reported_as": []
+    },
+    {
+      "id": "L11-001",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "source": "round",
+      "file": "src/remote/client.ts",
+      "line": 455,
+      "quote": "const id = ((await response.json()) as Partial<ApprovalResponse> | null)?.approvalId;",
+      "problem": "RemoteClient.askApproval flags the answer `undelivered: true` for every failure after `this.post(\"approval\", ...)` is attempted: a non-ok status, a body that is not valid JSON or has no approvalId, and any thrown error, including the request timeout (AbortSignal.timeout(requestTimeoutMs) in post). A timeout or a response-parse failure can happen after serve already accepted the question and put the Yes/No buttons in the topic. The flag then claims the card never reached the topic.",
+      "impact": "In that case the shell tells the operator 'Telegram mirror not delivered ... Answer it here' and the confirmation log marks the card unmirrored, while live buttons sit in the topic. The client has no approvalId, so it never calls closePrompt and the buttons stay until serve's own timeout. A Yes pressed there arrives as an early decision for an id nobody waits on and is dropped after earlyDecisionMs. The operator believes they answered and nothing happens. The flaw is a wrong status line and stale buttons; the answer still fails closed, so no unconfirmed action runs.",
+      "suggested_fix": "Set `undelivered: true` only when the post is known not to have been accepted: not connected, signal already aborted, or a non-ok response. For a thrown error or an unreadable body after a possible send, return a plain deny (the race then reports it through onTopicEnded, 'Telegram is no longer waiting', which is also the safer wording). Or keep the flag and word the note as 'may not have been delivered'.",
+      "also_reported_as": []
+    },
+    {
+      "id": "L7-004",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "source": "round",
+      "file": "src/remote/shell-bridge.ts",
+      "line": 214,
+      "quote": "const safe = redactSensitiveText(prompt).trim();",
+      "problem": "The Telegram copy of a card is redacted, so a whole-body card still differs from what is stored and posted. composeApprovalPrompt (:213-218) and operatorCardTooLongForTopic (:286) run redactSensitiveText, which masks secret, PII (email, phone, address) and entropy spans with fixed-width masks (redact.ts:147-164).",
+      "impact": "In the topic a review body, reply, evidence or quote holding such a span is shown masked while prepared.body (operator-confirm-review.ts:224) is posted raw, so the remote operator cannot see a secret or personal datum that will be posted publicly. The local dock prints the lines verbatim (tui-shell.ts:5424-5426), so only the remote leg differs. Exfil matches carry no mask (redact.ts:108-110). The slice widens the reach by putting whole bodies on the card.",
+      "suggested_fix": "Give no remote buttons when redactSensitiveText(card) !== card (the operatorCardTooLongForTopic route, answered in the shell), or refuse at card build a body that redaction would change.",
+      "also_reported_as": []
+    }
+  ]
+}

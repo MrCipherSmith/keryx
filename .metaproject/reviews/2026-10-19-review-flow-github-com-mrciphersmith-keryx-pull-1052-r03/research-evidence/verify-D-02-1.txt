@@ -1,0 +1,31 @@
+# keryx review verify-run
+finding: D-02
+command: keryx ctx rg -n review_complete. card|never run .keryx review complete src/review/completion-gate.ts
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T03:14:49.169Z
+exit: 0
+
+--- stdout ---
+# gdctx rg summary
+
+Command: `rg --with-filename --line-number --column --no-heading -n -- review_complete. card|never run .keryx review complete src/review/completion-gate.ts`
+Exit code: `0`
+Matches: `4`
+Files: `1`
+Raw lines: `4`
+Scope: `ripgrep defaults` — NOT searched: hidden paths not named on the command line (any dot-directory, `.metaproject/` included); `.gitignore`d files; binary files (anything holding a NUL byte, which ripgrep always skips silently). There, a nil result means "not looked at", not "not present". Widen with `--hidden` / `--no-ignore`.
+Completeness: `complete` — every one of the 4 matches ripgrep emitted is listed below.
+
+## Top Files
+
+- src/review/completion-gate.ts: 4
+
+## Matches
+
+- src/review/completion-gate.ts
+  - 756:408 return "Next: to continue a review opened in an earlier session, name its package (`keryx review status <review-id-or-path>`); otherwise `keryx review start --pr <n> --report <p...
+  - 759:249 return "Next: dispatch the reviewers per slice, build the research ledger with `keryx review ledger build <input-dir> --package <review-dir>` (it names every gap), `keryx review...
+  - 761:95 return "Next: write or ingest the missing artifacts (`keryx review ingest`), then call the `review_complete` card (the operator answers it; you never run `keryx review complete`...
+  - 819:29 "Stop only after the `review_complete` card has closed the package, or report the one real blocker with its evidence.",
+--- stderr ---
+

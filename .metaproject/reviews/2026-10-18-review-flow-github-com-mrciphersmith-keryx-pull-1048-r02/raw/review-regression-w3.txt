@@ -1,0 +1,19 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Scope B, slice-03. No regression demonstrable at major or above. Traced the changed behaviour of src/gdskills/context-resolver.ts (budget.usedBytes/exceeded now include promoted bytes, cited-path normalisation via normaliseCitedPath, collectContracts skipping declared paths, new optional undeclared/anchor/section_bytes/condition fields, recordLastResolve signature), src/gdskills/resolved-context-check.ts (appliedOf now keeps every citation, proof misses for condition: entries), src/gdskills/project-context-status.ts (new references status), src/gdskills/import-rules.ts (undeclaredCitationHint after text output) and the output-contract schemas into their consumers: src/flow/task-project-context.ts (flow task done), src/harness/tool/metaproject-adapter.ts skillsResolveContext and its SKILLS_RESOLVE_CONTEXT_OUTPUT_SCHEMA in metaproject-operations.ts (already carries undeclared), src/tui/project-context-inspector.ts and project-references-view.ts (read only tier/reason/path/budget, tolerate the new fields), listRuleRefs/listRuleFiles (fail-soft, so the import hint cannot throw and skip exitNonZeroOnRuleRefusal), and the three synchronised output-contract.schema.json copies (md5 identical across .metaproject/core, .metaproject/skills and src/gdskills/bundled; the input contracts only carry a resolved-context file path, no entry typing). Every changed behaviour is either additive and optional or gated on the presence of .metaproject/rules/project/references.json; this repo has no project rules dir, and a project without references.json reads exactly as before (no undeclared key, no declared entries, no proof misses because isPromoted needs a condition: reason). Cited-path normalisation only loosens (./x.md and backslash spellings now resolve; a/../b.md now resolves inside the root; absolute and root-climbing spellings stay raw and are still refused by name). Ran bun test over src/gdskills, src/flow/task-project-context.test.ts, the two TUI project-context tests, metaproject-adapter.test.ts and mcp/metaproject-tools.test.ts: 8374 pass, 0 fail. COVERAGE LIMITS: this slice reviewed only slice-03; the blast radius record says 17 of 210 candidate files were dropped by blast_radius_max_files=40 (chunks.json lists them, not checked here) and 50 changed files are absent from the code graph (their radius is unknown, not empty). The radius cannot see runtime edges: a worker dispatched by flow-orchestrator/job-orchestrator prompts (changed skills are non-code, empty radius), string-keyed MCP/harness tool registration, or projects whose installed skill copies lag the CLI. Slices 01, 02, 04 and 05 are not covered by this reply.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-03"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Notes (not findings, below the regression bar):
+- With references.json present, every declared document is now listed (on_demand when unmatched) and therefore joins the whole-file drift check in checkResolvedContext, whether or not a selected rule cites it. A task that edits an unrelated declared document would report drift under enforcement "block". This is opt-in behaviour of the new feature, not a break of existing behaviour, and on_demand entries were already drift-checked before.
+- keywordOccurs uses word-boundary lookarounds on both ends, so a keyword that begins or ends with a non-word character (for example ".css") cannot match text where that character is adjacent to a letter. New behaviour, not a regression.

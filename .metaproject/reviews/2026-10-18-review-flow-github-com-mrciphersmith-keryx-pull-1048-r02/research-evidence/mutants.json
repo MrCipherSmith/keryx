@@ -1,0 +1,249 @@
+{
+  "mutants": [
+    {
+      "id": "w1-m1",
+      "file": "src/commands/skills-references.ts",
+      "anchor": "if (!report.ok) process.exitCode = 1;",
+      "replacement": "",
+      "kind": "behavior"
+    },
+    {
+      "id": "w1-m2",
+      "file": "src/commands/skills-references.ts",
+      "anchor": "console.log(args.includes(\"--json\") ? JSON.stringify(report, null, 2) : renderReferencesReport(report));",
+      "replacement": "console.log(renderReferencesReport(report));",
+      "kind": "behavior"
+    },
+    {
+      "id": "w1-m3",
+      "file": "src/gdskills/references-check.ts",
+      "anchor": "for (const relative of [...cited.keys()].sort(compare)) {",
+      "replacement": "for (const relative of [...cited.keys()]) {",
+      "kind": "behavior"
+    },
+    {
+      "id": "w1-m4",
+      "file": "src/gdskills/references-check.ts",
+      "anchor": "if (!by.includes(rulePath)) by.push(rulePath);",
+      "replacement": "by.push(rulePath);",
+      "kind": "behavior"
+    },
+    {
+      "id": "w1-m5",
+      "file": "src/gdskills/references-check.ts",
+      "anchor": "if (lengthOf(declaration.description) < MIN_DESCRIPTION_CHARACTERS) {",
+      "replacement": "if (lengthOf(declaration.description) <= MIN_DESCRIPTION_CHARACTERS) {",
+      "kind": "behavior"
+    },
+    {
+      "id": "w1-m6",
+      "file": "src/gdskills/references-check.ts",
+      "anchor": "if (lengthOf(keyword) < MIN_KEYWORD_CHARACTERS) {",
+      "replacement": "if (lengthOf(keyword) <= MIN_KEYWORD_CHARACTERS) {",
+      "kind": "behavior"
+    },
+    {
+      "id": "w1-m7",
+      "file": "src/gdskills/references-check.ts",
+      "anchor": "if (info.size > CONTRACT_MAX_BYTES) return",
+      "replacement": "if (info.size >= CONTRACT_MAX_BYTES) return",
+      "kind": "behavior"
+    },
+    {
+      "id": "w1-m8",
+      "file": "src/gdskills/references-check.ts",
+      "anchor": "if (!isPathInside(rootReal, real)) return { status: \"outside-root\" };",
+      "replacement": "",
+      "kind": "behavior"
+    },
+    {
+      "id": "w1-m9",
+      "file": "src/gdskills/references-check.ts",
+      "anchor": "if (declared.has(relative) || !isDocumentCitation(relative)) continue;",
+      "replacement": "if (!isDocumentCitation(relative)) continue;",
+      "kind": "behavior"
+    },
+    {
+      "id": "w1-m10",
+      "file": "src/gdskills/import-rules.ts",
+      "anchor": "if (!json) {\n    const hint = await undeclaredCitationHint(process.cwd());",
+      "replacement": "if (true) {\n    const hint = await undeclaredCitationHint(process.cwd());",
+      "kind": "behavior"
+    },
+    {
+      "id": "w1-m11",
+      "file": "src/gdskills/references-check.ts",
+      "anchor": "if (!result.ok || result.suggestion.references.length === 0) return [];",
+      "replacement": "if (result.ok && result.suggestion.references.length === 0) return [];",
+      "kind": "behavior"
+    },
+    {
+      "id": "w1-m12",
+      "file": "src/gdskills/references-check.ts",
+      "anchor": "if (!cited.has(where)) {",
+      "replacement": "if (false) {",
+      "kind": "behavior"
+    },
+    {
+      "id": "w1-m13",
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "anchor": "(with `--task-text \"<fix task description>\"` and a fresh `--out`)",
+      "replacement": "(with a fresh `--out`)",
+      "kind": "presentation"
+    },
+    {
+      "id": "w1-m14",
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md",
+      "anchor": "(with `--task-text \"<fix task description>\"`)",
+      "replacement": "",
+      "kind": "presentation"
+    },
+    {
+      "id": "w1-m15",
+      "file": "src/commands/skills-references.ts",
+      "anchor": "if (!result.ok) {\n      for (const message of result.errors) console.error(message);\n      process.exitCode = 1;",
+      "replacement": "if (!result.ok) {\n      for (const message of result.errors) console.error(message);",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-01",
+      "file": "src/mcp/metaproject-tools.ts",
+      "anchor": "...(taskText !== undefined && taskText.trim() !== \"\" ? { taskText } : {}),",
+      "replacement": "",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-02",
+      "file": "src/harness/tool/metaproject-adapter.ts",
+      "anchor": "...(input.taskText !== undefined ? { taskText: input.taskText } : {}),",
+      "replacement": "",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-03",
+      "file": "src/tui/project-references-view.ts",
+      "anchor": "return status.last?.result.entries.find((entry) => entry.path === declaration.path && entry.condition !== undefined);",
+      "replacement": "return status.last?.result.entries.find((entry) => entry.path === declaration.path);",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-04",
+      "file": "src/tui/project-references-view.ts",
+      "anchor": "if (total === 0) lines.push(\"\", NO_REFERENCES_TEXT);",
+      "replacement": "",
+      "kind": "presentation"
+    },
+    {
+      "id": "w2-M-05",
+      "file": "src/gdskills/reference-entries.ts",
+      "anchor": "return new RegExp(`(?<![\\\\p{L}\\\\p{N}_])${escapeRegExp(keyword)}(?![\\\\p{L}\\\\p{N}_])`, \"iu\").test(text);",
+      "replacement": "return new RegExp(`(?<![\\\\p{L}])${escapeRegExp(keyword)}(?![\\\\p{L}])`, \"iu\").test(text);",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-06",
+      "file": "src/gdskills/reference-entries.ts",
+      "anchor": "return new RegExp(`(?<![\\\\p{L}\\\\p{N}_])${escapeRegExp(keyword)}(?![\\\\p{L}\\\\p{N}_])`, \"iu\").test(text);",
+      "replacement": "return new RegExp(`(?<![\\\\p{L}\\\\p{N}_])${keyword}(?![\\\\p{L}\\\\p{N}_])`, \"iu\").test(text);",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-07",
+      "file": "src/gdskills/reference-entries.ts",
+      "anchor": "if (input.taken.has(declaration.path)) {",
+      "replacement": "if (false) {",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-08",
+      "file": "src/gdskills/reference-entries.ts",
+      "anchor": "if (info.size > maxFileBytes) return { ok: false, why: `is larger than ${maxFileBytes} bytes` };",
+      "replacement": "if (info.size >= maxFileBytes) return { ok: false, why: `is larger than ${maxFileBytes} bytes` };",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-09",
+      "file": "src/gdskills/reference-proof.ts",
+      "anchor": "return entry.tier === \"must_read\" && entry.reason.startsWith(\"condition:\");",
+      "replacement": "return false;",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-10",
+      "file": "src/gdskills/reference-proof.ts",
+      "anchor": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{5,}/gu) ?? []);",
+      "replacement": "return new Set(text.toLowerCase().match(/\\p{L}{5,}/gu) ?? []);",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-11",
+      "file": "src/gdskills/reference-proof.ts",
+      "anchor": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{5,}/gu) ?? []);",
+      "replacement": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{4,}/gu) ?? []);",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-12",
+      "file": "src/gdskills/reference-proof.ts",
+      "anchor": "return Array.from(text.trim()).length;",
+      "replacement": "return text.trim().length;",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-13",
+      "file": "src/gdskills/reference-proof.ts",
+      "anchor": "const required = Math.min(SUMMARY_MIN_SHARED_WORDS, sectionWords.size);",
+      "replacement": "const required = SUMMARY_MIN_SHARED_WORDS;",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-14",
+      "file": "src/gdskills/reference-proof.ts",
+      "anchor": "if (shared >= required) return undefined;",
+      "replacement": "if (shared > required) return undefined;",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-15",
+      "file": "src/gdskills/reference-proof.ts",
+      "anchor": "if (length < SUMMARY_MIN_CHARS) {",
+      "replacement": "if (length <= SUMMARY_MIN_CHARS) {",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-16",
+      "file": "src/gdskills/reference-proof.ts",
+      "anchor": "if (entry.anchor !== undefined && item.anchor !== entry.anchor) {",
+      "replacement": "if (false) {",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-17",
+      "file": "src/gdskills/reference-proof.ts",
+      "anchor": "return items.find((item) => item.sha256 === pinned && item.how !== \"n/a\") ?? items.find((item) => item.how !== \"n/a\") ?? items[0];",
+      "replacement": "return items.find((item) => item.sha256 === pinned && item.how !== \"n/a\");",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-18",
+      "file": "src/gdskills/references-config.ts",
+      "anchor": "if (normal === \"..\" || normal.startsWith(\"../\")) return { problem: \"path escapes the project root\" };",
+      "replacement": "",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-19",
+      "file": "src/gdskills/references-config.ts",
+      "anchor": "return relative.endsWith(\".md\") && !relative.startsWith(\".metaproject/rules/\");",
+      "replacement": "return relative.endsWith(\".md\");",
+      "kind": "behavior"
+    },
+    {
+      "id": "w2-M-20",
+      "file": "src/gdskills/references-config.ts",
+      "anchor": "parsed = JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);",
+      "replacement": "parsed = JSON.parse(text);",
+      "kind": "behavior"
+    }
+  ]
+}

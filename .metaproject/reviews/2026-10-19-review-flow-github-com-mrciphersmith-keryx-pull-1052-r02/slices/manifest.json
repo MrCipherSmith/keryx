@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 143336,
+      "contentHash": "6d852301c9c94bc318dd0f64052fa0f7c105230fcecb4544d85d235f24b4ff43",
+      "files": [
+        ".metaproject/data/gdgraph/.provenance.json",
+        ".metaproject/data/gdgraph/artifacts/summary.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        "CHANGELOG.md",
+        "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/autonomous-review.md",
+        "src/commands/agent.ts",
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/operator-confirm-review-tools.test.ts",
+        "src/commands/operator-confirm-rosters.test.ts",
+        "src/commands/operator-confirm-tools.test.ts",
+        "src/commands/shell.test.ts",
+        "src/flow/confirm-token.test.ts",
+        "src/flow/confirm-token.ts",
+        "src/flow/schema.ts",
+        "src/flow/types.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/review/types.ts",
+        "src/tui/operator-confirmations.test.ts",
+        "src/tui/operator-confirmations.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "domain": ".metaproject, .metaproject [docs], . [docs] +9 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: src/flow/schema.ts",
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md, .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md (+1)",
+          "source code: src/commands/agent.ts, src/commands/operator-confirm-review.ts, src/flow/confirm-token.ts (+3)",
+          "schema: src/flow/types.ts, src/review/types.ts"
+        ]
+      }
+    }
+  ],
+  "omissions": [
+    {
+      "path": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "reason": "large-json",
+      "detail": "large json document (107916 bytes of diff)",
+      "bytes": 107916
+    },
+    {
+      "path": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "data-ledger",
+      "detail": "data ledger: tabular or line-delimited data, not code",
+      "bytes": 19492
+    }
+  ],
+  "totals": {
+    "slices": 1,
+    "bytes": 143336,
+    "files": 24,
+    "omittedFiles": 2,
+    "omittedBytes": 127408,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

@@ -1,0 +1,40 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "No exploitable code-level vulnerability found in slice-02 (src/commands, command tests, flow tests, bundled skill copies) or in the callees and plumbing traced from it. CLI `skills references check|suggest` is read-only and takes no path from the user. `--task-text` / MCP and harness `task_text` is data only: truncated to 4000 characters, matched by an escaped whole-word regex, stored through writeContained at a constant path. Declared and cited document paths are normalised and then realpath-checked inside the project root before any read. A rule file that is a symlink is not listed by listRuleRefs (Dirent.isFile is false for a symlink), so scanCitations does not follow it; confirmed by running listRuleRefs on a temp project.",
+  "findings": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-02"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## Security Review (wave 2, slice-02, round r02)
+
+### Scope
+- Branch feat/conditional-reads, merge-base 1658f77d374b2d20189a55eaf44b95d64768d6b6, head d6267d4a5099f39b74e86a71e5c8f61ca47aa63d.
+- Read: slice-02.diff, src/commands/skills-references.ts, the skills.ts / agent-commands.ts / group-subcommands.ts diffs, and at head: src/gdskills/resolve-context-command.ts, context-resolver.ts (diff and listRuleFiles / listRuleRefs / collectProjectRules), references-check.ts (scanCitations, inspectDocument), references-config.ts (path normalisation, loadReferences), reference-entries.ts (readDeclaredFile, keywordOccurs, resolveReferences), src/mcp/metaproject-tools.ts (skills_resolve_context case), src/harness/tool/metaproject-operations.ts (skills_resolve_context invoke), src/harness/tool/metaproject-adapter.ts (skillsResolveContext).
+
+### Findings
+None.
+
+### Clean areas, with the reason
+- CLI arguments: `referencesCommand` compares the action to fixed strings; the only other input is `--json`. The project root is process.cwd(). No user-supplied path reaches the filesystem. `check` and `suggest` call only readFile, lstat, realpath, stat and readdir; no write, rename or rm is reachable.
+- Path from declared or cited text: `normaliseRelativePath` (declarations) and `normaliseCitedPath` (citations) reject absolute paths, drive letters and `..` escape. `readDeclaredFile` and `inspectDocument` then lstat, realpath, require `isPathInside(rootReal, real)` and read the realpath, not the lexical path. A declared document that is a symlink out of the project is refused ("resolves outside the project root" / `document-outside-root`). `collectContracts` (cited, undeclared documents) keeps its existing realpath check. Resolver output carries path, sha256 and byte counts, never document content, so even a declared in-project secret file is not exposed by it.
+- `--task-text` (CLI) and `task_text` (MCP `skills_resolve_context` case in metaproject-tools.ts, harness operation in metaproject-operations.ts, adapter `skillsResolveContext`): the value is checked as a string, blank values are dropped, and it is forwarded as `taskText` data to `resolveProjectContext`. It is never put into a shell string, a file name or a path. `truncateTaskText` cuts it to 4000 code points. `keywordOccurs` builds its RegExp from `escapeRegExp(keyword)` with fixed lookarounds, so neither the task text nor a keyword can change the pattern, and matching is linear over at most 4000 characters. The MCP and harness paths do not write the last-resolve record; only the CLI does, through `writeContained` with the constant `LAST_RESOLVE_PATH`. `--out` also goes through `writeContained` (lexical, symlink-escape and realpath checks, atomic rename). Storing the task text in last.json was reported in wave 1 and is not repeated.
+- Rule file that is a symlink out of the project: `listRuleFiles` uses `readdir(..., { withFileTypes: true })` and keeps only `entry.isFile()` entries matching `.md`/`.mdc`; for a symlink Dirent.isFile() is false, and `entry.isDirectory()` is false for a symlinked directory, so neither is followed. `scanCitations` (references-check.ts) builds its list only from `listRuleRefs`, so it never reads through such a link. Demonstrated: a temp project with `.metaproject/rules/project/linked.md` symlinked to a file outside the project and a regular `real.md` returns `[ "real.md" ]` from `listRuleRefs`. The context-resolver also reads names from the project rule registry (`readText(projectRulePathFor(ref))`), which would follow a symlink, but that path predates this PR (not in the diff) and its content only feeds backticked-citation extraction, each citation then passing the contract realpath check.
+- Command and shell injection, SSTI, eval: the diff adds no exec, spawn or template rendering. The `--task-text "<...>"` strings in bundled SKILL.md and prompt copies are instructions to an agent, not executed code.
+- Secrets, crypto, auth, CSRF, redirect, XSS, IDOR: no occurrence in the changed code.
+- Tests use mkdtemp directories with cleanup; the symlink test points at a file in a second temp directory. No secrets, no network.
+- Not re-raised, per the brief: the vocabulary-proxy summary check, ci-triage-source.test.ts env failures, non-pasteable `suggest` output, the separate citation scan in references-check.ts, mkdocs, and the items fixed at this head.
+
+### Notes
+- There is a small window between realpath and readFile in `readDeclaredFile` / `inspectDocument` (the realpath result is what is read, so a swap needs a race against the operator's own local command). No attacker model, so not raised.
+- `truncateTaskText` runs `Array.from` on the whole input before cutting, so memory is proportional to the input size; the input is already bounded by the CLI argument limit or the MCP message size. Not raised.
+
+Routing audit: graph_used no (not-relevant, targeted read of named files); wiki_used no (not-relevant); ctx_used yes (keryx ctx rg / read); raw_rg_used no.

@@ -1,0 +1,123 @@
+STATUS: DONE
+
+## Clean Code Review (wave 4, slice-04)
+
+### Review scope
+- Package: PR 1052 (flow 464), r04, head b1c6da0e6992e4df473bae6b2fde78bc94d28776, base 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Slice: slice-04 (25 files: src/flow, src/harness, src/learning, src/remote, src/review, bundled review skills). Read the whole slice diff and opened the files at head for context (src/review/types.ts, evidence-level.ts, and keryx ctx rg for every pressedBy/pressedAt/cardPressFields site).
+- Not re-filed (already filed in wave 3 or deliberate): CC3-001..CC3-008, stale `keryx review complete` skill wording, r03 minors D-02..D-14, autonomous-profile.ts wording.
+
+### Summary
+The slice does what it set out to do and the new helper (`CardPress` / `cardPressFields` in src/review/types.ts) is applied cleanly across the review/ modules. The remaining friction is that the same "who pressed, and when" pair is still hand-declared and hand-spread at about ten sites outside src/review/, two operator-record writers grew a second trailing positional parameter, and one new sentence is pasted three times. All findings are `minor`: each is a maintenance cost with no runtime trigger I can name. No naming, comment-lie, error-handling or SOLID violation of consequence was found in the added lines.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 5  |  info: 0
+
+### Findings
+
+#### Naming
+No naming issues found.
+
+#### Functions
+[CC4-002] `answerChunkEstimate` and `recordCoverageWaiver` take `confirmedVia` and `press` as two separate trailing optional positionals (src/review/chunks-estimate.ts:160, src/review/coverage-complete.ts:215). `answerChunkEstimate` now has 6 parameters, `recordCoverageWaiver` 5, and the two optionals describe one fact (how the yes arrived), so every caller has to pass the same source twice: `confirmation.confirmedVia, cardPressFields(confirmation)` (src/commands/operator-confirm-review.ts:157 and :294). A caller that forgets the last argument records a remote-card answer with no press fields and nothing flags it. Fix: replace the pair with one `confirmation?: { confirmedVia: ConfirmedVia } & CardPress` (or an options object with `now` and `confirmation`). `waiveReadiness`, `recordPlanConfirmation` and `recordPremiseDecision` in the same diff already take it as one object.
+
+[CC4-004] `mapApprovalAnswer` reads the new field through a second inline cast instead of widening the local type (src/remote/shell-bridge.ts:208). `o` is already cast to `{ decision?; approvalId?; fromId? }` three lines earlier; the added line casts it again to `{ undelivered?: unknown }`. Fix: add `undelivered?: unknown` to the first cast and write `o.undelivered === true`.
+
+#### Comments
+[CC4-005] The doc comment of `ReadinessWaiver` is separated from it by two declarations and a function (src/review/types.ts:87). The line `/** A readiness item the operator waived ... */` sits above `ConfirmedVia` (already detached on the base), and this diff inserts `CardPress` and `cardPressFields` between that stack and `ReadinessWaiver` (line 102), so the sentence now documents a type 15 lines above the one it describes. Fix: move the comment to directly above `export type ReadinessWaiver` and leave `ConfirmedVia` with its own doc.
+
+#### Error Handling
+No error handling issues found.
+
+#### DRY
+[CC4-001] The `pressedBy` / `pressedAt` pair is declared and conditionally spread by hand at many sites although `CardPress` and `cardPressFields` exist (src/review/types.ts:92-100). Sites in this slice that restate it instead of using the helper: src/flow/confirm-token.ts:76-77 (stored token type), :120 and :140-141 (mint binding and spread), :235-236 (consume spread); src/flow/types.ts:188-189 and :785; src/flow/service.ts:1681-1682; src/harness/external/write-land.ts:173 and :229 (one 330-character line with a three-level nested spread); src/learning/decisions.ts:33-34; src/review/estimate.ts:199-200 (`PlanConfirmation`, which src/review/plan-confirmation.ts:33 declares a second time as `& CardPress`, so one record shape was extended in two different ways in the same diff). The cost is that adding a third press field, or changing the rule for an unset value, means editing about ten places and the copies drift. The helper lives in src/review/types.ts, which src/flow, src/harness and src/learning probably should not import, and that is likely why they were not used. Fix: move `CardPress` and `cardPressFields` to a neutral module (for example src/lib/card-press.ts), re-export from src/review/types.ts, and use `& CardPress` plus `...cardPressFields(x)` at the sites above. The operator-confirm-other.ts duplicate is CC3-005 and is not repeated here.
+
+[CC4-003] The same 100-character clause is pasted three times in `nextStep` (src/review/completion-gate.ts:756, :759, :761): "then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself)". The wording was just changed once to follow the TM-04 rule and is the sentence most likely to change again (D-01 and D-03 were exactly this class). Fix: hold it in one `const CLOSE_VIA_CARD = ...` and interpolate it into the three returns.
+
+#### SOLID
+No SOLID violations found.
+
+### Clean Areas
+- Functions B1/B3: no function added or changed in this slice exceeds 40 lines; `completeReviewGated`, `mirrorUndeliveredNote`, `evidenceLevelLine` are short and single-level.
+- Names A1-A3: `undelivered`, `MIRROR_NOT_DELIVERED`, `mirrorUndeliveredNote`, `CardPress` read well; vocabulary is consistent (`pressedBy`/`pressedAt` everywhere, except the flat `confirmationPressedBy`/`confirmationPressedAt` in interactive-tools.ts, which is the tool-context convention and covered by CC3-004).
+- Error handling D1/D2: no swallowed catch added; `completeReviewGated` refuses with named messages before anything is recorded.
+- SOLID F1-F5: no new class responsibilities, no `new Concrete()` in a method, `RemoteBridge.connected` is a plain getter.
+- Test file src/remote/mirror-undelivered.test.ts: cleanups are registered, names say what is asserted.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE",
+  "summary": "slice-04 applies the new CardPress/cardPressFields helper well inside src/review, but about ten sites outside it still declare and spread the pressedBy/pressedAt pair by hand, two writers grew a second trailing positional parameter for one fact, one new sentence is pasted three times, and one cast and one detached doc comment remain. No naming, error-handling or SOLID violations of consequence; all findings are minor.",
+  "stats": { "blocker": 0, "major": 0, "minor": 5, "info": 0 },
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "CC4-001",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/harness/external/write-land.ts",
+      "line": 229,
+      "quote": "...(input.confirmation.pressedBy !== undefined ? { pressedBy: input.confirmation.pressedBy } : {})",
+      "problem": "The pressedBy/pressedAt pair is declared and conditionally spread by hand at src/flow/confirm-token.ts:76-77,120,140-141,235-236; src/flow/types.ts:188-189,785; src/flow/service.ts:1681-1682; src/harness/external/write-land.ts:173,229 (one 330-character nested-spread line); src/learning/decisions.ts:33-34; src/review/estimate.ts:199-200 (and again, as '& CardPress', at src/review/plan-confirmation.ts:33), while CardPress and cardPressFields already exist at src/review/types.ts:92-100 and are used by the review/ modules in the same diff.",
+      "impact": "Maintenance cost: adding a press field or changing the unset-value rule means editing about ten places, and the copies already differ (estimate.ts inline vs plan-confirmation.ts CardPress for one record shape). No runtime defect found.",
+      "suggested_fix": "Move CardPress and cardPressFields to a neutral module (e.g. src/lib/card-press.ts) that flow/, harness/ and learning/ may import, re-export from src/review/types.ts, and replace the inline field declarations with '& CardPress' and the inline spreads with '...cardPressFields(x)'. CC3-005 (operator-confirm-other.ts) is separate and not included.",
+      "evidence": "keryx ctx rg -n 'pressedBy|pressedAt' src --all lists the sites above; src/review/types.ts:92-100 holds the helper; the review/ modules (chunks-estimate, coverage-complete, operator-decisions, plan-confirmation, premise-question, publish, readiness) use it.",
+      "confidence": 0.85
+    },
+    {
+      "id": "CC4-002",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/review/chunks-estimate.ts",
+      "line": 160,
+      "quote": "export async function answerChunkEstimate(packageDir: string, value: \"yes\" | \"no\", quote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia, press?: CardPress)",
+      "problem": "answerChunkEstimate now takes 6 parameters and recordCoverageWaiver (src/review/coverage-complete.ts:215) 5; confirmedVia and press are two trailing optional positionals that describe one fact and are always passed from the same source (src/commands/operator-confirm-review.ts:157 and :294: 'confirmation.confirmedVia, cardPressFields(confirmation)'). waiveReadiness, recordPlanConfirmation and recordPremiseDecision in the same diff take it as one object.",
+      "impact": "Maintenance cost: a caller that omits the last argument records a remote-card answer without its press fields and the compiler does not object; the long positional list is hard to read at the call site.",
+      "suggested_fix": "Replace the pair with one parameter, 'confirmation?: { confirmedVia: ConfirmedVia } & CardPress', or move now and confirmation into an options object, and update the two call sites in operator-confirm-review.ts.",
+      "evidence": "src/review/chunks-estimate.ts:160 and src/review/coverage-complete.ts:215 signatures; call sites at src/commands/operator-confirm-review.ts:157 and :294 from keryx ctx rg 'cardPressFields'.",
+      "confidence": 0.8
+    },
+    {
+      "id": "CC4-003",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": 756,
+      "quote": "then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself)",
+      "problem": "The same clause is pasted into all three returns of nextStep (lines 756, 759, 761). It was just rewritten once to follow the TM-04 rule, and earlier rounds (D-01, D-03) were this same wording drifting.",
+      "impact": "Maintenance cost: the next wording change must be made in three places and one is likely to be missed.",
+      "suggested_fix": "Hold the clause in a single constant (e.g. CLOSE_VIA_CARD) and interpolate it into the three returns.",
+      "evidence": "src/review/completion-gate.ts nextStep, lines 756, 759, 761 (keryx ctx rg 'function nextStep|never run').",
+      "confidence": 0.8
+    },
+    {
+      "id": "CC4-004",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/remote/shell-bridge.ts",
+      "line": 208,
+      "quote": "(o as { undelivered?: unknown }).undelivered === true",
+      "problem": "mapApprovalAnswer already casts 'got' to '{ decision?: unknown; approvalId?: unknown; fromId?: unknown }' as 'o'; the new field is read through a second inline cast of 'o' instead of being added to that type.",
+      "impact": "Maintenance cost: two casts for one record shape, and the field is easy to miss when the shape is next changed.",
+      "suggested_fix": "Add 'undelivered?: unknown' to the existing cast of 'o' and write 'o.undelivered === true'.",
+      "evidence": "src/remote/shell-bridge.ts mapApprovalAnswer: the first cast three lines above the added spread.",
+      "confidence": 0.9
+    },
+    {
+      "id": "CC4-005",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/review/types.ts",
+      "line": 87,
+      "quote": "/** A readiness item the operator waived in their own words (`keryx review complete --waive <item> \"<quote>\"`). */",
+      "problem": "This doc comment describes ReadinessWaiver but sits above ConfirmedVia (already detached on the base). The diff inserts CardPress and the cardPressFields function between that stack and ReadinessWaiver (line 102), so the sentence now documents a type 15 lines above the one it describes.",
+      "impact": "Misleads the next reader (documentation drift); no runtime effect.",
+      "suggested_fix": "Move the comment to directly above 'export type ReadinessWaiver' and leave ConfirmedVia with its own doc comment only.",
+      "evidence": "src/review/types.ts lines 87-102 at head; the base file (062aa9c) has the same comment above ConfirmedVia with ReadinessWaiver after it.",
+      "confidence": 0.65
+    }
+  ]
+}
+```

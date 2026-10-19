@@ -1,0 +1,60 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Slice-06 (second-look: resolver integration, reference-entries, reference-proof, references-check, references-config, references-section, resolved-context-check, status reader, output-contract schemas) was re-read against the code at head 5382b56abf17 and exercised with a scratch script. Budget and cap arithmetic, declared-versus-cited deduplication, last-citation proof selection, section extraction (CRLF, fences, closing hashes), keyword boundaries, task-text truncation and the last.json contents all behave as the acceptance criteria describe. One new minor defect: a declared glob is stored verbatim and matched verbatim, so a glob spelled with a leading ./, a leading /, a backslash or a leading ! never matches and nothing says so, while the path field of the same entry is normalised. No blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/references-config.ts",
+      "line": null,
+      "quote": "items.push(item.trim());",
+      "problem": "parseWhen/stringList keep each declared glob as the author typed it (trim only) and promotionReason in reference-entries.ts hands it unchanged to matchesAnyGlobWithBraces against task files that normaliseFiles has already put into project-relative posix form. The path field of the same entry goes through normaliseRelativePath (backslashes to slashes, './' removed, absolute and escaping paths rejected), but a glob gets no such treatment and no validation. Scratch run at head with matchesAnyGlobWithBraces: 'src/**/*.css' matches src/a.css; './src/**' does not match src/a.css; '/src/**/*.css' does not; the file 'src\\\\a.css' does not match 'src/**/*.css'; '!src/**' does not. Neither the loader nor `skills references check` (declarationFindings) reports a glob that cannot match.",
+      "impact": "Path: an author writes \"globs\": [\"./src/**/*.css\"] (a natural spelling next to the tolerant path field) and has no keywords or a keyword the task text does not use. The file is validated, `references check` reports no finding for the entry, and `resolve-context --files src/a.css` never promotes it, so the mandatory read silently stays on_demand. The reference then looks installed and healthy while the feature the flow exists for (AC1 declarations, promotion by file) does not fire. It is a configuration mistake, hence minor; the cost is that the failure is silent.",
+      "suggested_fix": "Normalise each glob in parseWhen the way normaliseRelativePath treats the path (convert backslashes, strip a leading './'), and reject a leading '/' or '!' with a message naming the entry, as the loader already does for an absolute path. Alternatively add a `references check` finding for a glob that starts with './', '/' or '!' or holds a backslash.",
+      "evidence": "src/gdskills/references-config.ts:141-156 (stringList pushes item.trim()) and :167 (globs taken from it), versus :118-126 (normaliseRelativePath applied to path); src/gdskills/reference-entries.ts:58 (matchesAnyGlobWithBraces(file, [candidate]) with the raw declared glob); scratch script t1.ts glob cases.",
+      "confidence": 0.8,
+      "reviewer": "review-logic",
+      "dedupe_key": "declared-glob-not-normalised",
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-06",
+      "coverage": "slice-06.diff read in full (1757 lines); context-resolver.ts, reference-entries.ts, reference-proof.ts, references-check.ts, references-config.ts, references-section.ts and resolved-context-check.ts read at head; glob matcher, extractSection, markdownHeadings, keywordOccurs and distinctWords exercised with a scratch bun script; acceptance-criteria.md (AC1, AC10, AC11, AC14) and the earlier wave outputs consulted so no r02/r03 finding is re-filed",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1,
+    "info": 0
+  }
+}
+```
+
+## Logic Review (wave 4, r03, slice-06, second-look)
+
+Spec compliance gate: skipped, no issue or task supplied beyond the package; acceptance-criteria.md of flow 462 was used as the reference.
+
+Summary: the delta was checked for what earlier rounds could have missed. Checked and consistent with the code and AC: the budget (promoted bytes added to usedBytes, cap warns and never demotes); `declared` set skipping already declared citations so `undeclared` lists only documents; normalised citations; pickProofItem taking the first item with the pinned hash and a `how` other than n/a, combined with the last-citation hash rule; currentSection falling back to the whole file on a dead anchor; section extraction with CRLF, fenced code, closing hashes and duplicate headings (first wins); keywordOccurs boundary rule on word-character edges; task text cut at 4000 code points with only length and truncated flag stored in last.json. One new minor (F-001, declared globs neither normalised nor validated).
+
+Stats: blocker 0 | major 0 | minor 1 | info 0
+
+### Not filed on purpose
+- Setext headings (`Title` over `=====`) are not section boundaries and a multi-space anchor does not match a collapsed heading: ATX-only extraction is the documented limit, and a dead anchor falls back to the whole file, so there is no wrong result.
+
+### Earlier findings that still apply unchanged (not re-filed)
+- review-logic-w1:F-001 (r03 wave 1, feed watermark advances after the listeners)
+- review-logic-w1:F-002 (r03 wave 1, linked-rule scan skips the resolver's hash check; confirmed again in references-check.ts)
+- review-logic-w2:F-001, review-logic-w2:F-002 (r03 wave 2, info: anchor wording unconditional; anchor not NFC-normalised)
+- review-logic-w3:F-001, F-002 (r03 wave 3, doc statements on linked rules and printed byte count), review-logic-w3:F-003 (flag handling)
+- r02: review-logic-w3:F-003 (BOM before the first heading, extractSection returns found:false), review-logic-w1:F-004 (words of any script)
+
+routing audit: graph_used: no (not-relevant, bounded slice read); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no

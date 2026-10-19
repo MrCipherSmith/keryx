@@ -1,0 +1,37 @@
+STATUS: DONE
+
+Scope B (blast radius), wave 3, slice-03 only. PR 1052, flow 464, head b1c6da0e6992e4df473bae6b2fde78bc94d28776, base 062aa9c36484e7b7f6b8a1dd6140671330646e66.
+
+Result: no new finding. R-001 and R-002 are already filed and are not repeated; I found no further site for either that I can add to their class_scope from this slice.
+
+What I walked, starting from the dependency path rather than the changed file:
+
+1. keryx review complete (src/commands/review.ts runComplete) now calls completeReviewGated (src/review/complete-gated.ts). The gate order is the order the removed inline code used: resolveReviewPackagePath, runProfileRefusal, packageRoutingRefusal with refuseUnreadable true, then completeManagedReview. The error prefix "review complete refused:" is unchanged. The imports removed from review.ts (completeManagedReview, runProfileRefusal, packageRoutingRefusal) have no remaining use in review.ts, review-operator.ts or review-run.ts; the helpers are still defined and used by estimate.ts, coverage.ts and review-ledger.ts. Every other caller of completeManagedReview is a test or library caller that calls it directly and is unaffected, because complete-gated.ts only wraps it.
+
+2. operatorConfirmTool invoke (src/commands/operator-confirm-tools.ts) now refuses a remote answer that carries no pressedBy/pressedAt, whose pressedBy is not in binding.allowedUserIds(), or whose card is older than 1 hour. Callers of that path:
+   - The only operatorConfirm binding site is src/commands/shell.ts (via interactive-agent-tools.ts) and it supplies allowedUserIds from loadRemoteConfig().
+   - The only producer of an ApprovalResponse with via "remote" is remoteApproval() in src/tui/tui-shell.ts (two call sites). It always sets pressedAt and sets pressedBy whenever the hub reported fromId.
+   - The hub (src/remote/hub.ts) already drops senders outside config.allowedUserIds, the same list the new check uses, so an answer the hub accepts is one the new check accepts.
+   - Terminal and local answers do not enter the remote branch, so the TUI-in-terminal confirmation path is unchanged.
+
+3. The roster. src/trigger/unattended.ts OPERATOR_CONFIRM_TOOL_NAMES includes review_decide_premise and review_complete, so an unattended run cannot reach the new card. The roster tests (operator-confirm-rosters.test.ts) and shell.test.ts are updated to the new count. schedule-tools.ts does not read confirmationVia, so it is unaffected by the new press fields.
+
+4. The waiver tool texts now say "call review_complete" instead of the CLI. The card itself runs the same gate, passes no dispositions, and then writes completion-confirmation.json. The one place this changes existing behaviour is the dispositions path, which is R-002, already filed.
+
+What the radius could not answer:
+- The blast radius is a code graph (depth 2, 40 files shown, 779 dropped by the file cap, 21 unresolved). I did not open every entry one by one; I followed the dependents of the changed symbols with keryx ctx rg instead.
+- The graph has no edges for skill text, docs, rule files or the bundled mirrors. The stale "run keryx review complete" wording in those is R-001 and was found by text search, not by the graph.
+- It has no runtime edges: the Telegram hub to TUI message handoff, and a hub of an older version that does not send fromId, are not visible. If an older hub omits fromId, a remote answer is now refused with "did not say who pressed it". That is fail-closed and a version-skew question, not a reproduced break, so I did not file it. A live run against an older hub would settle it.
+- The 1 hour card TTL is deliberate in the diff and is not reported.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-regression",
+  "status": "DONE",
+  "summary": "Slice-03: no new regression. runComplete and the review_complete card share completeReviewGated with the same gate order; the only operatorConfirm binding supplies allowedUserIds; the only via:remote producer sets pressedAt and pressedBy. R-001 and R-002 already filed. Radius is a code graph with 779 files dropped and no skill, docs or runtime edges.",
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-03"],
+  "findings": []
+}
+```

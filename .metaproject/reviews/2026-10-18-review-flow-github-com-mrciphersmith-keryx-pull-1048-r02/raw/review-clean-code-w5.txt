@@ -1,0 +1,73 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Slice-05 (TUI: project-references-view.ts, project-context-inspector.ts, tui-shell.ts wiring) is in good clean-code shape: the new view module is small pure functions at one abstraction level, the feed is a cohesive single-purpose factory with an injected interval seam, and names are intention-revealing. Three minor maintenance costs and one info observation: the tab dispatch is spelled out in several places, the 'condition:<kind>:<value>' reason format is produced in one module and re-parsed by a regex in another with no shared definition, and the feed's stop() is never called. No blocker or major findings.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "        : tab === \"references\"\n          ? formatProjectReferencesLines(status)\n          : formatProjectContextStatusLines(status);",
+      "problem": "Adding the References tab extended a tab-id-to-formatter mapping that is spelled out separately in four places: the nested three-way ternary in paint(), the Math.max(...) list that sizes contentRows, the tabs array, and the ProjectContextTab union. Meanwhile `let tab: string` (was the untyped `let tab = \"status\"`) ignores the newly added ProjectContextTab type, and ProjectContextCommand declares its own inline `tab?: \"references\"` literal. A fourth tab means editing all of these in step, and a miss (a tab missing from the contentRows max) silently mis-sizes the modal rather than failing a type check.",
+      "impact": "Maintenance cost on the next tab addition (OCP smell); no wrong behaviour today.",
+      "suggested_fix": "Hold one table keyed by ProjectContextTab, e.g. `const TAB_LINES: Record<ProjectContextTab, (s: ProjectContextStatus) => string[]>`, and derive paint(), the contentRows maximum and the tabs list from it; type `tab` as ProjectContextTab and have ProjectContextCommand reuse `Extract<ProjectContextTab, \"references\">`.",
+      "evidence": "Diff hunk @@ 76,283 of project-context-inspector.ts: paint() ternary, contentRows `Math.max(formatProjectContextStatusLines(status).length, formatProjectContextLastLines(status).length, formatProjectReferencesLines(status).length) + 2`, `let tab: string = options.initialTab ?? \"status\"`; ProjectContextTab is declared at line ~21 and used only for `initialTab?: ProjectContextTab`.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/project-references-view.ts",
+      "line": null,
+      "quote": "const match = /^condition:(glob|keyword):(.*)$/s.exec(reason);",
+      "problem": "reasonText() re-parses a string whose format is built in src/gdskills/reference-entries.ts (`return `condition:glob:${glob}`` and `` `condition:keyword:${keyword}` `` in promotionReason). The format lives in two modules with no shared constant, builder or parser, so the producer and the view agree only by convention. The fallback `: reason` hides a divergence (it would print the raw token) instead of failing a test.",
+      "impact": "If promotionReason's wording changes (a new kind, a different separator), the modal silently degrades to showing the raw reason; maintenance cost only.",
+      "suggested_fix": "Export a small `parseConditionReason(reason)` (or the prefix constant plus a builder) next to promotionReason in reference-entries.ts and use it from the view, so one module owns the format.",
+      "evidence": "Verified with keryx ctx rg: reference-entries.ts lines 50 and 52 produce `condition:glob:` / `condition:keyword:`; project-references-view.ts reasonText is the only parser (comment: '`condition:glob:src/**` reads as \"matched glob src/**\"').",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "    const next = await options.load();\n    if (!sameStatus(current, next)) {\n      current = next;\n      for (const listener of [...listeners]) listener(next);\n    }",
+      "problem": "reload() runs subscriber callbacks inside the same async function as the load, and poll() catches everything and reports it as a failed poll. A throwing subscriber (the sidebar repaint touches renderer objects) therefore (a) skips the remaining listeners, including an open modal's repaint, because `current` is already advanced and the next poll sees no change, and (b) is surfaced to the operator as a load failure ('projectctx: <message>') with `failing` set. Load errors and listener errors are one catch.",
+      "impact": "Only reachable if a subscriber throws (for example a repaint against a destroyed renderable); the symptom would be an open References tab that stops updating until the status changes again, with a misleading error. Not shown to occur in the diff, so kept at minor.",
+      "suggested_fix": "Isolate listeners: wrap each `listener(next)` in its own try/catch that reports through options.onError (or let guardedThemeRepaint-style guards own it), so one failing subscriber neither starves the others nor masquerades as a failed poll.",
+      "evidence": "Diff: createProjectContextFeed reload()/poll(); refreshProjectContextSidebar (tui-shell.ts) is subscribed via `projectContextFeed.subscribe(refreshProjectContextSidebar)` and clears/re-adds renderables; the modal listener calls paint().",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "    const projectContextFeed = createProjectContextFeed({\n      load: () => loadProjectContextStatus(projectContextDir()),",
+      "problem": "The feed starts a 5 s poll when the shell builds the sidebar, and ProjectContextFeed.stop() is part of the interface, but no production code calls it (keryx ctx rg over tui-shell.ts finds projectContextFeed used only for current/subscribe/reload). The interval is unref'd, so it cannot hold the process open, which is why this is not worse.",
+      "impact": "None observable today; the unused stop() is an untested-in-production lifecycle seam, and any future shell teardown or multi-shell test will leak the timer until it is wired.",
+      "suggested_fix": "Call projectContextFeed.stop() from the shell's existing teardown, or drop stop() from the interface if process-lifetime polling is intended and say so in a comment.",
+      "evidence": "keryx ctx rg for projectContextFeed in tui-shell.ts: lines 5271, 5277, 5291, 5292, 5301; no stop call. defaultInterval unrefs the timer.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 1 },
+  "slices": ["slice-05"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## Clean Code Review (slice-05)
+
+Clean areas reviewed with no findings: naming (formatProjectReferencesLines, referencesSidebarSegment, promotedCount, entryFor are intention-revealing), function size and arguments in project-references-view.ts (all small, one abstraction level), comments (the new header and docblocks match the code), DRY, SOLID DIP (the feed takes an injected `load` and `interval`).
+
+routing audit: graph_used: not-relevant (single-slice diff review); wiki_used: not-relevant; ctx_used: yes (keryx ctx rg); raw_rg_used: no

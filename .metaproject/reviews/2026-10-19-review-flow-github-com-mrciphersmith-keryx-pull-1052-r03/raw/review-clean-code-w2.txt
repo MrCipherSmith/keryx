@@ -1,0 +1,136 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE",
+  "slices": [{ "id": "slice-02", "coverage": "read in full (1570 lines); code judged against source at head 6f47bf35f" }],
+  "prior_dispositions": [
+    {
+      "id": "C-09",
+      "disposition": "open",
+      "evidence": "src/review/chunks-estimate.ts:160 still reads `answerChunkEstimate(packageDir, value, quote, now = new Date(), confirmedVia?, press?: CardPress)` and src/review/coverage-complete.ts:215 `recordCoverageWaiver(packageDir, operatorQuote, now = new Date(), confirmedVia?, press?: CardPress)`. The card callers still take `confirmation` apart: src/commands/operator-confirm-review.ts:157 `answerChunkEstimate(prepared.dir, prepared.answer, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia, cardPressFields(confirmation))` and :294 the same for recordCoverageWaiver. No options object was introduced; the delta did not touch these signatures."
+    },
+    {
+      "id": "C-25",
+      "disposition": "withdrawn",
+      "evidence": "Operator decision (round 1): dismiss. Source is unchanged at head: src/tui/operator-confirmations.ts:105 `function age(ms)` and :113 `function clock(at)` still duplicate formatAge/clock in src/tui/remote-control-surface.ts:102 and :144, so nothing was fixed; the finding is closed by the operator's dismissal, not by a code change."
+    },
+    {
+      "id": "C-27",
+      "disposition": "open",
+      "evidence": "src/commands/operator-confirm-tools.ts:206 still `pending.delete(token as string);` and :227 still `...(remote ? { pressedBy: pressedBy as number, pressedAt: pressedAt as string } : {}),`. invoke() (lines 198-237) still mixes token lookup, remote authorization (allowed id, one hour), confirmation building and apply; no authorizeRemotePress extraction. Behaviour is correct (the undefined checks at :214 precede the casts); this is structure only."
+    },
+    {
+      "id": "C-28",
+      "disposition": "open",
+      "evidence": "src/remote/shell-bridge.ts:208 still `...(!yes && (o as { undelivered?: unknown }).undelivered === true ? { undelivered: true as const } : {}),`; the inline re-cast of `o` was not replaced by a field on the narrowed type."
+    }
+  ],
+  "findings": [
+    {
+      "id": "CC-W2-001",
+      "reviewer": "review-clean-code",
+      "severity": "major",
+      "file": "src/review/completion-gate.ts",
+      "line": 761,
+      "quote": "return \"Next: write or ingest the missing artifacts (`keryx review ingest`), then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).\";",
+      "problem": "The delta rewrote the closing instruction of nextStep() as the same clause pasted into all three return strings (lines 756, 759, 761): ``then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).``",
+      "impact": "Three copies of one operator-facing rule that must change together (it is the sentence that tells the agent the CLI is off limits and which card closes a round). The next wording change, for example the card being renamed or the rule being relaxed for unattended runs, has to be made in three long literals, and a miss leaves the gate nudging the agent with two different instructions. This commit already shows the cost: the neighbouring strings in describeBlockers (see CC-W2-002) were not carried along.",
+      "suggested_fix": "Introduce one constant, e.g. `const CLOSE_VIA_CARD = \"then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).\";`, and build the three returns as `\"Next: ...\" + CLOSE_VIA_CARD` (the three differing heads stay as they are). decideReviewGate's `Stop only after the review_complete card has closed the package` can then reference the same noun once.",
+      "evidence": "src/review/completion-gate.ts lines 756, 759 and 761 at head 6f47bf35f all end with the identical clause; diff of slice-02 shows all three were edited in this delta (the old tail was `then \\`keryx review complete\\`.`).",
+      "confidence": "high",
+      "class_scope": "Every place that carries the 'call the review_complete card, never run keryx review complete' agent instruction as a copied literal: completion-gate.ts nextStep (3 sites) and the two describeBlockers strings that still say the opposite (CC-W2-002). Skill/doc copies are prose and out of scope."
+    },
+    {
+      "id": "CC-W2-002",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": 788,
+      "quote": "if (open.blockers.length === 0) return \"- none listed; run `keryx review complete` to close the package\";",
+      "problem": "describeBlockers still tells the agent to run `keryx review complete` (line 788) and that `keryx review complete` lists the blockers (line 791), while the same continue message, built by decideReviewGate, ends with nextStep's new rule 'you never run `keryx review complete` yourself' and 'Stop only after the review_complete card has closed the package'.",
+      "impact": "One nudge now contains two opposite instructions about the same command. An agent that follows the blocker list literally runs the CLI the delta just said it must not run; one that follows nextStep has no way to see why the list is empty. The delta updated nextStep, the stop report and the stop condition but not these two strings.",
+      "suggested_fix": "Reword line 788 to the card ('none listed; call the `review_complete` card') and line 791 to say the blockers are listed by `keryx review status <package>` or by the card's refusal, matching what the other strings now say. Use the constant from CC-W2-001 if the clause is reused.",
+      "evidence": "src/review/completion-gate.ts:788 and :791 at head 6f47bf35f next to :756-761 and :812-819 (decideReviewGate message). The refused-gate report at :804 was updated in this delta; these two were not.",
+      "confidence": "medium"
+    },
+    {
+      "id": "CC-W2-003",
+      "reviewer": "review-clean-code",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 742,
+      "quote": "if (prepared === undefined) return { output: \"review_complete: nothing prepared for this card\", isError: true };",
+      "problem": "completeSpec().apply is about 57 lines (741-797) and does five jobs in one body: re-reads and compares the facts digest, runs the gate, decides whether the round closed after a throw (re-reading the manifest), writes completion-confirmation.json, and composes a multi-part output with a closed-but-bookkeeping-failed path. It also declares a local `reason` closure used in four places.",
+      "impact": "This is the one function that closes a review, and its subtle rule ('a throw from the engine is not proof that nothing closed') is buried in the middle of record writing and message assembly, so it is hard to test or change alone. The delta grew it from a short try/return into three partial-failure branches (gateError, recordError, closed) that share mutable `let`s (done, gateError, recordError) declared at different points.",
+      "suggested_fix": "Extract two named steps and leave apply as the sequence: `runCompletionGate(ctx, seams, prepared, confirmation): Promise<{ done?: ...; gateError?: unknown }>` plus `writeCompletionRecord(prepared, facts, confirmation): Promise<unknown | undefined>` (returns the error), and `completionOutput({ closedLine, problems, done })` for the text. Move `reason` to module scope (the same `error instanceof Error ? error.message : String(error)` expression is already inlined at lines 183 of operator-confirm-tools.ts, 235 there and 675 here).",
+      "evidence": "src/commands/operator-confirm-review.ts lines 741-797 at head 6f47bf35f; body length counted from the `async apply(` line to its closing brace.",
+      "confidence": "medium",
+      "class_scope": "Functions over 40 lines in this delta: completeSpec().apply (this finding) and the arrow returned by mirrorApprovalToTopic in src/tui/tui-shell.ts (6097-6148, about 50 lines, two parallel card-log lifecycles; see CC-W2-004). completionFacts (658-692, about 35 lines, four data sources) is in the minor band and not filed."
+    },
+    {
+      "id": "CC-W2-004",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6109,
+      "quote": "operatorCards.answer(unmirroredId, { place: foregroundOperation.signal.aborted || verdict === undefined ? \"withdrawn\" : \"shell\", yes: verdict !== undefined && verdict !== false });",
+      "problem": "The delta introduced OperatorConfirmationLog.settle(id, outcome, turnAborted) so the mapping from a race outcome to a card answer lives in one tested place, then used it only for the mirrored branch (line 6138). The not-mirrored branch right above still re-implements the dock half of that mapping by hand with a different shape: `aborted || verdict === undefined` instead of `turnAborted`, and `verdict !== undefined && verdict !== false` instead of `result !== false`.",
+      "impact": "Two copies of 'how a local answer maps to withdrawn/shell and yes/no' with subtly different conditions, one covered by settle's unit test (operator-confirmations.test.ts, 'a mirrored card is settled from how the race ended') and one not covered at all. A later change to the rule (for example treating a thrown inner() as withdrawn) lands in only one of them.",
+      "suggested_fix": "In the unmirrored branch call `operatorCards.settle(unmirroredId, verdict === undefined ? undefined : { from: \"dock\", result: verdict }, foregroundOperation.signal.aborted)` so both branches go through settle and the test covers both.",
+      "evidence": "src/tui/tui-shell.ts:6109 (unmirrored finally) against :6138 (`operatorCards.settle(cardId, outcome, foregroundOperation.signal.aborted)`) and src/tui/operator-confirmations.ts:65-69 (settle). The finally at 6108 runs even when inner() throws, where verdict stays undefined and settle(undefined) gives the same withdrawn/no result.",
+      "confidence": "high"
+    }
+  ],
+  "summary": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 2,
+    "info": 0
+  }
+}
+```
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `docs/flow-helyx-operator-confirm`
+- Merge-base for this delta: `d2cb377f59f7f9c8553d9f377f99360bff3f6328`; head `6f47bf35f31c2e8c882e573b61dd4c39fcc81264`
+- Scope mode: explicit-hash-range (delta, slice-02 only)
+- Slice covered: slice-02 (read in full); source judged at head
+
+### Summary
+The delta mostly tightens the review_complete card well: the model-supplied `head` is gone, card text is sanitised, `settle` and `markUndelivered` are small named operations, and the press fields are documented in types, schema and JSON schema. What remains is structural: the closing instruction in completion-gate.ts is pasted three times and contradicts two neighbouring strings, `completeSpec().apply` has grown to about 57 lines, and one card branch in tui-shell.ts bypasses the new `settle`.
+
+### Stats
+- blocker: 0  |  major: 2  |  minor: 2  |  info: 0
+
+### Findings
+
+#### Naming
+No naming issues found.
+
+#### Functions
+- [CC-W2-003] major, src/commands/operator-confirm-review.ts:742, `completeSpec().apply` is about 57 lines doing five jobs.
+
+#### Comments
+No comment issues found. The new comments explain why (the engine closes the manifest before its bookkeeping; a package with no research.json carries no waiver), which is the justified kind.
+
+#### Error Handling
+No error handling issues found. The closed-but-bookkeeping-failed paths report `isError` with the cause instead of swallowing; `.catch(() => undefined)` at line 765 is deliberate and only widens to "not proven closed".
+
+#### DRY
+- [CC-W2-001] major, src/review/completion-gate.ts:761, the same closing clause pasted three times in nextStep.
+- [CC-W2-002] minor, src/review/completion-gate.ts:788, two strings still say to run `keryx review complete`.
+- [CC-W2-004] minor, src/tui/tui-shell.ts:6109, hand-rolled copy of the rule `settle` now owns.
+
+#### SOLID
+No SOLID violations found.
+
+### Prior findings
+C-09 open, C-25 withdrawn (operator dismiss; code unchanged), C-27 open, C-28 open. Evidence is in prior_dispositions.
+
+### Clean Areas
+Meaningful names (A), comments (C), error handling (D), SOLID (F) reviewed with no findings in this slice. The schema, types, test and doc hunks (flow-state.schema.json, schema.ts, types.ts, confirm-token.ts, CHANGELOG, TM-04, cli-reference, SKILL copies) contain no Clean Code issues; the two schema.ts/JSON-schema pairs and the SignatureConfirmation type carry the same two documented fields, which is the repository's existing pattern (schema mirrors type), not a DRY violation.

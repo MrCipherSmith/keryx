@@ -1,0 +1,48 @@
+STATUS: DONE
+
+## Checklist form (PR body of #1052, head 6f47bf35f, slice-02 = rest of delta d2cb377f5..6f47bf35f)
+
+| Box or claim (quoted) | State | What the diff / head shows | Expectation |
+|---|---|---|---|
+| `CI green` | unticked | pr-context.md: `AC8 full suite (5000 ms, preload): pending`, `typecheck-and-tests: pending` | Author's own open box. Not a finding. |
+| `bun test src/commands/operator-confirm-tools.test.ts src/commands/operator-confirm-review-tools.test.ts src/remote/ src/tui/` | unticked | slice-02 changes `operator-confirm-review-tools.test.ts`, `operator-confirm-tools.test.ts`, `src/tui/operator-confirmations.test.ts`, `confirm-token.test.ts`, `shell.test.ts` | A run instruction, not a claim about the diff. The AC5/AC7 commands are still absent from it (C-34, open). |
+| `Owner live check from the Telegram topic` | unticked | AC9, the owner's own check | Not decidable from the diff. |
+| "A remote-card answer now records `pressedBy` and `pressedAt`; it is accepted only from an allowed user id, once, for one question, within 1 hour." | claim | slice-02: `operator-confirm-tools.test.ts` +2 tests (no allowed-id list or no provider: refused, token spent); `confirm-token.ts` copies `pressedBy`/`pressedAt` into the signature; `flow-state.schema.json` and `src/flow/schema.ts` both declare the two fields as siblings of `boundTo`; CHANGELOG and TM-04 6a say "Each refusal leaves the token spent" | Holds. Docs, schema (both copies) and tests agree. |
+| "New `review_complete` card (SHA, evidence level, waivers); `review_confirm_plan` and `review_decide_premise` answer through the card too." | claim | `completeSpec` shows `reviewed head`, `facts.evidence`, readiness/coverage/mutation/override waivers; the model-supplied `head` input is removed from schema, card and apply, and a test pins that no `"head"` is in the schema; TM-04 table rows for all three tools; `shell.test.ts` roster adds `review_complete` | Holds. CHANGELOG and tool description both say "the round closes against the head the package recorded", matching the code. |
+| "The card says when the Telegram mirror was not delivered; the terminal commands stay as fallback." | claim | `operator-confirmations.ts` `markUndelivered`, `waiting()` ignoring undelivered and expired cards; `tui-shell.ts` settles the log entry on every exit; `pendingConfirmationLine` says "Telegram mirror not delivered, answer in the shell" | Holds. |
+| "TUI: pending and answered operator cards in the remote status tab, sidebar and `/decisions`." | claim | `operator-confirmations.ts` lines; tests in `operator-confirmations.test.ts` cover the remote tab, row, `/decisions`, help text | Holds. |
+| "Docs: TM-04 section, review guides, cli-reference, review skills." | claim | TM-04 (sections 1, 2, 6a, 8), `cli-reference.md`, both review-orchestrator SKILL.md copies (byte-identical, checked with cmp) and both SKILL.detail.md copies (byte-identical) are in the delta | Holds that they are touched. The Telegram guide is not (C-31 open). |
+| "`flow ac confirm` is unchanged (operator decision)." | claim | Nothing in slice-02 touches `flow ac confirm`; `confirm-token.test.ts` adds only the 464 pressedBy/pressedAt test | Holds. |
+| Checkbox "Tests updated" / "Documentation needed" / "Breaking change" / "Screenshots" | absent | The PR body carries none of these boxes | Nothing to contradict. |
+
+Slice-02 documentation cross-checks run (all via `keryx ctx rg`, `cmp`, Read at head 6f47bf35f):
+- TM-04 section 6a, section 8, CHANGELOG, `cli-reference.md` and `flow-state.schema.json` all state the same remote rule (allowed id, token, unused, under one hour, refusal spends the token, `pressedAt` is the shell clock). No disagreement.
+- `src/flow/schema.ts` and `docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json` describe `pressedBy`/`pressedAt` identically and at the same nesting level.
+- Residuals I found in the same slice are already filed by other reviewers in this round and are not re-filed: stale "run `keryx review complete`" text at `operator-confirm-review.ts:262,312`, `completion-gate.ts:788,791` (review-clean-code-w2 CC-W2-002; C-21 partial), and the `cli-reference.md` line that lists plain `complete` among the steps that "need a terminal" while TM-04 section 8 and `review.ts:4545-4563` say it has no TTY check (my own w1 C-05 residual). The autonomous-profile wording is left alone per the operator.
+
+## Prior dispositions, judged against source at head 6f47bf35f
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-pr-contract",
+  "summary": "Slice-02 of delta d2cb377f5..6f47bf35f: every PR-body claim that this slice can test holds (remote answer rule, review_complete card contents and recorded head, undelivered-mirror marking, TUI surfaces, schema fields in both schema copies, SKILL copies identical). No new finding; remaining doc residuals in this slice are already filed by other reviewers. Both prior findings stay open: C-31 (the Telegram guide still never mentions review cards) and C-34 (the PR test plan still omits the AC5 and AC7 commands).",
+  "findings": [],
+  "slices": ["slice-02"],
+  "prior_dispositions": [
+    {
+      "id": "C-31",
+      "disposition": "open",
+      "evidence": "At 6f47bf35f docs/docs/guides/drive-keryx-remotely.md and answer-remote-approvals.md still have no text about review cards. `keryx ctx rg -i 'card|decisions'` over both files returns five hits: answer-remote-approvals.md:9, :89, :173, :174 (Allow/Deny approval cards, unrelated) and drive-keryx-remotely.md:529 (a bare `/decisions` in a command list). No hit names review_complete, review_confirm_plan, the 1-hour token or the allowed-user rule. The guides were not touched by the delta (not in the 24-file scope). The cli-reference.md paragraph (line 4921) and TM-04 6a carry the card rules, but the Telegram guide a Telegram user reads does not. Still an omission, not a contradiction."
+    },
+    {
+      "id": "C-34",
+      "disposition": "open",
+      "evidence": "pr-context.md at head 6f47bf35f still lists the same three unticked Test plan boxes: `CI green`, the `bun test src/commands/operator-confirm-tools.test.ts src/commands/operator-confirm-review-tools.test.ts src/remote/ src/tui/` line, and `Owner live check from the Telegram topic`. It names neither the AC5 command (src/commands/review-tty-refusal.test.ts) nor the AC7 command (`bun test src/trigger/ src/gdskills/`), and does not say CI's full suite is the check for them. The PR body was not edited since round 1, so the omission stands. Still a gap in what the body promises, not a code defect."
+    }
+  ]
+}
+```
+
+Summary: no new PR-contract finding in slice-02; C-31 and C-34 remain open. Unverified: whether AC5/AC7 commands pass at the head (CI `AC8 full suite` and `typecheck-and-tests` still pending in pr-context.md).

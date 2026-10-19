@@ -1,0 +1,71 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice-05 (project-context-inspector.ts, new project-references-view.ts, tui-shell.ts wiring) is readable and consistently named. The new view file is small and well commented. Findings are maintenance cost only: the tab id is typed as string although a ProjectContextTab type was added, the tab-to-formatter choice is a nested ternary repeated as a Math.max list, a same-file import is re-exported for tests, and the feed's stop() has no caller.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "let tab: string = options.initialTab ?? \"status\";",
+      "problem": "This flow adds `export type ProjectContextTab = \"status\" | \"last\" | \"references\"` and uses it for `initialTab`, but the working variable `tab` is widened to `string`, and the literal `\"references\"` is repeated as the separate single-member type `tab?: \"references\"` in the `open` command variant and in `showProjectContext(tab?: \"references\")` in tui-shell.ts. The tab ids are therefore spelled in four places that the compiler does not tie together; the tab list in `openModalFn` repeats them again as strings.",
+      "impact": "Renaming or adding a tab id compiles cleanly and leaves one of the sites silently stale (for example a `paint` branch that never matches). Convention-consistency cost only; no wrong behaviour today.",
+      "suggested_fix": "Declare `let tab: ProjectContextTab = options.initialTab ?? \"status\";`, narrow the `renderTab` argument with a guard or cast once, and type the command and shell parameter as `Extract<ProjectContextTab, \"references\">` (or a named `ProjectContextOpenTab`) so one type owns the ids.",
+      "evidence": "Slice diff: `export type ProjectContextTab` (line 23 of the hunk), `let tab: string = ...`, `{ kind: \"open\"; /** Absent: the Status tab. */ tab?: \"references\" }`, and `const showProjectContext = (tab?: \"references\"): void` in tui-shell.ts.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "        : tab === \"references\"\n          ? formatProjectReferencesLines(status)\n          : formatProjectContextStatusLines(status);",
+      "problem": "`paint` chooses the formatter with a ternary chain (a ternary inside a ternary), and `contentRows` separately lists the same three formatters in a `Math.max(...)`. The tab-to-formatter mapping exists twice and is open-coded, so the next tab adds a third nesting level and a fourth place to edit.",
+      "impact": "Readability and a drift risk: a tab added to one of the two sites but not the other paints correctly yet gets a modal sized too small, or the reverse.",
+      "suggested_fix": "Hold one lookup, e.g. `const FORMATTERS: Record<ProjectContextTab, (s: ProjectContextStatus) => string[]> = { status: formatProjectContextStatusLines, last: formatProjectContextLastLines, references: formatProjectReferencesLines };`, then `FORMATTERS[tab](status)` in `paint` and `Math.max(...Object.values(FORMATTERS).map((f) => f(status).length)) + 2` for `contentRows`.",
+      "evidence": "Slice diff, `paint` and the `openModalFn` call in presentProjectContext: both enumerate the status/last/references formatters.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "export { formatProjectReferencesLines, NO_REFERENCES_TEXT } from \"./project-references-view\";",
+      "problem": "`formatProjectReferencesLines` is imported a few lines above for use in this file and then re-exported from the same module. Production code imports neither symbol from the inspector (tui-shell.ts does not); only project-context-inspector.test.ts reads them through it, while both are defined and exported by project-references-view.ts.",
+      "impact": "Unnecessary indirection: two import paths for one symbol, and the inspector looks like the owner of text that lives in project-references-view.ts. Small maintenance cost.",
+      "suggested_fix": "Drop the re-export and have the test import `NO_REFERENCES_TEXT` and `formatProjectReferencesLines` from `./project-references-view`.",
+      "evidence": "keryx ctx rg for NO_REFERENCES_TEXT|formatProjectReferencesLines|createProjectContextFeed over src and docs: consumers outside the view file are project-context-inspector.test.ts and the inspector itself; tui-shell.ts imports only createProjectContextFeed among the new names.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const projectContextFeed = createProjectContextFeed({",
+      "problem": "`ProjectContextFeed` exposes `stop()` and the factory starts the poller immediately, but nothing in tui-shell.ts calls `projectContextFeed.stop()` (the only uses are `current`, `reload` and `subscribe`). The interval is `unref`'d, so it cannot keep the process alive.",
+      "impact": "Dead API surface in the shell; a reader cannot tell whether the poller is meant to live for the whole session. Not a defect on its own, and the shell teardown path is outside this slice, so what would settle it is whether the shell has a dispose hook this should join.",
+      "suggested_fix": "Register `projectContextFeed.stop` with the shell's existing teardown, or add a comment at the creation site that the poll runs for the session by design.",
+      "evidence": "keryx ctx rg 'projectContextFeed\\.(stop|reload|subscribe)' src/tui/tui-shell.ts returned only subscribe (twice) and reload.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 1 },
+  "slices": ["slice-05"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Verdict: APPROVE_WITH_SUGGESTIONS. Positive notes: project-references-view.ts is small, pure and has a header that states its inputs and the states document; reasonText, conditionText and findingLine are named for what they return; the sidebar docstring was updated with the new "no references file" condition; the feed documents its error-once behaviour and test seam.
+
+Routing audit: graph_used: no (not-relevant, slice review of 3 files); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no

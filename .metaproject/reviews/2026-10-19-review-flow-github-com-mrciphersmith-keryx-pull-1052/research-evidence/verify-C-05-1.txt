@@ -1,0 +1,53 @@
+# keryx review verify-run
+finding: C-05
+command: rg -n -F 'or run `keryx review complete`' .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md; rg -n 'isTerminal' src/commands/review.ts | head; sed -n '715,745p' src/lib/command-risk.ts
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T01:39:20.167Z
+exit: 0
+
+--- stdout ---
+.metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:669:`keryx review complete` refuses status `completed` while any item fails. A failing item other than `premise-decisions` is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you call the `review_complete` card (the operator answers it in the shell or in the Telegram topic) or run `keryx review complete`. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
+src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:669:`keryx review complete` refuses status `completed` while any item fails. A failing item other than `premise-decisions` is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you call the `review_complete` card (the operator answers it in the shell or in the Telegram topic) or run `keryx review complete`. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
+631:  isTerminal?: () => boolean;
+941:      const code = await runOperatorCommand(command as OperatorCommand, args.slice(1), seams?.isTerminal === undefined ? {} : { isTerminal: seams.isTerminal });
+1061:    isTerminal: createSeams.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true),
+1921:export function commentsReplyGate(args: readonly string[], isTerminal: () => boolean): string | undefined {
+1923:  if (isTerminal()) return undefined;
+1998:  const refused = commentsReplyGate(args, seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true));
+3402:  const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+3403:  if (confirm && !isTerminal()) {
+4502:  const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+4506:  if (yes && !isTerminal()) {
+function parsedCoverageWaiver(command: string): boolean {
+  return anySimpleCommand(command, (words) => {
+    const args = keryxArgs(words);
+    if (args === undefined) return false;
+    const lower = args.map((w) => w.toLowerCase());
+    if (lower[0] === "ctx" && lower[1] === "rg") return false;
+    if (lower.some((w) => w.includes(COVERAGE_WAIVER_FLAG))) return true;
+    const review = lower.indexOf("review");
+    if (review < 0) return false;
+    const rest = args.slice(review + 1);
+    const completeLike = lower.slice(review + 1).includes("complete") || (rest[0] !== undefined && wordIsOpaque(rest[0]));
+    return completeLike && opaqueArgs(rest);
+  });
+}
+
+/**
+ * Flow 431 (AC10): `keryx review complete --waive-coverage "<quote>"` is the operator accepting that in-scope files
+ * went unreviewed. The quote has to be theirs, so the command asks in every permission mode, like `flow confirm`.
+ *
+ * Matched on PARSED words like {@link touchesSchedulerControl}, for a keryx command only: split quotes
+ * (`--waive-""coverage`), `$'\x2d…'` ANSI-C words, backslash escapes, environment prefixes and `bash -c`/`eval`
+ * bodies are resolved first, and a `review complete` whose arguments hold an expansion (`$X`, `$(…)`, a backtick, a
+ * brace) asks too, because the flag could be inside it. Globs are left out on purpose: they expand to existing file
+ * names, never to a flag. The quote-collapsed text is one more net, for nesting beyond {@link MAX_SHELL_NESTING} and
+ * for a keryx command behind a program the parser does not unwrap (`find -exec`); it needs `review` and `complete`
+ * beside the flag, so a search for the flag or a commit message about it is not caught. HONEST LIMIT: a script file
+ * or an interpreter one-liner is out of reach; `runComplete` therefore also requires a terminal for the waiver. Pure.
+ */
+export function touchesCoverageWaiver(raw: string): boolean {
+  const command = joinContinuations(raw);
+  const collapsed = collapseQuoting(command).toLowerCase();
+--- stderr ---
+

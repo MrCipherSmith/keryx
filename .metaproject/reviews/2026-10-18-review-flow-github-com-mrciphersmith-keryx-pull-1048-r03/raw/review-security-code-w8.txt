@@ -1,0 +1,31 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Slice-03 (14400 bytes) read in full, with the changed lines at head 5382b56. It is almost all skill and doc text: the resolve-context instruction lines in flow-orchestrator, job-orchestrator, orchestrator-prompt and task-implementer (each in both the .metaproject and the bundled copy), the cli-reference row, a test import, and a one-line sidebar change in src/tui/project-context-inspector.ts. No new executable attack surface. The sidebar value still goes through cardSafe(parts.join(' · ')) at line 105, so the added refs segment is sanitised like the rest. resolve-context-command.ts at head writes --out only through writeContained(projectRoot, outPath, json), and the docs say --out must be inside the project, so the doc matches the code. No new finding. The one security-relevant pattern in the slice is already filed and still applies unchanged: review-security-code-w1:F-101. job-orchestrator/SKILL.md:749, orchestrator-prompt.md:132 and task-implementer/SKILL.md:182 (bundled and .metaproject copies) tell the agent to pass --task-text '<task title and description>' in single quotes without the rule that a `'` inside the text becomes `'\\''`; only flow-orchestrator/SKILL.md:323 carries that sentence (confirmed with `keryx ctx rg -F \"'\\\\''\"`: the only two hits are the flow-orchestrator copies). Other r02/earlier items that touch this slice only through shared files and are not re-filed: w1:F-102, w3:F-002, w1:F-003 and w3:F-003, w4:F-003.",
+  "findings": [],
+  "slices": [
+    {
+      "id": "slice-03",
+      "coverage": "Whole diff read; changed lines read at head in the four bundled skill files, the inspector and resolve-context-command.ts. Checked for command injection through the documented shell invocation, path traversal on --out, secrets, and unsanitised terminal output in the sidebar value.",
+      "status": "DONE"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Security Review (round r03, wave 8, slice-03)
+
+Scope: PR #1048, head 5382b56abf17d23db61108554f3c6c68c8e3c036, base d6267d4a5099f39b74e86a71e5c8f61ca47aa63d, delta over r02. Reviewer: review-security-code. Mode: read-only.
+
+Checked and clean for this slice: injection (no exec, spawn, eval or template rendering added; the only shell-shaped text is documentation of a command line, see below), path traversal (`--out` goes through `writeContained`), secrets and logging (none), cryptography (none), authorization and CSRF (not applicable to a local CLI), terminal output (`cardSafe` wraps the sidebar value).
+
+Still open from earlier rounds, cited and not re-filed:
+- review-security-code-w1:F-101: the single-quote escape for `--task-text` is stated only in flow-orchestrator/SKILL.md:323. The same instruction at job-orchestrator/SKILL.md:749, orchestrator-prompt.md:132 (and the fix line at :188) and task-implementer/SKILL.md:182 omits it. Attack path as filed: a task title or description containing `'; <cmd> #` closes the quote when the agent builds the command line. Both the `.metaproject/skills/gdskills/...` and `src/gdskills/bundled/skills/...` copies carry the gap.
+- review-security-code-w1:F-102, w3:F-002, w1:F-003, w3:F-003, w4:F-003: they sit in files outside slice-03 and are unchanged by it.
+
+routing audit: graph_used: no (not-relevant, slice is a doc and instruction diff), wiki_used: no (not-relevant), ctx_used: yes, raw_rg_used: no

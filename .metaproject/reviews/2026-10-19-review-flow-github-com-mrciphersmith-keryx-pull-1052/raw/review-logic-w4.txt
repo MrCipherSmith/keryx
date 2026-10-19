@@ -1,0 +1,133 @@
+STATUS: DONE_WITH_CONCERNS
+
+Reviewer: review-logic, wave 4, slice-04 (src/tui/approval-mirror.ts, decisions-surface.ts, operator-confirmations.ts, remote-control-surface.ts, tui-shell.ts, operator-confirmations.test.ts). Spec gate: ran against AC5 and AC6 of flow 464 (AC9/AC10 not filed). Read-only: no command run beyond ctx rg / ctx read.
+
+Known issues from the dispatch (token Map never evicted; close-before-record in review_complete) are not repeated.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "The race itself is sound: raceApproval lets the first answer win, the second is ignored, pressedBy comes only from the bridge answer's fromId (never model input, never the TUI path), and an unconfigured or disconnected channel puts the not-delivered note on the card before it opens. One real defect: when the mirror fails after the card is already open (post refused, stream lost), the live view keeps claiming the card is waiting in Telegram, which is the false delivery claim AC5 forbids. The rest is minor: log ordering/eviction by ask order, a leaked pending entry if the dock throws, and expiry/staleness of the waiting state.",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "onUndelivered: () => io.onSystem?.(\"◇ Telegram mirror not delivered: the topic did not take the card. Answer it here.\\n\")",
+      "problem": "The log entry for a mirrored card is created with mirrored=true before the topic leg runs (operatorCards.ask(meta.card[0] ?? tool, true)). When the topic leg then reports undelivered (client not connected, post refused, no approvalId: shell-bridge askApproval line 965, client.ts 441/453/457), onUndelivered only prints one transcript line. Nothing flips the entry, and OperatorConfirmationLog has no method to do so (mirrored is readonly). So waiting() still counts the card, the Remote sidebar row shows '<topic> · N card waiting' in the attention role, and the /remote-control status tab and /decisions list it as 'waiting ... Nm left of the 1-hour token' with no 'Telegram mirror not delivered' suffix. The card in the dock does not carry the note either (withMirrorNote is applied only on the pre-check path). The same stale 'waiting in Telegram' state holds when the stream drops after a successful post: the leg ends in a deny without a press and nothing updates the entry.",
+      "impact": "AC5: the operator is told by every TUI surface that a card is waiting in Telegram and has a live token, when the question never reached the topic (or can no longer be answered there). It is the false delivery claim AC5 exists to prevent, shown on the surfaces AC6 added. Nobody can press anything in Telegram; the card can only be answered in the shell.",
+      "suggested_fix": "Add OperatorConfirmationLog.markUndelivered(id) that sets mirrored=false (make the field mutable or replace the entry) and notifies. In mirrorApprovalToTopic call it from onUndelivered (pass cardId in), so waiting() drops the card and pendingConfirmationLine appends 'Telegram mirror not delivered, answer in the shell'. Also call it when the topic leg ends without a press while the dock is still open (timeout, dropped stream). Add a test that drives a raceApproval whose topic leg returns {decision:'deny', undelivered:true} and asserts waiting() is empty and the line carries the note.",
+      "evidence": "tui-shell.ts mirrorApprovalToTopic: cardId = operatorCards.ask(..., true); raceApproval({... onUndelivered: () => io.onSystem?.(...)}) - the callback receives nothing and touches no log entry. operator-confirmations.ts: ConfirmationEntry.mirrored is readonly, waiting() filters on item.mirrored, pendingConfirmationLine only adds the note when !entry.mirrored. approval-mirror.ts line 52: `if (answer.undelivered === true) options.onUndelivered?.();` is the only consumer. operator-confirmations.test.ts has no test of the shell wiring, only of ask(.., false).",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "class_scope": {
+        "sites": [
+          "src/tui/tui-shell.ts: mirrorApprovalToTopic onUndelivered callback (does not update the log)",
+          "src/tui/operator-confirmations.ts: waiting() counts mirrored && unanswered",
+          "src/tui/operator-confirmations.ts: pendingConfirmationLine omits the note when mirrored=true",
+          "src/tui/remote-control-surface.ts: projectRemoteRow cards fragment (waitingCards from waiting())",
+          "src/tui/remote-control-surface.ts: formatRemoteStatusLines confirmations block",
+          "src/tui/decisions-surface.ts: withConfirmationLines (same lines)",
+          "src/tui/tui-shell.ts: unmirrored pre-check path (correct: ask(..., false))"
+        ],
+        "enumeration_method": "keryx ctx rg for `mirrored`, `.waiting()`, `onUndelivered`, `undelivered` over src (non-test); every reader of the flag was read."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": null,
+      "quote": "for (const old of answered.slice(0, Math.max(0, answered.length - ANSWERED_CARDS_KEPT))) {",
+      "problem": "Both the eviction and the display order use the order cards were ASKED, not the order they were ANSWERED. answer() filters items (insertion order = ask order), and evicts the first answered ones; entries() reverses the same list and calls it 'newest first'. A card that waited long and is answered after five later cards were answered is the first answered item, so it is evicted in the same call that answered it. With only two cards, A asked then B asked, B answered then A answered: entries() lists B before A although A was answered last.",
+      "impact": "The line the card exists for ('pressed by Telegram user N') can vanish the moment it is written, when approvals overlap (workers, queued cards). The answered list is not 'recent first' as documented. Sequential single-card use is unaffected, which is all the test covers.",
+      "suggested_fix": "Order and evict by answered.at: sort answered by `answered.at` descending in entries(), and evict the entries with the smallest `answered.at`. Add a test: ask A, ask 5 more and answer them, answer A last; expect A still present and first.",
+      "evidence": "operator-confirmations.ts answer(): `const answered = this.items.filter((item) => item.answered !== undefined)` then slice(0, len-5) of that insertion-ordered array; entries(): `this.items.filter(...answered !== undefined).reverse()`. Trace for A + b1..b5: answer(A) makes 6 answered, slice(0,1) = [A], spliced out.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const cardId = isCard && meta?.card !== undefined ? operatorCards.ask(meta.card[0] ?? tool, true) : undefined;",
+      "problem": "ask() is followed by `await raceApproval(...)` (and, on the pre-check path, `await inner(...)`) with no try/finally. If the dock or the race rejects, the entry is never answered. An unanswered entry is never evicted (eviction only counts answered items) and waiting() keeps counting it.",
+      "impact": "One thrown dock leaves a permanent 'N card waiting' attention row in the Remote sidebar and a 'waiting' line in the status tab and /decisions for the rest of the session; repeated failures grow the list without bound. Low probability (the dock is not expected to throw), silent when it does.",
+      "suggested_fix": "Wrap both branches: `try { ... } catch (error) { operatorCards.answer(id, { place: 'withdrawn', yes: false }); throw error; }`, or a finally that answers 'withdrawn' when no answer was recorded. Answered-twice is already a no-op in answer().",
+      "evidence": "tui-shell.ts mirrorApprovalToTopic: unmirroredId/cardId created, then `await inner(...)` / `await raceApproval(...)`; raceApproval rethrows dock errors after its finally. operator-confirmations.ts answer() is the only way an entry leaves the open state.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": null,
+      "quote": "const token = left > 0 ? `${age(left)} left of the 1-hour token` : \"token expired, ask again\";",
+      "problem": "The 1-hour state is computed only when a line is rendered, and nothing else reads it. waiting() ignores expiry, so a card past one hour (or whose topic leg timed out at MAX_APPROVAL_TIMEOUT_MS, also 1 hour) is still counted by the sidebar as '1 card waiting'. The text 'token expired, ask again' is wrong advice for a card still open in the dock: a shell answer records tui-card and has no TTL (operator-confirm-tools.ts only checks REMOTE_CARD_TTL_MS when confirmationVia is remote), so the operator can still answer it in the shell. Also nothing re-renders on time: the /decisions modal builds its text once at open, and the /remote-control tab repaints only on bridge or log changes, so 'asked 3m ago / 57m left' stays frozen while the modal is open.",
+      "impact": "AC6 'time left of the 1-hour token' is accurate only at the instant of opening; after expiry the surfaces keep signalling a Telegram-answerable card and tell the operator to ask again instead of answering in the shell.",
+      "suggested_fix": "Make waiting() take `now` and exclude entries past REMOTE_CARD_TTL_MS (or treat them as unmirrored); for an expired but still-open card print 'Telegram token expired, answer in the shell'. If live ages matter, add a coarse interval that calls the modal repaint while a card is waiting.",
+      "evidence": "operator-confirmations.ts waiting() has no time argument; pendingConfirmationLine branches on `left > 0`; operator-confirm-tools.ts lines 207-221 apply the TTL only on the remote path; decisions-surface.ts openDecisions calls `confirmationLines?.()` once.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/tui/remote-control-surface.ts",
+      "line": null,
+      "quote": "if (cards !== undefined) return { text: fit(`${topic} · ${cards}`, width), role: \"attention\", action: \"open\", ...detail };",
+      "problem": "The sidebar text budget is 30 columns (SIDEBAR_TEXT_WIDTH = 34-1-2-1). `fit` cuts from the right, so with a topic name of 14 or more characters the card count is what gets truncated ('keryx-helyx-confirm · 1 car…'). The test uses 'keryx-demo' and passes only because it is short. The new fragment also replaces the existing '<n> unconfirmed' fragment when both apply.",
+      "impact": "The attention colour remains but the count the row exists to show can be cut; an unconfirmed approval is hidden while a card waits. Same truncation shape as the existing unconfirmed fragment, so low severity.",
+      "suggested_fix": "Truncate the topic name instead of the suffix (fit the name to width - suffix length), and join both fragments when both are non-zero.",
+      "evidence": "remote-control-surface.ts projectRemoteRow; shell-chrome.ts SIDEBAR_TEXT_WIDTH; operator-confirmations.test.ts uses name 'keryx-demo'.",
+      "confidence": "low",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const requestApprovalForTelegramTurn: NonNullable<TuiAgentIo[\"requestApproval\"]> = async (tool, inputJson, meta) => {",
+      "problem": "Cards raised during a Telegram-started turn take this topic-only path, which never calls operatorCards.ask/answer. They do get remoteApproval(...) with fromId, so the durable record has pressedBy, but the sidebar count, the status tab and /decisions never list them while waiting or after the press.",
+      "impact": "AC6 visibility holds only for cards of shell-typed turns. Not a safety issue; the record is correct.",
+      "suggested_fix": "Either log those cards too (ask before bridge.askApproval, answer with place 'telegram' and fromId), or state in the AC/docs that the live view covers dock-raised cards only.",
+      "evidence": "tui-shell.ts requestApprovalForTelegramTurn; grep of operatorCards shows ask/answer only inside mirrorApprovalToTopic.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "function remoteApproval(fingerprint: string, fromId: number | undefined): Extract<ApprovalResponse, { approved: boolean }> {",
+      "problem": "Routed to review-style, not a logic defect: the new function and its doc comment were inserted between the long flow-173 F-003 JSDoc and `isToolAvailableToSideWorker`, so that JSDoc now sits above remoteApproval and the side-worker predicate lost its documentation. Separately, mirrorApprovalToTopic computes `yes: verdict !== false`; the card path only returns booleans today, but the ApprovalResponse union also has `{approved:false}`, which that test would call yes.",
+      "impact": "Doc misattribution; latent mislabel in the log if a card path ever returns the object form.",
+      "suggested_fix": "Move remoteApproval above the flow-173 doc block. Use the existing isApprovalFor/approved helper instead of `!== false`.",
+      "evidence": "slice-04 diff hunk at tui-shell.ts ~562-606; agent.ts ApprovalResponse type lines 291-305.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 3, "info": 3 },
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Checked and found correct (no finding):
+- approval-mirror.ts raceApproval: `settled` is checked before onUndelivered and before topicAnswer is set, so a late topic answer after the dock answered is ignored; `topicAnswer` is set only for an explicit press (allow, or a deny that names fromId); a timeout or abort is not a press; on a topic win the dock is aborted with "topic" and the dock's own result is discarded; on a dock answer the topic is aborted with "shell". First answer wins; second ignored.
+- pressedBy / pressedAt: remoteApproval() is called only on the two topic paths, with fromId from the bridge answer (mapApprovalAnswer accepts only a safe-integer number). The dock path returns a plain boolean, so tui-card never carries them. A topic allow without fromId yields no pressedBy and the tool refuses ("did not say who pressed it"): fails closed. pressedAt is the shell's receipt time, not a Telegram timestamp (note only).
+- AC5 pre-check path: mirrorUndeliveredNote(bridge) covers undefined, inactive and not-connected; the note is placed above the subject line, which is the dialog subtitle for cardTitle cards, and only meta.card (display) is changed; the recorded card (entry.shown) comes from the tool, so the note is never recorded. The user_prompt card is excluded from the note and the log.
+- operator-confirmations.ts empty states: confirmationLines([]) -> [], withConfirmationLines unchanged when empty, formatRemoteStatusLines unchanged without confirmations (test asserts equality). Rendering of via/pressedBy: telegram -> "pressed by Telegram user N" (or "a Telegram user"), shell/withdrawn never name a user. answer() on an unknown or already-answered id is a no-op.
+- Notification wiring: subscribe -> liveRemotePanel.refresh + modal listeners; getWaitingCards, getConfirmationLines and confirmationLines are passed at all three surfaces; /decisions arms drops the cards on purpose.
+
+Routing audit: graph_used: no (not-relevant, slice-local review); wiki_used: no (not-relevant); ctx_used: yes (ctx rg, ctx read); raw_rg_used: no.

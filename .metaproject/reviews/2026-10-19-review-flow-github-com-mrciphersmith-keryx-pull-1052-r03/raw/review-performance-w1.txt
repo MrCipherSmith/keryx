@@ -1,0 +1,51 @@
+STATUS: DONE
+
+## Performance Review
+
+### Scope
+- Branch: `docs/flow-helyx-operator-confirm`
+- Parent ref: `main`
+- Merge-base: `d2cb377f59f7f9c8553d9f377f99360bff3f6328`
+- Scope mode: explicit-hash-range (d2cb377f5..6f47bf35f, slice-02)
+- Changed files reviewed: 23 (slice-02 hunks; sources re-read at head 6f47bf35f for operator-confirm-review.ts, tui-shell.ts mirror wrapper, operator-decisions.ts)
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Prior dispositions
+- C-43 (info, completionFacts sync reads): closed. The finding itself required no change. At head the reads are still synchronous (`readFileSync` of manifest.json, report.md, research.json; `readOperatorDecisions` is async). The new read of operator-decisions.json adds one small file read per `completionFacts` call. `completionFacts` runs once at card build, once at apply, and once more only when the gate throws, each time an operator presses a button (a few times per review round). No loop, no scaling with N. The claimed "fixed" is not accurate (the code did not change here), but there was nothing to fix.
+
+### Findings
+None.
+
+### Clean Areas
+- N+1 queries / pagination / indexes: no DB or repository access in the delta.
+- Hot-path computation: `OperatorConfirmationLog.waiting()` now takes `Date.now()` once and filters a list bounded by `ANSWERED_CARDS_KEPT` plus the unanswered cards. It is called from the sidebar `getWaitingCards` and the status surfaces, which repaint on change, so the cost is a filter over a handful of entries. No finding.
+- `markUndelivered` and the `finally` blocks in `mirrorApprovalToTopic` (tui-shell.ts 6095-6152): both exits settle the log entry (`answer` removes it from the open set and trims answered entries), so no unbounded growth of pending entries. The unmirrored branch also settles in `finally`. Listener notification happens once per state change; `markUndelivered` is idempotent. No leak.
+- `factsDigest`: sha256 over a small JSON of strings, twice per card. Negligible.
+- Redundant reads: card build then apply repeat the same package reads on purpose (TOCTOU check), once per operator action.
+- Bundle imports / memory leaks / sync blocking: the delta adds `node:fs` and `node:path` imports in a test file only. Docs, skill, schema and changelog hunks have no runtime cost.
+
+```json keryx:findings
+[]
+```
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "No performance findings in the r03 delta. completionFacts keeps its few small synchronous reads, executed per operator button press (prior C-43, info, closed). OperatorConfirmationLog.waiting()/markUndelivered are O(bounded list); the mirror wrapper settles every card's log entry in finally, so no pending-entry leak.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "C-43", "disposition": "closed" }
+  ],
+  "slices": [
+    { "id": "slice-02", "coverage": "read in full" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```

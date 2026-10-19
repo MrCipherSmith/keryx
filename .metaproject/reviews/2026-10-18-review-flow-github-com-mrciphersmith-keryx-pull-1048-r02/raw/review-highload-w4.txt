@@ -1,0 +1,31 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "summary": "Slice-04 is almost entirely tests (conditional-reads e2e, resolver, schema, section, references-config, resolved-context-check, skill-sync, TUI inspector) plus thin task_text pass-through wiring in the harness adapter, the operation descriptor, the port type and the MCP tool. No shared mutable state, pools, queues, retries or distributed invariants are introduced by the diff. One minor item: the TUI status feed that the slice's tests exercise polls with setInterval and has no in-flight guard. Load profile not provided; severity assumes a single-operator TUI.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "const timer = setInterval(() => {\n    void tick();\n  }, ms);",
+      "problem": "The project-context feed polls with setInterval and an async tick (poll -> reload -> options.load) with no in-flight guard. A tick starts every 5000 ms whether or not the previous load has finished. reload() also assigns `current` and notifies listeners in completion order, not start order. Implementation sits outside the slice diff; the slice's `R7 the feed reloads on an interval...` test covers it and never exercises overlapping or out-of-order loads.",
+      "impact": "Trigger: load takes longer than 5 s (slow or network disk, large rules tree, the references check reading many files). Overlapping loads then pile up, one extra file scan per tick. A slower, older load can finish last and overwrite a newer status, so the sidebar and open modal show a stale resolve until the next change. Bounded by one TUI session, hence minor.",
+      "suggested_fix": "Add a single in-flight flag or reuse the pending promise in poll()/reload() (skip the tick while one is running), and drop a result whose start sequence number is older than the last applied. Add a test with a load that resolves after the next tick.",
+      "evidence": "src/tui/project-context-inspector.ts lines 149-155 (defaultInterval) and 167-186 (reload/poll/stop wiring); the test at `R7 the feed reloads on an interval and tells listeners only when the status changed` drives tick() sequentially with immediately-resolving loads only.",
+      "confidence": 0.55,
+      "reviewer": "review-highload"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": ["slice-04"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Reviewed the whole of slice-04 (about 2,780 diff lines). Checked: concurrency and shared state (none added), resource management (tests create temp dirs and remove them in afterEach/afterAll; the e2e test restores cwd, exitCode and console in finally/afterEach), caching (none), database (none), queues (none), retry/timeout (none), idempotency (none). The task_text wiring passes an unbounded string from the MCP and agent boundary into the resolver; the resolver cuts it at TASK_TEXT_MAX_CHARS (asserted by the `a task text over the cut warns...` test), so no unbounded growth. Clean areas: Parts A through E, F and G for the diff itself.

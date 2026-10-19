@@ -1,0 +1,31 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Slice-03 (resolver, reference entries, proof, references-check/config/section, status, resolved-context-check) has no blocker or major performance finding. One minor: loadProjectContextStatus now runs the full references check (rule scan plus reads of every declared and cited document) on every 5-second TUI poll. Everything else is bounded by small inputs (task text cut to 4000 chars, files cut to 256 KB, a handful of declarations) and runs once per CLI invocation.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/project-context-status.ts",
+      "line": null,
+      "quote": "const report = await checkReferences(projectRoot);",
+      "problem": "readReferences() is called from loadProjectContextStatus(), which the TUI's createProjectContextFeed calls through load: () => loadProjectContextStatus(projectContextDir()) on an unref'd setInterval every PROJECT_CONTEXT_POLL_MS (5000 ms) for the whole session. Before this diff a poll read three small files (config, last.json, registry) plus a rule listing. When references.json exists, each poll now also: loads references.json a second time (readReferences calls loadReferences, then checkReferences calls loadReferences again), re-lists and reads every project rule (scanCitations -> listRuleRefs + readFile per rule; listRuleRefs is already called once for the rule count in the same poll), and reads every declared document and every cited-but-undeclared .md document (inspectDocument reads up to CONTRACT_MAX_BYTES = 262144 bytes each, then extractSection runs on it). The result is only used when the References tab is open or the sidebar counters change.",
+      "impact": "Disk work in a long-lived interactive session grows with (rules + declared docs + cited docs), every 5 seconds, even when the user never opens the References tab and nothing changed. For a project with tens of rules and a few documents of tens of KB this is a few dozen file reads per tick: not a stall, but steady background IO and repeated parsing that was not there before, and it scales with the project's rule count. The ticks are not overlap-guarded (setInterval with void tick()), so a slow disk makes ticks pile up.",
+      "suggested_fix": "Keep the poll cheap: have loadProjectContextStatus return only the declarations (already loaded) on the poll path and compute checkReferences findings on demand, when the References tab opens or on an explicit reload. Alternatively cache the report keyed on the mtimes/sizes of references.json, the rule files and the declared documents. At minimum pass the already loaded declarations into checkReferences so references.json is not parsed twice, and guard the poll against overlapping ticks.",
+      "evidence": "project-context-status.ts readReferences(): loadReferences(projectRoot) then checkReferences(projectRoot); references-check.ts checkReferences(): loadReferences again, scanCitations (listRuleRefs + readFile per rule), inspectDocument per declaration, undeclaredCitations -> inspectDocument per cited .md. src/tui/project-context-inspector.ts: PROJECT_CONTEXT_POLL_MS = 5000, defaultInterval uses setInterval; src/tui/tui-shell.ts: load: () => loadProjectContextStatus(projectContextDir()). Data scale is not stated in the diff, hence minor.",
+      "confidence": 0.7,
+      "reviewer": "review-performance"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": ["slice-03"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Checked and clean in slice-03: N+1 style loops (resolveReferences reads one file per declaration sequentially, bounded by the number of declarations and 256 KB per file, once per CLI call); regex construction (keywordOccurs builds one RegExp per keyword per resolve, against text capped at 4000 chars); section extraction (single pass over lines, no quadratic work); proof check (re-reads each promoted file once more, once per validate call); unbounded growth (last.json stores task text capped at TASK_TEXT_MAX_CHARS); sync blocking (all fs calls are async); bundle imports (node built-ins and local modules only).

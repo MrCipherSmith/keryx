@@ -1,0 +1,1324 @@
+--- src/tui/approval-mirror.ts
+@@ 15,71 @@
+   /** The dock just opened: the topic leg starts (once). */
+   opened(): void;
+   /** The topic answered first. The dock's own result is then to be thrown away. */
+   topicWon(): boolean;
+ }
+ 
+ export type ApprovalRaceOutcome<V> = { from: "dock"; result: V } | { from: "topic"; answer: RemoteApprovalAnswer };
+ 
+ /** An explicit press in the topic: an allow, or a deny that names who pressed. A timeout or an abort is neither. */
+ export function isTopicPress(answer: RemoteApprovalAnswer): boolean {
+   return answer.decision === "allow" || answer.fromId !== undefined;
+ }
+ 
+ export async function raceApproval<V>(options: {
+   /** Runs the dock; resolves with its verdict, or early when `race.signal` aborted it. */
+   dock: (race: DockRace) => Promise<V>;
+   /** Asks in the topic; the answer is judged by {@link isTopicPress}. `signal` aborts it, with the reason "shell" or "cancelled". */
+   topic: (signal: AbortSignal) => Promise<RemoteApprovalAnswer>;
+   /** The turn stopped: both places are closed, the topic one as cancelled. */
+   turnSignal: AbortSignal;
++  /** Flow 464: the topic leg ended because the question never reached the topic; the dock stays and is the only place. */
++  onUndelivered?: () => void;
+ }): Promise<ApprovalRaceOutcome<V>> {
+   const dockAbort = new AbortController();
+   const topicAbort = new AbortController();
+   let topicAnswer: RemoteApprovalAnswer | undefined;
+   let settled = false;
+   let started = false;
+   const race: DockRace = {
+     signal: AbortSignal.any([options.turnSignal, dockAbort.signal]),
+     opened: () => {
+       if (started || settled) return;
+       started = true;
+       void options
+         .topic(topicAbort.signal)
+         .then((answer) => {
+-          if (settled || !isTopicPress(answer)) return;
++          if (settled) return;
++          if (answer.undelivered === true) options.onUndelivered?.();
++          if (!isTopicPress(answer)) return;
+           topicAnswer = answer;
+           dockAbort.abort("topic");
+         })
+         .catch(() => undefined);
+     },
+     topicWon: () => topicAnswer !== undefined,
+   };
+   try {
+     const result = await options.dock(race);
+     if (topicAnswer !== undefined) return { from: "topic", answer: topicAnswer };
+     return { from: "dock", result };
+   } finally {
+     settled = true;
+     // answered in the dock: serve says "answered in the shell"; the turn stopped: "cancelled". A leg that
+     // already ended ignores the abort, so a press that won keeps its own final state.
+     if (topicAnswer === undefined) topicAbort.abort(options.turnSignal.aborted ? "cancelled" : "shell");
+   }
+ }
+
+--- src/tui/decisions-surface.ts
+@@ 416,487 @@
+       width = ctx?.width;
+       node = paint(otui, options.renderer ?? (chrome as { renderer?: unknown } | undefined)?.renderer, body, content());
+     },
+     onClose: () => {
+       unsubscribeKey?.();
+     },
+   });
+   if (handle === undefined) return undefined;
+   if (options.onKeypress !== undefined) {
+     unsubscribeKey = options.onKeypress((key) => {
+       const token = key.name || key.sequence;
+       const step = token === "up" || token === "k" ? -1 : token === "down" || token === "j" ? 1 : token === "pageup" ? -bodyRows : token === "pagedown" ? bodyRows : 0;
+       if (step === 0) return;
+       scroll = clampScroll(scroll + step, rows.length, bodyRows);
+       repaint();
+     });
+   }
+   return handle;
+ }
+ 
+-export type OpenDecisionsOptions = Omit<PresentDecisionsOptions, "text"> & { cwd: string };
++export type OpenDecisionsOptions = Omit<PresentDecisionsOptions, "text"> & {
++  cwd: string;
++  /** Flow 464 (AC6): the operator cards waiting in the Telegram topic and the recent answers, appended under the report. */
++  confirmationLines?: () => readonly string[];
++};
+ 
+ /** Read the journal and open the modal over what `keryx decisions report` would print. */
+ export async function openDecisions(
+   otui: Parameters<typeof openModal>[0],
+   chrome: Parameters<typeof openModal>[1],
+   options: OpenDecisionsOptions,
+ ): Promise<HostModalHandle | undefined> {
+-  const { cwd, ...rest } = options;
+-  const text = await reportText(cwd).catch(() => UNREADABLE);
++  const { cwd, confirmationLines, ...rest } = options;
++  const report = await reportText(cwd).catch(() => UNREADABLE);
++  const text = withConfirmationLines(report, confirmationLines?.() ?? []);
+   return presentDecisions((hostOtui, hostChrome, input) => openModal(hostOtui as typeof otui, hostChrome as typeof chrome, input), otui, chrome, { ...rest, text }) as
+     | HostModalHandle
+     | undefined;
+ }
+ 
++/** The report with the Telegram review cards (waiting, answered) appended under it; unchanged when there are none. */
++export function withConfirmationLines(report: string, cards: readonly string[]): string {
++  return cards.length === 0 ? report : `${report}\n\n${cards.join("\n")}`;
++}
++
+ /** Open the same modal over the arm summary (`/decisions arms`, or a click on the arms row). */
+ export async function openDecisionsArms(
+   otui: Parameters<typeof openModal>[0],
+   chrome: Parameters<typeof openModal>[1],
+   options: OpenDecisionsOptions,
+ ): Promise<HostModalHandle | undefined> {
+-  const { cwd, ...rest } = options;
++  const { cwd, confirmationLines: _cards, ...rest } = options;
+   const text = await armsText(cwd);
+   return presentDecisions((hostOtui, hostChrome, input) => openModal(hostOtui as typeof otui, hostChrome as typeof chrome, input), otui, chrome, { ...rest, text, tabLabel: "Arms" }) as
+     | HostModalHandle
+     | undefined;
+ }
+ 
+ // --- the sidebar row ---------------------------------------------------------
+ 
+ export interface DecisionsPanelProjection {
+   readonly visible: boolean;
+   readonly text: string;
+ }
+ 
+ /** One row, and only once the journal holds a decision: zero rows otherwise. */
+ export function projectDecisionsPanel(count: number, width: number, backfilled = 0, annotated = 0): DecisionsPanelProjection {
+   if (count <= 0 && backfilled <= 0) return { visible: false, text: "" };
+   // live decisions first; the backfilled (historical) ones are shown apart, never added into the live count
+   const live = count > 0 ? `${count} decision${count === 1 ? "" : "s"}` : "";
+   const before = backfilled > 0 ? `${count > 0 ? " + " : ""}${backfilled} before` : "";
+   const label = `${live}${before}`;
+
+--- src/tui/decisions-surface.ts
+@@ 489,530 @@
+   // the modal lists each of them in full
+   const marked = annotated > 0 ? `${label} ${OWN_MARK}${annotated}` : label;
+   const candidates = [`${marked} · /decisions`, marked, `${label} · /decisions`, label];
+   const text = candidates.find((candidate) => candidate.length <= width) ?? label.slice(0, Math.max(1, width));
+   return { visible: true, text };
+ }
+ 
+ export interface DecisionsSidebarOptions {
+   otui: unknown;
+   chrome: ModalChrome & { showToast(message: string): void };
+   parent: unknown;
+   width: number;
+   cwd: string;
+   onKeypress: OpenDecisionsOptions["onKeypress"];
+   /** Where `/decisions reason|change` tell the outcome (the transcript). */
+   notice?: ((text: string) => void) | undefined;
+   /** The latest question answered through the journal in this session. */
+   lastDecisionId?: (() => string | undefined) | undefined;
+   /** This session's id, so `/decisions reason|change` without an id stays inside this session's decisions. */
+   session?: string | undefined;
++  /** Flow 464 (AC6): the operator cards waiting in the Telegram topic and the recent answers (`pressedBy`). */
++  confirmationLines?: () => readonly string[];
+   /** Test seam: how many LIVE decisions the journal holds. */
+   count?: () => Promise<number>;
+   /** Test seam: how many backfilled (historical) decisions the journal holds. */
+   backfilled?: () => Promise<number>;
+   /** Test seam: the report the arm summary is cut from. Default: `loadReport(cwd)`, a read-only call. */
+   armsReport?: () => Promise<unknown>;
+   /** Test seam: how many live decisions carry the operator's own text or a typed reason. */
+   annotated?: () => Promise<number>;
+   interval?: (tick: () => Promise<void>, ms: number) => () => void;
+   pollMs?: number;
+ }
+ 
+ export interface DecisionsSidebar {
+   projection(): DecisionsPanelProjection;
+   paintCount(): number;
+   /** The arm summary row: present only once some arm holds an answered decision that had a recommendation. */
+   armsProjection(): ArmsPanelProjection;
+   show(): Promise<HostModalHandle | undefined>;
+   /** Opens the arm summary modal (`/decisions arms`). */
+   showArms(): Promise<HostModalHandle | undefined>;
+
+--- src/tui/decisions-surface.ts
+@@ 601,641 @@
+     armsPaintedKey = key;
+     clearTranscriptChildren(armsBox);
+     if (!armsProjected.visible) return;
+     const [label, ...hint] = armsProjected.text.split(" · ");
+     const chunks = [roleChunk(core, "ok", label ?? armsProjected.text), ...(hint.length > 0 ? [dimChunk(core, ` · ${hint.join(" · ")}`)] : [])];
+     armsBox.add(
+       new core.TextRenderable(r, {
+         id: "sb-decisions-arms-row",
+         content: new core.StyledText(chunks),
+         onMouseDown: () => {
+           void showArms();
+         },
+       }),
+     );
+   };
+ 
+   const openWith = async (open: typeof openDecisions): Promise<HostModalHandle | undefined> => {
+     modal?.close({ restoreFocus: false });
+     modal = await open(core, chrome, {
+       cwd: options.cwd,
++      ...(options.confirmationLines !== undefined ? { confirmationLines: options.confirmationLines } : {}),
+       ...(options.onKeypress !== undefined ? { onKeypress: options.onKeypress } : {}),
+     });
+     return modal;
+   };
+   const show = (): Promise<HostModalHandle | undefined> => openWith(openDecisions);
+   const showArms = (): Promise<HostModalHandle | undefined> => openWith(openDecisionsArms);
+ 
+   const refresh = async (): Promise<void> => {
+     if (disposed) return;
+     const generation = ++refreshGeneration;
+     let n: number;
+     try {
+       n = await count();
+     } catch {
+       n = 0;
+     }
+     let before: number;
+     try {
+       before = await backfilledTotal();
+     } catch {
+
+--- src/tui/operator-confirmations.ts
+@@ 1,141 @@
++// Flow 464 (AC6): the operator-confirmation cards this shell mirrored to the Telegram topic — each question still
++// waiting for a press (with its age and the time left of the 1-hour token), and the recent ones with who pressed.
++// Held in memory only: the stores keep the durable record (`confirmedVia`, `pressedBy`, `pressedAt`); this is the
++// live view the sidebar, the `/remote-control` status and the `/decisions` modal read.
++
++import { REMOTE_CARD_TTL_MS } from "../commands/operator-confirm-tools";
++
++/** How many answered cards the view keeps. */
++export const ANSWERED_CARDS_KEPT = 5;
++
++export type CardAnswerPlace = "telegram" | "shell" | "withdrawn";
++
++export interface ConfirmationEntry {
++  readonly id: number;
++  /** The card's title: the question the operator was asked. */
++  readonly question: string;
++  readonly askedAt: number;
++  /** Whether the question reached the topic at all (false: the card says the mirror was not delivered). */
++  readonly mirrored: boolean;
++  readonly answered?: {
++    readonly place: CardAnswerPlace;
++    readonly yes: boolean;
++    readonly at: number;
++    /** The Telegram user id that pressed, when `place` is `telegram`. */
++    readonly pressedBy?: number;
++  };
++}
++
++export class OperatorConfirmationLog {
++  private readonly items: ConfirmationEntry[] = [];
++  private nextId = 1;
++  private readonly listeners = new Set<() => void>();
++
++  constructor(private readonly now: () => number = () => Date.now()) {}
++
++  /** A card was put to the operator. Returns the handle for {@link answer}. */
++  ask(question: string, mirrored: boolean): number {
++    const id = this.nextId++;
++    this.items.push({ id, question, askedAt: this.now(), mirrored });
++    this.changed();
++    return id;
++  }
++
++  /** The card was answered (or withdrawn, when the turn stopped). */
++  answer(id: number, result: { place: CardAnswerPlace; yes: boolean; pressedBy?: number }): void {
++    const at = this.items.findIndex((item) => item.id === id);
++    const entry = this.items[at];
++    if (entry === undefined || entry.answered !== undefined) return;
++    this.items[at] = {
++      ...entry,
++      answered: { place: result.place, yes: result.yes, at: this.now(), ...(result.pressedBy === undefined ? {} : { pressedBy: result.pressedBy }) },
++    };
++    const answered = this.items.filter((item) => item.answered !== undefined);
++    for (const old of answered.slice(0, Math.max(0, answered.length - ANSWERED_CARDS_KEPT))) {
++      this.items.splice(this.items.indexOf(old), 1);
++    }
++    this.changed();
++  }
++
++  /** Cards waiting for a press in the topic: mirrored and not yet answered. */
++  waiting(): readonly ConfirmationEntry[] {
++    return this.items.filter((item) => item.answered === undefined && item.mirrored);
++  }
++
++  /** Every card the view holds, waiting first (oldest first), then the answered ones (newest first). */
++  entries(): readonly ConfirmationEntry[] {
++    const open = this.items.filter((item) => item.answered === undefined);
++    const done = this.items.filter((item) => item.answered !== undefined).reverse();
++    return [...open, ...done];
++  }
++
++  subscribe(listener: () => void): () => void {
++    this.listeners.add(listener);
++    return () => {
++      this.listeners.delete(listener);
++    };
++  }
++
++  private changed(): void {
++    for (const listener of [...this.listeners]) listener();
++  }
++}
++
++function age(ms: number): string {
++  const seconds = Math.max(0, Math.round(ms / 1000));
++  if (seconds < 60) return `${seconds}s`;
++  const minutes = Math.floor(seconds / 60);
++  if (minutes < 60) return `${minutes}m`;
++  return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}m`;
++}
++
++function clock(at: number): string {
++  return new Date(at).toISOString().slice(11, 19);
++}
++
++function clip(text: string, max: number): string {
++  const flat = text.replace(/\s+/g, " ").trim();
++  return flat.length <= max ? flat : `${flat.slice(0, Math.max(0, max - 1))}…`;
++}
++
++/** `Complete review X? · asked 3m ago · 57m left of the 1-hour token`. */
++export function pendingConfirmationLine(entry: ConfirmationEntry, now: number): string {
++  const elapsed = now - entry.askedAt;
++  const left = REMOTE_CARD_TTL_MS - elapsed;
++  const token = left > 0 ? `${age(left)} left of the 1-hour token` : "token expired, ask again";
++  const where = entry.mirrored ? "" : " · Telegram mirror not delivered, answer in the shell";
++  return `${clip(entry.question, 80)} · asked ${age(elapsed)} ago · ${token}${where}`;
++}
++
++/** `Complete review X? · yes · pressed by Telegram user 9 at 12:03:11`. */
++export function answeredConfirmationLine(entry: ConfirmationEntry): string {
++  const done = entry.answered;
++  if (done === undefined) return clip(entry.question, 80);
++  const verdict = done.yes ? "yes" : "no";
++  if (done.place === "telegram") {
++    const who = done.pressedBy === undefined ? "a Telegram user" : `Telegram user ${done.pressedBy}`;
++    return `${clip(entry.question, 80)} · ${verdict} · pressed by ${who} at ${clock(done.at)}`;
++  }
++  if (done.place === "withdrawn") return `${clip(entry.question, 80)} · withdrawn (the turn stopped) at ${clock(done.at)}`;
++  return `${clip(entry.question, 80)} · ${verdict} · answered in the shell at ${clock(done.at)}`;
++}
++
++/**
++ * The lines the surfaces print. No cards, no lines: a surface with nothing to say stays quiet. `heading` is the
++ * section title; each card is one line.
++ */
++export function confirmationLines(entries: readonly ConfirmationEntry[], now: number, heading = "Operator confirmations (Telegram cards)"): string[] {
++  if (entries.length === 0) return [];
++  const waiting = entries.filter((entry) => entry.answered === undefined);
++  const answered = entries.filter((entry) => entry.answered !== undefined);
++  const lines = [heading];
++  for (const entry of waiting) lines.push(`  waiting  ${pendingConfirmationLine(entry, now)}`);
++  for (const entry of answered) lines.push(`  answered ${answeredConfirmationLine(entry)}`);
++  return lines;
++}
++
++/** The sidebar fragment: `1 card waiting`, or undefined when none waits in the topic. */
++export function waitingCardsText(waiting: number): string | undefined {
++  if (waiting <= 0) return undefined;
++  return `${waiting} card${waiting === 1 ? "" : "s"} waiting`;
++}
+
+--- src/tui/remote-control-surface.ts
+@@ 1,33 @@
+ // `/remote-control`: the TUI and readline halves of the shell's remote control
+ // (flow 376, AC3/AC12). The sidebar row, the modal, the slash command's text
+ // and the readline text are all built from one `RemoteStatus`, so no surface
+ // states something the others do not.
+ //
+ // Remote control is OFF unless this command turned it on. Nothing here starts
+ // it: `presentRemoteControl` and the panel only ask the host to (`onToggle`,
+ // `onOpen`), and the host runs the same code the typed command runs.
+ 
+ import { parseHistoryArgs } from "../remote/history";
+ import { historyArgsOf } from "../remote/history-host";
+ import { REMOTE_EVENT_LIMIT, type RemoteEvent, type RemoteState, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
++import { waitingCardsText } from "./operator-confirmations";
+ import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
+ import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
+ import { guardedThemeRepaint, isRenderableGone } from "./theme-repaint";
+ import { onThemeChange, type TextRole } from "./theme";
+ import { dimChunk, roleChunk } from "./theme-text";
+ 
+ type OpenTui = typeof import("@opentui/core");
+ 
+ export const REMOTE_CONTROL_COMMAND = "/remote-control";
+ export const REMOTE_CONTROL_SUMMARY = "Mirror this session into a Telegram topic: /remote-control [name|off|status]";
+ 
+ /** The label a line from Telegram carries in the transcript echo and the queue. */
+ export const TG_LABEL = TG_SOURCE;
+ /** The echo marker for a Telegram line (the user's own lines keep `❯`). */
+ export const TG_ECHO_MARKER = `${TG_LABEL} ❯`;
+ 
+ /** `[tg] text`, for the queue panel and any plain-text listing. */
+ /** The transcript line for a typed slash command: `❯ /model`, or `tg ❯ /model` when it came from the topic. */
+ export function commandEchoText(line: string, source?: string): string {
+   return source === TG_SOURCE ? `${TG_ECHO_MARKER} ${line}` : `❯ ${line}`;
+
+--- src/tui/remote-control-surface.ts
+@@ 100,156 @@
+ 
+ /** `12s`, `3m`, `2h`; the unit that reads shortest. */
+ export function formatAge(ms: number): string {
+   const seconds = Math.max(0, Math.round(ms / 1000));
+   if (seconds < 60) return `${seconds}s`;
+   const minutes = Math.round(seconds / 60);
+   if (minutes < 60) return `${minutes}m`;
+   return `${Math.round(minutes / 60)}h`;
+ }
+ 
+ const STATE_WORDS: Record<RemoteState, string> = { off: "off", on: "on", offline: "offline" };
+ 
+ /** `History: 10 messages posted at 06:52:11 (restored automatically)`, or how to post it. */
+ export function formatHistoryStatus(status: RemoteStatus): string {
+   const history = status.history;
+   if (history === undefined) return `History: not posted yet. Use ${HISTORY_COMMAND} [N], or press h here.`;
+   return `History: ${history.count} message${history.count === 1 ? "" : "s"} posted at ${clock(history.at)} (${history.auto ? "restored automatically" : HISTORY_COMMAND}). Again: ${HISTORY_COMMAND} [N], or press h here.`;
+ }
+ 
+ /** One status block: state, topic, heartbeat age and what turns it on or off. `posture` adds the Telegram permission lines (flow 396). */
+-export function formatRemoteStatusLines(status: RemoteStatus, posture?: readonly string[]): string[] {
++export function formatRemoteStatusLines(status: RemoteStatus, posture?: readonly string[], confirmations?: readonly string[]): string[] {
+   const lines = [`Remote control: ${STATE_WORDS[status.state]}`];
+   if (status.state === "off") {
+     lines.push("Topic: none");
+     lines.push(`Turn it on with ${REMOTE_CONTROL_COMMAND} <name>, or press o here.`);
+     return lines;
+   }
+   lines.push(`Topic: ${status.name ?? "registering"}`);
+   lines.push(`Last heartbeat: ${status.heartbeatAgeMs === undefined ? "none yet" : `${formatAge(status.heartbeatAgeMs)} ago`}`);
+   lines.push(formatHistoryStatus(status));
+   if (status.state === "offline") lines.push("Serve is not reachable. The shell keeps retrying; nothing is lost from Telegram.");
+   if (status.unconfirmedApprovals !== undefined && status.unconfirmedApprovals > 0) {
+     const n = status.unconfirmedApprovals;
+     lines.push(`Approvals not confirmed: ${n}. The topic shows ${n === 1 ? "it" : "them"} as "not confirmed" until serve takes the shell's ack.`);
+   }
++  // Flow 464 (AC6): the operator cards put to the topic and not answered yet, and who pressed the recent ones.
++  if (confirmations !== undefined && confirmations.length > 0) lines.push("", ...confirmations);
+   lines.push(`Turn it off with ${REMOTE_CONTROL_COMMAND} off, or press o here. Rename: ${REMOTE_CONTROL_COMMAND} off, then ${REMOTE_CONTROL_COMMAND} <name>.`);
+   if (posture !== undefined && posture.length > 0) {
+     lines.push("", "Telegram permissions (change with /remote-policy):", ...posture.map((line) => `  ${line}`));
+   }
+   return lines;
+ }
+ 
+ function clock(at: number): string {
+   return new Date(at).toISOString().slice(11, 19);
+ }
+ 
+ /** Recent events, newest first; one line each. */
+ export function formatRemoteEventLines(status: RemoteStatus): string[] {
+   if (status.events.length === 0) return ["No remote events yet."];
+   return [...status.events].reverse().slice(0, REMOTE_EVENT_LIMIT).map((event: RemoteEvent) => `${clock(event.at)}  ${event.kind.padEnd(8)} ${event.text}`);
+ }
+ 
+ /**
+  * Flow 387: the recent slash commands that came from the topic, newest first. Refused commands and
+  * confirmations still waiting for a press are in it, because the router records both as "command"
+
+--- src/tui/remote-control-surface.ts
+@@ 180,221 @@
+   if (request.action === "on") {
+     return `Remote control starts only in the full-screen shell: run \`keryx shell\` and use ${REMOTE_CONTROL_COMMAND} <name> there. Here it is off.\n${off}`;
+   }
+   return off;
+ }
+ 
+ // ---------------------------------------------------------------------------
+ // Modal
+ // ---------------------------------------------------------------------------
+ 
+ export const REMOTE_TABS = [
+   { id: "status", label: "Status" },
+   { id: "events", label: "Events" },
+   { id: "commands", label: "Commands" },
+ ] as const;
+ 
+ export type PresentRemoteOptions = {
+   getStatus: () => RemoteStatus;
+   /** The Telegram permission lines for the Status tab (flow 396). */
+   getPostureLines?: () => readonly string[] | undefined;
++  /** Flow 464 (AC6): the pending and recently answered operator cards, one line each, heading first. */
++  getConfirmationLines?: () => readonly string[] | undefined;
+   /** Turn it on (with the name serve picks) when off, off when on. Same code as the typed command. */
+   onToggle: () => void;
+   /**
+    * Post the session's history to the topic (the `h` key). Same code as the typed `/history`.
+    * Returns a promise that settles when the posts are done (a paced run takes a while): the
+    * modal shows that it is working, then repaints with the answer (a line for usage, empty
+    * history or remote control off) or with the new status when it is undefined.
+    */
+   onHistory?: () => void | Promise<string | undefined>;
+   renderer?: { width?: number; height?: number };
+   visibleRows?: number;
+   onKeypress?: (handler: (key: { name: string; sequence: string }) => void) => () => void;
+   /**
+    * Subscribe to the bridge's change notices (a decision confirmed or aged out, a state change):
+    * the open modal repaints on each, so "Approvals not confirmed: N" appears and clears without a
+    * keypress. Returns the unsubscribe, called when the modal closes.
+    */
+   subscribeChange?: (listener: () => void) => () => void;
+ };
+ 
+
+--- src/tui/remote-control-surface.ts
+@@ 242,282 @@
+   const bodyRows =
+     options.visibleRows ??
+     (typeof rendererHint?.width === "number" && typeof rendererHint.height === "number"
+       ? modalBodyRows(resolveModalPanelSize(rendererHint.width, rendererHint.height).height)
+       : 13);
+   let scroll = 0;
+   let width: number | undefined;
+   let current = "status";
+   const nodes = new Map<string, { content: string }>();
+   let unsubscribeKey: (() => void) | undefined;
+   let unsubscribeChange: (() => void) | undefined = undefined;
+   /** What the last `h` press says: that it is posting, or why nothing was posted. Shown in the status tab. */
+   let historyNote: string | undefined;
+   let postingHistory = false;
+   let closed = false;
+ 
+   const linesFor = (tab: string): string[] => {
+     const status = options.getStatus();
+     if (tab === "events") return formatRemoteEventLines(status);
+     if (tab === "commands") return formatRemoteCommandLines(status);
+-    const lines = formatRemoteStatusLines(status, options.getPostureLines?.());
++    const lines = formatRemoteStatusLines(status, options.getPostureLines?.(), options.getConfirmationLines?.());
+     if (historyNote !== undefined) {
+       const at = lines.findIndex((line) => line.startsWith("History:"));
+       lines.splice(at < 0 ? lines.length : at + 1, 0, historyNote);
+     }
+     return lines;
+   };
+   const content = (tab: string): string => {
+     const lines = linesFor(tab);
+     scroll = clampScroll(scroll, lines.length, bodyRows);
+     return wrapLines(windowLines(lines, scroll, bodyRows).join("\n"), width);
+   };
+   const repaint = (): void => {
+     const node = nodes.get(current);
+     if (node !== undefined) node.content = content(current);
+   };
+ 
+   const handle = open(otui, chrome, {
+     title: REMOTE_CONTROL_COMMAND,
+     tabs: REMOTE_TABS,
+     initialTab: "status",
+
+--- src/tui/remote-control-surface.ts
+@@ 365,473 @@
+ // ---------------------------------------------------------------------------
+ // Sidebar
+ // ---------------------------------------------------------------------------
+ 
+ export interface RemoteRow {
+   /** The value shown after the "Remote" label: `off`, the topic name, or `offline`. */
+   readonly text: string;
+   readonly role: TextRole;
+   /** A click always opens the modal: that is where it is turned on or off. */
+   readonly action: "open";
+   /** `history 10 · 06:52` once the history was posted to this topic (flow 399); absent otherwise. */
+   readonly detail?: string;
+ }
+ 
+ function fit(text: string, width: number): string {
+   if (width <= 0) return "";
+   return text.length <= width ? text : `${text.slice(0, Math.max(0, width - 1))}…`;
+ }
+ 
+ /** `Remote: off | <topic name> | offline`, as the value half of the row. */
+-export function projectRemoteRow(status: RemoteStatus | undefined, width: number): RemoteRow {
++export function projectRemoteRow(status: RemoteStatus | undefined, width: number, waitingCards = 0): RemoteRow {
+   if (status === undefined || status.state === "off") return { text: fit("off", width), role: "muted", action: "open" };
+   const detail = status.history === undefined ? {} : { detail: fit(`history ${status.history.count} · ${clock(status.history.at).slice(0, 5)}`, width) };
+   if (status.state === "offline") return { text: fit("offline", width), role: "attention", action: "open", ...detail };
+   const topic = status.name ?? "connecting";
+   const unconfirmed = status.unconfirmedApprovals ?? 0;
++  // Flow 464 (AC6): an operator card waiting for a press in the topic is attention, like an unconfirmed decision.
++  const cards = waitingCardsText(waitingCards);
++  if (cards !== undefined) return { text: fit(`${topic} · ${cards}`, width), role: "attention", action: "open", ...detail };
+   // Flow 397: a decision serve has not confirmed is attention, not "ok": the topic shows it as "not confirmed".
+   if (unconfirmed > 0) return { text: fit(`${topic} · ${unconfirmed} unconfirmed`, width), role: "attention", action: "open", ...detail };
+   return { text: fit(topic, width), role: "ok", action: "open", ...detail };
+ }
+ 
+ /** The posture line under the Remote row: only while remote control is on or retrying, and only when there is something to say. */
+ export function projectPostureLine(status: RemoteStatus | undefined, posture: string | undefined, width: number): string | undefined {
+   if (status === undefined || status.state === "off" || posture === undefined || posture.length === 0) return undefined;
+   return posture
+     .split("\n")
+     .map((line) => fit(line, width))
+     .join("\n");
+ }
+ 
+ type PanelParent = { add(child: unknown): void };
+ type TextNode = { content: unknown; onMouseDown?: (() => void) | undefined };
+ 
+ export interface RemotePanelOptions {
+   width: number;
+   getStatus: () => RemoteStatus;
++  /** Flow 464 (AC6): how many operator cards wait for a press in the topic. */
++  getWaitingCards?: () => number;
+   onOpen: () => void;
+   /**
+    * Flow 396: the Telegram permission posture, one line under the row (`trust · no limit · wait 15m`).
+    * Painted only while remote control is on; `undefined` hides the line so the sidebar keeps its height.
+    */
+   getPosture?: () => string | undefined;
+   /** A click on the posture line (the saved-rule count lives there) opens `/permissions`. */
+   onOpenPermissions?: () => void;
+ }
+ 
+ export interface RemotePanelHandle {
+   /** Repaint from the current status (the host calls it on every bridge change). */
+   refresh(): void;
+   row(): RemoteRow;
+   activate(): "open";
+   dispose(): void;
+ }
+ 
+ export function mountRemotePanel(otui: unknown, renderer: unknown, parent: unknown, options: RemotePanelOptions): RemotePanelHandle {
+   const core = otui as OpenTui;
+   const box = new core.BoxRenderable(renderer as never, { id: "sb-remote", flexDirection: "column", flexShrink: 0 });
+   (parent as PanelParent).add(box);
+   let disposed = false;
+ 
+   const label = new core.TextRenderable(renderer as never, {
+     id: "sb-remote-k",
+     content: core.t`${dimChunk(core, "Remote")}`,
+     marginTop: 1,
+   });
+   const value = new core.TextRenderable(renderer as never, { id: "sb-remote-v", content: "" }) as unknown as TextNode;
+   const detail = new core.TextRenderable(renderer as never, { id: "sb-remote-h", content: "" }) as unknown as TextNode;
+   box.add(label);
+   box.add(value as never);
+   box.add(detail as never);
+   const posture = new core.TextRenderable(renderer as never, { id: "sb-remote-p", content: "" }) as unknown as TextNode & { visible?: boolean };
+   box.add(posture as never);
+ 
+-  const currentRow = (): RemoteRow => projectRemoteRow(options.getStatus(), options.width);
++  const currentRow = (): RemoteRow => projectRemoteRow(options.getStatus(), options.width, options.getWaitingCards?.() ?? 0);
+   const draw = (): void => {
+     if (disposed) return;
+     const row = currentRow();
+     label.content = core.t`${dimChunk(core, "Remote")}`;
+     value.content = core.t`${roleChunk(core, row.role, row.text)}`;
+     detail.content = row.detail === undefined ? "" : core.t`${dimChunk(core, row.detail)}`;
+     const line = projectPostureLine(options.getStatus(), options.getPosture?.(), options.width);
+     posture.content = line === undefined ? "" : core.t`${dimChunk(core, line)}`;
+     posture.visible = line !== undefined;
+   };
+   const activate = (): "open" => {
+     options.onOpen();
+     return "open";
+   };
+   label.onMouseDown = () => {
+     activate();
+   };
+   value.onMouseDown = () => {
+     activate();
+   };
+
+--- src/tui/tui-shell.ts
+@@ 26,66 @@
+ // closed. Assigning the hook again would silently reopen it.
+ //
+ // The working directory the agent acts on is the sidebar `Directory` panel
+ // (`mountCwdPanel`), shortened to the sidebar's fixed 26-column text budget by
+ // the pure `shortenCwd`. It was absent from the TUI entirely — gap G-2, also
+ // closed: an agent holding `shell_exec` acts on a directory, and the operator
+ // approving that command has to be able to see which one.
+ //
+ // Since flow 112 the LAYOUT itself is not built here: `launchTuiAgentShell`
+ // mounts `createShellChrome` (./shell-chrome) and keeps only what knows what a
+ // tool is — approval, ask_user, the worker fleet, side workers, the wiki-enrich
+ // pre-router, the block registry/nav and the `runAgentTurn` call site. The chat
+ // driver mounts the same chrome, so the two surfaces cannot drift apart.
+ //
+ // `@opentui/core` is an OPTIONAL dependency (ADR-0005) loaded ONLY via a dynamic
+ // `import()` — never a top-level import (keryx's zero-`dependencies` floor + lazy
+ // optional-import guard, src/capability/no-optional-imports). `launchTuiAgentShell`
+ // is defensive: it returns `false` (caller falls back to the readline shell)
+ // whenever there is no TTY, the package is absent, or the renderer fails to init.
+ import { describeAutomaticReviewMode } from "../commands/automatic-review";
+-import type { AgentDeps, AgentIO } from "../commands/agent";
++import type { AgentDeps, AgentIO, ApprovalResponse } from "../commands/agent";
+ import {
+   describeReasoningEffortSource,
+   describeRoundLimit,
+   isReasoningEffortLevel,
+   REASONING_EFFORT_LEVELS,
+   resolveMaxAutoWake,
+   runAgentTurn,
+ } from "../commands/agent";
+ import { runModelTurn } from "../harness/provider/single-turn";
+ import { buildNextStepPrompt, NextStepSuggestionGate, sanitizeNextStepSuggestion } from "./next-step-suggestion";
+ import { buildApprovalContext } from "../commands/agent-approval-context";
+ import { buildDoctorReport, formatDoctorReport } from "../commands/doctor";
+ import {
+   closeSlateSession,
+   detachSlateSession,
+   mintTimestampAttemptId,
+   recordSlateSessionTouch,
+   type SlateSessionRef,
+ } from "../session/slate-lifecycle";
+ import { anchorsAnnouncement } from "../session/anchors-announce";
+
+--- src/tui/tui-shell.ts
+@@ 70,146 @@
+ import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
+ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
+ import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
+ import { estimateRequestTokens } from "../harness/provider/context-guard";
+ import packageJson from "../../package.json" with { type: "json" };
+ import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
+ import { isProductCommand, openProduct } from "./product-open-surface";
+ import { loadReviewDepth } from "./review-panel";
+ import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, isReviewsCommand, mountReviewsPanel, openReviews, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, type ReviewsPanelHandle } from "./reviews-inspector";
+ import { permissionsSlashText } from "../commands/permissions-command";
+ import {
+   loadPosture,
+   postureLines,
+   postureSidebarText,
+   REMOTE_POLICY_COMMAND,
+   remotePolicyText,
+   type RemotePolicyDeps,
+ } from "../commands/remote-policy-command";
+ import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
+ import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
+-import { describeApprovalForTopic, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
++import { describeApprovalForTopic, mirrorUndeliveredNote, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+ import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
+ import { type DockRace, raceApproval } from "./approval-mirror";
+ import { BUSY_REASON } from "../remote/command-gateway";
+ import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
+ import type { CommandOutcome } from "../remote/command-router";
+ import { ChannelsClient } from "../remote/channels-client";
+ import {
+   type ChannelsPanelHandle,
+   isChannelsCommand,
+   loadChannelsSnapshot,
+   mountChannelsPanel,
+   openChannels,
+   parseChannelsArgs,
+ } from "./channels-surface";
+ import {
+   HISTORY_COMMAND,
+   isHistoryCommand,
+   isRemoteControlCommand,
+   commandEchoText,
+   labelTelegramLine,
+   mountRemotePanel,
+   openRemoteControl,
+   parseRemoteControlArgs,
+   type RemotePanelHandle,
+   TG_ECHO_MARKER,
+ } from "./remote-control-surface";
+ // Flow 328, AC7: the modal's `c` key and `/ac` both run the SAME check the
+ // CLI does — no separate TUI-only Jev path. Never triggered automatically;
+ // only on an explicit key press.
+ import { runCheckAc } from "../commands/flow-check-ac";
+ import { mountOpsSidebar, routeOpsCommand, type OpsSidebar } from "./ops-sidebar";
+ import { describeDetachedRuns } from "./trigger-run-now";
+ import { mountApprovalsSidebar, routeApprovalsCommand, type ApprovalsSidebar } from "./approvals-sidebar";
+ import { intakeConfiguredSync, mountIntakeSidebar, routeIntakeCommand, type IntakeSidebar } from "./intake-surface";
+ import { mountDecisionsSidebar, routeDecisionsCommand, type DecisionsSidebar } from "./decisions-surface";
++import { OperatorConfirmationLog, confirmationLines as operatorConfirmationLines } from "./operator-confirmations";
+ import { mountResearchSyncPanel, type ResearchSyncPanelHandle } from "./research-sync-panel";
+ import { mountExternalDiffSidebar, routeExternalDiffCommand, type ExternalDiffSidebar } from "./external-diff-sidebar";
+ import { mountAutoReviewSidebar, routeAutoReviewCommand, type AutoReviewSidebar } from "./autoreview-surface";
+ import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
+ import { CTRL_C_EXIT_HINT, createCtrlCPolicy } from "./ctrl-c-policy";
+ import { classifyBusyDispatch } from "./busy-dispatch";
+ import { debugEvent } from "./debug-log";
+ import {
+   createSplashLifecycle,
+   mountEmptyTranscriptSplash,
+   mountStartupIndicator,
+   playBootAnimation,
+   type SplashLifecycle,
+ } from "./boot-animation";
+ import {
+   catchUpItems,
+   loadInspectorCatchUp,
+   loadInspectorFlows,
+   loadInspectorSlates,
+   loadInspectorWorkspace,
+
+--- src/tui/tui-shell.ts
+@@ 562,606 @@
+   // review r1 F9: `bus_list` no longer reaches a side worker either — not
+   // because it is unsafe (it genuinely is read-only), but because the side
+   // worker's own `makeAgentDeps` call now passes no bus getter at all (see
+   // that call site's own doc comment), so `bus_list`/`bus_send` are never
+   // even built into `base.tools` for it to filter here. Named anyway, should
+   // that ever change.
+   "bus_send",
+ ]);
+ 
+ /**
+  * Flow 173 F-003 (P2 conversion, flow 277): the side-worker tools filter's
+  * own predicate — `risk === "read"` AND not on {@link SIDE_WORKER_DENIED_TOOL_NAMES}
+  * — extracted from `spawnSideWorker`'s inline `base.tools.filter(...)` so the
+  * rule is a plain, unit-testable function instead of a source-text audit
+  * reading the filter's call site (`tui-shell.test.ts`'s flow 173 F-003
+  * block). Takes a narrow structural type — mirroring `InteractiveTool`'s
+  * `definition.risk`/`definition.name` (`../commands/agent.ts`,
+  * `../harness/tool/builtin/interactive-tools.ts`) — so this module stays free
+  * of importing those types just for this one check.
+  */
++/** Flow 464: an approval answered in the topic, carrying the pressing Telegram user and the press time. */
++function remoteApproval(fingerprint: string, fromId: number | undefined): Extract<ApprovalResponse, { approved: boolean }> {
++  return { approved: true, fingerprint, via: "remote", ...(fromId !== undefined ? { pressedBy: fromId } : {}), pressedAt: new Date().toISOString() };
++}
++
+ export function isToolAvailableToSideWorker(tool: { definition: { risk?: string; name: string } }): boolean {
+   return tool.definition.risk === "read" && !SIDE_WORKER_DENIED_TOOL_NAMES.has(tool.definition.name);
+ }
+ 
+ /** Parse a GitHub remote URL into `owner/repo` (if possible). */
+ function parseGitHubRemote(remote: string): string | undefined {
+   const trimmed = remote.trim();
+   if (trimmed.length === 0) {
+     return undefined;
+   }
+   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+     try {
+       const url = new URL(trimmed);
+       if (url.hostname !== "github.com") {
+         return undefined;
+       }
+       const [owner, repo] = url.pathname.split("/").filter(Boolean);
+       if (!owner || !repo) {
+         return undefined;
+       }
+
+--- src/tui/tui-shell.ts
+@@ 1595,1639 @@
+  */
+ export function shouldAutoApproveReadOnlySpawn(mode: string, hookAsk: boolean | undefined, untrustedOrigin?: boolean): boolean {
+   return mode === "read_only" && hookAsk !== true && untrustedOrigin !== true;
+ }
+ 
+ /**
+  * Flow 306 fix round 2 (finding C): whether an `alwaysAsk`+`card` approval
+  * (`agent.ts`'s shape for both `schedule_create` and a `UserPromptSubmit`
+  * hook's `ask`) is the `user_prompt` one, which must NOT be routed to
+  * `confirmOperatorCard` — the two calls share a meta shape but not a
+  * question, and routing on the shape alone put "Create this schedule and
+  * install its background timer?" in front of an operator being asked whether
+  * their own chat message may reach the model. Extracted as a pure predicate,
+  * same reason as {@link shouldAutoApproveReadOnlySpawn}: unit-testable
+  * without mounting the whole TUI shell.
+  */
+ export function isUserPromptApprovalCard(tool: string): boolean {
+   return tool === "user_prompt";
+ }
+ 
++/** Flow 464: the card with the mirror note above its last line (the subject), which the dialog shows as its subtitle. */
++export function withMirrorNote(card: readonly string[], note: string): readonly string[] {
++  return card.length === 0 ? [note] : [...card.slice(0, -1), note, card[card.length - 1] as string];
++}
++
+ /** The wording of the operator-confirmation dialog: the yes/no choice and the transcript line for each answer. */
+ export interface OperatorCardDialog {
+   readonly title: string;
+   readonly yes: { readonly id: string; readonly label: string; readonly description: string; readonly preselected?: boolean };
+   readonly no: { readonly id: string; readonly label: string; readonly description: string; readonly preselected?: boolean };
+   readonly confirmed: string;
+   readonly declined: string;
+   readonly phase: string;
+ }
+ 
+ /**
+  * Flow 456 (AC1): the dialog for an `alwaysAsk`+`card` approval. With a `cardTitle` (an
+  * operator-confirm gate, `operator-confirm-tools.ts`) the dialog asks that question with a plain
+  * yes/no; without one the card is `schedule_create`'s (or `/schedule`'s) and keeps its wording.
+  * Pure, so the wording is testable without mounting the shell.
+  */
+ export function operatorCardDialog(cardTitle: string | undefined): OperatorCardDialog {
+   if (cardTitle === undefined) {
+     return {
+       title: "Create this schedule and install its background timer?",
+
+--- src/tui/tui-shell.ts
+@@ 3919,3961 @@
+   // same way: a nullable ref set once real, read through optional chaining
+   // so an early Ctrl+C degrades to a safe no-op (there is nothing to sweep
+   // that early — no JobRegistry/BackgroundJobStore exists yet either).
+   let liveDeps: AgentDeps | undefined;
+   let liveJobs: BackgroundJobStore | undefined;
+   let disposeExecutionPlanPanel: (() => void) | undefined;
+   // Flow 300: same nullable-ref idiom — the Governance/Triggers sections own a
+   // poller and possibly a running `keryx trigger run` child to stop on exit.
+   let liveOps: OpsSidebar | undefined;
+   let liveSchedules: SchedulesSidebar | undefined;
+   let liveAutoReview: AutoReviewSidebar | undefined;
+   let liveReviewsPanel: ReviewsPanelHandle | undefined;
+   // Flow 376: remote control (the Telegram topic). Same nullable-ref/TDZ idiom as
+   // `busWakeController` below: the bridge's host closes over `runLine` and
+   // `turnLoop`, which do not exist yet, while `onDestroy` and the approval/reply
+   // wraps near the top of the shell already need to reach it. Off until the
+   // operator's `/remote-control <name>`; `closeRemote` deregisters (deletes the
+   // topic) on every exit path.
+   let remoteBridge: RemoteBridge | undefined;
+   let liveRemotePanel: RemotePanelHandle | undefined;
++  // Flow 464 (AC6): the operator cards this shell mirrored to the topic, for the sidebar, the status tab and /decisions.
++  const operatorCards = new OperatorConfirmationLog();
++  const operatorCardLines = (): string[] => operatorConfirmationLines(operatorCards.entries(), Date.now());
+   // Flow 377: the Telegram connection of this machine (`/channels`), shared by every shell.
+   let liveChannelsPanel: ChannelsPanelHandle | undefined;
+   const channelsClient = new ChannelsClient();
+   let liveApprovals: ApprovalsSidebar | undefined;
+   let liveIntake: IntakeSidebar | undefined;
+   let liveDecisions: DecisionsSidebar | undefined;
+   let liveResearchSync: ResearchSyncPanelHandle | undefined;
+   let liveExternalDiff: ExternalDiffSidebar | undefined;
+   // Flow 462: the project-context feed polls on a timer; `onDestroy` is installed before the feed exists.
+   let stopProjectContextFeed: (() => void) | undefined;
+   // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
+   // is installed before the operator exists, and leaving the module-level
+   // external bridge pointing at a destroyed shell would let a still-settling
+   // vendor run repaint a renderer that is gone.
+   let detachExternal: (() => void) | undefined;
+   // Flow 273 (agent bus P2, T7): same nullable-ref/TDZ idiom as `liveJobs` and
+   // `detachExternal` above — `onDestroy` is installed before the session (and
+   // so the bus join, which needs the session id) exists, and every exit path
+   // must call `leave()` even when Ctrl+C lands before the join ever ran.
+   let liveBus: BusClient | undefined;
+
+--- src/tui/tui-shell.ts
+@@ 4564,4604 @@
+       renderer: r,
+       parent: sidebar,
+       cwd: opts.session?.cwd ?? process.cwd(),
+       width: SIDEBAR_TEXT_WIDTH,
+       notice: (text) => io.onSystem?.(text),
+     });
+     liveAutoReview = autoReview;
+     // `/reviews`: the managed pull request reviews, mounted after Schedules with the open-findings
+     // count; a click opens the same modal the slash command does.
+     const reviewsPanel = mountReviewsPanel(otui, r, sidebar, {
+       cwd: opts.session?.cwd ?? process.cwd(),
+       width: SIDEBAR_TEXT_WIDTH,
+       onOpen: () => showReviews(),
+     });
+     liveReviewsPanel = reviewsPanel;
+     // Flow 376 (AC12): `Remote: off | <topic> | offline`; a click opens the `/remote-control` modal.
+     const remoteStatus = (): RemoteStatus => remoteBridge?.status() ?? { state: "off", events: [] };
+     liveRemotePanel = mountRemotePanel(otui, r, sidebar, {
+       width: SIDEBAR_TEXT_WIDTH,
+       getStatus: remoteStatus,
++      getWaitingCards: () => operatorCards.waiting().length,
+       onOpen: () => showRemoteControl(),
+       onOpenPermissions: () => showPermissions(),
+       getPosture: () => {
+         const posture = remoteBridge?.active === true ? telegramPosture() : undefined;
+         return posture === undefined ? undefined : postureSidebarText(posture);
+       },
+     });
+     // Flow 377: `Telegram: off | pairing | connected | serve down`; a click opens `/channels`.
+     liveChannelsPanel = mountChannelsPanel(otui, r, sidebar, {
+       width: SIDEBAR_TEXT_WIDTH,
+       load: () => loadChannelsSnapshot(channelsClient),
+       onOpen: () => showChannels(),
+     });
+     // Flow 369 (R4d): one row, only while a remote approval is pending; it polls the
+     // approval store itself (that lives in the config dir, not the project).
+     const approvals = mountApprovalsSidebar({
+       otui,
+       chrome,
+       parent: sidebar,
+       width: SIDEBAR_TEXT_WIDTH,
+
+--- src/tui/tui-shell.ts
+@@ 4612,4652 @@
+       chrome,
+       parent: sidebar,
+       width: SIDEBAR_TEXT_WIDTH,
+       root: opts.session?.cwd ?? process.cwd(),
+       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+       notice: (text) => io.onSystem?.(text),
+     });
+     liveIntake = intake;
+     // Flow 392 (AC8): one row, only once the recommendation journal holds a decision.
+     const decisionsPanel = mountDecisionsSidebar({
+       otui,
+       chrome,
+       parent: sidebar,
+       width: SIDEBAR_TEXT_WIDTH,
+       cwd: opts.session?.cwd ?? process.cwd(),
+       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+       // `/decisions reason <why>` and `/decisions change <option>` tell their outcome in the transcript
+       notice: (text) => io.onSystem?.(`◇ ${text}\n`),
+       lastDecisionId: lastAskUserDecisionId,
+       session: askUserSessionId(),
++      confirmationLines: operatorCardLines,
+     });
+     liveDecisions = decisionsPanel;
+     // Flow 404 (AC9): when the Part 1 materials were last synced; a row only in a checkout that has the catalog.
+     liveResearchSync = mountResearchSyncPanel(otui, r, sidebar, {
+       root: opts.session?.cwd ?? process.cwd(),
+       width: SIDEBAR_TEXT_WIDTH,
+     });
+     // Flow 370 (AC6): one row, only while a write run awaits review.
+     const externalDiff = mountExternalDiffSidebar({
+       otui,
+       chrome,
+       parent: sidebar,
+       width: SIDEBAR_TEXT_WIDTH,
+       cwd: opts.session?.cwd ?? process.cwd(),
+       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+     });
+     liveExternalDiff = externalDiff;
+     const fleet = new WorkerFleet();
+     const sessions = new SubagentSessionStore();
+     const jobs = new BackgroundJobStore();
+
+--- src/tui/tui-shell.ts
+@@ 6068,6157 @@
+       const decision = answer.decision;
+       let rememberedNote = "";
+       if (decision === "allow" && answer.always && offer !== undefined) {
+         // The pattern is the one the shell classified from the command it showed, never text from the
+         // model or from the button, and it goes through the same store and validators as the dock.
+         const stored = allowShellPattern(offer.pattern);
+         if (stored.length > 0) {
+           sessionShellAllow.add(stored);
+           permissionsFingerprintAtStart = shellPermissionsFingerprint();
+         }
+         rememberedNote = stored.length > 0 ? ` and remembered “${stored}”` : ` once; “${offer.pattern}” cannot be remembered`;
+         bridge.recordApproval(stored.length > 0 ? `saved a rule: ${stored}` : "a rule was asked for and refused by the store");
+         await bridge.reportRemembered(answer.approvalId, stored.length > 0);
+       }
+       setMainAgent("running", decision === "allow" ? "approved (telegram)" : "denied");
+       io.onSystem?.(
+         decision === "allow" ? `◇ ${brief} approved in Telegram${rememberedNote}.\n` : `◇ ${brief} denied (Telegram answer, timeout or no connection).\n`,
+       );
+       if (decision !== "allow") return false;
+       // Flow 456: answered in the topic — an operator-confirmed card records `confirmedVia: "remote-card"`.
+-      return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint, via: "remote" } : true;
++      return meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, answer.fromId) : true;
+     };
+     // Flow 419 (AC1, AC2): an approval the shell raises for a turn typed here is also posted to the topic
+     // the moment the dock opens (a call that is auto-approved never gets there). The first answer wins: a
+     // press in the topic closes the dock; an answer in the dock removes the buttons in the topic. Silence in
+     // the topic never ends the dock. A Telegram-started turn has its own topic-only path above, on its facade;
+     // this wrapper decides nothing and never reads the bridge-wide Telegram-turn flag.
+     const mirrorApprovalToTopic =
+       (inner: LocalApproval): NonNullable<TuiAgentIo["requestApproval"]> =>
+       async (tool, inputJson, meta) => {
+         const bridge = remoteBridge;
++        // Flow 464 (AC5): an operator card the topic cannot get says so on the card, and is answered here as before.
++        const isCard = meta?.alwaysAsk === true && meta.card !== undefined && meta.card.length > 0 && !isUserPromptApprovalCard(tool);
++        const unmirrored = isCard ? mirrorUndeliveredNote(bridge) : undefined;
++        if (unmirrored !== undefined && meta?.card !== undefined) {
++          const unmirroredId = operatorCards.ask(meta.card[0] ?? tool, false);
++          const verdict = await inner(tool, inputJson, { ...meta, card: withMirrorNote(meta.card, unmirrored) });
++          operatorCards.answer(unmirroredId, { place: foregroundOperation.signal.aborted ? "withdrawn" : "shell", yes: verdict !== false });
++          return verdict;
++        }
+         if (bridge === undefined || !bridge.active) {
+           return inner(tool, inputJson, meta);
+         }
+         if (operatorCardTooLongForTopic(tool, inputJson, meta)) {
+           void bridge.noticeCardTooLong(tool);
+           return inner(tool, inputJson, meta);
+         }
+         const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
++        const cardId = isCard && meta?.card !== undefined ? operatorCards.ask(meta.card[0] ?? tool, true) : undefined;
+         const outcome = await raceApproval({
+           turnSignal: foregroundOperation.signal,
++          ...(isCard ? { onUndelivered: () => io.onSystem?.("◇ Telegram mirror not delivered: the topic did not take the card. Answer it here.\n") } : {}),
+           dock: (race) => inner(tool, inputJson, meta, race),
+           // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.
+           topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
+         });
+-        if (outcome.from === "dock") return outcome.result;
++        if (outcome.from === "dock") {
++          if (cardId !== undefined) {
++            operatorCards.answer(cardId, { place: foregroundOperation.signal.aborted ? "withdrawn" : "shell", yes: outcome.result !== false });
++          }
++          return outcome.result;
++        }
+         const allowed = outcome.answer.decision === "allow";
++        if (cardId !== undefined) operatorCards.answer(cardId, { place: "telegram", yes: allowed, ...(outcome.answer.fromId === undefined ? {} : { pressedBy: outcome.answer.fromId }) });
+         input.focus();
+         setMainAgent("running", allowed ? "approved (telegram)" : "denied");
+         io.onSystem?.(allowed ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied in Telegram.\n`);
+         if (!allowed) return false;
+         // Flow 456: the topic answered first — an operator-confirmed card records `confirmedVia: "remote-card"`.
+-        return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint, via: "remote" } : true;
++        return meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, outcome.answer.fromId) : true;
+       };
+     io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));
+ 
+     /** Host for ask_user — Claude-style options docked above the composer. */
+     const askUserInteractive = async (req: {
+       question: string;
+       options: Array<{ id: string; label: string; description: string; recommended?: boolean; preselected?: boolean }>;
+     }): Promise<AskUserAnswer> => {
+       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
+       setMainAgent("blocked", "ask");
+       setBusyPhase("waiting for your answer (menu above input)");
+       // Keep a short transcript breadcrumb; the interactive picker is at the input.
+       const qShort = req.question.length > 100 ? `${req.question.slice(0, 97)}…` : req.question;
+       transcript.add(
+         new otui.TextRenderable(r, {
+           id: `ask${uid++}`,
+           content: otui.t`${roleChunk(otui, "attention", "? ")} ${dimChunk(otui, qShort)}`,
+         }),
+       );
+       // flow 401/419: a question is also put in the topic (any turn, while remote control is on); the first answer wins
+
+--- src/tui/tui-shell.ts
+@@ 7318,7365 @@
+     // Resolves with that line (undefined when messages went out); the sidebar is refreshed when it ends.
+     const postHistoryFor = async (line: string): Promise<string | undefined> => {
+       const bridge = remoteBridge;
+       if (bridge === undefined) return "Remote control is not available in this shell.";
+       try {
+         return await bridge.historyForCommand(historyArgsOf(line));
+       } catch {
+         return "The history could not be posted.";
+       } finally {
+         liveRemotePanel?.refresh();
+       }
+     };
+     const runHistoryCommand = (line: string): void => {
+       void postHistoryFor(line).then((answer) => {
+         if (answer !== undefined) io.onSystem?.(`◇ ${answer}\n`);
+       });
+     };
+     // Flow 397 review L-1: an open /remote-control modal repaints when the bridge reports a change
+     // (an approval confirmed or aged out), not only on the next keypress.
+     const remoteModalListeners = new Set<() => void>();
++    operatorCards.subscribe(() => {
++      liveRemotePanel?.refresh();
++      remoteModalListeners.forEach((listener) => listener());
++    });
+     const showRemoteControl = (): void => {
+       openRemoteControl(otui, chrome, {
+         getStatus: remoteStatus,
++        getConfirmationLines: operatorCardLines,
+         subscribeChange: (listener) => {
+           remoteModalListeners.add(listener);
+           return () => {
+             remoteModalListeners.delete(listener);
+           };
+         },
+         getPostureLines: () => {
+           const posture = remoteBridge?.active === true ? telegramPosture() : undefined;
+           return posture === undefined ? undefined : postureLines(posture);
+         },
+         onToggle: () => {
+           void (remoteBridge?.active === true ? disableRemoteControl() : enableRemoteControl());
+         },
+         // The modal shows the answer itself (a line behind it would be unseen) and repaints when the posts end.
+         onHistory: () => postHistoryFor(HISTORY_COMMAND),
+         renderer: r,
+         ...inspectorKeys,
+       });
+     };
+     const runRemoteControlCommand = (line: string): void => {
+
+--- src/tui/operator-confirmations.test.ts
+@@ 1,145 @@
++// Flow 464 (AC6): the Telegram review cards show where the operator already looks — the Remote sidebar row, the
++// /remote-control status tab and the /decisions modal — with the age and the time left of the 1-hour token while a
++// card waits, and who pressed once it is answered. The help modal and the slash command list name the card tools.
++
++import { expect, test } from "bun:test";
++import { commandsForMode } from "../commands/agent-commands";
++import { REMOTE_CARD_TTL_MS } from "../commands/operator-confirm-tools";
++import { HELP_GROUPS } from "../standard/help-groups";
++import { presentDecisions, withConfirmationLines } from "./decisions-surface";
++import { OperatorConfirmationLog, answeredConfirmationLine, confirmationLines, pendingConfirmationLine, waitingCardsText } from "./operator-confirmations";
++import { formatRemoteStatusLines, projectRemoteRow } from "./remote-control-surface";
++import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
++
++const T0 = Date.UTC(2026, 9, 18, 12, 0, 0);
++const CARD_TOOLS = ["review_confirm_plan", "review_decide_premise", "review_waive_readiness", "review_waive_coverage", "review_complete"];
++
++function logAt(clock: { now: number }): OperatorConfirmationLog {
++  return new OperatorConfirmationLog(() => clock.now);
++}
++
++test("a waiting card shows its question, its age and the time left of the 1-hour token", () => {
++  const clock = { now: T0 };
++  const log = logAt(clock);
++  log.ask("Complete review 2026-10-18-x?", true);
++  clock.now = T0 + 3 * 60_000;
++  const [entry] = log.entries();
++  expect(pendingConfirmationLine(entry!, clock.now)).toBe("Complete review 2026-10-18-x? · asked 3m ago · 57m left of the 1-hour token");
++});
++
++test("a card past the token says it expired", () => {
++  const log = logAt({ now: T0 });
++  log.ask("Confirm the plan?", true);
++  const [entry] = log.entries();
++  expect(pendingConfirmationLine(entry!, T0 + REMOTE_CARD_TTL_MS + 1000)).toContain("token expired, ask again");
++});
++
++test("a card whose mirror was not delivered says it must be answered in the shell", () => {
++  const log = logAt({ now: T0 });
++  log.ask("Confirm the plan?", false);
++  const [entry] = log.entries();
++  expect(pendingConfirmationLine(entry!, T0)).toContain("Telegram mirror not delivered, answer in the shell");
++  expect(log.waiting()).toHaveLength(0);
++});
++
++test("an answered card shows who pressed it", () => {
++  const clock = { now: T0 };
++  const log = logAt(clock);
++  const id = log.ask("Complete review X?", true);
++  clock.now = T0 + 11_000;
++  log.answer(id, { place: "telegram", yes: true, pressedBy: 9 });
++  const [entry] = log.entries();
++  expect(answeredConfirmationLine(entry!)).toBe("Complete review X? · yes · pressed by Telegram user 9 at 12:00:11");
++  expect(log.waiting()).toHaveLength(0);
++});
++
++test("a card answered in the shell or withdrawn names that, never a Telegram user", () => {
++  const log = logAt({ now: T0 });
++  const a = log.ask("A?", true);
++  const b = log.ask("B?", true);
++  log.answer(a, { place: "shell", yes: false });
++  log.answer(b, { place: "withdrawn", yes: false });
++  const lines = log.entries().map(answeredConfirmationLine).join("\n");
++  expect(lines).toContain("A? · no · answered in the shell");
++  expect(lines).toContain("B? · withdrawn (the turn stopped)");
++  expect(lines).not.toContain("pressed by");
++});
++
++test("the section lists waiting cards first, then answered ones; with no cards it is empty", () => {
++  expect(confirmationLines([], T0)).toEqual([]);
++  const log = logAt({ now: T0 });
++  const done = log.ask("Old?", true);
++  log.answer(done, { place: "telegram", yes: true, pressedBy: 4 });
++  log.ask("New?", true);
++  const lines = confirmationLines(log.entries(), T0);
++  expect(lines[0]).toBe("Operator confirmations (Telegram cards)");
++  expect(lines[1]).toMatch(/^ {2}waiting {2}New\?/);
++  expect(lines[2]).toMatch(/^ {2}answered Old\? · yes · pressed by Telegram user 4/);
++});
++
++test("the log keeps only the last few answered cards, and notifies on every change", () => {
++  const log = logAt({ now: T0 });
++  let changes = 0;
++  log.subscribe(() => {
++    changes += 1;
++  });
++  for (let i = 0; i < 8; i += 1) log.answer(log.ask(`Q${i}?`, true), { place: "shell", yes: true });
++  expect(log.entries()).toHaveLength(5);
++  expect(log.entries()[0]!.question).toBe("Q7?");
++  expect(changes).toBe(16);
++});
++
++test("the sidebar Remote row counts the cards waiting", () => {
++  expect(waitingCardsText(0)).toBeUndefined();
++  expect(waitingCardsText(1)).toBe("1 card waiting");
++  expect(waitingCardsText(3)).toBe("3 cards waiting");
++  const row = projectRemoteRow({ state: "on", name: "keryx-demo", events: [] }, SIDEBAR_TEXT_WIDTH, 2);
++  expect(row.text).toContain("2 cards waiting");
++  expect(row.role).toBe("attention");
++  expect(projectRemoteRow({ state: "on", name: "keryx-demo", events: [] }, SIDEBAR_TEXT_WIDTH).text).toBe("keryx-demo");
++});
++
++test("the /remote-control status tab carries the cards, and stays as before without any", () => {
++  const status = { state: "on", name: "keryx-demo", heartbeatAgeMs: 1000, events: [] } as const;
++  const log = logAt({ now: T0 });
++  log.ask("Complete review X?", true);
++  const withCards = formatRemoteStatusLines(status, undefined, confirmationLines(log.entries(), T0 + 60_000));
++  expect(withCards.join("\n")).toContain("Operator confirmations (Telegram cards)");
++  expect(withCards.join("\n")).toContain("Complete review X? · asked 1m ago · 59m left of the 1-hour token");
++  expect(formatRemoteStatusLines(status, undefined, [])).toEqual(formatRemoteStatusLines(status));
++});
++
++test("the /decisions modal prints the cards under the report", () => {
++  const log = logAt({ now: T0 });
++  log.answer(log.ask("Confirm the plan?", true), { place: "telegram", yes: true, pressedBy: 7 });
++  const text = withConfirmationLines("By stage:\n  ordinary", confirmationLines(log.entries(), T0));
++  expect(withConfirmationLines("By stage:", [])).toBe("By stage:");
++
++  let painted = "";
++  class FakeText {
++    content: string;
++    constructor(_r: unknown, opts: { content: string }) {
++      this.content = opts.content;
++      painted = opts.content;
++    }
++  }
++  const open = ((_otui: unknown, _chrome: unknown, input: { renderTab?: (id: string, body: unknown, ctx?: unknown) => void }) => {
++    input.renderTab?.("report", { add: () => undefined }, undefined);
++    return { close: () => undefined };
++  }) as never;
++  expect(presentDecisions(open, { TextRenderable: FakeText }, {}, { text, visibleRows: 40 })).toBeDefined();
++  expect(painted).toContain("By stage:");
++  expect(painted).toContain("Operator confirmations (Telegram cards)");
++  expect(painted).toContain("pressed by Telegram user 7");
++});
++
++test("the help modal and the command list name the card tools", () => {
++  const help = HELP_GROUPS.filter((entry) => entry.name === "/remote-control" || entry.name === "/decisions");
++  expect(help).toHaveLength(2);
++  const commands = commandsForMode("agent").filter((command) => command.name === "/remote-control" || command.name === "/decisions");
++  expect(commands).toHaveLength(2);
++  for (const tool of CARD_TOOLS) {
++    for (const entry of help) expect(entry.summary).toContain(tool);
++    for (const command of commands) expect(command.description).toContain(tool);
++  }
++});

@@ -1,0 +1,61 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-regression",
+  "status": "DONE_WITH_CONCERNS",
+  "slices": ["slice-01"],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0},
+  "head": "6f47bf35f",
+  "prior_dispositions": [
+    {"id": "C-01", "disposition": "closed", "evidence": "operator-confirm-rosters.test.ts asserts 19 card tools; OPERATOR_CONFIRM_TOOL_NAMES in src/trigger/unattended.ts holds 19 names. Roster/tools tests pass."},
+    {"id": "C-03", "disposition": "closed", "evidence": "operator-confirm-review.ts completeSpec.apply (741-797): the gate runs in its own try, `closed` is derived from the gate result or completionFacts status, and the completion-confirmation.json write is a separate try. A close with no record now returns isError 'the round is closed but ...' instead of claiming nothing was recorded."},
+    {"id": "C-05", "disposition": "closed", "evidence": "Both SKILL.md and SKILL.detail.md copies (bundled and .metaproject) name the review_complete card; TM-04 states the card is an agent rule, not a lock on plain `keryx review complete`."},
+    {"id": "C-06", "disposition": "closed", "evidence": "OperatorConfirmationLog.markUndelivered added (operator-confirmations.ts); tui-shell.ts onUndelivered calls it; waiting() drops unmirrored cards. Unit-tested in operator-confirmations.test.ts."},
+    {"id": "C-13", "disposition": "closed", "evidence": "mirrorApprovalToTopic in tui-shell.ts (~6095-6153) settles the card in try/finally in both branches, so a rejected topic leg still answers/clears the card."},
+    {"id": "C-16", "disposition": "open", "evidence": "docs/docs/guides/autonomous-review.md:35 still says the run 'stops at the floor and never tells you to run the terminal command'. The card tools are excluded from the unattended roster (unattended.ts) and autonomous-profile.ts still tells the child to run `keryx review complete`. Left on purpose per the commit message; I did not trace how a refused excluded-tool call is counted by isFloorRefusal. Not a regression of existing behaviour."},
+    {"id": "C-17", "disposition": "closed", "evidence": "CHANGELOG.md now says a rejected remote answer burns the card, matching the token being deleted before the id/TTL checks in confirm-token.ts."},
+    {"id": "C-18", "disposition": "closed", "evidence": "TM-04 section 6a has the bot-token-file bullet."},
+    {"id": "C-19", "disposition": "closed", "evidence": "TM-04 section 6a has the restart bullet (token and answered-card list live in shell memory only)."},
+    {"id": "C-20", "disposition": "closed", "evidence": "CHANGELOG.md '## [Unreleased]' is empty; the entries sit under the dated 0.3.124 heading."},
+    {"id": "C-21", "disposition": "partial", "evidence": "SKILL Done-when, hosts table and detail text, and completion-gate.ts nudge now name the card. operator-confirm-review.ts still says 'run `keryx review complete`' in the waive tool descriptions (lines 262, 312), tool outputs (296, 358) and the header comment (24)."},
+    {"id": "C-22", "disposition": "closed", "evidence": "The card input has only `package`; the head comes from the manifest and is sanitised with cardSafe in completionFacts (658-692). No head input or PR re-derivation remains."},
+    {"id": "C-23", "disposition": "closed", "evidence": "completionFacts reads research.json; only ENOENT counts as no coverage waiver, any other read/parse error is pushed as a blocker line."},
+    {"id": "C-24", "disposition": "closed", "evidence": "remoteApproval now sits above the isToolAvailableToSideWorker JSDoc (tui-shell.ts ~572), so each block documents its own function."},
+    {"id": "C-26", "disposition": "partial", "evidence": "The shared reason() helper is hoisted in apply and the duplicate head input is gone; the 12-character SHA abbreviation and refusal wording are still repeated. Cosmetic."},
+    {"id": "C-32", "disposition": "partial", "evidence": "operator-confirmations.test.ts and confirm-token.test.ts cover the log and token. The tui-shell seam (remoteApproval -> confirmedVia remote-card + pressedBy/pressedAt, onUndelivered -> markUndelivered) is only pinned by a source-text assertion; no behavioural test drives it."},
+    {"id": "C-39", "disposition": "closed", "evidence": "Doc comments in confirm-token.ts/types.ts/schema now say pressedAt is the shell clock at delivery, not the Telegram press time."},
+    {"id": "C-41", "disposition": "open", "evidence": "Info-level and unchanged: the factsDigest check still runs before the PR lookup in completeReviewGated. The TOCTOU window is not reachable by a concrete input; no new defect."},
+    {"id": "C-45", "disposition": "partial", "evidence": "waiting() now honours REMOTE_CARD_TTL_MS and shows 'Telegram token expired, answer in the shell'. The answered entry is still written from the transport event (tui-shell.ts ~6141) before the gate re-checks id/token/TTL, so the log can show a press the gate later refused."}
+  ],
+  "findings": []
+}
+```
+
+## Regression Review
+
+### Review Scope
+- Change: PR 1052 (flow 464), round r03, slice-01 fix slice, d2cb377f5..6f47bf35f.
+- Question asked: does this change break an existing behaviour in the blast radius?
+
+### What I checked
+- completion-gate.ts nudge text change: reaches `holdReviewGate`/`decideReviewGate` in src/commands/agent.ts, which now returns false for unattended and subagent runs. The text moved only for attended runs; no caller parses the string (agent.ts:3506 prints its own wording).
+- confirm-token.ts / types.ts / flow/schema.ts / flow-state.schema.json: `pressedBy` and `pressedAt` are optional on `SignatureConfirmation`; existing flow-state files and docpack validation still parse. Schema and type are in step.
+- Removing the card's `head` input: affects only the new `review_complete` card; no other tool or caller passes it.
+- operator-confirmations.ts `waiting()`: TTL filter is additive; the TUI pending-line consumers only render the string.
+- tui-shell.ts try/finally in mirrorApprovalToTopic: the `answer()` call now runs on a rejection as well; no caller depended on it being skipped.
+- OPERATOR_CONFIRM_TOOL_NAMES (19 tools): unattended exclusion and the roster test both agree; autonomous runs do not gain a card tool.
+
+### Tests run (real results)
+- Card/token/log/shell test files named by tests-to-run: 177 pass, 0 fail.
+- Wider run: 1089 pass, 0 fail across 71 files.
+- `tsc --noEmit`: clean.
+
+### Blast-radius coverage and its limits
+- blast-radius.json: depth 2, maxFiles 40, 24 changed files seen, 15 resolved, 9 unresolved (docs, skills, schema JSON and other non-code files). The graph cannot answer for those nine; "no finding" there means not looked at by the graph, not proved clean. I read the skill, docs and schema changes by hand.
+- The cap dropped 17 candidate files (droppedByCap = 17) beyond the 40 retained. I did not enumerate those 17 individually. Other drops were by relevance: 131 unrelated-symbol, 189 test consumers, 1 hub-damped.
+- No runtime edges (spawned processes, hooks, string-keyed tool registries) are in the graph. The unattended-roster and autonomous-profile checks above were done by reading source, not by the radius.
+
+### Findings
+None at major or above. The only regression-adjacent item is the C-16 / L-01 doc contradiction (autonomous profile still tells the child to run `keryx review complete`); it is below major and was not a behaviour the change broke, so it is not reported as a scope B finding.

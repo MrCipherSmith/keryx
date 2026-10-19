@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "source": "blast-radius.json",
+  "maxFiles": 40,
+  "maxBytes": 150000,
+  "dropped": 8,
+  "droppedKey": "8c8e5cb09138d746",
+  "fileBytes": {
+    "src/acp/roster.ts": 4165,
+    "src/commands/workspace.ts": 33010,
+    "src/decisions/context.ts": 4496,
+    "src/governance/aggregate.ts": 6216,
+    "src/harness/tool/builtin/workspace-context-tool.ts": 4842,
+    "src/tui/chat-shell.ts": 26927,
+    "src/tui/governance-panel.ts": 11429,
+    "src/wiki/deep-enrich.ts": 20340
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "src/tui/governance-panel.ts",
+        "src/acp/roster.ts",
+        "src/decisions/context.ts",
+        "src/harness/tool/builtin/workspace-context-tool.ts",
+        "src/tui/chat-shell.ts",
+        "src/wiki/deep-enrich.ts",
+        "src/commands/workspace.ts",
+        "src/governance/aggregate.ts"
+      ],
+      "bytes": 111425
+    }
+  ]
+}

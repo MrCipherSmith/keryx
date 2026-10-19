@@ -1,0 +1,495 @@
+{
+  "version": 1,
+  "scopeReviewed": false,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-clean-code-w1:F6-01",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F6-01 (Clean Code D1/E1 (a rule stated once, checked at the wrong place) with the S-401 consequence. The fi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "reason": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "finding": "S-402"
+    },
+    {
+      "id": "review-clean-code-w1:F6-02",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F6-02 (Clean Code E1. `evidence.trim()` is now computed five times in one loop body (lines 693, 694 twice, ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as F6-02.",
+      "reason": "Kept as F6-02.",
+      "finding": "F6-02"
+    },
+    {
+      "id": "review-clean-code-w1:F6-03",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F6-03 (Clean Code E2. The limit 300 is written as a literal in the schema description while the constant MA) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as F6-03.",
+      "reason": "Kept as F6-03.",
+      "finding": "F6-03"
+    },
+    {
+      "id": "review-clean-code-w1:F6-04",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F6-04 (The three caps are not derived from the one limit that decides whether a card can be answered remote) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as F6-04.",
+      "reason": "Kept as F6-04.",
+      "finding": "F6-04"
+    },
+    {
+      "id": "review-logic-w1:L6-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding L6-001 (S-401 asked for the shown text to equal the stored text. The fix covers length only. completionDispo) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "reason": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "finding": "S-402"
+    },
+    {
+      "id": "review-logic-w2:L6-601",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding L6-601 (The S-401 fix stores evidence.trim() (operator-confirm-review.ts:696) but shows cardSafe(record.evid) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "reason": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "finding": "S-402"
+    },
+    {
+      "id": "review-logic-w2:L6-602",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding L6-602 (The review-orchestrator skill tells the agent to pass dispositions to the review_complete card but o) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as L6-602.",
+      "reason": "Kept as L6-602.",
+      "finding": "L6-602"
+    },
+    {
+      "id": "review-logic-w5:L6-501",
+      "source": "raw/review-logic-w5.txt",
+      "question": "Is review-logic finding L6-501 (askApproval in src/remote/client.ts returns { decision: \"deny\", undelivered: true } from a catch tha) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as L6-501.",
+      "reason": "Kept as L6-501.",
+      "finding": "L6-501"
+    },
+    {
+      "id": "review-logic-w6:L6-601",
+      "source": "raw/review-logic-w6.txt",
+      "question": "Is review-logic finding L6-601 (PlanConfirmation gained optional pressedBy and pressedAt (estimate.ts:199-200). coverage-complete.ts) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as L6-603 (renamed: id L6-601 is also used by review-logic-w2 for a different finding).",
+      "reason": "Kept as L6-603 (renamed: id L6-601 is also used by review-logic-w2 for a different finding).",
+      "finding": "L6-603"
+    },
+    {
+      "id": "review-logic-w7:L6-701",
+      "source": "raw/review-logic-w7.txt",
+      "question": "Is review-logic finding L6-701 (S-401 is closed only for the length vector. dispositionLine still shows cardSafe(record.evidence), a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "reason": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "finding": "S-402"
+    },
+    {
+      "id": "review-logic-w7:fu1",
+      "source": "raw/review-logic-w7.txt",
+      "question": "Is the parent follow-up from review-logic done or ruled out, and where is that recorded? S-401 sibling to check: the card now allows 20 entries of up to 200+300 characters, so a full card is far above MAX_APPROVAL_PROMPT_CHARS (3000). That is handled (tui-shell.ts:6029 and :6104 route a t",
+      "status": "finding",
+      "evidence": "The follow-up (a full card is far above MAX_APPROVAL_PROMPT_CHARS) is F6-04.",
+      "reason": "The follow-up (a full card is far above MAX_APPROVAL_PROMPT_CHARS) is F6-04.",
+      "finding": "F6-04"
+    },
+    {
+      "id": "review-logic-w7:fu2",
+      "source": "raw/review-logic-w7.txt",
+      "question": "Is the parent follow-up from review-logic done or ruled out, and where is that recorded? F5-04: the evidence schema line was edited in this delta but still says 'Optional'; the engine still refuses a non-unknown disposition without evidence only after the press. Unchanged, stays open.",
+      "status": "out-of-scope",
+      "evidence": "F5-04 is a prior finding carried open by the ledger; this delta edited the schema line but did not change the behaviour.",
+      "reason": "Already filed as F5-04; not re-reported."
+    },
+    {
+      "id": "review-logic-w7:fu3",
+      "source": "raw/review-logic-w7.txt",
+      "question": "Is the parent follow-up from review-logic done or ruled out, and where is that recorded? F5-05: the new 20-entry test uses twenty identical finding entries as the accepted case, so it also documents that duplicates pass the card. Unchanged, stays open.",
+      "status": "out-of-scope",
+      "evidence": "F5-05 is a prior finding carried open by the ledger; the 20-entry test's identical entries are recorded in T6-02.",
+      "reason": "Already filed as F5-05; the test-side note is in T6-02."
+    },
+    {
+      "id": "review-regression-w2:R6-01",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is review-regression finding R6-01 (The change in 0f980c407 makes dispositionLine show cardSafe(record.evidence) and makes completionDis) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "reason": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "finding": "S-402"
+    },
+    {
+      "id": "review-regression-w2:R6-02",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is review-regression finding R6-02 (0f980c407 added MAX_DISPOSITIONS = 20 to completionDispositions. Before it, review_complete accepted) real, and where is it reported?",
+      "status": "narrowed",
+      "evidence": "The ingest scope-B screen rejects it: severity minor is below the scope-B floor major, and the card is new in this PR so no merge-base behaviour is lost (git show origin/main:src/commands/operator-confirm-review.ts has no review_complete).",
+      "reason": "Narrowed below the scope-B floor, not refuted: the 20-entry cap leaving no agent path for fix rounds with more than 20 prior findings stays open as a follow-up named in the report summary and in SKILL.md:284 (L6-602).",
+      "remains": "The 20-entry cap in completionDispositions leaves a fix round with more than 20 prior findings no agent path to record them all; this is a usability gap on a new path, not a regression, and stays open as a follow-up."
+    },
+    {
+      "id": "review-security-code-w1:S-601",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding S-601 (completionDispositions stores evidence.trim() raw and dispositionLine draws cardSafe(evidence); card) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "reason": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "finding": "S-402"
+    },
+    {
+      "id": "review-security-code-w1:S-602",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding S-602 (No test feeds control characters, OSC or newlines through the dispositions field; removing cardSafe ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into T-602: the same missing cardSafe test.",
+      "reason": "Merged into T-602: the same missing cardSafe test.",
+      "finding": "T-602"
+    },
+    {
+      "id": "review-security-code-w2:S-501",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding S-501 (The card shows cardSafe(evidence) and the record stores evidence.trim(). cardSafe removes OSC/DCS/PM) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "reason": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "finding": "S-402"
+    },
+    {
+      "id": "review-security-code-w4:S-601",
+      "source": "raw/review-security-code-w4.txt",
+      "question": "Is review-security-code finding S-601 (The S-401 fix caps the length of a disposition's evidence (300 chars) and finding (200 chars) and th) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "reason": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "finding": "S-402"
+    },
+    {
+      "id": "review-security-code-w5:F6-701",
+      "source": "raw/review-security-code-w5.txt",
+      "question": "Is review-security-code finding F6-701 (parseStoredToken validates the required fields but passes pressedBy, pressedAt and confirmedVia thro) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as F6-701.",
+      "reason": "Kept as F6-701.",
+      "finding": "F6-701"
+    },
+    {
+      "id": "review-security-code-w7:F6-01",
+      "source": "raw/review-security-code-w7.txt",
+      "question": "Is review-security-code finding F6-01 (dispositionLine shows cardSafe(record.evidence) but completionDispositions stores evidence.trim() un) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "reason": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "finding": "S-402"
+    },
+    {
+      "id": "review-security-code-w7:F6-02",
+      "source": "raw/review-security-code-w7.txt",
+      "question": "Is review-security-code finding F6-02 (A card with many long dispositions exceeds MAX_APPROVAL_PROMPT_CHARS (3000) and falls back to the lo) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into F6-04: the same 3000-character Telegram limit.",
+      "reason": "Merged into F6-04: the same 3000-character Telegram limit.",
+      "finding": "F6-04"
+    },
+    {
+      "id": "review-testing-practices-w1:T6-01",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T6-01 (The S-401 fix removes the length gap but not the second gap the finding named: the card shows cardSa) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "reason": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "finding": "S-402"
+    },
+    {
+      "id": "review-testing-practices-w1:T6-02",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T6-02 (The S-401 boundary tests pin the cap on one side only for two of three limits, and not the trim. Evi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as T6-02.",
+      "reason": "Kept as T6-02.",
+      "finding": "T6-02"
+    },
+    {
+      "id": "review-testing-practices-w1:T6-03",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding T6-03 (The caps are chosen so each entry is whole on the card, but the sum is not bounded against the remot) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into F6-04: the same 3000-character Telegram limit.",
+      "reason": "Merged into F6-04: the same 3000-character Telegram limit.",
+      "finding": "F6-04"
+    },
+    {
+      "id": "review-testing-practices-w2:T-601",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding T-601 (S-401 is closed only for length. completionDispositions stores `evidence.trim()` (line 696) while th) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "reason": "Merged into S-402: the same shown-versus-stored divergence for cardSafe, reported at operator-confirm-review.ts:696/702.",
+      "finding": "S-402"
+    },
+    {
+      "id": "review-testing-practices-w2:T-602",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding T-602 (The new test pins 'the card shows the evidence whole' only for plain ASCII (atCap contains no newlin) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Kept as T-602.",
+      "reason": "Kept as T-602.",
+      "finding": "T-602"
+    },
+    {
+      "id": "review-testing-practices-w2:T-603",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding T-603 (Three small points on the new tests. (1) The count test accepts 20 identical, evidence-less entries;) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Merged into T6-02: the same boundary and shape gaps in the new tests.",
+      "reason": "Merged into T6-02: the same boundary and shape gaps in the new tests.",
+      "finding": "T6-02"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "fixSlicesCovered": [
+      "slice-01"
+    ],
+    "priorDispositions": {
+      "F-102 (r05, this reviewer)": "partial",
+      "F5-01": "open",
+      "F5-02": "open",
+      "F5-03": "open",
+      "F5-04": "open",
+      "F5-05": "open",
+      "F5-06": "open",
+      "F5-07": "open",
+      "F5-08": "open",
+      "F5-09": "open",
+      "F5-10": "open",
+      "F5-11": "open",
+      "F5-12": "open",
+      "F5-13": "open",
+      "F5-14": "open",
+      "F5-15": "open",
+      "F5-16": "open",
+      "F5-17": "open",
+      "F5-18": "open",
+      "F5-19": "open",
+      "F5-20": "open",
+      "F5-21": "open",
+      "F5-22": "open",
+      "F5-23": "open",
+      "F5-24": "partial",
+      "F5-25": "open",
+      "F5-26": "open",
+      "F5-27": "open",
+      "F5-28": "open",
+      "F5-29": "open",
+      "F5-30": "open",
+      "F5-31": "open",
+      "F5-32": "open",
+      "F5-33": "open",
+      "F5-34": "open",
+      "S-401": "partial"
+    },
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "unresolvedRules": [
+      "review-architecture",
+      "review-highload",
+      "review-performance",
+      "review-pr-contract",
+      "review-style"
+    ],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:9e6b617e0d57",
+        "rawEvidence": "raw/review-clean-code-w1.txt#sha256:9e6b617e0d57",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:8b97c01286b1",
+        "rawEvidence": "raw/review-logic-w3.txt#sha256:8b97c01286b1",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06",
+          "slice-07",
+          "slice-08"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:ee4052ea034b",
+        "rawEvidence": "raw/review-regression-w2.txt#sha256:ee4052ea034b",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:2e61b0c9f576",
+        "rawEvidence": "raw/review-security-code-w1.txt#sha256:2e61b0c9f576",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04",
+          "slice-05",
+          "slice-06",
+          "slice-07",
+          "slice-08"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:not-run",
+        "status": "not-run",
+        "notRunReason": "no reviewer result recorded",
+        "scopeComplete": false
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:af264496c24e",
+        "rawEvidence": "raw/review-testing-practices-w1.txt#sha256:af264496c24e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 19,
+    "known": 0,
+    "unknown": 19,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}

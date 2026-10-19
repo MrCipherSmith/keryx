@@ -1,0 +1,127 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Clean Code Review (wave 2, slice-02)
+
+### Review Scope
+- Branch: docs/flow-helyx-operator-confirm
+- Head b1c6da0e6992e4df473bae6b2fde78bc94d28776, base 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Slice read: slice-02 (122946 bytes, kind new, 18 files). The slice holds no production TypeScript. It is flow bookkeeping files, two copies of the review-orchestrator skill (project and bundled, byte-identical, confirmed with cmp), the review-premise skill, CHANGELOG, TM-04, three docs pages, the flow-state JSON schema and package.json.
+- Read-only: no file edited, no keryx review mutating command run.
+
+### Summary
+The slice is almost entirely prose and agent instructions, so the Clean Code checklist applies mostly through its comment/consistency rule: wording must not contradict the rule the same PR introduces. The new rule (an agent completes a review only through the `review_complete` card and never runs `keryx review complete`) is stated correctly in the lines the diff touched, but two untouched sentences in both skill copies still tell the agent to run the CLI command. The same normative paragraph is repeated in three places of the docs. The schema addition (`pressedBy` integer, `pressedAt` string) matches `src/flow/types.ts` and `src/flow/schema.ts` and sits in the right object. No naming, function-size, error-handling or SOLID issues exist in this slice.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 1
+
+### Findings
+
+#### Naming
+No naming issues found.
+
+#### Functions
+No function design issues found (no code in slice).
+
+#### Comments
+[F-001] and [F-003] below (stale/contradicting wording, count claim).
+
+#### Error Handling
+No error handling issues found.
+
+#### DRY
+[F-002] below.
+
+#### SOLID
+No SOLID violations found.
+
+### F-001 Two skill sentences still send the agent to `keryx review complete`, contradicting the rule this PR adds
+
+- Severity: minor
+- File: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:782 (identical at src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:782); .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:386 (identical at the bundled copy)
+- Principle: Clean Code, Comments C1 (text that contradicts the current rule misleads the reader)
+- Problem: The diff rewrites "Done when" (SKILL.md:136), "Operator decisions" (SKILL.md:47) and the readiness paragraph (SKILL.detail.md:669) to say an agent never runs `keryx review complete` and calls the `review_complete` card instead. SKILL.md:782 (the dropped-files / coverage-waiver step) and SKILL.detail.md:386 (the memory-outside-stage waiver) were not touched and still say, after the waiver card, "then run `keryx review complete`". The same file now gives the agent two opposite instructions for the same step. This is the same class as r03 D-01/D-03, at sites those findings did not enumerate. Lesser, ambiguous mentions: SKILL.md:134 and SKILL.detail.md:866 list `keryx review complete` as the tail the round finishes, without saying who runs it.
+- Fix: Reword the two sites like SKILL.md:136: "then call the `review_complete` card (the CLI is for a human in a terminal)". Edit the project copy and the bundled copy together, because they are byte-identical now.
+- Patch:
+  ```diff
+  - `review_waive_coverage` (a card, never a terminal), then run `keryx review complete`; elsewhere
+  + `review_waive_coverage` (a card, never a terminal), then call the `review_complete` card; elsewhere
+  - (the operator answers a card, never a terminal), then run `keryx review complete <package>`; outside keryx shell
+  + (the operator answers a card, never a terminal), then call the `review_complete` card; outside keryx shell
+  ```
+
+### F-002 The remote-answer rule is pasted in three places of the user docs
+
+- Severity: minor
+- File: docs/docs/guides/review-with-a-record.md:734 (also :603 and docs/docs/cli-reference.md:4921)
+- Principle: Clean Code, DRY E1
+- Problem: The same normative text ("an allowed Telegram user only, for that card, once, within one hour; the record keeps `confirmedVia: remote-card` with `pressedBy` and `pressedAt`", plus "if the topic cannot be reached the card says the Telegram mirror was not delivered and you answer it in the shell") is written out at review-with-a-record.md:603, :734 and cli-reference.md:4921 (a shorter variant), and again in TM-04 section 6a and the CHANGELOG. Three copies in the user docs must change together when the TTL, the recorded fields or the fallback wording change.
+- Fix: Keep the full statement in one place (cli-reference or TM-04 section 6a) and have the two guide passages state only the step the reader takes (answer the card in the shell or the Telegram topic) and link to it. Not a blocker: the copies agree today.
+- Patch: none (prose restructuring).
+
+### F-003 TM-04 states "Nineteen" decisions, but its tool table lists 17 and omits three cards
+
+- Severity: info
+- File: docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md:7 (section 1, first sentence)
+- Principle: Clean Code, Magic numbers E2 (a count stated in prose that nothing keeps in sync)
+- Problem: Section 1 now says "Nineteen keryx decisions". The section 2 table has 17 tool rows. `OPERATOR_CONFIRM_TOOL_NAMES` in src/trigger/unattended.ts lists 19 names, and `schedule_create` is excluded separately, so the registry has 20. The table omits `review_waive_mutation`, `review_override_reviewers` and `review_comments_reply`, which the SKILL.md card list names. The PR added three rows to a table that was already incomplete, and the prose count (13 before) was already not derivable from it.
+- Fix: Drop the number ("These keryx decisions are the operator's alone") or add the three missing rows and state the count the roster test pins.
+
+### Clean Areas
+- Naming (Part A): schema property names `pressedBy` and `pressedAt` are intention-revealing and match `SignatureConfirmation` in src/flow/types.ts and the generated schema in src/flow/schema.ts.
+- Functions, SOLID, error handling (Parts B, D, F): no code in this slice.
+- Schema (flow-state.schema.json): `pressedBy`/`pressedAt` sit beside `boundTo` in `confirmation.properties`, not inside `boundTo`; types agree with types.ts (`number`, `string`).
+- r03 minors D-02..D-14 and the autonomous-profile wording were not re-filed; nothing in this slice makes them worse.
+
+```json
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Slice-02 is prose, skills, schema and version bump. No code-level Clean Code or SOLID issues. Two untouched sentences in both skill copies still tell the agent to run `keryx review complete`, contradicting the PR's card-only rule; the remote-answer rule is repeated in three doc passages; TM-04 states a decision count that does not match its table.",
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "slices": [
+    { "id": "slice-02", "coverage": "read in full" }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "in keryx shell call `review_waive_coverage` (a card, never a terminal), then run `keryx review complete`; elsewhere",
+      "problem": "SKILL.md:782 and SKILL.detail.md:386 still tell the agent to run `keryx review complete` after a waiver card, while SKILL.md:136 and SKILL.detail.md:669 (rewritten in this diff) say an agent never runs it and calls the `review_complete` card. The skill gives two opposite instructions for the same step. The bundled copies under src/gdskills/bundled/skills/review/review-orchestrator/ are byte-identical and carry both sentences.",
+      "impact": "An agent following the coverage-waiver or memory-outside-stage path reads the stale sentence last, runs the CLI close command, and bypasses the card the PR makes the rule for agents (the CLI has no TTY check for a plain complete, so nothing stops it).",
+      "suggested_fix": "Replace 'then run `keryx review complete`' at SKILL.md:782 and 'then run `keryx review complete <package>`' at SKILL.detail.md:386 with 'then call the `review_complete` card', in both the project and the bundled copy. Optionally say who runs the tail in SKILL.md:134 and SKILL.detail.md:866.",
+      "evidence": "Head b1c6da0e: grep of both skill files lists SKILL.md:136 ('an agent never runs `keryx review complete`') and SKILL.md:782 ('then run `keryx review complete`') in one file; SKILL.detail.md:669 ('An agent completes a review only through that card') and :386 ('then run `keryx review complete <package>`'). `cmp` reports the project and bundled copies identical for SKILL.md and SKILL.detail.md. Lines 782 and 386 are unchanged by the diff, but the diff introduces the rule they now contradict. Same class as r03 D-01/D-03 at sites those did not enumerate.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "line": null,
+      "quote": "Only you can waive an item, with your own words recorded beside the time.",
+      "problem": "The remote-answer rule (allowed Telegram user only, this card, once, within one hour; record keeps `confirmedVia: remote-card` with `pressedBy` and `pressedAt`; fallback wording when the mirror was not delivered) is written out at review-with-a-record.md:603, review-with-a-record.md:734 and docs/docs/cli-reference.md:4921, besides TM-04 section 6a and the CHANGELOG.",
+      "impact": "Three user-doc copies must be edited together when the TTL, recorded fields or fallback change; a missed copy leaves the docs contradicting each other, as already happened with the skill sentences.",
+      "suggested_fix": "State the full rule once (cli-reference or TM-04 section 6a) and have the guide passages say what the reader does and link to it.",
+      "evidence": "Diff lines for review-with-a-record.md hunks at 583-633 and 714-754 and the cli-reference.md hunk at 4873-4941 each add the sentence with the same phrase 'an allowed Telegram user only, for that card, once, within one hour' (two files, three sites; grep count 2 in the guide).",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-clean-code",
+      "severity": "info",
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "line": null,
+      "quote": "Nineteen keryx decisions are the operator's alone",
+      "problem": "The count in the prose does not match the table that follows (17 rows) or the registry (19 names in OPERATOR_CONFIRM_TOOL_NAMES plus schedule_create). The table omits review_waive_mutation, review_override_reviewers and review_comments_reply.",
+      "impact": "A reader cannot reconcile the number with the table; the count will drift again at the next card.",
+      "suggested_fix": "Drop the number, or add the three missing rows and state the count the roster test pins.",
+      "evidence": "TM-04 section 1 and section 2 at head; src/trigger/unattended.ts lines 63-82 (OPERATOR_CONFIRM_TOOL_NAMES) and line 52 (schedule_create); SKILL.md:47 names ten review cards.",
+      "confidence": "medium"
+    }
+  ],
+  "prior_dispositions": []
+}
+```

@@ -1,0 +1,79 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Round r05, slice-01 (fix). E-08, the only major this role owns, is fixed in substance: remoteApproval, the card lifecycle (raceMirroredCard) and the unmirrored path (askUnmirroredCard) are now exported from src/tui/operator-confirmations.ts and src/tui/card-lifecycle.test.ts drives them with the real OperatorConfirmationLog and a fake topic. By reading, each of these mutations fails a test: dropping fromId or pressedAt inside remoteApproval; dropping settle from the finally; ignoring turnAborted in settle; skipping markUndelivered or onTopicEnded; swapping the 'ended' wording. Residual gaps: the two tui-shell.ts call sites that feed fromId into remoteApproval are still untested (F-001), the new tests add fixed 10 ms sleeps (F-002), and the new `!topicAbort.signal.aborted` guard of the E-04 fix is unreachable and its test cannot pin it (F-003). The E-04 behaviour itself (a topic leg that ends without a press stops the card waiting) is pinned at three levels: raceApproval (onTopicEnded fires, not onUndelivered; a press or an undelivered card never fires it), the log (markUndelivered 'ended' wording) and the lifecycle. Out-of-role prior findings (E-01, E-06, E-07, E-10, E-35, E-52, E-58) were judged only on what slice-01 and head show; SKILL.detail.md and the bundled copies of E-01 are in slice-02 and were not read. No test command was run; mutations are proposed for the orchestrator.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6125,
+      "quote": "return meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, outcome.answer.fromId) : true;",
+      "problem": "The E-08 fix extracted remoteApproval, raceMirroredCard and askUnmirroredCard and tests them, but the hop that actually feeds the presser into the durable record is still in the untested closure: tui-shell.ts:6125 (topic won the race) and tui-shell.ts:6083 (`remoteApproval(meta.fingerprint, answer.fromId)`, Telegram-turn path) pass fromId by hand, and the `isCard` / `unmirrored !== undefined` choice between askUnmirroredCard and raceMirroredCard is also decided there. card-lifecycle.test.ts calls remoteApproval(\"fp-1\", 9, now) directly, never through the shell. E-08 named 'dropping fromId' as a mutation that must go red; at the helper level it does, at the wiring level it does not. git grep over src/**/*.test.ts finds no test or source-string pin of either call.",
+      "impact": "Changing either call to `remoteApproval(meta.fingerprint, undefined)` leaves every test green, so a remote press is recorded with confirmedVia remote-card but no pressedBy, which is the empty who-pressed record E-08 was filed about. Likewise sending a delivered card down the askUnmirroredCard branch stays green.",
+      "suggested_fix": "Minimum named in E-08: a tui-shell.test.ts source-string pin that both remoteApproval calls pass the answer's fromId (`remoteApproval(meta.fingerprint, answer.fromId)` and `remoteApproval(meta.fingerprint, outcome.answer.fromId)`). Better: move the two `answer -> ApprovalResponse` conversions into one exported helper (for example `topicAnswerToResponse(meta, answer)` in operator-confirmations.ts) and assert allow with fromId 9 gives pressedBy 9, deny gives false, and no fingerprint gives true.",
+      "evidence": "git grep -n 'remoteApproval' at 77d2eff20 lists src/tui/tui-shell.ts:6083 and :6125 as production uses and src/tui/card-lifecycle.test.ts:30-33 as the only test, which calls the helper with a literal 9. No mutation run (read-only). Proposed mutants for the orchestrator: M-1 tui-shell.ts:6125 replace `outcome.answer.fromId` with `undefined`; M-2 tui-shell.ts:6083 replace `answer.fromId` with `undefined`; expected today: both survive.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/card-lifecycle.test.ts",
+      "line": 24,
+      "quote": "await new Promise((resolve) => setTimeout(resolve, 10));",
+      "problem": "The fix adds new fixed sleeps to let the topic leg settle before asserting: card-lifecycle.test.ts:24 (answeringDock), :62 and :86 (10 ms each, inside the dock that then asserts log.waiting() and the pending line) and mirror-undelivered.test.ts:141 and :159 (10 ms), :181 (5 ms before a negative assertion). Same class as E-42, which is open for the two older stubs at :106 and :125; the new tests copy the pattern instead of waiting on a condition. The topic stubs here resolve in a microtask, so a deferred the dock awaits (or one `await Promise.resolve()` chain / `setImmediate`) is enough.",
+      "impact": "Fixed timers are banned by the testing rule: the positive cases are slower than needed and a loaded CI box could, in principle, run the assertion before the topic leg's .then ran. The negative case at :181 (`expect(ended).toBe(0)` after 5 ms) passes whether or not the leg had settled, so it proves nothing beyond the timer.",
+      "suggested_fix": "Give the fake topic a deferred (`const topicDone = Promise.withResolvers()` resolved from the stub) and have the dock `await topicDone.promise` then `await new Promise((r) => setImmediate(r))` before asserting; for :181 resolve the topic stub by hand after the dock returns, await the race, flush one macrotask, then assert. Fix E-42 and these together.",
+      "evidence": "git grep -n 'setTimeout(resolve' at 77d2eff20 -- src/tui/card-lifecycle.test.ts src/remote/mirror-undelivered.test.ts: card-lifecycle.test.ts 24, 62, 86; mirror-undelivered.test.ts 106, 125, 141, 159, 181.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/tui/approval-mirror.ts",
+      "line": 55,
+      "quote": "else if (!isTopicPress(answer) && !topicAbort.signal.aborted) options.onTopicEnded?.();",
+      "problem": "The `!topicAbort.signal.aborted` half of the E-04 fix cannot be reached: topicAbort is aborted only in the finally at the end of raceApproval, after `settled = true`, and the .then handler returns at `if (settled) return;` two lines earlier, so the clause is always true when evaluated. The test named 'the dock answering first aborts the topic leg and that abort is not reported as an ended leg' (mirror-undelivered.test.ts:168) therefore pins the `settled` guard, not this clause, and removing the clause leaves it green (an equivalent mutant). The same test notes in its title a property the code guarantees twice.",
+      "impact": "A reader and a mutation sweep will count an unpinned clause; if a later change aborts topicAbort before settling (for example a turn-abort path), the clause becomes live with no test written for that case.",
+      "suggested_fix": "Drop `&& !topicAbort.signal.aborted` and rely on `settled`, or keep it and add the case that makes it live (abort the topic signal from the turn-abort path before the dock returns) with a test; rename the test to say it pins the settled guard.",
+      "evidence": "approval-mirror.ts at 77d2eff20: line 52 `if (settled) return;`, line 55 the clause, line 176 `topicAbort.abort(...)` only in the finally after `settled = true`. Proposed mutant for the orchestrator: M-3 delete `&& !topicAbort.signal.aborted`; expected: survives (equivalent). M-4 delete `if (settled) return;` while keeping the clause: expected survives too, because the aborted clause covers it, so neither guard is pinned alone.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "E-01", "disposition": "closed" },
+    { "id": "E-04", "disposition": "closed" },
+    { "id": "E-06", "disposition": "closed" },
+    { "id": "E-07", "disposition": "closed" },
+    { "id": "E-10", "disposition": "closed" },
+    { "id": "E-25", "disposition": "open" },
+    { "id": "E-35", "disposition": "closed" },
+    { "id": "E-44", "disposition": "open" },
+    { "id": "E-45", "disposition": "open" },
+    { "id": "E-52", "disposition": "partial" },
+    { "id": "E-53", "disposition": "open" },
+    { "id": "E-58", "disposition": "closed" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 }
+}
+```
+
+Notes on the dispositions (this role reads tests; the rest is judged on the visible diff only):
+- E-04 closed: tests fail without the fix. mirror-undelivered.test.ts:133 asserts calls equal ["ended"] for a plain deny; :149 asserts a press or an undelivered card never fires onTopicEnded (removing the `else` fails the undelivered row); operator-confirmations.test.ts:68-74 pins the 'no longer waiting' wording and not 'not delivered'; card-lifecycle.test.ts:77-96 asserts log.waiting() is empty from inside the dock. Residual: F-003.
+- E-06 closed: apply now delegates to runCompletionGates (operator-confirm-review.ts:818), writeCompletionRecord (:836) and completionOutput (:845).
+- E-10 closed: closeStep(card) at completion-gate.ts:755 is the single clause; completion-gate.test.ts:80-100 covers both branches (card present and absent).
+- E-35 closed: the closure now dispatches to askUnmirroredCard and raceMirroredCard.
+- E-52 partial: the unmirrored branch moved into askUnmirroredCard but still maps place/yes itself with log.answer instead of reusing settle.
+- E-58 closed: remoteApproval moved to src/tui/operator-confirmations.ts (placement was the finding), with an injectable clock.
+- E-01: SKILL.md hunks in this slice (lines 8, 10, 53) name the card; SKILL.detail.md and the bundled copies are in slice-02, not read.
+- E-07: cli-reference.md:4921 now lists only `complete --waive-coverage` and `complete --waive` as terminal-only and says plain `complete` has no terminal check.
+- E-25, E-44, E-45, E-53 were not claimed fixed and are unchanged in this slice. E-44 is still not pinned for onUndelivered: no test lets the dock win first and then delivers an undelivered answer; test :168 covers dock-first only for onTopicEnded.
+- E-02 (dispositions on the review_complete card), seen only through `prepared: { ..., dispositions }` in this slice: head tests at operator-confirm-review-tools.test.ts:671-699 cover the card listing, the yes path recording findings.json and completion-confirmation.json, an unknown finding refusing the close, and four malformed-input refusals. That reads as covered; the slice-02 reviewer owns the verdict.

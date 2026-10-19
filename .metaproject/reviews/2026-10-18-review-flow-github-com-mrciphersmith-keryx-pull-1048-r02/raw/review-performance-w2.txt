@@ -1,0 +1,47 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Slice-02 (src/commands, command tests, flow tests, bundled skill copies) read in full, all 1321 diff lines. No performance finding: the one new runtime path, `keryx skills references check|suggest`, is a one-shot CLI command with no loop, no polling, no listener and no cache. The rest of the slice is help text, test code and prose in bundled SKILL.md copies.",
+  "findings": [],
+  "slices": [
+    { "id": "slice-02", "coverage": "whole diff read, lines 1-1321: agent-commands.ts, skills-references.ts, skills.ts hunks, skills-references.test.ts, task-project-context.test.ts, bundled flow-orchestrator / job-orchestrator / task-implementer / tests-creator copies", "status": "DONE" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## Performance Review
+
+### Scope
+- Branch: `feat/conditional-reads`
+- Merge-base: `1658f77d374b2d20189a55eaf44b95d64768d6b6`, head `d6267d4a5099f39b74e86a71e5c8f61ca47aa63d`
+- Scope mode: supplied slice (slice-02.diff), no diff rebuilt
+- Changed files reviewed: 11 (7 source/test files, 4 bundled skill copies)
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Findings
+None.
+
+### Clean Areas
+- N+1 queries: no database access in the slice.
+- React re-renders and MobX: no component code. `/projectctx` only gains a description string in `agent-commands.ts`.
+- Hot-path computation: `renderReferencesReport` and `referencesCommand` run once per CLI invocation over the findings list. There is no render loop, no tight loop, and no regex built inside a loop.
+- Memory: no listener, timer, subscription or growing collection is added. The test `capture()` helper restores `console.log` and `console.error` in `finally`. `afterEach` restores cwd and exitCode and removes every temp root.
+- Imports: `skills.ts` adds a static import of `TASK_TEXT_MAX_CHARS` from `../gdskills/context-resolver` (a constant, used only in the help text) and of `./skills-references`. The CLI already statically imports `resolve-context-command` from the same area, so there is no new heavy dependency. The help text interpolates the constant at call time only.
+- Blocking in async contexts: `referencesCommand` awaits `checkReferences` and `suggestReferences`. The slice adds no sync fs call. The file reading itself lives in `gdskills/references-check.ts`, which is outside this slice.
+- Pagination: `suggest` prints the whole skeleton as one JSON document. The input is the set of documents cited by project rules, which is small and operator-authored, so there is nothing to paginate.
+- Redundant calls: in `check --json` followed by `check`, the test deliberately runs the analysis twice. That is test code and costs milliseconds.
+- Tests: each test builds a temp project and the largest fixture is a 256 KiB file. This is proportionate and shows no timing-sensitive wait.
+- Bundled skill copies (flow-orchestrator, job-orchestrator, orchestrator-prompt, task-implementer, tests-creator): prose only. They add `--task-text` to the documented `resolve-context` calls. The text is cut to `TASK_TEXT_MAX_CHARS` by the resolver, so the dispatch prompt size is bounded.
+
+### Not covered
+- `src/gdskills/references-check.ts`, `context-resolver.ts` and the import-hint code that the tests exercise are in other slices. I did not read them, and no verdict on their file-read cost is given here. The wave-1 note on the HEADING regex in `references-section.ts` is not repeated.

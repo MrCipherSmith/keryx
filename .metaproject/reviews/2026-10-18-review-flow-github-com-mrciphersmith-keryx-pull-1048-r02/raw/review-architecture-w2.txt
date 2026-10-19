@@ -1,0 +1,85 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice 02 adds a thin `keryx skills references` router entry (src/commands/skills-references.ts) over the analysis in gdskills/references-check.ts, registers it in the SKILLS_SUBCOMMAND_HELP table, extends the /projectctx description, adds command and flow tests, and edits five bundled skill texts one line for one line (the per-skill line ceilings are untouched; the installed .metaproject copies carry the same edits). Layering is sound: the command module only parses arguments, calls the gdskills analysis and prints; analysis stays in gdskills, the help table is the documented single-entry registration, and group-subcommands.ts already lists the new subcommand. No layer, dependency-direction or module-boundary violation found in this slice. Two minor drift risks in help text are reported.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/skills.ts",
+      "line": null,
+      "quote": "[--task-type <type>] [--max-bytes <n>] [--out <path>] [--json]",
+      "problem": "The diff edits printResolveContextHelp to add `--task-text`, and docs/docs/cli-reference.md (line 3452) shows `[--task-type <type>] [--task-text <text>] [--max-bytes <n>] [--out <path>] [--json]`, but the usage block of printSkillsHelp (`keryx skills --help`), two lines above the new `keryx skills references` lines the diff adds, still omits `--task-text`. The flag's usage is therefore spelled in three places (the USAGE constant in resolve-context-command.ts, printResolveContextHelp, printSkillsHelp) and the group help is the one left behind.",
+      "impact": "An operator reading `keryx skills --help` does not see the one flag that lets a declared keyword promote a document; without it only globs promote. The group help also disagrees with the CLI reference that mirrors it. No behaviour breaks.",
+      "suggested_fix": "Add `[--task-text <text>]` to the resolve-context usage lines in printSkillsHelp. Optionally build the three usage strings from one exported constant (the USAGE in resolve-context-command.ts) so the next flag cannot be missed in one of them.",
+      "evidence": "src/commands/skills.ts printSkillsHelp resolve-context usage (single match of `--max-bytes <n>]`, unchanged context in the slice hunk 1828-1936) versus src/gdskills/resolve-context-command.ts USAGE and docs/docs/cli-reference.md 3451-3452, which carry --task-text.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "help-usage-drift:skills-resolve-context-task-text"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/skills-references.ts",
+      "line": null,
+      "quote": "Warnings: a description under 20 characters, a keyword under 4, a cited document with",
+      "problem": "printReferencesHelp states the check thresholds (20 characters, 4 characters) and the command name `keryx skills references suggest` as literals, while references-check.ts exports MIN_DESCRIPTION_CHARACTERS, MIN_KEYWORD_CHARACTERS and REFERENCES_SUGGEST_COMMAND for exactly these values. The sibling help in skills.ts already interpolates TASK_TEXT_MAX_CHARS from its owner, so the same slice mixes both styles. No test pins the help text to the constants.",
+      "impact": "If either threshold is changed in references-check.ts the findings use the new number and `keryx skills references --help` keeps teaching the old one. Cost is a silent doc drift to whoever next tunes the checks.",
+      "suggested_fix": "Import MIN_DESCRIPTION_CHARACTERS, MIN_KEYWORD_CHARACTERS and REFERENCES_SUGGEST_COMMAND into skills-references.ts and interpolate them in the help template and the USAGE string.",
+      "evidence": "src/commands/skills-references.ts help template (`under 20 characters`, `under 4`) versus src/gdskills/references-check.ts lines 26-28 (exported constants) and the TASK_TEXT_MAX_CHARS interpolation in src/commands/skills.ts printResolveContextHelp.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "help-literals-vs-constants:references-check"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 0 },
+  "slices": [
+    { "id": "slice-02", "coverage": "whole diff read (1321 lines, two pages); surrounding source read at head: skills-references.ts callees (references-check.ts, context-resolver.ts head, resolve-context-command.ts, import-rules.ts, skill-length-ceilings.ts, cli-registry.ts group lookup)", "status": "DONE" }
+  ]
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/conditional-reads`
+- Merge-base: `1658f77d374b2d20189a55eaf44b95d64768d6b6`, head `d6267d4a5099f39b74e86a71e5c8f61ca47aa63d`
+- Scope mode: diff, slice-02 only
+- Stack detected: generic-ts (Bun CLI, command layer over a gdskills analysis layer)
+
+### Summary
+A new command module routes `skills references check|suggest` to the existing gdskills analysis and prints; the help table, the /projectctx description and five bundled skill texts are updated in place. Structure is correct. Two minor help-text drift points remain.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 2  |  info: 0
+
+### Layer Violations
+None detected. skills-references.ts parses args and prints; the checks live in gdskills/references-check.ts and are shared with project-context-status.ts and import-rules.ts.
+
+### Dependency Direction
+None detected in this slice. skills.ts imports from the new command module and from gdskills; gdskills does not import from commands. Tests in src/flow importing src/commands has precedent (26 existing `../commands` imports under src/flow).
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+None detected. The SKILLS_SUBCOMMAND_HELP entry is the documented one-line registration; the `references` dispatch has no try/catch where siblings have one, which is consistent with the analysis returning failures as values (all its file reads are caught).
+
+### SOLID Violations
+None detected.
+
+### Framework-Specific
+N/A, no NestJS or React/MobX in this slice.
+
+### Findings
+- [F-001] minor, src/commands/skills.ts: `keryx skills --help` usage for resolve-context omits `--task-text`.
+- [F-002] minor, src/commands/skills-references.ts: help text hardcodes thresholds and the suggest command that references-check.ts exports as constants.
+
+### Not covered
+Nothing in slice-02 was left unread. Line-count ceilings were checked by reading the diff (each bundled SKILL.md hunk replaces one line with one line), not by running the length test.
+
+Routing audit: graph_used no (not-relevant, direct reads sufficed), wiki_used no (not-relevant), ctx_used yes (keryx ctx rg), raw_rg_used no.

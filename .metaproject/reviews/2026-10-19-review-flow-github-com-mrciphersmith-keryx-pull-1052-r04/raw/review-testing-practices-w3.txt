@@ -1,0 +1,92 @@
+STATUS: DONE_WITH_CONCERNS
+
+Reviewer review-testing-practices, wave 3, slice-04 (domain slice: src/flow, bundled review skills, harness/external, remote client and shell-bridge, review library). Head b1c6da0e6992e4df473bae6b2fde78bc94d28776. The one test file in the slice is src/remote/mirror-undelivered.test.ts; the production hunks were read against the tests that exist at head (confirm-token.test.ts, operator-confirm-*.test.ts, approval-mirror.test.ts, operator-confirmations.test.ts, tui-shell.test.ts, shell-bridge.test.ts).
+
+Mutation pass: not run (allowed_tools = read-only). Candidates are listed in mutant_candidates; none was executed, so no finding below claims a mutation result.
+
+Graph context: graph_context: unavailable for this pass (no graph query run; symbol use sites were enumerated with keryx ctx rg).
+
+Checklist result. Offline and isolated: the RemoteClient test injects fetchImpl (every request path in client.ts goes through this.fetchImpl, confirmed by grep), points at example.invalid, uses a realpath'd mkdtemp root removed through a cleanup stack, and drops the client in cleanup. Nothing can reach the real network. The bridge, mapApprovalAnswer and mirrorUndeliveredNote tests are pure. The flow-side change is pinned end to end: confirm-token.test.ts "464: a remote-card token carries who pressed the card and when into the signature" mints with pressedBy/pressedAt, spends the token through service.complete, reads the signature from disk and validates the flow against flowStateSchema(), which covers confirm-token.ts, service.ts, types.ts and schema.ts together. The review library sinks (chunks-estimate, coverage-complete, operator-decisions, plan-confirmation, premise-question, publish, readiness) are exercised through the card tests in slice-03; the "who pressed" coverage gap there is D-12 and is not re-filed. The wiring of onUndelivered/markUndelivered in tui-shell.ts is D-10 and the nextStep/describeBlockers wording is D-14; neither is re-filed. Three new points remain, all minor or info.
+
+### F-001 Three of the four undelivered sites in RemoteClient.askApproval, and both deliberate non-undelivered denies, are unpinned
+- Severity: minor
+- File: src/remote/mirror-undelivered.test.ts:46 (production: src/remote/client.ts:441, 450, 453, 457; non-flag denies at 477 and 480)
+- The AC5 contract is that the flag is set exactly when the question never reached the topic. askApproval has four returns that set it: not connected or already aborted (client.ts:441), a non-ok response to the POST (450), a response without a usable approvalId (453) and a thrown POST (457). The only test drives the first one (fetchImpl rejects, but the client never connected, so the early return fires and `post` is never reached). Under the same file's own name "an unreachable client reports undelivered", dropping `undelivered: true` from 450, 453 or 457 leaves every test green: grep for `undelivered` under src finds test hits only in this file, and the existing askApproval/requestApproval tests (approval.test.ts, approval-edit.test.ts, telegram-permissions.test.ts, shell-bridge.test.ts) compare only the `decision` (requestApproval returns the bare decision). The opposite boundary is unpinned too: when the question WAS posted and the stream then dropped (client.ts:477, `if (!this.connected) return { decision: "deny" }`) or the turn was aborted after posting (480), the topic holds live buttons and the flag must stay absent, otherwise the operator would be told "Answer it here" while the topic can still take a press. A change that adds the flag at those two returns is also invisible to the suite.
+- Why it matters: the flag is the only signal that tells the operator the mirror failed; it is set at four places by hand and the test covers one.
+- Fix: in mirror-undelivered.test.ts add a table over a connected client (see the existing connected-client harness in telegram-permissions.test.ts or approval.test.ts) whose fetchImpl answers the approval POST with (a) status 500, (b) 200 with `{}`, (c) a rejection, each expecting `toMatchObject({ decision: "deny", undelivered: true })`; and two cases that post successfully then (d) drop the stream, (e) abort the signal, each expecting `answer.undelivered` toBeUndefined().
+
+### F-002 The two raceApproval tests wait on fixed 10 ms timers
+- Severity: minor
+- File: src/remote/mirror-undelivered.test.ts:106 and :125
+- Both dock stubs do `await new Promise((resolve) => setTimeout(resolve, 10))` to give the topic leg time to settle before the test reads `told` or asserts `race.signal.aborted === false`. Fixed sleeps are banned in this lane. It cannot flake in practice, because the topic stub resolves immediately and its `.then` microtasks drain before any timer fires, so the timer buys nothing a condition would not; but the test then says "10 ms is enough" instead of "the topic leg has finished". This copies the pattern already in src/tui/approval-mirror.test.ts (lines 82 and 97 use 15 ms and 5 ms), so the convention is inherited, not introduced.
+- Fix: make the topic stub signal completion and have the dock wait on that: `let topicDone!: () => void; const settled = new Promise<void>((r) => { topicDone = r; });` with `topic: async () => { queueMicrotask(topicDone); return undelivered; }`, and in the dock `await settled; await new Promise((r) => setImmediate(r));` (a macrotask yield after the leg ended, not a duration) before the `aborted` assertion. In the second test assert `told` after `await settled` the same way.
+
+### F-003 bridge.connected is only ever tested as false
+- Severity: info
+- File: src/remote/mirror-undelivered.test.ts:84 (production: src/remote/shell-bridge.ts `get connected()`)
+- The new getter `this.client?.connected === true` feeds mirrorUndeliveredNote in tui-shell. The test asserts `bridge.connected` toBe(false) for a bridge with no client; no test constructs a bridge with a connected client and expects true, and none drives a connected client whose `askApproval` returns `{ decision: "deny", undelivered: true }` through `bridge.askApproval` (only mapApprovalAnswer is tested in isolation). A getter that always returned false would put the "channel is not connected" note on every card while the suite stays green. shell-bridge.test.ts has a fake-client harness (line 99) where this is a two-line case.
+- Fix: in shell-bridge.test.ts (or here) start a bridge over the fake client, expect `bridge.connected` true, then make the fake `askApproval` return `{ decision: "deny", undelivered: true }` and expect `bridge.askApproval("card")` toMatchObject the same.
+
+mutant_candidates are in the JSON block (not run).
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-testing-practices",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Slice-04 has one test file, src/remote/mirror-undelivered.test.ts. It is offline and isolated, and the flow-side press record is pinned end to end through service.complete and the flow schema. Three gaps: only one of four undelivered returns in RemoteClient.askApproval (and neither deliberate non-undelivered deny) is tested; the raceApproval tests wait on fixed 10 ms timers; bridge.connected is tested only as false. D-10 (tui-shell wiring), D-12 (press fields) and D-14 (wording) are not re-filed. Mutation pass not run (read-only).",
+  "stats": { "files_reviewed": 1, "findings": 3, "blocker": 0, "major": 0, "minor": 2, "info": 1, "mutants_run": 0 },
+  "slices": ["slice-04"],
+  "graph_context": "unavailable: no graph query run, use sites enumerated with keryx ctx rg",
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "src/remote/mirror-undelivered.test.ts",
+      "line": 46,
+      "quote": "describe(\"an unreachable client reports undelivered\", () => {",
+      "problem": "RemoteClient.askApproval sets undelivered: true at four returns (client.ts:441 not connected or aborted, 450 non-ok POST, 453 missing approvalId, 457 thrown POST). The test drives only the first: fetchImpl rejects but the client never connected, so the early return fires and post() is never reached. The two returns that must NOT set the flag (477 stream dropped after the question was posted, 480 aborted after posting) are also unpinned. No other test asserts the flag.",
+      "impact": "Dropping undelivered: true from lines 450, 453 or 457, or adding it at 477/480, keeps the suite green. The first leaves the operator with no 'mirror not delivered' note while the topic never got the card; the second tells the operator to answer in the shell while the topic still holds live buttons.",
+      "suggested_fix": "Add a table over a connected client whose fetchImpl answers the approval POST with (a) status 500, (b) 200 with {}, (c) a rejection, each expecting toMatchObject({ decision: 'deny', undelivered: true }); plus two cases that post successfully then (d) drop the stream, (e) abort the signal, each expecting answer.undelivered toBeUndefined().",
+      "evidence": "keryx ctx rg 'undelivered' src --glob '*.test.ts' lists client-level assertions only at mirror-undelivered.test.ts:64 (the not-connected case); src/remote/client.ts at head: lines 441, 450, 453, 457 return { decision: 'deny', undelivered: true }, lines 477 and 480 return { decision: 'deny' } / { decision: 'deny', approvalId }. Existing askApproval/requestApproval tests (approval.test.ts, approval-edit.test.ts, telegram-permissions.test.ts, shell-bridge.test.ts) compare the decision only.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "src/remote/mirror-undelivered.test.ts",
+      "line": 106,
+      "quote": "await new Promise((resolve) => setTimeout(resolve, 10));",
+      "problem": "Both raceApproval dock stubs wait on a fixed 10 ms timer (lines 106 and 125) to let the topic leg settle before asserting aborted === false or told. Fixed sleeps are banned; the test should wait on the topic leg finishing.",
+      "impact": "Cannot flake in practice (the topic stub resolves immediately and microtasks drain before any timer), so the cost is intent and maintenance: the test encodes a duration instead of the condition, and the pattern is being copied (src/tui/approval-mirror.test.ts already uses 15 ms and 5 ms).",
+      "suggested_fix": "Make the topic stub resolve a deferred (queueMicrotask(topicDone)) and have the dock await it, then yield one macrotask with setImmediate before reading race.signal.aborted / told.",
+      "evidence": "keryx ctx rg 'setTimeout' src/remote/mirror-undelivered.test.ts: 106:40 and 125:40, both `await new Promise((resolve) => setTimeout(resolve, 10));` inside dock callbacks whose topic stub is `async () => undelivered` / `async () => ({ decision: 'deny', always: false })`.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-testing-practices",
+      "severity": "info",
+      "file": "src/remote/mirror-undelivered.test.ts",
+      "line": 84,
+      "quote": "expect(bridge.connected).toBe(false);",
+      "problem": "The new RemoteBridge.connected getter (this.client?.connected === true) is asserted only for a bridge with no client. No test constructs a bridge over a connected client and expects true, and none drives a connected client whose askApproval returns { decision: 'deny', undelivered: true } through bridge.askApproval; only mapApprovalAnswer is tested in isolation.",
+      "impact": "A getter that always returns false would put the 'remote channel is not connected' note on every operator card while the suite stays green.",
+      "suggested_fix": "Using the fake client harness in shell-bridge.test.ts, start a bridge, expect bridge.connected true, then make the fake askApproval return { decision: 'deny', undelivered: true } and expect bridge.askApproval('card') toMatchObject the same.",
+      "evidence": "keryx ctx rg 'bridge\\.connected' src --glob '*.test.ts' finds no shell-bridge.test.ts use; the only assertion is mirror-undelivered.test.ts:84 (false). src/remote/shell-bridge.ts adds `get connected(): boolean { return this.client?.connected === true; }`.",
+      "confidence": "medium"
+    }
+  ],
+  "mutant_candidates": [
+    { "file": "src/remote/client.ts", "line": 450, "mutation": "remove undelivered: true from the non-ok POST return", "expected": "a test fails; today none does" },
+    { "file": "src/remote/client.ts", "line": 453, "mutation": "remove undelivered: true from the missing-approvalId return", "expected": "a test fails; today none does" },
+    { "file": "src/remote/client.ts", "line": 457, "mutation": "remove undelivered: true from the catch return", "expected": "a test fails; today none does" },
+    { "file": "src/remote/client.ts", "line": 477, "mutation": "add undelivered: true to the post-posting stream-dropped return", "expected": "a test fails; today none does" },
+    { "file": "src/remote/shell-bridge.ts", "line": 301, "mutation": "get connected() returns false constantly", "expected": "a test fails; today none does" },
+    { "file": "src/remote/shell-bridge.ts", "line": 208, "mutation": "drop the !yes guard so a press can carry undelivered", "expected": "killed by the mapApprovalAnswer allow case (covered)" },
+    { "file": "src/tui/approval-mirror.ts", "line": 52, "mutation": "call onUndelivered before the settled check", "expected": "no test drives an undelivered answer that arrives after the dock answered" }
+  ]
+}
+```

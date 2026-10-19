@@ -1,0 +1,28 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slices 03 and 04 read in full against head 77d2eff20 (slice-04's tui-shell.ts hunk is cut in the diff, so the call site was read in the file and compared with b1c6da0e6). No new logic defect. E-04: onTopicEnded fires only from the topic leg's own .then while settled is false, is mutually exclusive with onUndelivered, and can never fire after the dock or a topic press settled the race; markUndelivered(id, \"ended\") is idempotent and ignores answered or already-unmirrored entries, so there is no double settle and no state regression. E-05: cardAvailable is read from deps.tools, the same list that builds the turn's tool definitions, and review_complete is registered only when operatorConfirm is bound (interactive-agent-tools.ts), so the readline REPL gets the command wording and the TUI keeps the card wording; the three prompt branches and the stop report agree. E-08: the extracted raceMirroredCard and askUnmirroredCard are behaviour-equivalent to the removed inline code (onUndelivered is still passed only for a card, verdict and withdrawn rules identical, settle still in finally), and the unused ApprovalRaceOutcome and ApprovalResponse imports were removed with no dangling use. D-03 and E-45 are unchanged and stay open as known minors.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [
+    {"id": "E-04", "disposition": "closed"},
+    {"id": "E-05", "disposition": "closed"},
+    {"id": "E-08", "disposition": "closed"},
+    {"id": "E-10", "disposition": "closed"},
+    {"id": "D-03", "disposition": "open"},
+    {"id": "E-45", "disposition": "open"},
+    {"id": "E-23", "disposition": "open"},
+    {"id": "E-49", "disposition": "open"}
+  ],
+  "slices": [
+    {"id": "slice-03", "coverage": "read in full: completion-gate.ts (closeStep, nextStep, describeBlockers, decideReviewGate card flag), approval-mirror.ts onTopicEnded, operator-confirmations.ts markUndelivered/remoteApproval/askUnmirroredCard/raceMirroredCard, tui-shell.ts import and call-site changes, card-lifecycle.test.ts, operator-confirmations.test.ts; call sites re-read at head 77d2eff20 and compared with b1c6da0e6", "status": "DONE"},
+    {"id": "slice-04", "coverage": "read in full: review-orchestrator SKILL.md and SKILL.detail.md wording (both copies are byte-identical), cli-reference.md sentence, review.ts import removal (completeManagedReview has no remaining use in review.ts), agent.ts cardAvailable wiring; the cut tui-shell.ts hunk read in the file at head", "status": "DONE"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```

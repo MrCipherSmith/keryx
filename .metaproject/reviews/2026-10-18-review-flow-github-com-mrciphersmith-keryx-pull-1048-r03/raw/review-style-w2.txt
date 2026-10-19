@@ -1,0 +1,135 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice-02 (r03 delta) is stylistically clean in the new code; one major (user-facing docs now contradict the fixed behaviour) and a handful of minor/info items.",
+  "slices": [{ "id": "slice-02", "coverage": "whole diff read, every manifest file checked at head for the quoted sites", "status": "DONE" }],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "reviewer": "review-style",
+      "file": "docs/docs/guides/apply-project-rules.md",
+      "line": null,
+      "quote": "only: a rule imported with `--link` is not scanned, and neither are bundled",
+      "problem": "The r03 delta makes `references check`/`suggest` scan a rule imported with `--link` at its origin (references-check.ts now reads `resolveOriginPath(origin, projectRoot)`; the new test 'a rule imported with --link is scanned at its origin' asserts it). The code comment in references-check.ts:16 was updated, but two user-facing statements still say the opposite: this guide paragraph and the `references check` row in cli-reference.md ('Citations are backticked `X.md` names in `.metaproject/rules/project/`; a linked rule is not scanned.').",
+      "impact": "Trigger: an operator who imported rules with `--link` reads the guide or CLI reference before running `keryx skills references check`. Outcome: the docs tell them their linked rules' citations are invisible to the check, yet the command reports `undeclared-citation` for documents cited by those rules (and no longer reports `unused-declaration` for them); they will treat correct output as a bug or add declarations they believe are unneeded. Documentation that is actively wrong is a major comment-quality defect.",
+      "suggested_fix": "Rewrite the guide sentence to 'The citation scan looks for backticked `X.md` names in project rules, including rules imported with `--link` (read at their origin); bundled rules are not scanned.' and end the cli-reference row with 'a rule imported with `--link` is scanned at its origin.' Both docs must change together.",
+      "evidence": "docs/docs/guides/apply-project-rules.md:261 and docs/docs/cli-reference.md:3491 say linked rules are not scanned; src/gdskills/references-check.ts:16 and :98 and src/commands/skills-references.test.ts:333 say and prove they are. keryx ctx rg for 'linked rule|imported with .--link|not scanned' over README.md, docs (excluding docs/requirements), src/gdskills, src/commands and .metaproject/skills/gdskills returned exactly these two stale statements; the earlier findings review-architecture-w3:F-002 and review-logic-w2:F-001 covered the code, not these docs.",
+      "confidence": "high",
+      "dedupe_key": "style:docs-linked-rule-not-scanned",
+      "class_scope": {
+        "sites": [
+          "docs/docs/guides/apply-project-rules.md:261",
+          "docs/docs/cli-reference.md:3491 (references check row)"
+        ],
+        "enumeration_method": "keryx ctx rg -n --all 'linked rule|imported with .--link|not scanned' README.md docs src/gdskills src/commands .metaproject/skills/gdskills --glob '!docs/requirements/**' (17 matches, 2 are the stale claim; the rest concern import/update/remove behaviour)"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "reviewer": "review-style",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "import { cardSafe } from \"../lib/card-safe\";",
+      "problem": "The new import sits between two sibling (`./`) imports. Every other import in the block is ordered type-only project imports, then siblings alphabetically; a `../lib` import in the middle breaks both the grouping and the order.",
+      "impact": "Import-group convention (framework/project, then relative, blank line between groups) is not followed; the next editor cannot tell where a new import goes.",
+      "suggested_fix": "Move the line to sit with the `../gdskills/...` import above `./modal-host`, so parent-directory imports come before sibling ones.",
+      "evidence": "src/tui/project-context-inspector.ts lines 8-14: `../gdskills/project-context-status`, `./modal-host`, `../lib/card-safe`, `./execution-plan-inspector`, `./project-references-view`, `./theme`, `./theme-repaint`.",
+      "confidence": "high",
+      "dedupe_key": "style:import-order-card-safe"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "reviewer": "review-style",
+      "file": "src/gdskills/context-resolver.ts",
+      "line": null,
+      "quote": "...(task !== undefined ? { taskTextLength: Array.from(options.taskText!).length, ...(task.truncated ? { taskTextTruncated: true as const } : {}) } : {}),",
+      "problem": "One dense line holds a ternary, a nested conditional spread and a non-null assertion (`options.taskText!`) that re-splits the whole text into code points after `truncateTaskText` already did the same split (`Array.from(text)` inside it) and then discarded the count.",
+      "impact": "Hard to read, the `!` is only safe because of the `task !== undefined` check four lines up, and the length is computed twice with the same idiom. Related to the three code-point counters already noted in review-clean-code-w3:F-010, but this is the readability side (assertion and nested spread), not the duplication count.",
+      "suggested_fix": "Have `truncateTaskText` also return `length` (the code-point count it already has), then write `const task = ...; const record = { recordedAt, result, ...(task ? { taskTextLength: task.length, ...(task.truncated ? { taskTextTruncated: true as const } : {}) } : {}) }` after splitting the optional pieces into a small `taskTextFields(task)` helper.",
+      "evidence": "src/gdskills/context-resolver.ts:531-535 and truncateTaskText at :74-76.",
+      "confidence": "medium",
+      "dedupe_key": "style:record-last-resolve-dense-spread"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "reviewer": "review-style",
+      "file": "src/gdskills/context-resolver.test.ts",
+      "line": null,
+      "quote": "await recordLastResolve(root, result, { taskText: `${\"x\".repeat(TASK_TEXT_MAX_CHARS + 50)}` });",
+      "problem": "A template literal that only interpolates one expression: `${\"x\".repeat(...)}` wraps a plain string.",
+      "impact": "Noise; reads as if something were being concatenated.",
+      "suggested_fix": "`{ taskText: \"x\".repeat(TASK_TEXT_MAX_CHARS + 50) }`. Same test also mixes `text.length` (line 428) with the code-point count the implementation records; fine for ASCII, but a short comment or `Array.from` would keep it honest if the fixture ever gains an emoji.",
+      "evidence": "src/gdskills/context-resolver.test.ts:432.",
+      "confidence": "high",
+      "dedupe_key": "style:pointless-template-literal"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "reviewer": "review-style",
+      "file": "src/commands/skills-references.test.ts",
+      "line": null,
+      "quote": "upsert: [entry(\"styling.mdc\", linkedRule, RULE), entry(\"other.mdc\", second, ",
+      "problem": "In the new --link test the second rule's text is written out twice as the same multi-line literal: once for `writeFile(second, ...)` and again as the third argument of `entry(\"other.mdc\", ...)`, which hashes it.",
+      "impact": "If one copy is edited the registry hash silently stops matching the file on disk, and the test then fails for a reason unrelated to what it checks. Same shape as the repeated rule literal in review-style-w2:F-005 (prior round).",
+      "suggested_fix": "`const OTHER_RULE = \"---\\ndescription: other\\nglobs: src/**\\nalwaysApply: false\\n---\\n\\nRead `OTHER.md` first.\\n\";` once, then `writeFile(second, OTHER_RULE, ...)` and `entry(\"other.mdc\", second, OTHER_RULE)`. Better still, let `entry` take the text and write the file itself.",
+      "evidence": "src/commands/skills-references.test.ts:341 and :356.",
+      "confidence": "high",
+      "dedupe_key": "style:duplicated-rule-literal-link-test"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "reviewer": "review-style",
+      "file": "src/gdskills/reference-entries.test.ts",
+      "line": null,
+      "quote": "maxFileBytes: 1_000_000,",
+      "problem": "Magic number in the new test; the production cap for a cited document is already a named export.",
+      "impact": "The test does not say whether 1_000_000 is meant to be 'the real limit' or 'big enough'.",
+      "suggested_fix": "Import and use the named constant (CONTRACT_MAX_BYTES from ./context-resolver, if that is the cap the resolver passes) or name a local `const ROOMY = 1_000_000`.",
+      "evidence": "src/gdskills/reference-entries.test.ts:45; CONTRACT_MAX_BYTES is exported from src/gdskills/context-resolver.ts.",
+      "confidence": "medium",
+      "dedupe_key": "style:magic-number-reference-entries-test"
+    },
+    {
+      "id": "F-007",
+      "severity": "info",
+      "reviewer": "review-style",
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "--task-text '<task title and description>'",
+      "problem": "The r03 change moved every `--task-text` placeholder to single quotes, but only flow-orchestrator/SKILL.md says why and how to escape (a `'` inside becomes `'\\''`; double quotes let the shell run backticks and `$(...)`). job-orchestrator SKILL.md (3 sites), orchestrator-prompt.md (2), task-implementer SKILL.md and tests-creator SKILL.md carry the bare single-quoted placeholder.",
+      "impact": "A task title or description with an apostrophe (common prose) still breaks the command in those copies, and an agent reading only one of them does not learn the rule. Guidance is stated once in four places and silently dropped in the rest.",
+      "suggested_fix": "Add the same one-line note ('single-quote the text; a `'` inside becomes `'\\''`') beside the first placeholder in each skill, or point to flow-orchestrator by name. Edit the bundled copies under src/gdskills/bundled/skills in the same change.",
+      "evidence": "keryx ctx rg -n \"single-quot|--task-text '\" over .metaproject/skills/gdskills/orchestration, tests-creator/SKILL.md, README.md and the guide: only flow-orchestrator/SKILL.md:323 explains the escaping. Related to review-clean-code-w2:F-002 (Step B ellipsis lacks --task-text).",
+      "confidence": "medium",
+      "dedupe_key": "style:task-text-quoting-guidance-inconsistent"
+    },
+    {
+      "id": "F-008",
+      "severity": "info",
+      "reviewer": "review-style",
+      "file": "src/tui/project-context-inspector.test.ts",
+      "line": null,
+      "quote": "const onDestroy = source.slice(source.indexOf(\"onDestroy: () => {\"), source.indexOf(\"onDestroy: () => {\") + 2500);",
+      "problem": "A source-text test with a magic 2500-character window and the same `indexOf` computed twice.",
+      "impact": "The window is arbitrary: adding a few comment lines to `onDestroy` in tui-shell.ts silently pushes `stopProjectContextFeed?.()` out of range and the test fails with no hint why (testing-practices wave owns whether a source-reading test belongs at all).",
+      "suggested_fix": "`const start = source.indexOf(\"onDestroy: () => {\");` and `const END_OF_ON_DESTROY = ...` (or search for the next closing marker) with a named constant explaining the window.",
+      "evidence": "src/tui/project-context-inspector.test.ts:598.",
+      "confidence": "medium",
+      "dedupe_key": "style:magic-window-source-test"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 3, "info": 4 }
+}
+```
+
+Summary: Slice-02 was read in full and the quoted sites verified at head 5382b56abf17. The new code is generally tidy (the hand-written heading scanner, the feed's `polling`/`started`/`applied` guards and the new tests are readable and named well). The one major is documentation drift: the r03 fix makes `references check` scan `--link` rules at their origin and updates the code comment, but docs/docs/guides/apply-project-rules.md:261 and the `references check` row in docs/docs/cli-reference.md:3491 still say a linked rule is not scanned. The rest is minor/info: an out-of-order import in project-context-inspector.ts, a dense non-null-asserted spread in `recordLastResolve`, a duplicated rule literal in the new --link test, a pointless template literal, two magic numbers in tests, and `--task-text` single-quote guidance whose escaping rule is stated only in flow-orchestrator. Prior r02 style findings that still apply unchanged were not re-filed.

@@ -1,0 +1,24 @@
+STATUS: DONE
+
+Scope B (regression) over fix slice slice-01, delta b1c6da0e6..77d2eff20 of PR #1052. Result: no blocker and no major regression found. No finding is reported.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Checked each fix of 77d2eff20 in slice-01 for completeness across sibling sites and for breakage of existing behaviour. E-01 (agent must not run keryx review complete; card wording): every imperative site in .metaproject/skills and src/gdskills/bundled is changed in both the source skill files and the bundled mirrors; the decideReviewGate nudge in src/review/completion-gate.ts (closeStep/nextStep/describeBlockers) is now chosen by ReviewGateInput.cardAvailable, whose only caller is src/commands/agent.ts (deps.tools.some(name === review_complete)), so a roster without the card still gets the CLI wording and nothing that worked before stops working. E-04 (topic leg ended without a press): raceApproval in src/tui/approval-mirror.ts calls onTopicEnded only after the settled guard and only when the answer is not undelivered, not a press and the topic signal is not aborted; the three non-press ends in src/remote/client.ts askApproval (timeout, stream drop, abort after post) are the only ones that reach it, and a live card cannot be flagged ended by a dock answer or a turn stop. OperatorConfirmationLog.markUndelivered(id, reason) ignores answered or already unmirrored entries, so the added path is idempotent. E-05 (roster gate) and E-06/E-07 (askUnmirroredCard, raceMirroredCard, remoteApproval moved from src/tui/tui-shell.ts into src/tui/operator-confirmations.ts) are behaviour-preserving moves: the shell call sites at ~6083-6137 pass the same arguments, the finally blocks still settle or withdraw the card on a throw, and remoteApproval keeps the same fields (approved, fingerprint, via, pressedBy, pressedAt). E-10 (review_complete dispositions input and the apply split into runCompletionGates, writeCompletionRecord, completionOutput in src/commands/operator-confirm-review.ts): the new dispositions field is optional, recordDispositions in src/review/managed.ts runs before the manifest is closed inside the try block that takes the waivers back on failure, and the existing no-dispositions call path is unchanged. E-02 and E-03 are outside slice-01 (schema and the other slices); I only checked their mechanism and did not close them here. Not verified by me: E-08. Blast-radius caveat: the radius is a code graph. Most of this slice is skill text, docs and a JSON schema, which have an empty or unresolved radius, so for those I enumerated by text search (git grep of every keryx review complete occurrence at 77d2eff20) rather than from the graph. Runtime edges (string-keyed tool names such as review_complete, the Telegram topic leg over HTTP) are not in the graph and were followed by reading src/remote/client.ts and src/remote/shell-bridge.ts. Residual wording, not a regression and below the scope-B threshold, left for the owning scopes: src/commands/review.ts:4558 and :4562 refusals for --waive-coverage and --waive still say to call the review_complete card, which a readline keryx shell session without that tool cannot do (the earlier text said the same, the commit did not move it); the overflow line in completion-gate.ts still says keryx review complete lists them all (known D-03); the job-orchestrator skill still tells an agent to run keryx review complete --finding, which still works because the CLI itself was not narrowed.",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "E-01", "disposition": "closed" },
+    { "id": "E-04", "disposition": "closed" },
+    { "id": "E-05", "disposition": "closed" },
+    { "id": "E-06", "disposition": "closed" },
+    { "id": "E-07", "disposition": "closed" }
+  ],
+  "slices": [
+    { "id": "slice-01", "coverage": "all hunks of slice-01.diff read; sibling sites enumerated by git grep and caller read", "status": "DONE" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```

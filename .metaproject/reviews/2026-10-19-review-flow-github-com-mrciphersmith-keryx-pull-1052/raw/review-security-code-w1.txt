@@ -1,0 +1,82 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Security Review (review-security-code, wave 1, slice-01)
+
+Scope: slice-01 (docs, CHANGELOG, package.json, TM-04, SKILL files, flow 464 files). Read the slice diff in full, then the code the doc claims depend on: src/commands/operator-confirm-tools.ts, src/tui/tui-shell.ts (remoteApproval), src/remote/hub.ts (allowed-id check), src/remote/config.ts, src/remote/shell-bridge.ts and client.ts diffs, src/commands/review.ts (TTY seams), src/lib/command-risk.ts, src/trigger/unattended.ts.
+
+Summary: 1 major, 2 minor. The TM-04 section states the three limits it was asked to state (same-OS-user store forgery, bot token reachable by the agent, Telegram ordering) and the claims it makes about the allowed id, single use, 1-hour TTL, `pressedBy`/`pressedAt` only on the remote path, and `pressedAt` from the shell clock all match the code. The problem is the `review_complete` act: the docs and one SKILL sentence treat it as card-only or terminal-only, and the code does not enforce that.
+
+Checked and clean:
+- Allowed-id check: hub.ts:1086 drops any press whose `fromId` is undefined or not in `allowedUserIds`; operator-confirm-tools.ts:213-217 checks again at the record and fails closed when the list is absent. Config loader (config.ts:104) rejects an empty list, so "a binding with none refuses every remote answer" holds.
+- `pressedAt` is `new Date().toISOString()` in the shell (tui-shell.ts:584), not Telegram's clock, as TM-04 says. `pressedBy`/`pressedAt` are spread into the record only when `remote` is true (operator-confirm-tools.ts:227), never from model input.
+- Token is a `randomUUID` held in process memory and deleted before the remote checks (lines 191-206), so a refusal spends it; replay finds nothing.
+- package.json: the only change is `version` 0.3.123 -> 0.3.124. No script, dependency, `files`, bin or lifecycle-hook change, so no supply-chain surface.
+- Flow 464 files (flow.json, context.md, description.md, journal.md, plan.md, tasks.md, acceptance-criteria.md) and the diff as a whole: a pattern scan for GitHub/API tokens, Telegram bot-token shape, private-key headers and `password=`/`secret=` found nothing. The quoted operator request and helyx message id are not secrets.
+- SKILL.md / review-premise: the new text keeps "You never run --mode automatic or --yes, and never write an operator quote yourself" and tells the agent to call the card, not to send the operator to a terminal. Nothing there lets the agent answer a card.
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "TM-04 6a is accurate about what the press proves and about the allowed-id, single-use, 1-hour and pressedBy/pressedAt rules, and states the same-OS-user, bot-token and ordering limits. One major: the docs and one SKILL sentence present review_complete as card-only/terminal-only, but plain `keryx review complete` has no TTY check, no command-risk floor and no card, and SKILL.detail.md tells the agent it may run it instead of the card. Two minors on TM-04 wording. package.json is version-only; no secrets in the flow files.",
+  "slices": [{"id": "slice-01", "coverage": "full diff read; claims checked against code at head", "status": "DONE"}],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "then you call the `review_complete` card (the operator answers it in the shell or in the Telegram topic) or run `keryx review complete`.",
+      "problem": "The readiness paragraph tells the agent it may run `keryx review complete` itself as an alternative to the `review_complete` card. The same PR documents `complete` as an operator act that needs a terminal (docs/docs/cli-reference.md: \"The operator-only steps here (`confirm-plan`, `decide-premise`, `chunks estimate --answer`, `complete`, ...) need a terminal\"), and TM-04 6a lists `review complete` among the acts that used to need a terminal. In the code only `--waive` and `--waive-coverage` require a TTY (src/commands/review.ts:4556-4562). Plain `review complete` has no TTY check, and touchesHumanConfirmation in src/lib/command-risk.ts matches only the waiver flags (the PR does not touch that file). So the card adds an operator press that the CLI path does not require.",
+      "impact": "Attack vector: the agent follows the SKILL (or acts on its own), runs `keryx review complete <package>` through shell_exec in a shell where every waiver is already recorded. The review reaches `completed` with no card, no operator press, no `confirmedVia` and no `pressedBy`. The head, evidence and waiver gates in completeReviewGated still apply, so this bypasses the operator's final yes, not the gates. The brief states the requirement as \"the agent must never be able to record an operator act (confirm-plan, decide-premise, waive, complete) by itself\". Caveat: the CLI behaviour is pre-existing, and an autonomous run closes its package with this same command (autonomous-review.md exit 0, `complete`). The new text is what presents it as gated and, in the SKILL, invites the agent to use it.",
+      "suggested_fix": "Decide which of these is true and make code and text agree. (a) If the card is the operator act, drop \"or run `keryx review complete`\" from both SKILL.detail.md copies and make plain `review complete` ask in command-risk (add it to touchesHumanConfirmation) or refuse without a TTY when the call comes from keryx shell, with the autonomous profile as the explicit exception. (b) If the CLI stays agent-runnable, remove `complete` from the cli-reference \"need a terminal\" list, from the TM-04 6a opening paragraph, and from the autonomous-review.md bullet, and state in TM-04 that the card is a display-and-record step, not a gate on completion.",
+      "evidence": "SKILL.detail.md sentence above (and the identical sentence in src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:669). cli-reference.md line in the diff at slice-01.diff:758. Code: review.ts:4556 and 4562 test isTerminal only for --waive-coverage and --waive; command-risk.ts:725-740 floors `review complete` only with the waiver flags; `git diff` shows command-risk.ts untouched by the PR. docs/docs/guides/autonomous-review.md says the five review cards stop an autonomous run at the floor, while its own exit-code table has exit 0 meaning the package was closed by `keryx review complete`.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md (Readiness paragraph, \"or run `keryx review complete`\")",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:669 (same sentence)",
+          "docs/docs/cli-reference.md (\"The operator-only steps here (... `complete` ...) need a terminal\")",
+          "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md 6a (first paragraph lists `review complete` among acts that needed a terminal)",
+          "docs/docs/guides/autonomous-review.md (\"These are cards a person answers ... it stops at the floor\" versus exit-code 0 `complete`)"
+        ],
+        "enumeration_method": "Read every hunk of slice-01 that mentions `review complete` or `review_complete`, then checked the code that decides whether plain `complete` is guarded (review.ts isTerminal sites via keryx ctx rg, command-risk.ts review/complete matcher, git diff on command-risk.ts). The bundled copy was located with keryx ctx rg, which skips dot-directories, so the .metaproject copy was read directly from the slice."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "line": null,
+      "quote": "Each refusal leaves the token spent.",
+      "problem": "Three small mismatches between TM-04 6a, the CHANGELOG and the code. (1) The CHANGELOG says a replayed, expired, foreign or text-only answer \"changes nothing\"; TM-04 says each refusal spends the token. The code agrees with TM-04 (operator-confirm-tools.ts:206 deletes the pending entry before the allowed-id and TTL checks), so the CHANGELOG sentence is the loose one. (2) 6a says the press \"carries this question's token\". The token is a randomUUID held only in process memory and handed to `invoke` by the driver (operator-confirm-tools.ts:14-17, 191-206); the Telegram press carries no token, and the binding is that the awaiting approval is the question. (3) The one-hour expiry cannot be reached from the topic in practice, because limitations.md states a 15-minute approval wait on the Telegram path, so \"a delayed press ... has aged out, and is refused by the token rules\" describes the approval timeout, not the TTL.",
+      "impact": "Docs overstate precision about the binding mechanism, which is the sentence a later reviewer or operator will rely on when judging whether a replayed or foreign press can do anything. No exploit: the code fails closed in each case. A hostile or mistaken press from a non-allowed id would also consume the pending card in the shell only if it passed the hub, which it does not (hub.ts:1086).",
+      "suggested_fix": "In 6a replace \"it carries this question's token\" with \"it answers the one approval this card is waiting on (the token never leaves the shell process)\"; state that the 1-hour check is a second bound behind the 15-minute approval wait; change the CHANGELOG to \"is refused and the card is spent; nothing is recorded\".",
+      "evidence": "operator-confirm-tools.ts:14-17 header comment, 191-192, 206, 214-221; limitations.md hunk in slice-01.diff mentions the 15-minute approval wait; hub.ts:1086.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "line": null,
+      "quote": "It cannot make Telegram report a press from an allowed user id, but it can talk to the bot API, so a press is evidence of an allowed account, not of an unreachable channel.",
+      "problem": "The bot-token bullet does not name what a token holder can do to the card itself. The token is an owner-only file (`bot-token` in the remote directory, src/remote/paths.ts:16, config.ts:260), readable by an agent running as the same OS user. With it the agent can call editMessageText or editMessageReplyMarkup on the mirrored card. The `review_complete` card exists to show the SHA, evidence level and waivers; the callback stays bound to the real approval. The bullet on message order says only that the operator may not have seen \"the card text last shown\", which is about ordering, not about altered text. The bullet also says the token sits in \"the shell's environment or config\"; it is a file the shell and serve read.",
+      "impact": "Attack vector: an agent that read the bot-token file edits the Telegram copy of a review_complete card so it shows a different head SHA or no waivers, the operator presses yes on the edited text, and the shell records `remote-card` with a valid `pressedBy` for a card the operator did not read. This needs the same-OS-user agent the section already assumes, so it is a gap in what 6a says the press proves, not a new bypass.",
+      "suggested_fix": "Add to the second \"does not prove\" bullet: a token holder can also edit or replace the text of the mirrored card, so the press proves a press on a card with the real approval id, not that the operator read the text the shell holds. Name the file instead of \"environment or config\". Optionally have the shell re-render the card text from the package when it records the answer, which AC4 already asks for.",
+      "evidence": "TM-04 6a bullets (slice-01.diff:679-681); paths.ts:16 BOT_TOKEN_FILE; config.ts:260-264 (owner-only file, read by the shell).",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 1, "minor": 2, "info": 0}
+}
+```

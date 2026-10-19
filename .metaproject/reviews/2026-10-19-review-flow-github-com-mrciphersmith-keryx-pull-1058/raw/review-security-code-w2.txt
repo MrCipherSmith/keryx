@@ -1,0 +1,66 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Security Review, slice-02 (wave 2 of 4)
+
+Scope: PR 1058 head 5974c976823e1a7134723edf3a9140b991246d45, slice-02 (src/commands/review-operator.ts, the completion-card hunk in src/commands/operator-confirm-review.ts, the test file, docs and the PRD). Judged against the operator's decision (polls 225 and 227): keryx does not verify the answer, the record is the agent's report kept verbatim. Not re-reported: the five wave-1 items named in the task.
+
+### Summary
+- Blockers: 0
+- Major: 1
+- Minor: 0
+- Info: 0
+
+### Findings
+
+### [S2-SEC-001] Only decide-premise checks that the operator's words are an answer; the other three verbs record any text that does not open with a decline word, including the verb's own decline option "keep"
+- Severity: major
+- File: src/commands/review-operator.ts:274 (LEAD_DECLINE), :302 (refuseDecline), :385, :411 (the other call sites)
+- Attack vector / failing input: the operator is asked "Waive the mutation pass? Waive or Keep?" through the host's question tool and picks Keep (the option the code itself declares as the decline for waive-mutation and override-reviewers: HOST_OPTIONS `decline: "keep"`, lines 257 and 265, and the label the journal stores, "Keep: run the mutation pass"). The agent, acting honestly, records the report: `keryx review waive-mutation --package P --reason "suite takes an hour" --answered-by claude-code:q1 --answer-text "Keep" --question-text "Waive the mutation pass?"`. `refuseDecline` runs `wordsOf("Keep")` = ["keep"]; LEAD_DECLINE does not contain "keep", so nothing refuses, and `recordOperatorDecision` writes a `mutation-waiver` with `confirmedVia: "host-question"` and quote "Keep". The mutation gate (`mutationErrors`, `confirmedDecision`) then reads the waiver as granted and `review complete` closes with "Not run: mutation pass". Same for override-reviewers (`--answer-text "Keep"` or "Keep: run the required reviewers" records a reviewer override and lets a smaller roster close the round). Free text records too: `--answer-text "what does the mutation pass do?"` or "I am not sure" (first word "what" / "i") is recorded as a waiver; `--answer-text "uphold"` is recorded for waive-mutation. Only the `--answer` flag is checked against the decline option (line ~351, tested in review-host-question.test.ts:205); `--answer-text`, the operator's words, is not. The test file covers the decline words n/no/nope/нет only (line 258) and a positive-word check only for decide-premise (line 268, 274).
+- Problem: the PRD decision Q2 ("free text is never a decision; the answer must be one of the verb's options") and the docs (TM-04 6b: "an answer that is not one of the verb's options ... for the others a yes"; limitations page; cli-reference) say the verbs refuse an answer that is not a yes. The implementation enforces that positively only for decide-premise (`refuseOtherChoice`). For confirm-plan, waive-mutation and override-reviewers the only text gate is a short deny-list of first words, and the deny-list omits the verbs' own declared decline option. This is not the wave-1 point about "don't waive it" (a negated yes that opens with "don"): here there is no check that the words are an affirmative at all, and a decline word the code itself defines slips through.
+- Impact: the operator said no (or asked a question) and a waiver of a review gate is recorded as the operator's decision, with a verbatim quote that reads "Keep". A later reader of `operator-decisions.json`, the `/decisions` modal or the completion card sees a granted waiver. This is the honest-agent path, not a forgery: the operator's decision (keryx does not verify) accepts an agent that lies, it does not accept keryx recording the opposite of what an honest agent reports, and it contradicts the stated Q2 behaviour and the docs.
+- Suggested fix: require a positive match for every verb, as decide-premise does. For confirm-plan, waive-mutation and override-reviewers, accept only when the first word set is in an affirmative list (yes, y, yeah, confirm, waive, override, approve, да, ok ...) or the words contain the verb's `confirm` id, and refuse when the words contain the `decline` id (keep, no) or neither. Add the verbs' decline ids to the refusal: derive the deny-list from `HOST_OPTIONS[verb].decline` so the two cannot drift. Add tests for `--answer-text` "Keep", "Keep: run the mutation pass", "what does this mean?", and "uphold" on waive-mutation, override-reviewers and confirm-plan, each asserting the package is byte-identical.
+- Evidence: src/commands/review-operator.ts lines 257, 265 (decline "keep"), 274 (LEAD_DECLINE without "keep"), 302-306 (refuseDecline: `words.length === 0 || LEAD_DECLINE.has(words[0])`), 385, 411 (the only text checks on those paths). Test gap: src/commands/review-host-question.test.ts:205 tests `--answer keep`, :258 tests the decline words list, :268 and :274 test the positive check for decide-premise only.
+- Confidence: high
+- class_scope: sites = src/commands/review-operator.ts:385 (confirm-plan), :411 (waive-mutation and override-reviewers share the branch); decide-premise at :395-396 is correct and is the model. Enumeration: `keryx ctx rg refuseDecline|refuseOtherChoice|decline:` over src/commands/review-operator.ts, three call sites of `refuseDecline` and one of `refuseOtherChoice`.
+
+### Clean areas (checked, no finding)
+- Injection: no shell, SQL or template use in the new path; `--answered-by` parsed by split on the first colon, source allow-listed against HOST_QUESTION_SOURCES, ref only trimmed and non-empty; error text echoes with JSON.stringify and slice.
+- Refuse-before-write ordering: every refusal (env, unattended, answered-by, texts, answer flag, finding, stale plan, decline, other choice, missing reason) runs before the first write; the journal write after the record is a warning only, so a journal failure cannot lose or duplicate the operator's record.
+- Env refusals in `refuseHostQuestionHere` fail closed (KERYX_TOOL_CALL=1, isAutonomousEnv, unattended run profile); an unreadable run profile reads as attended, covered by the floor in src/trigger/unattended.ts (`recordsHostQuestion`, strips quotes and backslashes, outside this slice) and by the existing completion gate's run-profile refusal. The env-variable overrides an agent could type (`env -u KERYX_TOOL_CALL`) are the shell-floor's job and were not judged here.
+- Card hunk (operator-confirm-review.ts:509): the host-question source and ref are passed through `cardSafe` before the `review_complete` card prints them, and the card says "(host-question source:ref)" so the operator sees which kind of record each waiver is.
+- Secrets/logging: the answer and question texts go to the package and the decisions journal only, not to a log; no credential handling in the slice.
+- Docs and PRD hunks make no claim stronger than the decision, apart from the Q2 claim in finding S2-SEC-001.
+
+REVIEW_RESULT
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Slice-02 (wave 2): one major. The host-question path checks that the operator's words are an answer only for decide-premise; confirm-plan, waive-mutation and override-reviewers refuse only a short deny-list of first words, which omits the verbs' own declared decline option 'keep', so an honest agent reporting 'Keep' records a mutation waiver or reviewer override. Everything else in the slice (refuse-before-write ordering, source allow-list, env and unattended refusals, card display) holds against the operator's no-verification decision.",
+  "findings": [
+    {
+      "id": "S2-SEC-001",
+      "severity": "major",
+      "file": "src/commands/review-operator.ts",
+      "line": 274,
+      "quote": "const LEAD_DECLINE = new Set([\"n\", \"no\", \"nope\", \"nah\", \"not\", \"never\", \"cancel\", \"stop\", \"decline\", \"declined\", \"reject\", \"нет\", \"не\", \"отмена\"]);",
+      "problem": "Only decide-premise requires the operator's words to name a choice (refuseOtherChoice). For confirm-plan, waive-mutation and override-reviewers the sole check on --answer-text is refuseDecline: refuse when the text is empty or its first word is in LEAD_DECLINE. The deny-list does not contain 'keep', the decline option the same file declares for waive-mutation and override-reviewers (HOST_OPTIONS decline: \"keep\", the label the journal stores). Any other non-affirmative text is recorded as well. This contradicts PRD decision Q2 and the docs ('an answer that is not one of the verb's options (for the others a yes) is refused').",
+      "impact": "Failing input: `keryx review waive-mutation --package P --reason \"suite takes an hour\" --answered-by claude-code:q1 --answer-text \"Keep\" --question-text \"Waive the mutation pass?\"` exits 0 and writes a mutation-waiver (confirmedVia host-question, quote \"Keep\"); the mutation gate reads it as granted and review complete closes with the pass Not run. The same text on override-reviewers records a reviewer override. `--answer-text \"what does the mutation pass do?\"` (first word 'what') and `--answer-text \"uphold\"` also record. An honest agent that reports the operator's decline option, or a clarifying question, leaves a granted gate waiver whose quote reads as a refusal; the audit record contradicts the operator's answer. Not covered by the operator's no-verification decision, which accepts a lying agent, not keryx recording the opposite of an honest report.",
+      "suggested_fix": "Require a positive match for every verb as decide-premise does: accept only when the words contain the verb's confirm id or an affirmative word list (yes, y, yeah, confirm, waive, override, approve, да, ok), refuse when they contain the verb's decline id or neither. Derive the refusal from HOST_OPTIONS[verb].decline so the code and the offered options cannot drift. Add tests: --answer-text 'Keep', 'Keep: run the mutation pass', 'what does this mean?' and 'uphold' on waive-mutation, override-reviewers and confirm-plan, each asserting the package and journal are byte-identical.",
+      "evidence": "review-operator.ts 257 and 265 (decline \"keep\"), 274 (LEAD_DECLINE without keep), 302-306 (refuseDecline: words.length === 0 || LEAD_DECLINE.has(words[0])), 385 and 411 (the only text checks for confirm-plan and for waive-mutation/override-reviewers). review-host-question.test.ts:205 tests only `--answer keep`; :258 tests only n/no/nope/нет; :268 and :274 test the positive check for decide-premise only. wordsOf(\"Keep\") = [\"keep\"], not in LEAD_DECLINE, so refuseDecline returns without throwing.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "class_scope": {
+        "sites": [
+          "src/commands/review-operator.ts:385",
+          "src/commands/review-operator.ts:411"
+        ],
+        "enumeration_method": "keryx ctx rg 'refuseDecline|refuseOtherChoice|decline:' src/commands/review-operator.ts: three refuseDecline call sites (385 confirm-plan, 395 decide-premise, 411 waive-mutation and override-reviewers) and one refuseOtherChoice (396, decide-premise only, correct); 385 and 411 have no positive-answer check"
+      }
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 },
+  "slices": ["slice-02"]
+}
+```

@@ -1,0 +1,60 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Slice-02 (src/commands/*, src/flow/*) read in full (diff + callers: loadRemoteConfig, evidenceLevelLine). No blocker or major performance cost in the changed code. Two info notes: synchronous reads in the new review_complete card path (operator-initiated, once per round close, so not a hot path) and a pending-card Map that is only swept on invoke/decline (pre-existing shape; the PR adds a TTL but no eviction).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "const report = readFileSync(path.join(dir, \"report.md\"), \"utf8\");",
+      "problem": "completionFacts reads manifest.json, report.md and research.json with readFileSync, and runs twice per card (buildCard, then again in apply to compare the digest); completeReviewGated then reads the same package a third time.",
+      "evidence": "Diff hunk @@ 746-877 of operator-confirm-review.ts: completionFacts() is called from buildCard and from apply. It runs in the keryx shell process, so each call blocks the event loop for the length of the three reads. Frequency: once per review_complete card plus once per yes, both driven by an operator pressing a button, a few times per review round. report.md is a text report of tens to a few hundred KB; a local read is sub-millisecond to low milliseconds. evidenceLevelLine is a linear scan (src/review/evidence-level.ts:58) and loadRemoteConfig (src/remote/config.ts:172) is one small file read, once per remote press.",
+      "impact": "Negligible. At most a single-digit-ms stall of the TUI loop on an operator action. No scaling with N and no repetition inside a loop.",
+      "suggested_fix": "None required. If the file ever grows large or the card is rendered on a timer, switch to fs/promises readFile; the surrounding specs already import sync fs helpers, so the sync form is consistent with the file.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "location_class": "in-diff",
+      "publication": "omit"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-tools.ts",
+      "line": null,
+      "quote": "pending.set(token, { input: key(input), card, shown, prepared: built.prepared, issuedAt: now().getTime() });",
+      "problem": "An entry in the per-tool `pending` Map is deleted only in invoke (any path) or confirmationDeclined. The PR adds issuedAt and a one-hour TTL, but an expired entry is not evicted unless somebody calls invoke with its token; a card whose approval never resolves (turn aborted, shell closed mid-card) keeps its entry, including `prepared`, for the life of the process.",
+      "evidence": "operator-confirm-tools.ts diff @@ 139-247: deletions occur at `pending.delete(token)` in invoke and in `confirmationDeclined`; no timer or sweep. Frequency is one entry per card the operator is shown, a handful per session, each holding a small card plus a prepared record (a dir path and digests).",
+      "impact": "Bounded by the number of abandoned cards in a session; a few KB at worst. Not a leak that grows with traffic. The shape pre-dates this PR; the PR only adds one number to each entry.",
+      "suggested_fix": "Optional: when issuing a new token, drop entries whose issuedAt is older than REMOTE_CARD_TTL_MS. One line, and it makes the TTL also a retention bound.",
+      "confidence": "medium",
+      "reviewer": "review-performance",
+      "location_class": "pre-existing",
+      "publication": "omit"
+    }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+}
+```
+
+## Performance review: slice-02 (src/commands/*, src/flow/*)
+
+Scope: diff of agent-commands.ts, agent.ts, operator-confirm-other.ts, operator-confirm-review.ts, operator-confirm-tools.ts, review.ts, shell.ts, the two test files, confirm-token.ts, flow/service.ts, flow/types.ts. Read in full; outside-the-hunk reads: src/remote/config.ts (loadRemoteConfig), src/review/evidence-level.ts (evidenceLevelLine).
+
+Checked and clean:
+- N+1 and queries: none introduced; no DB access in this slice.
+- Loops with I/O: none. The new cardPressFields spreads add no I/O. record() in operator-confirm-other.ts and the confirm-token mint add two optional fields only.
+- Unbounded reads/growth: waiver quotes are clipped to 300 characters (clip), file lists are capped by LISTED_FILES; completion-confirmation.json holds one record. The scheduler decision log (appendFile) gains two optional fields per line, no new frequency.
+- Async blocking in a request path: allowedUserIds() calls loadRemoteConfig() synchronously, once per remote press (one small config file), not per render or per event. Fine, and the "read fresh" choice is deliberate.
+- Memory/subscriptions: no new listeners or timers. See F-002 for the pending Map.
+- review.ts: the inline run-profile and routing refusals moved into completeReviewGated (outside this slice); the CLI path runs the same checks once, no duplicate work added here.
+- Imports: shell.ts adds a named import of loadRemoteConfig from ../remote/config; no large-library or wildcard imports.
+- React re-renders / MobX: not in this slice.
+
+Routing audit: graph_used no (diff-scoped, nothing to trace beyond two callees read directly); wiki_used no (not relevant to code-level cost); ctx_used yes (keryx ctx rg); raw_rg_used no.

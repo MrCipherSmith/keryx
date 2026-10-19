@@ -1,0 +1,98 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-architecture",
+  "summary": "Slice-02 keeps the dependency direction (commands to review, flow and remote only) and gives the CLI and the review_complete card ONE gate function, completeReviewGated, so the head gate, evidence-level check, research gate and readiness gate are not duplicated. No blocker or major in the layering lens. Two minor structural findings: the card re-implements the completion preconditions in the commands layer (one predicate, prBound, already differs from the library's isPrBound), and the operator's act is persisted as a commands-layer sidecar written after the close, which makes the 'nothing was recorded' refusal untrue when that write fails.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "prBound: manifest.target?.kind === \"pr\",",
+      "problem": "The review_complete card re-derives the completion preconditions in the commands layer (completionFacts re-reads manifest.json, the report and the research files with ad-hoc JSON types) instead of asking the review library. The copy has already drifted from the single gate: the library's isPrBound (src/review/complete-head-gate.ts) is `target.kind === \"pr\" || PR_URL.test(target.ref)`, the card's prBound is kind === \"pr\" only. The head regex /^[0-9a-f]{7,40}$/ is also written a second time (it is in completeManagedReview too), and the card shows evidenceLevelLine (a non-validating line grab) where the gate uses parseEvidenceLevel (validating). The 'already closed' refusal exists only in the card.",
+      "evidence": "operator-confirm-review.ts:678 prBound: manifest.target?.kind === \"pr\"; :712 head regex; :717 `head applies to a pull request package` refusal built from facts.prBound; :667 evidenceLevelLine(report). Library side: src/review/managed.ts completeManagedReview throws on `!isPrBound(stored.target)` using src/review/complete-head-gate.ts isPrBound (kind pr OR PR URL in ref), then runs parseEvidenceLevel. The CLI path and the card path both end in completeReviewGated (src/review/complete-gated.ts), so the gates themselves are shared; only the pre-card preflight is duplicated.",
+      "impact": "A package whose target.kind is not \"pr\" but whose ref is a pull request URL accepts --head on the CLI and is refused by the card at buildCard time, so the two entry points disagree about the same package. A malformed 'Evidence level:' line is shown on the card as if valid, and the gate then refuses at apply time (fails closed, so no wrong record, but the operator is asked to confirm something that cannot complete). Any later change to the gate has to be mirrored by hand in the card.",
+      "suggested_fix": "Export one read-only preflight from src/review (for example completionPreflight(packageDir, head) returning reviewId, prBound via isPrBound, status, the validated evidence level via parseEvidenceLevel, and the waivers) and have both completeManagedReview and the card use it; the card keeps only the rendering and the digest. Failing that, import isPrBound and parseEvidenceLevel into completionFacts so the predicates cannot diverge.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE), `${JSON.stringify(record, null, 2)}\\n`);",
+      "problem": "The operator's act for review_complete (quote, confirmedVia, pressedBy and pressedAt, head, evidence, waivers) is persisted by the commands layer as a free-standing sidecar, completion-confirmation.json, written AFTER completeReviewGated has already closed the manifest and run recordFinishedRound, and inside the same try whose catch reports `nothing was recorded`. The review library does not know the file: it is not in the manifest, the ledger or any reader, and the CLI path writes no equivalent.",
+      "evidence": "operator-confirm-review.ts:750 completeReviewGated(...) returns, :765 writeFileAtomic(... COMPLETION_FILE ...), :774 catch returns `review_complete refused: ... — nothing was recorded`. A keryx ctx rg over src and docs finds no reader of completion-confirmation.json outside the tests. The round registry (src/review/round-registry.ts recordFinishedRound) hashes the manifest identity fields, findings.json and round.json only, and its header says closing the round does not break the match, so the extra file does not invalidate registry trust (checked and refuted as a risk). The same-shape sidecars for other operator acts go through the review library (cardPressFields spread into recordOperatorDecision, recordPlanConfirmation, recordCoverageWaiver, waiveReadiness and others).",
+      "impact": "If the sidecar write fails (disk full, read-only directory) after the gate passed, the review is already closed but the operator is told nothing was recorded; the card then refuses a second attempt because the package status is closed, so the answer cannot be retried and the proof of who pressed what is lost. The audit trail of this one operator act lives outside the library that owns every other one, with no reader and no CLI parity.",
+      "suggested_fix": "Move the recording into the review library: give completeReviewGated (or completeManagedReview) an optional `confirmation` argument that writes the record before or together with the close, and have it return it. If the sidecar stays, write it before calling the gate (it holds only facts already re-derived and digest-checked) or catch its failure separately and say that the review is complete but the confirmation record was not written. Name a reader (ledger or report) or drop the file.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/review/types.ts",
+      "line": null,
+      "quote": null,
+      "problem": "The invariant 'pressedBy and pressedAt are recorded only when confirmedVia is remote-card' is enforced in one place, operatorConfirmTool in src/commands/operator-confirm-tools.ts. The eight review-library recorders (answerChunkEstimate, publishReview, recordCoverageWaiver, waiveReadiness, recordOperatorDecision, recordPlanConfirmation, answerPremiseQuestion and the flow confirmMint) accept the press fields from any caller and spread cardPressFields unconditionally. Today every caller passes through the tool, so nothing is wrong; the guarantee depends on that single composition site. Related and pre-existing, not part of this diff: ConfirmedVia is declared both in src/review/types.ts and in operator-confirm-tools.ts, and src/remote/shell-bridge.ts imports ../commands/approval-cause (remote depending on commands).",
+      "impact": "A future caller of a recorder can write a pressedBy for a non-remote answer. No current violation.",
+      "suggested_fix": "Optional: have cardPressFields (or a CardPress constructor) return the fields only when confirmedVia is remote-card, so the library enforces the rule it records. Declare ConfirmedVia once in src/review/types.ts and import it in the commands layer.",
+      "evidence": "src/review/types.ts CardPress and cardPressFields; callers listed in the slice-02 diff. No file:line cited for a violation because none exists.",
+      "confidence": "low",
+      "reviewer": "review-architecture",
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 }
+}
+```
+
+## Architecture Review (review-architecture, wave 2, slice-02)
+
+### Review Scope
+- Branch: docs/flow-helyx-operator-confirm, head d2cb377f59f7f9c8553d9f377f99360bff3f6328, base 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Slice: slice-02 (src/commands/*, src/flow/*)
+- Stack: generic TypeScript, Bun CLI (commands adapter, review library, flow service, remote infrastructure)
+
+### Summary
+The CLI `keryx review complete` and the `review_complete` card both end in the same function, completeReviewGated, which runs the run-profile refusal, the narrowed-routing refusal and completeManagedReview (head gate, evidence level, research gate, readiness gate, round registry). completeManagedReview has no other non-test caller, so the gates have one source of truth. The review.ts refactor that moved the run-profile and routing checks into it is correct. allowedUserIds has a single composition site (src/commands/shell.ts via loadRemoteConfig) and fails closed when absent. No new inverted dependency was introduced: commands import review, flow and remote, not the reverse.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 2 | info: 1
+
+### Layer Violations
+F-002 (minor): operator act stored by the commands layer after the library closed the review.
+
+### Dependency Direction
+None detected in the diff. The remote to commands import in src/remote/shell-bridge.ts (approval-cause) pre-dates this PR and is not flagged.
+
+### Module Boundary Violations
+F-001 (minor): card preflight duplicates library predicates and one of them differs.
+
+### Design Pattern Misuse
+None detected.
+
+### SOLID Violations
+None detected. F-003 (info) is a DIP-style note on where an invariant is enforced.
+
+### Framework-Specific
+N/A (no NestJS or React in this slice).
+
+### Checked and found sound
+- One shared gate: src/review/complete-gated.ts used by src/commands/review.ts and operator-confirm-review.ts.
+- allowlist, TTL and token consumption live in one place (operator-confirm-tools.ts invoke), composed once in shell.ts.
+- Press-field plumbing is consistent across the review-library recorders and flow/confirm-token.ts.
+- Round registry (flow 458): the post-close sidecar does not change the hashed inputs; checked in src/review/round-registry.ts and refuted as a risk.
+- AC9 (owner live check) and AC10 (release) were not treated as code defects.
+
+### Routing audit
+graph_used: no (not-relevant, targeted reading of a known diff); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg, read); raw_rg_used: no.

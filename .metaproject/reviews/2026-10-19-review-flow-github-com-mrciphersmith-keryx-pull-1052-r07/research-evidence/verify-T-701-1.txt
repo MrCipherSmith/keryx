@@ -1,0 +1,15 @@
+# keryx review verify-run
+finding: T-701
+command: rg -n operatorQuote|mutation-waiver|reviewer-override src/commands/operator-confirm-review-tools.test.ts
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T07:36:21.249Z
+exit: 0
+
+--- stdout ---
+321:      operatorQuote: "Accept 2 uncovered file(s) as not reviewed in .metaproject/reviews/pr7932-r1?: yes",
+659:    research["dispatch"] = { ...(research["dispatch"] ?? {}), coverageWaiver: { operatorQuote: "Waive coverage of 2 files?: yes", time: NOW.toISOString(), files: ["src/a.ts", "src/b.ts"] } };
+673:        { kind: "mutation-waiver", quote: "Waive the mutation pass?: yes", reason: "no time", confirmedVia: "tui-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["m1", "m2"] } },
+674:        { kind: "reviewer-override", quote: "Run a smaller reviewer set?: yes", reason: "small diff", confirmedVia: "remote-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["review-security-code"] } },
+689:      decisions: [{ kind: "mutation-waiver", quote: "sneaked in", reason: "x", confirmedVia: "tui-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["m1"] } }],
+--- stderr ---
+

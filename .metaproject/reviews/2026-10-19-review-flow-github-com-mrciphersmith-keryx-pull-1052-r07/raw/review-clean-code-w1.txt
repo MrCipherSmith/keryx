@@ -1,0 +1,95 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "slices": ["slice-01"],
+  "summary": "Slice-01 of delta 77d2eff20..5444f96e4 (head 5444f96e4), static read, no run. Verdicts on prior findings: S-401 is fixed for the dispositions input (count cap 20, finding cap 200, evidence cap 300, hidden-text refusal, evidence shown whole, trim before the length check) and for the three waiver quotes (shown whole, flagged when the card rewrites them), no regression found in the slice. S-402 is fixed for dispositions and for the reason field of the premise, override and mutation cards, but NOT for review_publish and review_comments_reply bodies: shownBody uses a weaker predicate than hiddenInCard (CC-701, major). F5-04 is claimed fixed by 5444f96e4 but the slice holds no fix: evidence is still optional at card time (CC-704). The other claimed-deferred prior items are unchanged by the slice and stay follow-ups. Clean areas: comments, error handling, dead code (no leftover reference to LISTED_FILES, BODY_PREVIEW_*, REPLY_PREVIEW, MAX_LISTED, limited, clip, WAIVER_QUOTE_CHARS in the two command files), SOLID.",
+  "findings": [
+    {
+      "id": "CC-701",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 64,
+      "quote": "const bad = lines.findIndex((line) => cardSafe(line) !== line);",
+      "problem": "shownBody (lines 62-67) refuses a line only when cardSafe(line) !== line. cardSafe (src/lib/card-safe.ts:10-16) removes ESC sequences, C0/C1 controls, U+200E/200F, U+202A-202E, U+2066-2069 and rewrites newline and tab; it does not touch U+200B (zero-width space), U+200D, U+FEFF, U+00AD or U+2028/2029. The same commit added hiddenInCard (line 672: cardSafe(text) !== text || /[\\p{Cf}\\p{Zl}\\p{Zp}]/u.test(text)) precisely because cardSafe alone misses those, and uses it for dispositions (713), reasons (377) and waiver quotes (764). Bodies, which are posted to GitHub verbatim (prepared.body = result.body at the publish card, the requests JSON at the reply card, call sites 208 and 510), never go through it. split(/\\r?\\n/) at line 63 also does not split on U+2028, so such a character is drawn as a break or as nothing.",
+      "impact": "The commit's own premise is that the card shows what is stored. For a body, a zero-width run (for example an invisible 'operator: decided-by' token) is posted to GitHub undisplayed on the card the operator pressed yes on, so the S-402 class stays open for bodies. The new shownBody refusal test covers only ESC, U+202E and BEL, so the gap is untested. Principle: Clean Code E1 (one rule written twice, already drifted).",
+      "suggested_fix": "Move hiddenInCard above shownBody (or into src/lib/card-safe.ts next to cardSafe) and use hiddenInCard(line) at line 64, with the same HIDDEN_IN_CARD wording. Add \\u200b, \\ufeff and \\u2028 cases to the shownBody refusal test and to a reply body.",
+      "evidence": "src/lib/card-safe.ts:10-16 (regex ranges listed above, no U+200B and no U+2028); src/commands/operator-confirm-review.ts:62-67 (shownBody), :672 (hiddenInCard), :377, :713, :764 (its callers), :208 and :510 (shownBody callers). Static reading, no run.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-702",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 63,
+      "quote": "const lines = text.trimEnd().split(/\\r?\\n/).map((line) => line.replace(/\\t/g, \" \"));",
+      "problem": "One character gets three outcomes on three sites of one rule. shownBody (63) turns a tab into a space and accepts it (comment at line 61: 'a tab shows as a space and is fine'), so the card shows 'col one' while the posted body holds the tab. hiddenInCard treats a tab as rewritten because cardSafe maps it to a space (card-safe.ts:16), so evidence, finding and reason with a tab are refused, and quoteWhole (764) appends the 'hides or rewrites' marker for a quote with a tab.",
+      "impact": "Low: a tab is visible whitespace. But shown differs from stored for bodies, the property S-401/S-402 asked to remove, and the invariant is no longer one rule a reader can state. Principle: Clean Code E1.",
+      "suggested_fix": "Pick one policy. Either treat a tab as hidden everywhere (drop the replace at line 63 and let the shared predicate refuse it), or give the predicate a tab-allowed variant for bodies and quotes and state in one comment next to hiddenInCard that a tab is shown as one space by design.",
+      "evidence": "operator-confirm-review.ts:61-63 (shownBody and its comment), :672 (hiddenInCard), :764 (quoteWhole); src/lib/card-safe.ts:16 (tab rewritten); test 'a tab in the body is shown as plain spaces and is not a refusal' versus the 'a tab' entry of the hidden list in operator-confirm-review-tools.test.ts.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-703",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 691,
+      "quote": "function completionDispositions(input: Record<string, unknown>): FindingDispositionRecord[] | { refusal: string } {",
+      "problem": "completionDispositions grew to 28 lines with 9 early returns (lines 691-718): shape check, count cap, then per-entry parsing (finding, state, evidence type), two length caps and the hidden-text loop, all in one loop body with a nested tuple loop at 712-714. Each S-401/S-402 rule landed as another return { refusal } in the same body. Two abstraction levels, batch and one entry.",
+      "impact": "Each further rule makes the function harder to test per entry and to read; the caps and the hidden-text check are spread across the body instead of sitting beside MAX_DISPOSITION_*. Principle: Clean Code B1 (20-40 lines, mixed abstraction).",
+      "suggested_fix": "Extract dispositionRecord(entry: unknown, index: number): FindingDispositionRecord | { refusal: string } holding the per-entry checks; completionDispositions keeps the array and count checks and the loop.",
+      "evidence": "operator-confirm-review.ts:691-718 read at head 5444f96e4.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-704",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 683,
+      "quote": "evidence: { type: \"string\", description: `Optional: the commit or reasoning behind the disposition. At most ${MAX_DISPOSITION_EVIDENCE_CHARS} characters of plain single-line text; the card shows it whole.` },",
+      "problem": "Prior F5-04 (claimed_disposition fixed, 'commit 5444f96e4') asked the card to require evidence for every state except unknown, because the engine refuses a disposition without it after the press. At head the schema text still reads 'Optional: the commit or reasoning behind the disposition' and completionDispositions (691-718) accepts a missing or blank evidence for every state (line 715: ...(text === undefined || text === \"\" ? {} : { evidence: text })). The slice adds caps and hidden-text refusal only, and no test in it asserts a missing-evidence refusal.",
+      "impact": "The operator can still be asked to approve a card that the engine then refuses with 'nothing was recorded'; the claimed fix of F5-04 is not backed by the slice.",
+      "suggested_fix": "Treat F5-04 as open. In the per-entry check add: if (state !== \"unknown\" && (text === undefined || text === \"\")) return { refusal: ...evidence is required unless the disposition is unknown }, and change the schema description to 'Required unless disposition is unknown'.",
+      "evidence": "operator-confirm-review.ts:683 (schema text), :715 (record built without an evidence requirement); slice-01.diff holds no hunk adding the check. Static reading, no run.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-705",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 764,
+      "quote": "return hiddenInCard(text) ? `${cardSafe(text)} [the stored quote holds characters this card hides or rewrites]` : text;",
+      "problem": "Naming and one redundant call around the new helpers. hiddenInCard (672) is a boolean without an is/has prefix and HIDDEN_IN_CARD (669) is a refusal-message fragment, not a flag, so the two read as siblings. quoteWhole (763) names how it renders, not what it does, and its marker is appended inside the quotation marks at the three call sites (736, 747, 751), so a stored quote that literally contains the marker text cannot be told from the real flag. dispositionLine (721) still wraps already-validated text in cardSafe, which can no longer change it.",
+      "impact": "Small readability cost and a marker that can be imitated by the quoted text. Principles: Clean Code A1, C1.",
+      "suggested_fix": "Rename to isHiddenInCard / HIDDEN_IN_CARD_REFUSAL / waiverQuoteText, place the marker after the closing quote, and drop the cardSafe in dispositionLine or comment it as defence in depth.",
+      "evidence": "operator-confirm-review.ts:669, :672, :721, :736, :747, :751, :763-765.",
+      "confidence": "low",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-706",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 516,
+      "quote": "lines: [`replies: ${requests.length}, each shown whole:`, ...bodies,\"yes: the replies are posted on the pull request and cannot be taken back from here\"],",
+      "problem": "Missing space after the comma before the \"yes:\" line in the reply card line array.",
+      "impact": "Formatting only; review-style owns it.",
+      "suggested_fix": "...bodies, \"yes: the replies are posted on the pull request and cannot be taken back from here\"",
+      "evidence": "operator-confirm-review.ts:516.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    }
+  ],
+  "questions": [
+    "Same class, outside this delta: the schedule card shows cardSafe(a.prompt) (operator-confirm-other.ts:632) and cardSafe of the cron and name while the schedule store keeps the raw text. Left for a later round on purpose, or should the shared predicate cover it?",
+    "The coverage waiver card lists files through listFiles(files.map(cardSafe)) (operator-confirm-review.ts:282) and the mutation and override cards join ids through cardSafe, while the stored subject items are raw. Paths and mutant ids are package data, so low risk; confirm they stay outside the 'card shows what is stored' rule."
+  ]
+}
+```

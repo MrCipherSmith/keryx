@@ -1,0 +1,45 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Slice-05 (TUI project-references view, createProjectContextFeed, tui-shell wiring) has one performance finding: the new 5 s status poll re-runs the full references check (every project rule and every declared or undeclared cited document is read) on an idle TUI with no change detection and no in-flight guard. It is bounded and async, so minor. The pure formatting functions, the status-equality gate and the unref'd timer are fine.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "const timer = setInterval(() => {\n    void tick();\n  }, ms);",
+      "problem": "createProjectContextFeed polls every 5000 ms (PROJECT_CONTEXT_POLL_MS) for the whole TUI session and each poll calls loadProjectContextStatus, which for a project with references.json runs checkReferences. That reads every project rule (scanCitations), reads and parses every declared document (up to CONTRACT_MAX_BYTES = 262144 each) and every undeclared cited document, and calls loadReferences twice (readReferences, then checkReferences). The reads are sequential awaits. The result is then compared by JSON.stringify of the whole status including last.result entries. There is no cheap change test (mtime of last.json, references.json, rules dir) before the full recompute, and the tick has no in-flight guard, so a slow filesystem lets ticks overlap. The returned stop() is never called in tui-shell.ts (only 5 occurrences of projectContextFeed, none call stop), so the poll runs until process exit.",
+      "impact": "Steady background disk I/O and UTF-8 decode plus JSON stringify every 5 s on an idle TUI, scaling with the number of rules and declared documents (worst case roughly declarations x 256 KiB per tick). On a project with tens of small rules and documents this is milliseconds and invisible; the cost shows only with many or large documents, or a slow or network filesystem, where overlapping ticks can pile up. Off any measured hot path, so no user-visible regression is claimed. Only projects that have references.json pay the full cost; without it readReferences returns after one loadReferences.",
+      "suggested_fix": "Gate the expensive part on a cheap stamp: in the poll, stat last.json, references.json, tasks.config.json and the rules dir (or a rule-count plus max mtime) and call load() only when the stamp changed; reload() from the modal keeps loading unconditionally. Add an in-flight flag in poll() so a tick is skipped while the previous load is pending. Call projectContextFeed.stop() on TUI teardown. Optionally have readReferences reuse the already loaded declarations instead of calling loadReferences a second time via checkReferences.",
+      "evidence": "src/tui/project-context-inspector.ts defaultInterval and createProjectContextFeed.poll (no pending guard); src/gdskills/project-context-status.ts readReferences -> loadReferences + checkReferences; src/gdskills/references-check.ts scanCitations (readFile per rule), inspectDocument per declaration and per undeclared citation; src/gdskills/context-resolver.ts CONTRACT_MAX_BYTES = 262144; src/tui/tui-shell.ts has createProjectContextFeed at the const projectContextFeed site and no call to projectContextFeed.stop.",
+      "confidence": 0.7,
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "const next = await options.load();\n    if (!sameStatus(current, next)) {\n      current = next;",
+      "problem": "reload() is shared by the poll, the sidebar and the modal toggle (loadStatus: reloadProjectContext) with no ordering. A poll started before the user toggles enforcement can resolve after the toggle's reload and write the older status into current and to subscribers (the open modal then repaints it and its next 'e' press reads the stale status.enforcement). This is a correctness race rather than a cost; noted for review-logic, not graded here.",
+      "impact": "Needs a poll in flight at the moment of a toggle and the older read finishing last; the next poll 5 s later corrects the display. No performance cost.",
+      "suggested_fix": "Give reload() a sequence number and drop a result whose sequence is older than the last applied one, or serialize loads through one in-flight promise (which also fixes F-001's overlap).",
+      "evidence": "src/tui/project-context-inspector.ts reload: assigns current after await with no staleness check; showProjectContext passes loadStatus: reloadProjectContext and subscribe: projectContextFeed.subscribe in src/tui/tui-shell.ts.",
+      "confidence": 0.5,
+      "reviewer": "review-performance"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "slices": ["slice-05"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Clean areas checked: formatProjectReferencesLines and referencesSidebarSegment (pure, linear in declarations; entryFor is O(entries) per declaration, so O(D x E) with both small and only on paint); sidebar refresh runs only when the status differs (sameStatus gate), so a quiet project repaints nothing; modal contentRows computes three line arrays once at open; unsubscribeStatus is released on close; the poll timer is unref'd so it does not hold the process; no bundle-import, N+1 or pagination patterns in the slice.
+
+routing audit: graph_used: no (not-relevant, slice-local reading); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no

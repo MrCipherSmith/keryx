@@ -1,0 +1,1324 @@
+[
+  {
+    "file": "scripts/benchmark/long-runner-turn.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/acp/roster.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/bus/delivery.integration.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/bus/flow-isolation.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "src/cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/agent-approval-binding.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-approval-context-p0.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "MetaprojectAdapterDeps",
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/commands/agent-approval-context.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-bus-notification.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-commands.confusable.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-commands.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-destructive-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-fewer-prompts.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-granted-json.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-hooks.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-instruction-roster.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-lifecycle-hooks.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-orchestrator-log.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-permission-mode.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-question-axis.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-review-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-rewind-seam.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-task-notification.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-tool-call-budget.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-trust-orchestration.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-untrusted-batch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.context-guard.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.error-hint.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.host-contracts.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.overflow-retry.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.recovery.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.repeat-guard-prune.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.slate-trail.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.working-memory.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agents-catalog-commands.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents-external-antigravity.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents-external-run.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents-external-write.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents-external.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents.monitor.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/flow-check-ac.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runCheckAc",
+      "tryAdvisoryCheckAc"
+    ]
+  },
+  {
+    "file": "src/commands/flow-check-hygiene.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/commands/flow-complete-uncommitted.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/commands/flow-freeze-kind-prompt.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/commands/flow-sensitivity.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/commands/flow-status-uncommitted.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/commands/forgetting.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "MetaprojectAdapterDeps",
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/commands/goal-command.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runGoalCommand"
+    ]
+  },
+  {
+    "file": "src/commands/governance.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "summarizeAcceptance"
+    ]
+  },
+  {
+    "file": "src/commands/interactive-agent-tools.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/commands/mcp-tool-surface.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/mcp-untrusted.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/memory-orchestrator-log.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/commands/operator-confirm-other-tools.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService"
+    ]
+  },
+  {
+    "file": "src/commands/review-ac-check-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-contract-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/commands/schedule-security.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/schedule-tools.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/shell-agent-repl.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/shell-bus.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-cli-validation.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-launch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ShellCommandRuntime",
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-lease.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-task-tools.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "launchTuiAgentShell"
+    ]
+  },
+  {
+    "file": "src/commands/trigger-agent-task.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runTriggerOnce"
+    ]
+  },
+  {
+    "file": "src/commands/trigger-dispatch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService"
+    ]
+  },
+  {
+    "file": "src/commands/trigger-hooks-coexist.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "triggerCommand"
+    ]
+  },
+  {
+    "file": "src/commands/trigger-review.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runTriggerOnce"
+    ]
+  },
+  {
+    "file": "src/commands/trigger-unattended.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/trigger.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "triggerCommand"
+    ]
+  },
+  {
+    "file": "src/commands/verify-kind-creation-paths.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/decisions/decisions.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/decisions/interviewer-path.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/decisions/own-answer.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/decisions/review-fixes.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/decisions/round2.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/decisions/round3.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/decisions/round4.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/flow/ac-kinds-errors.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/ac-kinds-never-gates.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/ac-kinds.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/ac-reseal.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/flow/ac-strict-args.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/allocation.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/flow/attempts.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/flow/check-complete.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService"
+    ]
+  },
+  {
+    "file": "src/flow/completion-attempts.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowStateSchema"
+    ]
+  },
+  {
+    "file": "src/flow/completion-never-stuck.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/flow/confirmation-backward-compat.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowStateSchema"
+    ]
+  },
+  {
+    "file": "src/flow/default-tasks.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/flow/depends-and-attempts.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/flow/duplicate-ids.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/flow/folder-hygiene.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/flow/init-tracker.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/flow/migration.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/flow/origin-evidence.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/origin-flow-392.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "OriginRoot",
+      "originRoot",
+      "readRawFlow"
+    ]
+  },
+  {
+    "file": "src/flow/origin-init.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/origin-never-gates.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/origin-outcome-author.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/origin-status.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/origin-template.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "OriginRoot",
+      "originRoot"
+    ]
+  },
+  {
+    "file": "src/flow/outcome-author-init.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowStateSchema"
+    ]
+  },
+  {
+    "file": "src/flow/outcome-author-set.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/flow/outcome-author-status.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/flow/outcome-author-template.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/flow/owner-backward-compat.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowStateSchema"
+    ]
+  },
+  {
+    "file": "src/flow/owner-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/flow/owner-status-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/flow/owner.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/flow/renumber-reviews.e2e.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/review-gate.e2e.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/review-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/flow/schema.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowStateSchema"
+    ]
+  },
+  {
+    "file": "src/flow/security-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/flow/service.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/flow/signatures.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService"
+    ]
+  },
+  {
+    "file": "src/flow/store.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/flow/task-depends.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/flow/task-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/flow/task-project-context.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService"
+    ]
+  },
+  {
+    "file": "src/flow/task-traceability.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/flow/templates.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/governance/flow-narrative.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "summarizeWork"
+    ]
+  },
+  {
+    "file": "src/governance/report.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/harness/child/spawn.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/harness/flow/managed-flow-port.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/harness/flow/parity.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService",
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/harness/migration.hardening.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowState"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/shell-exec-spill.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/harness/tool/graph-find-projection.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/harness/tool/memory-recall-p3.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/harness/tool/metaproject-adapter-containment.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/harness/tool/metaproject-adapter-p0.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/harness/tool/metaproject-adapter-task-text.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/harness/tool/metaproject-adapter.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowService"
+    ]
+  },
+  {
+    "file": "src/harness/tool/metaproject-boundary-parity.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "MetaprojectAdapterDeps",
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/harness/tool/metaproject-display-truth.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/harness/tool/search-code-confinement.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/harness/tool/search-code-output.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/harness/tool/wiki-evidence-projection.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/harness/tool/wiki-freshness-op.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createMetaprojectAdapter"
+    ]
+  },
+  {
+    "file": "src/mcp/metaproject-orchestrator-log.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/product/never-gates.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/remote/telegram-permission.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/review/active-review.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/review/bot/metrics.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/bot/post.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/clean-context.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/complete-head-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/completion-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "decideReviewGate"
+    ]
+  },
+  {
+    "file": "src/review/dedupe.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/evidence-level.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/filter-stats.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/harness-robustness.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "buildReviewConfirmSpecs"
+    ]
+  },
+  {
+    "file": "src/review/ingest-locator-sha.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/locate-ingest.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/loop.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/managed.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/review/pr-comments.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/premise.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/rebuttal-citation.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/repair-ingest.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/research.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/review-notes.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/round-trip.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/second-look.test.ts",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "src/review/slice-routing.test.ts",
+    "reason": "text-link",
+    "symbols": []
+  },
+  {
+    "file": "src/review/verification.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/sac/fwk-service.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createLocalFwkReadService"
+    ]
+  },
+  {
+    "file": "src/sac/workspace-forgetting.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createLocalFwkReadService"
+    ]
+  },
+  {
+    "file": "src/security/web-taint-durable-boundary.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/standard/command-registry.coverage.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "triggerCommand"
+    ]
+  },
+  {
+    "file": "src/tui/ac-kinds-surface.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "loadInspectorFlows"
+    ]
+  },
+  {
+    "file": "src/tui/ask-user-bridge.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/tui/flow-hygiene.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowGovernance"
+    ]
+  },
+  {
+    "file": "src/tui/flow-inspector-interrupted.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "loadInspectorFlows"
+    ]
+  },
+  {
+    "file": "src/tui/flow-inspector-outcome-author.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "loadInspectorFlows"
+    ]
+  },
+  {
+    "file": "src/tui/flow-inspector-uncommitted.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "loadInspectorFlows"
+    ]
+  },
+  {
+    "file": "src/tui/governance-flows.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowGovernance",
+      "GovernanceReport"
+    ]
+  },
+  {
+    "file": "src/tui/governance-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowConfirmations",
+      "FlowGovernance",
+      "GovernanceReport",
+      "GovernanceReportRead",
+      "ProjectGovernance"
+    ]
+  },
+  {
+    "file": "src/tui/governance-panel.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "GovernanceReport"
+    ]
+  },
+  {
+    "file": "src/tui/inspector-sources.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "loadInspectorFlows"
+    ]
+  },
+  {
+    "file": "src/tui/ops-sidebar.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "GovernanceReportRead"
+    ]
+  },
+  {
+    "file": "src/tui/origin-surface.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runFlowOriginForShell"
+    ]
+  },
+  {
+    "file": "src/tui/tui-shell.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/wiki/deep-enrich.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createMetaprojectAdapter"
+    ]
+  }
+]

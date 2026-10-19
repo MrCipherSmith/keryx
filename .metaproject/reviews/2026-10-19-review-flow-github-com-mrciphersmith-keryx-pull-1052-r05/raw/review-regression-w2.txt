@@ -1,0 +1,35 @@
+STATUS: DONE_WITH_CONCERNS
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Scope B, slice-02, head 77d2eff20 (delta b1c6da0e6..77d2eff20). No major or blocker regression found: E-01, E-02, E-03, E-05, E-06 and E-07 are fixed completely, and their sibling sites hold. Checked: (E-01) the 'complete' text in docs/docs/cli-reference.md:4921 now says plain `complete` has no terminal check, matching src/commands/review.ts:4557/4561, and the SKILL.md / SKILL.detail.md and bundled mirrors (782/386 fixed, 124/65/866 reworded, mirrors byte-identical); (E-02) completeSpec in src/commands/operator-confirm-review.ts carries `dispositions` through CompletePrepared into completeReviewGated(..., { dispositions: prepared.dispositions, ... }) and on to completeManagedReview -> recordDispositions, with the all-or-nothing validation intact; (E-03) the readiness_waivers items in docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json:191-206 now declare confirmedVia (enum tui-card, remote-card), pressedBy (integer) and pressedAt (string, minLength 1), matching ReadinessWaiver/CardPress in src/review/types.ts:89-102, so a manifest with a card-recorded waiver no longer fails additionalProperties:false in validateManagedReviewManifest; (E-05) cardAvailable at src/commands/agent.ts:3501 is `deps.tools.some((tool) => tool.definition.name === \"review_complete\")`, decideReviewGate in src/review/completion-gate.ts defaults to `input.cardAvailable !== false` so every other caller of decideReviewGate/nextStep/describeBlockers keeps the card wording, and holdReviewGate (agent.ts:3486-3502) returns false for subagents and unattended runs before the flag is read; (E-06) the operator-confirm-review.ts helper refactor (errorText, runCompletionGates, writeCompletionRecord, completionOutput) is behaviour-equivalent; (E-07) correct. E-04/E-08 were outside slice-02; I only read the delta in src/tui/approval-mirror.ts (raceApproval onUndelivered/onTopicEnded), operator-confirmations.ts, tui-shell.ts and mirror-undelivered.test.ts and saw no regression, but that is not a full check. The code graph could not answer for non-code files: 6 blast-radius entries are unresolved (the review-orchestrator SKILL files and their mirrors, cli-reference.md, the package schema, all not-a-graph-node) and 199 candidates were dropped by the cap, so the radius there is not clean, it is unanswered. I read the skill/doc/schema files by hand instead. No tests were run (read-only role). Below-major observations are in follow_ups.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [
+    "Card/runtime mismatch on the review_complete card (src/commands/operator-confirm-review.ts dispositionsSchema vs src/review/managed.ts recordDispositions): the card schema describes dispositions `evidence` as optional, but recordDispositions refuses any non-`unknown` state without evidence, so a press can be accepted and the refusal only surfaces at apply time. Not a regression (no prior behaviour relied on it); decide whether the card should require evidence at ask time.",
+    "Unbounded dispositions list on the review_complete card: with roughly 30 or more entries the card text exceeds MAX_APPROVAL_PROMPT_CHARS (3000), operatorCardTooLongForTopic is true, and the card gets no remote buttons and falls back to shell-only. A fix round of r04's size (65 findings) would lose Telegram answering for this card. A degradation of the remote path, not a break; settle by posting a card for ~40 dispositions and checking whether the buttons appear.",
+    "Stale instructions outside the changed set and outside the blast radius: .metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:27 and :193 and job-orchestrator/SKILL.md:1002 (and the bundled copies of both) still tell the agent to run `keryx review complete --finding ...`. The radius could not see them (non-code, not graph nodes), so I could not rule on them as a regression of the review_complete card change.",
+    "D-03 residual, still deferred: src/review/completion-gate.ts:800 still reads `more (\\`keryx review complete\\` lists them all)` in the overflow line of describeBlockers, which does not honour the new `card` argument; it stays card-agnostic wording.",
+    "Residual ambiguous wording in the review-orchestrator SKILL.md at :59 and :134 mentions the completion step without saying which surface answers it; harmless after the E-01 rewording but worth a pass."
+  ],
+  "prior_dispositions": [
+    {"id": "E-01", "disposition": "closed"},
+    {"id": "E-02", "disposition": "closed"},
+    {"id": "E-03", "disposition": "closed"},
+    {"id": "E-05", "disposition": "closed"},
+    {"id": "E-06", "disposition": "closed"},
+    {"id": "E-07", "disposition": "closed"}
+  ],
+  "slices": [
+    {
+      "id": "slice-02",
+      "coverage": "Read at head 77d2eff20: operator-confirm-review.ts (completeSpec, dispositions, helpers, ~640-870), review/completion-gate.ts 754-831, agent.ts holdReviewGate and cardAvailable (3470-3520, 3183-3198), review/managed.ts completeManagedReview + recordDispositions (889-1066, 1913-2002), review/complete-gated.ts, review/types.ts 89-102, the package schema 150-230, docs/docs/cli-reference.md around 4921 with review.ts 4535-4575, the review-orchestrator SKILL.md / SKILL.detail.md and bundled mirrors, and the approval-mirror.ts delta. Non-code radius entries (6 unresolved) read by hand; 199 dropped candidates not examined; no tests run.",
+      "status": "DONE"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```

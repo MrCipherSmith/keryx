@@ -1,0 +1,49 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-07 (second-look: task_text plumbing through the adapter, port, operations and MCP projection, help-group text, and the test files for the resolver, e2e scenarios, proof, config, section, status and TUI inspector) was read in full against the code at head 5382b56abf17. The non-test code is a thin, consistent pass-through of task_text/taskText: the MCP case, the agent operation and the adapter all drop an empty or whitespace-only text the same way the CLI does, truncateTaskText cuts by code point, the mirrored result schema allows undeclared and the condition object, and the e2e scenarios use keywords and globs that do not collide. No new defect found. No blocker, major, minor or info finding is filed.",
+  "findings": [],
+  "slices": [
+    {
+      "id": "slice-07",
+      "coverage": "slice-07.diff read in full except the TUI inspector test hunks, which were skimmed (tests only); metaproject-adapter.ts, metaproject-operations.ts, metaproject-port.ts, mcp/metaproject-tools.ts, context-resolver.ts (truncateTaskText, budget), resolve-context-command.ts, reference-entries.ts, reference-proof.ts, references-section.ts and the mirrored result schema read at head",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "info": 0
+  }
+}
+```
+
+## Logic Review (wave 5, r03, slice-07, second-look)
+
+Spec compliance gate: skipped, no issue or task supplied beyond the package; acceptance-criteria.md of flow 462 was the reference.
+
+Summary: the slice is mostly tests plus small plumbing. Checked and found consistent:
+- task_text reaches resolveProjectContext identically on three paths. The CLI (resolve-context-command.ts) and the MCP case (metaproject-tools.ts:128-134) and the agent operation (metaproject-operations.ts:2008-2015) all treat an empty or whitespace-only text as absent. The adapter (metaproject-adapter.ts:1381) passes it through unchanged.
+- truncateTaskText counts code points via Array.from, so the exact-4000 boundary test and the astral-character case in the tests hold, and a surrogate pair is never split.
+- The result schema (skills-resolve-context-result.schema.json) declares undeclared and the condition object with globs and keywords, so a resolve result with promoted entries validates under additionalProperties:false.
+- Budget arithmetic: usedBytes = used + promotedBytes, exceeded flag includes the cap, and the tests' expectations match.
+- e2e scenarios: the keywords and globs of the declarations do not match each other's task text, so the not-promoted scenarios cannot pass by accident.
+
+### Not filed on purpose
+- The agent/MCP resolve path does not call recordLastResolve (only the CLI does), so the TUI "last resolve" line reflects CLI runs. recordLastResolve is called only from resolve-context-command.ts at head; no acceptance criterion of flow 462 requires the adapter path to record, so this is a design limit, not a defect.
+- A keyword such as "dark mode" does not match "dark-mode" or "dark  mode": whole-word literal matching is the documented rule, and the failure mode is a missed promotion the author sees in `references check`/`suggest`, not a wrong result.
+
+### Earlier findings that still apply unchanged (not re-filed)
+- r02 review-logic-w3:F-003 (BOM before the first heading, extractSection returns found:false; references-section.ts has no BOM strip)
+- r02 review-logic-w1:F-004 (summary words of any script)
+- r03 review-logic-w4:F-001 (declared glob stored and matched verbatim: ./, /, backslash or ! never match)
+- r03 review-logic-w1:F-001, F-002; review-logic-w2:F-001, F-002; review-logic-w3:F-001, F-002, F-003
+
+Stats: blocker 0 | major 0 | minor 0 | info 0
+
+routing audit: graph_used: no (not-relevant, bounded slice read); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no

@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-architecture",
+  "wave": 4,
+  "waves": 5,
+  "slices": [
+    "slice-04"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-04",
+      "path": "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/slices/slice-04.diff",
+      "bytes": 137651
+    }
+  ],
+  "result": "raw/review-architecture-w4.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+}

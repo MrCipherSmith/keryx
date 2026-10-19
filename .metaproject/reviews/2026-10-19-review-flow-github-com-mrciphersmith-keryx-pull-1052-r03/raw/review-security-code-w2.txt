@@ -1,0 +1,54 @@
+STATUS: DONE
+
+## Security Review
+
+### Scope
+- Branch: `docs/flow-helyx-operator-confirm`
+- Merge-base / delta base: `d2cb377f59f7f9c8553d9f377f99360bff3f6328`; head `6f47bf35f31c2e8c882e573b61dd4c39fcc81264`
+- Scope mode: delta (slice-02)
+- Changed files reviewed: slice-02 in full (SKILL copies, CHANGELOG, TM-04, cli-reference, flow-state schema, agent.ts comment, operator-confirm-review.ts review_complete spec, confirm-token.ts, schema.ts, types.ts, completion-gate.ts, operator-confirmations.ts, tui-shell.ts mirror wrapper, tests)
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+### Prior findings
+
+- C-04: closed. `review_complete` no longer declares `head` in its input schema (`additionalProperties: false`), `completionFacts(dir)` takes no head input, and `apply` calls `completeReviewGated` without a `head` option, so `completeManagedReview` never replaces `manifest.target.head` on the card path. The card shows the recorded head, run through `cardSafe`, and `factsDigest` covers it. An extra `head` in the model input is ignored (test "the model cannot supply a head"). `--head` stays on the CLI, where the operator types it in a terminal.
+- C-40: closed. `consumeConfirmationToken` (confirm-token.ts) copies `pressedBy` and `pressedAt` from the stored token into the returned `SignatureConfirmation`. `SignatureConfirmation` (types.ts), the TS `flowStateSchema` (schema.ts) and the docs schema (flow-state.schema.json, under `definitions/flowSignature/properties/confirmation`) all declare both fields. The new test 464 reads the signature back from disk and validates it against the schema.
+
+### Findings
+
+None. Slice-02 changes were checked for the following and no exploitable path was found:
+- Card text built from package data: head, review id, evidence line, waiver item, waiver quote, mutation/override items and quotes all pass `cardSafe`. `decision.confirmedVia` is interpolated raw, but `readOperatorDecisions` accepts only `tui-card|remote-card|terminal`.
+- Remote acceptance in `operatorConfirmTool.invoke`: the allowed-id list must contain `pressedBy`, a missing id or time is refused, the token is deleted before the checks (spent on every refusal), and the 1-hour age is enforced. `remoteApproval` in tui-shell sets `pressedAt` from the shell clock. If `fromId` is undefined, `pressedBy` is absent and the remote answer is refused.
+- Between card and yes: `factsDigest` now covers the mutation-waiver and reviewer-override decisions as well as readiness and coverage waivers, so one added after the card is refused.
+- The close is gated by `completeReviewGated` (run profile, narrowed routing, head, evidence, research, readiness), identical to the CLI. A throw after the manifest closed is reported as closed with the problem, not as "nothing was recorded".
+- TUI mirror wrapper: `markUndelivered` and `settle` only change the in-memory log and affect no approval decision. An expired mirrored card stops counting as waiting in the topic, and the shell dock still answers it.
+
+### Clean Areas
+Injection, auth/authz on the card path, IDOR (package resolved through `resolveReviewPackagePath`), input validation (schema has no `head`), secrets, crypto (sha256 digest only), CSRF, path traversal (no new path from model input), open redirect, React and NestJS patterns (not applicable).
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-security-code",
+  "status": "DONE",
+  "slices": [{ "id": "slice-02", "coverage": "read in full" }],
+  "findings": [],
+  "prior_dispositions": [
+    {
+      "id": "C-04",
+      "disposition": "closed",
+      "evidence": "src/commands/operator-confirm-review.ts completeSpec: inputSchema has only `package` (additionalProperties false); completionFacts(dir) takes no head; apply() calls completeReviewGated without a `head` option, so managed.ts:967-979 (the head override) is not reached from the card. The card renders `reviewed head: ${facts.head}` from manifest.target.head via cardSafe, and factsDigest covers it. Test 'the model cannot supply a head' pins this; the CLI --head remains an operator-typed terminal flag."
+    },
+    {
+      "id": "C-40",
+      "disposition": "closed",
+      "evidence": "src/flow/confirm-token.ts:234-235 consumeConfirmationToken spreads stored.pressedBy/pressedAt into the returned SignatureConfirmation; types.ts SignatureConfirmation, src/flow/schema.ts and docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json (flowSignature.confirmation) declare both fields; confirm-token.test.ts '464: a remote-card token carries who pressed the card and when into the signature' reads the signature from disk and validates it against the schema."
+    }
+  ]
+}
+```

@@ -1,0 +1,160 @@
+STATUS: DONE
+
+# Style Review Report (wave 4, slice-04)
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+Slice-04 (25 files, read at head b1c6da0e6) is mostly clean: the review/ files route the new press fields through one helper (`CardPress` + `cardPressFields` in src/review/types.ts), names are consistent (`pressedBy`, `pressedAt`, `undelivered`, `MIRROR_NOT_DELIVERED`), `complete-gated.ts` is small and well commented, and the new test file is focused. The notable style gap is that the flow/ and harness/ layers re-implement the same two-field shape and "spread when defined" pattern by hand instead of sharing the helper, one of those sites is a ~300-character one-liner, and a few repeated literals/casts could be tightened. Nothing here is a functional risk. No major findings.
+
+## Review Scope
+- Branch: docs/flow-helyx-operator-confirm
+- Merge-base: 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Head: b1c6da0e6992e4df473bae6b2fde78bc94d28776
+- Scope mode: diff (slice-04 only)
+- Changed files in slice: 25
+
+## Stats
+- major: 0
+- minor: 3
+- info: 3
+
+## Minor & Info
+
+### [S4-01] pressedBy/pressedAt shape and spread pattern copied by hand across flow/, harness/, learning/ (CardPress already exists)
+- Severity: minor
+- File: src/flow/confirm-token.ts:140 (also confirm-token.ts:235, src/flow/service.ts:1681, src/harness/external/write-land.ts:229)
+- Problem: `cardPressFields` / `CardPress` (src/review/types.ts:92-100) was introduced for exactly this and is used by every review/ writer. The same two fields are redeclared inline in src/flow/confirm-token.ts:76 and :120, src/flow/types.ts:188 and :785, src/harness/external/write-land.ts:173, src/learning/decisions.ts, src/review/estimate.ts (PlanConfirmation) and src/harness/tool/builtin/interactive-tools.ts, and the `x.pressedBy !== undefined ? { pressedBy: x.pressedBy } : {}` spread is written out again at confirm-token.ts:140-141, :235-236, service.ts:1681-1682 and write-land.ts:229. src/review/estimate.ts and src/review/plan-confirmation.ts each export a `PlanConfirmation`; only the latter uses `& CardPress`, the former spells the fields out, so the two shapes are kept in sync by hand.
+- Why it matters: one concept (a card press) is expressed in about ten places; adding a third field (or changing `pressedBy` to a string) needs ten edits and the inline copies can drift from the helper's semantics.
+- Fix: move `CardPress`/`cardPressFields` to a neutral module (for example src/lib/card-press.ts) that flow/, harness/ and learning/ can import without depending on src/review, and use `& CardPress` for the inline type members and `...cardPressFields(x)` for the spreads. Keep the review/types.ts exports as re-exports if needed.
+
+### [S4-02] 300-character one-line nested conditional spread in landWriteRun
+- Severity: minor
+- File: src/harness/external/write-land.ts:229
+- Problem: the `decisionBody({...})` argument contains `...(input.confirmation !== undefined ? { confirmedVia: ..., quote: ..., ...(input.confirmation.pressedBy !== undefined ? { pressedBy: ... } : {}), ...(input.confirmation.pressedAt !== undefined ? { pressedAt: ... } : {}) } : {})` on a single line of about 300 characters, a conditional spread nested inside a conditional spread. The `Record<string, string | number>` widening at :156 exists only to carry the number.
+- Why it matters: readability; the nesting is the hardest line in the slice to review and it records an audit field.
+- Fix: build the confirmation fields in a named local before the call, for example `const confirmationFields = input.confirmation === undefined ? {} : { confirmedVia: input.confirmation.confirmedVia, quote: input.confirmation.quote, ...cardPressFields(input.confirmation) };` and spread `...confirmationFields` (also resolves S4-01 here).
+
+### [S4-03] Redundant second cast for `undelivered` in mapApprovalAnswer
+- Severity: minor
+- File: src/remote/shell-bridge.ts:208
+- Problem: `o` is already cast to `{ decision?: unknown; approvalId?: unknown; fromId?: unknown }` at line 198, and the new line casts `o` again inline: `(o as { undelivered?: unknown }).undelivered === true`.
+- Why it matters: a second ad hoc cast next to the typed local reads as an oversight and hides that `undelivered` is part of the accepted wire shape.
+- Fix: add `undelivered?: unknown` to the type on line 198 and write `!yes && o.undelivered === true ? { undelivered: true as const } : {}`.
+
+### [S4-04] Same `review_complete` instruction sentence repeated in three nextStep branches
+- Severity: info
+- File: src/review/completion-gate.ts:756
+- Problem: the clause "then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself)." is pasted into all three returns of `nextStep` (lines 756, 759, 761), each already a 300-450 character string. The wording was changed in this PR, so any further wording fix has to be made three times.
+- Why it matters: DRY for a user-facing literal that the PR has just had to edit in several places.
+- Fix: hold the clause in one module constant and interpolate it in the three branches.
+
+### [S4-05] Identical `{ decision: "deny", undelivered: true }` literal repeated four times in RemoteClient.askApproval
+- Severity: info
+- File: src/remote/client.ts:441
+- Problem: lines 441, 453, 457 and 461 return the same object literal for four different "never reached the topic" exits. Before this PR they were four copies of `{ decision: "deny" }`, and each had to be edited to add the flag.
+- Why it matters: small DRY point; a named constant makes the intent ("not delivered") explicit at each exit and keeps the four in step.
+- Fix: `const NOT_DELIVERED: ApprovalAnswer = { decision: "deny", undelivered: true };` near the interface and return it from each exit (or a tiny helper if callers might mutate the answer).
+
+### [S4-06] Import added out of alphabetical order in premise-question.ts
+- Severity: info
+- File: src/review/premise-question.ts:13
+- Problem: `import { cardPressFields, type CardPress } from "./types";` sits between `./package-location` (line 12) and `./premise` (line 14), while the surrounding relative imports (`./package-location`, `./premise`, `./round-registry`) are in alphabetical order.
+- Why it matters: minor import-order consistency; likely fixed automatically if the project formatter sorts imports.
+- Fix: move the line after `./round-registry`.
+
+## Positive Notes
+- `cardPressFields` keeps the optional fields out of the JSON when unset, and the review/ writers all use it consistently.
+- New comments use the existing "Flow NNN:" convention and say what is set only with `remote-card`.
+- `mirror-undelivered.test.ts` covers the three branches of `mirrorUndeliveredNote` and the "timed out is not undelivered" negative case.
+
+```json
+REVIEW_RESULT
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "summary": "Slice-04 style review: no major findings. The review/ writers share one press-field helper but flow/, harness/ and learning/ re-declare the same shape by hand (including a 300-character nested spread), plus a redundant cast, three repeated nextStep sentences, four repeated deny literals and one import out of order.",
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 3 },
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "S4-01",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "src/flow/confirm-token.ts",
+      "line": 140,
+      "quote": "...(binding.pressedBy !== undefined ? { pressedBy: binding.pressedBy } : {}),",
+      "problem": "The pressedBy/pressedAt shape and the spread-when-defined pattern are re-implemented by hand in src/flow/confirm-token.ts (lines 76, 120, 140, 235), src/flow/service.ts:1681, src/flow/types.ts (188, 785), src/harness/external/write-land.ts (173, 229), src/learning/decisions.ts, src/review/estimate.ts and interactive-tools.ts, although CardPress/cardPressFields in src/review/types.ts exists for exactly this and every review/ writer uses it. estimate.ts and plan-confirmation.ts each export a PlanConfirmation; only one uses & CardPress.",
+      "impact": "One concept expressed in about ten places; changing or extending the press record needs ten edits and the inline copies can drift.",
+      "suggested_fix": "Move CardPress and cardPressFields to a neutral module importable from flow/, harness/ and learning/ (for example src/lib/card-press.ts), re-export from review/types.ts, and use & CardPress and ...cardPressFields(x) at the inline sites.",
+      "evidence": "keryx ctx rg for 'pressedBy?: ' and 'pressedBy !== undefined' over src (non-test) lists the sites above; git diff 062aa9c36..b1c6da0e6 shows the review/ files using cardPressFields and the flow/harness files not.",
+      "confidence": 0.9
+    },
+    {
+      "id": "S4-02",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "src/harness/external/write-land.ts",
+      "line": 229,
+      "quote": "...(input.confirmation !== undefined ? { confirmedVia: input.confirmation.confirmedVia, quote: input.confirmation.quote,",
+      "problem": "A single line of about 300 characters holds a conditional spread with two more conditional spreads nested inside it; the Record<string, string | number> widening on decisionBody exists only to carry the number.",
+      "impact": "Hardest line of the slice to read, on an audit record.",
+      "suggested_fix": "Build the confirmation fields in a named local (confirmedVia, quote, ...cardPressFields(input.confirmation)) before the decisionBody call and spread that.",
+      "evidence": "src/harness/external/write-land.ts:229 at head b1c6da0e6; git blame shows the line was rewritten in 1735646bef.",
+      "confidence": 0.9
+    },
+    {
+      "id": "S4-03",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "src/remote/shell-bridge.ts",
+      "line": 208,
+      "quote": "...(!yes && (o as { undelivered?: unknown }).undelivered === true ? { undelivered: true as const } : {}),",
+      "problem": "o is already cast to { decision?, approvalId?, fromId? } at line 198; the new line adds a second inline cast instead of extending that type.",
+      "impact": "Ad hoc second cast next to a typed local; hides that undelivered is part of the accepted wire shape.",
+      "suggested_fix": "Add undelivered?: unknown to the cast type on line 198 and use o.undelivered === true.",
+      "evidence": "src/remote/shell-bridge.ts:198 and :208 at head.",
+      "confidence": 0.9
+    },
+    {
+      "id": "S4-04",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/review/completion-gate.ts",
+      "line": 756,
+      "quote": "then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).",
+      "problem": "The same clause is pasted into all three returns of nextStep (lines 756, 759, 761).",
+      "impact": "A wording fix has to be repeated three times; this PR already had to edit all three.",
+      "suggested_fix": "Hold the clause in one module constant and interpolate it in the three branches.",
+      "evidence": "keryx ctx rg 'you never run .keryx review complete' src/review/completion-gate.ts lists lines 756, 759, 761.",
+      "confidence": 0.85
+    },
+    {
+      "id": "S4-05",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/remote/client.ts",
+      "line": 441,
+      "quote": "return { decision: \"deny\", undelivered: true };",
+      "problem": "The same object literal is returned from four exits of askApproval (lines 441, 453, 457, 461).",
+      "impact": "Small DRY point; the four exits must be kept in step by hand.",
+      "suggested_fix": "A named constant (or tiny helper) for the not-delivered answer, returned from each exit.",
+      "evidence": "keryx ctx rg 'undelivered: true' src (non-test) lists the four sites in client.ts.",
+      "confidence": 0.8
+    },
+    {
+      "id": "S4-06",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/review/premise-question.ts",
+      "line": 13,
+      "quote": "import { cardPressFields, type CardPress } from \"./types\";",
+      "problem": "Inserted between ./package-location and ./premise, breaking the alphabetical order of the surrounding relative imports (./package-location, ./premise, ./round-registry).",
+      "impact": "Import-order consistency only.",
+      "suggested_fix": "Move the line after the ./round-registry import.",
+      "evidence": "src/review/premise-question.ts lines 12-15 at head.",
+      "confidence": 0.7
+    }
+  ]
+}
+```

@@ -1,0 +1,88 @@
+{
+ "mutants": [
+  {
+   "id": "w3-M-01",
+   "file": "src/tui/project-context-inspector.ts",
+   "anchor": "if (polling) return;",
+   "replacement": "",
+   "kind": "behavior"
+  },
+  {
+   "id": "w3-M-02",
+   "file": "src/tui/project-context-inspector.ts",
+   "anchor": "      polling = false;",
+   "replacement": "",
+   "kind": "behavior"
+  },
+  {
+   "id": "w3-M-03",
+   "file": "src/tui/project-context-inspector.ts",
+   "anchor": "if (mine > applied && !sameStatus(current, next)) {",
+   "replacement": "if (!sameStatus(current, next)) {",
+   "kind": "behavior"
+  },
+  {
+   "id": "w3-M-04",
+   "file": "src/tui/project-context-inspector.ts",
+   "anchor": "applied = Math.max(applied, mine);",
+   "replacement": "applied = mine;",
+   "kind": "behavior"
+  },
+  {
+   "id": "w3-M-05",
+   "file": "src/tui/project-context-inspector.ts",
+   "anchor": "return cardSafe(parts.join(\" \u00b7 \"));",
+   "replacement": "return parts.join(\" \u00b7 \");",
+   "kind": "behavior"
+  },
+  {
+   "id": "w3-M-06",
+   "file": "src/tui/project-context-inspector.ts",
+   "anchor": "stylePlanText(otui, lines.map(cardSafe).join(\"\\n\"), \"plain\")",
+   "replacement": "stylePlanText(otui, lines.join(\"\\n\"), \"plain\")",
+   "kind": "behavior"
+  },
+  {
+   "id": "w3-M-07",
+   "file": "src/gdskills/context-resolver.ts",
+   "anchor": "taskTextLength: Array.from(options.taskText!).length",
+   "replacement": "taskTextLength: options.taskText!.length",
+   "kind": "behavior"
+  },
+  {
+   "id": "w3-M-08",
+   "file": "src/gdskills/context-resolver.ts",
+   "anchor": "{ taskTextLength: Array.from(options.taskText!).length,",
+   "replacement": "{ taskText: task.text, taskTextLength: Array.from(options.taskText!).length,",
+   "kind": "behavior"
+  },
+  {
+   "id": "w3-M-09",
+   "file": "src/gdskills/context-resolver.ts",
+   "anchor": "options.taskText !== undefined && options.taskText.trim() !== \"\" ? truncateTaskText(options.taskText) : undefined",
+   "replacement": "options.taskText !== undefined ? truncateTaskText(options.taskText) : undefined",
+   "kind": "behavior"
+  },
+  {
+   "id": "main-M-10",
+   "file": "src/gdskills/reference-entries.ts",
+   "anchor": "const before = WORD_CHAR.test(chars[0] ?? \"\") ? \"(?<![\\\\p{L}\\\\p{N}_])\" : \"\";",
+   "replacement": "const before = \"(?<![\\\\p{L}\\\\p{N}_])\";",
+   "kind": "behavior"
+  },
+  {
+   "id": "main-M-11",
+   "file": "src/gdskills/reference-entries.ts",
+   "anchor": "const after = WORD_CHAR.test(chars[chars.length - 1] ?? \"\") ? \"(?![\\\\p{L}\\\\p{N}_])\" : \"\";",
+   "replacement": "const after = \"(?![\\\\p{L}\\\\p{N}_])\";",
+   "kind": "behavior"
+  },
+  {
+   "id": "main-M-12",
+   "file": "src/gdskills/references-check.ts",
+   "anchor": ".filter((entry) => entry.mode === \"link\" && !copies.includes(entry.ref))",
+   "replacement": ".filter(() => false)",
+   "kind": "behavior"
+  }
+ ]
+}

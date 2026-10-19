@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03",
+  "mode": "ingest",
+  "status": "closed",
+  "target": {
+    "kind": "report",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/1048",
+    "head": "5382b56abf17d23db61108554f3c6c68c8e3c036"
+  },
+  "artifacts": {
+    "scope": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/scope.md",
+    "coverage": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/coverage.md",
+    "report": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/report.md",
+    "findings": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/findings.json",
+    "learning": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/learning.md",
+    "decisions": ".metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r03/decisions.md",
+    "research": "research.json",
+    "reviewerDispatch": "research.json"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-architecture",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-clean-code",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-highload",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-logic",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-performance",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-regression",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-security-code",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-style",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    },
+    {
+      "reviewer": "review-testing-practices",
+      "status": "run",
+      "reason": "dispatched; the research ledger records it complete"
+    }
+  ],
+  "filter_stats": {
+    "schema_version": 1,
+    "total": 67,
+    "dropped_prefilter": 0,
+    "dropped_low_confidence": null,
+    "dropped_refuted": 0,
+    "dropped_scope_b": 0,
+    "dropped_findings_cap": 0,
+    "merged_duplicates": 7,
+    "retained": 60,
+    "dismissed_by_round": null,
+    "by_reason": {},
+    "not_measured": [
+      {
+        "stage": "low_confidence",
+        "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
+      },
+      {
+        "stage": "round_dismissed",
+        "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
+      }
+    ]
+  },
+  "report_fields": [
+    "evidence-level"
+  ],
+  "createdAt": "2026-10-18T15:39:32.019Z",
+  "updatedAt": "2026-10-18T19:33:26.520Z",
+  "readiness_waivers": [
+    {
+      "item": "pr-files",
+      "operator_quote": "В PR 88 файлов, в объёме ревью 33: остальные это бумаги флоу 462 (журналы, resolved) и обновления генерируемых данных",
+      "time": "2026-10-18T19:33:25.750Z"
+    }
+  ]
+}

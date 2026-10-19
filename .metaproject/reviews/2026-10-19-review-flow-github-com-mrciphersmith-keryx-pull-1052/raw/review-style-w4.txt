@@ -1,0 +1,116 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "slices": ["slice-04"],
+  "summary": "Slice-04 (TUI surfaces: approval-mirror, decisions-surface, operator-confirmations(+test), remote-control-surface, tui-shell) is readable and consistently named. Five minor/info style points: a doc comment orphaned from the function it documents, two near-duplicate time helpers, a repeated magic width, a repeated answer-recording expression, and stale JSDoc on a function that gained a parameter. No logic, security or architecture concerns raised (outside this lens).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "function remoteApproval(fingerprint: string, fromId: number | undefined): Extract<ApprovalResponse, { approved: boolean }> {",
+      "problem": "The new `remoteApproval` helper and its one-line JSDoc were inserted between the long Flow 173 F-003 JSDoc block and `export function isToolAvailableToSideWorker`. The Flow 173 comment (head lines ~570-581, 'the side-worker tools filter's own predicate ...') now sits above `remoteApproval`, and `isToolAvailableToSideWorker` is left with no documentation. Two consecutive JSDoc blocks precede one function.",
+      "impact": "Misleading comment: editor hover and doc tooling attach the side-worker explanation to an unrelated approval helper, and the real predicate loses its contract text.",
+      "suggested_fix": "Move `remoteApproval` (with its own JSDoc) above the Flow 173 block, or below `isToolAvailableToSideWorker`, so the Flow 173 JSDoc is directly followed by `export function isToolAvailableToSideWorker`.",
+      "evidence": "Diff hunk @@ 562,606 in slice-04: the existing JSDoc closes with ` */`, then `+/** Flow 464: an approval answered in the topic ... */ +function remoteApproval(...)`, then the unchanged `export function isToolAvailableToSideWorker`. At head: remoteApproval at tui-shell.ts:583, isToolAvailableToSideWorker at :587, Flow 173 comment at :572.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "tui-shell-orphaned-jsdoc-remoteApproval",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": null,
+      "quote": "function clock(at: number): string {",
+      "problem": "`clock` is a byte-identical copy of the module-private `clock` in remote-control-surface.ts (head line 144), and `age` does the same job as the exported `formatAge` in remote-control-surface.ts (head line 102) with different rounding (`age` floors minutes and adds an `h`+`mm` form; `formatAge` rounds and prints whole hours). Two duration formatters with different rules now appear on the same /remote-control status tab.",
+      "impact": "Duplicated helpers drift. The status tab can show '57m' from one formatter and '1h' from the other for similar spans, and a fix to one will not reach the other. The name `age` is also used for 'time left' (`age(left)`), which reads wrongly.",
+      "suggested_fix": "Export `clock` once (a small shared time-format module, since remote-control-surface.ts already imports operator-confirmations.ts and a back-import would be circular). Either reuse `formatAge`, or rename `age` to `formatDuration` and say in a comment why it differs. Add a short JSDoc to each.",
+      "evidence": "operator-confirmations.ts:84 `function age`, :92 `function clock`; remote-control-surface.ts:102 `export function formatAge`, :144 `function clock`. Both `clock` bodies are `new Date(at).toISOString().slice(11, 19)`.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "duplicate-clock-age-helpers",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": null,
+      "quote": "return `${clip(entry.question, 80)} · asked ${age(elapsed)} ago · ${token}${where}`;",
+      "problem": "The literal `80` (the clipped width of a question) appears five times: in `pendingConfirmationLine` and four times in `answeredConfirmationLine`. It has no name.",
+      "impact": "Changing the card width means editing five places, and a missed one gives rows of different widths.",
+      "suggested_fix": "Add `const QUESTION_WIDTH = 80;` next to `ANSWERED_CARDS_KEPT` and use it in each `clip(entry.question, QUESTION_WIDTH)` call. Or give `clip` a default for the question case.",
+      "evidence": "operator-confirmations.ts: `clip(entry.question, 80)` in the pending line and in the empty, telegram, withdrawn and shell branches of the answered line (slice diff lines 338, 344, 348, 350, 351).",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "magic-80-question-width",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "operatorCards.answer(unmirroredId, { place: foregroundOperation.signal.aborted ? \"withdrawn\" : \"shell\", yes: verdict !== false });",
+      "problem": "The expression `{ place: foregroundOperation.signal.aborted ? \"withdrawn\" : \"shell\", yes: x !== false }` is written twice in `mirrorApprovalToTopic` (the unmirrored branch and the dock branch). The telegram branch builds its own `answer` object in a third shape.",
+      "impact": "Small duplication. The 'withdrawn if the turn stopped' rule lives in two places and could drift. `mirrorApprovalToTopic` also grew a second code path, which makes it longer to read.",
+      "suggested_fix": "Add a local helper, e.g. `const answerInShell = (id: number, verdict: unknown) => operatorCards.answer(id, { place: foregroundOperation.signal.aborted ? \"withdrawn\" : \"shell\", yes: verdict !== false });`, and call it from both branches.",
+      "evidence": "Diff lines 1071 and 1093 in slice-04 carry the same ternary and `!== false` test.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "duplicate-shell-answer-recording",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/tui/remote-control-surface.ts",
+      "line": null,
+      "quote": "/** One status block: state, topic, heartbeat age and what turns it on or off. `posture` adds the Telegram permission lines (flow 396). */",
+      "problem": "`formatRemoteStatusLines` gained a third parameter `confirmations`, but its JSDoc still documents only `posture`. The same holds for `projectRemoteRow` (new `waitingCards` parameter, JSDoc unchanged: '`Remote: off | <topic name> | offline`'). The new parameter names `confirmations` and `confirmationLines` (option) also share a name with the exported function `confirmationLines` in operator-confirmations.ts, which forces the `as operatorConfirmationLines` alias in tui-shell.ts.",
+      "impact": "Readers of the signature do not learn that a card section is appended, or that a waiting card changes the row to 'attention'. The shared name is easy to confuse.",
+      "suggested_fix": "Extend both JSDoc lines (`confirmations` adds the Telegram card section, flow 464; `waitingCards` marks the row as attention). Consider renaming the function to `formatConfirmationLines`, matching the `formatRemote*` family, and dropping the import alias.",
+      "evidence": "Diff hunks @@ 100,156 and @@ 365,473 in slice-04 change the signatures and leave the doc lines untouched. tui-shell.ts imports `confirmationLines as operatorConfirmationLines`.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "stale-jsdoc-new-params",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "export function isUserPromptApprovalCard(tool: string): boolean {",
+      "problem": "tui-shell.ts is far past the 800-line threshold (the diff touches lines beyond 7300) and this PR adds roughly 40 more lines of card bookkeeping to it (log creation, ask/answer calls, remote-approval helper, mirror note).",
+      "impact": "Pre-existing. The file was already very large before this PR. The additions follow the file's own conventions, and only the growth is attributable to the diff. Noted for tracking, not as a defect of this change.",
+      "suggested_fix": "No action in this PR. A later split could move the operator-card mirroring (`mirrorApprovalToTopic` and its helpers) into its own module.",
+      "evidence": "Hunk line numbers in slice-04 reach tui-shell.ts:7365.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "tui-shell-file-length",
+      "location_class": "pre-existing"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 3 }
+}
+```
+
+## Summary
+
+Verdict: APPROVE_WITH_SUGGESTIONS. Naming, comments (each tagged with the flow and AC), import grouping and test structure are consistent with the surrounding code. The new `operator-confirmations.ts` is small, pure and well documented.
+
+Checked: naming (camelCase, boolean prefixes `isCard`, `unmirrored`), dead code (the `_cards` destructure is intentional), imports, nesting and complexity in `mirrorApprovalToTopic`, magic numbers, DRY, comment accuracy, file length, console usage (none added).
+
+Positive notes: the `Flow 464 (ACn)` comments tie each addition to its criterion. `withMirrorNote`, `withConfirmationLines` and the line formatters are pure and tested. No `console.*` was added.
+
+Not in lens (left to other reviewers): the correctness of the allowed-user, one-shot and expiry checks, which this slice does not contain. In this slice `pressedBy` comes from `answer.fromId`, and the TUI path writes no `pressedBy`/`pressedAt` (only `remoteApproval` does). I did not verify the bridge side.
+
+Routing audit: graph_used no (not-relevant, style lens on a given diff); wiki_used no (not-relevant); ctx_used yes (`keryx ctx rg` for head line numbers); raw_rg_used no.

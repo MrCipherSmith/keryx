@@ -1,0 +1,83 @@
+STATUS: DONE
+
+## Logic Review (slice-07, second look, unchanged since r05)
+
+### Review Scope
+- Branch: docs/flow-helyx-operator-confirm
+- Merge-base: 062aa9c36484e7b7f6b8a1dd6140671330646e66 (head 0f980c4078eb937fcb0806fe5a25e7235bf34465)
+- Scope mode: explicit slice read, slice-07 only
+- Spec compliance gate: skipped (no issue or task criteria beyond the round request)
+
+### Summary
+slice-07 carries the pressedBy/pressedAt plumbing (confirm token, signature, flow types and schema, write-land decision file, learning decision log), the `undelivered` flag from the remote client up through the bridge, the mirror-undelivered tests, and the review-orchestrator and review-premise skill text. The plumbing is logically sound. The one defect found is minor: the `undelivered` flag is also set on paths where the card may have reached the topic. S-401 and the F5-* ledger entries were not re-reported.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Verified claims (read against source at head)
+- parseStoredToken (src/flow/confirm-token.ts:157-174) returns the parsed record whole, so `pressedBy` and `pressedAt` survive the read in checkConfirmationToken and reach consumeConfirmationToken; the signature gets them (confirm-token.ts:235-236).
+- A remote answer cannot reach a record without the id check: operator-confirm-tools.ts:207-221 refuses when pressedBy or pressedAt is missing, when the id is not in `allowedUserIds`, and when the card is older than REMOTE_CARD_TTL_MS. `pressedBy` is only set on the confirmation when `remote` (line 227), so `confirmedVia: "tui-card"` never carries a Telegram id.
+- mapApprovalAnswer (shell-bridge.ts:208) copies `undelivered` only when the decision is not a yes, and `fromId` only when a safe integer, so a press never carries the flag.
+- raceApproval (approval-mirror.ts:53-55) ignores `undelivered` once `settled`, so a dock answer first produces no stray note.
+- appendDecision (learning/decisions.ts:75) spreads `confirmation` whole, so pressedBy/pressedAt reach the log from accept, promote and refresh. write-land.ts decisionBody was widened to `string | number`, which matches the new numeric field.
+- Schema: `pressedBy` is `integer` with `additionalProperties: true` on the signature confirmation, so old signatures still validate.
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+
+### [L6-501] `undelivered` is set when the approval post failed in transit, not only when the card never left the shell
+
+- **Severity**: minor
+- **File**: src/remote/client.ts:455-461
+- **Problem**: The `try` around `this.post("approval", body)` and `await response.json()` ends in `catch { return { decision: "deny", undelivered: true }; }`. `post` aborts at `requestTimeoutMs` (client.ts:675) and `response.text()` / `json()` can throw after serve has already registered and posted the question. The same flag is returned for an already-aborted signal (line 440), where the card is not undelivered but moot.
+- **Why it matters**: On a timeout or a truncated body after serve accepted the approval, the shell tells the operator "Telegram mirror not delivered: the topic did not take the card. Answer it here" (tui-shell.ts:6113) while the topic may show live Yes/No buttons. Nothing is unsafe: no waiter is registered for that approval id, the late frame is dropped after the early-decision window, and a press is ignored (fail closed). The operator is only told something untrue, and a stale card stays in the topic until it expires.
+- **Reproduction scenario**: serve takes the POST and sends the topic message but answers slower than `requestTimeoutMs`. `askApproval` returns `{ deny, undelivered: true }`, raceApproval fires `onUndelivered`, the shell prints the not-delivered note, and the topic message stays visible with buttons that do nothing.
+- **Fix**: Return `undelivered: true` only when the post is known not to have been accepted (no stream, `!response.ok`, a thrown error before a response). After a response was received, or on a timeout where acceptance is unknown, return a plain deny, which raceApproval already reads as `onTopicEnded`; or close the prompt before returning when the id is known. For the aborted-signal branch at line 440, return a plain deny.
+- **Confidence**: medium (static reading, no run)
+
+### Async & Concurrency
+None detected beyond L6-501.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected. Not re-reported: older tokens without pressedBy keep working (optional everywhere); a hand-edited token store could carry a non-integer pressedBy that parseStoredToken does not validate, but the store is hash-gated and local, so it is not a finding.
+
+### Suggested Patches
+None.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-logic",
+  "status": "DONE",
+  "slices": [{ "id": "slice-07", "coverage": "read in full" }],
+  "findings": [
+    {
+      "id": "L6-501",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "problem": "askApproval in src/remote/client.ts returns { decision: \"deny\", undelivered: true } from a catch that also covers a post that timed out (requestTimeoutMs, client.ts:675) or a response body that failed to read after serve had already registered and posted the approval, and from an already-aborted signal (line 440). The flag means the question never reached the topic; on these paths it may have.",
+      "impact": "The shell prints 'Telegram mirror not delivered: the topic did not take the card. Answer it here' (tui-shell.ts:6113) while the topic may show live Yes/No buttons. No waiter is registered, so a press there is ignored (fail closed); the operator is told something untrue and a stale card stays in the topic. Reproduction: serve accepts the POST and answers slower than requestTimeoutMs.",
+      "suggested_fix": "Set undelivered only when the post is known not accepted (not connected, !response.ok, error before any response). After a response was received or on a timeout, return a plain deny (raceApproval then fires onTopicEnded) or close the prompt; return a plain deny for the aborted-signal branch.",
+      "evidence": "client.ts:439-462 read at head 0f980c407: the try block holds post() and response.json(); catch returns undelivered:true; post() at :667-682 aborts on AbortSignal.timeout(requestTimeoutMs) and awaits response.text(). approval-mirror.ts:54-55 maps undelivered to onUndelivered and a plain deny to onTopicEnded. Static reading, no run.",
+      "confidence": "medium",
+      "file": "src/remote/client.ts",
+      "line": 460,
+      "quote": "    } catch {\n      return { decision: \"deny\", undelivered: true };\n    }"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 }
+}
+```
+
+Routing audit: graph_used: no (not-relevant: bounded slice read); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no.

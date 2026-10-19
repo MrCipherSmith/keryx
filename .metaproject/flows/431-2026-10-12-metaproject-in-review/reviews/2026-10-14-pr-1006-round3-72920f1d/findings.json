@@ -1,0 +1,647 @@
+[
+  {
+    "id": "R3-01",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "Both human-confirmation floors decide on literal words. The opaque-word rule (wordIsOpaque, /[$`]/) fires only when a literal `review` is followed by a literal `complete`. touchesChunkEstimateAnswer has no opaque rule, and its collapsed-text net needs a literal --answer. A subcommand or flag that the shell assembles from an assignment or a mid-word expansion therefore matches neither floor: `A=--answer; keryx review chunks estimate --package p $A yes --quote x`, `... estimate --ans${X}wer yes ...`, `keryx review $C p ${F}coverage q`. The chunk answer then has no second gate, because review-chunks.ts requires no terminal for `estimate --answer` (runComplete does require one for the waiver).",
+    "impact": "Trigger: an agent in auto mode, or an unattended run, emits the assignment-plus-expansion form. Outcome: touchesHumanConfirmation is false, so there is no prompt and no unattended refusal, and `chunks estimate --answer yes --quote <any non-blank text>` records an operator answer that lifts the 25x40 spend ceiling (chunkRunBlocker) with no terminal check. The waiver form is bypassed the same way but is still stopped by the terminal check in runComplete. This is shell expansion, not a script or interpreter one-liner, so it is outside the recorded residual.",
+    "suggested_fix": "1) Require a terminal for `chunks estimate --answer` in review-chunks.ts, as runComplete does for the waiver, so the floor is not the only gate. 2) In parsedCoverageWaiver and touchesChunkEstimateAnswer, ask when a segment holds a literal review/complete/chunks/estimate word together with any opaque word, and when the subcommand slot after keryx is opaque; widen wordIsOpaque to { } * ? [ ~. 3) Add tests for the three forms above.",
+    "evidence": "Executed by the orchestrator at head: touchesChunkEstimateAnswer('A=--answer; keryx review chunks estimate --package p $A yes --quote x') -> false; touchesChunkEstimateAnswer('keryx review chunks estimate --package p --ans${X}wer yes --quote x') -> false; touchesCoverageWaiver('keryx review $C p ${F}coverage q') -> false; the literal controls (--answer, review complete --waive-coverage) -> true. Source: command-risk.ts:668-670, 677-688, 711-726; command-risk-review-floor.test.ts keeps a literal `review complete` in every variable case; review-chunks.ts has no terminal check for --answer; unattended.ts:134 and agent.ts:5746 use the same functions.",
+    "confidence": "high",
+    "file": "src/lib/command-risk.ts",
+    "line": 718,
+    "quote": "if (after.includes(\"estimate\") && after.some((w) => w === \"--answer\" || w.startsWith(\"--answer=\"))) return true;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/lib/command-risk.ts:668",
+        "src/lib/command-risk.ts:677",
+        "src/lib/command-risk.ts:700",
+        "src/lib/command-risk.ts:711",
+        "src/commands/review-chunks.ts",
+        "src/trigger/unattended.ts:134",
+        "src/commands/agent.ts:5746"
+      ],
+      "enumeration_method": "keryx ctx rg -n \"wordIsOpaque|touchesCoverageWaiver|touchesChunkEstimateAnswer|touchesHumanConfirmation\" src --glob '!*.test.ts'; executed probe of three expansion-built forms"
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-01"
+  },
+  {
+    "id": "R3-02",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "The `review layers` row of the prompt-free trust table is routine for every flag. layers.ts promises a dry run unless --write-wiki is given, and --write-wiki sets dryRun:false with cwd = projectRoot, so tracked wiki pages in the working copy are rewritten. automatic-review.ts:406 already refuses --write-wiki; the trust table has no such exclusion and no test pins either answer (the R2-07 test has no --write-wiki case). review-architecture raised the same drift as Arch-01.",
+    "impact": "Trigger: `keryx review layers refresh --package <dir> --write-wiki` in trust or review-auto mode, including after untrusted content entered the turn. Outcome: it runs with no prompt and rewrites tracked wiki pages outside the review package. R2-07 intended these verbs to change only the package.",
+    "suggested_fix": "Reject a `layers` segment whose words include --write-wiki (or --write-wiki=...) in isRoutineKeryx, ideally through one shared per-verb flag-refusal table next to review-path-flags.ts that automatic-review.ts also reads. Add a --write-wiki case to trust-routine-command.test.ts and automatic-review.test.ts.",
+    "evidence": "trust-routine-command.ts:94-97 (rows layers/chunks/coverage), matchesEntry at 144-155 checks leading words only; layers.ts:445-450 (dryRun: !writeWiki, cwd: projectRoot); review-layers.ts:105; automatic-review.ts:406 (refuses the flag) pinned at automatic-review.test.ts:123; trust-routine-command.test.ts:774-792 has no --write-wiki case. Raised independently by review-security-code (SEC-02, major) and review-architecture (Arch-01, minor).",
+    "confidence": "high",
+    "file": "src/lib/trust-routine-command.ts",
+    "line": 94,
+    "quote": "\"layers\",",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/lib/trust-routine-command.ts:94",
+        "src/commands/review-layers.ts:105",
+        "src/commands/automatic-review.ts:406"
+      ],
+      "enumeration_method": "keryx ctx rg -n -l \"write-wiki\" src --glob '!*.test.ts': review.ts, automatic-review.ts, review-layers.ts, review-path-flags.ts; only automatic-review.ts excludes the flag from a prompt-free list"
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-02"
+  },
+  {
+    "id": "R3-03",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "classifyToolCall returns the first layer whose unanchored regex matches anywhere in the call text, and callText feeds it every argument (command, arguments, input), not only the invoked tool or command word. A call that merely contains another layer's command text is credited to that layer, and a call chaining two layers credits only the first, because one call yields one layer.",
+    "impact": "Trigger: a reviewer searches the source or docs for text such as `keryx wiki`, `keryx memory` or `graph_query` (this PR's own sources contain many such strings), or chains two layer commands. Outcome: layersUsed.wiki/graph/memory reads above zero for a reviewer that never consulted that layer, ctx is undercounted, and every layer after the first in a chain is lost. The panel's `layers used n/m` and perLayer figures show a wrong value although the feature promises a count taken from the actual tool-call log.",
+    "suggested_fix": "Classify on the tool identity or on the first command word of each shell segment, not on the whole argument text. Split a shell command on ; && || |, skip a leading `keryx ctx rg|grep` and its quoted argument, and count each segment. For an MCP-style call match the name field only. Return a set so a chained call credits every layer it invokes. Add tests for `keryx ctx rg \"keryx wiki\"` (expect ctx) and a chained call (expect both).",
+    "evidence": "Executed by the orchestrator at head: classifyToolCall('keryx ctx rg \"keryx wiki\"') -> wiki (expected ctx); classifyToolCall('keryx gdgraph affected x && keryx wiki ask y') -> graph (wiki lost). layers-usage.ts:15-20, 23-25, 27-43, 46-54; layers-usage.test.ts:18-26 pins only plain commands and MCP names. Consumer: ledger.ts:365 via layersUsedFrom.",
+    "confidence": "high",
+    "file": "src/review/layers-usage.ts",
+    "line": 24,
+    "quote": "return LAYER_PATTERNS.find(([, pattern]) => pattern.test(call))?.[0];",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/layers-usage.ts:15",
+        "src/review/layers-usage.ts:23",
+        "src/review/layers-usage.ts:27",
+        "src/review/layers-usage.ts:46"
+      ],
+      "enumeration_method": "keryx ctx rg -n \"LAYER_PATTERNS|classifyToolCall|countLayerUsage|layersUsedFrom\" src (non-test hits: layers-usage.ts, and ledger.ts:365 as the only consumer)"
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-03"
+  },
+  {
+    "id": "R3-04",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "problem": "touchesHumanConfirmation now includes touchesCoverageWaiver and touchesChunkEstimateAnswer. touchesCoverageWaiver matches the bare substring `--waive-coverage` anywhere in the command text (also in the quote-collapsed text) without checking that the word is an argument of `keryx review complete`, and parsedCoverageWaiver flags any segment with a standalone `review` followed later by a standalone `complete` and any word containing `$` or a backtick. Prose and ordinary commands therefore match. Every consumer of the floor forces `ask` in every mode and never remembers the answer; unattendedShellRefusal refuses outright.",
+    "impact": "Trigger: `keryx ctx rg -n -- \"--waive-coverage\" src`, `git commit -m \"docs: explain --waive-coverage\"`, a `gh pr create --body \"... keryx review complete ... $VAR\"`, or `keryx review complete \"$PKG\"` in a script. Outcome: in trust or auto mode the command stops at a prompt that cannot be remembered or pre-approved, and in an unattended run it is refused with an operator-needed message, so a run that merely searches for or documents the flag cannot proceed. Before this PR none of these commands asked. Part of the surface is an intended fail-closed trade-off (an expansion inside a `review complete`), but searching for or quoting the flag is not.",
+    "suggested_fix": "Restrict both rules to a segment whose command-word chain is actually `keryx [..] review complete` (use commandWord/peelWrappers as touchesSchedulerControl does) and test the flag only among that command's arguments. Drop the raw-substring check at command level, or limit it to argument position, and keep the recursion only for words that are themselves a command line. Add negative cases to command-risk-review-floor.test.ts.",
+    "evidence": "Executed by the orchestrator at head: touchesHumanConfirmation is true for `keryx ctx rg -n -- \"--waive-coverage\" src`, for `git commit -m \"docs: explain --waive-coverage\"`, for `keryx review complete \"$PKG\"` and for `gh pr create --body \"see keryx review complete then $VAR\"`; false for a plain `keryx review complete --package p`. Source: command-risk.ts:625-627, 668-670, 677-688, 700-705. Consumers: shell-approval.ts:86, agent.ts:5746, acp-permission.ts:143, shell-permissions.ts:150/450/516, unattended.ts:134.",
+    "confidence": "high",
+    "file": "src/commands/shell-approval.ts",
+    "line": 86,
+    "quote": "const sacReviewConfirmation = touchesHumanConfirmation(command);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/shell-approval.ts:86",
+        "src/commands/agent.ts:5746",
+        "src/harness/external/acp-permission.ts:143",
+        "src/lib/shell-permissions.ts:150",
+        "src/lib/shell-permissions.ts:450",
+        "src/lib/shell-permissions.ts:516",
+        "src/trigger/unattended.ts:134"
+      ],
+      "enumeration_method": "keryx ctx rg --all -n 'touchesHumanConfirmation|touchesCoverageWaiver|touchesChunkEstimateAnswer' src (non-test): every hit is a floor consumer; supervise-mcp.ts:258 and trust-routine-command.ts:348 also call it but are outside the 40-file set"
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-04"
+  },
+  {
+    "id": "R3-05",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "problem": "readReviewRounds in review-gate.ts now calls packageResearchErrors(..., { completeness: status !== \"closed\" }), which runs coverageGateErrors on every review package whose manifest status is not `closed` and whose artifacts carry reviewerDispatch. coverageGateErrors reports uncovered in-scope files whenever the package is tracked (blast-radius.json lists cap-dropped files, or a slice manifest copy exists). coveredSlices and chunk-plan state are written only by code this PR adds, so a package made before the upgrade records no coverage. The only exemption is status `closed`; a package that `review complete` has not closed is `draft`, so older rounds count.",
+    "impact": "Trigger: upgrade keryx mid-flow while an earlier deep round of that flow is still `draft` (ingested, never run through `keryx review complete`) and its blast radius was cut by the cap. Outcome: `keryx flow complete` / the flow review gate fails with `ingested-round ... cannot be read`, naming the uncovered files, although the flow passed before the upgrade. The only ways through are `chunks next` over an old round or `review complete --waive-coverage` with an operator quote on a historical round.",
+    "suggested_fix": "Apply the completeness gate only to rounds that opted into the coverage record (for example require research.json dispatch.coveredSlices, or chunks.json / coverage.json, to exist), or stamp the manifest at create time with a coverage schema version, or exempt rounds already ingested in readReviewRounds and not only `closed`.",
+    "evidence": "review-gate.ts:446 (only `closed` exempt); research.ts:55; coverage-complete.ts:97-170 and 219-236; manifest statuses types.ts:29 (draft|reviewed|decided|learned|closed), managed.ts:830/978; gate use review-gate.ts:1313-1348 and service.ts:636. Reported by reading; not executed. Settle with a pre-upgrade package fixture (reviewerDispatch artifact, blast-radius.json with dropped files, no chunks.json, status draft) in src/flow/review-gate.e2e.test.ts.",
+    "confidence": "medium",
+    "file": "src/flow/service.ts",
+    "line": 636,
+    "quote": "await reviewGate({",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/flow/service.ts:636"
+      ],
+      "enumeration_method": "keryx ctx rg --all -n 'reviewGate|runReviewGate|readReviewRounds|packageResearchErrors' src (non-test): readReviewRounds has one production caller, runReviewGate (review-gate.ts:1833), reached from reviewGate() whose only production caller is service.ts:636; the other packageResearchErrors callers (managed.ts:735, 820) are the review complete path itself"
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-05"
+  },
+  {
+    "id": "R3-06",
+    "reviewer": "review-highload",
+    "severity": "minor",
+    "problem": "The only SIGINT/SIGTERM handler is installed inside withDetachedWorktree, so it exists only during the graph build. The refresh lock is held for the whole refresh (recover, sweep, build, wiki, memory, layers.json write). A signal after the build has no handler, so the process dies by the default action and withFileLock's finally never runs. isLockHeld treats a lock with a fresh mtime as held whether or not the owner pid is alive.",
+    "impact": "Trigger: Ctrl-C, or the TUI's exit-time SIGTERM to its refresh child, during the wiki, memory or layers.json phase. Outcome: refresh.lock stays for up to about a minute (LOCK_STALE_MS = 60 s); loadPackageGraph throws `being refreshed` and ensurePackageLayers waits for that period, then the lock clears by itself. The R2-08 text says the lock is removed on SIGINT/SIGTERM, which holds for the build phase only. Rated minor by the orchestrator: self-clearing within a minute, no data loss (the reviewer filed it as major).",
+    "suggested_fix": "Install the signal handler at lock scope in refreshLayers around the whole withFileLock body (remove the worktree and staging directory if present, then the lock, then re-raise), or give withDetachedWorktree's handler a lock-release callback that stays registered until withFileLock exits. Add a test that signals during the wiki phase and asserts refresh.lock is gone.",
+    "evidence": "layers.ts:360-367 (the only process.on in the file); layers.ts:537-572 (lock scope); fs.ts:175-184 (isLockHeld) and 82-160 (release only in finally). The R2-08 child test signals during the build only. Not executed.",
+    "confidence": "medium",
+    "file": "src/review/layers.ts",
+    "line": 367,
+    "quote": "for (const name of SIGNALS) process.on(name, onSignal);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-06"
+  },
+  {
+    "id": "R3-07",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The CLI promises that any integer >= 256 is a valid cap. The truncation loop measures the block with its truncation record included. With all lists empty the record holds up to six entries, each with a `command` of roughly 100 to 200 bytes, plus prHead and graphCommit, so the smallest block is about 700 to 1000 bytes. For a cap between 256 and that floor the loop empties every list, pops every file and throws `needs N bytes with every list empty`.",
+    "impact": "Trigger: `keryx review layers block --package P --files src/a.ts --max-bytes 300` on a file that has affected files, tests or symbols. Outcome: an error that contradicts the validation message. Only the CLI calls the builder, so no reviewer payload is affected.",
+    "suggested_fix": "Raise the CLI minimum to a named constant equal to the measured floor (for example 1024) shared with buildLayersBlock and named in the help and the error, or return the cut-to-floor block with a truncated entry saying the cap could not be met instead of throwing.",
+    "evidence": "review-layers.ts:133; layers-payload.ts:263-276 and 281-290; layers-payload.test.ts:137 and :187 pin the throw only at maxBytes 40 and 50, below the CLI floor. Not executed.",
+    "confidence": "medium",
+    "file": "src/commands/review-layers.ts",
+    "line": 133,
+    "quote": "if (maxBytes !== undefined && (!Number.isInteger(maxBytes) || maxBytes < 256)) throw new Error(\"--max-bytes must be an integer of at least 256.\");",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-07"
+  },
+  {
+    "id": "R3-08",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "Five functions the PR adds run past 50 lines and do several jobs at different levels of abstraction: buildLayersBlock (218-303, about 85 lines: path validation, depth choice, totals, byte-cap truncation), refreshLayers (layers.ts 510-574, about 65: range resolution, lock, recovery, sweep, reuse, build, wiki, memory, write), completeManagedReview (managed.ts 799-864: coverage check, waiver, close, restore), computeCoverage (coverage-complete.ts 97-171), runLayers (review-layers.ts 89-141), and makeLayersRefreshRunner (review-layers-actions.ts 36-62, with its double-start guard in module state).",
+    "impact": "Cost to the next editor: a change to one concern (truncation rule, reuse rule, close-time waiver handling) means reading the whole body, and the restore-on-failure and lock-scoped steps that must not be reordered are not marked by the structure.",
+    "suggested_fix": "Extract one named step per job: truncateToCap, resolveReviewRange, reuseOrBuildGraph, withCoverageWaiver(research, waiver, fn) with the snapshot and restore in one try/finally, and split computeCoverage into collect and decide. No behaviour change.",
+    "evidence": "Line ranges read at head for all five bodies; the round-2 delta adds to the same bodies.",
+    "confidence": "high",
+    "file": "src/review/layers-payload.ts",
+    "line": 218,
+    "quote": "export async function buildLayersBlock(input: BuildLayersBlockInput): Promise<LayersBlock> {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-08"
+  },
+  {
+    "id": "R3-09",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "The recursion limit 4 is a bare literal at four sites (lines 501, 562, 685, 719), and the nested-shell descent is written out three times (scheduler matcher, parsedCoverageWaiver, touchesChunkEstimateAnswer). touchesCoverageWaiver also tests the flag three ways (raw text, quote-collapsed text, parsed words), the third kept only 'as the parsed-form statement of the rule' (fixes-round2.md, cr3). The collapsed-text net covers nesting deeper than 4 but nothing connects it to the limit.",
+    "impact": "Cost to the next editor: changing the depth means finding four literals, and missing one makes the matchers disagree about which nesting is still parsed; a fix to the descent is repeated in three skeletons.",
+    "suggested_fix": "Add `const MAX_SHELL_NESTING = 4;`, use it at the four sites, share one anyNestedCommand(words, depth, predicate) walker, and comment that the collapsed-text net exists for nesting beyond the limit.",
+    "evidence": "command-risk.ts read in full; `keryx ctx rg -n depth src/lib/command-risk.ts` gave 11 matches; overlap taken from lines 700-705 and fixes-round2.md (cr3).",
+    "confidence": "high",
+    "file": "src/lib/command-risk.ts",
+    "line": 501,
+    "quote": "if (value !== undefined && depth < 4 && parsedSchedulerControl(value, depth + 1)) return true;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-09"
+  },
+  {
+    "id": "R3-10",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "The flag name `--waive-coverage` is a string literal in 13 places across five modules (review.ts 515, 3874, 3876, 3882, 3970, 4355; coverage-complete.ts 202, 234 plus a /-{0,2}waive[- ]?coverage/gi regex at 200; command-risk.ts 629 and 691; managed.ts 759; review-chunks.ts 67), while command-risk.ts already defines COVERAGE_WAIVER_FLAG.",
+    "impact": "Cost to the next editor: renaming or aliasing the flag is a 13-site hunt, and the command-risk floor, the parser and the quote-stripper must agree on the spelling; a miss is silent and, for the floor, means a waiver command that no longer asks.",
+    "suggested_fix": "Export COVERAGE_WAIVER_FLAG from one small module (not the security floor itself), import it in the other four modules, and build the coverage-complete regex from the constant.",
+    "evidence": "`keryx ctx rg waive-coverage` over non-test src; review.ts 3867-3996 read.",
+    "confidence": "high",
+    "file": "src/commands/review.ts",
+    "line": 3874,
+    "quote": "const waiver = flagTokens(args).find((token) => token.name === \"--waive-coverage\");",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-10"
+  },
+  {
+    "id": "R3-11",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "The truncation loop (256-301) is hard to follow. `lists` holds the same arrays as `block`, and the loop shrinks them in place with list.pop(), so mutation is visible through two names; files.pop() shrinks the array block.files also points to. The inner bound `taken < Math.max(1, list.length - runnerUp)` re-reads list.length while popping, so a batch is about half the gap rather than the gap the comment at 278-280 promises. The `+ 2` is an unexplained constant. base(depth) (226-241) also rebuilds symbols, wiki and memory although only affected and relatedTests depend on depth, so a block under the cap reads wiki and memory twice (review-performance filed this as Perf-03).",
+    "impact": "Cost to the next editor: the next change to the cap logic must re-derive the aliasing, the shrinking bound and the separator width; the doubled reads cost one more full wiki and memory collection per `layers block` call (tens of ms against about 100 wiki and 60 memory pages here).",
+    "suggested_fix": "Capture `const gap = list.length - runnerUp` before the inner loop, name the constant (JSON_SEPARATOR_BYTES = 2), compute symbols, wiki and memory once outside base() and vary only affected and relatedTests inside it, and either copy the lists or say that block is mutated by design.",
+    "evidence": "layers-payload.ts 218-303; doubled reads at 235-238, called at 243 and 245; R2-04 comment at 278-280.",
+    "confidence": "medium",
+    "file": "src/review/layers-payload.ts",
+    "line": 298,
+    "quote": "removed += entryBytes + 2;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-11"
+  },
+  {
+    "id": "R3-12",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "Reader failures are swallowed without a trace in the block: wikiFor (133-138) returns [] when collectPages throws and `continue`s on a per-page read error (145-149), memoryFor (168-173) returns [] when collectEntries throws, and affectedFor (75-80) skips a file whose computeAffected throws. Each result is indistinguishable from 'nothing relevant found'.",
+    "impact": "Cost to the next reader: a reviewer reading `wiki: []` cannot tell 'no page covers these files' from 'the wiki could not be read', and a debugging session starts from a false 'none'. The reviewer did not confirm what the collectors can throw, so this stays minor.",
+    "suggested_fix": "Return `{ items: [], unavailable: reason }` from the three readers, or push a truncated-style record, so layersBlockLines can print `wiki: unavailable (reason)`. At least log the reason once to stderr.",
+    "evidence": "layers-payload.ts 71-84, 132-154, 164-174.",
+    "confidence": "medium",
+    "file": "src/review/layers-payload.ts",
+    "line": 170,
+    "quote": "entries = await collectEntries(projectRoot);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-12"
+  },
+  {
+    "id": "R3-13",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "The rule 'a derived chunk belongs to the chunk it retries' (d.retryOf?.includes(id)) is written three times with different shapes: the `family` array in runStates (230), the `mine` lookup in recordChunkLocked (304) and outcomeIds in computeChunkPass (377).",
+    "impact": "Cost to the next editor: changing how a retry chunk ties to its parent (for example a multi-parent retryOf) means editing three sites in different functions, and missing one makes the state a chunk reports differ from the findings it merges.",
+    "suggested_fix": "Add one chunkFamily(state, chunkId) helper next to covered() and call it from the three sites.",
+    "evidence": "chunks.ts 220-235, 296-306, 370-380; `keryx ctx rg -n retryOf src/review/chunks.ts`.",
+    "confidence": "high",
+    "file": "src/review/chunks.ts",
+    "line": 377,
+    "quote": "const outcomeIds = (chunk: ChunkEntry): string[] => [chunk.id, ...state.derived.filter((d) => d.retryOf?.includes(chunk.id)).map((d) => d.id)];",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-13"
+  },
+  {
+    "id": "R3-14",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "The PR adds a fifth shell-quoting helper instead of reusing one. Existing: tui/external-transcript.ts shellQuoteArg (417), commands/skills.ts shellWord (519), security/audit-harness/index.ts shellQuoteForMatching (332), tui/review-accept.ts:34 and trigger/schedule.ts:169. Two exported functions are both called `shellQuote` with different signatures (lib/shell-quote.ts:2 takes a string, external-transcript.ts:406 an argv array). review-style also saw two spellings inside this PR: layers-payload.ts uses the always-quoting shellQuote while the layers command hints use the bare-when-safe shellWord.",
+    "impact": "Cost to the next editor: importing `shellQuote` by auto-complete picks one of two functions that behave differently, and the safe-character sets can drift apart, which matters for hints an operator pastes into a terminal.",
+    "suggested_fix": "Make lib/shell-quote.ts the single home, point external-transcript.ts and skills.ts at it and delete the private copies (or rename the argv variant shellJoin), and use one spelling in layers-payload.ts.",
+    "evidence": "`keryx ctx rg -n \"function shellQuoteArg|function shellQuote|function shellWord|SAFE_WORD\" src --glob '!*.test.ts'` gave 8 matches in 4 files; shell-quote.ts:2,:9; layers-payload.ts:192-205. Also raised as Style-05 by review-style.",
+    "confidence": "medium",
+    "file": "src/lib/shell-quote.ts",
+    "line": 6,
+    "quote": "const SAFE_WORD = /^[A-Za-z0-9_@%+=:,./-]+$/;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-14"
+  },
+  {
+    "id": "R3-15",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "refreshLayers checks layersCurrent twice for the same inputs (546 and, in the failed-rebuild branch, 551) and reaches the graph with `(existing as LayersFile).graph` (547, 552). sameHead is true only when existing is defined, but readLayers returns undefined or null, so the cast carries an invariant the compiler cannot see. defaultLayerDeps.git (133-140) also returns null for every failure and drops stderr, so resolveCommit (527-533) cannot tell 'no such revision' from 'git is missing'.",
+    "impact": "Cost to the next editor: changing the reuse test means editing both sites and holding the cast's invariant in mind; when a head cannot be resolved the record shows the raw spelling with no cause.",
+    "suggested_fix": "Compute `const reusable = input.force !== true && existing !== undefined && sameHead && (await layersCurrent(...))` once and read existing.graph without a cast; let defaultLayerDeps.git keep the message and let callers ignore it or log it once.",
+    "evidence": "layers.ts 510-574 and 128-140; both layersCurrent calls take (packageDir, existing, prHead) under the same lock.",
+    "confidence": "high",
+    "file": "src/review/layers.ts",
+    "line": 546,
+    "quote": "if (input.force !== true && sameHead && (await layersCurrent(input.packageDir, existing, prHead))) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-15"
+  },
+  {
+    "id": "R3-16",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "One command module imports generic helpers (resolvePackageDir, wantsHelp) from a sibling command module, so review-chunks depends on the layers command for things unrelated to layers, and review-layers also exports ensurePackageLayers and runLayers beside them.",
+    "impact": "No wrong behaviour today. Cost to the next editor: a change to the layers command can break the chunks command, and a third review verb will copy the pattern.",
+    "suggested_fix": "Move resolvePackageDir and wantsHelp into a small shared module (for example src/commands/review-package.ts, or next to review-path-flags.ts) that both commands import.",
+    "evidence": "review-chunks.ts:19 imports from ./review-layers; review-layers.ts exports both helpers alongside the layers-specific functions.",
+    "confidence": "high",
+    "file": "src/commands/review-chunks.ts",
+    "line": 19,
+    "quote": "import { resolvePackageDir, wantsHelp } from \"./review-layers\";",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-16"
+  },
+  {
+    "id": "R3-17",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "readChunkLimits rebuilds the routing config path with a string literal although harness/routing/config.ts exports projectRoutingConfigPath (line 71). R2-33 moved the read to the shared JSON loader but left the path as a second copy, and saveRoutingConfig now preserves other top-level keys (that is how reviewChunks survives), so the two sides are coupled by file name only.",
+    "impact": "If the harness moves or renames the file, the chunk ceiling silently falls back to the default (25) while the harness reads the new location. Latent cost for the next editor, not a present fault.",
+    "suggested_fix": "Import projectRoutingConfigPath (or a small readRoutingConfigRaw helper) from the harness config module; keep the reviewChunks parsing in chunks-estimate.ts.",
+    "evidence": "chunks-estimate.ts:43 versus harness/routing/config.ts:71 and the `{ ...others, ...renderRoutingConfig(table) }` merge in saveRoutingConfig.",
+    "confidence": "high",
+    "file": "src/review/chunks-estimate.ts",
+    "line": 43,
+    "quote": "const file = path.join(projectRoot, \"routing.config.json\");",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-17"
+  },
+  {
+    "id": "R3-18",
+    "reviewer": "review-performance",
+    "severity": "minor",
+    "problem": "Each mountReviewsPanel refresh calls loadReviewDepth(cwd), which computes coverage, chunk pass and layers view for every review package, old ones included, while the sidebar draws only projectReviewsLayerLines(depth, width, limit = 3). Package directories have no retention (R2-26 skipped), so the work grows with every review ever run.",
+    "impact": "Trigger: TUI start and each /reviews open. Outcome: serial per-package JSON reads and coverage computation before the panel repaints; measured at tens of ms for 27 packages (3.4 MB) on this machine, growing linearly and spent on rows never drawn.",
+    "suggested_fix": "Load depth only for the newest N packages the panel can draw (N = 3 plus the selected one), or lazily when the Review depth tab opens; keep the full load for the tab and for /review layers.",
+    "evidence": "reviews-inspector.ts:271 and :321; review-panel.ts:110 loadReviewDepth(cwd, listed?) serial over packages; tui-shell.ts mount and showReviews refresh. The 27-package figure is from the local tree; not timed here.",
+    "confidence": "medium",
+    "file": "src/tui/reviews-inspector.ts",
+    "line": 321,
+    "quote": "depth = await readDepth(options.cwd).catch((): ReviewDepthRow[] | undefined => undefined);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-18"
+  },
+  {
+    "id": "R3-19",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The SIGTERM test spawns a real bun child that blocks in buildGraph. The ready-poll allows 30 s, but the test has no explicit timeout and bunfig.toml sets none, so bun's 5 s default applies. child.kill sits after the assertions with no try/finally, so a failing assertion or a timeout skips it.",
+    "impact": "Trigger: a cold or loaded machine where bun start plus the layers.ts imports take over 5 s, or any assertion failing before the kill. Outcome: a spurious failure, and the child stays alive holding the refresh lock and a registered worktree under the OS temp dir until killed by hand; the next sweep leaves it alone for 30 min.",
+    "suggested_fix": "Pass an explicit timeout (for example 60_000) as the third argument of test(...) and wrap the body after spawn in try/finally with child.kill(\"SIGKILL\") in the finally.",
+    "evidence": "layers-round2.test.ts:197-225: spawn at 210, poll 212-213, expects 214-216, kill 218 with no finally; bunfig.toml has only the two preloads.",
+    "confidence": "medium",
+    "file": "src/review/layers-round2.test.ts",
+    "line": 212,
+    "quote": "const deadline = Date.now() + 30_000;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-19"
+  },
+  {
+    "id": "R3-20",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The R2-29 confinement test creates the target as a fixed name, <os tmp>/escape, and afterEach removes it with rm(..., { recursive: true, force: true }) whether or not this test created it.",
+    "impact": "Trigger: two bun test processes at once (a normal run plus a mutation worker), or an operator who already has a /tmp/escape directory. Outcome: one run deletes the other's directory so the ../escape case fails with a different message, or an unrelated directory is removed recursively.",
+    "suggested_fix": "Create a per-test parent with mkdtemp, put the 'escape' directory inside it, and remove only that parent in afterEach.",
+    "evidence": "review-layers.test.ts:64-74 (beforeEach mkdir, afterEach rm) and 84-92; layers.test-helpers.ts creates the root with mkdtemp(tmpdir()/keryx-layers-).",
+    "confidence": "high",
+    "file": "src/commands/review-layers.test.ts",
+    "line": 69,
+    "quote": "await mkdir(path.join(path.dirname(fixture.root), \"escape\"), { recursive: true });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-20"
+  },
+  {
+    "id": "R3-21",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "PR-added guards with no test that fails when they are removed: (a) core.fsmonitor=false (the hook test pins hooksPath only); (b) the ^{commit} peel in resolveCommit (layers-current.test.ts pins the hex check, not tag-to-commit); (c) LOCK_WAIT_MS = 16 min (the lock-wait tests pass waitMs explicitly); (d) process.once('exit', killLiveChildren) in makeLayersRefreshRunner; (e) the staleMs: LOCK_STALE_MS option (the stale-lock tests use a 10-minute lock, which exceeds both 30 s and 60 s); (f) listener removal after the signal handler fires and the SIGINT path (review-highload raised (d)-(f) as HL-02).",
+    "impact": "Trigger: any later edit that reverts a guard. Outcome, checked by mutation at head: removing core.fsmonitor=false, dropping the ^{commit} peel, or dropping the staleMs option leaves 3985 tests green, so a hostile or merely configured fsmonitor program runs again in the review checkout (R2-15), an annotated tag name resolves to the tag object and is compared as a head (R2-03), and a refresh that crashed without releasing its lock is treated as stale on the generic default instead of the 60 s bound this PR set. A fourth surviving mutant removes the --max-bytes lower bound (256) with no test failing. All four are guards this PR added in answer to a round-2 major, so the fixes are not pinned.",
+    "suggested_fix": "Capture the git config seen by the add with a fake deps.git; assert resolveCommit of an annotated tag name returns the commit sha; assert refreshLayers passes timeoutMs >= 15 min through a lock seam; spawn a child that installs the runner and exits and assert its grandchild is gone; add a lock aged between 30 s and 60 s with a live owner; add a SIGINT variant and a listenerCount assertion.",
+    "evidence": "mutant:r3-ly-fsmonitor survived; mutant:r3-ly-peel survived; mutant:r3-ly-lock-stale-opt-off survived; mutant:r3-rl-maxbytes-floor survived (full focused command, 3985 pass; mutation-1.json in this package). Killed for contrast: r3-ly-lock-wait, r3-ly-wait-deadline, r3-ly-publish-no-restore, r3-ly-signal-lock-keep, r3-ly-prune-always, r3-rl-current-head-off. Source: layers.ts:57, 226, 369, 572; review-layers.ts:133; `keryx ctx rg` for fsmonitor|LOCK_WAIT|16 * 60 over the layers, layers-round2, layers-current and review-layers tests returns no hit.",
+    "confidence": "high",
+    "file": "src/review/layers.ts",
+    "line": 369,
+    "quote": "const add = [\"-c\", \"core.hooksPath=/dev/null\", \"-c\", \"core.fsmonitor=false\", \"worktree\", \"add\", \"--detach\", \"--force\", \"--end-of-options\", worktree, rev];",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/layers.ts:369",
+        "src/review/layers.ts:226",
+        "src/review/layers.ts:572",
+        "src/commands/review-layers.ts:133"
+      ],
+      "enumeration_method": "Mutation pass over every guard the round-2 fix pass added to layers.ts and review-layers.ts (12 mutants of r3 spec, deduplicated against the round-2 specs): the four survivors are the full set of unpinned ones; the other eight were killed. Guards in command-risk, automatic-review, trust-routine, unattended and the TUI child are outside the focused command and were not mutated."
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-21"
+  },
+  {
+    "id": "R3-22",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The timeout test accepts any rejection, so a child that never prints JSON rejects the same way and the test cannot tell a timeout kill from the no-JSON path, and it never checks the child is gone. The tests for R2-05, R2-07, R2-09 and R2-40 (command-risk-review-floor, automatic-review, trust-routine-command, unattended, review-layers-child, review-layers-actions) all sit outside the focused mutation command, so the mutation pass cannot see those guards.",
+    "impact": "Trigger: mutating or deleting the execFile timeout option, or any change in command-risk.ts, automatic-review.ts, trust-routine-command.ts, unattended.ts, review-layers-actions.ts or review-path-flags.ts. Outcome: the focused command stays green; only a wider run shows it.",
+    "suggested_fix": "Assert a message that only a timeout produces (killed / SIGTERM) or that the process is dead, and widen the mutation command to include those test files when a mutant targets them.",
+    "evidence": "review-layers-child.test.ts:46-49. The focused command contains none of the six test files above.",
+    "confidence": "high",
+    "file": "src/tui/review-layers-child.test.ts",
+    "line": 48,
+    "quote": "await expect(makeLayersRefreshRunner(entry, 300)(dir, \"/p\")).rejects.toThrow();",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-22"
+  },
+  {
+    "id": "R3-23",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "R2-21 made the double-start guard module level and keyed by package dir, but the 'layers in /reviews' tests use one view and one dir (/p/r1), so nothing distinguishes a module-level dir-keyed guard from the old per-view one. The Set also lives for the whole test process, so an action that never settles leaves its key set for the next test using the same dir.",
+    "impact": "Trigger: reverting the guard to per-view state, or keying by something other than the dir. Outcome: two TUI views on the same package can start two refreshes and no test fails.",
+    "suggested_fix": "Add a test with two views over the same dir (the second start is refused while the first is pending) and one with two dirs (both start); settle the pending runner promise in a finally so the key is cleared in the failure case.",
+    "evidence": "reviews-inspector.ts:108, 167; reviews-inspector.test.ts lines 270-384 use a single view and dir.",
+    "confidence": "medium",
+    "file": "src/tui/reviews-inspector.ts",
+    "line": 108,
+    "quote": "const pendingActions = new Set<string>();",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-23"
+  },
+  {
+    "id": "R3-24",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "problem": "The JSDoc of touchesCoverageWaiver lists \"a glob\" among the expansions that make a `review complete` word ask. wordIsOpaque (line 668) tests only `$` and a backtick, so a bare glob word does not ask on its own.",
+    "impact": "No runtime harm. The next editor who trusts the comment will believe `review complete *` is covered, or will widen the prompt to unrelated commands to match it.",
+    "suggested_fix": "Drop \"a glob\" from the list, or state that globs are deliberately left out and why (the security finding on this file asks for { } * ? [ ~ to be widened instead).",
+    "evidence": "command-risk.ts:696 (comment) against wordIsOpaque at :668 (/[$`]/) and its use at :683.",
+    "confidence": "high",
+    "file": "src/lib/command-risk.ts",
+    "line": 696,
+    "quote": "* `review complete` whose words hold an expansion (`$X`, `$(…)`, a backtick, a glob) asks too, because the flag could",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-24"
+  },
+  {
+    "id": "R3-25",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "problem": "The synopsis omits --force (R2-23: a refresh keeps an intact graph at the same head unless --force). The prose never says an intact graph is reused or that the lock wait is 16 minutes. The same omission is in the command's own help of src/commands/review.ts (around lines 4245-4254), which review-architecture also raised (Arch-04).",
+    "impact": "An operator whose graph was reused and who wants a rebuild finds no flag in the reference.",
+    "suggested_fix": "Add [--force] to the synopsis in docs/docs/cli-reference.md (:4791, :5286) and in review.ts, and one sentence on reuse and the 16-minute lock wait.",
+    "evidence": "docs/docs/cli-reference.md:4791 and :5286; --force in src/commands/review-layers.ts:15 and :23; LOCK_WAIT_MS in layers.ts:57.",
+    "confidence": "high",
+    "file": "docs/docs/cli-reference.md",
+    "line": 4791,
+    "quote": "keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--json]",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-25"
+  },
+  {
+    "id": "R3-26",
+    "reviewer": "review-style",
+    "severity": "minor",
+    "problem": "The coverage-waiver paragraph states the 25x40 ceiling and the waiver but not the round-2 rules: the waiver needs an interactive terminal, the quote needs at least 8 characters with a letter or digit after the flag text is removed, and the command asks in every permission mode.",
+    "impact": "A scripted caller of review complete --waive-coverage meets a refusal the page never mentioned; the refusal text names the cause, so no wrong command results.",
+    "suggested_fix": "Add one sentence covering the terminal requirement, the 8-character minimum and the always-ask rule.",
+    "evidence": "docs/docs/cli-reference.md:5284-5299 against coverage-complete.ts:192, the isTerminal seam in runComplete, touchesCoverageWaiver.",
+    "confidence": "medium",
+    "file": "docs/docs/cli-reference.md",
+    "line": null,
+    "quote": "A review reads three derived layers besides the diff: the code graph, the wiki and the memory.",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-26"
+  },
+  {
+    "id": "R3-27",
+    "reviewer": "review-performance",
+    "severity": "info",
+    "problem": "previewFreshness reads every changed file with one or two serial `git show` spawns, holds all contents in memory, has no cap on the changed-file count, and calls loadGraph a second time although the layers refresh just built or loaded that graph.",
+    "impact": "Trigger: each layers refresh, including one that reuses an intact graph, for base..prHead. Outcome: for a PR with a few hundred changed files, a few hundred sequential process spawns before the wiki layer is marked current. Bounded by the PR size and paid once per refresh.",
+    "suggested_fix": "Run the spawns with limited concurrency (4 to 8), or use one `git diff --name-only` plus a `git cat-file --batch` stream; pass the already loaded graph into previewFreshness.",
+    "evidence": "run.ts:116-133 and 143-171; the refreshWikiLayer call in layers.ts passes since: base, toRev: prHead. Not measured.",
+    "confidence": "medium",
+    "file": "src/wiki/freshness/run.ts",
+    "line": 118,
+    "quote": "const changes = await collectChanges(input.cwd, git, input.since, input.toRev);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-27"
+  },
+  {
+    "id": "R3-28",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "blockedWhile asserts that the writer has not settled after a fixed 150 ms wait. It cannot fail falsely, but it can pass against a writer that ignores the lock when that writer needs more than 150 ms to reach its write.",
+    "impact": "No reproducible path to a wrong result is claimed; mutant ch-lock-off shows whether each of the four writer tests detects a writer without the lock.",
+    "suggested_fix": "Optional: assert on the lock file's presence plus a spy on the first write, or poll until the writer is observed waiting.",
+    "evidence": "chunks.test.ts:287-304 (the held and acquired promises order the holder; only the negative wait is timed).",
+    "confidence": "low",
+    "file": "src/review/chunks.test.ts",
+    "line": 298,
+    "quote": "await new Promise((resolve) => setTimeout(resolve, 150));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-28"
+  },
+  {
+    "id": "R3-29",
+    "reviewer": "review-highload",
+    "severity": "info",
+    "problem": "A package whose graph build failed persistently (R2-12, by design) is rebuilt on every ensurePackageLayers call: a worktree, a full build and a cleanup each time, serialised behind refresh.lock.",
+    "impact": "No reproducible harm path. If the build fails deterministically, every review step that calls it pays the build time again; temp dirs do not accumulate.",
+    "suggested_fix": "Optional: record the failed head and skip a retry at the same head within a short window unless --force is given.",
+    "evidence": "review-layers.ts:65-83; callers review.ts:790-799 and 3527.",
+    "confidence": "low",
+    "file": "src/commands/review-layers.ts",
+    "line": 65,
+    "quote": "export async function ensurePackageLayers(",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-29"
+  },
+  {
+    "id": "R3-30",
+    "reviewer": "review-style",
+    "severity": "info",
+    "problem": "Exported but unused outside their file: MIN_WAIVER_QUOTE_CHARS (coverage-complete.ts:192), ChunkRecordResult (chunks.ts:292), CHUNK_LOCK_WAIT_MS (chunks.ts:20); only a pinning test reads them.",
+    "impact": "No runtime effect.",
+    "suggested_fix": "Drop the export on the three.",
+    "evidence": "`keryx ctx rg` over src for each name.",
+    "confidence": "medium",
+    "file": "src/review/coverage-complete.ts",
+    "line": 192,
+    "quote": "export const MIN_WAIVER_QUOTE_CHARS = 8;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-30"
+  },
+  {
+    "id": "R3-31",
+    "reviewer": "review-style",
+    "severity": "info",
+    "problem": "Test names and the file name carry review-round ids (R2-02, R2-10, ...) that already mean other things in other flows; layers-round2.test.ts is named after a round.",
+    "impact": "Ambiguous when searched; not a defect.",
+    "suggested_fix": "Prefix with the flow number or rename after the behaviour.",
+    "evidence": "`keryx ctx rg 'R2-[0-9]+'` over src/review, src/commands, src/tui, src/lib.",
+    "confidence": "medium",
+    "file": "src/review/layers-round2.test.ts",
+    "line": 43,
+    "quote": "describe(\"the graph directory is verified, not assumed (R2-02)\", () => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-14-pr-1006-round3-72920f1d#R3-31"
+  }
+]

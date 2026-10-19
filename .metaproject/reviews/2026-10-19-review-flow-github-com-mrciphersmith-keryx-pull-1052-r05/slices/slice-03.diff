@@ -1,0 +1,677 @@
+--- src/review/completion-gate.ts
+@@ 734,764 @@
+ }
+ 
+ /**
+  * True when the transcript shows the review skill was loaded or a `keryx review` command was executed in this session:
+  * the same definition the session tracker keeps (`SessionReviewNames.runSeen`), any subcommand — `status` and `attach`
+  * continue a review as much as `start` does.
+  */
+ export function reviewRunSeenInHistory(history: ReadonlyArray<HistoryMessage>): boolean {
+   return new SessionReviewTracker(process.cwd()).update(history).runSeen === true;
+ }
+ 
+ /** The earliest message timestamp in the transcript: packages closed before it are not this run's. */
+ export function sessionStartedAt(history: ReadonlyArray<{ ts?: string | undefined }>): number {
+   for (const message of history) {
+     const at = message.ts === undefined ? Number.NaN : Date.parse(message.ts);
+     if (!Number.isNaN(at)) return at;
+   }
+   return Date.now();
+ }
+ 
+-function nextStep(open: OpenManagedReview): string {
++/** How the agent closes the package: the card when this session has the tool, the command otherwise (a session with no card tool). */
++function closeStep(card: boolean): string {
++  return card
++    ? "call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself)"
++    : "run `keryx review complete`";
++}
++
++function nextStep(open: OpenManagedReview, card: boolean): string {
+   if (open.packageDir === "") {
+-    return "Next: to continue a review opened in an earlier session, name its package (`keryx review status <review-id-or-path>`); otherwise `keryx review start --pr <n> --report <path>` opens the package; then dispatch the reviewers per slice, save each result, `keryx review ledger build <input-dir> --package <review-dir>`, `keryx review ingest ... --research <review-dir>/research.json`, then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).";
++    return `Next: to continue a review opened in an earlier session, name its package (\`keryx review status <review-id-or-path>\`); otherwise \`keryx review start --pr <n> --report <path>\` opens the package; then dispatch the reviewers per slice, save each result, \`keryx review ledger build <input-dir> --package <review-dir>\`, \`keryx review ingest ... --research <review-dir>/research.json\`, then ${closeStep(card)}.`;
+   }
+
+--- src/review/completion-gate.ts
+@@ 773,831 @@
+   runSeen: boolean;
+   continues: number;
+   stalls: number;
+   lastSignature: string | undefined;
++  /** Whether this session has the `review_complete` card tool; false (a readline session) keeps the command wording. Default true. */
++  cardAvailable?: boolean | undefined;
+ };
+ 
+ export type ReviewGateDecision =
+   | { action: "accept" }
+   | { action: "continue"; message: string; stalls: number; signature: string }
+   | { action: "stop"; report: string };
+ 
+ const MAX_NUDGE_BLOCKERS = 20;
+ const MAX_NUDGE_BLOCKER_CHARS = 300;
+ 
+ /** One blocker as one bounded line: line breaks and control characters carried in from package text are flattened. */
+ function nudgeLine(blocker: string): string {
+   // eslint-disable-next-line no-control-regex
+   const flat = blocker.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ").trim();
+   return flat.length > MAX_NUDGE_BLOCKER_CHARS ? `${flat.slice(0, MAX_NUDGE_BLOCKER_CHARS)}…` : flat;
+ }
+ 
+-export function describeBlockers(open: OpenManagedReview): string {
+-  if (open.blockers.length === 0) return "- none listed; call the `review_complete` card to close the package";
++export function describeBlockers(open: OpenManagedReview, card = true): string {
++  if (open.blockers.length === 0) return `- none listed; ${card ? "call the `review_complete` card" : "run `keryx review complete`"} to close the package`;
+   const shown = open.blockers.slice(0, MAX_NUDGE_BLOCKERS).map((b) => `- ${nudgeLine(b)}`);
+   const more = open.blockers.length - shown.length;
+   return [...shown, ...(more > 0 ? [`- … and ${more} more (\`keryx review complete\` lists them all)`] : [])].join("\n");
+ }
+ 
+ export function decideReviewGate(input: ReviewGateInput): ReviewGateDecision {
+   const { open } = input;
+   if (open === null || !input.runSeen) return { action: "accept" };
++  const card = input.cardAvailable !== false;
+   const stalls = input.lastSignature === open.signature ? input.stalls + 1 : 0;
+   if (input.continues >= MAX_REVIEW_GATE_CONTINUES || stalls >= MAX_REVIEW_GATE_STALLS) {
+     return {
+       action: "stop",
+       report:
+         `Review ${open.reviewId} is not complete after ${input.continues} continue(s)` +
+         `${stalls >= MAX_REVIEW_GATE_STALLS ? " and no new artifact in the last " + stalls : ""}. ` +
+-        `The review_complete card would still be refused on:\n${describeBlockers(open)}`,
++        `${card ? "The review_complete card" : "`keryx review complete`"} would still be refused on:\n${describeBlockers(open, card)}`,
+     };
+   }
+   return {
+     action: "continue",
+     stalls,
+     signature: open.signature,
+     message:
+-      `The managed review ${open.reviewId} is not finished: it is finished when the package is closed (the operator answers the \`review_complete\` card and its gates pass), not when you stop writing. ` +
+-      `It still refuses on:\n${describeBlockers(open)}\n` +
+-      `${nextStep(open)}\n` +
++      `The managed review ${open.reviewId} is not finished: it is finished when the package is closed (${card ? "the operator answers the `review_complete` card and its gates pass" : "`keryx review complete` accepts it"}), not when you stop writing. ` +
++      `It still refuses on:\n${describeBlockers(open, card)}\n` +
++      `${nextStep(open, card)}\n` +
+       "Do the next missing step now. Step 1 (Build Review Context Pack) has no CLI command; it is a prose step, so mark it done and move on. " +
+       "A command that is refused is not a blocker: run `keryx review --help` for the accepted usage and retry with the right flags. " +
+       "A plan item you marked blocked for such a reason is not blocked: mark it in_progress. " +
+       "A tool loop guard or an empty child result is not a reason to ask the operator to resend the request or to continue: change the arguments, retry the failed pass on a smaller slice, and keep going. " +
+-      "Stop only after the `review_complete` card has closed the package, or report the one real blocker with its evidence.",
++      `Stop only after ${card ? "the `review_complete` card has" : "`keryx review complete` has"} closed the package, or report the one real blocker with its evidence.`,
+   };
+ }
+
+--- src/tui/approval-mirror.ts
+@@ 17,46 @@
+   /** The topic answered first. The dock's own result is then to be thrown away. */
+   topicWon(): boolean;
+ }
+ 
+ export type ApprovalRaceOutcome<V> = { from: "dock"; result: V } | { from: "topic"; answer: RemoteApprovalAnswer };
+ 
+ /** An explicit press in the topic: an allow, or a deny that names who pressed. A timeout or an abort is neither. */
+ export function isTopicPress(answer: RemoteApprovalAnswer): boolean {
+   return answer.decision === "allow" || answer.fromId !== undefined;
+ }
+ 
+ export async function raceApproval<V>(options: {
+   /** Runs the dock; resolves with its verdict, or early when `race.signal` aborted it. */
+   dock: (race: DockRace) => Promise<V>;
+   /** Asks in the topic; the answer is judged by {@link isTopicPress}. `signal` aborts it, with the reason "shell" or "cancelled". */
+   topic: (signal: AbortSignal) => Promise<RemoteApprovalAnswer>;
+   /** The turn stopped: both places are closed, the topic one as cancelled. */
+   turnSignal: AbortSignal;
+   /** Flow 464: the topic leg ended because the question never reached the topic; the dock stays and is the only place. */
+   onUndelivered?: () => void;
++  /** Flow 464: the topic leg ended without a press after the card was posted (a dropped stream, the wait running out); the dock is the only place left. */
++  onTopicEnded?: () => void;
+ }): Promise<ApprovalRaceOutcome<V>> {
+   const dockAbort = new AbortController();
+   const topicAbort = new AbortController();
+   let topicAnswer: RemoteApprovalAnswer | undefined;
+   let settled = false;
+   let started = false;
+   const race: DockRace = {
+     signal: AbortSignal.any([options.turnSignal, dockAbort.signal]),
+
+--- src/tui/operator-confirmations.ts
+@@ 17,44 @@
+   readonly id: number;
+   /** The card's title: the question the operator was asked. */
+   readonly question: string;
+   readonly askedAt: number;
+   /** Whether the question reached the topic at all (false: the card says the mirror was not delivered). */
+   readonly mirrored: boolean;
++  /** Set when the topic leg ended without a press after the card was posted (a dropped stream, the wait running out). */
++  readonly topicEnded?: true;
+   readonly answered?: {
+     readonly place: CardAnswerPlace;
+     readonly yes: boolean;
+     readonly at: number;
+     /** The Telegram user id that pressed, when `place` is `telegram`. */
+     readonly pressedBy?: number;
+   };
+ }
+ 
+ export type MirroredCardOutcome =
+   | { readonly from: "dock"; readonly result: unknown }
+   | { readonly from: "topic"; readonly answer: { readonly decision: string; readonly fromId?: number | undefined } };
+ 
+ export class OperatorConfirmationLog {
+   private readonly items: ConfirmationEntry[] = [];
+   private nextId = 1;
+   private readonly listeners = new Set<() => void>();
+ 
+   constructor(private readonly now: () => number = () => Date.now()) {}
+ 
+
+--- src/tui/operator-confirmations.ts
+@@ 57,101 @@
+     if (entry === undefined || entry.answered !== undefined) return;
+     this.items[at] = {
+       ...entry,
+       answered: { place: result.place, yes: result.yes, at: this.now(), ...(result.pressedBy === undefined ? {} : { pressedBy: result.pressedBy }) },
+     };
+     const answered = this.items.filter((item) => item.answered !== undefined);
+     for (const old of answered.slice(0, Math.max(0, answered.length - ANSWERED_CARDS_KEPT))) {
+       this.items.splice(this.items.indexOf(old), 1);
+     }
+     this.changed();
+   }
+ 
+   /** Settle a mirrored card from how its race ended; no outcome means the race threw, so the card is withdrawn. */
+   settle(id: number, outcome: MirroredCardOutcome | undefined, turnAborted: boolean): void {
+     if (outcome === undefined) this.answer(id, { place: "withdrawn", yes: false });
+     else if (outcome.from === "dock") this.answer(id, { place: turnAborted ? "withdrawn" : "shell", yes: outcome.result !== false });
+     else this.answer(id, { place: "telegram", yes: outcome.answer.decision === "allow", ...(outcome.answer.fromId === undefined ? {} : { pressedBy: outcome.answer.fromId }) });
+   }
+ 
+   /** The topic leg did not deliver a card that was logged as mirrored: it no longer waits for a press there. */
+-  markUndelivered(id: number): void {
++  markUndelivered(id: number, reason: "undelivered" | "ended" = "undelivered"): void {
+     const at = this.items.findIndex((item) => item.id === id);
+     const entry = this.items[at];
+     if (entry === undefined || entry.answered !== undefined || !entry.mirrored) return;
+-    this.items[at] = { ...entry, mirrored: false };
++    this.items[at] = { ...entry, mirrored: false, ...(reason === "ended" ? { topicEnded: true as const } : {}) };
+     this.changed();
+   }
+ 
+   /** Cards waiting for a press in the topic: mirrored, not yet answered and inside the 1-hour token. */
+   waiting(): readonly ConfirmationEntry[] {
+     const now = this.now();
+     return this.items.filter((item) => item.answered === undefined && item.mirrored && now - item.askedAt <= REMOTE_CARD_TTL_MS);
+   }
+ 
+   /** Every card the view holds, waiting first (oldest first), then the answered ones (newest first). */
+   entries(): readonly ConfirmationEntry[] {
+     const open = this.items.filter((item) => item.answered === undefined);
+     const done = this.items.filter((item) => item.answered !== undefined).reverse();
+     return [...open, ...done];
+   }
+ 
+   subscribe(listener: () => void): () => void {
+     this.listeners.add(listener);
+     return () => {
+       this.listeners.delete(listener);
+
+--- src/tui/operator-confirmations.ts
+@@ 112,220 @@
+   if (seconds < 60) return `${seconds}s`;
+   const minutes = Math.floor(seconds / 60);
+   if (minutes < 60) return `${minutes}m`;
+   return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}m`;
+ }
+ 
+ function clock(at: number): string {
+   return new Date(at).toISOString().slice(11, 19);
+ }
+ 
+ function clip(text: string, max: number): string {
+   const flat = text.replace(/\s+/g, " ").trim();
+   return flat.length <= max ? flat : `${flat.slice(0, Math.max(0, max - 1))}…`;
+ }
+ 
+ /** `Complete review X? · asked 3m ago · 57m left of the 1-hour token`. */
+ export function pendingConfirmationLine(entry: ConfirmationEntry, now: number): string {
+   const elapsed = now - entry.askedAt;
+   const left = REMOTE_CARD_TTL_MS - elapsed;
+   const token = left > 0 ? `${age(left)} left of the 1-hour token` : "Telegram token expired, answer in the shell";
+-  const where = entry.mirrored ? "" : " · Telegram mirror not delivered, answer in the shell";
++  const where = entry.mirrored ? "" : entry.topicEnded === true ? " · Telegram is no longer waiting for this card, answer in the shell" : " · Telegram mirror not delivered, answer in the shell";
+   return `${clip(entry.question, 80)} · asked ${age(elapsed)} ago · ${token}${where}`;
+ }
+ 
+ /** `Complete review X? · yes · pressed by Telegram user 9 at 12:03:11`. */
+ export function answeredConfirmationLine(entry: ConfirmationEntry): string {
+   const done = entry.answered;
+   if (done === undefined) return clip(entry.question, 80);
+   const verdict = done.yes ? "yes" : "no";
+   if (done.place === "telegram") {
+     const who = done.pressedBy === undefined ? "a Telegram user" : `Telegram user ${done.pressedBy}`;
+     return `${clip(entry.question, 80)} · ${verdict} · pressed by ${who} at ${clock(done.at)}`;
+   }
+   if (done.place === "withdrawn") return `${clip(entry.question, 80)} · withdrawn (the turn stopped) at ${clock(done.at)}`;
+   return `${clip(entry.question, 80)} · ${verdict} · answered in the shell at ${clock(done.at)}`;
+ }
+ 
+ /**
+  * The lines the surfaces print. No cards, no lines: a surface with nothing to say stays quiet. `heading` is the
+  * section title; each card is one line.
+  */
+ export function confirmationLines(entries: readonly ConfirmationEntry[], now: number, heading = "Operator confirmations (Telegram cards)"): string[] {
+   if (entries.length === 0) return [];
+   const waiting = entries.filter((entry) => entry.answered === undefined);
+   const answered = entries.filter((entry) => entry.answered !== undefined);
+   const lines = [heading];
+   for (const entry of waiting) lines.push(`  waiting  ${pendingConfirmationLine(entry, now)}`);
+   for (const entry of answered) lines.push(`  answered ${answeredConfirmationLine(entry)}`);
+   return lines;
+ }
+ 
+ /** The sidebar fragment: `1 card waiting`, or undefined when none waits in the topic. */
+ export function waitingCardsText(waiting: number): string | undefined {
+   if (waiting <= 0) return undefined;
+   return `${waiting} card${waiting === 1 ? "" : "s"} waiting`;
+ }
++
++/** An approval answered in the topic, carrying the pressing Telegram user and the shell's clock when the press arrived. */
++export function remoteApproval(fingerprint: string, fromId: number | undefined, now: () => Date = () => new Date()): Extract<ApprovalResponse, { approved: boolean }> {
++  return { approved: true, fingerprint, via: "remote", ...(fromId !== undefined ? { pressedBy: fromId } : {}), pressedAt: now().toISOString() };
++}
++
++/** A card the topic could not take: logged as not mirrored, answered in the shell, and withdrawn if the turn stopped or the dock threw. */
++export async function askUnmirroredCard<V>(log: OperatorConfirmationLog, question: string, turnSignal: AbortSignal, ask: () => Promise<V>): Promise<V> {
++  const id = log.ask(question, false);
++  let verdict: V | undefined;
++  let answered = false;
++  try {
++    verdict = await ask();
++    answered = true;
++    return verdict;
++  } finally {
++    log.answer(id, { place: turnSignal.aborted || !answered ? "withdrawn" : "shell", yes: answered && verdict !== false });
++  }
++}
++
++/** A card raced between the dock and the topic: logged while it waits, and settled whichever way it ends, a throw included. */
++export async function raceMirroredCard<V>(options: {
++  log: OperatorConfirmationLog;
++  /** The card's title; undefined for a question that is not an operator card (nothing is logged). */
++  question: string | undefined;
++  turnSignal: AbortSignal;
++  dock: (race: DockRace) => Promise<V>;
++  topic: (signal: AbortSignal) => Promise<RemoteApprovalAnswer>;
++  /** The topic never took the card; the shell tells the operator to answer here. */
++  onUndelivered?: () => void;
++}): Promise<ApprovalRaceOutcome<V>> {
++  const id = options.question === undefined ? undefined : options.log.ask(options.question, true);
++  let outcome: ApprovalRaceOutcome<V> | undefined;
++  try {
++    outcome = await raceApproval({
++      turnSignal: options.turnSignal,
++      ...(id === undefined
++        ? {}
++        : {
++            onUndelivered: () => {
++              options.log.markUndelivered(id);
++              options.onUndelivered?.();
++            },
++            onTopicEnded: () => options.log.markUndelivered(id, "ended"),
++          }),
++      dock: options.dock,
++      topic: options.topic,
++    });
++    return outcome;
++  } finally {
++    if (id !== undefined) options.log.settle(id, outcome, options.turnSignal.aborted);
++  }
++}
+
+--- src/tui/tui-shell.ts
+@@ 26,66 @@
+ // closed. Assigning the hook again would silently reopen it.
+ //
+ // The working directory the agent acts on is the sidebar `Directory` panel
+ // (`mountCwdPanel`), shortened to the sidebar's fixed 26-column text budget by
+ // the pure `shortenCwd`. It was absent from the TUI entirely — gap G-2, also
+ // closed: an agent holding `shell_exec` acts on a directory, and the operator
+ // approving that command has to be able to see which one.
+ //
+ // Since flow 112 the LAYOUT itself is not built here: `launchTuiAgentShell`
+ // mounts `createShellChrome` (./shell-chrome) and keeps only what knows what a
+ // tool is — approval, ask_user, the worker fleet, side workers, the wiki-enrich
+ // pre-router, the block registry/nav and the `runAgentTurn` call site. The chat
+ // driver mounts the same chrome, so the two surfaces cannot drift apart.
+ //
+ // `@opentui/core` is an OPTIONAL dependency (ADR-0005) loaded ONLY via a dynamic
+ // `import()` — never a top-level import (keryx's zero-`dependencies` floor + lazy
+ // optional-import guard, src/capability/no-optional-imports). `launchTuiAgentShell`
+ // is defensive: it returns `false` (caller falls back to the readline shell)
+ // whenever there is no TTY, the package is absent, or the renderer fails to init.
+ import { describeAutomaticReviewMode } from "../commands/automatic-review";
+-import type { AgentDeps, AgentIO, ApprovalResponse } from "../commands/agent";
++import type { AgentDeps, AgentIO } from "../commands/agent";
+ import {
+   describeReasoningEffortSource,
+   describeRoundLimit,
+   isReasoningEffortLevel,
+   REASONING_EFFORT_LEVELS,
+   resolveMaxAutoWake,
+   runAgentTurn,
+ } from "../commands/agent";
+ import { runModelTurn } from "../harness/provider/single-turn";
+ import { buildNextStepPrompt, NextStepSuggestionGate, sanitizeNextStepSuggestion } from "./next-step-suggestion";
+ import { buildApprovalContext } from "../commands/agent-approval-context";
+ import { buildDoctorReport, formatDoctorReport } from "../commands/doctor";
+ import {
+   closeSlateSession,
+   detachSlateSession,
+   mintTimestampAttemptId,
+   recordSlateSessionTouch,
+   type SlateSessionRef,
+ } from "../session/slate-lifecycle";
+ import { anchorsAnnouncement } from "../session/anchors-announce";
+
+--- src/tui/tui-shell.ts
+@@ 72,146 @@
+ import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
+ import { estimateRequestTokens } from "../harness/provider/context-guard";
+ import packageJson from "../../package.json" with { type: "json" };
+ import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
+ import { isProductCommand, openProduct } from "./product-open-surface";
+ import { loadReviewDepth } from "./review-panel";
+ import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, isReviewsCommand, mountReviewsPanel, openReviews, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, type ReviewsPanelHandle } from "./reviews-inspector";
+ import { permissionsSlashText } from "../commands/permissions-command";
+ import {
+   loadPosture,
+   postureLines,
+   postureSidebarText,
+   REMOTE_POLICY_COMMAND,
+   remotePolicyText,
+   type RemotePolicyDeps,
+ } from "../commands/remote-policy-command";
+ import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
+ import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
+ import { describeApprovalForTopic, mirrorUndeliveredNote, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+ import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
+-import { type ApprovalRaceOutcome, type DockRace, raceApproval } from "./approval-mirror";
+ import { BUSY_REASON } from "../remote/command-gateway";
+ import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
+ import type { CommandOutcome } from "../remote/command-router";
+ import { ChannelsClient } from "../remote/channels-client";
+ import {
+   type ChannelsPanelHandle,
+   isChannelsCommand,
+   loadChannelsSnapshot,
+   mountChannelsPanel,
+   openChannels,
+   parseChannelsArgs,
+ } from "./channels-surface";
+ import {
+   HISTORY_COMMAND,
+   isHistoryCommand,
+   isRemoteControlCommand,
+   commandEchoText,
+   labelTelegramLine,
+   mountRemotePanel,
+   openRemoteControl,
+   parseRemoteControlArgs,
+   type RemotePanelHandle,
+   TG_ECHO_MARKER,
+ } from "./remote-control-surface";
+ // Flow 328, AC7: the modal's `c` key and `/ac` both run the SAME check the
+ // CLI does — no separate TUI-only Jev path. Never triggered automatically;
+ // only on an explicit key press.
+ import { runCheckAc } from "../commands/flow-check-ac";
+ import { mountOpsSidebar, routeOpsCommand, type OpsSidebar } from "./ops-sidebar";
+ import { describeDetachedRuns } from "./trigger-run-now";
+ import { mountApprovalsSidebar, routeApprovalsCommand, type ApprovalsSidebar } from "./approvals-sidebar";
+ import { intakeConfiguredSync, mountIntakeSidebar, routeIntakeCommand, type IntakeSidebar } from "./intake-surface";
+ import { mountDecisionsSidebar, routeDecisionsCommand, type DecisionsSidebar } from "./decisions-surface";
+-import { OperatorConfirmationLog, confirmationLines as operatorConfirmationLines } from "./operator-confirmations";
++import type { DockRace } from "./approval-mirror";
++import { OperatorConfirmationLog, askUnmirroredCard, confirmationLines as operatorConfirmationLines, raceMirroredCard, remoteApproval } from "./operator-confirmations";
+ import { mountResearchSyncPanel, type ResearchSyncPanelHandle } from "./research-sync-panel";
+ import { mountExternalDiffSidebar, routeExternalDiffCommand, type ExternalDiffSidebar } from "./external-diff-sidebar";
+ import { mountAutoReviewSidebar, routeAutoReviewCommand, type AutoReviewSidebar } from "./autoreview-surface";
+ import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
+ import { CTRL_C_EXIT_HINT, createCtrlCPolicy } from "./ctrl-c-policy";
+ import { classifyBusyDispatch } from "./busy-dispatch";
+ import { debugEvent } from "./debug-log";
+ import {
+   createSplashLifecycle,
+   mountEmptyTranscriptSplash,
+   mountStartupIndicator,
+   playBootAnimation,
+   type SplashLifecycle,
+ } from "./boot-animation";
+ import {
+   catchUpItems,
+   loadInspectorCatchUp,
+   loadInspectorFlows,
+   loadInspectorSlates,
+   loadInspectorWorkspace,
+
+--- src/tui/card-lifecycle.test.ts
+@@ 1,165 @@
++// Flow 464 (PR 1052 E-08): the hop between a topic press and the durable record. The shell logs a card when it is
++// asked, marks it when the topic cannot take it or gave up on it, and settles it however it ends; these tests drive
++// that lifecycle with the real log and a fake topic, so dropping `fromId`, `pressedAt` or the settle fails here.
++
++import { expect, test } from "bun:test";
++import type { RemoteApprovalAnswer } from "../remote/shell-bridge";
++import type { DockRace } from "./approval-mirror";
++import { OperatorConfirmationLog, askUnmirroredCard, pendingConfirmationLine, raceMirroredCard, remoteApproval } from "./operator-confirmations";
++
++const T0 = Date.UTC(2026, 9, 19, 12, 0, 0);
++const allow = (fromId?: number): RemoteApprovalAnswer => ({ decision: "allow", always: false, ...(fromId === undefined ? {} : { fromId }) });
++
++/** A dock that opens the topic leg and waits until the race closes it, like the real approval dock. */
++const waitingDock = (race: DockRace): Promise<string> => {
++  race.opened();
++  return new Promise((resolve) => race.signal.addEventListener("abort", () => resolve("dock-closed")));
++};
++
++/** A dock that opens the topic leg, lets it settle, and answers itself. */
++const answeringDock =
++  (verdict: boolean) =>
++  async (race: DockRace): Promise<boolean> => {
++    race.opened();
++    await new Promise((resolve) => setTimeout(resolve, 10));
++    return verdict;
++  };
++
++const newLog = (): OperatorConfirmationLog => new OperatorConfirmationLog(() => T0);
++
++test("remoteApproval names who pressed and stamps the shell's clock; a press with no user carries no pressedBy", () => {
++  const now = () => new Date("2026-10-19T12:34:56.000Z");
++  expect(remoteApproval("fp-1", 9, now)).toEqual({ approved: true, fingerprint: "fp-1", via: "remote", pressedBy: 9, pressedAt: "2026-10-19T12:34:56.000Z" });
++  expect(remoteApproval("fp-1", undefined, now)).not.toHaveProperty("pressedBy");
++});
++
++test("a topic allow closes the dock and logs who pressed", async () => {
++  const log = newLog();
++  const outcome = await raceMirroredCard({ log, question: "Complete review X?", turnSignal: new AbortController().signal, dock: waitingDock, topic: async () => allow(9) });
++  expect(outcome).toMatchObject({ from: "topic", answer: { decision: "allow", fromId: 9 } });
++  expect(log.waiting()).toHaveLength(0);
++  expect(log.entries()[0]?.answered).toMatchObject({ place: "telegram", yes: true, pressedBy: 9 });
++});
++
++test("a topic deny with a presser logs no, from Telegram", async () => {
++  const log = newLog();
++  await raceMirroredCard({ log, question: "Complete review X?", turnSignal: new AbortController().signal, dock: waitingDock, topic: async () => ({ decision: "deny", always: false, fromId: 4 }) });
++  expect(log.entries()[0]?.answered).toMatchObject({ place: "telegram", yes: false, pressedBy: 4 });
++});
++
++test("a card the topic never took stops waiting there, says so, and is answered in the dock", async () => {
++  const log = newLog();
++  let told = 0;
++  const outcome = await raceMirroredCard({
++    log,
++    question: "Complete review X?",
++    turnSignal: new AbortController().signal,
++    onUndelivered: () => {
++      told += 1;
++    },
++    dock: async (race) => {
++      race.opened();
++      await new Promise((resolve) => setTimeout(resolve, 10));
++      expect(log.waiting()).toHaveLength(0);
++      expect(pendingConfirmationLine(log.entries()[0]!, T0)).toContain("Telegram mirror not delivered");
++      return true;
++    },
++    topic: async () => ({ decision: "deny", always: false, undelivered: true }),
++  });
++  expect(told).toBe(1);
++  expect(outcome).toEqual({ from: "dock", result: true });
++  expect(log.entries()[0]?.answered).toMatchObject({ place: "shell", yes: true });
++});
++
++test("a topic leg that ended with no press stops the card waiting, without the undelivered note", async () => {
++  const log = newLog();
++  let told = 0;
++  await raceMirroredCard({
++    log,
++    question: "Complete review X?",
++    turnSignal: new AbortController().signal,
++    onUndelivered: () => {
++      told += 1;
++    },
++    dock: async (race) => {
++      race.opened();
++      await new Promise((resolve) => setTimeout(resolve, 10));
++      expect(log.waiting()).toHaveLength(0);
++      expect(pendingConfirmationLine(log.entries()[0]!, T0)).toContain("no longer waiting for this card");
++      return false;
++    },
++    topic: async () => ({ decision: "deny", always: false }),
++  });
++  expect(told).toBe(0);
++  expect(log.entries()[0]?.answered).toMatchObject({ place: "shell", yes: false });
++});
++
++test("a dock that throws leaves the card withdrawn, never waiting", async () => {
++  const log = newLog();
++  await expect(
++    raceMirroredCard({
++      log,
++      question: "Complete review X?",
++      turnSignal: new AbortController().signal,
++      dock: async () => {
++        throw new Error("dock failed");
++      },
++      topic: async () => allow(),
++    }),
++  ).rejects.toThrow("dock failed");
++  expect(log.waiting()).toHaveLength(0);
++  expect(log.entries()[0]?.answered).toMatchObject({ place: "withdrawn", yes: false });
++});
++
++test("a turn that stopped withdraws the card even if the dock returned a verdict", async () => {
++  const log = newLog();
++  const turn = new AbortController();
++  await raceMirroredCard({
++    log,
++    question: "Complete review X?",
++    turnSignal: turn.signal,
++    dock: async (race) => {
++      race.opened();
++      turn.abort();
++      return false;
++    },
++    topic: (signal) => new Promise<RemoteApprovalAnswer>((resolve) => signal.addEventListener("abort", () => resolve({ decision: "deny", always: false }))),
++  });
++  expect(log.entries()[0]?.answered).toMatchObject({ place: "withdrawn" });
++});
++
++test("a question that is not an operator card logs nothing", async () => {
++  const log = newLog();
++  await raceMirroredCard({ log, question: undefined, turnSignal: new AbortController().signal, dock: answeringDock(true), topic: async () => ({ decision: "deny", always: false }) });
++  expect(log.entries()).toHaveLength(0);
++});
++
++test("askUnmirroredCard logs a card the topic cannot get as not mirrored, then answered in the shell", async () => {
++  const log = newLog();
++  const verdict = await askUnmirroredCard(log, "Complete review X?", new AbortController().signal, async () => {
++    expect(log.entries()[0]?.mirrored).toBe(false);
++    return true;
++  });
++  expect(verdict).toBe(true);
++  expect(log.entries()[0]?.answered).toMatchObject({ place: "shell", yes: true });
++});
++
++test("askUnmirroredCard: a no is logged as no, a stopped turn or a throw as withdrawn", async () => {
++  const log = newLog();
++  await askUnmirroredCard(log, "A?", new AbortController().signal, async () => false);
++  const turn = new AbortController();
++  await askUnmirroredCard(log, "B?", turn.signal, async () => {
++    turn.abort();
++    return true;
++  });
++  await expect(
++    askUnmirroredCard(log, "C?", new AbortController().signal, async () => {
++      throw new Error("boom");
++    }),
++  ).rejects.toThrow("boom");
++  expect(log.entries().map((entry) => [entry.question, entry.answered?.place, entry.answered?.yes])).toEqual([
++    ["C?", "withdrawn", false],
++    ["B?", "withdrawn", true],
++    ["A?", "shell", false],
++  ]);
++});
+
+--- src/tui/operator-confirmations.test.ts
+@@ 47,96 @@
+ 
+ test("a card logged as mirrored that the topic never took is marked undelivered and stops waiting there", () => {
+   const log = logAt({ now: T0 });
+   let changes = 0;
+   const id = log.ask("Confirm the plan?", true);
+   log.subscribe(() => {
+     changes += 1;
+   });
+   expect(log.waiting()).toHaveLength(1);
+   log.markUndelivered(id);
+   expect(log.waiting()).toHaveLength(0);
+   expect(pendingConfirmationLine(log.entries()[0]!, T0)).toContain("Telegram mirror not delivered, answer in the shell");
+   expect(changes).toBe(1);
+   log.markUndelivered(id);
+   expect(changes).toBe(1);
+   log.answer(id, { place: "shell", yes: true });
+   log.markUndelivered(id);
+   expect(log.entries()[0]!.answered?.place).toBe("shell");
+ });
+ 
++test("a card the topic leg gave up on after posting stops waiting there, with its own wording", () => {
++  const log = logAt({ now: T0 });
++  const id = log.ask("Confirm the plan?", true);
++  log.markUndelivered(id, "ended");
++  expect(log.waiting()).toHaveLength(0);
++  const line = pendingConfirmationLine(log.entries()[0]!, T0);
++  expect(line).toContain("Telegram is no longer waiting for this card, answer in the shell");
++  expect(line).not.toContain("not delivered");
++});
++
+ test("a card whose mirror was not delivered says it must be answered in the shell", () => {
+   const log = logAt({ now: T0 });
+   log.ask("Confirm the plan?", false);
+   const [entry] = log.entries();
+   expect(pendingConfirmationLine(entry!, T0)).toContain("Telegram mirror not delivered, answer in the shell");
+   expect(log.waiting()).toHaveLength(0);
+ });
+ 
+ test("an answered card shows who pressed it", () => {
+   const clock = { now: T0 };
+   const log = logAt(clock);
+   const id = log.ask("Complete review X?", true);
+   clock.now = T0 + 11_000;
+   log.answer(id, { place: "telegram", yes: true, pressedBy: 9 });
+   const [entry] = log.entries();
+   expect(answeredConfirmationLine(entry!)).toBe("Complete review X? · yes · pressed by Telegram user 9 at 12:00:11");
+   expect(log.waiting()).toHaveLength(0);
+ });
+ 
+ test("a card answered in the shell or withdrawn names that, never a Telegram user", () => {

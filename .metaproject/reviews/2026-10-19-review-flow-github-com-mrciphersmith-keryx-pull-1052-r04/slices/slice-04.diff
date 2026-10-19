@@ -1,0 +1,2314 @@
+--- src/flow/confirm-token.ts
+@@ 55,97 @@
+   flowId: string;
+   kind: "complete";
+   acChecksum: string;
+   /**
+    * The completion target the operator was shown when minting (security
+    * review of PR #661): `pr:<url>` for a pull-request completion, `merged` for
+    * a direct-merge one. `flow complete` refuses a token spent on any other
+    * target, so a token minted while looking at pull/1 cannot close pull/999.
+    */
+   target: string;
+   mintedAt: string;
+   expiresAt: string;
+   usedAt?: string | undefined;
+   /**
+    * Flow 456: how the operator's yes arrived when it was not the terminal challenge — `tui-card`
+    * for the shell's yes/no card — and the card text that answer was given to. Absent on a token
+    * minted by `keryx flow confirm` in a terminal, and on every token minted before flow 456.
+    */
+   confirmedVia?: string | undefined;
+   confirmationQuote?: string | undefined;
++  /** Flow 464: the Telegram user id that pressed the remote card and the shell's clock when the press arrived. */
++  pressedBy?: number | undefined;
++  pressedAt?: string | undefined;
+ };
+ 
+ export type ConfirmationTokenFailure =
+   | "token_required"
+   | "token_not_minted"
+   | "token_unreadable"
+   | "token_mismatch"
+   | "token_expired"
+   | "token_used"
+   | "token_other_flow"
+   | "token_stale_criteria"
+   | "token_target_mismatch";
+ 
+ export type ConfirmationTokenCheck =
+   | { ok: true; stored: StoredConfirmationToken }
+   | { ok: false; reason: ConfirmationTokenFailure };
+ 
+ export function confirmTokenPath(cwd: string, dir: string): string {
+   return path.join(flowsRoot(cwd), dir, CONFIRM_TOKEN_FILE);
+ }
+
+--- src/flow/confirm-token.ts
+@@ 100,161 @@
+  * The completion target a token binds to: `merged` for a direct-merge
+  * completion, `pr:<url>` for a pull-request one, `pr:none` when no PR is
+  * recorded (a completion that the pull-request gate will fail anyway).
+  */
+ export function completionTarget(input: { merged: boolean; prUrl: string | null }): string {
+   return input.merged ? "merged" : `pr:${input.prUrl ?? "none"}`;
+ }
+ 
+ function sha256(text: string): string {
+   return createHash("sha256").update(text).digest("hex");
+ }
+ 
+ /**
+  * Write a fresh token's hash for `flowId`, replacing any earlier one: only the
+  * latest mint is spendable. Returns the plaintext token, once, to the caller.
+  * The caller holds the flow lock.
+  */
+ export async function mintConfirmationToken(
+   cwd: string,
+   dir: string,
+-  binding: { flowId: string; acChecksum: string; target: string; confirmedVia?: string; confirmationQuote?: string },
++  binding: { flowId: string; acChecksum: string; target: string; confirmedVia?: string; confirmationQuote?: string; pressedBy?: number; pressedAt?: string },
+   deps: { now: () => Date; randomToken?: () => string },
+ ): Promise<{ token: string; stored: StoredConfirmationToken }> {
+   // The flow id is the token's visible prefix, so a token pasted into the wrong
+   // flow is refused as "other flow" rather than as an anonymous mismatch.
+   const token = `${binding.flowId}.${(deps.randomToken ?? (() => randomBytes(24).toString("base64url")))()}`;
+   const mintedAt = deps.now();
+   const hash = sha256(token);
+   const stored: StoredConfirmationToken = {
+     schemaVersion: 1,
+     hash,
+     tokenRef: hash.slice(0, TOKEN_REF_LENGTH),
+     flowId: binding.flowId,
+     kind: "complete",
+     acChecksum: binding.acChecksum,
+     target: binding.target,
+     mintedAt: mintedAt.toISOString(),
+     expiresAt: new Date(mintedAt.getTime() + CONFIRMATION_TOKEN_TTL_MS).toISOString(),
+     ...(binding.confirmedVia !== undefined ? { confirmedVia: binding.confirmedVia } : {}),
+     ...(binding.confirmationQuote !== undefined ? { confirmationQuote: binding.confirmationQuote } : {}),
++    ...(binding.pressedBy !== undefined ? { pressedBy: binding.pressedBy } : {}),
++    ...(binding.pressedAt !== undefined ? { pressedAt: binding.pressedAt } : {}),
+   };
+   await writeFileAtomic(confirmTokenPath(cwd, dir), `${JSON.stringify(stored, null, 2)}\n`);
+   return { token, stored };
+ }
+ 
+ const isString = (value: unknown): value is string => typeof value === "string" && value.length > 0;
+ const isInstant = (value: unknown): value is string => isString(value) && Number.isFinite(Date.parse(value));
+ 
+ /**
+  * The store's shape, checked before anything in it is trusted (security review
+  * of PR #661). `null`, an array, a missing or non-string field, or an
+  * `expiresAt` that does not parse is `token_unreadable`. An unparsable expiry
+  * must never read as "never expires": `NaN <= now` is false, which is exactly
+  * that bug.
+  */
+ function parseStoredToken(raw: unknown): StoredConfirmationToken | undefined {
+   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+   const record = raw as Record<string, unknown>;
+   if (
+     !isString(record["hash"]) ||
+
+--- src/flow/confirm-token.ts
+@@ 215,256 @@
+ export async function consumeConfirmationToken(
+   cwd: string,
+   dir: string,
+   stored: StoredConfirmationToken,
+   now: Date,
+ ): Promise<SignatureConfirmation> {
+   const consumedAt = now.toISOString();
+   await writeFileAtomic(
+     confirmTokenPath(cwd, dir),
+     `${JSON.stringify({ ...stored, usedAt: consumedAt }, null, 2)}\n`,
+   );
+   // A card-minted token (flow 456) says so in the signature: "tui-card-token" / "remote-card-token".
+   const mechanism: SignatureConfirmation["mechanism"] =
+     stored.confirmedVia === "tui-card" ? "tui-card-token" : stored.confirmedVia === "remote-card" ? "remote-card-token" : "terminal-token";
+   return {
+     mechanism,
+     tokenRef: stored.tokenRef,
+     mintedAt: stored.mintedAt,
+     consumedAt,
+     boundTo: { kind: stored.kind, acChecksum: stored.acChecksum, target: stored.target },
++    ...(stored.pressedBy !== undefined ? { pressedBy: stored.pressedBy } : {}),
++    ...(stored.pressedAt !== undefined ? { pressedAt: stored.pressedAt } : {}),
+   };
+ }
+ 
+ /** One operator-facing sentence per refusal. Never echoes the token. */
+ export function describeConfirmationFailure(reason: ConfirmationTokenFailure, flowId: string): string {
+   const mint =
+     "mint one with the `flow_confirm` tool inside keryx shell (the operator presses yes on a card), " +
+     `or from a terminal outside it: \`keryx flow confirm ${flowId}\``;
+   switch (reason) {
+     case "token_required":
+       return `this flow requires a confirmation token, passed as --confirm-token; ${mint}`;
+     case "token_not_minted":
+       return `no confirmation token was minted for this flow; ${mint}`;
+     case "token_unreadable":
+       return `the confirmation token store could not be read; ${mint}`;
+     case "token_mismatch":
+       return `the confirmation token does not match the one minted for this flow (only the latest mint is valid); ${mint}`;
+     case "token_expired":
+       return `the confirmation token expired; ${mint}`;
+     case "token_used":
+
+--- src/flow/schema.ts
+@@ 311,352 @@
+             additionalProperties: true,
+             required: ["mechanism", "tokenRef", "mintedAt", "consumedAt", "boundTo"],
+             properties: {
+               mechanism: { type: "string", enum: ["terminal-token", "tui-card-token", "remote-card-token"] },
+               tokenRef: { type: "string", description: "A prefix of the stored token hash. Never the token." },
+               mintedAt: { type: "string" },
+               consumedAt: { type: "string" },
+               boundTo: {
+                 type: "object",
+                 additionalProperties: true,
+                 required: ["kind", "acChecksum"],
+                 properties: {
+                   kind: { type: "string", enum: ["complete"] },
+                   acChecksum: { type: "string" },
+                   target: {
+                     type: "string",
+                     description: "The completion target the token was minted for: `pr:<url>` or `merged`.",
+                   },
+                 },
+               },
++              pressedBy: { type: "integer", description: "Flow 464: on a remote-card token, the Telegram user id that pressed the card." },
++              pressedAt: { type: "string", description: "Flow 464: on a remote-card token, the shell's clock when the press arrived." },
+             },
+           },
+         },
+       },
+       completionAttempt: {
+         type: "object",
+         description:
+           "flow 291: one `flow complete` attempt, on the record — every gate it evaluated, whether the attempt passed overall, and the AC checksum in force. Never mutated once written.",
+         additionalProperties: true,
+         required: ["at", "gates", "passed", "acChecksum"],
+         properties: {
+           at: { type: "string" },
+           gates: {
+             type: "array",
+             items: { $ref: "#/definitions/gateOutcome" },
+           },
+           passed: { type: "boolean" },
+           acChecksum: {
+             type: ["string", "null"],
+             description: "The acceptance-criteria checksum in force when this attempt ran.",
+
+--- src/flow/service.ts
+@@ 1658,1703 @@
+         if (expect !== undefined) {
+           const nowTarget = completionTarget({ merged: merged === true, prUrl: flow.pr.url });
+           if (flow.acChecksum !== expect.acChecksum || nowTarget !== expect.target) {
+             throw new Error(
+               `flow confirm: flow ${flow.id}'s ${flow.acChecksum !== expect.acChecksum ? "acceptance criteria" : "completion target"} ` +
+                 "changed after the confirmation card was shown; no token was minted. Ask for a new card.",
+             );
+           }
+         }
+         const criteria = await readAcCriteria(cwd, dir);
+         const { token, stored } = await mintConfirmationToken(
+           cwd,
+           dir,
+           {
+             flowId: flow.id,
+             acChecksum: flow.acChecksum,
+             // The target the CLI just showed the operator (security review of
+             // PR #661): a later `flow implemented --pr <other>` cannot reuse it.
+             target: completionTarget({ merged: merged === true, prUrl: flow.pr.url }),
+             ...(confirmation !== undefined
+-              ? { confirmedVia: confirmation.confirmedVia, confirmationQuote: confirmation.quote }
++              ? {
++                  confirmedVia: confirmation.confirmedVia,
++                  confirmationQuote: confirmation.quote,
++                  ...(confirmation.pressedBy !== undefined ? { pressedBy: confirmation.pressedBy } : {}),
++                  ...(confirmation.pressedAt !== undefined ? { pressedAt: confirmation.pressedAt } : {}),
++                }
+               : {}),
+           },
+           { now: deps.now },
+         );
+         // History names the token by its hash prefix only: the plaintext token
+         // exists once, in this function's return value.
+         flow = await save(cwd, dir, flow, "confirmation-minted", `token ${stored.tokenRef}, expires ${stored.expiresAt}`);
+         return {
+           flow,
+           token,
+           tokenRef: stored.tokenRef,
+           mintedAt: stored.mintedAt,
+           expiresAt: stored.expiresAt,
+           acChecksum: stored.acChecksum,
+           confirmedCriteria: criteria.filter((criterion) => Boolean(flow.acConfirmed[criterion])).length,
+           totalCriteria: criteria.length,
+           target: flow.pr.url ?? null,
+         };
+       });
+     },
+
+--- src/flow/types.ts
+@@ 167,209 @@
+ };
+ 
+ /**
+  * What a confirmation token recorded when it was spent on a completion
+  * (flow 299, AC3). This is a record of a mechanism, not an identity: it says
+  * an interactive confirmation step ran within the token's TTL for exactly
+  * this AC checksum. It does not say who ran that step (see TM-03).
+  */
+ export type SignatureConfirmation = {
+   mechanism: "terminal-token" | "tui-card-token" | "remote-card-token";
+   /** A prefix of the stored hash, for correlation. Never the token. */
+   tokenRef: string;
+   mintedAt: string;
+   consumedAt: string;
+   /**
+    * `target` (security review of PR #661): `pr:<url>` or `merged`, the
+    * completion the operator was shown. Optional in the type so a signature
+    * written before it existed still reads.
+    */
+   boundTo: { kind: "complete"; acChecksum: string; target?: string | undefined };
++  /** Flow 464: for a remote-card token, the Telegram user id that pressed the card and the shell's clock when the press arrived. */
++  pressedBy?: number | undefined;
++  pressedAt?: string | undefined;
+ };
+ 
+ /**
+  * One append-only signature (flow 289, AC4): who signed, when, and exactly
+  * what they signed. Pushed onto `FlowState.signatures`, never mutated once
+  * written — a repeated `ac confirm`/`complete` records a NEW entry rather
+  * than replacing the last one, so the full signing history survives even
+  * when (e.g.) an AC is reconfirmed.
+  */
+ export type FlowSignature = {
+   at: string;
+   kind: "ac-confirm" | "complete";
+   identity: Identity;
+   /** The AC id this signs. Present only for `kind: "ac-confirm"`. */
+   criterion?: string | undefined;
+   /**
+    * The acceptance-criteria checksum in force at signing time. Null when the
+    * criteria were not frozen yet (mirrors `FlowState.acChecksum`).
+    */
+   acChecksum: string | null;
+
+--- src/flow/types.ts
+@@ 765,805 @@
+    * nothing (flow 364, AC4): no status transition, no `completionAttempts`
+    * entry, no signature, no lock, no spent token.
+    */
+   checkComplete(input: {
+     cwd: string;
+     id: string;
+     mergedCommit?: string | undefined;
+     confirmToken?: string | undefined;
+   }): Promise<FlowCompletionCheck>;
+   /**
+    * Mint a completion confirmation token (flow 299, AC1). The service checks the
+    * flow's state; the CLI verb adds the terminal and typed-challenge
+    * requirements, which the service cannot observe. Returns the plaintext
+    * token once; only its hash is stored.
+    */
+   confirmMint(input: {
+     cwd: string;
+     id: string;
+     merged?: boolean | undefined;
+     /** Flow 456: set by the shell's yes/no card; recorded in the token store. Absent for the terminal verb. */
+-    confirmation?: { confirmedVia: string; quote: string } | undefined;
++    confirmation?: { confirmedVia: string; quote: string; pressedBy?: number | undefined; pressedAt?: string | undefined } | undefined;
+     /**
+      * Flow 456: the criteria checksum and completion target the operator was SHOWN on the card. Checked
+      * under the flow lock; if either changed since, nothing is minted.
+      */
+     expect?: { acChecksum: string; target: string } | undefined;
+   }): Promise<FlowConfirmMintResult>;
+   /**
+    * Move a flow stuck in `completing` back to `in-progress` (flow 299, AC6),
+    * recording why. Refuses from any other status, and while another process
+    * holds the flow lock (a `complete` still running).
+    */
+   recover(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
+   block(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
+   unblock(input: { cwd: string; id: string }): Promise<FlowState>;
+   check(input: { cwd: string }): Promise<FlowCheckResult>;
+   /**
+    * Change a flow's number. The only sanctioned way to do it: `flow.json` is
+    * CLI-owned and the move must be recorded so old references stay traceable.
+    */
+   renumber(input: {
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
+@@ 649,689 @@
+ fix introduced in round 3 gets no regression check at all, and the round that
+ certifies the flow is the one that checked the least.
+ 
+ ## Readiness — the checklist behind `completed` and behind publishing
+ 
+ `keryx review readiness <review-id-or-path> [--json]` reads the package and prints every readiness item, READY or NOT READY, each with the evidence and the command that repairs it. It writes nothing, and exits non-zero when the verdict is NOT READY. Only item 9 reaches GitHub (the PR's own file list); the TUI and `review status` read the package alone.
+ 
+ 1. `files-covered` — every changed file is in a wave or carries a recorded waiver.
+ 2. `blast-radius` — no file the blast radius cut is left unreviewed. A cut radius writes `chunks.json`; run `keryx review chunks plan`, `estimate`, `next`/`record`, `merge`. In an unattended run every wave runs without a question, up to the 25-pass ceiling; in an interactive run the operator is asked once: in keryx shell call `review_chunks_answer` (a card, never a terminal); elsewhere the operator runs `keryx review chunks estimate --package <dir> --answer yes --quote "<their words>"` in their terminal; unattended, record Not run.
+ 3. `reviewers` — every planned reviewer was dispatched and its result ingested.
+ 4. `verifier` — the verifier checked every finding it should, or the report says how many it did not.
+ 5. `ledger` — the ledger is READY.
+ 6. `coverage-md` — coverage.md does not list a reviewer as `run` that the dispatch record says did not finish. Re-run `keryx review ingest` for the package.
+ 7. `head` — the report's head is the PR head.
+ 8. `report-names` — pending mutation candidates and parity warnings are named in the report.
+ 9. `pr-files` — the changed-file count equals the PR's own file list. A recount more than 3x the recorded scope is refused: it came from the wrong base. Recount with `keryx review blast-radius --package <ref> --changed <the PR's files>`.
+ 10. `memory-outside-stage` — the orchestrator read memory only in its memory stage ("Clean context" above). Outside keryx shell it reads "not observable on this host" unless this session's keryx calls carry the caller token `keryx review start` printed.
+ 11. `premise-decisions` — every finding `review-premise` held (`challenged` or `owner-decision`) has an operator decision: in keryx shell the card `review_decide_premise`; elsewhere the operator runs `keryx review decide-premise --package <dir> --finding <global_id> --answer uphold|dismiss --reason "<why>"` in their terminal (SKILL.md "Wave D"). Not waivable: each held finding needs its own answer, and `review_waive_readiness` / `--waive` refuse this item.
+ 12. `quotes-located` — every open finding whose quote `review ingest` could not place (absent from the file at the reviewed head, or in it more than once) has a disposition. Ingest keeps such a finding with no line, flagged `quote_unlocated` and listed in scope.md, instead of refusing the round. Re-quote one distinct line and re-ingest, record a disposition, or the operator waives the item.
+ 
+-`keryx review complete` refuses status `completed` while any item fails. A failing item other than `premise-decisions` is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you run `keryx review complete`. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
++`keryx review complete` refuses status `completed` while any item fails. A failing item other than `premise-decisions` is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you call the `review_complete` card (the operator answers it in the shell or in the Telegram topic). An agent completes a review only through that card; `keryx review complete` is for a human in a terminal. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
+ 
+ ## Fix rounds — dispositions, regressions, withdrawal
+ 
+ ### Every prior finding leaves the round with a disposition
+ 
+ A fix round that reports only new findings is unreadable: the author cannot tell
+ which of their fixes landed. Close the loop explicitly — one line per prior
+ finding, in the report, before the new findings:
+ 
+ | Disposition | Meaning |
+ |---|---|
+ | `closed` | Checked against the code, not against the commit message, and the defect is gone |
+ | `open` | The fix does not reach the defect; say what is still true |
+ | `partial` | One site of the class was fixed and the enumeration named others |
+ | `regressed` | The fix removed this defect and introduced another — file the new one separately |
+ | `withdrawn` | The finding was wrong. See below |
+ 
+ **Check the code, not the commit message.** A commit titled *"report an abandoned
+ sync as abandoned"* is a claim; the disposition is whether the branch it renamed
+ is reachable and pinned. On a recorded round, two such commits asserted behaviour
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ 27,76 @@
+ 1. **Can it spawn?** The round needs a subagent-spawn tool (`Agent`, `spawn_subagent` or the host's equivalent) and depth budget left: Claude Code nests subagents at most 3 deep, and at the limit `Agent` is withheld. A host with no spawn tool at all (Codex and other AGENTS.md hosts) does not stop here and does not review alone: it runs the round through the autonomous runner, `keryx review run --autonomous --target pr --ref <pull request URL>` (no pull request: `--target branch --ref <base> [--head <commit>]`), and relays its verdict and exit code (see "Hosts"). Only a session that has spent the depth budget (a nested subagent) stops; its whole output is this line, with no tool calls and no review of your own:
+    `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
+ 2. **Is a round needed?** List the files with `git diff --name-status --no-renames <base>...HEAD`, so a rename shows both paths. A diff where EVERY file is prose or machine-written data ends here with one line, `round not needed: <reason>`, and no reviewer. Prose is exactly: README or CHANGELOG at any depth; CONTRIBUTING, LICENSE, SECURITY or CODE_OF_CONDUCT at the top level; and under `docs/`, `.metaproject/wiki`, `.metaproject/reviews` or a flow's `journal.md`, a file with extension md, rst or adoc whose name holds a lowercase letter (an all-uppercase name such as AGENT or WARP is steering by convention). Machine-written data is a file under `coverage/` or `__generated__/` with extension lcov, info or map only; json, txt, html and md there are code. Steering is code wherever it sits, `docs/` included: a directory (singular or plural) named agent, skill, command, rule, prompt, instruction, persona, steering or hook, any path segment starting with a dot (`.claude`, `.cursorrules`, `.mcp.json`), a file name starting with SKILL, AGENT, CLAUDE, GEMINI, QWEN, CODEX, WARP, CRUSH, JULES, KNOWLEDGE, GUIDELINES, CONVENTIONS or copilot-instructions, ending in .local, .override, .instructions, .prompt, .agent or .chatmode before the extension, or containing prompt, instruction or system. A flow's `description.md`, `acceptance-criteria.md` and `tasks/` are gate inputs, so they are code. Every other file counts as code too, including lockfiles, committed `dist/` output, CI, auth, migrations, config JSON, and any path with `..`, a backslash, a leading `./` or `//`. `classifyRoundNeed` in `src/review/round-need.ts` is the tested reference of this rule; the host executes this text, and nothing in the CLI calls the function yet. `--all`, an explicit reviewer list or a gating round forces a round.
+ 3. **Round ceiling.** 5 rounds (`REVIEW_ROUND_CAP`) over the same change. Past it: interactive, ask the operator; unattended, `STATUS: BLOCKED round_cap`.
+ 4. **PR state, shown before dispatch.** On a PR target read its state (merged, approved, CI) and tell the operator the risk that it merges before the round ends: a verdict ready at minute 55 and held to minute 119 lost the race to the merge. Depth and the estimate need the package and the slice manifest, so they come later: after `review scope`, `review start` and `review slice`, before the first reviewer starts ("Round plan" steps 5-6; `SKILL.detail.md` § "Preflight 4").
+ 
+ ## Hosts — the same round, different tools
+ 
+ | | keryx shell | Claude Code | Codex, other AGENTS.md hosts | autonomous runner |
+ |---|---|---|---|---|
+ | Spawn | `spawn_subagent` | `Agent` (`subagent_type`) | its spawn tool; none → the runner (Preflight 1) | its own reviewers |
+ | Plan | `plan_set`, `plan_update` | its todo/task list | its plan tool (`update_plan`), else the checklist in your reply | none |
+ | Question | `ask_user` | `AskUserQuestion` | one question in your reply, then wait | none: defaults, unattended |
+ | Operator decision | the card tool | the exact terminal command, for the operator | the exact terminal command, for the operator | refused: recorded Not run |
+ | Result file | `save_result_to: <package>/raw/<reviewer>.txt` | the reviewer writes `<package>/raw/<reviewer>.txt` itself, before it replies | as Claude Code | its own package |
+ | Wave bytes | `--host keryx-shell` (60000: a child dies at 5 min) | `--host claude-code` (150000) | `--host codex` / `--host other` (150000) | its own |
+ 
+ - **Every host keeps the same files, per package** (`<package>` is the directory `keryx review start` created): slices in `<package>/slices/`, one reply per dispatch in `<package>/raw/<reviewer>.txt` (reviewer replies only), one driver per dispatch in `<package>/drivers/<reviewer>.json`, and `research.json` from `keryx review ledger build --package <package>` — never by hand. `retry-plan --package`, `verdict` and `ledger build` read `<package>/raw` by default; the shared `.metaproject/data/review/raw` holds other rounds' replies and is read only when named, so never write there.
+ - **The result is the file, never the spawn tool's output.** keryx shell cuts a child's summary at 16000 characters and Claude Code returns only the last message: parse `<package>/raw/<reviewer>.txt`. A missing file is no result (`BLOCKED`). Token spend: keryx shell appends `KERYX_USAGE {"tokens_in":…,"tokens_out":…,"model":…,"by":"host"}` to that file itself; on another host, when your spawn tool's result reports the subagent's tokens, append that one line, with `"by":"host"`, to the file yourself (a dispatch without it is counted unknown, never 0; a line without the mark is counted as stated by the reviewer, not measured).
+ - **Caller token.** `keryx review start` prints `export KERYX_REVIEW_CALLER_TOKEN=…`; outside keryx shell export it on this session's keryx calls, or readiness item 10 reads "not observable on this host".
+-- **Operator decisions.** In keryx shell the operator answers a card: `review_confirm_plan`, `review_waive_readiness`, `review_waive_coverage`, `review_waive_mutation`, `review_override_reviewers`, `review_chunks_answer`, `review_publish`, `review_comments_reply`, `review_decide_premise`. Elsewhere give the operator the exact command to run in their own terminal — `keryx review confirm-plan --package <package>`, `keryx review complete <package> --waive <item> "<their words>"` or `--waive-coverage "<their words>"`, `keryx review waive-mutation --package <package> --reason "<why>"`, `keryx review override-reviewers --package <package> --reason "<why>"`, `keryx review chunks estimate --package <package> --answer yes --quote "<their words>"`, `keryx review publish <package>`, `keryx review comments reply … --final`, `keryx review decide-premise --package <package> --finding <id> --answer uphold|dismiss --reason "<why>"` — and wait. You never run `--mode automatic` or `--yes`, and never write an operator quote yourself; unattended, the item is Not run.
++- **Operator decisions.** In keryx shell the operator answers a card: `review_confirm_plan`, `review_waive_readiness`, `review_waive_coverage`, `review_waive_mutation`, `review_override_reviewers`, `review_chunks_answer`, `review_publish`, `review_comments_reply`, `review_decide_premise`, `review_complete`. In keryx shell call the card and never send the operator to a terminal for these acts; the operator may answer it in the shell or in the Telegram topic. Only outside keryx shell give the operator the exact command to run in their own terminal — `keryx review confirm-plan --package <package>`, `keryx review complete <package> --waive <item> "<their words>"` or `--waive-coverage "<their words>"`, `keryx review waive-mutation --package <package> --reason "<why>"`, `keryx review override-reviewers --package <package> --reason "<why>"`, `keryx review chunks estimate --package <package> --answer yes --quote "<their words>"`, `keryx review publish <package>`, `keryx review comments reply … --final`, `keryx review decide-premise --package <package> --finding <id> --answer uphold|dismiss --reason "<why>"` — and wait. You never run `--mode automatic` or `--yes`, and never write an operator quote yourself; unattended, the item is Not run.
+ 
+ ## Round plan — the order on every host
+ 
+ 1. `keryx review plan --target <pr-url|branch> [--ref <base>] [--head <sha>] --host <host> [--memory-query "<query>"] [--unattended]` is the one command: it runs start, scope (Step 3), blast-radius (Step 3b), slice, required and estimate, writes `<package>/plan.json` and dispatches nothing. Read the round first (Step 1a), then dispatch from step 7.
+ 2. Without `plan`, run those stages one by one in this order: `keryx review scope --ref <base> --json > .metaproject/data/review/scope.json`, then `keryx review start --target <kind> --ref <ref> --scope .metaproject/data/review/scope.json --memory-query "<query>" --host <host>` (plus `--unattended` when nobody is at the keyboard); `start` searches every prior-round source (local package, git history, the PR's keryx round block, PR comments, flow) and writes `round.json`.
+ 3. `keryx review blast-radius --ref <base> --package <package> --json > blast-radius.json` (Step 3b). Reasoned omissions (`unrelated-symbol`, `hub-damped`, `text-hub`, `test-consumer`) are context, not scope; only cap drops become chunks. Run the tests in `<package>/tests-to-run.json` with the command the radius prints, instead of reading them, and hand the output to the reviewers as context.
+ 4. `keryx review slice --ref <base> --package <package> --host <host>`: each slice carries `roles`, `depth` (deep or light) and `audit`.
+ 5. `keryx review required --mode all --scope .metaproject/data/review/scope.json --depth auto --package <package>`.
+-6. `keryx review estimate --package <package>`. Over threshold, the operator confirms (card `review_confirm_plan`, or `keryx review confirm-plan --package <package>` in their terminal); `dispatch-check` and `ledger build` refuse an unconfirmed plan, so never dispatch one. Unattended: report the estimate and stop with `STATUS: BLOCKED plan_over_threshold`.
++6. `keryx review estimate --package <package>`. Over threshold, the operator confirms: in keryx shell call the card `review_confirm_plan` (never send them to a terminal); outside it, `keryx review confirm-plan --package <package>` in their terminal; `dispatch-check` and `ledger build` refuse an unconfirmed plan, so never dispatch one. Unattended: report the estimate and stop with `STATUS: BLOCKED plan_over_threshold`.
+ 7. Dispatch by slice roles: each role gets the slices that name it; a deep slice names every roster role its path gates allow, an `audit` one the whole core set. A major or worse on a light slice comes back from `review next` as an `escalated` dispatch: dispatch the core roles on it.
+ 8. Verifier on the first blocker or major (Step 10). It runs no command itself: run `keryx review verify-run --package <package> --finding <id> -- <command>` and hand it the saved `research-evidence/verify-<id>-<n>.txt` as context. After it (no verifier ran: after the last reviewer), Wave D: `review-premise` (Step 10b).
+ 9. `keryx review verdict <package>` to the operator, then the tail: mutation pass, `ledger build`, `ingest` (with `--premises`), the operator's answer to each held finding (Wave D), `readiness`, `complete`.
+ 
+ ## Clean context — the round starts empty
+ 
+ Context comes only from your own context stages: scope, the Review Context Pack, the memory stage and the layers. Your session memory, the auto-memory index (`MEMORY.md`), remembered feedback and the earlier conversation are not inputs: do not read, quote or apply them.
+ - **Accepted exceptions, the only three:** `prior_findings` of an earlier round of the same package; review-notes and learning that reach you through the memory stage; a reviewer's own `memory_search`.
+ - **One memory read.** Run the stage query once and record it with `keryx review start … --memory-query "<query>"`. keryx writes `<package>/tool-calls/orchestrator.jsonl` itself from the moment the package starts: never create, edit or append to it. Readiness item 10, `memory-outside-stage`, blocks `review complete` and `review publish` on any other memory call; only the operator's waiver lifts it: in keryx shell call `review_waive_readiness` (a card, never a terminal), outside it `--waive memory-outside-stage "<operator quote>"` in a terminal; unattended, record it as Not run. Detail: `SKILL.detail.md` § "Clean context".
+ - **Open question.** Look in this skill and `SKILL.detail.md` first. If the answer is not there, ask the user: one question with the host's question tool (`AskUserQuestion`, `ask_user`; "Hosts") interactively; unattended, the whole output is `STATUS: BLOCKED question — <the question>`. Never answer from memory or a guess.
+ - **Named limit.** keryx cannot stop a runtime that loads the agent's memory before this skill starts, and reads of personal memory outside `keryx memory` are not visible to the log. The guarantee is instruction plus detection, not isolation.
+ 
+ ## Workflow
+ 
+ ```
+ Review Orchestrator Progress:
+ - [ ] Step 0: On a PR target, collect external comments — `keryx review comments collect`
+ - [ ] Step 0b: On a PR target whose checks are red, triage each failed run with `keryx review ci-triage --run <id>` (opt-in `review.jev.ci_triage`) — see "CI Triage on Red Checks"
+ - [ ] Step 1: Build Review Context Pack — PR metadata AND the PR's own description, scope, rules, context_doc summary, accepted memory, and the cross-repo contracts the diff consumes (prose step: no `keryx review` command builds it; do it, tick it, move on)
+ - [ ] Step 2: Detect review mode (diff mode vs. path mode)
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ 116,156 @@
+ ## Slices, waves and results — every host; keryx shell specifics marked
+ 
+ A reviewer starts in the project root and reads project files; a path outside the project root is unreadable to it. On keryx shell its `context_files` content reaches it wrapped as DATA, and slices and measurements travel only there (never pasted or retyped); elsewhere the prompt names the slice paths. `skill_path` and `pr_context` stay payload fields. The text reaches the reviewer in slices small enough to finish.
+ 
+ 0. **Publish the plan before anything else (keryx shell).** Your first tool call is `plan_set` with `step-0`…`step-14` and `step-10b` all `pending`. A shell turn that has open plan items is continued by the host; a turn that ends on a text reply is over, and a message saying the review "cannot be honestly completed" ends the run with nothing reviewed. Never end the turn while a step is `pending` or `in_progress`: mark it `blocked` only with a cause you cannot fix with a command, and otherwise keep working. Step 6a then updates this plan rather than creating it.
+ 1. **Slice first.** `keryx review slice --ref <base> --package <package> --host <host>` after `keryx review start`. It writes `<package>/slices/slice-NN.diff` files of at most 150000 bytes each and a `manifest.json` carrying a wave budget (`--wave-bytes`, never below the slice ceiling; default by `--host`: 60000 on keryx-shell, 150000 elsewhere): what ONE reviewer dispatch may total, so a role owning many slices is dispatched in slice waves that each fit the child deadline. On keryx shell with a large diff pass a small `--max-bytes` (for example 18000) and `--wave-bytes` (for example 54000) so no wave outruns a reviewer's five minutes; ledgers (csv, lockfiles, snapshots, generated files) are listed under `omissions` with a reason — list them in the report as not reviewed, never as clean.
+ 2. **Slices travel by path; on keryx shell, only by `context_files`.** The slices sit under the project (`<package>/slices`). On keryx shell pass each reviewer its slice paths in `spawn_subagent`'s `context_files`: the host copies the text into that reviewer's task, so you never paste or retype a slice. Elsewhere name the slice paths in the prompt. Put the `slices` ids in its reviewer-input. A dispatch that names a git range but no slice leaves the reviewer with nothing to read — that is `BLOCKED`, not a review.
+ 3. **Check before dispatch, every payload.** `keryx review dispatch-check --payload <file> --manifest <package>/slices/manifest.json --package <package>` for the wave; exit 1 means a payload names no slice, is over the wave ceiling (dispatch fewer slices, then the next wave), names a `skill_path` or `context_doc` that does not exist (`REVIEWER_INPUT_PATH_MISSING`), belongs to an unconfirmed over-threshold plan (`REVIEWER_INPUT_PLAN_UNCONFIRMED`), or breaks `reviewer-input.schema.json`. Fix it; do not dispatch around it.
+ 4. **One batch.** Dispatch the whole wave — up to 10 reviewers — in one message, not one at a time. On keryx shell every round reviewer's `spawn_subagent` carries `review_wave: {"package": "<package>", "pass": "round"}` (a wave outside it counts against the turn's 32 children) and a `timeout_ms` that fits its wave: the default 300000 is sized for a wave of 60000 bytes, so a larger `--wave-bytes` needs a larger `timeout_ms`. Give each reviewer `max_rounds` of at least 40 (the default); a reviewer that spends its rounds reading the skill and the schema returns nothing. **Incomplete means the next wave while it makes progress, Not run when it stalls.** Every reviewer result lists the `slices` it covered, in its `REVIEW_RESULT` object, as ids (`"slices": ["slice-01", "slice-02"]`); an object with an `id` and an optional `coverage` note (`{"id": "slice-01", "coverage": "read in full"}`) is read the same way. An object with a `status` counts only when it is DONE, COMPLETE, COVERED or OK (any case); a slice marked NOT_READ, INCOMPLETE, SKIPPED or PARTIAL is not covered, so give a slice you did not read no `status` of that kind and leave it out. An entry with no id counts for nothing. **One driver file per dispatch.** Write `<package>/drivers/<reviewer>.json` with `{"reviewer": "<name>", "slices": [<ids dispatched>], "result": "raw/<reviewer>.txt", "definition": "<path of the reviewer's SKILL.md>"}`: `ledger build` takes the reviewer's rule file from `definition` (a `skill_path` there, or inside a `payload` object, is read too) and the slices it was handed from `slices`. Only reviewer replies belong in `raw/`; a verification payload or a note filed there is reported as set aside and left in place, but it still costs a step. On `INCOMPLETE`, `BLOCKED` or `NEEDS_CONTEXT` (never accepted as a finished scope), and on a `DONE` that left slices open, `keryx review retry-plan --manifest <package>/slices/manifest.json --result <package>/raw/<reviewer>.txt --package <package>` decides and hands out the next wave of only the slices still uncovered (`--next-wave` plans one without a result). A result that covered a new slice spends no attempt; two results in a row with nothing new, or six failed rounds, print the `- **Not run:** …` line to paste into the report, and a result with nothing new first has its open slices cut in half. `keryx review slice --package <package>` already wrote one driver per reviewer x wave (`drivers/<reviewer>-w<n>.json`: slice ids, absolute slice paths, `result` path; the dispatcher adds `model`). Dispatch each wave in one batch, save each reply to its driver's `result`, and after each batch run `keryx review next --package <package>` (never `retry-plan` once per reviewer): it returns every reviewer's next wave at once, with reason `missing`, `retry`, `stalled` or `escalated`, or `done`. After a crash or timeout run it first: it collects late results from `<package>/raw/` and never re-hands a finished slice. Only the operator can accept a smaller set than that (`review_override_reviewers`, or `keryx review override-reviewers` in their terminal). An unfinished reviewer is never counted as a clean pass. **Persist every result, on every host.** On keryx shell pass each reviewer `save_result_to: <package>/raw/<reviewer>.txt`: the host writes its full final text there. Elsewhere the prompt tells the reviewer to write its whole reply to `<package>/raw/<reviewer>.txt` before it answers. Either way `review complete` has raw evidence after the transcript is cut, and you parse that file, never the tool output. Build `research.json` with `keryx review ledger build --package <package>` — never by hand: it reads the saved results, `scope-files.json` and the retry state, marks a reviewer complete only when its result is finished and its payloads cover the scope, and prints each gap with the exact next command and the waves left (a `retry-plan --next-wave` call, or a `--dispositions` entry for a raw finding). Run `keryx review ingest --research <package>/research.json` once it prints READY (exit 0). A refused `review complete` names what is missing: fix that with a command and run it again; it is never `blocked`. `--head` wants a SHA (`git rev-parse HEAD`), not `HEAD`.
+ 5. **Never print a scope or a slice.** The tool output of one call is cut at about 20 KB and `keryx review scope` of a large PR prints hundreds of KB. Run it as `keryx review scope --ref <base> --json > .metaproject/data/review/scope.json` and read the counts from the file (`keryx ctx read`, or `jq`); take `<base>` from `git symbolic-ref refs/remotes/origin/HEAD`, not a guessed `origin/main`. Create `.metaproject/data/review/` first (`mkdir -p`) — a missing directory is a command to run, not a blocker. **Machine artifacts by direct write.** Save slices, payloads and results by redirection or `keryx ctx run --raw -- <command>`; the summarized form of `keryx ctx run` drops the bytes a later step parses.
+ 6. **Write mutants whole.** A testing reviewer's `mutant_candidates` cover every changed branch, code downstream of the diff included. Write them to `research-evidence/mutants.json` unchanged; you may not narrow them, and a candidate no pass has run still blocks the coverage gate (`SKILL.detail.md`, mutation pass).
+ 7. **Measure before `review-layout`.** Run the browser measurements (Playwright/Storybook) yourself and pass them in its first dispatch (`context_files` on keryx shell, by path elsewhere); they count as evidence when the command and viewport are named. A second `NEEDS_CONTEXT` from one role is Not run (`layout: no engine`), not another refill (`SKILL.detail.md`).
+ 
+ ## Control
+ 
+ - **Profiles.** The default is read-only: one round, no edits. `--fix` hands the findings to `flow-orchestrator` or `task-implementer`; the orchestrator never edits code. Control returns to this main session after each hand-off, which loads this skill again (never the implementer, which would nest); each re-review counts toward the ceiling (it adds 1 to the count).
+ - **Waves.** Split by diff domain (`core` = logic, security, architecture; `domain` = frontend, backend, conventions; `support` = style, tests), in that order; A/B/C/D below keep their dependency order, except Wave C, which starts early and overlaps A and B (see Wave C); Wave D runs after the last verifier pass. A full or `--all` round runs at most 10 reviewers per wave (`MAX_REVIEWERS_PER_WAVE_FULL`).
+ - **Rate limits.** On a reviewer dispatch that fails with a rate-limit or overloaded error (reported as `STATUS: RATE_LIMITED`, a harness signal, not a schema status), halve the wave, requeue the rest and honour `retry-after`, at most 300 seconds (`MAX_RETRY_AFTER_SECONDS`). After at most two halvings (`MAX_RATE_HALVINGS`) stop with `STATUS: BLOCKED rate_limited`, naming the queue left.
+ - **Early verdict.** When every reviewer and the verifier are done, save every verifier pass to `research-evidence/verifications.json`, then run `keryx review verdict <package>` (it reads `<package>/raw`; the shared `.metaproject/data/review/raw` only when passed as `--raw`, which mixes in other rounds) and give the operator the verdict then; refuted findings are excluded only once `verifications.json` exists, held ones only once Wave D's claims are saved to `research-evidence/premises.json`. A verdict given before Wave D ran is provisional, and you say so: it counts as open the findings the judge may still hold or lower. The mutation pass, ledger and `keryx review complete` continue as the tail, and every managed round finishes them. The verdict is interim: the round is not done until `complete` (`SKILL.detail.md` § "Early verdict").
+ - **Recovery.** After a timeout or crash: collect, validate, ingest, then dispatch only what is missing with `keryx review next --package <package>` (all reviewers at once). Never re-dispatch a wave whose results are on disk; after a second timeout of the same reviewer change the task (fewer slices, narrower focus), not only the diff size (`SKILL.detail.md` § "Recovery").
+-- **Done when** the consolidated report and the `keryx:findings` block are emitted and the stage counts and **Not run** are stated. A managed round (not `lightweight`, which is report-only) is also done only when every dispatched reviewer's result is recorded with `keryx review ingest` and `keryx review complete` has run. `completed` means `keryx review readiness` passed, or each failing item but `premise-decisions` (answered per finding, never waived) is waived by the operator: in keryx shell call `review_waive_readiness` (a card, never a terminal), then run `keryx review complete`; elsewhere the operator runs `keryx review complete <package> --waive <item> "<their words>"` in their terminal; unattended, record Not run; publishing to GitHub is held by the same checklist, and a not-ready package goes out only through `keryx review publish --partial` (in keryx shell: `review_publish` with `partial: true`).
++- **Done when** the consolidated report and the `keryx:findings` block are emitted and the stage counts and **Not run** are stated. A managed round (not `lightweight`, which is report-only) is also done only when every dispatched reviewer's result is recorded with `keryx review ingest` and the `review_complete` card has been answered (an agent never runs `keryx review complete`; that command is for a human in a terminal). `completed` means `keryx review readiness` passed, or each failing item but `premise-decisions` (answered per finding, never waived) is waived by the operator: in keryx shell call `review_waive_readiness` (a card, never a terminal), then call `review_complete`; elsewhere the operator runs `keryx review complete <package> --waive <item> "<their words>"` in their terminal; unattended, record Not run; publishing to GitHub is held by the same checklist, and a not-ready package goes out only through `keryx review publish --partial` (in keryx shell: `review_publish` with `partial: true`).
+ 
+ ---
+ 
+ ## Step 12 — the `keryx:findings` block
+ 
+ The prose report is for a human. **`keryx review ingest` reads the fenced block,
+ not the prose**, and a round that emits only prose cannot be used to build the
+ next round's input — the reviewer's `confidence`, `evidence`, `impact` and
+ `suggested_fix` do not survive rendering, and no regex recovers what was never
+ written down.
+ 
+ So every report ends with one fenced block whose info string carries
+ `keryx:findings`:
+ 
+ ````text
+ ```json keryx:findings
+ [ { …one object per finding, conforming to review-finding.schema.json… } ]
+ ```
+ ````
+ 
+
+--- src/gdskills/bundled/skills/review/review-premise/SKILL.md
+@@ 79,119 @@
+    the framework's own docs), the language's idioms, clean-code principles and common
+    patterns say? Then the project's own rules, with their known exceptions. A project rule
+    applied where accepted practice makes an exception is not a defect.
+ 3. **Consistency.** Would the suggested fix make the system more consistent or less? A fix
+    that makes one site differ from siblings doing the same thing is evidence against the
+    premise, not a follow-up.
+ 4. **Fix soundness.** Would a senior reviewer reject the suggested fix? A fix that is wrong
+    for the platform usually means the premise is wrong too.
+ 
+ ## Verdicts
+ 
+ | Verdict | Meaning | Must carry |
+ |---|---|---|
+ | `upheld` | The premise stands; the finding goes on unchanged. | — |
+ | `downgraded` | A defect, but intent or practice shows it is smaller than reported. Never for a `minor`, an external or a `review-security-code` finding: hold those with `challenged` or `owner-decision` instead. | `severity`, strictly lower and never below `minor`, and ≥1 `intent_signals` or `practice_sources` |
+ | `challenged` | Evidence says it is not a defect. | ≥1 `intent_signals` or `practice_sources`, and a `question` |
+ | `owner-decision` | A product choice the code cannot settle either way. | a `question` and ≥2 `options` |
+ 
+ `challenged` and `owner-decision` **hold** the finding: it does not count as an open
+ blocker or major, it is not sent to a fixer, and the verdict lists it as awaiting the
+-operator, who answers with `keryx review decide-premise` (`uphold` or `dismiss`). You never
++operator, who answers with the `review_decide_premise` card in keryx shell (never send them to a terminal) or `keryx review decide-premise` outside it (`uphold` or `dismiss`). You never
+ dismiss. `upheld` is the normal answer: a finding with a trigger, an outcome, no intent
+ signal and no practice source against it is upheld.
+ 
+ ## Iron Laws
+ 
+ | Rule | Why |
+ |------|-----|
+ | **You can only lower or hold.** No new finding, no raised severity, no edit to a finding's text. | The merge builds the record from the original finding and takes only your verdict; a claim carrying more is rejected (`unknown-property`), an entry that is no object too (`malformed-claim`). |
+ | **Never judge your own finding.** | The merge rejects a judge equal to the reporter (`self-judgement`). |
+ | **Claim first, argument second.** | The case passed two reviews that read the fix's argument and never the premise. |
+ | **`challenged` cites.** Each intent signal names its `ref` (`file:line` or a SHA) and what it says; each practice source names the guideline and section precisely enough to look up. | An uncited challenge is rejected and the finding stays as reported. Never invent a quote. |
+ | **Never re-grade by the rubric.** Severity is the reviewer's and the verifier's call; a test gap or a surviving mutant stays as reported unless intent or practice shrinks it, and a minor is upheld or challenged, never downgraded. | An uncited downgrade is rejected (`downgrade-without-evidence`). Minors matter: a finding you weaken is one nobody fixes. |
+ | **Read-only.** Read files; run nothing but `git log`, `git blame` and `git show`, and those only where your host gives a read-only child git. On keryx shell you have no shell and no git tool: read the history excerpts in `context_files`, or say the history was not read. | Executing is the verifier's job; this judgement is about meaning. |
+ | **An external finding, and a `review-security-code` finding, is held or upheld, never dismissed or downgraded.** | A human asked; the operator answers them. Severity of a security finding measures exposure, which intent does not lower. The merge rejects the downgrade (`external-downgrade`, `security-downgrade`). |
+ 
+ ## Output Contract
+ 
+ ```
+ STATUS: DONE | NEEDS_CONTEXT | BLOCKED
+ ```
+
+--- src/harness/external/write-land.ts
+@@ 136,193 @@
+   const read = readTranscriptFile(path.join(dir, EXTERNAL_WRITE_PATCH_FILE));
+   if (!read.ok) return { ok: false, reason: "patch-missing", detail: `the stored patch cannot be read (${read.reason})` };
+   if (record.patchHash === undefined || sha256Hex(read.text) !== record.patchHash) {
+     return { ok: false, reason: "hash-mismatch", detail: "the stored patch no longer matches the hash recorded for it" };
+   }
+   return { ok: true, text: read.text };
+ }
+ 
+ /** One run with its verified patch, or undefined when there is no such run. */
+ export function viewWriteRun(cwd: string, runIdOrPrefix: string, deps: WriteLandDeps = {}): WriteRunView | undefined {
+   const located = locate(cwd, runIdOrPrefix, deps.dataDir);
+   if (located === undefined) return undefined;
+   const patch = readVerifiedPatch(located.dir, located.record);
+   return patch.ok ? { record: located.record, patch: patch.text } : { record: located.record };
+ }
+ 
+ function refuse(reason: LandRefusal, detail: string): LandResult {
+   return { kind: "refused", reason, detail };
+ }
+ 
+-function decisionBody(decision: Record<string, string>): string {
++function decisionBody(decision: Record<string, string | number>): string {
+   return `${JSON.stringify({ ...decision, at: new Date().toISOString() }, null, 2)}\n`;
+ }
+ 
+ /**
+  * Land the run as the new local branch `external/<runId>` (one commit, cut from the recorded
+  * base commit in a second throwaway worktree). `confirmedPatchHash` is the hash the human was
+  * shown and typed back; anything else lands nothing. The current branch and the working tree
+  * are never touched. A run lands at most once.
+  */
+ export async function landWriteRun(
+   input: {
+     readonly cwd: string;
+     readonly runId: string;
+     readonly confirmedPatchHash: string;
+     readonly allowFlagged?: boolean;
+     /** Flow 456: how the yes arrived (`tui-card`) and the card text it answered; stored in the decision file. */
+-    readonly confirmation?: { readonly confirmedVia: string; readonly quote: string };
++    readonly confirmation?: { readonly confirmedVia: string; readonly quote: string; readonly pressedBy?: number; readonly pressedAt?: string };
+   },
+   deps: WriteLandDeps = {},
+ ): Promise<LandResult> {
+   const located = locate(input.cwd, input.runId, deps.dataDir);
+   if (located === undefined) return refuse("not-found", `no external write run "${input.runId}" in this checkout`);
+   const { record, dir } = located;
+   if (record.state !== "pending-review" || located.decided) {
+     return refuse("not-pending", record.state === "refused" ? "the run was refused at capture; it can only be discarded" : "the run was already decided");
+   }
+   const patch = readVerifiedPatch(dir, record);
+   if (!patch.ok) return refuse(patch.reason, patch.detail);
+   if (input.confirmedPatchHash !== record.patchHash) {
+     return refuse("hash-mismatch", "the confirmed hash is not the hash of the stored patch");
+   }
+   if (record.redacted) {
+     return refuse("redacted", "the stored patch was altered by redaction, so landing it would land content the agent did not write");
+   }
+   const binary = record.files.filter((file) => file.binary === true).map((file) => file.path);
+   if (binary.length > 0) {
+     return refuse("binary", `binary content is not carried by the patch: ${binary.join(", ")}`);
+
+--- src/harness/external/write-land.ts
+@@ 209,249 @@
+   const ownedDir = deps.worktreesDir === undefined ? await mkdtemp(path.join(tmpdir(), "keryx-external-land-")) : undefined;
+   const worktreesDir = deps.worktreesDir ?? (ownedDir as string);
+   const port = createGitWorktreePort({ repoRoot: repo, worktreesDir, ref: record.baseCommit });
+   const worktreeId = `land-${record.runId}`;
+   let createdBranch = false;
+   try {
+     const worktree = await port.create(worktreeId);
+     await git(["apply", "--check", "--index", "-"], worktree.path, patch.text);
+     await git(["apply", "--index", "-"], worktree.path, patch.text);
+     const tree = (await git(["write-tree"], worktree.path)).trim();
+     const message = `External write run ${record.runId} (${record.agentId})`;
+     const commit = (await git(["commit-tree", tree, "-p", record.baseCommit, "-m", message], worktree.path)).trim();
+     await git(["branch", branch, commit], repo);
+     createdBranch = true;
+     const won = createOwnerOnlyFileExclusive(
+       path.join(dir, EXTERNAL_WRITE_DECISION_FILE),
+       decisionBody({
+         decision: "landed",
+         branch,
+         commit,
+-        ...(input.confirmation !== undefined ? { confirmedVia: input.confirmation.confirmedVia, quote: input.confirmation.quote } : {}),
++        ...(input.confirmation !== undefined ? { confirmedVia: input.confirmation.confirmedVia, quote: input.confirmation.quote, ...(input.confirmation.pressedBy !== undefined ? { pressedBy: input.confirmation.pressedBy } : {}), ...(input.confirmation.pressedAt !== undefined ? { pressedAt: input.confirmation.pressedAt } : {}) } : {}),
+       }),
+     );
+     if (!won) {
+       await git(["branch", "-D", branch], repo).catch(() => undefined);
+       createdBranch = false;
+       return refuse("not-pending", "the run was decided by someone else while it was being landed");
+     }
+     return { kind: "landed", branch, commit };
+   } catch (error) {
+     if (createdBranch) await git(["branch", "-D", branch], repo).catch(() => undefined);
+     return refuse("apply-failed", errorMessage(error));
+   } finally {
+     await port.remove(worktreeId).catch(() => undefined);
+     if (ownedDir !== undefined) await rm(ownedDir, { recursive: true, force: true }).catch(() => undefined);
+     else await rm(path.join(worktreesDir, worktreeId), { recursive: true, force: true }).catch(() => undefined);
+     await git(["worktree", "prune"], repo).catch(() => undefined);
+   }
+ }
+ 
+ /** Record a discard decision and delete the stored patch. A landed or already discarded run cannot be discarded. */
+
+--- src/harness/tool/builtin/interactive-tools.ts
+@@ 46,88 @@
+  * The rule an aborted tool follows is release, not kill: `shell_task_wait` and
+  * `shell_exec`'s yield return promptly with the tasks still RUNNING, and their
+  * completions are delivered afterwards by the flow-265 drain. Aborting a wait
+  * says "stop waiting", never "stop the work".
+  */
+ export interface InteractiveToolContext {
+   /** Aborted when the operator interrupts the turn this call belongs to. */
+   signal?: AbortSignal;
+   /**
+    * Flow 295 (F8): the one-time token `confirmation` issued for THIS call. The driver
+    * passes it only after the operator approved the card, so a tool that stores
+    * something on confirmation can refuse an invoke that never went through the card.
+    */
+   confirmationToken?: string;
+   /**
+    * Flow 456 (AC1): where the operator answered the card of THIS call. `remote` when the yes came from the
+    * remote topic (the approval mirror or a Telegram-started turn), `local` when it came from this shell. Set
+    * only together with {@link confirmationToken}; a tool that records the operator's decision labels it from here.
+    */
+   confirmationVia?: "local" | "remote";
++  /** Flow 464 (AC1): the Telegram user id that pressed the remote card, and when. Set only with `confirmationVia: "remote"`. */
++  confirmationPressedBy?: number;
++  confirmationPressedAt?: string;
+   /**
+    * Flow 425: untrusted external content was read earlier in this turn. `ask_user` copies it onto the question, so
+    * the review arbiter can tell a question that may have been shaped by that content and never decide it.
+    */
+   untrustedContentSeen?: boolean;
+ }
+ 
+ /** A tool the interactive agent can offer to the model and execute for content. */
+ export interface InteractiveTool {
+   definition: NormalizedToolDefinition;
+   invoke: (input: Record<string, unknown>, ctx?: InteractiveToolContext) => Promise<InteractiveToolResult>;
+   /**
+    * Flow 441 AC6: the directory a shell tool runs its commands in. The trust routine table judges a command
+    * (`bun test`, a review command's path flags) from here, not from the process working directory; absent, the
+    * process working directory stands in.
+    */
+   workingDirectory?: string;
+   /**
+    * Flow 295 (AC7): a tool whose every call needs the OPERATOR's explicit yes, whatever
+    * the permission mode. `auto` included, it is never auto-approved, never remembered,
+
+--- src/learning/decisions.ts
+@@ 12,54 @@
+ 
+ export type DecisionAction = "accept" | "reject" | "refresh" | "promote" | "graduate-apply";
+ 
+ export interface Decision {
+   schemaVersion: 1;
+   action: DecisionAction;
+   id: string;
+   scope: LearningScope;
+   actor: string;
+   /** Whether the action ran in an interactive terminal (accept/promote require it — see `paths.ts`/`store.ts` callers). */
+   tty: boolean;
+   at: string;
+   /** Flow 456: set when the operator answered a yes/no card in the shell instead of a terminal prompt. */
+   confirmation?: DecisionConfirmation;
+ }
+ 
+ /** How a card-confirmed decision was answered: the channel and the card text plus the answer. */
+ export interface DecisionConfirmation {
+   confirmedVia: string;
+   quote: string;
++  /** Flow 464: who pressed the remote card and when; set only with `confirmedVia: "remote-card"`. */
++  pressedBy?: number;
++  pressedAt?: string;
+ }
+ 
+ export interface AppendDecisionInput {
+   action: DecisionAction;
+   id: string;
+   actor: string;
+   tty: boolean;
+   /** Defaults to `new Date().toISOString()`. */
+   at?: string;
+   confirmation?: DecisionConfirmation;
+ }
+ 
+ export interface DecisionLogOptions {
+   scope: LearningScope;
+   env?: NodeJS.ProcessEnv;
+   homeDir?: string;
+ }
+ 
+ function envOf(options: DecisionLogOptions): NodeJS.ProcessEnv {
+   return options.env ?? process.env;
+
+--- src/remote/client.ts
+@@ 115,156 @@
+   dir?: string | undefined;
+   fetchImpl?: typeof fetch;
+   heartbeatMs?: number;
+   backoff?: { initialMs?: number; maxMs?: number };
+   /** Abortable sleep, injectable so tests need not wait out a backoff. */
+   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+   /** Timeout for the non-stream requests. */
+   requestTimeoutMs?: number;
+   /** Test seam: is the serve process named in `endpoint.json` running, as this user? */
+   isAlive?: (pid: number) => boolean;
+   /** How long a decision that beat the question it answers may wait for that question to register (default 2 s). */
+   earlyDecisionMs?: number;
+ }
+ 
+ /** What came back for one approval (flow 396). `approvalId` is absent when nothing was ever asked. */
+ export interface ApprovalAnswer {
+   decision: ApprovalDecision;
+   approvalId?: string;
+   /** The Telegram user who pressed the button; absent for a deny that was not a press (timeout, dropped stream). */
+   fromId?: number;
++  /** Flow 464: the question never reached the topic (no stream, a refused or failed post), so nobody could answer it there. */
++  undelivered?: true;
+ }
+ 
+ /**
+  * An approval event from the stream, read without trusting its shape (flow 396). It needs an id to
+  * mean anything; a decision that is not exactly `allow`, `always` or `deny` is a `deny`, never a yes.
+  * `fromId` is kept only when it is a whole number. Exported for the tests.
+  */
+ export function readApprovalEvent(parsed: unknown): { approvalId: string; pressed: PressedApproval } | undefined {
+   if (parsed === null || typeof parsed !== "object") return undefined;
+   const o = parsed as { approvalId?: unknown; decision?: unknown; fromId?: unknown };
+   if (typeof o.approvalId !== "string" || o.approvalId.length === 0) return undefined;
+   const decision: ApprovalDecision = o.decision === "allow" || o.decision === "always" ? o.decision : "deny";
+   const fromId = typeof o.fromId === "number" && Number.isSafeInteger(o.fromId) ? o.fromId : undefined;
+   return { approvalId: o.approvalId, pressed: { decision, ...(fromId === undefined ? {} : { fromId }) } };
+ }
+ 
+ export interface PressedApproval {
+   decision: ApprovalDecision;
+   fromId?: number;
+ }
+
+--- src/remote/client.ts
+@@ 421,481 @@
+       return false;
+     }
+   }
+ 
+   /**
+    * Ask the topic to allow or deny. Fails closed: anything but an explicit allow
+    * pressed in the topic is `deny` — a timeout, a refusal, no stream, a dropped
+    * stream, an error.
+    */
+   async requestApproval(prompt: string, timeoutMs: number): Promise<ApprovalDecision> {
+     return (await this.askApproval(prompt, timeoutMs)).decision;
+   }
+ 
+   /**
+    * Like {@link requestApproval}, and it can offer "Always: <remember>" (flow 396). The answer names the
+    * approval and the Telegram user who pressed, so the shell can audit it and report what became of an
+    * "Always" press with {@link reportApprovalResult}. Same fail-closed rule: no press is a deny.
+    */
+   async askApproval(prompt: string, timeoutMs: number, options: { remember?: string; signal?: AbortSignal } = {}): Promise<ApprovalAnswer> {
+     if (!this.connected || options.signal?.aborted === true) {
+-      return { decision: "deny" };
++      return { decision: "deny", undelivered: true };
+     }
+     const body: ApprovalBody = {
+       sessionId: this.options.sessionId,
+       prompt,
+       timeoutMs,
+       ...(options.remember === undefined ? {} : { remember: options.remember }),
+     };
+     let approvalId: string;
+     try {
+       const response = await this.post("approval", body);
+       if (!response.ok) {
+-        return { decision: "deny" };
++        return { decision: "deny", undelivered: true };
+       }
+       const id = ((await response.json()) as Partial<ApprovalResponse> | null)?.approvalId;
+       if (typeof id !== "string" || id.length === 0) {
+-        return { decision: "deny" };
++        return { decision: "deny", undelivered: true };
+       }
+       approvalId = id;
+     } catch {
+-      return { decision: "deny" };
++      return { decision: "deny", undelivered: true };
+     }
+     const early = this.earlyDecisions.get(approvalId);
+     if (early !== undefined) {
+       // The frame beat this response: now it reaches a live question, so it is applied, and only now.
+       clearTimeout(early.timer);
+       this.earlyDecisions.delete(approvalId);
+       this.settleApproval(approvalId, early.pressed.decision, true);
+       return { ...early.pressed, approvalId };
+     }
+     if (!this.connected) {
+       return { decision: "deny" };
+     }
+     if (isAborted(options.signal)) {
+       await this.closePrompt(approvalId, closeByFor(options.signal));
+       return { decision: "deny", approvalId };
+     }
+     return new Promise<ApprovalAnswer>((resolve) => {
+       const signal = options.signal;
+       const onAbort = (): void => {
+         // The turn was stopped (flow 396 `/stop`): the question is moot, so it is a deny and a late press finds nothing.
+
+--- src/remote/shell-bridge.ts
+@@ 76,117 @@
+   unconfirmedApprovals?: number;
+   /** Newest last, at most {@link REMOTE_EVENT_LIMIT}. */
+   events: readonly RemoteEvent[];
+ }
+ 
+ /** The part of {@link RemoteClient} the bridge uses; tests pass a fake. */
+ export type RemoteClientLike = Pick<
+   RemoteClient,
+   "start" | "close" | "reply" | "requestApproval" | "requestChoice" | "connected" | "name" | "runTimeoutMs" | "lastHeartbeatAt"
+ > &
+   Partial<Pick<RemoteClient, "askChoice" | "reportState" | "unconfirmedApprovals" | "askApproval" | "reportApprovalResult" | "permissionMode" | "approvalTimeoutMs">>;
+ 
+ /** What the topic answered to one approval (flow 396). */
+ export interface RemoteApprovalAnswer {
+   decision: "allow" | "deny";
+   /** "Always" was pressed: the shell saves the rule it offered, then calls {@link RemoteBridge.reportRemembered}. */
+   always: boolean;
+   approvalId?: string;
+   /** The Telegram user who pressed; absent when nobody did (timeout, no stream). */
+   fromId?: number;
++  /** Flow 464: the question never reached the topic. */
++  undelivered?: true;
+ }
+ 
+ export interface RemoteBridgeHost extends Partial<Omit<RemoteCommandHost, "isBusy" | "cancelTurn" | "stopTelegramTurn">> {
+   sessionId(): string;
+   project(): string;
+   /** A turn is running, or something the user typed is waiting to run. */
+   isBusy(): boolean;
+   /** Idle path: run `text` like a typed line, labelled `tg`. */
+   runLine(text: string): void;
+   /** Busy path: queue `text` through the same queue a typed line takes, labelled `tg`. */
+   enqueue(text: string): void;
+   /** One line in the transcript. */
+   notice(text: string): void;
+   /** Stop the running turn (the run time limit). */
+   cancelTurn(): void;
+   /** Session history (AC4): remote control went on for this session / went off. */
+   recordOn(name: string): void;
+   recordOff(): void;
+   /**
+    * Remote control is going off: remove the Telegram-labelled lines still waiting in
+
+--- src/remote/shell-bridge.ts
+@@ 188,228 @@
+   if (safe.length <= REMOTE_REPLY_MAX_CHARS) return safe;
+   return `${safe.slice(0, REMOTE_REPLY_MAX_CHARS)}\n[cut: the full reply is in the shell]`;
+ }
+ 
+ /**
+  * What the shell takes from the client's answer. Fail closed: only an explicit `allow` or `always` is a
+  * yes; a missing, unknown or malformed decision is a deny, and `always` counts as one only when an
+  * "Always" was offered. Exported for the tests.
+  */
+ export function mapApprovalAnswer(got: unknown, offered: boolean): RemoteApprovalAnswer {
+   if (got === null || typeof got !== "object") return { decision: "deny", always: false };
+   const o = got as { decision?: unknown; approvalId?: unknown; fromId?: unknown };
+   const yes = o.decision === "allow" || o.decision === "always";
+   const approvalId = typeof o.approvalId === "string" && o.approvalId.length > 0 ? o.approvalId : undefined;
+   const fromId = typeof o.fromId === "number" && Number.isSafeInteger(o.fromId) ? o.fromId : undefined;
+   return {
+     decision: yes ? "allow" : "deny",
+     always: o.decision === "always" && offered,
+     ...(approvalId === undefined ? {} : { approvalId }),
+     ...(fromId === undefined ? {} : { fromId }),
++    ...(!yes && (o as { undelivered?: unknown }).undelivered === true ? { undelivered: true as const } : {}),
+   };
+ }
+ 
+ /** The approval prompt: redacted and within the server's limit. Exported for the tests. */
+ export function composeApprovalPrompt(prompt: string): string {
+   const safe = redactSensitiveText(prompt).trim();
+   if (safe.length <= MAX_APPROVAL_PROMPT_CHARS) return safe;
+   const note = "\n[cut: the rest of this prompt is in the shell]";
+   return `${safe.slice(0, MAX_APPROVAL_PROMPT_CHARS - note.length - 1)}…${note}`;
+ }
+ 
+ /**
+  * What the topic is asked: the tool, the command or input a human would read, and the
+  * flags that make a call risky. Never the tool's full payload; redaction and the
+  * server's size limit are applied again when it is sent.
+  */
+ export function describeApprovalForTopic(
+   tool: string,
+   inputJson: string,
+   meta?: {
+
+--- src/remote/shell-bridge.ts
+@@ 269,321 @@
+       shell: tool === "shell_exec" || tool === "shell",
+     });
+   lines.push(approvalCauseLine(cause));
+   return lines.join("\n");
+ }
+ 
+ /**
+  * Whether an operator card (`alwaysAsk` + `card`) would be cut by {@link composeApprovalPrompt}. A cut card must
+  * never get remote Yes/No buttons: the operator would be answering a decision they could not read in full.
+  * Exported for the shell and the tests.
+  */
+ export function operatorCardTooLongForTopic(
+   tool: string,
+   inputJson: string,
+   meta?: { alwaysAsk?: boolean; card?: readonly string[]; destructive?: boolean; credentials?: boolean; untrustedOrigin?: boolean; cause?: ApprovalCause },
+ ): boolean {
+   if (meta?.alwaysAsk !== true || meta.card === undefined || meta.card.length === 0) return false;
+   return redactSensitiveText(describeApprovalForTopic(tool, inputJson, meta)).trim().length > MAX_APPROVAL_PROMPT_CHARS;
+ }
+ 
++/** Flow 464 (AC5): the line an operator card carries when its Telegram mirror was not sent. */
++export const MIRROR_NOT_DELIVERED = "Telegram mirror not delivered";
++
++/**
++ * Why a card cannot be mirrored to the topic right now, or undefined when it can. The card is answered in the shell
++ * either way; this only says that nobody can answer it in Telegram.
++ */
++export function mirrorUndeliveredNote(bridge: { readonly active: boolean; readonly connected: boolean } | undefined): string | undefined {
++  if (bridge === undefined || !bridge.active) return `${MIRROR_NOT_DELIVERED}: remote control is not on in this shell. Answer it here.`;
++  if (!bridge.connected) return `${MIRROR_NOT_DELIVERED}: the remote channel is not connected. Answer it here.`;
++  return undefined;
++}
++
+ export class RemoteBridge {
+   private client: RemoteClientLike | undefined;
+   private readonly events: RemoteEvent[] = [];
+   private readonly host: RemoteBridgeHost;
+   private readonly now: () => number;
+   private readonly approvalOverrideMs: number | undefined;
+   /** What `/remote-policy` changed in this shell since it registered; wins over what serve delivered (flow 396). */
+   private policyOverride: RemotePolicyOverride = {};
+   private connectedOnce = false;
+   private clientConnected = false;
+   private tgTurn = false;
+   private lastAssistantText = "";
+   private runTimer: ReturnType<typeof setTimeout> | undefined;
+   private timedOut = false;
+   /** `/stop` ended the running Telegram turn (flow 396). */
+   private stoppedByUser = false;
+   /** Aborts a pending approval wait when the turn is stopped or runs out of time. */
+   private turnAbort: AbortController | undefined;
+   /** The close of the client being turned off, while it runs. */
+   private closing: Promise<void> | undefined;
+
+--- src/remote/shell-bridge.ts
+@@ 404,448 @@
+         this.switched = false;
+         return was;
+       },
+       limits: {
+         runningNoticeMs: options.commandRunningNoticeMs ?? DEFAULT_ROUTER_LIMITS.runningNoticeMs,
+         commandLimitMs: options.commandLimitMs ?? DEFAULT_ROUTER_LIMITS.commandLimitMs,
+         choiceTimeoutMs: options.choiceTimeoutMs ?? DEFAULT_ROUTER_LIMITS.choiceTimeoutMs,
+         ...(options.idlePollMs !== undefined ? { idlePollMs: options.idlePollMs } : {}),
+         ...(options.queuedCommandLimitMs !== undefined ? { queuedCommandLimitMs: options.queuedCommandLimitMs } : {}),
+       },
+     });
+   }
+ 
+   // ---- state -----------------------------------------------------------------
+ 
+   /** Whether remote control is on (connected or not). */
+   get active(): boolean {
+     return this.client !== undefined;
+   }
+ 
++  /** Whether the stream to serve is up right now (flow 464). */
++  get connected(): boolean {
++    return this.client?.connected === true;
++  }
++
+   /** The running turn came from Telegram. */
+   get telegramTurnActive(): boolean {
+     return this.tgTurn;
+   }
+ 
+   /** The Telegram user who started the running turn, when known (flow 396). */
+   get telegramTurnUserId(): number | undefined {
+     return this.tgTurn ? this.currentFromId : undefined;
+   }
+ 
+   /**
+    * The mode serve says a Telegram-started turn starts under. A serve that did not say (older than this
+    * shell) is read as `ask`: today's behaviour, never a silent widening.
+    */
+   get configuredPermissionMode(): "ask" | "trust" {
+     return this.policyOverride.permissionMode ?? this.client?.permissionMode ?? "ask";
+   }
+ 
+   /** How long an approval waits in the topic: a test override, then what serve delivered, then the old five minutes. */
+   get approvalTimeoutMs(): number {
+
+--- src/remote/shell-bridge.ts
+@@ 945,985 @@
+ 
+   /**
+    * Ask the topic. Fails closed: with no client, no stream, a timeout or any
+    * error the answer is `deny`.
+    */
+   async requestApproval(prompt: string): Promise<"allow" | "deny"> {
+     return (await this.askApproval(prompt)).decision;
+   }
+ 
+   /**
+    * Like {@link requestApproval}; with `remember` the prompt carries an "Always: <pattern>" button
+    * (flow 396). Anything but an explicit press is a deny. The press is recorded with the user id.
+    */
+   async askApproval(
+     prompt: string,
+     options: { remember?: string; signal?: AbortSignal; timeoutMs?: number } = {},
+   ): Promise<RemoteApprovalAnswer> {
+     const client = this.client;
+     if (client === undefined || !client.connected) {
+       this.push("approval", "denied: not connected");
+-      return { decision: "deny", always: false };
++      return { decision: "deny", always: false, undelivered: true };
+     }
+     this.push("approval", "asked in the topic");
+     let answer: RemoteApprovalAnswer;
+     this.openPrompts += 1;
+     try {
+       const text = composeApprovalPrompt(prompt);
+       const timeoutMs = options.timeoutMs ?? this.approvalTimeoutMs;
+       if (client.askApproval !== undefined) {
+         const signals = [this.turnAbort?.signal, options.signal].filter((one): one is AbortSignal => one !== undefined);
+         const signal = signals.length === 0 ? undefined : signals.length === 1 ? signals[0] : AbortSignal.any(signals);
+         const got = await client.askApproval(text, timeoutMs, {
+           ...(options.remember === undefined ? {} : { remember: options.remember }),
+           ...(signal === undefined ? {} : { signal }),
+         });
+         answer = mapApprovalAnswer(got, options.remember !== undefined);
+       } else {
+         const decision: unknown = await client.requestApproval(text, timeoutMs);
+         answer = { decision: decision === "allow" || decision === "always" ? "allow" : "deny", always: false };
+       }
+     } catch {
+
+--- src/remote/mirror-undelivered.test.ts
+@@ 1,132 @@
++// Flow 464 (AC5): an operator card the Telegram topic cannot get says so. The card is answered in the shell as
++// before; the remote side only reports that the mirror was not delivered.
++
++import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { afterEach, describe, expect, test } from "bun:test";
++import { writeOwnerOnlyFileAtomic } from "../lib/config-dir";
++import { raceApproval } from "../tui/approval-mirror";
++import { withMirrorNote } from "../tui/tui-shell";
++import { RemoteClient } from "./client";
++import { endpointPath } from "./endpoint";
++import { MIRROR_NOT_DELIVERED, RemoteBridge, type RemoteApprovalAnswer, mapApprovalAnswer, mirrorUndeliveredNote } from "./shell-bridge";
++import { mintShellToken } from "./shell-token";
++
++const cleanups: (() => Promise<void> | void)[] = [];
++afterEach(async () => {
++  while (cleanups.length > 0) await cleanups.pop()?.();
++});
++
++describe("mirrorUndeliveredNote", () => {
++  test("no bridge, or remote control off: the note says it is not on in this shell", () => {
++    expect(mirrorUndeliveredNote(undefined)).toContain(MIRROR_NOT_DELIVERED);
++    expect(mirrorUndeliveredNote(undefined)).toContain("not on in this shell");
++    expect(mirrorUndeliveredNote({ active: false, connected: false })).toContain("not on in this shell");
++  });
++
++  test("remote control on but the channel is down: the note says it is not connected", () => {
++    const note = mirrorUndeliveredNote({ active: true, connected: false });
++    expect(note).toContain(MIRROR_NOT_DELIVERED);
++    expect(note).toContain("not connected");
++  });
++
++  test("a live channel needs no note", () => {
++    expect(mirrorUndeliveredNote({ active: true, connected: true })).toBeUndefined();
++  });
++});
++
++describe("the card carries the note above its subject line", () => {
++  test("the subject stays last, so the dialog subtitle is unchanged", () => {
++    const card = ["Complete review X?", "reviewed head: abc", "subject: review X"];
++    expect(withMirrorNote(card, "NOTE")).toEqual(["Complete review X?", "reviewed head: abc", "NOTE", "subject: review X"]);
++  });
++});
++
++describe("an unreachable client reports undelivered", () => {
++  test("a RemoteClient with no stream answers a card deny with undelivered", async () => {
++    const base = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-undelivered-")));
++    cleanups.push(() => rmSync(base, { recursive: true, force: true }));
++    const dir = path.join(base, "config");
++    mkdirSync(dir, { recursive: true });
++    expect(mintShellToken(dir).ok).toBe(true);
++    writeOwnerOnlyFileAtomic(endpointPath(dir), `${JSON.stringify({ address: "example.invalid", port: 4455, pid: process.pid })}\n`);
++    const client = new RemoteClient({
++      sessionId: "sess-un-0001",
++      project: "/work/app",
++      dir,
++      onLine: () => undefined,
++      fetchImpl: ((_input: RequestInfo | URL) => Promise.reject(new Error("no network"))) as typeof fetch,
++    });
++    cleanups.push(() => client.drop());
++    await client.start();
++    const answer = await client.askApproval("Complete review X?", 200, {});
++    expect(answer).toMatchObject({ decision: "deny", undelivered: true });
++  });
++
++  test("a bridge with no client denies and says undelivered", async () => {
++    const bridge = new RemoteBridge({
++      host: {
++        sessionId: () => "s",
++        project: () => "/p",
++        isBusy: () => false,
++        runLine: () => undefined,
++        enqueue: () => undefined,
++        notice: () => undefined,
++        cancelTurn: () => undefined,
++        recordOn: () => undefined,
++        recordOff: () => undefined,
++        dropQueuedTelegramLines: () => [],
++        onChange: () => undefined,
++      },
++    });
++    expect(await bridge.askApproval("card")).toEqual({ decision: "deny", always: false, undelivered: true });
++    expect(bridge.connected).toBe(false);
++  });
++
++  test("mapApprovalAnswer keeps the flag on a deny and never lets a press carry it", () => {
++    expect(mapApprovalAnswer({ decision: "deny", undelivered: true }, false)).toMatchObject({ decision: "deny", undelivered: true });
++    expect(mapApprovalAnswer({ decision: "allow", undelivered: true }, false).undelivered).toBeUndefined();
++    expect(mapApprovalAnswer({ decision: "deny" }, false).undelivered).toBeUndefined();
++  });
++});
++
++describe("raceApproval: a topic leg that never delivered", () => {
++  const undelivered: RemoteApprovalAnswer = { decision: "deny", always: false, undelivered: true };
++
++  test("onUndelivered fires and the dock stays the only place to answer", async () => {
++    let told = 0;
++    const outcome = await raceApproval({
++      turnSignal: new AbortController().signal,
++      onUndelivered: () => {
++        told += 1;
++      },
++      dock: async (race) => {
++        race.opened();
++        await new Promise((resolve) => setTimeout(resolve, 10));
++        expect(race.signal.aborted).toBe(false);
++        return "answered-in-dock";
++      },
++      topic: async () => undelivered,
++    });
++    expect(told).toBe(1);
++    expect(outcome).toEqual({ from: "dock", result: "answered-in-dock" });
++  });
++
++  test("a delivered question that simply timed out does not fire it", async () => {
++    let told = 0;
++    await raceApproval({
++      turnSignal: new AbortController().signal,
++      onUndelivered: () => {
++        told += 1;
++      },
++      dock: async (race) => {
++        race.opened();
++        await new Promise((resolve) => setTimeout(resolve, 10));
++        return "dock";
++      },
++      topic: async () => ({ decision: "deny", always: false }),
++    });
++    expect(told).toBe(0);
++  });
++});
+
+--- src/review/chunks-estimate.ts
+@@ 1,32 @@
+ // What a chunk run will cost, said before it starts. A run at or under the ceiling goes through; a run over it needs a yes.
+ // The ceiling is 25 passes of 40 files (1,000 files) unless `routing.config.json` carries `reviewChunks.maxPasses`.
+ 
+ import { createHash } from "node:crypto";
+ import { existsSync } from "node:fs";
+ import path from "node:path";
+ import { shellWord } from "../lib/shell-quote";
+ import { pathExists, writeFileAtomic } from "../lib/fs";
+ import { CHUNK_REVIEWER, CHUNK_TIER, computeChunkPass, ensureChunkPlan, readChunkPlan, withChunkStateLock } from "./chunks";
+ import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "./blast-radius";
+ import { readJsonFileOr, readJsonObjectFile } from "../lib/json";
+-import type { ConfirmedVia } from "./types";
++import { cardPressFields, type CardPress, type ConfirmedVia } from "./types";
+ 
+ export const CHUNK_ESTIMATE_FILE = "chunk-estimate.json";
+ /** The file automatic review mode (flow 429) leaves in its package; `commands/automatic-review.ts` takes its name from here. */
+ export const AUTOMATIC_REVIEW_DISCLOSURE_FILE = "automatic-run-inputs.json";
+ export const DEFAULT_MAX_PASSES = 25;
+ const MAX_PASSES_LIMIT = 100;
+ /** Tokens a pass spends on the reviewer's own prompt and the answer, beyond the chunk text. */
+ const PASS_PROMPT_TOKENS = 3_000;
+ const PASS_OUTPUT_TOKENS = 1_500;
+ const BYTES_PER_TOKEN = 4;
+ 
+ export type ChunkLimits = {
+   maxPasses: number;
+   inputUsdPerMTok: number;
+   outputUsdPerMTok: number;
+   secondsPerPass: number;
+   source: "default" | "routing.config.json";
+   /** Set when routing.config.json exists but could not be read; the defaults apply and the estimate says so. */
+   warning?: string;
+ };
+
+--- src/review/chunks-estimate.ts
+@@ 94,134 @@
+     reviewer: CHUNK_REVIEWER,
+     chunks: remaining.length,
+     files: remaining.reduce((sum, chunk) => sum + chunk.files.length, 0),
+     bytes,
+     tokens: { input, output },
+     costUsd,
+     seconds: remaining.length * effective.secondsPerPass,
+     maxPasses: effective.maxPasses,
+     ceilingFiles: effective.maxPasses * DEFAULT_BLAST_RADIUS_MAX_FILES,
+     overCeiling: remaining.length > effective.maxPasses,
+     limitsSource: effective.source,
+     ...(effective.warning === undefined ? {} : { limitsWarning: effective.warning }),
+     // The whole plan, not what is left of it: recording a chunk DONE must not take the operator's answer with it.
+     planKey: createHash("sha256").update(plan.chunks.map((chunk) => `${chunk.id}:${chunk.files.join(",")}`).join("|")).digest("hex").slice(0, 16),
+   };
+ }
+ 
+ export type ChunkMode = "automatic" | "interactive";
+ export type ChunkDecision = "proceed" | "ask-once" | "wait-for-yes";
+ 
+-export type ChunkAnswer = { value: "yes" | "no"; quote: string; at: string; confirmedVia?: ConfirmedVia | undefined };
++export type ChunkAnswer = { value: "yes" | "no"; quote: string; at: string; confirmedVia?: ConfirmedVia | undefined } & CardPress;
+ 
+ export type ChunkEstimateRecord = {
+   schemaVersion: 1;
+   estimate: ChunkEstimate;
+   mode: ChunkMode;
+   decision: ChunkDecision;
+   /** True once the operator has been asked about this run. */
+   asked: boolean;
+   answer?: ChunkAnswer;
+ };
+ 
+ /** Automatic review mode (flow 429) leaves its disclosure file in the package; any other run is interactive. */
+ export function chunkModeOf(packageDir: string, override?: string): ChunkMode {
+   if (override === "automatic" || override === "interactive") return override;
+   return existsSync(path.join(packageDir, AUTOMATIC_REVIEW_DISCLOSURE_FILE)) ? "automatic" : "interactive";
+ }
+ 
+ export function decisionFor(estimate: Pick<ChunkEstimate, "overCeiling">, mode: ChunkMode): ChunkDecision {
+   if (!estimate.overCeiling) return "proceed";
+   return mode === "automatic" ? "ask-once" : "wait-for-yes";
+
+--- src/review/chunks-estimate.ts
+@@ 140,185 @@
+ 
+ /** Records the estimate and the decision it leads to. An answer survives only while the estimate covers the same chunks. */
+ export function recordChunkEstimate(packageDir: string, estimate: ChunkEstimate, mode: ChunkMode): Promise<ChunkEstimateRecord> {
+   return withChunkStateLock(packageDir, async () => {
+     const previous = await readChunkEstimate(packageDir);
+     const same = previous?.estimate.planKey === estimate.planKey;
+     const decision = decisionFor(estimate, mode);
+     const record: ChunkEstimateRecord = {
+       schemaVersion: 1,
+       estimate,
+       mode,
+       decision,
+       asked: decision !== "proceed",
+       ...(same && previous?.answer !== undefined ? { answer: previous.answer } : {}),
+     };
+     await writeFileAtomic(path.join(packageDir, CHUNK_ESTIMATE_FILE), `${JSON.stringify(record, null, 2)}\n`);
+     return record;
+   });
+ }
+ 
+-export async function answerChunkEstimate(packageDir: string, value: "yes" | "no", quote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia): Promise<ChunkEstimateRecord> {
++export async function answerChunkEstimate(packageDir: string, value: "yes" | "no", quote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia, press?: CardPress): Promise<ChunkEstimateRecord> {
+   if (quote.trim() === "") throw new Error("The answer needs the operator's own words (--quote).");
+   return withChunkStateLock(packageDir, async () => {
+     const previous = await readChunkEstimate(packageDir);
+     if (previous === undefined) throw new Error("No chunk estimate is recorded; run `keryx review chunks estimate` first.");
+-    const record: ChunkEstimateRecord = { ...previous, asked: true, answer: { value, quote: quote.trim(), at: now.toISOString(), ...(confirmedVia === undefined ? {} : { confirmedVia }) } };
++    const record: ChunkEstimateRecord = { ...previous, asked: true, answer: { value, quote: quote.trim(), at: now.toISOString(), ...(confirmedVia === undefined ? {} : { confirmedVia }), ...cardPressFields(press) } };
+     await writeFileAtomic(path.join(packageDir, CHUNK_ESTIMATE_FILE), `${JSON.stringify(record, null, 2)}\n`);
+     return record;
+   });
+ }
+ 
+ /** Why `chunks next` may not hand out a chunk yet: empty when the run is under the ceiling or the operator said yes. */
+ export async function chunkRunBlocker(packageDir: string, projectRoot: string, known?: ChunkEstimate | null): Promise<string | undefined> {
+   const estimate = known === undefined ? await estimateChunkRun(packageDir, projectRoot) : known;
+   if (estimate === null || !estimate.overCeiling) return undefined;
+   const record = await readChunkEstimate(packageDir);
+   const answered = record?.estimate.planKey === estimate.planKey ? record.answer : undefined;
+   if (answered?.value === "yes") return undefined;
+   const dir = shellWord(path.relative(process.cwd(), packageDir) || ".");
+   const size = `${estimate.chunks} passes of at most ${DEFAULT_BLAST_RADIUS_MAX_FILES} files (${estimate.files} files) exceed the ceiling of ${estimate.maxPasses} passes (${estimate.ceilingFiles} files)`;
+   if (answered?.value === "no") return `${size}, and the operator answered no. Nothing runs.`;
+   return `${size}. In keryx shell, call the \`review_chunks_answer\` tool: the operator answers a card. Outside the shell, run \`keryx review chunks estimate --package ${dir}\` to record the estimate, then \`keryx review chunks estimate --package ${dir} --answer yes --quote "<operator quote>"\` in a terminal once the operator agrees.`;
+ }
+ 
+ const money = (usd: number): string => `$${usd.toFixed(2)}`;
+ const minutes = (seconds: number): string => (seconds < 90 ? `${seconds} s` : `${Math.round(seconds / 60)} min`);
+
+--- src/review/complete-gated.ts
+@@ 1,18 @@
++import { resolveProjectRoot } from "../lib/contained-path";
++import { completeManagedReview, resolveReviewPackagePath, type CompleteManagedReviewOptions, type CompleteManagedReviewResult } from "./managed";
++import { runProfileRefusal } from "./run-profile";
++import { packageRoutingRefusal } from "./routing-check";
++
++/**
++ * `keryx review complete` and the `review_complete` card close a round through this one function, so both meet the same
++ * gates: the run profile, the narrowed-routing check, then the head, evidence-level, research and readiness gates inside
++ * `completeManagedReview`. A refusal throws before anything is recorded.
++ */
++export async function completeReviewGated(cwd: string, ref: string, options: CompleteManagedReviewOptions): Promise<CompleteManagedReviewResult> {
++  const packageDir = await resolveReviewPackagePath(cwd, ref);
++  const profileMissing = runProfileRefusal(packageDir);
++  if (profileMissing !== undefined) throw new Error(`review complete refused: ${profileMissing}`);
++  const narrowedRouting = packageRoutingRefusal(packageDir, resolveProjectRoot(cwd), { refuseUnreadable: true });
++  if (narrowedRouting !== undefined) throw new Error(`review complete refused: ${narrowedRouting}`);
++  return completeManagedReview(cwd, ref, options);
++}
+
+--- src/review/completion-gate.ts
+@@ 736,774 @@
+ /**
+  * True when the transcript shows the review skill was loaded or a `keryx review` command was executed in this session:
+  * the same definition the session tracker keeps (`SessionReviewNames.runSeen`), any subcommand — `status` and `attach`
+  * continue a review as much as `start` does.
+  */
+ export function reviewRunSeenInHistory(history: ReadonlyArray<HistoryMessage>): boolean {
+   return new SessionReviewTracker(process.cwd()).update(history).runSeen === true;
+ }
+ 
+ /** The earliest message timestamp in the transcript: packages closed before it are not this run's. */
+ export function sessionStartedAt(history: ReadonlyArray<{ ts?: string | undefined }>): number {
+   for (const message of history) {
+     const at = message.ts === undefined ? Number.NaN : Date.parse(message.ts);
+     if (!Number.isNaN(at)) return at;
+   }
+   return Date.now();
+ }
+ 
+ function nextStep(open: OpenManagedReview): string {
+   if (open.packageDir === "") {
+-    return "Next: to continue a review opened in an earlier session, name its package (`keryx review status <review-id-or-path>`); otherwise `keryx review start --pr <n> --report <path>` opens the package; then dispatch the reviewers per slice, save each result, `keryx review ledger build <input-dir> --package <review-dir>`, `keryx review ingest ... --research <review-dir>/research.json`, then `keryx review complete`.";
++    return "Next: to continue a review opened in an earlier session, name its package (`keryx review status <review-id-or-path>`); otherwise `keryx review start --pr <n> --report <path>` opens the package; then dispatch the reviewers per slice, save each result, `keryx review ledger build <input-dir> --package <review-dir>`, `keryx review ingest ... --research <review-dir>/research.json`, then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).";
+   }
+   if (open.blockers.some((b) => /research|dispatch/.test(b))) {
+-    return "Next: dispatch the reviewers per slice, build the research ledger with `keryx review ledger build <input-dir> --package <review-dir>` (it names every gap), `keryx review ingest ... --research <review-dir>/research.json`, then `keryx review complete`.";
++    return "Next: dispatch the reviewers per slice, build the research ledger with `keryx review ledger build <input-dir> --package <review-dir>` (it names every gap), `keryx review ingest ... --research <review-dir>/research.json`, then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).";
+   }
+-  return "Next: write or ingest the missing artifacts (`keryx review ingest`), then `keryx review complete`.";
++  return "Next: write or ingest the missing artifacts (`keryx review ingest`), then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).";
+ }
+ 
+ export type ReviewGateInput = {
+   open: OpenManagedReview | null;
+   runSeen: boolean;
+   continues: number;
+   stalls: number;
+   lastSignature: string | undefined;
+ };
+ 
+ export type ReviewGateDecision =
+   | { action: "accept" }
+   | { action: "continue"; message: string; stalls: number; signature: string }
+
+--- src/review/completion-gate.ts
+@@ 797,821 @@
+   const stalls = input.lastSignature === open.signature ? input.stalls + 1 : 0;
+   if (input.continues >= MAX_REVIEW_GATE_CONTINUES || stalls >= MAX_REVIEW_GATE_STALLS) {
+     return {
+       action: "stop",
+       report:
+         `Review ${open.reviewId} is not complete after ${input.continues} continue(s)` +
+         `${stalls >= MAX_REVIEW_GATE_STALLS ? " and no new artifact in the last " + stalls : ""}. ` +
+-        `\`keryx review complete\` still refuses on:\n${describeBlockers(open)}`,
++        `The review_complete card would still be refused on:\n${describeBlockers(open)}`,
+     };
+   }
+   return {
+     action: "continue",
+     stalls,
+     signature: open.signature,
+     message:
+-      `The managed review ${open.reviewId} is not finished: it is finished when \`keryx review complete\` accepts the package, not when you stop writing. ` +
++      `The managed review ${open.reviewId} is not finished: it is finished when the package is closed (the operator answers the \`review_complete\` card and its gates pass), not when you stop writing. ` +
+       `It still refuses on:\n${describeBlockers(open)}\n` +
+       `${nextStep(open)}\n` +
+       "Do the next missing step now. Step 1 (Build Review Context Pack) has no CLI command; it is a prose step, so mark it done and move on. " +
+       "A command that is refused is not a blocker: run `keryx review --help` for the accepted usage and retry with the right flags. " +
+       "A plan item you marked blocked for such a reason is not blocked: mark it in_progress. " +
+       "A tool loop guard or an empty child result is not a reason to ask the operator to resend the request or to continue: change the arguments, retry the failed pass on a smaller slice, and keep going. " +
+-      "Stop only after `review complete` succeeds, or report the one real blocker with its evidence.",
++      "Stop only after the `review_complete` card has closed the package, or report the one real blocker with its evidence.",
+   };
+ }
+
+--- src/review/coverage-complete.ts
+@@ 1,52 @@
+ // Which in-scope files a review actually looked at. In scope is scope A (the changed files) together with scope B (the
+ // blast radius, including the files the cap dropped). Every file ends up covered, omitted under a named reason, or
+ // uncovered; `keryx review complete` refuses while any is uncovered unless the operator waives them in their own words.
+ 
+ import path from "node:path";
+ import { shellWord } from "../lib/shell-quote";
+ import { writeFileAtomic } from "../lib/fs";
+ import { type ChunkPass, computeChunkPass, hasChunkPlan } from "./chunks";
+ import { BLAST_RADIUS_SCOPE_REVIEWER, isCapDrop, isReasonedDrop } from "./blast-radius";
+ import { packageScopeFiles } from "./coverage";
+ import type { SliceManifest } from "./slice";
+-import type { ConfirmedVia } from "./types";
++import { cardPressFields, type CardPress, type ConfirmedVia } from "./types";
+ import { readJsonFileOr } from "../lib/json";
+ import { asRecord as record, dispatchRunRecords } from "./record";
+ 
+ export const COVERAGE_FILE = "coverage.json";
+ /** Where the ledger build leaves a copy of the slice manifest when the input directory is not the package. */
+ export const SLICE_MANIFEST_COPY = "slice-manifest.json";
+ 
+ export type CoverageStatus = "covered" | "omitted" | "uncovered";
+ 
+ export type CoverageFile = {
+   file: string;
+   scope: "A" | "B";
+   status: CoverageStatus;
+   /** What covered it: a slice id, a chunk id, or the scope-B reviewer run. */
+   by?: string;
+   /** Why an omitted file was left out, or why an uncovered one is not covered. */
+   reason?: string;
+ };
+ 
+-export type CoverageWaiver = { operatorQuote: string; time: string; files: string[]; confirmedVia?: ConfirmedVia | undefined };
++export type CoverageWaiver = { operatorQuote: string; time: string; files: string[]; confirmedVia?: ConfirmedVia | undefined } & CardPress;
+ 
+ export type CoverageReport = {
+   schemaVersion: 1;
+   /** False when the package holds no slice manifest, no blast radius with dropped files and no chunk plan: there is nothing to account against. */
+   tracked: boolean;
+   counts: { inScope: number; covered: number; omitted: number; uncovered: number };
+   omissionReasons: Record<string, number>;
+   files: CoverageFile[];
+   omissions: Array<{ file: string; reason: string }>;
+   waiver?: CoverageWaiver;
+   /** True when a valid waiver names every uncovered file. */
+   waived: boolean;
+ };
+ 
+ const readJson = <T>(file: string): Promise<T | undefined> => readJsonFileOr<T | undefined>(file, undefined);
+ 
+ const text = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
+ 
+ type Radius = { files?: Array<{ file?: unknown }>; dropped?: Array<{ file?: unknown; reason?: unknown; detail?: unknown }> };
+ 
+
+--- src/review/coverage-complete.ts
+@@ 78,120 @@
+   return dispatchRunRecords(dispatch).some((run) => run.reviewer === BLAST_RADIUS_SCOPE_REVIEWER && run.status === "complete" && run.scopeComplete !== false);
+ }
+ 
+ /**
+  * True when the package carries any record written by the coverage accounting: a chunk plan, `coverage.json`, or a
+  * dispatch run that names `coveredSlices`. A package cut before that accounting existed holds none of them, and the
+  * completeness gate has nothing to hold it against.
+  */
+ export async function packageRecordsCoverage(packageDir: string, research?: unknown): Promise<boolean> {
+   if (hasChunkPlan(packageDir)) return true;
+   if ((await readJson<unknown>(path.join(packageDir, COVERAGE_FILE))) !== undefined) return true;
+   const ledger = research ?? (await readJson<unknown>(path.join(packageDir, "research.json")));
+   return dispatchRunRecords(record(ledger)?.dispatch).some((run) => Array.isArray(run.coveredSlices));
+ }
+ 
+ export function readCoverageWaiver(dispatch: unknown): CoverageWaiver | undefined {
+   const waiver = record(record(dispatch)?.coverageWaiver);
+   if (waiver === undefined || !text(waiver.operatorQuote) || !text(waiver.time)) return undefined;
+   const files = Array.isArray(waiver.files) ? waiver.files.filter(text) : [];
+   const via = waiver.confirmedVia === "tui-card" || waiver.confirmedVia === "remote-card" ? waiver.confirmedVia : undefined;
+-  return { operatorQuote: waiver.operatorQuote, time: waiver.time, files, ...(via === undefined ? {} : { confirmedVia: via }) };
++  const pressedBy = typeof waiver.pressedBy === "number" && Number.isSafeInteger(waiver.pressedBy) ? waiver.pressedBy : undefined;
++  const pressedAt = text(waiver.pressedAt) ? waiver.pressedAt : undefined;
++  return { operatorQuote: waiver.operatorQuote, time: waiver.time, files, ...(via === undefined ? {} : { confirmedVia: via }), ...cardPressFields({ pressedBy, pressedAt }) };
+ }
+ 
+ export type ComputeCoverageOptions = {
+   /** The parsed `research.json`, when the caller already holds it. */
+   research?: unknown;
+ };
+ 
+ /** The coverage of one package, computed from what it holds. Writes nothing. */
+ export async function computeCoverage(packageDir: string, options: ComputeCoverageOptions = {}): Promise<CoverageReport> {
+   const research = options.research ?? (await readJson<unknown>(path.join(packageDir, "research.json")));
+   const dispatch = record(record(research)?.dispatch);
+   const radius = await readJson<Radius>(path.join(packageDir, "blast-radius.json"));
+   const manifest = await readManifest(packageDir);
+   const retry = await readJson<unknown>(path.join(packageDir, "retry-state.json"));
+   const scopeA = (await packageScopeFiles(packageDir)) ?? [];
+   const chunkPass: ChunkPass | null = hasChunkPlan(packageDir) ? await computeChunkPass(packageDir) : null;
+ 
+   const radiusFiles = (radius?.files ?? []).map((entry) => entry.file).filter(text);
+   const dropped = (radius?.dropped ?? []).filter((entry) => text(entry.file));
+   const capDropped = dropped.filter((entry) => isCapDrop(entry.reason)).map((entry) => entry.file as string);
+
+--- src/review/coverage-complete.ts
+@@ 195,248 @@
+ 
+ export async function readCoverage(packageDir: string): Promise<CoverageReport | undefined> {
+   return readJson<CoverageReport>(path.join(packageDir, COVERAGE_FILE));
+ }
+ 
+ /** The four counts, as the one line the CLI, `layers status` and the panel print. */
+ export function coverageLine(report: Pick<CoverageReport, "counts" | "omissionReasons" | "tracked">): string {
+   if (!report.tracked) return "coverage: not tracked (no slice manifest, no dropped blast-radius files)";
+   const reasons = Object.entries(report.omissionReasons).sort(([a], [b]) => a.localeCompare(b)).map(([reason, count]) => `${reason} ${count}`).join(", ");
+   const { inScope, covered, omitted, uncovered } = report.counts;
+   return `coverage: in scope ${inScope}, covered ${covered}, omitted ${omitted}${reasons === "" ? "" : ` (${reasons})`}, uncovered ${uncovered}`;
+ }
+ 
+ /** Characters, not words, of the operator's own text (the flag's name does not count). */
+ const MIN_WAIVER_QUOTE_CHARS = 8;
+ 
+ /**
+  * Records the operator's waiver of every file uncovered right now in `research.json` (`dispatch.coverageWaiver`, the shape
+  * of the mutation waiver: their quote, the time, and the waived file list). Nothing uncovered means nothing to waive.
+  */
+-export async function recordCoverageWaiver(packageDir: string, operatorQuote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia): Promise<CoverageWaiver | undefined> {
++export async function recordCoverageWaiver(packageDir: string, operatorQuote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia, press?: CardPress): Promise<CoverageWaiver | undefined> {
+   // A flag name or a one-word "ok" is not the operator's words; the flag is also a human-confirmation command (see command-risk).
+   const quote = operatorQuote.replace(/-{0,2}waive[- ]?coverage/gi, "").trim();
+   if (quote.length < MIN_WAIVER_QUOTE_CHARS || !/[\p{L}\p{N}]/u.test(quote)) {
+     throw new Error(`--waive-coverage needs the operator's own words as its value: at least ${MIN_WAIVER_QUOTE_CHARS} characters, with letters or digits in them.`);
+   }
+   const file = path.join(packageDir, "research.json");
+   const research = record(await readJson<unknown>(file));
+   const dispatch = record(research?.dispatch);
+   if (research === undefined || dispatch === undefined) return undefined;
+   const report = await computeCoverage(packageDir, { research });
+   const uncovered = report.files.filter((entry) => entry.status === "uncovered").map((entry) => entry.file);
+   if (!report.tracked || uncovered.length === 0) return undefined;
+-  const waiver: CoverageWaiver = { operatorQuote: quote, time: now.toISOString(), files: uncovered, ...(confirmedVia === undefined ? {} : { confirmedVia }) };
++  const waiver: CoverageWaiver = { operatorQuote: quote, time: now.toISOString(), files: uncovered, ...(confirmedVia === undefined ? {} : { confirmedVia }), ...cardPressFields(press) };
+   await writeFileAtomic(file, `${JSON.stringify({ ...research, dispatch: { ...dispatch, coverageWaiver: waiver } }, null, 2)}\n`);
+   return waiver;
+ }
+ 
+ export const FIRST_FILES = 5;
+ 
+ /** What stops `review complete`: empty when nothing is uncovered, or a valid waiver names every uncovered file. */
+ export async function coverageGateErrors(packageDir: string, research?: unknown): Promise<string[]> {
+   const report = await computeCoverage(packageDir, research === undefined ? {} : { research });
+   if (!report.tracked || report.counts.uncovered === 0 || report.waived) return [];
+   const uncovered = report.files.filter((entry) => entry.status === "uncovered");
+   const first = uncovered.slice(0, FIRST_FILES).map((entry) => entry.file);
+   const more = uncovered.length > FIRST_FILES ? `, … (+${uncovered.length - FIRST_FILES})` : "";
+   const dir = shellWord(path.relative(process.cwd(), packageDir) || ".");
+   const chunkWork = uncovered.some((entry) => entry.scope === "B");
+   const sliceWork = uncovered.some((entry) => entry.scope === "A");
+   const commands = [
+     ...(chunkWork ? [`keryx review chunks next --package ${dir}`] : []),
+     ...(sliceWork ? [`keryx review ledger build <input-dir> --package ${dir}`] : []),
+   ].join(" ; ");
+
+--- src/review/estimate.ts
+@@ 178,220 @@
+     maxMinutes: positive(fields.maxMinutes) ? fields.maxMinutes : DEFAULT_MAX_MINUTES,
+     source: "routing.config.json",
+   };
+ }
+ 
+ // ---------------------------------------------------------------------------
+ // Plan confirmation: `<package>/plan-confirmation.json`, written by the `review_confirm_plan` card (keryx shell) or by
+ // `keryx review estimate --confirm --quote` at a terminal. Nothing else may write it.
+ // ---------------------------------------------------------------------------
+ 
+ export type PlanConfirmedVia = "tui-card" | "remote-card" | "terminal";
+ const CONFIRMED_VIA: readonly PlanConfirmedVia[] = ["tui-card", "remote-card", "terminal"];
+ 
+ export type PlanConfirmation = {
+   planKey: string;
+   dispatches: number;
+   minutes: [number, number];
+   quote: string;
+   confirmedVia: PlanConfirmedVia;
+   at: string;
++  /** Flow 464: who pressed the remote card and when; set only with `confirmedVia: "remote-card"`. */
++  pressedBy?: number | undefined;
++  pressedAt?: string | undefined;
+ };
+ 
+ function isPlanConfirmation(value: unknown): value is PlanConfirmation {
+   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+   const v = value as Record<string, unknown>;
+   return typeof v.planKey === "string" && v.planKey !== ""
+     && typeof v.dispatches === "number" && Number.isFinite(v.dispatches)
+     && Array.isArray(v.minutes) && v.minutes.length === 2 && v.minutes.every((m) => typeof m === "number" && Number.isFinite(m))
+     && typeof v.quote === "string" && v.quote.trim() !== ""
+     && typeof v.confirmedVia === "string" && (CONFIRMED_VIA as readonly string[]).includes(v.confirmedVia)
+     && typeof v.at === "string" && v.at !== "";
+ }
+ 
+ /** The recorded plan confirmation, or undefined when there is none or it is not a well-formed one. */
+ export function readPlanConfirmation(packageDir: string): PlanConfirmation | undefined {
+   try {
+     const parsed: unknown = JSON.parse(readFileSync(path.join(packageDir, PLAN_CONFIRMATION_FILE), "utf8"));
+     return isPlanConfirmation(parsed) ? parsed : undefined;
+   } catch {
+     return undefined;
+
+--- src/review/evidence-level.ts
+@@ 36,60 @@
+  * `static only` must be followed by what did not run, `ran` by what ran: a bare
+  * "static only" says nothing a reader can check, which is the defect the field
+  * exists to close.
+  */
+ export function parseEvidenceLevel(report: string): EvidenceLevelParse {
+   const line = withoutFences(report).map((l) => LINE.exec(l)).find((m) => m !== null);
+   if (!line) return { ok: false, reason: "the report has no `Evidence level:` line" };
+   const value = line[1]!.replace(/(?:\*\*|__)\s*$/, "").trim();
+   const staticOnly = /^static[ -]only\b/i.exec(value);
+   if (staticOnly) {
+     const items = itemsOf(value.slice(staticOnly[0].length).replace(SEPARATORS, "").replace(/^(?:did not run|not run|did not)\s*:?\s*/i, ""));
+     return items.length > 0 ? { ok: true, level: "static-only", items } : { ok: false, reason: "`static only` must list what did not run" };
+   }
+   const ran = /^ran\b/i.exec(value);
+   if (ran) {
+     const items = itemsOf(value.slice(ran[0].length).replace(SEPARATORS, ""));
+     return items.length > 0 ? { ok: true, level: "ran", items } : { ok: false, reason: "`ran` must list what ran" };
+   }
+   return { ok: false, reason: "the evidence level must start with `static only` or `ran`" };
+ }
++
++/** The report's own `Evidence level:` line, trimmed, or undefined when it has none. */
++export function evidenceLevelLine(report: string): string | undefined {
++  return withoutFences(report).find((line) => LINE.test(line))?.trim();
++}
+
+--- src/review/operator-decisions.ts
+@@ 1,107 @@
+ // Operator decisions in `<package>/operator-decisions.json`. Two record families share the file.
+ //
+ // - Gate decisions (flow 457, T7) relax a review gate. A mutation waiver ("Not run: mutation pass" on an attended
+ //   review) and a reviewer-set override (a smaller set than `keryx review required` names, or mode diff) used to be
+ //   accepted from any `operatorQuote` in the dispatch JSON — which the agent writes. On a package stamped by `review
+ //   start` (./run-profile.ts) the gate now accepts them only when one of these records exists, and only two writers
+ //   produce one: the `review_waive_mutation` / `review_override_reviewers` cards in keryx shell (confirmedVia
+ //   tui-card|remote-card), and `keryx review waive-mutation|override-reviewers` at a terminal (confirmedVia terminal).
+ // - Premise answers (flow 459, kind `premise-question`) answer a finding the premise judge held. They relax nothing:
+ //   `uphold` returns the finding to the fix, `dismiss` ends it. The same provenance applies: the two writers are the
+ //   `review_decide_premise` card and `keryx review decide-premise`, each records how it was confirmed and the
+ //   operator's own words, and the record is bound to the finding it was shown (`subject`).
+ //
+ // Every write is a read-modify-write of the whole file. An atomic rename stops a torn file, not a lost update, so the
+ // read and the write run under one lock beside the file: two writers that overlap both land.
+ 
+ import { readdir } from "node:fs/promises";
+ import path from "node:path";
+ import { withFileLock, writeFileAtomic } from "../lib/fs";
+ import { readJsonFileOr } from "../lib/json";
+-import type { ConfirmedVia } from "./types";
++import { cardPressFields, type CardPress, type ConfirmedVia } from "./types";
+ 
+ export const OPERATOR_DECISIONS_FILE = "operator-decisions.json";
+ /**
+  * The lock directory serialising writes to {@link OPERATOR_DECISIONS_FILE} and to the package's findings.json: the
+  * decisions writers, a premise answer (which writes both), the disposition recorder and ingest all take it.
+  */
+ export const OPERATOR_DECISIONS_LOCK = ".operator-decisions.lock";
+ 
+ /** The gate decisions: the kinds that relax a gate and carry the quote/subject shape of {@link OperatorDecision}. */
+ export const OPERATOR_DECISION_KINDS = ["mutation-waiver", "reviewer-override"] as const;
+ export type OperatorDecisionKind = (typeof OPERATOR_DECISION_KINDS)[number];
+ /** The premise answer (flow 459): a different record, see {@link PremiseQuestionDecision}. */
+ export const PREMISE_DECISION_KIND = "premise-question";
+ /** Every kind the file may hold. */
+ export type AnyOperatorDecisionKind = OperatorDecisionKind | typeof PREMISE_DECISION_KIND;
+ 
+ /** How the operator's words reached the package: a shell card, its remote mirror, or a terminal prompt. */
+ export type OperatorDecisionVia = ConfirmedVia | "terminal";
+ const VIAS: readonly OperatorDecisionVia[] = ["tui-card", "remote-card", "terminal"];
+ 
+ /** Who answers a premise question. Both writers record this one label; how it was confirmed is `confirmedVia`. */
+ export const PREMISE_DECISION_ACTOR = "operator";
+ 
+ /**
+  * What the card or the terminal showed the operator (security review M4): the head the package was at, and the
+  * mutant ids left unrun (mutation waiver) or the required reviewers left out (override). The gate accepts a decision
+  * only for that head and only while what is waived now is a subset of what was shown: a new head, a new mutant or
+  * another dropped reviewer needs the operator again.
+  */
+ export type OperatorDecisionSubject = { head?: string | undefined; items: string[] };
+ 
+ export type OperatorDecision = {
+   kind: OperatorDecisionKind;
+   quote: string;
+   reason: string;
+   confirmedVia: OperatorDecisionVia;
+   at: string;
+   subject?: OperatorDecisionSubject | undefined;
+-};
++} & CardPress;
+ 
+ /**
+  * What the operator was shown when answering a premise question: the finding's severity, the judge's verdict, and a
+  * hash of the finding's problem text. A decision counts only while the finding still matches it, so a re-ingest that
+  * reuses the id for a different finding (or changes its severity or verdict) needs the operator again.
+  */
+ export type PremiseDecisionSubject = { severity: string; verdict: string; problemSha256: string };
+ 
+ /**
+  * The operator's answer to a held finding (flow 459): `keryx review decide-premise` / the `review_decide_premise` card.
+  * `uphold` returns the finding to kept at its original severity; `dismiss` records `dismissed-incorrect` with `reason`
+  * as the evidence. `finding` is the finding's `global_id` or `id`; `quote` is what the operator typed or confirmed.
+  */
+ export type PremiseQuestionDecision = {
+   kind: typeof PREMISE_DECISION_KIND;
+   finding: string;
+   answer: "uphold" | "dismiss";
+   reason: string;
+   quote: string;
+   at: string;
+   /** Always {@link PREMISE_DECISION_ACTOR}: a label, not an identity. */
+   actor: string;
+   confirmedVia: OperatorDecisionVia;
+   subject: PremiseDecisionSubject;
+   /** Set when the answer was copied from an earlier round's package for a carried finding (flow 459): that package's path. */
+   carriedFrom?: string | undefined;
+-};
++} & CardPress;
+ 
+ /** What a writer passes: the store fills in the kind and the actor, so both writers record the same convention. */
+ export type PremiseDecisionInput = Omit<PremiseQuestionDecision, "kind" | "actor">;
+ 
+ export type OperatorDecisionsFile = { schemaVersion: 1; decisions: Array<OperatorDecision | PremiseQuestionDecision> };
+ 
+ const text = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
+ 
+ function validPremiseSubject(value: unknown): value is PremiseDecisionSubject {
+   if (value === null || typeof value !== "object") return false;
+   const subject = value as Record<string, unknown>;
+   return text(subject.severity) && text(subject.verdict) && text(subject.problemSha256);
+ }
+ 
+ function validPremise(entry: unknown): entry is PremiseQuestionDecision {
+   if (entry === null || typeof entry !== "object") return false;
+   const d = entry as Record<string, unknown>;
+   return (
+     d.kind === PREMISE_DECISION_KIND &&
+     text(d.finding) &&
+
+--- src/review/operator-decisions.ts
+@@ 213,253 @@
+  * Appends a premise-question decision after `applyFirst`, inside the same lock: the answer command uses it to apply the
+  * answer to findings.json, so no other writer interleaves between the two files. The two writes land together or not
+  * at all (review HL2-003): a failed append runs `applyFirst`'s undo before the error reaches the caller, and a failed
+  * `applyFirst` records nothing. Either way a retry starts from the state before the answer, never from a recorded
+  * decision whose findings.json was not updated. `applied` is `applyFirst`'s value, returned only once both landed.
+  */
+ export async function recordPremiseDecisionAfter<A>(
+   packageDir: string,
+   input: PremiseDecisionInput,
+   applyFirst: (decision: PremiseQuestionDecision) => Promise<AppliedFirst<A> | undefined>,
+ ): Promise<{ decision: PremiseQuestionDecision; applied: A | undefined }> {
+   const kept: PremiseQuestionDecision = {
+     kind: PREMISE_DECISION_KIND,
+     finding: typeof input.finding === "string" ? input.finding.trim() : input.finding,
+     answer: input.answer,
+     reason: typeof input.reason === "string" ? input.reason.trim() : input.reason,
+     quote: typeof input.quote === "string" ? input.quote.trim() : input.quote,
+     at: input.at,
+     actor: PREMISE_DECISION_ACTOR,
+     confirmedVia: input.confirmedVia,
++    ...cardPressFields(input),
+     subject: input.subject,
+     ...(input.carriedFrom === undefined ? {} : { carriedFrom: input.carriedFrom }),
+   };
+   if (!validPremise(kept)) {
+     throw new Error("a premise decision needs the finding, an answer of uphold or dismiss, a reason, the operator's words, the time, how it was confirmed and the finding it was shown");
+   }
+   const applied = await withOperatorDecisionsLock(packageDir, async () => {
+     const first = await applyFirst(kept);
+     try {
+       await appendDecision(packageDir, kept);
+     } catch (error) {
+       await first?.undo();
+       throw error;
+     }
+     return first?.value;
+   });
+   return { decision: kept, applied };
+ }
+ 
+ function validSubject(value: unknown): value is OperatorDecisionSubject {
+
+--- src/review/operator-decisions.ts
+@@ 258,291 @@
+ 
+ /** Whether `decision` was shown at least what `now` waives, at the same head. A decision without a subject covers nothing. */
+ export function decisionCovers(decision: OperatorDecision, now: OperatorDecisionSubject): boolean {
+   if (!validSubject(decision.subject)) return false;
+   if ((decision.subject.head ?? "") !== (now.head ?? "")) return false;
+   const shown = new Set(decision.subject.items);
+   return now.items.every((item) => shown.has(item));
+ }
+ 
+ /**
+  * The latest valid decision of `kind`, or undefined. With `now`, only a decision bound to that head whose shown items
+  * include every item waived now (`decisionCovers`).
+  */
+ export async function confirmedDecision(packageDir: string, kind: OperatorDecisionKind, now?: OperatorDecisionSubject): Promise<OperatorDecision | undefined> {
+   return (await readOperatorDecisions(packageDir)).filter((decision) => decision.kind === kind && (now === undefined || decisionCovers(decision, now))).at(-1);
+ }
+ 
+ export async function recordOperatorDecision(packageDir: string, decision: OperatorDecision): Promise<OperatorDecision> {
+   if (!validGateDecision(decision)) throw new Error("an operator decision needs a kind, the operator's words, a reason, how it was confirmed and the time");
+   const subject = decision.subject === undefined ? undefined : { ...(decision.subject.head === undefined ? {} : { head: decision.subject.head }), items: [...new Set(decision.subject.items)].sort() };
+-  const entry: OperatorDecision = { ...decision, quote: decision.quote.trim(), reason: decision.reason.trim(), ...(subject === undefined ? {} : { subject }) };
++  const entry: OperatorDecision = { ...decision, quote: decision.quote.trim(), reason: decision.reason.trim(), ...cardPressFields(decision), ...(subject === undefined ? {} : { subject }) };
+   await withOperatorDecisionsLock(packageDir, () => appendDecision(packageDir, entry));
+   return decision;
+ }
+ 
+ /** The card or command that records `kind`, for a refusal to name. */
+ export function decisionWriters(kind: AnyOperatorDecisionKind, packageArg = "<review-dir>"): string {
+   if (kind === PREMISE_DECISION_KIND) {
+     return `in keryx shell, call the review_decide_premise tool (the operator answers a card); in a terminal, run \`keryx review decide-premise --package ${packageArg} --finding <id> --answer uphold|dismiss --reason "<why>"\``;
+   }
+   return kind === "mutation-waiver"
+     ? `in keryx shell, call the review_waive_mutation tool (the operator answers a card); in a terminal, run \`keryx review waive-mutation --package ${packageArg} --reason "<why>"\``
+     : `in keryx shell, call the review_override_reviewers tool (the operator answers a card); in a terminal, run \`keryx review override-reviewers --package ${packageArg} --reason "<why>"\``;
+ }
+
+--- src/review/plan-confirmation.ts
+@@ 2,81 @@
+ //
+ // `keryx review estimate` says how many dispatches and minutes a round needs. A plan over the threshold does not
+ // start until the operator has seen those numbers and said yes, through the `review_confirm_plan` card in keryx
+ // shell or at a terminal. The record binds to the plan it confirmed (`planKey`), so a re-cut plan asks again.
+ // One implementation: the plan key, the threshold and the stored record are estimate.ts's, so a confirmation the
+ // card or the terminal writes is exactly what dispatch-check and the ledger accept.
+ 
+ import path from "node:path";
+ import { writeFileAtomic } from "../lib/fs";
+ import {
+   DEFAULT_MAX_DISPATCHES,
+   DEFAULT_MAX_MINUTES,
+   PLAN_CONFIRMATION_FILE,
+   estimatePackage,
+   planConfirmed as estimatePlanConfirmed,
+   planKeyOf as estimatePlanKeyOf,
+   readPlanConfirmation as estimateReadPlanConfirmation,
+   type RoundEstimate,
+ } from "./estimate";
+ import type { OperatorDecisionVia } from "./operator-decisions";
++import { cardPressFields, type CardPress } from "./types";
+ 
+ export { PLAN_CONFIRMATION_FILE };
+ 
+ export type PlanConfirmation = {
+   planKey: string;
+   dispatches: number;
+   minutes: [number, number];
+   quote: string;
+   confirmedVia: OperatorDecisionVia;
+   at: string;
+-};
++} & CardPress;
+ 
+ /** The default threshold, as estimate.ts holds it (routing.config.json may change it per project). */
+ export const DEFAULT_PLAN_THRESHOLD = { dispatches: DEFAULT_MAX_DISPATCHES, minutes: DEFAULT_MAX_MINUTES } as const;
+ 
+ /** What the plan confirmation needs from an estimate: the numbers the operator sees and what they bind to. */
+ export type PlanNumbers = Pick<RoundEstimate, "dispatches" | "minutes" | "perRole" | "slicePlan" | "overThreshold">;
+ 
+ /** Whether `estimate` needs the operator's confirmation: the estimate's own verdict. */
+ export function planOverThreshold(estimate: PlanNumbers): boolean {
+   return estimate.overThreshold;
+ }
+ 
+ export function planKeyOf(estimate: PlanNumbers): string {
+   return estimatePlanKeyOf(estimate);
+ }
+ 
+ /** The package's plan estimate, the library call `keryx review estimate --json` prints. */
+ export function estimatePlan(packageDir: string): Promise<RoundEstimate> {
+   return estimatePackage(packageDir);
+ }
+ 
+ export async function readPlanConfirmation(packageDir: string): Promise<PlanConfirmation | undefined> {
+   return estimateReadPlanConfirmation(packageDir) as PlanConfirmation | undefined;
+ }
+ 
+ /** Whether the operator confirmed exactly this plan. */
+ export async function planConfirmed(packageDir: string, estimate: PlanNumbers): Promise<boolean> {
+   return estimatePlanConfirmed(packageDir, estimate);
+ }
+ 
+ export async function recordPlanConfirmation(
+   packageDir: string,
+   estimate: PlanNumbers,
+-  confirmation: { quote: string; confirmedVia: OperatorDecisionVia; at: string },
++  confirmation: { quote: string; confirmedVia: OperatorDecisionVia; at: string } & CardPress,
+ ): Promise<PlanConfirmation> {
+   if (confirmation.quote.trim() === "") throw new Error("a plan confirmation needs the operator's own words");
+   const record: PlanConfirmation = {
+     planKey: planKeyOf(estimate),
+     dispatches: estimate.dispatches,
+     minutes: [estimate.minutes.min, estimate.minutes.max],
+     quote: confirmation.quote.trim(),
+     confirmedVia: confirmation.confirmedVia,
++    ...cardPressFields(confirmation),
+     at: confirmation.at,
+   };
+   await writeFileAtomic(path.join(packageDir, PLAN_CONFIRMATION_FILE), `${JSON.stringify(record, null, 2)}\n`);
+   return record;
+ }
+
+--- src/review/premise-question.ts
+@@ 1,33 @@
+ // The operator's answer to a finding the premise judge held (flow 459): looked up and recorded here, for both
+ // `keryx review decide-premise` and the `review_decide_premise` card, so the two refuse the same things, show the same
+ // facts and write the same records.
+ 
+ import { createHash } from "node:crypto";
+ import { existsSync, realpathSync } from "node:fs";
+ import { readFile } from "node:fs/promises";
+ import path from "node:path";
+ import { writeFileAtomic } from "../lib/fs";
+ import { readJsonFileOr } from "../lib/json";
+ import { readPremiseDecisions, recordPremiseDecision, recordPremiseDecisionAfter, type AppliedFirst, type OperatorDecisionVia, type PremiseDecisionSubject, type PremiseQuestionDecision } from "./operator-decisions";
+ import { isReviewPackageDir } from "./package-location";
++import { cardPressFields, type CardPress } from "./types";
+ import { applyPremiseDecision, isHeldVerdict, latestPremiseDecision, premiseHoldState, premiseSubjectOf } from "./premise";
+ import { recordFinishedRound, registryVouchesPackage } from "./round-registry";
+ 
+ export type HeldFinding = {
+   /** The key the decision is recorded under: the finding's `global_id`, else its `id`. */
+   key: string;
+   severity: string;
+   problem: string;
+   verdict: string;
+   question: string;
+   /** The operator's earlier answer, when the question was already answered (a later answer replaces it). */
+   answered?: "uphold" | "dismiss" | undefined;
+   /** What a decision is bound to (see `premiseSubjectOf`). */
+   subject: PremiseDecisionSubject;
+   /** sha256 of everything above as shown: a card compares it before it records, so a change after showing refuses. */
+   digest: string;
+ };
+ 
+ export type HeldFindingLookup = { ok: true; finding: HeldFinding } | { ok: false; refusal: string };
+ 
+
+--- src/review/premise-question.ts
+@@ 112,180 @@
+     if (!keys.some((key) => carriedIds.includes(key))) continue;
+     if (!isHeldVerdict(obj(record["premise"])?.["verdict"])) continue;
+     const decision = latestPremiseDecision(record, previous);
+     if (decision === undefined) continue;
+     if (have.some((entry) => entry.finding === decision.finding && entry.at === decision.at && entry.carriedFrom === carriedFrom)) continue;
+     const { kind: _kind, actor: _actor, ...input } = decision;
+     await recordPremiseDecision(packageDir, { ...input, carriedFrom });
+     carried.push(decision.finding);
+   }
+   return carried;
+ }
+ 
+ export type PremiseAnswer = {
+   finding: HeldFinding;
+   answer: "uphold" | "dismiss";
+   reason: string;
+   /** The operator's own words: what they typed at the terminal, or the card text they said yes to. */
+   quote: string;
+   at: string;
+   confirmedVia: OperatorDecisionVia;
+-};
++} & CardPress;
+ 
+ /**
+  * Where the local round registry is read and written (the checkout, for its repository identity, and the config dir),
+  * and where a registry that could not be updated is reported: the answer itself is recorded either way.
+  */
+ export type RegistryOptions = { cwd?: string; dir?: string; warn?: (message: string) => void };
+ 
+ const registryPlace = (registry: RegistryOptions): { cwd?: string; dir?: string } => ({
+   ...(registry.cwd === undefined ? {} : { cwd: registry.cwd }),
+   ...(registry.dir === undefined ? {} : { dir: registry.dir }),
+ });
+ 
+ /**
+  * Record the operator's answer and apply it to the finding record, under one lock. The answered record goes to
+  * findings.json first (`premise.operator`, and `dismissed-incorrect` for a dismiss): that is what the readers that know
+  * nothing of premises read, the round-to-round carry (prior-round.ts) and the published round block (publish.ts), and
+  * without it a dismissed finding is carried into the next round as open. Then the decision goes to
+  * operator-decisions.json (what the verdict, readiness and the flow gate trust). The two land together: a failed
+  * decision write restores findings.json as it was.
+  *
+  * findings.json is one of the files the local round registry hashes (review RG2-001). When the registry vouched for the
+  * package before the answer, the round is recorded again after it, so the next round still cuts a delta from it; an
+  * answer never makes the registry vouch for a package it did not vouch for already.
+  */
+ export async function answerPremiseQuestion(packageDir: string, input: PremiseAnswer, registry: RegistryOptions = {}): Promise<PremiseQuestionDecision> {
+   const { decision, applied: vouched } = await recordPremiseDecisionAfter(
+     packageDir,
+-    { finding: input.finding.key, answer: input.answer, reason: input.reason, quote: input.quote, at: input.at, confirmedVia: input.confirmedVia, subject: input.finding.subject },
++    { finding: input.finding.key, answer: input.answer, reason: input.reason, quote: input.quote, at: input.at, confirmedVia: input.confirmedVia, ...cardPressFields(input), subject: input.finding.subject },
+     (kept) => applyAnswerToFindings(packageDir, kept, registry),
+   );
+   if (vouched === true) reRecordRegistry(packageDir, registry);
+   return decision;
+ }
+ 
+ /**
+  * Writes `kept` onto the finding records it answers in findings.json. Its value is whether the registry vouched for the
+  * package before the write; undefined (nothing to undo) when findings.json is missing, unparseable or holds no record
+  * the answer changes.
+  */
+ async function applyAnswerToFindings(packageDir: string, kept: PremiseQuestionDecision, registry: RegistryOptions): Promise<AppliedFirst<boolean> | undefined> {
+   const file = path.join(packageDir, FINDINGS_FILE);
+   const before = await readFile(file, "utf8").catch(() => undefined);
+   let findings: unknown;
+   try {
+     findings = before === undefined ? undefined : JSON.parse(before);
+   } catch {
+     findings = undefined;
+   }
+
+--- src/review/publish.ts
+@@ 1,53 @@
+ // The only keryx path to GitHub for a review: it runs the readiness checklist, shows the body, and posts nothing a
+ // failing checklist has not been allowed to post as a "Partial review".
+ 
+ import { readFile } from "node:fs/promises";
+ import path from "node:path";
+ import { writeFileAtomic } from "../lib/fs";
+ import { readJsonFileOr } from "../lib/json";
+ import { isPrBound } from "./complete-head-gate";
+ import { readRunProfile } from "./run-profile";
+ import { renderRoundBlock, ROUND_BLOCK_VERSION, type RoundBlock, type RoundBlockFinding } from "./pr-comments";
+ import { findingStatus, quoteSha256, readRoundNumber } from "./round-record";
+ import { recordFinishedRound } from "./round-registry";
+ import { computeVerdict, type VerdictFinding } from "./verdict";
+ import { computeReadiness, failingItems, readinessRefusal, type ReadinessOptions, type ReadinessReport } from "./readiness";
+-import type { ConfirmedVia, ManagedReviewManifest } from "./types";
++import { cardPressFields, type CardPress, type ConfirmedVia, type ManagedReviewManifest } from "./types";
+ 
+ export const REVIEW_EVENTS = ["COMMENT", "REQUEST_CHANGES", "APPROVE"] as const;
+ export type ReviewEvent = (typeof REVIEW_EVENTS)[number];
+ 
+ export type PostResult = { ok: boolean; detail: string };
+ 
+ export type PublishOptions = {
+   event?: ReviewEvent | undefined;
+   partial?: boolean | undefined;
+   readiness?: ReadinessOptions | undefined;
+   /** Posts the review to the pull request. */
+   post: (ref: string, event: ReviewEvent, body: string) => Promise<PostResult>;
+   /** Shows the body to the operator and answers whether to post it. */
+   confirm: (body: string, ref: string, event: ReviewEvent) => Promise<boolean>;
+   now?: (() => Date) | undefined;
+   /** Set when the operator's yes came from a card instead of the terminal prompt; recorded in published.json. */
+   confirmedVia?: ConfirmedVia | undefined;
+-};
++} & CardPress;
+ 
+ export type PublishResult = { readiness: ReadinessReport; body: string; event: ReviewEvent; partial: boolean; posted: boolean; registryWarning?: string | undefined };
+ 
+ export function reviewEvent(value: string | undefined): ReviewEvent {
+   const wanted = (value ?? "COMMENT").trim().toUpperCase();
+   const found = REVIEW_EVENTS.find((event) => event === wanted);
+   if (found === undefined) throw new Error(`--event must be one of ${REVIEW_EVENTS.join(", ")}, got "${value}".`);
+   return found;
+ }
+ 
+ /** What the posted page says about itself when the checklist did not pass: each failing item and what it leaves uncovered. */
+ export function partialPublishHeader(readiness: ReadinessReport): string[] {
+   const failing = failingItems(readiness);
+   return [
+     `**Partial review.** This review did not pass its readiness checklist (${failing.length} item(s) failing); what follows does not cover the whole change.`,
+     ...failing.map((item) => `- ${item.id}: ${item.evidence}`),
+     "",
+   ];
+ }
+ 
+
+--- src/review/publish.ts
+@@ 155,180 @@
+   const partial = failing.length > 0;
+   if (partial && options.partial !== true) throw new Error(readinessRefusal(readiness, "publish"));
+   if (partial && event === "APPROVE") {
+     throw new Error(`A partial review cannot approve: ${failing.length} readiness item(s) are failing (${failing.map((item) => item.id).join(", ")}). Use --event COMMENT or REQUEST_CHANGES, or repair the items.`);
+   }
+   const report = (await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => "")).trim();
+   if (report === "") throw new Error(`Review ${manifest.reviewId} has no report.md body to publish.`);
+   const head = `${partial ? `${partialPublishHeader(readiness).join("\n")}\n` : ""}${runModeHeader(packageDir)}${report}\n`;
+   const foot = runModeFooter(packageDir);
+   const minors = minorSection((await computeVerdict(packageDir)).minors, report, PUBLISHED_BODY_LIMIT - head.length - foot.length - ROUND_BLOCK_LIMIT);
+   const visible = `${head}${minors}${foot}`;
+   const reviewedHead = manifest.target.head ?? null;
+   const findings = await readJsonFileOr<unknown>(path.join(packageDir, "findings.json"), []);
+   const roundBlock = buildRoundBlock({ body: visible, round: readRoundNumber(packageDir) ?? 1, reviewId: manifest.reviewId, reviewedHead, findings: Array.isArray(findings) ? findings : [] });
+   const body = `${visible}\n${renderRoundBlock(roundBlock)}\n`;
+   if (!(await options.confirm(body, manifest.target.ref, event))) return { readiness, body, event, partial, posted: false };
+   const result = await options.post(manifest.target.ref, event, body);
+   if (!result.ok) throw new Error(`GitHub refused the review: ${result.detail}`);
+   await writeFileAtomic(
+     path.join(packageDir, "published.json"),
+-    `${JSON.stringify({ pr: manifest.target.ref, reviewId: manifest.reviewId, head: reviewedHead, round: roundBlock.round, event, partial, failing: failing.map((item) => item.id), time: (options.now?.() ?? new Date()).toISOString(), ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }) }, null, 2)}\n`,
++    `${JSON.stringify({ pr: manifest.target.ref, reviewId: manifest.reviewId, head: reviewedHead, round: roundBlock.round, event, partial, failing: failing.map((item) => item.id), time: (options.now?.() ?? new Date()).toISOString(), ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }), ...cardPressFields(options) }, null, 2)}\n`,
+   );
+   // Flow 458: keryx's own record that it finished (and posted) this round, outside the repository (./round-registry.ts).
+   const registered = recordFinishedRound(packageDir, "publish");
+   return { readiness, body, event, partial, posted: true, ...(registered.error === undefined ? {} : { registryWarning: `round not recorded in the local round registry: ${registered.error}` }) };
+ }
+
+--- src/review/readiness.ts
+@@ 7,47 @@
+ import { shellWord } from "../lib/shell-quote";
+ import { testsNotRunWarning } from "./tests-to-run";
+ import { writeFileAtomic } from "../lib/fs";
+ import { readJsonFileOr } from "../lib/json";
+ import { isCapDrop, isReasonedDrop } from "./blast-radius";
+ import { computeCoverage } from "./coverage-complete";
+ import { hasChunkPlan } from "./chunks";
+ import { packageScopeFiles } from "./coverage";
+ import { completeHeadGate, isPrBound, type PrLookup } from "./complete-head-gate";
+ import { dispatchErrors } from "./dispatch";
+ import { ORCHESTRATOR_LOG, memoryCalls, readToolLog } from "./layers-usage";
+ import { CALLER_ORCHESTRATOR, CALLER_UNATTRIBUTED, ENV_REVIEW_CALLER_TOKEN } from "./orchestrator-log";
+ import { readRunProfile } from "./run-profile";
+ import type { PremiseQuestionDecision } from "./operator-decisions";
+ import { awaitingOperator, premiseHoldState } from "./premise";
+ import { premiseRecords } from "./verdict";
+ import { packageParityWarnings } from "./parity";
+ import { dispatchRuns, packageCoverageErrors, researchErrors, type DispatchRun } from "./research";
+ import { asRecord as record } from "./record";
+ import { COVERAGE_MD_MARK, parseCoverageEntries } from "./coverage-md";
+-import { FINDING_DISPOSITION_STATES, type ConfirmedVia, type ManagedReviewManifest, type ReadinessWaiver } from "./types";
++import { FINDING_DISPOSITION_STATES, cardPressFields, type CardPress, type ConfirmedVia, type ManagedReviewManifest, type ReadinessWaiver } from "./types";
+ 
+ export const READINESS_ITEMS = [
+   { number: 1, id: "files-covered", title: "every changed file is covered by a wave or a recorded waiver" },
+   { number: 2, id: "blast-radius", title: "no file the blast radius cut is left unreviewed" },
+   { number: 3, id: "reviewers", title: "every planned reviewer was dispatched and its result ingested" },
+   { number: 4, id: "verifier", title: "the verifier checked every finding it should, or the report says how many it did not" },
+   { number: 5, id: "ledger", title: "the ledger is READY: every obligation has a closure" },
+   { number: 6, id: "coverage-md", title: "coverage.md states the ingest status of each reviewer truthfully" },
+   { number: 7, id: "head", title: "the report's head matches the PR head" },
+   { number: 8, id: "report-names", title: "pending mutation candidates and parity warnings are named in the report" },
+   { number: 9, id: "pr-files", title: "the changed-file count equals the PR's own file list" },
+   { number: 10, id: "memory-outside-stage", title: "the orchestrator read memory only in its own memory stage" },
+   { number: 11, id: "premise-decisions", title: "every held finding has an operator decision" },
+   { number: 12, id: "quotes-located", title: "every open finding's quote is placed in its file, or the finding is answered" },
+ ] as const;
+ 
+ export type ReadinessItemId = (typeof READINESS_ITEMS)[number]["id"];
+ export type ReadinessStatus = "pass" | "fail" | "waived";
+ 
+ export type ReadinessItem = {
+
+--- src/review/readiness.ts
+@@ 537,582 @@
+ /** The first lines of report.md: one line per waived item, replacing any earlier set. */
+ export function partialHeader(waivers: readonly ReadinessWaiver[]): string[] {
+   return waivers.map((waiver) => `Partial review: ${waiver.item} waived by the operator: ${waiver.operator_quote}`);
+ }
+ 
+ async function writePartialHeader(packageDir: string, waivers: readonly ReadinessWaiver[]): Promise<void> {
+   const file = path.join(packageDir, "report.md");
+   const lines = (await readFile(file, "utf8").catch(() => "")).split(/\r?\n/);
+   while (lines.length > 0 && (PARTIAL_LINE.test(lines[0]!) || (lines[0]!.trim() === "" && PARTIAL_LINE.test(lines[1] ?? "")))) lines.shift();
+   while (lines.length > 0 && lines[0]!.trim() === "") lines.shift();
+   await writeFileAtomic(file, `${[...partialHeader(waivers), "", ...lines].join("\n").replace(/\n+$/, "")}\n`);
+ }
+ 
+ /**
+  * Waives the named failing items in the operator's own words: written into the manifest and into the first lines of
+  * report.md. A quote that is a flag name, a one-word "ok" or too short is refused, as the coverage waiver does.
+  * `premise-decisions` (item 11) is the one item that cannot be waived: a held finding needs its own answer
+  * (`keryx review decide-premise` / the `review_decide_premise` card), which says uphold or dismiss for that finding; a
+  * blanket quote would let every held finding through unanswered.
+  */
+-export async function waiveReadiness(packageDir: string, selectors: readonly string[], operatorQuote: string, options: ReadinessOptions & { now?: Date; confirmedVia?: ConfirmedVia } = {}): Promise<ReadinessWaiver[]> {
++export async function waiveReadiness(packageDir: string, selectors: readonly string[], operatorQuote: string, options: ReadinessOptions & { now?: Date; confirmedVia?: ConfirmedVia } & CardPress = {}): Promise<ReadinessWaiver[]> {
+   const quote = operatorQuote.replace(/-{0,2}waive/gi, "").trim();
+   if (quote.length < MIN_WAIVER_QUOTE_CHARS || !/[\p{L}\p{N}]/u.test(quote)) {
+     throw new Error(`--waive needs the operator's own words as its value: at least ${MIN_WAIVER_QUOTE_CHARS} characters, with letters or digits in them.`);
+   }
+   const ids = selectors.map((selector) => {
+     const id = readinessItemId(selector);
+     if (id === undefined) throw new Error(`--waive: "${selector}" is not a readiness item. Items: ${READINESS_ITEMS.map((item) => `${item.number} ${item.id}`).join(", ")}.`);
+     return id;
+   });
+   if (ids.includes("premise-decisions")) {
+     throw new Error(`--waive: ${PREMISE_DECISIONS_NOT_WAIVABLE}`);
+   }
+   const report = await computeReadiness(packageDir, options);
+   const notFailing = ids.filter((id) => report.items.find((item) => item.id === id)?.status === "pass");
+   if (notFailing.length > 0) throw new Error(`--waive: ${notFailing.join(", ")} already pass${notFailing.length === 1 ? "es" : ""}; there is nothing to waive.`);
+   const manifestPath = path.join(packageDir, "manifest.json");
+   const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
+   const time = (options.now ?? new Date()).toISOString();
+   const kept = (manifest.readiness_waivers ?? []).filter((waiver) => !(ids as string[]).includes(waiver.item));
+-  const added: ReadinessWaiver[] = ids.map((item) => ({ item, operator_quote: quote, time, ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }) }));
++  const added: ReadinessWaiver[] = ids.map((item) => ({ item, operator_quote: quote, time, ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }), ...cardPressFields(options) }));
+   const all = [...kept, ...added].sort((a, b) => READINESS_ITEMS.findIndex((i) => (i.id as string) === a.item) - READINESS_ITEMS.findIndex((i) => (i.id as string) === b.item));
+   await writeFileAtomic(manifestPath, `${JSON.stringify({ ...manifest, readiness_waivers: all }, null, 2)}\n`);
+   await writePartialHeader(packageDir, all);
+   return added;
+ }
+
+--- src/review/types.ts
+@@ 71,122 @@
+   head?: string | undefined;
+ };
+ 
+ export type ManagedReviewFlowRef = {
+   id: string;
+   path: string;
+   issueUrl?: string | undefined;
+   prUrl?: string | undefined;
+ };
+ 
+ export type ReviewCoverageEntry = {
+   reviewer: string;
+   status: ReviewCoverageStatus;
+   reason: string;
+ };
+ 
+ /** A readiness item the operator waived in their own words (`keryx review complete --waive <item> "<quote>"`). */
+ /** How an operator decision was taken: the shell's yes/no card, or the remote topic's mirror of it. Absent on a terminal answer and on older records. */
+ export type ConfirmedVia = "tui-card" | "remote-card";
+ 
+-export type ReadinessWaiver = { item: string; operator_quote: string; time: string; confirmedVia?: ConfirmedVia | undefined };
++/** Flow 464: the Telegram user id that pressed a remote card and the ISO time on the shell's clock when the press arrived (not Telegram's time). Set only with `confirmedVia: "remote-card"`. */
++export type CardPress = { pressedBy?: number | undefined; pressedAt?: string | undefined };
++
++/** The press fields of `source` that are set, ready to spread into a record. */
++export function cardPressFields(source: CardPress | undefined): CardPress {
++  return {
++    ...(source?.pressedBy === undefined ? {} : { pressedBy: source.pressedBy }),
++    ...(source?.pressedAt === undefined ? {} : { pressedAt: source.pressedAt }),
++  };
++}
++
++export type ReadinessWaiver = { item: string; operator_quote: string; time: string; confirmedVia?: ConfirmedVia | undefined } & CardPress;
+ 
+ export type ManagedReviewManifest = {
+   schemaVersion: 1;
+   reviewId: string;
+   mode: ManagedReviewMode;
+   status: ReviewPackageStatus;
+   target: ManagedReviewTarget;
+   flow?: ManagedReviewFlowRef | undefined;
+   artifacts: {
+     scope: string;
+     coverage: string;
+     report: string;
+     findings: string;
+     learning: string;
+     decisions: string;
+     /** Package-local evidence locators; absent only on legacy packages. */
+     research?: string | undefined;
+     reviewerDispatch?: string | undefined;
+   };
+   coverage: ReviewCoverageEntry[];

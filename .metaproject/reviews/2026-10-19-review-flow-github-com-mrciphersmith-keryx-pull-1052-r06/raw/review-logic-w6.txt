@@ -1,0 +1,65 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "reviewer": "review-logic",
+  "worker": "w6",
+  "round": 6,
+  "slices": ["slice-08"],
+  "status": "DONE",
+  "findings": [
+    {
+      "id": "L6-601",
+      "severity": "info",
+      "file": "src/review/estimate.ts:199",
+      "title": "PlanConfirmation declares pressedBy/pressedAt but isPlanConfirmation does not read them",
+      "problem": "PlanConfirmation gained optional pressedBy and pressedAt (estimate.ts:199-200). coverage-complete.ts validates the same two fields on a waiver (Number.isSafeInteger / text()), but isPlanConfirmation does not look at them. A hand-edited or corrupted record with pressedBy: 'x' passes the guard and is typed as number | undefined.",
+      "why_it_matters": "No reproducible harm found: nothing in this slice branches on the plan-confirmation pressedBy value, and a malformed value only reaches display. Reported so the two readers are consistent if a consumer is added later.",
+      "suggested_fix": "Mirror the readCoverageWaiver checks in isPlanConfirmation, or leave as is and note the field is display-only."
+    }
+  ],
+  "prior_findings_not_reraised": [
+    "F5-12", "F5-13", "F5-14", "F5-15", "F5-18", "F5-19", "F5-20", "F5-21",
+    "F5-22", "F5-26", "F5-32", "F5-33", "F5-34"
+  ]
+}
+
+## Logic Review
+
+### Review Scope
+- Round: r06 (final delta 77d2eff20..0f980c407 over r05 package)
+- Slice: slice-08 (second-look, unchanged since r05, read once): src/review/*, src/standard/help-groups.ts, src/trigger/unattended.ts, src/tui/{approval-mirror,decisions-surface,operator-confirmations,remote-control-surface,tui-shell}.ts and their tests
+- Spec compliance gate: skipped for this slice (no acceptance criteria assigned to it in the payload)
+- Not reviewed here: src/commands/operator-confirm-review.ts, the home of the S-401 fix (0f980c407). It is in the fix slices of other reviewers.
+
+### Summary
+Slice-08 implements press provenance (CardPress / cardPressFields), the OperatorConfirmationLog card lifecycle, the card-versus-command close-step wording, and the unattended exclusion of review_complete. Every defect I could see in it is already in the r05 ledger (the isTopicPress double evaluation, the unreachable !topicAbort.signal.aborted guard, the stale "lists every blocker" truncation line naming `keryx review complete`, the hand-built place/yes mapping). I found no new blocker or major. One info note below.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 1
+
+### Spec Gaps (blocker)
+None detected in this slice.
+
+### Logic Bugs
+None new. Open r05 items in this slice (F5-13, F5-14, F5-15, F5-32) are not re-reported.
+
+### Async & Concurrency
+None new. The raceApproval settle path (`settled` check, abort of dockAbort on a topic press, onUndelivered / onTopicEnded) matches the prior ledger; I found no ordering that produces a wrong answer beyond what F5-13 and F5-32 describe.
+
+### Error Handling
+None detected. completeReviewGated throws with the "review complete refused:" prefix on a missing run profile or narrowed routing, before completeManagedReview runs, so no partial completion.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+- [L6-601] info: isPlanConfirmation does not validate pressedBy/pressedAt (see REVIEW_RESULT).
+
+### Edge Cases
+None detected. waiting() uses `now - askedAt <= REMOTE_CARD_TTL_MS`, so a card exactly at the TTL still counts as waiting; this is a boundary choice consistent with the 1-hour token, not a defect.
+
+### Suggested Patches
+None.
+
+Routing audit: graph_used: no (not-relevant, bounded diff review); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no.

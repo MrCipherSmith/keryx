@@ -1,0 +1,189 @@
+STATUS: DONE
+
+# Style Review Report (wave 5, slice-05: TUI part)
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+The TUI slice is readable and consistently commented (every addition carries a "Flow 464" origin note, the new module is small and pure, the pure line builders are unit tested). The style cost sits in three places: `mirrorApprovalToTopic` in tui-shell.ts grew into a function with roughly 25 decision points and two redundant narrowing checks; `operator-confirmations.ts` adds a third copy of `clock` and a second, differently rounded age formatter next to `formatAge`; and one concept is named four ways (`confirmationLines` is both a function and an option property with a different type). No major findings.
+
+## Review Scope
+- Branch: `docs/flow-helyx-operator-confirm`
+- Merge-base: `062aa9c36484e7b7f6b8a1dd6140671330646e66`, head `b1c6da0e6992e4df473bae6b2fde78bc94d28776`
+- Scope mode: diff, slice-05 only (help-groups.ts, unattended.ts, approval-mirror.ts, decisions-surface.ts, operator-confirmations.ts (+test), remote-control-surface.ts, tui-shell.ts)
+- Changed files: 8
+
+## Stats
+- major: 0
+- minor: 3
+- info: 5
+
+Not re-filed (already on record): S3-01..S3-07, S4-01..S4-06, the unmirrored branch duplicating the place/yes rule, operator-confirmations.ts value-importing REMOTE_CARD_TTL_MS, mirror-undelivered.test.ts importing tui-shell for withMirrorNote. Related to S3-04: the same five-name card-tool list is also pasted into help-groups.ts (lines 582 and 600) and the unattended.ts comment; those are further sites of that class, not a new finding. r03 minors D-02..D-14 and the autonomous-profile.ts wording were left alone.
+
+## Minor
+
+### [S5-01] mirrorApprovalToTopic now carries two card paths, redundant narrowing and ~25 decision points
+- File: src/tui/tui-shell.ts:6095-6148
+- The wrapper gained the unmirrored-card early branch (try/finally with a hand-rolled `verdict`), the `isCard` four-clause condition, `cardId` ternary, a conditional spread for `onUndelivered`, and a second try/finally around `raceApproval`. `meta?.card !== undefined` is re-checked at 6102 and 6120 only to narrow the type although `isCard` already implies it, and `meta.card[0] ?? tool` is computed twice (6103, 6120). The same `meta?.alwaysAsk === true && meta.card !== undefined` test now appears a third time (5555, 5563, 6100).
+- Fix: derive once `const cardQuestion = isCard ? (meta.card[0] ?? tool) : undefined` (narrow `meta` through a small `operatorCardOf(tool, meta)` returning `{ card, title } | undefined`), and move the two card bodies into named functions (`answerUnmirroredCard`, `raceMirroredCard`) so the wrapper reads: not a card -> old path; card without topic -> A; card with topic -> B.
+
+### [S5-02] Duplicated time helpers: third copy of `clock`, and a second age formatter that rounds differently from `formatAge`
+- File: src/tui/operator-confirmations.ts:105 and :113
+- `clock` is byte-identical to remote-control-surface.ts:144 and channels-surface.ts:127 (the existing two stay as sibling copies; this adds a third). `age()` (floors minutes, prints `1h05m`) sits beside `formatAge` (remote-control-surface.ts:102, rounds, prints `1h`). Both now render in the same `/remote-control` Status tab: "Last heartbeat: 2m ago" for 90s from `formatAge`, "asked 1m ago" for the same 90s from `age()`.
+- Fix: one shared `time-format.ts` (or export `formatAge`/`clock` from a neutral module) used by both; importing from remote-control-surface directly would be circular because that file already imports `waitingCardsText` from operator-confirmations.
+
+### [S5-03] One concept, four names; `confirmationLines` is two different things
+- File: src/tui/operator-confirmations.ts:148; src/tui/decisions-surface.ts (OpenDecisionsOptions, DecisionsSidebarOptions); src/tui/tui-shell.ts:126, ~3940
+- `confirmationLines(entries, now, heading)` is a function returning `string[]`; `confirmationLines` is also the option property `() => readonly string[]` in decisions-surface. tui-shell has to alias the import (`confirmationLines as operatorConfirmationLines`) to avoid shadowing, then adds `operatorCardLines` and `operatorCards`, while remote-control-surface calls the same thing `getConfirmationLines` and `getWaitingCards`, and the class is `OperatorConfirmationLog`. "Card", "confirmation" and "operator" mix freely, so a reader cannot tell whether `operatorCardLines` and `operatorConfirmationLines` are the same value.
+- Fix: choose "card" (matches the user-facing "Telegram cards" heading): `cardSectionLines(entries, now)`, option `cardLines`, local `cardLog`/`cardLines`; drop the import alias.
+
+## Info
+
+### [S5-04] `remoteApproval` placed between SIDE_WORKER_DENIED_TOOL_NAMES and the predicate that documents it
+- File: src/tui/tui-shell.ts:571-574
+- A pure approval-response builder was inserted at module level between the side-worker deny set and `isToolAvailableToSideWorker`, whose docblock links to that set. It is unrelated to both, and tui-shell.ts is already 10568 lines. Same class as the filed `withMirrorNote` location (tui-shell.ts:1616).
+- Fix: move both helpers next to `raceApproval` in approval-mirror.ts (small, already unit tested).
+
+### [S5-05] Docblocks not updated for the new parameters; options type promises what one opener drops
+- File: src/tui/remote-control-surface.ts:119, :385; src/tui/decisions-surface.ts:467
+- `formatRemoteStatusLines` docblock still lists only `posture`; `projectRemoteRow` docblock still says `Remote: off | <topic name> | offline` and says nothing of the `· N cards waiting` suffix or the new `waitingCards` argument. `openDecisionsArms` accepts `confirmationLines` through the shared `OpenDecisionsOptions` and discards it with `confirmationLines: _cards`, so the type says the arms modal takes cards when it does not.
+- Fix: one added sentence per docblock; make the option `Omit`-ted for the arms opener or note that it is ignored.
+
+### [S5-06] "1-hour token" is a literal in four strings while the TTL is a constant
+- File: src/tui/operator-confirmations.ts:2, :80, :122, :126; src/standard/help-groups.ts:600
+- `REMOTE_CARD_TTL_MS` drives the arithmetic, but the user-visible text hardcodes "1-hour". If the TTL changes the sidebar and status tab would state a wrong limit.
+- Fix: build the phrase from the constant (`${REMOTE_CARD_TTL_MS / 3_600_000}-hour`), or keep the literal and have a test assert it equals the constant.
+
+### [S5-07] `at` names an array index in two methods and a timestamp everywhere else in the file
+- File: src/tui/operator-confirmations.ts:50, :73
+- `const at = this.items.findIndex(...)` in `answer` and `markUndelivered`, while `answered.at` and `clock(at: number)` use `at` for a time. The same lookup is also written twice.
+- Fix: `index` plus a private `find(id)` returning `{ index, entry }`.
+
+### [S5-08] Tests for exported functions of other modules live in operator-confirmations.test.ts
+- File: src/tui/operator-confirmations.test.ts:1360-1500 (diff lines)
+- `projectRemoteRow`, `formatRemoteStatusLines`, `withConfirmationLines`/`presentDecisions` and the help/command lists are tested here, while `remote-control-surface.test.ts` and `decisions-surface.test.ts` exist beside their subjects. The header comment states the feature-level grouping on purpose, so this is a convention note, not a defect.
+- Fix: optional; move the three surface tests to their sibling files, or leave as a feature test.
+
+## Positive Notes
+- The new module is pure, small and has a header that says what it holds, what it does not (memory only), and who reads it.
+- `MirroredCardOutcome` is structurally narrower than `ApprovalRaceOutcome` on purpose, which keeps operator-confirmations free of an approval-mirror import.
+- Error paths in `settle` are explicit (a thrown race is "withdrawn"), and each branch is covered by a test.
+
+---
+
+```json
+REVIEW_RESULT
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "summary": "Slice-05 (TUI) has no major style issues. Three minors: mirrorApprovalToTopic complexity and redundant narrowing, duplicated clock/age helpers with inconsistent rounding, and one concept named four ways with an overloaded confirmationLines identifier. Five infos on placement, stale docblocks, a hardcoded '1-hour' literal, the index-vs-timestamp name `at`, and test placement.",
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 5 },
+  "slices": ["slice-05"],
+  "findings": [
+    {
+      "id": "S5-01",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6100,
+      "quote": "const isCard = meta?.alwaysAsk === true && meta.card !== undefined && meta.card.length > 0 && !isUserPromptApprovalCard(tool);",
+      "problem": "mirrorApprovalToTopic now holds the unmirrored-card early branch, the isCard four-clause condition, a cardId ternary, a conditional spread for onUndelivered and two try/finally blocks: roughly 25 decision points. meta?.card !== undefined is re-checked at 6102 and 6120 only to narrow the type although isCard implies it, and meta.card[0] ?? tool is computed twice.",
+      "impact": "The wrapper is hard to read and the next change to either card path has to be reasoned about against the other; the same alwaysAsk+card test now appears three times (5555, 5563, 6100).",
+      "suggested_fix": "Compute the card and its title once through a small helper that returns { card, title } or undefined, and move the two card bodies into named functions (answerUnmirroredCard, raceMirroredCard) so the wrapper dispatches.",
+      "evidence": "src/tui/tui-shell.ts:6095-6148 at head b1c6da0e6; grep for 'alwaysAsk === true' shows 5555, 5563, 6100.",
+      "confidence": 0.8
+    },
+    {
+      "id": "S5-02",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 105,
+      "quote": "function age(ms: number): string {",
+      "problem": "clock() is byte-identical to remote-control-surface.ts:144 and channels-surface.ts:127 (a third copy), and age() is a second age formatter next to formatAge (remote-control-surface.ts:102) with different rounding (floors minutes, prints 1h05m, versus rounds, prints 1h).",
+      "impact": "The /remote-control Status tab shows both: 90 seconds reads '2m ago' for the heartbeat and '1m ago' for a card's age. A change to one helper will not reach the others.",
+      "suggested_fix": "Move formatAge and clock to a neutral module (for example tui/time-format.ts) and import them in all three files; importing from remote-control-surface directly would be circular because it already imports waitingCardsText from operator-confirmations.",
+      "evidence": "keryx ctx rg for 'function clock|function formatAge|function age' in src/tui: remote-control-surface.ts:102,144; channels-surface.ts:127; operator-confirmations.ts:105,113.",
+      "confidence": 0.85
+    },
+    {
+      "id": "S5-03",
+      "reviewer": "review-style",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 148,
+      "quote": "export function confirmationLines(entries: readonly ConfirmationEntry[], now: number, heading = \"Operator confirmations (Telegram cards)\"): string[] {",
+      "problem": "confirmationLines is a function (entries, now) -> string[] here and an option property () => readonly string[] in decisions-surface.ts (OpenDecisionsOptions, DecisionsSidebarOptions). tui-shell aliases the import as operatorConfirmationLines and adds operatorCardLines and operatorCards, remote-control-surface calls it getConfirmationLines and getWaitingCards, and the class is OperatorConfirmationLog.",
+      "impact": "'Card', 'confirmation' and 'operator' are used interchangeably for one concept and one identifier carries two types, so a reader cannot tell whether operatorCardLines and operatorConfirmationLines are the same value; the alias exists only to dodge the collision.",
+      "suggested_fix": "Pick one term (card, matching the user-facing heading): rename the function to cardSectionLines, the option to cardLines, the locals to cardLog and cardLines, and drop the import alias.",
+      "evidence": "src/tui/tui-shell.ts:126 import alias; ~3940 operatorCards/operatorCardLines; decisions-surface.ts option type; remote-control-surface.ts getConfirmationLines/getWaitingCards.",
+      "confidence": 0.8
+    },
+    {
+      "id": "S5-04",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": 571,
+      "quote": "function remoteApproval(fingerprint: string, fromId: number | undefined): Extract<ApprovalResponse, { approved: boolean }> {",
+      "problem": "A pure approval-response builder sits at module level between SIDE_WORKER_DENIED_TOOL_NAMES and isToolAvailableToSideWorker, whose docblock links to that set; it is unrelated to both. tui-shell.ts is 10568 lines. Same class as the already filed withMirrorNote placement.",
+      "impact": "Splits two related declarations and grows an already oversized file with a helper that has no shell state.",
+      "suggested_fix": "Move remoteApproval and withMirrorNote next to raceApproval in approval-mirror.ts.",
+      "evidence": "src/tui/tui-shell.ts:560-581 at head.",
+      "confidence": 0.7
+    },
+    {
+      "id": "S5-05",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/tui/remote-control-surface.ts",
+      "line": 119,
+      "quote": "/** One status block: state, topic, heartbeat age and what turns it on or off. `posture` adds the Telegram permission lines (flow 396). */",
+      "problem": "The docblock does not mention the new confirmations parameter; projectRemoteRow's docblock (line 385) still reads 'Remote: off | <topic name> | offline' with no mention of the cards-waiting suffix or the waitingCards argument. openDecisionsArms (decisions-surface.ts:467) accepts confirmationLines through the shared options type and discards it as _cards.",
+      "impact": "Docs and the options type describe less (or more) than the code does.",
+      "suggested_fix": "Add one sentence per docblock; omit confirmationLines from the arms opener's options or say it is ignored.",
+      "evidence": "src/tui/remote-control-surface.ts:119-120, 385; src/tui/decisions-surface.ts:467.",
+      "confidence": 0.75
+    },
+    {
+      "id": "S5-06",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 126,
+      "quote": "const token = left > 0 ? `${age(left)} left of the 1-hour token` : \"Telegram token expired, answer in the shell\";",
+      "problem": "The arithmetic uses REMOTE_CARD_TTL_MS but the visible text hardcodes '1-hour' here and in four other strings (lines 2, 80, 122; help-groups.ts:600).",
+      "impact": "If the TTL changes, the sidebar and status tab would state a wrong limit.",
+      "suggested_fix": "Derive the phrase from the constant, or add a test asserting REMOTE_CARD_TTL_MS equals one hour.",
+      "evidence": "keryx ctx rg '1-hour' in src/tui/operator-confirmations.ts; REMOTE_CARD_TTL_MS = 60 * 60 * 1000 at src/commands/operator-confirm-tools.ts:117.",
+      "confidence": 0.6
+    },
+    {
+      "id": "S5-07",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 50,
+      "quote": "const at = this.items.findIndex((item) => item.id === id);",
+      "problem": "`at` is an array index in answer() and markUndelivered() (lines 50, 73) but a timestamp in answered.at and in clock(at: number); the same findIndex lookup is written twice.",
+      "impact": "Misleading name in a file where `at` otherwise means a time.",
+      "suggested_fix": "Rename to `index` and extract a private find(id) returning { index, entry }.",
+      "evidence": "src/tui/operator-confirmations.ts:50, 73, 113.",
+      "confidence": 0.7
+    },
+    {
+      "id": "S5-08",
+      "reviewer": "review-style",
+      "severity": "info",
+      "file": "src/tui/operator-confirmations.test.ts",
+      "line": 1,
+      "quote": "// Flow 464 (AC6): the Telegram review cards show where the operator already looks",
+      "problem": "Tests for projectRemoteRow, formatRemoteStatusLines, withConfirmationLines/presentDecisions and the help/command lists live in operator-confirmations.test.ts although remote-control-surface.test.ts and decisions-surface.test.ts exist beside their subjects.",
+      "impact": "Someone changing projectRemoteRow will not look in this file; convention is test next to subject. The header states the feature grouping on purpose, so this is a note.",
+      "suggested_fix": "Optional: move the three surface tests to their sibling test files.",
+      "evidence": "ls src/tui shows both sibling test files; test names at diff lines 1460-1513.",
+      "confidence": 0.5
+    }
+  ]
+}
+```

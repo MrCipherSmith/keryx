@@ -1,0 +1,64 @@
+{
+  "reviewer": "review-regression",
+  "status": "DONE",
+  "chunk": "chunk-003",
+  "files_read": [
+    "scripts/benchmark/run-ablation-mutating.ts (imports, requestApproval at line 183)",
+    "scripts/benchmark/run-ablation-raw.ts (imports; no agent approval surface)",
+    "scripts/benchmark/run-ablation.ts (imports, comment at line 12)",
+    "scripts/benchmark/run-ablation-long.ts (imports, requestApproval at line 160)",
+    "scripts/stress/keryx-shell-stress.ts (imports, requestApproval adapter lines 218-232)",
+    "src/commands/workspace.ts (imports; mintConfirmToken comes from ../sac/review-confirm-token, not src/flow/confirm-token)",
+    "src/governance/aggregate.ts (imports) and src/governance/accountability.ts lines 18-55 (summarizeConfirmations)",
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/slices/slice-01.diff",
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/slices/slice-02.diff (agent.ts, confirm-token.ts, schema.ts, types.ts hunks)"
+  ],
+  "stats": {
+    "files_in_chunk": 7,
+    "files_with_regression": 0,
+    "findings": 0,
+    "notes": "These 7 files are blast-radius files the cap dropped. No finding. The radius is a code graph: runtime edges (string-keyed consumers of the completion-gate nudge text, remote answer shape) are not covered, and non-code changes in the delta (SKILL.md, SKILL.detail.md, docs, flow-state schema consumers outside the graph) have no radius."
+  },
+  "findings": [],
+  "per_file": [
+    {
+      "file": "scripts/benchmark/run-ablation-mutating.ts",
+      "verdict": "no break",
+      "evidence": "Line 183 'requestApproval: async () => true' still satisfies Promise<ApprovalResponse>: the delta in src/commands/agent.ts only rewrites a doc comment on the optional pressedBy/pressedAt fields of the object arm; the boolean arm and types are unchanged. It does not import completion-gate, operator-confirm tools or flow types."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-raw.ts",
+      "verdict": "no break",
+      "evidence": "Imports runAgentTurn types but defines no approver and uses no changed symbol (no OPERATOR_CONFIRM_TOOL_NAMES, completion-gate, SignatureConfirmation)."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation.ts",
+      "verdict": "no break",
+      "evidence": "Read-only tool roster; the line 12 comment says no tool needs AgentIO.requestApproval. builtinReadOnlyTools/builtinMetaprojectTools are not in the delta, and the new review_complete card tool lives in operator-confirm-review.ts, which this script does not import."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-long.ts",
+      "verdict": "no break",
+      "evidence": "Line 160 'requestApproval: async () => true' is the boolean arm of ApprovalResponse, unchanged. Tool rosters (builtinMetaprojectTools, builtinReadOnlyTools, shellExecTool, workingMemoryTools) do not include the operator card tools, so the new review_complete tool is not offered and nothing here depends on it."
+    },
+    {
+      "file": "scripts/stress/keryx-shell-stress.ts",
+      "verdict": "no break",
+      "evidence": "Lines 225-229 wrap approver(): Promise<boolean> into requestApproval returning the boolean; valid against ApprovalResponse. The object arm gained no required field (pressedBy/pressedAt are optional), so the adapter still type-checks. Imports of src/commands/agent are type-only (AgentDeps, AgentIO) plus runAgentTurn; no completion-gate or flow-state shape dependency."
+    },
+    {
+      "file": "src/commands/workspace.ts",
+      "verdict": "no break",
+      "evidence": "Its confirm token is mintConfirmToken from ../sac/review-confirm-token (the SAC workspace-review token), a separate store from src/flow/confirm-token.ts, which the delta changed. It imports none of flow/types, completion-gate, tui or operator-confirm modules."
+    },
+    {
+      "file": "src/governance/aggregate.ts",
+      "verdict": "no break",
+      "evidence": "Calls summarizeConfirmations(flow) (line 81). accountability.ts lines 39-52 copies completionSignature.confirmation through as a whole object; the delta only adds optional pressedBy?/pressedAt? to SignatureConfirmation and to the flow schema (additionalProperties: true), so older records and the consumer both stay valid. No exhaustive switch over the mechanism or field list."
+    }
+  ],
+  "limits": [
+    "The blast radius is a code graph with no runtime edges: a consumer that matches the completion-gate nudge text or the 'keryx review complete' wording by string would not appear in it. None of these 7 files mention either.",
+    "Non-code changes in the delta (SKILL.md, SKILL.detail.md, docs, TM-04 decision doc) have an empty graph radius; this chunk could not say anything about their consumers."
+  ]
+}

@@ -1,0 +1,223 @@
+--- .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md
+@@ 303,322 @@
+ `subagent-dispatch` object
+ (`.metaproject/core/gdskills/contracts/subagent-dispatch.schema.json`) and each
+ worker reply is a `subagent-result` object
+ (`.metaproject/core/gdskills/contracts/subagent-result.schema.json`) whose first
+ line is `STATUS: <status>`
+ (`.metaproject/rules/core/subagent-status-protocol.md`).
+ 
+ `<worktree_path>` below is the absolute root of the checkout this flow's work
+ happens in: the git worktree the flow runs in, or the project root when it runs
+ in the main checkout. Resolve it once, before the first dispatch
+ (`git rev-parse --show-toplevel` from that checkout), check
+ `git -C <worktree_path> branch --show-current` is the branch the work belongs
+ on, and pin every dispatch to it (`rules/core/git-concurrency.mdc`, "Pinning A
+ Dispatch To Its Worktree").
+ 
+ Workers do not commit: flow-orchestrator owns every commit and dispatches with
+ auto-commit off (task-implementer's `automation.auto_commit: false`). A
+ `subagent-dispatch` has no `automation` field, so the setting travels as the
+ explicit constraint below — never as the worker's default, which is `true`.
+ 
+-Before every `test`, `implement` and fix dispatch, run `keryx skills resolve-context --for test|implement --files <the task's target files, comma-joined> --task-type <type> --out .metaproject/flows/<dir>/resolved/<Tn>.<for>.json` (a fix dispatch re-resolves on the new head) and pass that path as `resolved_context_file`: a `context_refs` entry plus the constraint below. Before accepting the reply, run `keryx skills contracts validate <result.json> --schema task-implementer-output|tests-creator-output --resolved <that file>`; under `gdskills.projectContext.enforcement: block` a miss is a refusal, under `warn` journal it.
+
+--- .metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md
+@@ 729,748 @@
+ what agents *return*, not with what they do; a returned result file path costs a line,
+ an inlined verification log costs thousands. After 3–4 waves of inlined results the
+ session freezes on context reload, which is the failure this rule exists to avoid.
+ 
+ ---
+ 
+ #### Wave ordering
+ 
+ Waves come from `dependency_order` in `ANALYSIS_RESULT`, which `issue-analyzer` already
+ returned topologically sorted and which 2.2 validated. Wave 1 is every task with no
+ unsatisfied dependency; wave N+1 is every task whose dependencies are all in waves 1..N.
+ Do not re-derive an ordering the analysis already produced.
+ 
+ #### Execution pattern
+ 
+ ```
+ FOR wave_index, wave_tasks in enumerate(WAVES):
+ 
+   keryx job step <job-name> tests-creator --status in-progress      # wave 1 only
+   # Step A — tests-creator (MANDATORY, run first)
+-  keryx skills resolve-context --for test --files <task target_files, comma-joined> --task-type <task_type> --out <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
+
+--- .metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md
+@@ 112,131 @@
+ - no → Phase 3
+ 
+ ### Step: PREPARE — Create Feature Branch
+ 
+ > **CRITICAL**: Use ONLY `git worktree add`. NEVER `git checkout -b`.
+ 
+ ```bash
+ git -C <project_dir> fetch origin <base_branch>
+ git -C <project_dir> worktree add ../<branch-slug> -b feature/<branch-slug> origin/<base_branch>
+ # then install with the DETECTED package manager — never hardcode npm
+ ```
+ 
+ All subsequent operations ONLY in the worktree directory.
+ 
+ ### Step: TESTS-CREATOR + IMPLEMENT — Waves
+ 
+ ```
+ WAVES = dependency_order from ANALYSIS_RESULT (already topologically sorted)
+ 
+ FOR wave_index, wave_tasks in enumerate(WAVES):
+-  1. keryx skills resolve-context --for test --files <target_files> --task-type <type> --out <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
+
+--- .metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md
+@@ 162,181 @@
+ **2.0 Read job context (if available):**
+ 
+ If the orchestrator provided `JOB_NAME` and `CONTEXT_PATH`:
+ - Read `CONTEXT_PATH` (e.g., `<JOBS_ROOT>/<job-name>/ai/context.md`)
+ - Extract relevant sections: library docs, codebase patterns, conventions, best practices
+ - Use this context throughout Phase 2-4 to guide implementation decisions
+ - If the file does not exist, proceed without it — context is optional
+ 
+ **2.0b Verify the project-skill covering the target (see `rules/core/skill-lifecycle.mdc`):**
+ 
+ Before you rely on a project-skill's guidance, confirm it still matches the code:
+ - `keryx skills route <target_file>` — find the project-skill for this module/entity (if any).
+ - If one exists: `keryx skills verify <module>/<skill>` — classifies it `fresh | stale | needs-review | blocked`.
+ - If it is **not `fresh`**: do not follow it blindly. Verify each claim against the code you read in Phase 2, and note the drift in `notes` (Phase 6.1) so the orchestrator can trigger `skills learn`.
+ - If it is **`fresh`**: apply it. Its rules, templates and conventions for the target are part of the task, not background reading, and they supplement this skill's phases: a project skill never replaces a phase, the TDD order or the output contract. Where it and a bundled rule disagree, the project skill wins; say so in `notes`.
+ - If no skill exists for a non-trivial module you had to reverse-engineer, note that too — it's a candidate for `skills create`.
+ 
+ This step is read-only and inline; do not spawn a subagent for it.
+ 
+ **2.0c Resolve the project's standard (before 2.1):**
+-- Use `workspace.resolved_context_file` when given; otherwise run `keryx skills resolve-context --for implement --files <target_files, comma-joined> --task-type <task_type> --out <project-relative path>`.
+
+--- docs/docs/cli-reference.md
+@@ 3473,3489 @@
+ keryx skills export <project-skill> --runtime codex|claude|plugin
+ keryx skills sync --runtime codex|claude --target <dir>
+ keryx skills contracts validate <file> --schema <name> [--resolved <resolved.json>]
+ keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all]
+     [--origin learned --source-ref <id>] [--json]
+ keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>[:<model>]]
+     [--judge <provider>[:<model>]] [--scope bundled|all] [--model-grader] [--json]
+ keryx skills judge-check <skill-id> --judge <provider>[:<model>] [--scope bundled|all] [--samples <n>] [--record] [--json]
+ keryx skills stocktake [--scope bundled|all] [--quick] [--json]
+ ```
+ 
+ | Subcommand | Flags / args | Description |
+ |---|---|---|
+ | `status` | `--json` | Print the local gdskills install status summary. |
+ | `list` | `--json` | List registered project skills as a table. |
+ | `inspect <project-skill>` | `--json` | Inspect one project skill: metadata + file presence. Missing target exits `1`. |
+ | `route <query-or-target>` | `--json` | Score/rank registry entries against a free-text query or path. |
+-| `resolve-context` | `--files <file>[,<file>...]` (required), `--for implement\|test\|review` (required), `--task-type <type>`, `--max-bytes <n>`, `--out <path>`, `--json` | Resolve, deterministically and project first, which rules, project skills and referenced project contracts an implementer, test writer or reviewer must read for the given files. Each entry carries `path`, `sha256`, `bytes`, `reason` (`glob:<g>`, `always`, `task-type:<t>`, `replaces-bundled`, `route`, `bundled-default`, `referenced-by:<path>`), `tier` (`must_read` or `on_demand`) and, for a project rule that replaces a bundled one, `shadows`. Project entries come first, bundled ones after; a bundled rule a project rule replaces is dropped. An `alwaysApply` rule above 30,720 bytes is listed as an `on_demand` index. `must_read` bytes are counted against the cap (`--max-bytes`, else `gdskills.projectContext.maxBytes` in `tasks.config.json`, default 131072); the remainder is listed `on_demand` and `budget.exceeded` is set with one stderr warning — rules are never cut and the exit code stays `0`. A link-mode rule is read from its origin only while its sha256 equals the registry's. `--out` must be inside the project. The last result is recorded in `.metaproject/data/skills/project-context/last.json`. A missing `--for` or `--files` exits `1`. |
+
+--- src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md
+@@ 303,322 @@
+ `subagent-dispatch` object
+ (`.metaproject/core/gdskills/contracts/subagent-dispatch.schema.json`) and each
+ worker reply is a `subagent-result` object
+ (`.metaproject/core/gdskills/contracts/subagent-result.schema.json`) whose first
+ line is `STATUS: <status>`
+ (`.metaproject/rules/core/subagent-status-protocol.md`).
+ 
+ `<worktree_path>` below is the absolute root of the checkout this flow's work
+ happens in: the git worktree the flow runs in, or the project root when it runs
+ in the main checkout. Resolve it once, before the first dispatch
+ (`git rev-parse --show-toplevel` from that checkout), check
+ `git -C <worktree_path> branch --show-current` is the branch the work belongs
+ on, and pin every dispatch to it (`rules/core/git-concurrency.mdc`, "Pinning A
+ Dispatch To Its Worktree").
+ 
+ Workers do not commit: flow-orchestrator owns every commit and dispatches with
+ auto-commit off (task-implementer's `automation.auto_commit: false`). A
+ `subagent-dispatch` has no `automation` field, so the setting travels as the
+ explicit constraint below — never as the worker's default, which is `true`.
+ 
+-Before every `test`, `implement` and fix dispatch, run `keryx skills resolve-context --for test|implement --files <the task's target files, comma-joined> --task-type <type> --out .metaproject/flows/<dir>/resolved/<Tn>.<for>.json` (a fix dispatch re-resolves on the new head) and pass that path as `resolved_context_file`: a `context_refs` entry plus the constraint below. Before accepting the reply, run `keryx skills contracts validate <result.json> --schema task-implementer-output|tests-creator-output --resolved <that file>`; under `gdskills.projectContext.enforcement: block` a miss is a refusal, under `warn` journal it.
+
+--- src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md
+@@ 729,748 @@
+ what agents *return*, not with what they do; a returned result file path costs a line,
+ an inlined verification log costs thousands. After 3–4 waves of inlined results the
+ session freezes on context reload, which is the failure this rule exists to avoid.
+ 
+ ---
+ 
+ #### Wave ordering
+ 
+ Waves come from `dependency_order` in `ANALYSIS_RESULT`, which `issue-analyzer` already
+ returned topologically sorted and which 2.2 validated. Wave 1 is every task with no
+ unsatisfied dependency; wave N+1 is every task whose dependencies are all in waves 1..N.
+ Do not re-derive an ordering the analysis already produced.
+ 
+ #### Execution pattern
+ 
+ ```
+ FOR wave_index, wave_tasks in enumerate(WAVES):
+ 
+   keryx job step <job-name> tests-creator --status in-progress      # wave 1 only
+   # Step A — tests-creator (MANDATORY, run first)
+-  keryx skills resolve-context --for test --files <task target_files, comma-joined> --task-type <task_type> --out <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
+
+--- src/gdskills/bundled/skills/orchestration/job-orchestrator/orchestrator-prompt.md
+@@ 112,131 @@
+ - no → Phase 3
+ 
+ ### Step: PREPARE — Create Feature Branch
+ 
+ > **CRITICAL**: Use ONLY `git worktree add`. NEVER `git checkout -b`.
+ 
+ ```bash
+ git -C <project_dir> fetch origin <base_branch>
+ git -C <project_dir> worktree add ../<branch-slug> -b feature/<branch-slug> origin/<base_branch>
+ # then install with the DETECTED package manager — never hardcode npm
+ ```
+ 
+ All subsequent operations ONLY in the worktree directory.
+ 
+ ### Step: TESTS-CREATOR + IMPLEMENT — Waves
+ 
+ ```
+ WAVES = dependency_order from ANALYSIS_RESULT (already topologically sorted)
+ 
+ FOR wave_index, wave_tasks in enumerate(WAVES):
+-  1. keryx skills resolve-context --for test --files <target_files> --task-type <type> --out <JOBS_ROOT>/<job-name>/results/<task_id>.test.resolved.json
+
+--- src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md
+@@ 162,181 @@
+ **2.0 Read job context (if available):**
+ 
+ If the orchestrator provided `JOB_NAME` and `CONTEXT_PATH`:
+ - Read `CONTEXT_PATH` (e.g., `<JOBS_ROOT>/<job-name>/ai/context.md`)
+ - Extract relevant sections: library docs, codebase patterns, conventions, best practices
+ - Use this context throughout Phase 2-4 to guide implementation decisions
+ - If the file does not exist, proceed without it — context is optional
+ 
+ **2.0b Verify the project-skill covering the target (see `rules/core/skill-lifecycle.mdc`):**
+ 
+ Before you rely on a project-skill's guidance, confirm it still matches the code:
+ - `keryx skills route <target_file>` — find the project-skill for this module/entity (if any).
+ - If one exists: `keryx skills verify <module>/<skill>` — classifies it `fresh | stale | needs-review | blocked`.
+ - If it is **not `fresh`**: do not follow it blindly. Verify each claim against the code you read in Phase 2, and note the drift in `notes` (Phase 6.1) so the orchestrator can trigger `skills learn`.
+ - If it is **`fresh`**: apply it. Its rules, templates and conventions for the target are part of the task, not background reading, and they supplement this skill's phases: a project skill never replaces a phase, the TDD order or the output contract. Where it and a bundled rule disagree, the project skill wins; say so in `notes`.
+ - If no skill exists for a non-trivial module you had to reverse-engineer, note that too — it's a candidate for `skills create`.
+ 
+ This step is read-only and inline; do not spawn a subagent for it.
+ 
+ **2.0c Resolve the project's standard (before 2.1):**
+-- Use `workspace.resolved_context_file` when given; otherwise run `keryx skills resolve-context --for implement --files <target_files, comma-joined> --task-type <task_type> --out <project-relative path>`.
+
+--- src/gdskills/context-resolver.test.ts
+@@ 4,5 @@
+ import path from "node:path";
+ import { importProjectRules } from "./import-rules";
+-import { type ContextEntry, readLastResolve, recordLastResolve, resolveProjectContext } from "./context-resolver";
+
+--- src/tui/project-context-inspector.ts
+@@ 104,104 @@
+   if (status.configError !== undefined) parts.push("config unreadable");
+-  return parts.join(" · ");

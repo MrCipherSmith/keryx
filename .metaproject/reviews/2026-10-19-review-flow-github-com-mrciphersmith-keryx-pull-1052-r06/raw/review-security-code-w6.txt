@@ -1,0 +1,42 @@
+STATUS: DONE
+
+## Security Review (round r06, second-look slice-08)
+
+### Scope
+- Branch: `docs/flow-helyx-operator-confirm`
+- Scope mode: diff, slice-08 only (second look, unchanged since r05)
+- Changed files reviewed: 22 (src/review/chunks-estimate.ts, complete-gated.ts, completion-gate.ts, coverage-complete.ts, estimate.ts, evidence-level.ts, operator-decisions.ts, plan-confirmation.ts, premise-question.ts, publish.ts, readiness.ts, types.ts, completion-gate.test.ts; src/standard/help-groups.ts; src/trigger/unattended.ts; src/tui/approval-mirror.ts, decisions-surface.ts, operator-confirmations.ts, remote-control-surface.ts, tui-shell.ts, card-lifecycle.test.ts, operator-confirmations.test.ts)
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 0
+
+The r05 ledger (S-401, F5-01 onward) was not re-reported. The S-401 fix hunks (the dispositions caps and the whole-evidence render in operator-confirm-review.ts) are in slices 01 and 02, not here, so this report does not judge S-401 completeness.
+
+### Findings
+None.
+
+### Clean Areas (checked, no finding)
+- Close-path parity: `completeReviewGated` (src/review/complete-gated.ts) runs the run-profile refusal, then the narrowed-routing check with `refuseUnreadable: true`, then `completeManagedReview` with its head, evidence, research and readiness gates. Both callers (the CLI `keryx review complete` and the `review_complete` card) go through it. The card path has no way to skip a gate that the CLI enforces, and `completion-gate.ts` only changes wording (`closeStep(card)`, `describeBlockers(open, card)`) and the `cardAvailable` hint, not the decision.
+- Provenance fields: `pressedBy` and `pressedAt` (`CardPress` / `cardPressFields` in src/review/types.ts) are only recorded into answers, waivers, confirmations, decisions and `published.json`. Nothing in the slice reads them to grant anything. `readCoverageWaiver` validates `pressedBy` as a safe integer and `pressedAt` as non-empty text. On the producing side, `fromId` is taken from the Telegram update and checked against `allowedUserIds` (src/remote/hub.ts:1085-1086), and `mapApprovalAnswer` keeps it only when `Number.isSafeInteger` (src/remote/shell-bridge.ts:202). `estimate.ts:199-200` only types the two fields; no unvalidated runtime read was found there.
+- Mirror and undelivered handling: `mirrorUndeliveredNote` (src/remote/shell-bridge.ts:296-300) only adds a visible note when the bridge is off or not connected. `undelivered` is attached to a deny only (`mapApprovalAnswer` line 208 uses `!yes`, and `askApproval` line 965 returns `deny`), so an undelivered mirror cannot approve a card. `raceApproval`'s new `onUndelivered` / `onTopicEnded` callbacks only settle the in-memory log; they do not feed a decision.
+- Card rendering: `OperatorConfirmationLog` lines pass the question through `clip(...)`, and the questions come from card titles that already go through `cardSafe` (src/lib/card-safe.ts strips ANSI, C0/C1 controls and bidi overrides). No terminal-escape or log injection from model-supplied text was found in the lines this slice adds.
+- Unattended exclusion: `"review_complete"` is added to `OPERATOR_CONFIRM_TOOL_NAMES` in src/trigger/unattended.ts, so an unattended run cannot reach the operator-confirmed close. This is the tightening direction.
+- Injection (SQL, command, SSTI, eval), path traversal, open redirect, CSRF, secrets in logs, insecure cryptography: no new surface in the changed lines. No new filesystem path built from external input, no new shell or process call, no new token or random generation in this slice.
+- Auth and authz, IDOR: the slice adds no endpoint or route. Authorization for a remote press stays at the existing allow-list check and the one-time token check outside this slice (slice-06 and slice-07).
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-security-code",
+  "status": "DONE",
+  "slices": ["slice-08"],
+  "summary": "Slice-08 (review completion gate, CardPress provenance fields, operator confirmation log, mirror undelivered plumbing, unattended roster) has no exploitable defect. The CLI and the review_complete card close through one gated path, provenance fields are recorded and never trusted as a gate, an undelivered mirror can only deny, and card text is sanitized by cardSafe. The S-401 hunks live in slices 01 and 02 and were not judged here.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```

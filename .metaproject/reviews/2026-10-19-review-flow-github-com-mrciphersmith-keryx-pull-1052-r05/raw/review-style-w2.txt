@@ -1,0 +1,50 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice-02 (new hunks of 77d2eff20) read in full against head 77d2eff20. The imperative E-01 sites (SKILL.md:136, :782, SKILL.detail.md:386, mirrors) and the descriptive SKILL.md:124 and SKILL.detail.md:866 first clause now name the review_complete card; the two copies of each skill file are byte-identical (diff -q empty). Three descriptive tail sites still say a bare `complete` (SKILL.md:59, SKILL.md:134, SKILL.detail.md:864 and the second clause of :866), which E-01's suggested_fix listed; one minor. The E-06 extraction (runCompletionGates, writeCompletionRecord, completionOutput) reads cleanly and apply is now orchestration only; the only residue is a fourth copy of the error-to-text expression (info). E-02 and E-03 are complete from the style side: the dispositions schema, parser and card line are named and ordered consistently, the schema file gained the three properties, and the doc line at SKILL.md:188-189 and :229-230 matches the code. No style regression found.",
+  "findings": [
+    {
+      "id": "F-101",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 134,
+      "quote": "The verdict is interim: the round is not done until `complete` (`SKILL.detail.md` § \"Early verdict\").",
+      "problem": "E-01's fix is incomplete for the descriptive tail sites. SKILL.md:124 and SKILL.detail.md:866 (first clause) were reworded to name the review_complete card, but four sibling sites still end the tail on a bare `complete`, the same ambiguity E-01 listed (SKILL.md:134, SKILL.md:59, SKILL.detail.md:866 second clause) plus SKILL.detail.md:864 and the heading at :862. SKILL.md:59: \"`readiness`, `complete`.\" SKILL.detail.md:866: \"its tail is `ledger build`, `ingest`, `readiness`, `complete`.\" and \"The round is **not done** until `complete`\". The bundled mirrors carry the same text.",
+      "impact": "In the same files a reader now meets `review_complete` card, `keryx review complete` (human terminal) and a bare `complete` for the one step. An agent reading the step list at :59 or the checklist at :134 cannot tell which of the two it names, which is the ambiguity that sent agents to the CLI before 77d2eff20. The imperative sites are fixed, so this is wording consistency, not a gate bypass.",
+      "suggested_fix": "Name the card at the three remaining tail sites in both copies: SKILL.md:59 '`readiness`, the `review_complete` card.'; SKILL.md:134 'the round is not done until the `review_complete` card has closed the package'; SKILL.detail.md:864/:866 'its tail is `ledger build`, `ingest`, `readiness`, `review_complete`' and 'not done until `review_complete`' (the heading at :862 may say 'until the round is closed').",
+      "evidence": "git grep -n -o -E '(`complete`|, complete\\b|until complete)' at 77d2eff20 in review-orchestrator/SKILL.md and SKILL.detail.md returns SKILL.md:59, SKILL.md:134, SKILL.detail.md:862, :864, :866 (two hits); diff -q against src/gdskills/bundled/skills/review/review-orchestrator/ is empty for both files at head.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-102",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 813,
+      "quote": "const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));",
+      "problem": "The E-06 extraction replaced the apply-local `reason` closure with a new module-level helper, but the same expression already exists in this file twice: `failed` at line 87 (`const failed = (error: unknown): { refusal: string } => ({ refusal: error instanceof Error ? error.message : String(error) });`) and inline at line 715 inside completionFacts (`cardSafe(error instanceof Error ? error.message : String(error))`). src/commands/operator-confirm-other.ts:83 holds a fourth copy. The helper is also declared after its first use in apply (line 791 versus 813), unlike `clip` and `factsDigest`, which sit above completeSpec.",
+      "impact": "Four copies of one conversion; a change to how errors are shown on cards has to be made in each.",
+      "suggested_fix": "Define errorText once near `failed` at the top of the file and let `failed` and line 715 call it (`({ refusal: errorText(error) })`, `cardSafe(errorText(error))`); optionally export it for operator-confirm-other.ts.",
+      "evidence": "git grep -n -E 'error instanceof Error \\? error.message : String\\(error\\)' 77d2eff20 -- src/commands/operator-confirm-review.ts src/commands/operator-confirm-other.ts lists lines 87, 715, 813 and operator-confirm-other.ts:83.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [
+    {"id": "E-01", "disposition": "partial"},
+    {"id": "E-02", "disposition": "closed"},
+    {"id": "E-03", "disposition": "closed"},
+    {"id": "E-06", "disposition": "closed"}
+  ],
+  "slices": [
+    {"id": "slice-02", "coverage": "read in full: the SKILL.md and SKILL.detail.md hunks and their bundled mirrors (confirmed byte-identical at head), the schema hunk, agent.ts, operator-confirm-review.ts, the three test files; E-01 sites re-grepped at head 77d2eff20", "status": "DONE"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 1}
+}
+```

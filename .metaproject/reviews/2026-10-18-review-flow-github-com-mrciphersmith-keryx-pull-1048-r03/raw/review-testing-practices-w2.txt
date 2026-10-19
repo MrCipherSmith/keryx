@@ -1,0 +1,87 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "summary": "Slice-02 (first pass, kind new) has no blocker or major test-practice defect. The new tests use mkdtemp fixtures with cleanup, controlled promises instead of timers for the stale-reload race, no network, and assert on public output (last.json fields, rendered text, resolver results). All nine slice test files pass (160 pass, 0 fail). Three minor findings and one info: the sidebar half of the control-character test cannot fail, the --link test ends in a muddled boolean-and assertion, the same test leaves an origin-hash mismatch uncovered while scanCitations does not check it, and a wall-clock bound in the linear-time heading test.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.test.ts",
+      "line": null,
+      "quote": "expect(control.test(renderProjectContextSidebarValue(status) ?? \"\")).toBe(false);",
+      "problem": "Vacuous assertion (testing rule: tests must be able to fail). The test is named 'control characters from a reference never reach the terminal: tab body and sidebar value are cleaned', but the sidebar half asserts on renderProjectContextSidebarValue(status), whose references segment (referencesSidebarSegment in src/tui/project-references-view.ts) returns only 'refs <p>/<n>', '-', '?' or '!<k>': counts and symbols that carry no declaration text. The control characters in the fixture live in a reference description, which never reaches that string.",
+      "impact": "If the cardSafe wrapper at project-context-inspector.ts:105 (the sidebar value) were removed, this test would stay green, so the sidebar half gives false confidence that the slice's cardSafe-on-sidebar hardening is guarded. The tab half (text.replace(...) plus the 'line one ⏎ line two' check) is a real guard and is unaffected.",
+      "suggested_fix": "Either drop the sidebar line and rename the test to cover the tab body only, or make the sidebar path carry hostile text and assert on it: put a control character into a field the sidebar value actually renders (for example the project-context warning text, if the sidebar shows it), assert the raw value would contain it before cardSafe, then assert the rendered value does not. A direct unit test of renderProjectContextSidebarValue with such a field is the cleanest form.",
+      "evidence": "src/tui/project-context-inspector.test.ts:630 holds the assertion. src/tui/project-references-view.ts: referencesSidebarSegment returns 'refs p/n', '-', '?' or '!k' and no declaration strings. src/tui/project-context-inspector.ts:105 'return cardSafe(parts.join(\" · \"));' and :239 'lines.map(cardSafe)' are the two guarded sites; only :239 is exercised by the test's tab half.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "sidebar-control-char-assertion-vacuous",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/skills-references.test.ts",
+      "line": null,
+      "quote": "expect(suggestion.ok && suggestion.suggestion.references.map((entry) => entry.path)).toEqual([\"OTHER.md\"]);",
+      "problem": "The closing assertion of the new --link test folds a guard into the value under test. If suggestion.ok is false, the expression evaluates to false and the failure reads 'expected [\"OTHER.md\"], received false', which hides the real cause (the error the suggest call returned). It also type-narrows through a boolean-and instead of a plain precondition.",
+      "impact": "A regression in origin scanning or registry reading shows up as an opaque diff and costs a debugging step; the test still fails, so this is a diagnostics and clarity issue rather than a gap in coverage.",
+      "suggested_fix": "Assert the precondition first and then the value: expect(suggestion.ok).toBe(true); if (!suggestion.ok) throw new Error(JSON.stringify(suggestion)); expect(suggestion.suggestion.references.map((entry) => entry.path)).toEqual([\"OTHER.md\"]);",
+      "evidence": "src/commands/skills-references.test.ts:362 (end of the test that starts at :333, 'a rule imported with --link is scanned at its origin: ...'). Test passes at head.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "link-test-boolean-and-assertion",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/skills-references.test.ts",
+      "line": null,
+      "quote": "a rule imported with --link is scanned at its origin: suggest finds its citation and check does not call the declaration unused",
+      "problem": "The new --link test only covers the happy path where the registry entry's sha256 and originSha256 match the origin file. The resolver ignores a linked rule whose recorded hash differs from the origin (the origin changed after import), but scanCitations in src/gdskills/references-check.ts reads the origin without comparing any hash (rg for sha256/originSha256 in that file returns no match). The two code paths can therefore disagree, and no test pins which behaviour is intended.",
+      "impact": "When a linked rule's origin is edited after import, the resolver stops treating its citations as live while `references check` and `suggest` keep counting them, so a declaration can be reported as used although the resolver never promotes it. Without a test, either behaviour can change silently. This is a coverage gap in a new branch of code, not a defect in the test as written.",
+      "suggested_fix": "Add a case to the --link describe block: register the link, then rewrite the origin file so its sha256 no longer matches the registry entry, run checkReferences and suggest, and assert the intended outcome (either the citation is ignored like the resolver does, or it is reported with a stale-link warning). If the divergence is deliberate, document it in the test name.",
+      "evidence": "src/commands/skills-references.test.ts:333-362 builds the link with matching hashes only. src/gdskills/references-check.ts scanCitations (lines ~60-150 at head) reads via resolveOriginPath/readProjectRuleRegistry with no hash comparison. The slice's resolver tests cover link handling on the resolver side only. The behavioural question is for review-logic; this finding is limited to the missing test.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "link-origin-hash-mismatch-untested",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/gdskills/references-section.test.ts",
+      "line": null,
+      "quote": "expect(performance.now() - started).toBeLessThan(1000);",
+      "problem": "A wall-clock bound is used to prove the heading parser is linear. The inputs are 120k-blank lines and the old regexes took many seconds, so the 1000 ms margin is large and the flake risk is low. It is still a timing assertion, which depends on the machine, and it does not distinguish linear from mildly super-linear growth.",
+      "impact": "On a heavily loaded CI runner this could fail without a regression; more likely it will never fail for the right reason below 1 s. No action is required for this round.",
+      "suggested_fix": "Optional: also assert the structural property, for example parse the same shape at n and 4n characters in the same run and assert the elapsed time ratio stays under a generous bound (about 8x), or count loop iterations through an injected counter. Keep the current check as a coarse guard.",
+      "evidence": "src/gdskills/references-section.test.ts:170-174 ('const started = performance.now();' then the assertion). No timers or sleeps are involved; the test is synchronous.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "wall-clock-linear-time-assertion",
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-02",
+      "coverage": "Whole slice-02.diff read. Read at head: src/tui/project-context-inspector.test.ts (all), src/tui/project-references-view.ts, src/commands/skills-references.test.ts (new --link test and helpers), src/gdskills/references-check.ts (scanCitations), src/gdskills/references-section.test.ts (heading parsing tests); diff-only for reference-entries.test.ts, context-resolver.test.ts, conditional-reads.e2e.test.ts, resolved-context-check.test.ts, metaproject-adapter-task-text.test.ts, metaproject-tools.test.ts. Ran the nine slice test files: 160 pass, 0 fail.",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 3,
+    "info": 1
+  }
+}
+```
+
+Summary: Slice-02 at head 5382b56abf17 is sound from a testing-practices view. No test touches the network or sleeps on a timer; the stale-reload race test controls its promises directly, last.json tests assert that the secret task text is absent and only taskTextLength/taskTextTruncated are written, and fixtures use mkdtemp with cleanup. Four findings, none above minor: the sidebar assertion in the control-character test cannot fail (F-001), the --link test ends in an opaque `ok && ...` assertion (F-002) and leaves an origin-hash mismatch uncovered while scanCitations skips the hash check the resolver applies (F-003), and the linear-time heading test uses a wall-clock bound with a wide margin (F-004). The source-text test for the onDestroy wiring in project-context-inspector.test.ts is brittle (fixed 2500-character window) but matches an existing repo convention (tui-shell.test.ts); it is already filed by review-clean-code w2:F-002 and is not repeated here. Still-open r02 testing items that apply unchanged are cited, not re-filed: the maxFileBytes branch is asserted in context-resolver.test.ts ('is too large or is missing is not listed and warns') but not in reference-entries.test.ts. graph_context: unavailable (graphify-out not used; keryx ctx rg only). Routing audit: graph_used no (not-relevant, test-only review), wiki_used no (not-relevant), ctx_used yes, raw_rg_used no.

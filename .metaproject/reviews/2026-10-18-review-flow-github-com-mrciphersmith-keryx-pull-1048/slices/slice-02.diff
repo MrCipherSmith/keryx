@@ -1,0 +1,1919 @@
+--- docs/docs/cli-reference.md
+@@ 3432,3612 @@
+ Page types: `architecture`, `domain-model`, `business-rule`, `user-scenario`,
+ `component`, `service`, `integration`, `decision`.
+ 
+ When the `security` module is enabled, `collect` runs an advisory security check
+ before writing each draft. Advisory (the default) reports and writes anyway;
+ `enforced`/`ci`/`gateway` mode can suppress a draft's write with a masked reason.
+ 
+ ---
+ 
+ ## skills
+ 
+ Manage the working-skills subsystem: a bundled catalog of skills and per-project
+ skill packages, plus routing, verification, learning, export, and JSON contracts.
+ 
+ ```
+ keryx skills status
+ keryx skills list
+ keryx skills inspect <project-skill>
+ keryx skills route <query-or-target>
+ keryx skills resolve-context --files <file>[,<file>...] --for implement|test|review
+-    [--task-type <type>] [--max-bytes <n>] [--out <path>] [--json]
++    [--task-type <type>] [--task-text <text>] [--max-bytes <n>] [--out <path>] [--json]
++keryx skills references check [--json]
++keryx skills references suggest
+ keryx skills catalog [--profile recommended]
+ keryx skills install [--profile recommended]
+ keryx skills install --profile <manifest-profile> [--with <component>]... [--without <component>]...
+     [--target <harness>] [--include-deprecated] [--dry-run] [--json] [--force]
+ keryx skills doctor [--target <harness>] [--json]
+ keryx skills uninstall --target <harness> [--module <module-id>] [--force] [--json]
+ keryx skills create <target> --module <module> --name <skill-name>
+ keryx skills import --from <dir|SKILL.md|https-url> [--module <module>] [--name <name>]
+     [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]
+ keryx skills import --rules <dir> [--only <glob>]... [--link] [--dry-run] [--force] [--allow-flagged] [--json]
+ keryx skills update [<module>/<name>|--all] [--from <origin>] [--dry-run] [--allow-flagged] [--json]
+ keryx skills update --rules [<ref>] [--dry-run] [--force] [--allow-flagged] [--json]
+ keryx skills remove <module>/<name> [--dry-run] [--json]
+ keryx skills remove --rule <ref> [--dry-run] [--json]
+ keryx skills verify <skill-or-target>
+ keryx skills verify --bundled [--root <dir>] [--json]
+ keryx skills learn --from-review <path> --skill <module>/<skill>
+ keryx skills learn apply <proposal.json>
+ keryx skills export <project-skill> --runtime codex|claude|plugin
+ keryx skills sync --runtime codex|claude --target <dir>
+ keryx skills contracts validate <file> --schema <name> [--resolved <resolved.json>]
+ keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all]
+     [--origin learned --source-ref <id>] [--json]
+ keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>[:<model>]]
+     [--judge <provider>[:<model>]] [--scope bundled|all] [--model-grader] [--json]
+ keryx skills judge-check <skill-id> --judge <provider>[:<model>] [--scope bundled|all] [--samples <n>] [--record] [--json]
+ keryx skills stocktake [--scope bundled|all] [--quick] [--json]
+ ```
+ 
+ | Subcommand | Flags / args | Description |
+ |---|---|---|
+ | `status` | `--json` | Print the local gdskills install status summary. |
+ | `list` | `--json` | List registered project skills as a table. |
+ | `inspect <project-skill>` | `--json` | Inspect one project skill: metadata + file presence. Missing target exits `1`. |
+ | `route <query-or-target>` | `--json` | Score/rank registry entries against a free-text query or path. |
+-| `resolve-context` | `--files <file>[,<file>...]` (required), `--for implement\|test\|review` (required), `--task-type <type>`, `--max-bytes <n>`, `--out <path>`, `--json` | Resolve, deterministically and project first, which rules, project skills and referenced project contracts an implementer, test writer or reviewer must read for the given files. Each entry carries `path`, `sha256`, `bytes`, `reason` (`glob:<g>`, `always`, `task-type:<t>`, `replaces-bundled`, `route`, `bundled-default`, `referenced-by:<path>`), `tier` (`must_read` or `on_demand`) and, for a project rule that replaces a bundled one, `shadows`. Project entries come first, bundled ones after; a bundled rule a project rule replaces is dropped. An `alwaysApply` rule above 30,720 bytes is listed as an `on_demand` index. `must_read` bytes are counted against the cap (`--max-bytes`, else `gdskills.projectContext.maxBytes` in `tasks.config.json`, default 131072); the remainder is listed `on_demand` and `budget.exceeded` is set with one stderr warning — rules are never cut and the exit code stays `0`. A link-mode rule is read from its origin only while its sha256 equals the registry's. `--out` must be inside the project. The last result is recorded in `.metaproject/data/skills/project-context/last.json`. A missing `--for` or `--files` exits `1`. |
++| `resolve-context` | `--files <file>[,<file>...]` (required), `--for implement\|test\|review` (required), `--task-type <type>`, `--task-text <text>`, `--max-bytes <n>`, `--out <path>`, `--json` | Resolve, deterministically and project first, which rules, project skills and referenced project contracts an implementer, test writer or reviewer must read for the given files. Each entry carries `path`, `sha256`, `bytes`, `reason` (`glob:<g>`, `always`, `task-type:<t>`, `replaces-bundled`, `route`, `bundled-default`, `referenced-by:<path>`, `declared`, `condition:glob:<g>`, `condition:keyword:<k>`), `tier` (`must_read` or `on_demand`) and, for a project rule that replaces a bundled one, `shadows`. Project entries come first, bundled ones after; a bundled rule a project rule replaces is dropped. An `alwaysApply` rule above 30,720 bytes is listed as an `on_demand` index. `must_read` bytes are counted against the cap (`--max-bytes`, else `gdskills.projectContext.maxBytes` in `tasks.config.json`, default 131072); the remainder is listed `on_demand` and `budget.exceeded` is set with one stderr warning — rules are never cut and the exit code stays `0`. A link-mode rule is read from its origin only while its sha256 equals the registry's. `--out` must be inside the project. The last result is recorded in `.metaproject/data/skills/project-context/last.json`. A missing `--for` or `--files` exits `1`. The three reasons added by flow 462 come from `.metaproject/rules/project/references.json` (see below): `declared` is a declared document no condition matched (`on_demand`), and `condition:glob:<g>` or `condition:keyword:<k>` is one a condition promoted to `must_read`. A glob is matched against `--files`; a keyword is matched, ignoring case and as a whole word, against `--task-text`, which is cut to 4000 characters and recorded in `last.json`. A promoted entry counts only its anchored section in the cap, and the cap never moves it back to `on_demand` (it warns). The result gains `undeclared`, the contract paths a project rule names that have no declaration, when a `references.json` exists. |
++| `references check` | `--json` | Check `.metaproject/rules/project/references.json` and the project rules that cite documents. Errors (exit `1`): `invalid-file`, `document-missing`, `document-outside-root`, `document-not-file`, `document-too-large`, `document-unreadable`, `anchor-not-found`. Warnings: `description-short` (under 20 characters), `keyword-short` (under 4), `unused-declaration`, `undeclared-citation`, `rule-unreadable`. Ends with `N errors, M warnings`. A missing `references.json` is not an error. Citations are backticked `X.md` names in `.metaproject/rules/project/`; a linked rule is not scanned. |
++| `references suggest` | — | Print a JSON skeleton (`schema`, `references[]` with `path`, `bytes`, `anchorCandidates`, empty `description` and `when`) for every cited document with no declaration. Writes no file. Copy entries into `references.json` by hand and remove `bytes`, `anchorCandidates` and empty lists first: the loader rejects unknown properties and empty `globs`/`keywords`. Exits `1` when the existing `references.json` is invalid. |
+ | `catalog` | `--profile minimal\|recommended\|full\|custom` | Print the bundled catalog for a profile. |
+ | `install` | `--profile <profile>` | Install bundled skills, catalog, manifest, and contracts. Requires `.metaproject/`. |
+ | `install --profile <manifest-profile>` | `--with <component>` (repeatable), `--without <component>` (repeatable), `--target <harness>`, `--include-deprecated`, `--dry-run`, `--json`, `--force` | Flow 325 (W1): resolve and apply a profile→modules/components install-manifest plan instead of the legacy profile copy. Triggered by any manifest flag, or a non-legacy `--profile` id (e.g. `core`, `react`, `nestjs`, `python`) — the four legacy ids (`minimal\|recommended\|full\|custom`) with no manifest flags still run the pre-309 behavior above. `--dry-run` prints the resolved plan without writing, and its `Apply this plan:` hint repeats every `--with`, `--without`, `--include-deprecated`, `--target` and `--profile` that was passed. A `--with`/`--without` id that is unknown, or that cannot change the plan for the chosen profile (judged by effect: the id must change the set of modules the profile selects, so `--profile full --without framework:react` and `--profile react --with framework:react` are refused as no-ops), exits non-zero and lists the ids that would change the plan. Reads `.metaproject/data/stack/stack.json` (from `keryx stack detect`) when present to bias module selection; absent or unreadable fails open. `--force` overwrites drifted files; without it, a drifted/unrecorded existing file is skipped, not overwritten. v1 install destinations exist only for `--target claude` and `--target keryx-shell`. |
+ | `doctor` | `--target <harness>`, `--json` | Compare the recorded install-state for a target against disk: `ok`/`drifted`/`missing`/`orphaned` per path. Exits `1` if anything is not `ok`. |
+ | `uninstall` | `--target <harness>` (required), `--module <module-id>`, `--force`, `--json` | Remove only the paths recorded in install-state for a target, optionally scoped to one module. A drifted file is refused unless `--force`. |
+ | `create <target>` | `--module <m>`, `--name <n>`, `--format auto\|single\|package`, `--dry-run` | Create and register a project-skill package. (`generate` is an alias.) |
+ | `import --from <src>` | `--module <m>`, `--name <n>`, `--only <glob>` (repeatable), `--dry-run`, `--force`, `--allow-flagged`, `--json` | Copy a SKILL.md (directory, file, or https GitHub blob/raw URL) into `.metaproject/project-skills/<module>/<name>/`, recording Origin. `--module review` is the only module `review-orchestrator` auto-dispatches. `--only` is a glob (`*`, `?`) matched against the package directory name as it is on disk; it is required when `--from` is a tree of several packages and the import targets module `review` — the import is refused with the candidate list until it is given. An `--only` with an empty value is an error. In a tree, `--name` likewise selects by the directory name. What is written is the slug of that name (`review_house_api` → `review-house-api`): the destination, the already-exists and bundled-name checks and the reported row all use the slug, and two selected directories that slug to one destination are refused before anything is written. In a tree import a `deprecated: true` package is skipped. Other hosts and GitHub tree URLs are refused. A bundled name is skipped unless `--force`. A package landing in module `review` gets `warning:` lines for: no path trigger (`paths: none`), each `metadata.flags` entry dropped as not a flag, each flag exactly one existing project reviewer carries (it becomes a family flag for both), and — on a `--force` overwrite — each family flag the new version drops that leaves exactly one other reviewer carrying it (that reviewer is dispatched outright under it from then on). A name with no letter or digit (a package directory, or a SKILL.md or URL name) is refused. Before anything is written, every destination — package, registry, catalog, each rule, each template — that would be written or compared is checked for a symlink on the way that resolves outside the project; one is refused and nothing is written, `--dry-run` included. A template destination that is only reported (`skipped`) is not written and does not refuse the run. Frontmatter is read as a YAML subset (BOM and CRLF accepted, trailing `#` comments dropped, `metadata.paths`/`metadata.flags` as a flow, block or comma-separated list, only keys directly under `metadata:`); a shape outside it reads as not declared. Rules the skills cite are copied as described under [`review import`](#review). A package's `templates/` directory (a report overlay, say) is copied byte for byte, subdirectories included, to `.metaproject/project-skills/<module>/<name>/templates/`, so the skill reads it from the project and not from the repository it was imported from; a URL source has none. Only regular UTF-8 text files are copied (a symlink or a binary file is not; the latter gets a `skipped` row). Each file has its own row, in a `templates` array in `--json`: `imported` (`would-import` on a dry run), `unchanged` when the project already has it byte for byte, `differs` when the project's copy is another file — left as it is, and replaced (`overwritten`, `would-overwrite`) only with `--force`, or by `keryx skills update`, which refreshes the package from its origin. Running `import` a second time therefore skips what the source has not changed and reports what it has as `differs`. A package that is already in the project still gets the templates it lacks. A template that cannot be written because a file (or a link to one) stands where its directory belongs, or because a directory stands where the file belongs, is `skipped` with the path named, in a dry run and a real run alike; the rest of the package is written. Every file is passed through the security gate on its final text while the import is planned, `--dry-run` included. A secret is masked and the row says `redacted by the security gate (…)` (`would be redacted …` on a dry run); another finding is reported on the row as `flagged by the security gate (…)`, following the project's security mode. A prompt-injection finding refuses the file in every mode: the row is `refused` (`would-refuse` on a dry run) with the gate's own summary, nothing is written, and the other packages go on. A template the gate refuses refuses its whole package: the package row is `refused` (`would-refuse`), its other templates are `skipped`, and neither `SKILL.md`, the registry entry, the catalog row nor any template is written; other packages of the same run are not affected, and a rule cited only by the refused package is not written. A package the project already has keeps its row (`skipped`) and its rules without `--force`; only its templates are withheld. With `--force` the package is being written, so its row is `refused`, its installed `SKILL.md` stays, and the rules only it cites are skipped. The refusal is reported before a `differs` verdict, so `--force` is never advised for a file that would then be refused. With the security module disabled the import runs the deterministic injection detector itself and refuses on a match the same way (the reason says the security module is disabled and the import ran its own injection check); a secret is still masked and clean text imports as usual. A rule cited only by refused packages is not written: its row is `skipped — cited only by a refused package`. A real run with any `refused` row prints every row and then exits `1`; a dry run (`would-refuse`) exits `0`. The final text is gated once, before the scaffold, registry entry or catalog row is written, and the text written is the text gated. `--allow-flagged` writes an injection-flagged file after you have read it (the row says it was flagged and written because of the flag); it does not override a block by the project's security mode, so under `enforced` a secret is refused either way. The `--allow-flagged` hint under the rows is printed only when a refused row carries a prompt-injection finding. A row carries a `security` object in `--json` (`action`, `findings[]` of `policyId`/`category`/`action`, `redacted`, `refused`). |
+ | `import --rules <dir>` | `--only <glob>` (repeatable), `--link`, `--dry-run`, `--force`, `--allow-flagged`, `--json` | Import a project's own rules, with no skill citing them. Every `*.mdc` and `*.md` under `<dir>` is copied byte for byte to `.metaproject/rules/project/<relative path>` and recorded in `projectSkillRegistry` as `kind: rule` with `description`, `globs` and `alwaysApply` from its front matter. `--only` matches the relative path or the file name. A re-run reports `unchanged`; a project copy that differs is replaced only with `--force`; `--dry-run` reports `would-import` and writes nothing. The files go through the same security gate and containment check as `SKILL.md`: a prompt-injection finding refuses the file unless `--allow-flagged`, a symlink resolving outside the project refuses the whole run with nothing written, and nothing is ever written under `.metaproject/rules/core/`. With `--link` nothing is copied: the registry keeps the origin path and sha256 and `resolve-context` reads the rule in place only while the file still has that sha256; on a mismatch the rule is left out with a warning that names the file and says to run `keryx skills update --rules`. A copied rule and a linked rule with the same ref resolve to the copy. |
+ | `update --rules [<ref>]` | `--dry-run`, `--force`, `--allow-flagged`, `--json` | Re-read the rules `import --rules` registered from their recorded origin and report each as `current`, `updated`, `modified-locally` (the project's copy was edited; replaced only with `--force`), `refused` or `skipped`, with the old and new sha256. A copy is rewritten; a linked rule is re-pinned to the origin's new hash. Same gate and containment as `import`. |
+ | `remove --rule <ref>` | `--dry-run`, `--json` | Remove a rule `import --rules` registered: its copy under `.metaproject/rules/project/`, the directories that leaves empty, and its registry entry. A linked rule loses its entry only; its origin file is never touched. A file under `rules/project/` that was not imported, and anything under `rules/core/`, is refused. |
+ | `update [<module>/<name>]` | `--all`, `--from <origin>`, `--dry-run`, `--allow-flagged`, `--json` | Re-read Origin and overwrite SKILL.md when the source moved on. Name one skill, or `--all`. A skill with no Origin is skipped. The `templates/` directory beside a local Origin is re-read with it: each file replaces the project's copy and a file the source gained is added, through the same gate, containment check and `templates` rows as `import`; a file the source dropped stays. A refused template refuses its package here too: the installed `SKILL.md` and templates stay as they were. A destination behind a symlink that resolves outside the project is refused before anything is written, `--dry-run` included. The refreshed text goes through the same security gate as `import`: a prompt-injection finding makes the row `refused` (`would-refuse` on a dry run) and leaves the installed copy as it was, unless `--allow-flagged`; the text is gated before anything is written, so a refusal never touches the installed `SKILL.md`, registry or catalog. With the security module disabled the update runs the injection detector itself, as `import` does. A real run with any `refused` row prints every row and exits `1`; a dry run exits `0`. A secret is redacted and reported on the row; rows carry a `security` object in `--json`. |
+ | `remove <module>/<name>` | `--dry-run`, `--json` | Remove a project skill — the inverse of `create`/`import`, in this order: the verification report, the catalog row, the package directory (its imported `templates/` with it, and its `<module>/` directory when it was the last skill there), and the `projectSkillRegistry` entry last. Each part is listed as `removed` or `absent`; an already-missing part is not an error, and a skill whose entry and package are gone is still found by a leftover catalog row or verification report, so a skill half-removed by hand can be finished. If a step fails (e.g. a read-only directory), the error names that part and lists what is already gone and what is still in place (a package directory whose removal failed part-way is listed as `(may be partly removed)`); the registry entry is still there, so re-running the same command after fixing the cause finishes the removal. `--dry-run` lists what would be removed and changes nothing. Refused with exit `1`, always before anything is changed: a bundled skill (use `install`/`uninstall`); an unknown name (names are case-sensitive: `Review/Alpha` is refused, naming the registered `review/alpha`, even on a case-insensitive filesystem); a skill whose package directory is on disk only under another spelling (`review/Alpha/` for `review/alpha`) — the refusal names the on-disk spelling; rename the directory to the registered one and retry; a registry entry whose `path` is not its own `.metaproject/project-skills/<module>/<name>` or whose module/name is not a plain path segment; a symlink where something would be deleted (`project-skills/`, the `<module>/` directory, the package itself, the reports directory) — nothing is deleted through a link and the link is not unlinked; a `metaproject.json` or `catalog.md` that resolves outside the project (one reached through a symlink inside the project is rewritten in place and listed with its `resolvedPath`). A verification report whose body names another package (`skillPath`) is left alone even when its file name matches. Imported rules, runtime exports and learning proposals are left in place. |
+ | `verify <skill-or-target>` | `--dry-run`, `--json` | Verify a project skill against evidence; write a report. `--all` verifies every registered skill. |
+ | `verify --bundled` | `--root <dir>`, `--json` | Structurally validate the **shipped** skill tree (the 65 `SKILL.md` files copied into every install), not this project's project-skills. Exits `1` on any finding and on an empty tree. |
+ | `learn --from-<source> <path> --skill <m>/<s>` | `--from-review\|--from-test\|--from-failure\|--from-health\|--from-memory <path>`, `--skill`, `--dry-run`, `--json` | Create an auditable learning proposal (does not mutate SKILL.md). |
+ | `learn apply <proposal.json>` | `--dry-run`, `--json` | Apply a reviewed proposal to SKILL.md + changelog; bump patch version. |
+ | `export <project-skill>` | `--runtime codex\|claude\|plugin`, `--dry-run`, `--json` | Export a project skill to a runtime artifact. The `plugin` runtime (alongside `codex` and `claude`) emits a Claude Code plugin package. |
+ | `sync` | `--runtime codex\|claude`, `--target <dir>`, `--dry-run`, `--json` | Sync exported runtime skills to an explicit target dir. Requires both `--runtime` and `--target`. |
+ | `contracts list` | — | Print name/path/description for all contract schemas. |
+-| `contracts validate <file>` | `--schema <name>`, `--resolved <resolved.json>` | Validate a JSON file against a named contract schema. Exits `1` on failure. `--resolved` (only with `task-implementer-output` or `tests-creator-output`) also checks the result's `project_context_applied` against a `resolve-context --out` file: every `must_read` entry has to be cited with the sha256 the resolver pinned, and no resolved file may have changed since. The summary line `project context: N miss(es), M drifted (enforcement X)` follows the schema verdict; under `gdskills.projectContext.enforcement: warn` (default) it only prints, under `block` it goes to stderr and exits `1`. |
++| `contracts validate <file>` | `--schema <name>`, `--resolved <resolved.json>` | Validate a JSON file against a named contract schema. Exits `1` on failure. `--resolved` (only with `task-implementer-output` or `tests-creator-output`) also checks the result's `project_context_applied` against a `resolve-context --out` file: every `must_read` entry has to be cited with the sha256 the resolver pinned, and no resolved file may have changed since. For an entry promoted by a `condition:` reason the item also needs `anchor` equal to the declared one and a `summary` of at least 40 characters that shares at least three distinct words of five or more letters with the section (or all of them, if the section has fewer); `how: "n/a"` is a miss. A miss prints `- project context miss: <path> (<reason>) <detail>`. The summary line `project context: N miss(es), M drifted (enforcement X)` follows the schema verdict; under `gdskills.projectContext.enforcement: warn` (default) it only prints, under `block` it goes to stderr and exits `1`. |
+ | `scout <name-or-description>` | `--record <pack-dir>`, `--include-imports`, `--candidate <dir>`, `--scope bundled\|all`, `--json` | Flow 325 (W1): pre-creation dedupe gate — does an existing skill already cover this? Scores the query against the catalog (bundled by default, `--scope all` includes project-skills); `--candidate` vets a not-yet-created skill directory; `--record` persists the scout result under a pack directory. `--include-imports` (flow 313, W4) additionally scores the query against every recorded entry in `~/.keryx/skills/external-imports.json` (see [bundle import --external](#bundle)), with the same lexical scorer, reporting `searched: false` and a named reason when the registry is absent or corrupt rather than a silently empty match list. |
+ | `eval <skill-id>` | `--strictness low\|medium\|high`, `--trials N`, `--runner <provider>[:<model>]`, `--judge <provider>[:<model>]`, `--scope bundled\|all`, `--model-grader`, `--json` | Flow 325 (W1): behavioral compliance eval — trigger accuracy + scenario pass rate. Scenarios that need a runner capability are reported `not-run`, not failed, when none is configured. `--runner` splits at the first `:` into provider and optional model (e.g. `--runner deepseek:deepseek-chat`, `--runner ollama:llama3.1:latest`); flow 314 wires this through `src/commands/model-eval-runner.ts`, dispatching each scenario as a single-turn call with the skill's `SKILL.md` as the system prompt. `--scope` (default `all` for `eval`, unlike `scout`/`stocktake`/`judge-check`, which default to `bundled`) selects which catalog the skill id resolves against and the triggers are scored against — a stack-pack eval gate document requires `--scope bundled` explicitly; the pack gate refuses a report recorded with `scope: "all"`. Flow 316: `--judge <provider>[:<model>]` (same `provider[:model]` split as `--runner`, via `src/commands/model-eval-judge.ts`, called at `temperature: 0` for the closest a provider gets to deterministic scoring) grades every `"grader": "judge"` behavior scenario with a live LLM judge instead of leaving it `skipped`; the judge is a separate build and separate calls from the runner under test, even when both name `deepseek:deepseek-chat`. Building either an unknown `--runner`/`--judge` provider, or one with no credential, fails closed before any scenario runs. With `--judge`, the report gains `judge` (provider), `judgeModel`, and `judgePromptVersion` (the judge prompt version that produced the recorded verdicts); every report also gains `catalogDigest` (the bundled catalog the trigger scenarios were scored against, kept as informational context only — trigger scenarios are always re-scored live against the current catalog, never trusted from the report) and, per ran behavior scenario, `trialRecords` — one entry per trial (`output`, `outputSha256`, `deterministic` results, `judge` verdict, `passed`) so the report can be re-derived (`regradeRecordedReport`) without re-running the model. The stable-pack gate (`checkSkillReportForPackGate`) requires the report's `(runner, model)` and, when any scenario carries a judge expectation, its `(judge, judgeModel)` to both be in the gate's allowlisted set (`STACK_PACK_GATE_POLICY`, pinned to `deepseek`/`deepseek-chat` for both roles), `judgePromptVersion` to match the current judge prompt, and the recorded `passes`/`passRate`/trial counts to match what the trial records themselves show — a report from an unlisted runner or judge, a stale prompt version, or counts that disagree with its own records, never clears the gate. **What this proves, and what it does not:** the gate proves internal consistency — the recorded outputs, deterministic results, counts and pass rates are re-derived from the trial records, and trigger results are re-scored live, not re-declared from the report. It does not prove provenance: the trial outputs, judge verdicts, and runner/judge labels are self-declared by whoever ran the eval, and the gate never re-runs the judge model against them ("re-derive"/"re-grade" here means recomputing from what was recorded, not re-judging). The control for provenance is review of the committed `eval.json` / recording diff in the pull request. |
+ | `eval --reverify <pack-dir>` | `--judge <provider>[:<model>]` (required), `--sample <n>` (default `10`), `--json` | Flow 317 (FU3): the live re-judge sampler. Re-judges a RANDOM SAMPLE of `<pack-dir>`'s already-recorded trial outputs (`governance/eval.json`, every ran behavior scenario's `trialRecords` that carry a judge verdict) against the CURRENT live judge, matched against the skill's current `evals.json` by scenario id, and reports where the live verdict disagrees with what was recorded. Read-only — never rewrites `governance/eval.json`. **Threat model:** `eval`'s own stable-pack gate (above) proves a recorded report is internally consistent (`regradeRecordedReport`) and re-scores triggers live, but it cannot prove a recorded JUDGE verdict was ever a genuine live grading rather than, say, a hand-edited recording — nor can it catch the judge PROVIDER's own weights drifting under a pinned model name over time. `--reverify` is the closest available check for exactly those two gaps: a diagnostic a human (or a scheduled job) runs and acts on, not something the gate itself enforces automatically. Exits `1` when the sampled disagreement rate exceeds `REVERIFY_DISAGREEMENT_THRESHOLD` (20%, `src/gdskills/governance/eval.ts`) — deliberately generous, since a live judge is not perfectly deterministic on identical input (flow 316 review round 1) and a single flaky call among a handful of samples is expected noise, not drift. |
+ | `judge-check <skill-id>` | `--judge <provider>[:<model>]` (required), `--scope bundled\|all` (default `bundled`), `--samples <n>` (default `3`), `--record`, `--json` | Flow 316: proves a skill's judge-graded scenarios are hard to game. For every scenario carrying a `"grader": "judge"` expectation, runs the canned answer set — `empty`, `echo`, `vague`, `known-wrong`, `subtle-wrong`, `injection`, `stuffed`, `known-right` (eight kinds; fix 1 / R1-4, R1-11 added `vague` and `subtle-wrong`, authored per scenario from the required `calibration.vague`/`calibration.subtle_wrong` fields) — through the live judge named by `--judge`, using the same grading function `eval`'s own trial loop uses. Each non-`empty` canned answer is graded `--samples` times (default 3) rather than once, because the live judge is not deterministic on identical input; a canned answer is a match only when every sample agrees with the expected verdict and none errored — the recordings this command writes (with `--record`) store all of a canned answer's samples, not a single verdict. Exits `1` if any canned answer's verdict does not match what it should be (`empty`/`echo`/`vague`/`known-wrong`/`subtle-wrong`/`injection`/`stuffed` must all FAIL, `known-right` must PASS). `--record` writes the recorded samples to `src/gdskills/governance/judge-recordings/<pack>__<skill>.json`, keyed by a digest of the exact judge prompt — the integrity guard replays these offline, and a stale recording (an edited rubric, a bumped judge prompt version) is detected rather than silently reused. A recording is a hand-writable file like any other committed artifact: it proves the anti-gaming set was checked against a live judge at record time, not that nobody could have edited it afterward — the same threat model as `eval`'s report, above. |
+ | `stocktake` | `--scope bundled\|all`, `--quick`, `--json` | Flow 325 (W1): periodic catalog health check — buckets each skill `keep\|improve\|update\|retire\|merge`. `--quick` skips the slower checks. |
+ 
+ Profiles: `minimal`, `recommended` (default), `full`, `custom`. Contract schemas:
+ `subagent-result`, `subagent-dispatch`, `agent-event`, `orchestrator-state`,
+ `review-finding`, `task-implementer-input`, `task-implementer-output`,
+ `tests-creator-output`.
+ 
+ ### Project rules and implementation skills
+ 
+ `task-implementer` and `tests-creator` read the project's own standards before
+ they write code or tests, project first and bundled second. Three pieces make
+ that checkable instead of a request in prose:
+ 
+ - **Import.** `keryx skills import --rules <dir>` brings rules in; a package
+   whose `metadata.category` is `implementation` or `testing` imports without
+   `--module` into `.metaproject/project-skills/implementation/<name>/` or
+   `.../testing/<name>/`. A project skill only supplements the built-in
+   `task-implementer` and `tests-creator`; it never replaces them, and a project
+   skill may not share a name with a bundled one. `keryx skills route` ranks a
+   project skill above a bundled one when their scores are equal.
+ - **Resolve.** `keryx skills resolve-context` lists, in one deterministic and
+   hash-pinned result, the rules, project skills and referenced contract files
+   (`CLAUDE.md`, `.claude/rules/x.md` and similar paths cited in backticks by a
+   project rule) the task has to read. The worker cites what it read in
+-  `project_context_applied: [{path, sha256, how}]`.
++  `project_context_applied: [{path, sha256, how}]`; an item for a document
++  promoted by a condition also carries `anchor` and `summary`.
++- **Declare.** `.metaproject/rules/project/references.json` (`schema: 1`) says
++  when a cited document is required: `references[]` with `path`, `when.globs`
++  and/or `when.keywords` (at least one), and optionally `anchor` (a heading;
++  only that section is required) and `description`. Unknown properties are
++  errors. A missing file means no declarations; a malformed one disables
++  promotion for that run with a warning and does not block. Authoring help:
++  `keryx skills references check` and `keryx skills references suggest`. The
++  guide [Make agents follow my project's own rules](guides/apply-project-rules.md#5-make-a-long-document-required-only-when-the-task-needs-it)
++  has a worked example.
+ - **Check.** `keryx skills contracts validate <result.json> --schema
+   task-implementer-output --resolved <resolved.json>` reports every `must_read`
+   entry missing from `project_context_applied` and every resolved file that
+   changed since it was pinned. `keryx flow task done <id> <taskId> --result
+   <result.json> --resolved <resolved.json>` runs the same check when an
+   `implement` or `test` task is closed.
+ 
+ Both the cap and the enforcement mode live in `.metaproject/tasks.config.json`:
+ 
+ ```json
+ { "gdskills": { "projectContext": { "enforcement": "warn", "maxBytes": 131072 } } }
+ ```
+ 
+ | Key | Values | Meaning |
+ |---|---|---|
+ | `gdskills.projectContext.enforcement` | `warn` (default), `block` | `warn`: a miss is printed by `contracts validate --resolved`, and written to the flow journal by `flow task done`; the exit code stays `0`. `block`: `contracts validate --resolved` exits `1` naming the missing paths, and `flow task done` refuses an `implement` or `test` task whose result fails the check or that records no result (close it with `--disposition skipped --reason "<why>"` to move past it). An unknown value reads as `warn`. |
+ | `gdskills.projectContext.maxBytes` | integer 4096..1048576, default 131072 | Cap on project-sourced content per task. Entries that fit are `must_read`; the rest are listed `on_demand` with their description and `budget.exceeded` is set with one warning that names this key. Rules are never cut. `resolve-context --max-bytes` overrides it for one call. A value outside the range reads as the default and warns. |
+ 
+ The default install writes neither key and reads as `warn` with 128 KiB. The
+-mode can also be changed from the TUI: `/projectctx [warn|block]` opens the
+-inspector (Status and Last resolve tabs, `e` toggles the mode) and the
++mode can also be changed from the TUI: `/projectctx [warn|block|refs]` opens the
++inspector (Status, Last resolve and References tabs, `e` toggles the mode;
++`/projectctx refs` opens it on the References tab, which lists each declared
++conditional reference with its condition, anchor, promotion status, reason and
++the problems `keryx skills references check` finds; the sidebar line gains
++`refs <promoted>/<declared>`, `!<k>` for problems and `?` for an invalid
++references file) and the
+ settings modal has a `Project rules check` row under Safety that shows the
+ mode and, beside it, the cap (the cap itself is edited in the config file). The sidebar shows a
+ `ProjectCtx` line once the project has imported rules or a recorded resolve.
+ 
+ The MCP and shell operation `skills_resolve_context` returns the same entries
+-as the CLI and, unlike the CLI, does not write `last.json`.
++as the CLI and, unlike the CLI, does not write `last.json`. It takes the task
++text as `task_text`, the counterpart of `--task-text`.
++
++**What the check does not prove.** Keryx cannot see what an agent opens. The
++`anchor` and `summary` test is a proxy: a summary of 40 characters that shares
++three distinctive words with the section passes, and two sections of one document
++can share such words, so a worker that read nothing can pass it. It catches a
++missing, empty or generic answer. How often a document is required depends on
++how broad its globs and keywords are, and the size cap never drops a promoted
++document.
+ 
+ ### What `verify --bundled` checks, and what it does not
+ 
+ `--bundled` is **layer one of three** and only layer one. It runs the checks that
+ can be decided by reading files:
+ 
+ | Check | Rule |
+ |---|---|
+ | `frontmatter:block` / `:name` / `:description` / `:metadata` | Required fields are present, non-empty, and `metadata` carries a `version`. |
+ | `frontmatter:name-unique` | No two skills declare the same `name`; a harness registers by that name. |
+ | `catalog:registered` | `BUNDLED_GDSKILLS` names the directory, so `skills install` actually copies it. |
+ | `model:concrete-declaration` | No skill names a model id where a `model_tier` belongs. |
+ | `persona:name` / `persona:marker` / `path:personal-home` | No shipped file names a particular person or points into their home directory. |
+ | `xref:skill` / `xref:path` | Every skill and every `skills/`, `rules/`, `scripts/` path a skill names actually exists in the shipped tree. |
+ 
+ It does **not** judge whether a skill's instructions are correct, useful, or
+ followed. That is layer two (a model judging across named dimensions) and layer
+ three (reliability over repeated runs), and neither is built. A clean report from
+ `--bundled` is not a quality claim, and the command's own output says so.
+ 
+
+--- docs/docs/commands-by-task.md
+@@ 98,138 @@
+ | `keryx review` | Managed review packages and lightweight report-only review mode; `review ledger build` writes the research ledger the completion gate demands. |
+ 
+ | Shell command | Summary |
+ |---|---|
+ | `/flows` | Browse project flows and inspect one. |
+ | `/ac` | Check the active flow's frozen acceptance criteria (advisory, cached) — same modal as /flows, AC tab. |
+ | `/review` | Show project-wide items needing review (proposals, blocked sessions). |
+ | `/ci` | Failed CI runs/jobs of the current branch's PR, each with an advisory triage and its deterministic-signal evidence. |
+ | `/conform` | Check a PR, a review report, or a diff against a reference document's clauses, with Jev. |
+ | `/risk` | Risk map of the working diff's hunks — deterministic facts plus Jev per risk dimension, ranked, highest risk first. |
+ | `/scenarios` | Which user scenarios the working diff likely changes — deterministic scenario/code links plus Jev, ranked. |
+ | `/jevrules` | Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule. |
+ | `/staledocs` | List doc sections that likely went stale because of the working diff, with Jev. |
+ | `/flow` | Show a flow's origin, or set it with a reason — /flow origin [<id>] \| /flow origin <id> <kind> --reason "...". |
+ | `/opencomments` | List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>. |
+ | `/contract` | Check PR-description claims and a linked flow's frozen acceptance criteria against the working diff, with Jev. |
+ | `/triage` | Advisory annotations — severity calibration, duplicate-merge candidates, verifier queue order — over the latest review package, with Jev. |
+ | `/guard` | Opt-in turn guard: after a turn, checks whether the request was done and catches a reply that contradicts the tools — /guard [on\|off]. |
+ | `/route` | Opt-in routing classifier: each request runs on its routing category's model — /route [on\|off]. |
+ | `/editguard` | Jev EDIT GUARD status, threshold and recent flags for the Claude Code PostToolUse hook, with a toggle. |
+-| `/projectctx` | Project rules for implementation: the last resolve, the context cap and warn/block enforcement — /projectctx [warn\|block]. |
++| `/projectctx` | Project rules for implementation: the last resolve, the context cap, warn/block enforcement and conditional references — /projectctx [warn\|block\|refs]. |
+ | `/jevprofile` | Every review.jev.* setting next to its measured verdict; toggle one or apply the recommended profile. |
+ | `/plan` | Toggle read-only mode — /plan [on\|off]. |
+ | `/goal` | Deterministically start a goal — /goal <text> [--workspace <id>] [--auto [N]]. |
+ 
+ ## Automation
+ 
+ | CLI command | Summary |
+ |---|---|
+ | `keryx trigger` | Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code. |
+ | `keryx schedule` | Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove; `add --digest` makes a GitHub and board digest that `keryx serve` sends to Telegram. |
+ | `keryx approvals` | Pending remote approvals: list them, allow or deny one call, once (the local answer path of keryx serve). |
+ | `keryx permissions` | The saved shell rules an Always answer leaves behind: list them (honoured or not, with the reason) and remove one. |
+ | `keryx governance` | Read-only report over already-recorded spend, confirmations, signatures and gate outcomes. |
+ | `keryx decisions` | Recommendation journal: record each agent question with options and its recommendation, the human's choice, and report how often they agree (a third are asked blind). A question also takes your own text: the last row "Свой ответ…" in the shell, the "✍ Свой ответ" button in Telegram, and Tab after an option adds a typed reason. |
+ | `keryx intake` | GitHub work intake: tickets, review requests, failed CI, PR comments and board movement as cards in Telegram; status, pause, poll by hand, and a usefulness report. |
+ | `keryx research` | Part 1 materials: sync refreshes the -latest counts, the text-free decisions export and the status page next to the catalog; no commit, only when the content changed. |
+ | `keryx product` | The product's intent as a derived index, and the intents closed in code that nobody looked back at. |
+ | `keryx hooks` | Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration. |
+ | `keryx learn` | Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune. |
+ | `keryx remote` | Preview how Telegram replies are rendered (tables, lists, rules) in every mode, with no network: format-sample. |
+
+--- docs/docs/guides/apply-project-rules.md
+@@ 80,303 @@
+ { "gdskills": { "projectContext": { "enforcement": "warn", "maxBytes": 131072 } } }
+ ```
+ 
+ `warn` (the default) records a miss in the flow journal and lets the task
+ close. `block` refuses it. In the TUI, the **Project rules check** row of
+ `/settings` switches the mode and shows the cap, and `/projectctx` opens the
+ last result.
+ 
+ ## 4. Check the worker's work
+ 
+ A worker returns a `project_context_applied` list in its result: the path and
+ `sha256` of each `must_read` file it read. Close the task against it:
+ 
+ ```console
+ $ keryx flow task done 461 T2 --result result.json --resolved .metaproject/data/skills/project-context/last.json
+ ```
+ 
+ Two things count as a failure: a `must_read` file the result does not cite, and
+ a cited file whose hash changed after it was resolved. Under `block`, an
+ `implement` or `test` task with no result is refused too;
+-`--disposition skipped --reason "…"` is the way out.
++`--disposition skipped --reason "…"` is the way out. A document promoted by a
++declaration (section 5) has further checks, listed there.
++
++## 5. Make a long document required only when the task needs it
++
++A rule file is short and is read on every matching task. A document such as
++`STYLING.md` or `THEMING.md` is long, and rules usually point at it by name
++(``Follow `STYLING.md` for classes``). Left alone, such a document is listed
++`on_demand`, which no worker is checked on. You can declare when a document
++becomes required, and for which part of it.
++
++### Declare it
++
++Write `.metaproject/rules/project/references.json`. It is a separate file
++because rules are copied byte for byte and `keryx skills update --rules`
++overwrites them.
++
++```json
++{
++  "schema": 1,
++  "references": [
++    {
++      "path": "STYLING.md",
++      "when": {
++        "globs": ["src/**/*.css", "src/**/*.tsx"],
++        "keywords": ["className", "tailwind", "spacing"]
++      },
++      "anchor": "Class conventions",
++      "description": "Class naming, spacing and variants. Read before adding or changing className, CSS or inline style."
++    },
++    {
++      "path": "THEMING.md",
++      "when": { "globs": ["src/theme/**"], "keywords": ["theme", "dark mode", "colour"] },
++      "anchor": "Tokens",
++      "description": "Theme tokens and dark mode. Read before adding a colour or touching a theme."
++    }
++  ]
++}
++```
++
++- `path` is relative to the project root, with `/` separators, and stays inside
++  it.
++- `when` needs at least one glob or keyword. A glob is matched against the task's
++  files, as a rule's `globs` are.
++- A keyword is matched against the task text as a whole word, ignoring case. A
++  keyword may be several words (`dark mode`).
++- `anchor` (optional) is a heading in the document. Only that section is
++  required: from the heading to the next heading of the same or a higher level,
++  not counting headings inside fenced code. The heading matches by its text or
++  its slug, and the first match wins. Without `anchor` the whole file is required.
++- `description` is shown next to the entry, so a worker can see why it is there.
++- A property that is not listed here is an error.
++
++A missing `references.json` means no declarations. A malformed one does not stop
++anything: no reference is promoted, the resolver prints a warning, and the task
++carries on. The file is also covered by a JSON schema,
++`docs/requirements/keryx-conditional-reads/schemas/references.schema.json`.
++
++### Resolve against the task
++
++Pass the task text with `--task-text`. It is cut at 4000 characters, and the cut
++text is what `last.json` records. A task that edits `src/button.tsx`:
++
++```console
++$ keryx skills resolve-context --files src/button.tsx --for implement \
++    --task-text "Add a loading spinner to the Button"
++Budget: 462 of 131072 bytes (default)
++
++## must_read (2)
++- .metaproject/rules/project/styling.mdc — project rule, glob:src/**/*.tsx, 113 bytes, sha256 65a5c6fe816c
++- STYLING.md — project contract, condition:glob:src/**/*.tsx, 438 bytes, sha256 3b473b6d9c0e (anchor "Class conventions", section 349 bytes)
++
++## on_demand (1)
++- THEMING.md — project contract, declared, 152 bytes, sha256 169fe095b433 (anchor "Tokens", section 141 bytes)
++```
++
++`STYLING.md` moved to `must_read` because the file matches `src/**/*.tsx`. The
++reason, `condition:glob:<glob>` or `condition:keyword:<word>`, says which
++condition fired. `THEMING.md` stayed `on_demand`, reason `declared`.
++A task on `src/session.ts` with the text "Let the user pick a dark mode" promotes
++`THEMING.md` instead, with reason `condition:keyword:dark mode`. A task on the same file with
++the text "Fix the token refresh race" promotes neither.
++
++Details that can surprise you:
++
++- The byte count of a promoted document is the size of its section, or of the
++  file when there is no anchor. The size cap never moves a promoted document back
++  to `on_demand`; it prints a warning that the cap is exceeded instead, and the
++  budget line includes the promoted bytes.
++- An `anchor` that is not found falls back to the whole file, with a warning.
++- A declared file that is missing, outside the project, larger than 262144 bytes,
++  or already listed as a rule is left out, with a warning.
++- When a `references.json` exists, the result also lists `undeclared`: documents
++  that a project rule names but that have no declaration.
++
++### What the worker must return
++
++For a promoted document the worker's `project_context_applied` item carries two
++more fields, `anchor` and `summary`:
++
++```json
++{
++  "path": "STYLING.md",
++  "sha256": "3b473b6d9c0e…",
++  "how": "read",
++  "anchor": "Class conventions",
++  "summary": "Class names go through the cn helper, spacing uses the Tailwind scale, variants sit in a cva definition beside the component."
++}
++```
++
++`sha256` is the hash of the whole file, as printed by `resolve-context`, even
++when only a section was promoted. The checks run when the task is closed, or by
++hand with `keryx skills contracts validate result.json --schema
++task-implementer-output --resolved last.json`. For an item promoted by a
++condition, a miss is recorded when:
++
++1. `how` is `n/a`.
++2. `anchor` differs from the declared one.
++3. `summary` is shorter than 40 characters.
++4. `summary` shares fewer than three distinct words of five or more letters
++   with the section (or all of them, if the section holds fewer than three
++   such words). Words in any script count.
++
++A file that changed after it was resolved is counted separately, as drift. A
++miss is one line, and the headline counts both:
++
++```text
++project context: 1 miss(es), 0 drifted (enforcement warn)
++- project context miss: STYLING.md (condition:glob:src/**/*.tsx) has a summary that shares 0 distinct word(s) of 5 or more letters with the section "Class conventions"; 2 required. Write the summary in the wording of the text you read
++```
++
++Under `warn` this exits 0 and the task closes; under `block` it exits 1, the
++message goes to stderr, and `keryx flow task done` refuses.
++
++### Check the declarations
++
++```console
++$ keryx skills references check
++```
++
++It reads `references.json` and every rule in `.metaproject/rules/project/`, and
++ends with `N errors, M warnings`. It exits 1 on an error:
++
++| Finding | Level |
++|---------|-------|
++| `invalid-file`, `document-missing`, `document-outside-root`, `document-not-file`, `document-too-large`, `document-unreadable`, `anchor-not-found` | error |
++| `description-short` (under 20 characters), `keyword-short` (under 4) | warning |
++| `unused-declaration` (no project rule names the document), `undeclared-citation` (a rule names a document with no declaration), `rule-unreadable` | warning |
++
++A missing `references.json` is not an error. `--json` prints the same findings
++as JSON. The citation scan looks for backticked `X.md` names in project rules
++only: a rule imported with `--link` is not scanned, and neither are bundled
++rules.
++
++To start a file, `keryx skills references suggest` prints a skeleton for every
++document that a project rule names and `references.json` does not declare. It
++writes nothing. Copy the entries you want into `references.json`, fill in
++`description` and `when`, choose an `anchor` from `anchorCandidates`, and delete
++`anchorCandidates` and `bytes`, which the loader rejects as unknown properties.
++Delete an empty `globs` or `keywords` list as well; an empty one is an error.
++`keryx skills import
++--rules` ends with a reminder when it finds such documents.
++
++```console
++$ keryx skills references suggest
++{
++  "schema": 1,
++  "references": [
++    {
++      "path": "STYLING.md",
++      "bytes": 438,
++      "anchorCandidates": ["Styling", "Class conventions", "Cascade", "Inline style"],
++      "description": "",
++      "when": { "globs": [], "keywords": [] }
++    }
++  ]
++}
++```
++
++In the TUI, the sidebar line `refs <promoted>/<declared>` and the References tab
++of `/projectctx` (`/projectctx refs`) show the same state.
++
++### What this does not prove
++
++- **The proof is a proxy.** Keryx cannot see what an agent opened. A summary
++  passes when it has 40 characters and shares three distinctive words with the
++  section, and an agent that read nothing can sometimes do that: two sections
++  of a style guide easily share words such as "never" and "component". The check
++  catches a missing, empty or generic answer. It does not show that the agent
++  read the section.
++- **Breadth decides how often a document is required.** A glob such as `src/**`
++  or a keyword such as `component` promotes the document on most tasks. Use
++  narrow conditions, and let `references check` flag short keywords.
++- **A promoted document is never dropped for size.** If several are promoted
++  on one task, all of them are required and the cap only produces a warning.
++- **A malformed `references.json` turns the feature off** for that run. It warns
++  and does not block, so read the warnings.
+ 
+ ## Where to go next
+ 
+ - [CLI reference](../cli-reference.md#project-rules-and-implementation-skills) —
+   every flag and the config table.
+ - [Give an agent context about my repository](give-an-agent-context.md) — the
+   index these rules sit under.
+
+--- docs/requirements/keryx-conditional-reads/README.md
+@@ 1,98 @@
++# Conditional mandatory reads for documents cited by project rules
++
++Flow: 462 (`.metaproject/flows/462-2026-10-18-conditional-reads/`). Status: DRAFT for the operator; criteria are not frozen.
++Criteria (single source): `.metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md`.
++Builds on flow 461 (PR #1047, project rules first). This branch must be rebased on `main` once #1047 is merged; nothing here compiles without the 461 resolver.
++
++## 1. Problem
++
++Flow 461 made project rules `must_read` for code and test workers, and a validator compares what the worker cites with what the resolver required. Documents that a rule only points at are different. A Vantage rule such as `styling.mdc` says "see `STYLING.md`" (about 100 KB) and `THEMING.md` (about 68 KB). The resolver lists such a file as `kind: contract`, `tier: on_demand`, with no condition: it is always optional, the validator never asks for it, and the rule carries no statement of when the document matters. A worker that touches `className` or a theme token can finish with a green validator without having read the document that governs exactly that.
++
++The operator's wording (voice 212151): when a task intersects styling or theming the agent must read the project rule, and the same holds for the other rules; so the files imported into project rules need not just links and hashes but a proper description, so the agent understands when it must read the main document and that it must go to the link and actually read it.
++
++## 2. Decisions already taken by the operator (poll 211, 2026-10-18)
++
++| Question | Answer |
++|---|---|
++| When | a separate flow after green CI of #1047 (this flow) |
++| Condition shape | path masks of the task's files plus keywords of the task text, an anchor and a description per reference |
++| Effect of a match | the reference is promoted from `on_demand` to `must_read` |
++| Proof of reading | path, hash, anchor and a short summary |
++
++## 3. Goals
++
++1. A project declares, per cited document: where it applies (file globs and task keywords), which section matters (anchor), and a description of what the document governs.
++2. The resolver reads the declarations and the task, and promotes the matching documents to `must_read`; unmatched ones stay `on_demand` but now carry their description, so the worker can decide.
++3. The worker's result proves the read: path and sha256 as today, plus the anchor and a summary of the section.
++4. A validator checks the proof deterministically. A summary that has nothing to do with the section fails. It warns first and blocks under the existing `enforcement: block` setting.
++5. A project can see what is missing: undeclared citations, dead anchors, thin descriptions.
++6. All of it is visible in the TUI (sidebar, modal tab, command).
++
++## 4. Non-goals
++
++- Proving that a model actually read the text. The check is a deterministic proxy: the hash pins the version, the anchor pins the place, the summary must use the section's own vocabulary. It raises the cost of skipping the read; it cannot make it impossible. The docs say so.
++- Inferring conditions with a model. Declarations are authored (a human or an agent edits a file); `suggest` only prints a skeleton.
++- Reading whole 100 KB files up front. The anchor limits the obligation to one section.
++- Changing how rules themselves are selected (glob, `alwaysApply`) or the cap default.
++- Releasing (batched).
++
++## 5. Design
++
++### 5.1 Declarations
++
++A project file `.metaproject/rules/project/references.json` (schema committed under `docs/requirements/keryx-conditional-reads/schemas/`):
++
++```json
++{
++  "schema": 1,
++  "references": [
++    {
++      "path": "STYLING.md",
++      "when": { "globs": ["src/**/*.css", "src/**/*.tsx"], "keywords": ["className", "tailwind", "style", "spacing"] },
++      "anchor": "Class conventions",
++      "description": "Class naming and the Tailwind 4 cascade contract. Read before adding or changing className, CSS or inline style."
++    }
++  ]
++}
++```
++
++Why a sidecar and not front matter: rules are imported byte for byte from the upstream (`keryx skills import --rules`), so edits inside them are overwritten by `skills update`, and the front-matter reader is a flat YAML subset with no nested objects. The sidecar survives updates and is the project's own statement.
++
++`when.globs` use the same glob engine as rules. `when.keywords` are matched case-insensitively against the task text. A declaration with neither is invalid. A match on either is a match (a task can touch styling without touching a `.css` file, and the reverse).
++
++### 5.2 Resolution
++
++`resolve-context` takes the task text (`--task-text`, passed by the orchestrators from the task title and description; also a field of the shell/MCP operation). For each declared reference whose file exists and is cited or declared:
++
++- matched: `tier: must_read`, `reason: condition:glob|keyword (<rule or declaration>)`, plus `anchor`, `description`, `section_bytes`, `sha256` of the whole file;
++- not matched: `tier: on_demand`, with `description`, `anchor` and the condition, so the worker sees why it was not required.
++
++With an anchor, the obligation is the section from that heading to the next heading of the same or higher level, and the budget counts `section_bytes`, not the file. A matched reference is never demoted by the cap (an obligation that disappears when the budget is tight is the original bug); the existing over-cap warning fires instead. Citations without a declaration behave exactly as in flow 461.
++
++### 5.3 Proof
++
++`project_context_applied` items gain optional `anchor` and `summary`. They are required for entries promoted by a condition. `how` keeps its enum (`read|followed|n/a`) so every existing result stays valid. The validator, in addition to the path and hash check of flow 461, requires: the anchor equals the declared one; the summary has at least 40 characters; it contains at least three distinct words of five or more letters that occur in the anchored section. A miss is reported with the reason; `enforcement: block` makes it exit 1, and `flow task done` refuses it as for other misses.
++
++### 5.4 Authoring help
++
++- `keryx skills references check`: undeclared citations (warning), declared file missing or outside the root or over the size limit (error), anchor not found (error), description under 20 characters (warning), declaration that no rule cites and that has no globs/keywords match possible (warning).
++- `keryx skills references suggest`: prints a JSON skeleton for every undeclared citation: path, size, the headings found as anchor candidates, empty `description`. Writes nothing.
++- `keryx skills import --rules` ends with the count of undeclared citations and the command to run.
++
++### 5.5 TUI
++
++Sidebar `ProjectCtx` gains `refs <promoted>/<declared>` after a resolve. The `/projectctx` modal gets a References tab: each declaration with its condition, anchor, whether the last resolve promoted it and why, and the problems `check` found. `/projectctx refs` opens it. The tab refreshes when a new resolve is recorded. The state matrix goes to `TUI-states.md` of this folder.
++
++## 6. Risks
++
++| Risk | Handling |
++|---|---|
++| Keywords too broad promote everything and fill the cap | the obligation is one anchored section, not the file; the over-cap warning and the Last resolve tab show the cost; keywords are the project's own and `check` flags a keyword shorter than 4 characters |
++| Keywords too narrow miss a real case | glob is an independent trigger; the unmatched reference stays listed with its description |
++| Summary check false positive (non-English section, very short section) | words are compared case-insensitively on letters of any script; a section with fewer than three qualifying words requires only as many shared words as it holds (none: only the length rule); warn mode first |
++| A worker fabricates a plausible summary | possible; the check raises the cost and the journal keeps the summary for review. Stated in the docs, not hidden |
++| Declarations drift from the documents | `check` reports dead anchors; the hash pin catches edits between resolve and validate (AC13) |
++
++## 7. Out of this flow
++
++A live run on vantage-frontend is an operator run with a runbook (AC18), like AC22 of flow 461. Rollout to the other projects stays with the operator.
+
+--- docs/requirements/keryx-conditional-reads/TUI-states.md
+@@ 1,32 @@
++# TUI states: conditional reads
++
++Authoritative for AC16: every row is implemented and has a render test in
++`src/tui/project-context-inspector.test.ts` (test names start with the row ID).
++Surfaces: sidebar `ProjectCtx` line, `/projectctx` modal References tab, command
++`/projectctx refs`.
++
++The References tab is always present, so `/projectctx refs` works in every state.
++The Status and Last resolve tabs, and the sidebar line, are unchanged when the
++project has no references file.
++
++| ID | State | Sidebar | References tab |
++|---|---|---|---|
++| R0 | No references file | no `refs` segment | one line: no declarations, with the command `keryx skills references suggest` |
++| R1 | Declared, no resolve yet | `refs -/<n>` | `References: <n> declared, no resolve yet`; each row: path, anchor, condition, status "not resolved" |
++| R2 | Resolved, some promoted | `refs <p>/<n>` | `References: <p> promoted of <n> declared`; each row: path, anchor, condition, `promoted` with the reason (`matched glob <g>` or `matched keyword <k>`) and the bytes (section bytes with an anchor, file bytes without), or `on demand` with the description. A declaration the last resolve did not list reads `not in the last resolve (see its warnings)` |
++| R3 | Resolved, none promoted | `refs 0/<n>` | rows show `on demand` with their description |
++| R4 | Promoted and over the cap | `refs <p>/<n>` plus the existing over-cap marker (`cap exceeded`) | promoted rows show their bytes and `over the cap: <used> of <limit> bytes` |
++| R5 | Problems from check | `refs <p>/<n> !<k>` (`refs -/<n> !<k>` before a resolve) | after the rows, `problems (<k>):` and one line per finding of `keryx skills references check`: `[error\|warning] <code> <path>: <message>` (dead anchor, thin description, undeclared citation, and the other check codes) |
++| R6 | Invalid references file | `refs ?` | `References file is invalid:` and the validation messages, each naming the entry |
++| R7 | New resolve recorded | counters update without reopening anything (the status is re-read every 5 seconds and when the modal opens) | an open tab repaints in place when the status changes; an unchanged status repaints nothing |
++
++Notes:
++
++- `<n>` is the number of declarations in the file; `<p>` counts the declared
++  references the last recorded resolve listed as `must_read`. A cited contract
++  (an entry without a condition) is not a reference and is not counted.
++- Before any resolve, and when `last.json` is unreadable, `<p>` is `-`.
++- With a references file but no project rules and no recorded resolve, the sidebar
++  line is still shown (`warn · 0 rules · refs -/<n>`).
++- Problems are counted as `<k>` whatever their severity; the tab shows which are
++  errors and which are warnings.
+
+--- docs/requirements/keryx-conditional-reads/live-run.md
+@@ 1,293 @@
++# Живой прогон на vantage-frontend (AC20)
++
++Это runbook для оператора. Реализующий агент его не запускал; AC20 остаётся
++неподтверждённым, пока вы не пройдёте шаги и не запишете результат в журнал
++flow 462.
++
++Что доказываем: на реальных STYLING.md и THEMING.md резолвер поднимает документ
++в `must_read` только когда сработало объявленное условие, а валидатор принимает
++результат воркера со ссылкой на якорь и пересказом раздела и отклоняет
++выдуманный пересказ.
++
++Репозиторий Vantage в этом прогоне только читается и получает один небольшой
++локальный правочный diff; не коммитьте и не пушьте его.
++
++## Что уже проверил e2e-тест, а что покажет только этот прогон
++
++Тест `src/gdskills/conditional-reads.e2e.test.ts` (AC18) собирает временный
++проект с документами размером около 90 КБ и 80 КБ и гоняет настоящие команды
++`skills resolve-context`, `skills contracts validate --resolved` и
++`skills references check`. Он подтверждает:
++
++- условие (glob или слово из текста задачи) поднимает нужный документ и не
++  поднимает другой; для несвязанной задачи не поднимается ни один;
++- бюджет считает размер раздела (`section_bytes`), а не файла;
++- честный результат (путь, sha256 всего файла, якорь, пересказ словами раздела,
++  `how: "read"`) проходит; выдуманный, слишком короткий, с чужим якорем и
++  `how: "n/a"` для поднятой записи дают промахи с причинами;
++- под `warn` код выхода `0`, под `block` код выхода `1`.
++
++Чего тест показать не может и что проверяет только живой прогон:
++
++- как реальный воркер ведёт себя с задачей: читает ли раздел, пишет ли пересказ
++  своими словами или копирует заголовки;
++- реальные размеры, якоря и глобы Vantage (в тесте они придуманы);
++- как выглядит вывод резолвера на реальных проектных правилах рядом с другими
++  записями.
++
++Проверка пересказа остаётся заменителем чтения, а не его доказательством:
++пересказ должен делить минимум два различных слова из пяти и более букв с
++разделом, так что воркер, который скопировал заголовки раздела, пройдёт. Это
++сказано в PRD (риск 6) и в документации; прогон должен дать вам материал для
++решения, достаточно ли этого.
++
++## 0. Подготовка
++
++```bash
++cd /home/altsay/work/vantage-frontend
++git status --short            # должно быть чисто; иначе остановитесь
++k() { bun /home/altsay/keryx/.worktrees/conditional-reads/src/cli.ts "$@"; }
++k status                      # .metaproject должен быть; если нет — остановитесь и сообщите координатору
++```
++
++`k` запускает сборку ветки `feat/conditional-reads`, а не глобальный `keryx`.
++Если к моменту прогона flow 462 уже выпущен, замените `k` на `keryx` и сначала
++выполните `keryx update` в проекте, чтобы скиллы оркестратора и воркеров были
++новой версии (иначе воркер не знает про якорь и пересказ). В режиме `k` скиллы
++проекта надо обновить так же: `k update`.
++
++Правила Vantage должны быть уже импортированы (flow 461, AC22):
++`ls .metaproject/rules/project`. Правило, которое цитирует документы,
++должно называть их в обратных кавычках, например `` `STYLING.md` `` и
++`` `THEMING.md` ``. Проверьте:
++
++```bash
++k skills references suggest   # печатает заготовку по цитатам; ничего не пишет
++```
++
++Ожидаем JSON, где `STYLING.md` и `THEMING.md` перечислены с `path`, а условия
++пусты. Путь в декларации относителен корню проекта; если документы лежат не в
++корне, используйте путь так, как его печатает `suggest`.
++
++## 1. Декларации
++
++Создайте `.metaproject/rules/project/references.json` (подставьте реальные
++пути документов и якоря):
++
++```json
++{
++  "schema": 1,
++  "references": [
++    {
++      "path": "STYLING.md",
++      "when": {
++        "globs": ["src/**/*.css", "src/**/*.tsx"],
++        "keywords": ["styling", "tailwind"]
++      },
++      "anchor": "<заголовок раздела с конвенциями классов>",
++      "description": "Class conventions and the Tailwind 4 cascade contract. Read before changing a className, a stylesheet or inline style."
++    },
++    {
++      "path": "THEMING.md",
++      "when": {
++        "globs": ["src/theme/**"],
++        "keywords": ["theme", "dark mode"]
++      },
++      "anchor": "<заголовок раздела с токенами темы>",
++      "description": "Theme tokens, contrast and dark mode. Read before adding a colour role, a theme or a dark mode switch."
++    }
++  ]
++}
++```
++
++Якорь — текст заголовка ATX (`## ...`) без решёток, регистр не важен, или его
++slug. Раздел идёт до следующего заголовка того же или более высокого уровня,
++вложенные `###` входят в него. Проверьте декларации:
++
++```bash
++k skills references check
++```
++
++Ожидаем итоговую строку `0 errors, 0 warnings`. Ошибки (`missing`,
++`anchor not found`, `oversized`) исправьте до продолжения. Предупреждения о
++коротком описании (меньше 20 символов) или слове (меньше 4) тоже исправьте.
++Запишите размеры документов и размер раздела каждого якоря из вывода резолвера
++ниже.
++
++## 2. Три задачи
++
++Для каждой задачи выполните резолвер, сохраните вывод, затем отдайте воркеру
++`task-implementer` небольшую правку и проверьте его результат валидатором.
++Текст задачи передаётся и воркеру, и резолверу (`--task-text`): слова-условия
++ищутся в нём.
++
++```bash
++mkdir -p .metaproject/data/skills/project-context/runs
++```
++
++### Задача A: затронут файл стилей
++
++Файл: существующий `<TSX_FILE>` под `src/` (например, компонент кнопки).
++Текст: `Add a loading spinner prop to the button` (без слов `styling`,
++`tailwind`, `theme`, `dark mode`).
++
++```bash
++k skills resolve-context --files <TSX_FILE> --for implement --task-type ui_component \
++  --task-text "Add a loading spinner prop to the button" \
++  --out .metaproject/data/skills/project-context/runs/a.json
++```
++
++Ожидаем в выводе:
++
++- в `## must_read` строка для STYLING.md вида
++  `- STYLING.md — project contract, condition:glob:src/**/*.tsx, <N> bytes, sha256 <12 символов> (anchor "<ваш якорь>", section <M> bytes)`,
++  где `M` много меньше `N`;
++- в `## on_demand` строка для THEMING.md с причиной `declared`;
++- строка `Budget: X of 131072 bytes (default)`, где `X` включает `M`, а не `N`.
++
++### Задача B: только слово темы
++
++Файл: существующий `.ts` вне `src/theme/` и не `.tsx` (например, утилита или
++стор настроек). Текст: `Let the user pick a theme in the settings`.
++
++```bash
++k skills resolve-context --files <TS_FILE> --for implement --task-type ui_component \
++  --task-text "Let the user pick a theme in the settings" \
++  --out .metaproject/data/skills/project-context/runs/b.json
++```
++
++Ожидаем: в `## must_read` THEMING.md с причиной `condition:keyword:theme`
++(якорь и `section` в скобках), в `## on_demand` STYLING.md с причиной
++`declared`.
++
++### Задача C: несвязанная
++
++Файл: существующий `.ts` вне `src/theme/`. Текст:
++`Fix the token refresh race in the session service`.
++
++```bash
++k skills resolve-context --files <TS_FILE> --for implement --task-type service_api \
++  --task-text "Fix the token refresh race in the session service" \
++  --out .metaproject/data/skills/project-context/runs/c.json
++```
++
++Ожидаем: ни одного `condition:` в `## must_read`; оба документа в
++`## on_demand` с причиной `declared`, с описанием и условием; бюджет не
++включает ни одного из них.
++
++Если у ваших файлов или текста случайно сработало другое условие, это не
++ошибка прогона: выберите другие файл и слова и запишите, что произошло.
++
++## 3. Результаты воркера и вердикты
++
++Для задач A и B дайте воркеру содержимое `a.json` / `b.json`, текст задачи и
++требование вернуть `project_context_applied`, где для поднятой записи указаны
++`path`, `sha256` всего файла, `anchor` и `summary`, а `how` — `read` или
++`followed`. Сохраните результат как `a-result.json`, `b-result.json`,
++`c-result.json`.
++
++```bash
++k skills contracts validate a-result.json --schema task-implementer-output \
++  --resolved .metaproject/data/skills/project-context/runs/a.json
++```
++
++То же для `b` и `c`. Ожидаем для каждой задачи, где воркер прочитал раздел и
++пересказал его своими словами:
++
++```
++valid: <файл>
++schema: task-implementer-output
++project context: every must_read entry cited, nothing drifted (enforcement warn)
++```
++
++Для задачи C `must_read` состоит только из проектных правил, поэтому вердикт
++чистый и без пересказа.
++
++Если воркер вернул промах, не правьте его руками: запишите вывод. Это
++результат прогона, а не помеха.
++
++## 4. Выдуманный пересказ
++
++Скопируйте `a-result.json` в `a-fake.json` и замените `summary` записи
++STYLING.md общей фразой без слов из раздела, например:
++`Looked over the whole thing, nothing unusual noticed, all requirements satisfied as expected.`
++
++```bash
++k skills contracts validate a-fake.json --schema task-implementer-output \
++  --resolved .metaproject/data/skills/project-context/runs/a.json
++```
++
++Ожидаем (код выхода `0` под `warn`):
++
++```
++project context: 1 miss(es), 0 drifted (enforcement warn)
++- project context miss: STYLING.md (condition:glob:src/**/*.tsx) has a summary that shares 0 distinct word(s) of 5 or more letters with the section "<ваш якорь>"; 3 required. Write the summary in the wording of the text you read
++```
++
++Дополнительно, по желанию, каждый вариант отдельно:
++
++- пересказ `Read the section.` даёт два промаха: длину
++  (`has a summary of 17 characters; at least 40 are required`) и слова;
++- другой `anchor` даёт промах `cites anchor "<чужой>"; the declaration says
++  "<ваш якорь>"`;
++- запись с `how: "n/a"` даёт промах `is cited only with how "n/a"`.
++
++Затем включите блокировку: в `.metaproject/tasks.config.json` поставьте
++`{"gdskills":{"projectContext":{"enforcement":"block"}}}`, повторите проверку
++`a-fake.json` и убедитесь, что строки идут в stderr, а код выхода равен `1`
++(`echo $?`). Верните `warn` или удалите ключ.
++
++## 5. Критерий прохождения
++
++Прогон пройден, если выполнено всё:
++
++1. `references check` на реальных документах: `0 errors`.
++2. Задача A поднимает STYLING.md по glob, THEMING.md остаётся `on_demand`.
++3. Задача B поднимает THEMING.md по слову `theme`, STYLING.md остаётся
++   `on_demand`.
++4. Задача C не поднимает ни один из двух документов.
++5. Честные результаты воркера A и B проходят с чистым вердиктом; результат C
++   тоже.
++6. Выдуманный пересказ из шага 4 даёт промах `summary-words` с указанной
++   причиной, а под `block` код выхода равен `1`.
++7. Бюджет в задачах A и B включает размер раздела, а не файла.
++
++Прогон не пройден, если нарушен любой пункт. Типичные причины и что с ними
++делать:
++
++- декларация не срабатывает: проверьте glob относительно корня проекта и слово
++  целиком (слово ищется как отдельное, без учёта регистра);
++- честный результат отклонён по `summary-words`: запишите раздел, пересказ и
++  число общих слов; это сигнал, что порог в два слова слишком строг для вашего
++  раздела;
++- выдуманный пересказ прошёл: запишите текст; это сигнал, что заменитель
++  слишком слаб, и решение о порогах принимает оператор.
++
++## 6. Уборка
++
++```bash
++git checkout -- <TSX_FILE> <TS_FILE>      # откат правок воркера
++git status --short                        # references.json и данные лежат в .metaproject/, это ожидаемо
++```
++
++## 7. Запись результата в журнал flow 462
++
++Отдельной команды `flow journal` нет. Результат записывается так:
++
++```bash
++k flow ac confirm 462 AC20 --note "Живой прогон на vantage-frontend <дата>: A glob ok, B keyword ok, C ничего не поднято; выдуманный пересказ отклонён (summary-words); результат: pass|fail; выводы в <путь или ссылка>"
++```
++
++Команда добавляет в `.metaproject/flows/462-2026-10-18-conditional-reads/journal.md`
++запись `ac-confirmed`. Если прогон не пройден, не подтверждайте критерий:
++добавьте вручную строку в конец `journal.md` в том же формате
++(`- <ISO-время> - live-run: <что произошло, какой пункт критерия нарушен>`) и
++сообщите координатору.
++
++Приложите к записи:
++
++- вывод `references check` (шаг 1);
++- три вывода резолвера (шаг 2);
++- три вердикта валидатора и вердикт для выдуманного пересказа (шаги 3–4);
++- наблюдение о том, как воркер писал пересказ: своими словами или копией
++  заголовков.
+
+--- docs/requirements/keryx-conditional-reads/schemas/references.schema.json
+@@ 1,59 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "https://keryx.dev/schemas/references.schema.json",
++  "title": "Keryx conditional reference declarations",
++  "description": ".metaproject/rules/project/references.json. See README.md section 5.1. Each entry declares a document that project rules cite, where it applies (file globs and task keywords), the section that matters (anchor) and what it governs. A path must be relative and stay inside the project root; JSON Schema cannot express that normalisation, so the loader (src/gdskills/references-config.ts) also rejects a path that escapes the root.",
++  "type": "object",
++  "additionalProperties": false,
++  "required": ["schema", "references"],
++  "properties": {
++    "schema": { "const": 1 },
++    "references": {
++      "type": "array",
++      "items": {
++        "type": "object",
++        "additionalProperties": false,
++        "required": ["path", "when", "description"],
++        "properties": {
++          "path": {
++            "type": "string",
++            "minLength": 1,
++            "pattern": "^(?![/\\\\])(?![A-Za-z]:).+$",
++            "description": "Project-relative path of the document; absolute paths and paths escaping the root are rejected."
++          },
++          "when": {
++            "type": "object",
++            "additionalProperties": false,
++            "anyOf": [{ "required": ["globs"] }, { "required": ["keywords"] }],
++            "properties": {
++              "globs": {
++                "type": "array",
++                "minItems": 1,
++                "items": { "type": "string", "minLength": 1, "pattern": "\\S" },
++                "description": "Globs matched against the task's files; a match promotes the reference."
++              },
++              "keywords": {
++                "type": "array",
++                "minItems": 1,
++                "items": { "type": "string", "minLength": 1, "pattern": "\\S" },
++                "description": "Words matched case-insensitively, on a word boundary, against the task text."
++              }
++            }
++          },
++          "anchor": {
++            "type": "string",
++            "minLength": 1,
++            "pattern": "\\S",
++            "description": "Heading text or slug of the section that matters; without it the whole file is the obligation."
++          },
++          "description": {
++            "type": "string",
++            "minLength": 1,
++            "pattern": "\\S",
++            "description": "What the document governs and when to read it."
++          }
++        }
++      }
++    }
++  }
++}
+
+--- docs/requirements/keryx-project-implementation-rules/schemas/skills-resolve-context-result.schema.json
+@@ 6,69 @@
+   "type": "object",
+   "required": ["schema", "for", "files", "entries", "budget", "warnings"],
+   "additionalProperties": false,
+   "properties": {
+     "schema": { "const": 1 },
+     "for": { "enum": ["implement", "test", "review"] },
+     "files": { "type": "array", "items": { "type": "string" } },
+     "entries": { "type": "array", "items": { "$ref": "#/definitions/ContextEntry" } },
+     "budget": {
+       "type": "object",
+       "required": ["limitBytes", "usedBytes", "exceeded", "limitSource"],
+       "additionalProperties": false,
+       "properties": {
+         "limitBytes": { "type": "integer", "minimum": 0 },
+         "usedBytes": { "type": "integer", "minimum": 0 },
+         "exceeded": { "type": "boolean", "description": "A signal to raise gdskills.projectContext.maxBytes; no rule is cut." },
+         "limitSource": { "enum": ["default", "config", "flag"] }
+       }
+     },
+     "warnings": { "type": "array", "items": { "type": "string" } },
++    "undeclared": {
++      "type": "array",
++      "items": { "type": "string" },
++      "description": "Present only when the project has a references file: documents a rule cites that the file does not declare (they stay on_demand)."
++    },
+     "error": { "type": "string", "description": "Set when the resolve could not run; the other fields are then empty." }
+   },
+   "definitions": {
+     "ContextEntry": {
+       "type": "object",
+       "required": ["kind", "source", "path", "sha256", "bytes", "reason", "tier"],
+       "additionalProperties": false,
+       "properties": {
+         "kind": { "enum": ["rule", "skill", "contract"] },
+         "source": { "enum": ["project", "bundled"] },
+         "path": { "type": "string", "description": "Project-relative, posix; absolute for a linked rule whose origin is outside the project." },
+         "sha256": { "type": "string" },
+         "bytes": { "type": "integer", "minimum": 0 },
+-        "reason": { "type": "string", "description": "glob:<g>, always, task-type:<t>, replaces-bundled, route, bundled-default or referenced-by:<path>." },
++        "reason": {
++          "type": "string",
++          "description": "glob:<g>, always, task-type:<t>, replaces-bundled, route, bundled-default, referenced-by:<path>, or for a declared reference condition:glob:<g>, condition:keyword:<k> or declared (not promoted)."
++        },
+         "tier": { "enum": ["must_read", "on_demand"] },
+         "description": { "type": "string" },
+         "index": { "const": true },
+         "linked": { "const": true },
+         "shadows": { "type": "string", "description": "The bundled rule this project rule replaces." },
+-        "also_at": { "type": "array", "items": { "type": "string" }, "description": "Other project paths with the same sha256; citing any of them counts." }
++        "also_at": { "type": "array", "items": { "type": "string" }, "description": "Other project paths with the same sha256; citing any of them counts." },
++        "anchor": { "type": "string", "description": "Declared references only: heading text or slug of the section that matters, as declared in references.json." },
++        "section_bytes": { "type": "integer", "minimum": 0, "description": "Declared references with an anchor: UTF-8 size of the anchored section, the bytes the obligation and the budget count." },
++        "condition": {
++          "type": "object",
++          "required": ["globs", "keywords"],
++          "additionalProperties": false,
++          "description": "Declared references only: where the document applies, so an on_demand entry says why it was not required.",
++          "properties": {
++            "globs": { "type": "array", "items": { "type": "string" } },
++            "keywords": { "type": "array", "items": { "type": "string" } }
++          }
++        }
+       }
+     }
+   }
+ }
+
+--- package.json
+@@ 37,77 @@
+   "exports": {
+     ".": "./dist/core.js",
+     "./package.json": "./package.json"
+   },
+   "scripts": {
+     "keryx": "bun ./src/cli.ts",
+     "build": "bun build ./src/cli.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core && bun build ./src/core.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core && bun build ./src/harness/process/sandbox/proxy-worker.ts --outdir ./dist --target bun --external @modelcontextprotocol/sdk --external web-tree-sitter --external @opentui/core",
+     "prepare": "bun run build",
+     "typecheck": "tsc --noEmit",
+     "typecheck:scripts": "tsc --project tsconfig.scripts.json --noEmit",
+     "test": "bun test",
+     "test:core": "bun test src/cli src/core src/impact-evidence/ src/shell-source-audits.test.ts src/acp/ src/assets/ src/bundle/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/decisions/ src/eval/ src/flow/ src/forgetting/ src/gdgraph/ src/gdskills/ src/governance/ src/product/ src/health/ src/integrations/ src/job/ src/learning/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/retention/ src/review/ src/rules/ src/sac/ src/security/ src/stack/ src/standard/ src/sync/ src/testing/ src/trigger/ src/wiki/ scripts/",
+     "test:client:terminal": "bun test src/tui/ src/commands/shell",
+     "test:client:streaming": "bun test src/harness/provider/",
+     "test:client:cancel-resume": "bun test src/harness/run/ src/harness/resume/ src/harness/session/ src/session/ src/bus/ src/rewind/ src/remote/ src/docs/ src/commands/sessions",
+     "test:client:runtime": "bun test src/harness/ src/mcp-client/ src/mcp-servers/ src/agents/ src/commands/agent src/commands/harness src/commands/providers src/scheduler/ src/intake/",
+     "test:client": "bun run test:client:terminal && bun run test:client:streaming && bun run test:client:cancel-resume && bun run test:client:runtime",
+     "check": "bun run lint && bun run typecheck && bun run typecheck:scripts && bun test",
+     "check:core": "bun run lint && bun run typecheck && bun run typecheck:scripts && bun run test:core",
+     "docs:build": "mkdocs build --strict",
++    "docs:check": "bun run check:doc-links && bun run check:retired-spellings && bun test src/cli-reference-coverage.test.ts src/standard/commands-by-task.test.ts src/standard/help-groups.test.ts",
+     "check:doc-links": "bun scripts/check-doc-links.ts",
+     "check:retired-spellings": "bun scripts/check-retired-cli-spellings.ts",
+     "baseline:review-precision": "bun scripts/review-precision-baseline.ts",
+     "test:guards": "bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts src/gdskills/agent-catalogue-xref.test.ts src/gdskills/enforcement-claims.test.ts",
+     "lint": "eslint ."
+   },
+   "files": [
+     "dist",
+     "docs/requirements/shared-agent-context/schemas",
+     "src/gdgraph",
+     "src/gdskills/bundled",
+     "src/gdskills/contracts",
+     "!src/**/*.test.ts",
+     "LICENSE",
+     "THIRD_PARTY_NOTICES.md",
+     "README.md",
+     "package.json"
+   ],
+   "dependencies": {},
+   "overrides": {
+
+--- src/commands/agent-commands.ts
+@@ 410,450 @@
+     // TUI-only: the per-turn tag and `sb-route` sidebar row are OpenTUI
+     // surfaces, same reasoning as `/guard`.
+     name: "/route",
+     description: "Opt-in routing classifier: sorts the request into a category and routes it to that model — /route [on|off]",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 343 (Jev EDIT GUARD): a `PostToolUse` hook check, not a
+     // per-turn one — this modal shows the opt-in state, threshold, and
+     // recent flags of the Claude Code hook installed by `keryx review
+     // jev-edit-guard install`, and toggles it. TUI-only, same reasoning as
+     // `/guard`/`/route`.
+     name: "/editguard",
+     description: "Jev EDIT GUARD status/threshold/recent flags, with a toggle — install via keryx review jev-edit-guard install",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 461: project rules and implementation context — the last resolve, the cap,
+     // and whether a missing `project_context_applied` only warns or blocks. TUI-only.
+     name: "/projectctx",
+-    description: "Project rules for implementation: last resolve, context cap, warn/block enforcement — /projectctx [warn|block]",
++    description: "Project rules for implementation: last resolve, context cap, warn/block enforcement, conditional references — /projectctx [warn|block|refs]",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 346: the EXTERNAL switch — blocks/allows sending private work
+     // (code, diffs, CI logs, prompts) to Jev/TypeSafe and other listed
+     // providers/models. Bare `/external` prints state/source/effective-list
+     // (what `keryx external status`/`list` show); `/external on|off` toggles
+     // + persists per-user (project override stays CLI/tasks.config.json-only
+     // — same reasoning `/route`'s bare-print/toggle split already uses).
+     name: "/external",
+     description: "Block/allow sending private work to Jev/TypeSafe and other listed providers/models — /external [on|off]",
+     modes: AGENT_ONLY,
+   },
+   {
+     // Flow 373: the one-step opt-in for the external agent RUNTIME (bare = status,
+     // `on`/`off` = the same enable/disable as `keryx agents external enable|disable`).
+     // Not `/external` — that is the privacy switch for sending work to listed
+     // providers; this one decides whether a vendor coding CLI may be spawned at all.
+     name: "/external-agents",
+     description: "Turn the external agent runtime (claude/codex/agy CLIs) on or off — /external-agents [on|off]; not /external (the privacy switch)",
+
+--- src/commands/skills-references.ts
+@@ 1,67 @@
++// `keryx skills references check|suggest` (flow 462): authoring help for the
++// conditional-read declarations in `.metaproject/rules/project/references.json`.
++// The router in skills.ts dispatches here; the analysis is gdskills/references-check.ts.
++
++import { checkReferences, suggestReferences, type ReferencesCheckReport } from "../gdskills/references-check";
++
++const USAGE = "Usage: keryx skills references check [--json] | keryx skills references suggest";
++
++export function printReferencesHelp(): void {
++  console.log(`keryx skills references
++
++Authoring help for .metaproject/rules/project/references.json: the documents project rules
++cite, and when a task must read them. Reads files only; nothing is written.
++
++Usage:
++  keryx skills references check [--json]
++  keryx skills references suggest
++
++  check    Errors (exit 1): a declared document that is missing, outside the project root or
++           over the size limit; an anchor that matches no heading; an invalid file.
++           Warnings: a description under 20 characters, a keyword under 4, a cited document with
++           no declaration, a declaration no rule cites. A missing references.json is not an error.
++  suggest  Prints a JSON skeleton for every cited document with no declaration: path, size in
++           bytes, the document's headings as anchor candidates, an empty description and an
++           empty condition. Fill it in and copy the entries into references.json yourself.
++`);
++}
++
++export function renderReferencesReport(report: ReferencesCheckReport): string {
++  const lines = ["# skills references check", ""];
++  lines.push(report.present ? `${report.declared} declared` : "No references.json: nothing is declared.");
++  for (const finding of report.findings) {
++    lines.push(`- ${finding.severity.padEnd(7)} ${finding.path} [${finding.code}] ${finding.message}`);
++  }
++  lines.push("", `${report.errors} ${report.errors === 1 ? "error" : "errors"}, ${report.warnings} ${report.warnings === 1 ? "warning" : "warnings"}`);
++  return lines.join("\n");
++}
++
++/** `keryx skills references <action>`. A check with errors, or a suggest that cannot read the declarations, exits 1. */
++export async function referencesCommand(args: string[], projectRoot: string = process.cwd()): Promise<void> {
++  const action = args[0];
++  if (action === undefined || action === "--help" || action === "-h") {
++    printReferencesHelp();
++    return;
++  }
++
++  if (action === "check") {
++    const report = await checkReferences(projectRoot);
++    console.log(args.includes("--json") ? JSON.stringify(report, null, 2) : renderReferencesReport(report));
++    if (!report.ok) process.exitCode = 1;
++    return;
++  }
++
++  if (action === "suggest") {
++    const result = await suggestReferences(projectRoot);
++    if (!result.ok) {
++      for (const message of result.errors) console.error(message);
++      process.exitCode = 1;
++      return;
++    }
++    console.log(JSON.stringify(result.suggestion, null, 2));
++    return;
++  }
++
++  console.error(`Unknown skills references action: ${action}. ${USAGE}`);
++  process.exitCode = 1;
++}
+
+--- src/commands/skills.ts
+@@ 50,92 @@
+ } from "../gdskills/sync";
+ import {
+   createProjectSkill,
+   metaprojectRelative,
+   normalizeProjectSkillFormat,
+   PROJECT_SKILL_REPORTS_DIR,
+   PROJECT_SKILLS_CATALOG_PATH,
+   PROJECT_SKILLS_MANIFEST_PATH,
+   projectSkillKey,
+   projectSkillReportFileName,
+   type ProjectSkillRegistryEntry,
+ } from "../gdskills/project-skills";
+ import {
+   printSkillsImportHelp,
+   printSkillsUpdateHelp,
+   runSkillsImportCommand,
+   runSkillsUpdateCommand,
+ } from "../gdskills/import-skills";
+ import { runSkillsImportRulesCommand } from "../gdskills/import-rules";
+ import { checkResolvedContext, formatResolvedHeadline, formatResolvedReport, readResolvedFile, RESOLVED_SCHEMAS } from "../gdskills/resolved-context-check";
++import { TASK_TEXT_MAX_CHARS } from "../gdskills/context-resolver";
+ import { runResolveContextCommand } from "../gdskills/resolve-context-command";
++import { printReferencesHelp, referencesCommand } from "./skills-references";
+ import { runSkillsRemoveRuleCommand } from "../gdskills/remove-rules";
+ import { runSkillsUpdateRulesCommand } from "../gdskills/update-rules";
+ import { printSkillsRemoveHelp, runSkillsRemoveCommand } from "../gdskills/remove-skill";
+ import { verifyProjectSkill } from "../gdskills/verify";
+ import {
+   defaultBundledRoot,
+   evaluateBundledTree,
+   renderBundledEvaluation,
+ } from "../gdskills/bundled-eval";
+ 
+ type MetaprojectManifest = {
+   modules?: {
+     gdskills?: {
+       enabled?: boolean;
+       profile?: GdskillsProfile;
+       skills?: string;
+       catalog?: string;
+       projectSkillRegistry?: ProjectSkillRegistryEntry[];
+     };
+   };
+
+--- src/commands/skills.ts
+@@ 160,204 @@
+   if (command === "inspect") {
+     await inspectProjectSkill(args);
+     return;
+   }
+ 
+   if (command === "route") {
+     await routeProjectSkills(args);
+     return;
+   }
+ 
+   if (command === "resolve-context") {
+     try {
+       await runResolveContextCommand(args.slice(1));
+     } catch (error) {
+       console.error(error instanceof Error ? error.message : String(error));
+       process.exitCode = 1;
+     }
+     return;
+   }
+ 
++  if (command === "references") {
++    await referencesCommand(args.slice(1));
++    return;
++  }
++
+   if (command === "create" || command === "generate") {
+     await createSkillCommand(args);
+     return;
+   }
+ 
+   if (command === "import") {
+     try {
+       if (args.includes("--rules")) await runSkillsImportRulesCommand(args);
+       else await runSkillsImportCommand(args);
+     } catch (error) {
+       console.error(error instanceof Error ? error.message : String(error));
+       process.exitCode = 1;
+     }
+     return;
+   }
+ 
+   if (command === "update") {
+     try {
+       if (args.includes("--rules")) await runSkillsUpdateRulesCommand(args);
+       else await runSkillsUpdateCommand(args);
+
+--- src/commands/skills.ts
+@@ 1828,1936 @@
+ function relativeToCwd(filePath: string): string {
+   return path.relative(process.cwd(), filePath) || ".";
+ }
+ 
+ /**
+  * The help a `keryx skills <subcommand> --help` question is answered with.
+  *
+  * A TABLE OF PRINTERS, not a route. `cli-registry.ts` intercepts `--help` in
+  * front of every skills subcommand it has not been told is safe (`install`
+  * writes files and does not look for `--help`), and asks
+  * {@link printSkillsHelpFor} for the text instead of running anything. So a
+  * subcommand's own help is reached by adding ONE entry here, next to its
+  * printer — no registry edit, and no way for the entry to execute the
+  * subcommand. A subcommand with no entry gets the group help.
+  */
+ const SKILLS_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
+   ["doctor", printDoctorHelp],
+   ["uninstall", printUninstallHelp],
+   ["route", printRouteHelp],
+   ["resolve-context", printResolveContextHelp],
++  ["references", printReferencesHelp],
+   ["inspect", printInspectHelp],
+   ["create", () => printCreateHelp("create")],
+   ["generate", () => printCreateHelp("generate")],
+   ["import", printSkillsImportHelp],
+   ["update", printSkillsUpdateHelp],
+   ["remove", printSkillsRemoveHelp],
+   ["verify", printVerifyHelp],
+   ["learn", printLearnHelp],
+   ["export", printExportHelp],
+   ["sync", printSyncHelp],
+   ["contracts", printContractsHelp],
+ ]);
+ 
+ /** Print the named subcommand's own help, or the whole group's when `rest` names none that has one. Never runs anything. */
+ export function printSkillsHelpFor(rest: readonly string[] = []): void {
+   const subcommand = rest[0];
+   const own = subcommand === undefined ? undefined : SKILLS_SUBCOMMAND_HELP.get(subcommand);
+   (own ?? printSkillsHelp)();
+ }
+ 
+ function printSkillsHelp(): void {
+   console.log(`keryx skills
+ 
+ Usage:
+   keryx skills status
+   keryx skills status --json
+   keryx skills list
+   keryx skills inspect <project-skill>
+   keryx skills route <query-or-target>
+   keryx skills resolve-context --files <file>[,<file>...] --for implement|test|review
+       [--task-type <type>] [--max-bytes <n>] [--out <path>] [--json]
++  keryx skills references check [--json]
++  keryx skills references suggest
+   keryx skills catalog [--profile minimal|recommended|full|custom]
+   keryx skills install [--profile minimal|recommended|full|custom]
+   keryx skills install --profile <manifest-profile> [--with <component>]... [--without <component>]...
+       [--target <harness>] [--include-deprecated] [--dry-run] [--json] [--force]
+   keryx skills doctor [--target <harness>] [--json]
+   keryx skills uninstall --target <harness> [--module <module-id>] [--force] [--json]
+   keryx skills create <target> --module <module> --name <skill-name>
+   keryx skills generate <target> --module <module> --name <skill-name>
+   keryx skills import --from <dir|SKILL.md|https-url> [--module <module>] [--name <name>]
+       [--only <glob>]... [--dry-run] [--force] [--json]
+   keryx skills update [<module>/<name>|--all] [--from <origin>] [--dry-run] [--json]
+   keryx skills remove <module>/<name> [--dry-run] [--json]
+   keryx skills verify <skill-or-target>
+   keryx skills verify --all
+   keryx skills verify --bundled [--root <dir>] [--json]
+   keryx skills learn --from-review <path> --skill <module>/<skill>
+   keryx skills learn apply <proposal.json>
+   keryx skills export <project-skill> --runtime codex|claude
+   keryx skills sync --runtime codex|claude --target <dir>
+   keryx skills contracts list
+   keryx skills contracts validate <file> --schema <name> [--resolved <resolved.json>]
+   keryx skills scout <name-or-description> [--record <pack-dir>] [--include-imports] [--candidate <dir>] [--scope bundled|all]
+               [--origin learned --source-ref <id>] [--json]
+   keryx skills eval <skill-id> [--strictness low|medium|high] [--trials N] [--runner <provider>]
+               [--judge <provider>[:<model>]] [--model-grader] [--json]
+   keryx skills judge-check <skill-id> --judge <provider>[:<model>] [--scope bundled|all] [--record] [--json]
+   keryx skills stocktake [--scope bundled|all] [--quick] [--json]
+ 
+ Commands:
+   status    Show local gdskills installation status
+   list      List registered project skills
+   inspect   Inspect one registered project skill
+   route     Route a query or target to matching project skills
+   resolve-context  List the project rules and skills a worker must read for these files (project first)
++  references  Check the conditional-read declarations (references.json) or print a skeleton for undeclared citations
+   catalog  Print bundled gdskills catalog for a profile
+   install   Install bundled gdskills into .metaproject (legacy profile), or resolve/apply a
+             profile->modules/components install-manifest plan (--with/--without/--target/
+             --dry-run/--json/--include-deprecated, or a non-legacy profile id such as
+             core|react|nestjs|python). --target only accepts claude|keryx-shell (the only
+             targets with a v1 destination table) — any other value is a named error, never
+             an empty plan. --profile/--target/--with/--without given with no usable value
+             (a bare trailing flag, immediately followed by another flag, or --flag= with
+             nothing after it) is also a named error, never a silent default. NOTE:
+             --dry-run/--json on a LEGACY profile id (minimal|full|...) with no other
+             manifest flag always previews the MANIFEST-driven installer's own same-named
+             profile, which can differ from the legacy install the same command without
+             --dry-run/--json would run; the CLI prints this note when it applies.
+   doctor    Compare recorded install-state to disk: ok/drifted/missing/orphaned per path.
+             orphaned is a file under this target's destination roots that install-state
+             doesn't know about (often the operator's own file, e.g. .claude/rules/my-own.md)
+             — it is reported but never fails the command; only a drifted/missing recorded
+             path, or an unreadable/unsafe install-state file, sets a non-zero exit code.
+             --target with no usable value is a named error, never a silent default.
+   uninstall Remove only the paths recorded in install-state for a target (optionally one
+
+--- src/commands/skills.ts
+@@ 1998,2046 @@
+ Usage:
+   keryx skills route <query-or-target> [--json]
+ 
+ Examples:
+   keryx skills route src/pipelines/PipelineStepStore.ts
+   keryx skills route "подготовь пакет документации"
+   keryx skills route "change pipeline step store behavior" --json
+ `);
+ }
+ 
+ function printResolveContextHelp(): void {
+   console.log(`keryx skills resolve-context
+ 
+ Decides which project rules and project skills a worker must read before it
+ writes code or tests, project first, bundled second. Reads files on disk only;
+ no model is asked. A successful resolve exits 0 whatever the budget says.
+ 
+ Usage:
+   keryx skills resolve-context --files <file>[,<file>...] --for implement|test|review
+       [--task-type ui_component|store_logic|service_api|fix|mixed]
+-      [--max-bytes <4096..1048576>] [--out <path>] [--json]
++      [--task-text <text>] [--max-bytes <4096..1048576>] [--out <path>] [--json]
+ 
+   --files       Target files, repo-relative; commas or a repeated flag.
+   --for         implement: rules and implementation skills; test: rules and testing skills;
+                 review: project rules only.
+   --task-type   Adds the bundled rules for that task type (the task-implementer table).
++  --task-text   What the task is about (title and description). Matched against the keywords of the
++                documents declared in .metaproject/rules/project/references.json; a match makes that
++                document must_read. Cut to ${TASK_TEXT_MAX_CHARS} characters, then recorded in the last-resolve record.
+   --max-bytes   Cap on project content that is must_read (default 131072, or
+                 gdskills.projectContext.maxBytes in .metaproject/tasks.config.json). Over the cap,
+                 later entries become on_demand and a warning goes to stderr.
+   --out         Write the JSON here (inside the project); its path is the task's resolved_context_file.
+ 
+ Each entry carries path, sha256, bytes, reason and tier (must_read | on_demand).
+ Check a worker's result against it with:
+   keryx skills contracts validate <result.json> --schema task-implementer-output --resolved <resolved.json>
+ 
+ Examples:
+   keryx skills resolve-context --files src/stores/UserStore.ts --for implement --task-type store_logic --json
+   keryx skills resolve-context --files src/a.test.tsx --for test --out .metaproject/data/resolved.json
+ `);
+ }
+ 
+ function printInspectHelp(): void {
+   console.log(`keryx skills inspect
+ 
+ Usage:
+   keryx skills inspect <project-skill> [--json]
+
+--- src/commands/skills-references.test.ts
+@@ 1,311 @@
++import { afterEach, expect, test } from "bun:test";
++import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { knownSubcommandsFor } from "../cli-registry";
++import { skillsCommand } from "./skills";
++import type { ReferencesCheckReport, ReferencesSuggestion } from "../gdskills/references-check";
++
++// Flow 462, T9: `keryx skills references check|suggest` and the import hint.
++// The analysis is tested through the router, the way an operator reaches it.
++
++const roots: string[] = [];
++const startCwd = process.cwd();
++
++afterEach(async () => {
++  process.chdir(startCwd);
++  process.exitCode = 0;
++  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
++});
++
++async function capture(run: () => Promise<void>): Promise<{ out: string; err: string }> {
++  const out: string[] = [];
++  const err: string[] = [];
++  const originalLog = console.log;
++  const originalError = console.error;
++  console.log = (...parts: unknown[]) => void out.push(parts.map(String).join(" "));
++  console.error = (...parts: unknown[]) => void err.push(parts.map(String).join(" "));
++  try {
++    await run();
++  } finally {
++    console.log = originalLog;
++    console.error = originalError;
++  }
++  return { out: out.join("\n"), err: err.join("\n") };
++}
++
++const STYLING_DOC = "# Styling\n\nIntro.\n\n## Class conventions\n\nUse tokens, never raw colours.\n\n## Spacing\n\nUse the scale.\n";
++const GOOD_DESCRIPTION = "Class naming and the Tailwind cascade contract.";
++const RULE = "---\ndescription: styling\nglobs: src/**/*.css\nalwaysApply: false\n---\n\nRead `STYLING.md` before touching a class.\n";
++
++type Declaration = { path: string; when: { globs?: string[]; keywords?: string[] }; anchor?: string | undefined; description: string };
++
++/** `undefined` removes a field: an entry without an anchor is a declaration of the whole file. */
++type Overrides = { [Key in keyof Declaration]?: Declaration[Key] | undefined };
++
++function declaration(overrides: Overrides = {}): Declaration {
++  const entry: Declaration = { path: "STYLING.md", when: { globs: ["src/**/*.css"], keywords: ["className"] }, anchor: "Class conventions", description: GOOD_DESCRIPTION };
++  return {
++    path: overrides.path ?? entry.path,
++    when: overrides.when ?? entry.when,
++    description: overrides.description ?? entry.description,
++    ..."anchor" in overrides ? (overrides.anchor === undefined ? {} : { anchor: overrides.anchor }) : { anchor: entry.anchor },
++  };
++}
++
++async function project(options: {
++  rules?: Record<string, string>;
++  files?: Record<string, string>;
++  references?: Declaration[] | string;
++}): Promise<string> {
++  const root = await mkdtemp(path.join(tmpdir(), "keryx-skills-references-"));
++  roots.push(root);
++  await mkdir(path.join(root, ".metaproject", "rules", "project"), { recursive: true });
++  await writeFile(path.join(root, ".metaproject", "metaproject.json"), "{}\n", "utf8");
++  for (const [name, text] of Object.entries(options.rules ?? { "styling.mdc": RULE })) {
++    await mkdir(path.dirname(path.join(root, ".metaproject", "rules", "project", name)), { recursive: true });
++    await writeFile(path.join(root, ".metaproject", "rules", "project", name), text, "utf8");
++  }
++  for (const [name, text] of Object.entries(options.files ?? { "STYLING.md": STYLING_DOC })) {
++    await mkdir(path.dirname(path.join(root, name)), { recursive: true });
++    await writeFile(path.join(root, name), text, "utf8");
++  }
++  if (options.references !== undefined) {
++    const text = typeof options.references === "string" ? options.references : `${JSON.stringify({ schema: 1, references: options.references }, null, 2)}\n`;
++    await writeFile(path.join(root, ".metaproject", "rules", "project", "references.json"), text, "utf8");
++  }
++  process.chdir(root);
++  return root;
++}
++
++async function check(...extra: string[]): Promise<{ out: string; err: string; report?: ReferencesCheckReport }> {
++  const result = await capture(() => skillsCommand(["references", "check", ...extra]));
++  return extra.includes("--json") ? { ...result, report: JSON.parse(result.out) as ReferencesCheckReport } : result;
++}
++
++function codes(report: ReferencesCheckReport | undefined, severity: "error" | "warning"): string[] {
++  return (report?.findings ?? []).filter((finding) => finding.severity === severity).map((finding) => `${finding.code}:${finding.path}`);
++}
++
++async function listing(root: string, relative = ""): Promise<string[]> {
++  const found: string[] = [];
++  for (const entry of await readdir(path.join(root, relative), { withFileTypes: true })) {
++    const ref = relative === "" ? entry.name : `${relative}/${entry.name}`;
++    found.push(ref);
++    if (entry.isDirectory()) found.push(...(await listing(root, ref)));
++  }
++  return found.sort();
++}
++
++test("`references` is a known skills subcommand and the help lists check and suggest", async () => {
++  expect(knownSubcommandsFor("skills")).toContain("references");
++  const { out } = await capture(() => skillsCommand(["--help"]));
++  expect(out).toContain("keryx skills references check");
++  expect(out).toContain("keryx skills references suggest");
++});
++
++test("references check: a project whose declarations are sound reports nothing and exits 0", async () => {
++  await project({ references: [declaration()] });
++  const { out, err } = await check();
++  expect(process.exitCode ?? 0).toBe(0);
++  expect(err).toBe("");
++  expect(out).toContain("0 errors");
++  expect(out).toContain("0 warnings");
++});
++
++test("references check: a declared document that does not exist is an error naming the entry, and exits 1", async () => {
++  await project({ references: [declaration(), declaration({ path: "docs/GONE.md", anchor: undefined })] });
++  const { out, report } = await check("--json");
++  expect(codes(report, "error")).toEqual(["document-missing:docs/GONE.md"]);
++  expect(report?.ok).toBe(false);
++  expect(process.exitCode).toBe(1);
++  const text = await check();
++  expect(text.out).toContain("docs/GONE.md");
++  expect(out).toContain("document-missing");
++});
++
++test("references check: a declared document that resolves outside the project root is an error", async () => {
++  const root = await project({ references: [declaration({ path: "linked.md", anchor: undefined })] });
++  const outside = await mkdtemp(path.join(tmpdir(), "keryx-skills-references-outside-"));
++  roots.push(outside);
++  await writeFile(path.join(outside, "SECRET.md"), "# Secret\n", "utf8");
++  await symlink(path.join(outside, "SECRET.md"), path.join(root, "linked.md"));
++  const { report } = await check("--json");
++  expect(codes(report, "error")).toContain("document-outside-root:linked.md");
++  expect(process.exitCode).toBe(1);
++});
++
++test("references check: a declared document over the size limit is an error", async () => {
++  await project({
++    references: [declaration({ anchor: undefined })],
++    files: { "STYLING.md": `# Styling\n\n${"x".repeat(262145)}\n` },
++  });
++  const { report } = await check("--json");
++  expect(codes(report, "error")).toEqual(["document-too-large:STYLING.md"]);
++  expect(process.exitCode).toBe(1);
++});
++
++test("references check: an anchor that matches no heading is an error and lists the headings the file has", async () => {
++  await project({ references: [declaration({ anchor: "Nonexistent section" })] });
++  const { report } = await check("--json");
++  expect(codes(report, "error")).toEqual(["anchor-not-found:STYLING.md"]);
++  const finding = report?.findings.find((entry) => entry.code === "anchor-not-found");
++  expect(finding?.message).toContain("Nonexistent section");
++  expect(finding?.message).toContain("Class conventions");
++  expect(process.exitCode).toBe(1);
++});
++
++test("references check: a description under 20 characters is a warning and does not fail the run", async () => {
++  await project({ references: [declaration({ description: "Styling rules." })] });
++  const { report } = await check("--json");
++  expect(codes(report, "warning")).toEqual(["description-short:STYLING.md"]);
++  expect(codes(report, "error")).toEqual([]);
++  expect(report?.ok).toBe(true);
++  expect(process.exitCode ?? 0).toBe(0);
++});
++
++test("references check: a keyword under 4 characters is a warning naming the keyword", async () => {
++  await project({ references: [declaration({ when: { globs: ["src/**/*.css"], keywords: ["css", "className", "ui"] } })] });
++  const { report } = await check("--json");
++  expect(codes(report, "warning")).toEqual(["keyword-short:STYLING.md", "keyword-short:STYLING.md"]);
++  const messages = (report?.findings ?? []).filter((entry) => entry.code === "keyword-short").map((entry) => entry.message);
++  expect(messages.some((message) => message.includes('"css"'))).toBe(true);
++  expect(messages.some((message) => message.includes('"ui"'))).toBe(true);
++  expect(process.exitCode ?? 0).toBe(0);
++});
++
++test("references check: a citation with no declaration is a warning, and a missing references.json is not an error", async () => {
++  await project({});
++  const { report } = await check("--json");
++  expect(report?.present).toBe(false);
++  expect(codes(report, "error")).toEqual([]);
++  expect(codes(report, "warning")).toEqual(["undeclared-citation:STYLING.md"]);
++  expect(process.exitCode ?? 0).toBe(0);
++});
++
++test("references check: a declaration that no rule cites is a warning", async () => {
++  await project({
++    rules: { "styling.mdc": "---\ndescription: styling\nglobs: src/**/*.css\nalwaysApply: false\n---\n\nNo document is cited here.\n" },
++    references: [declaration()],
++  });
++  const { report } = await check("--json");
++  expect(codes(report, "warning")).toEqual(["unused-declaration:STYLING.md"]);
++  expect(process.exitCode ?? 0).toBe(0);
++});
++
++test("references check: malformed JSON is an error that carries the loader's message", async () => {
++  await project({ references: "{ not json" });
++  const { out, err, report } = await check("--json");
++  expect(process.exitCode).toBe(1);
++  expect(report?.ok).toBe(false);
++  expect(codes(report, "error")).toEqual([`invalid-file:.metaproject/rules/project/references.json`]);
++  expect(report?.findings[0]?.message).toContain("is not valid JSON");
++  expect(err).toBe("");
++  expect(out).toContain("is not valid JSON");
++});
++
++test("references check: a schema violation names the entry", async () => {
++  await project({ references: JSON.stringify({ schema: 1, references: [{ path: "STYLING.md", when: {}, description: GOOD_DESCRIPTION }] }) });
++  const { report } = await check("--json");
++  expect(process.exitCode).toBe(1);
++  expect(report?.findings.some((entry) => entry.severity === "error" && entry.message.includes('references[0] ("STYLING.md")'))).toBe(true);
++});
++
++test("references check: --json carries the same findings the text report prints", async () => {
++  await project({ references: [declaration({ description: "short", anchor: "Missing" })] });
++  const json = await check("--json");
++  process.exitCode = 0;
++  const text = await check();
++  for (const finding of json.report?.findings ?? []) {
++    expect(text.out).toContain(finding.path);
++    expect(text.out).toContain(finding.message);
++  }
++  expect(text.out).toContain(`${json.report?.errors} error`);
++  expect(text.out).toContain(`${json.report?.warnings} warning`);
++});
++
++test("references check: an unknown action is refused with usage and exits 1", async () => {
++  await project({});
++  const { err } = await capture(() => skillsCommand(["references", "bogus"]));
++  expect(err).toContain("keryx skills references");
++  expect(process.exitCode).toBe(1);
++});
++
++test("references suggest: prints a skeleton for each undeclared citation and writes no file", async () => {
++  const root = await project({});
++  const before = await listing(root);
++  const { out } = await capture(() => skillsCommand(["references", "suggest"]));
++  const parsed = JSON.parse(out) as ReferencesSuggestion;
++  expect(parsed.schema).toBe(1);
++  expect(parsed.references).toHaveLength(1);
++  const entry = parsed.references[0]!;
++  expect(entry.path).toBe("STYLING.md");
++  expect(entry.bytes).toBe(Buffer.byteLength(STYLING_DOC));
++  expect(entry.anchorCandidates).toEqual(["Styling", "Class conventions", "Spacing"]);
++  expect(entry.description).toBe("");
++  expect(entry.when).toEqual({ globs: [], keywords: [] });
++  expect(await listing(root)).toEqual(before);
++  expect(process.exitCode ?? 0).toBe(0);
++});
++
++test("references suggest: leaves out citations that are already declared and prints an empty list when none remain", async () => {
++  await project({ references: [declaration()] });
++  const { out } = await capture(() => skillsCommand(["references", "suggest"]));
++  expect((JSON.parse(out) as ReferencesSuggestion).references).toEqual([]);
++});
++
++test("references suggest: lists only citations that name a file inside the project", async () => {
++  await project({
++    rules: { "styling.mdc": `${RULE}\nAlso see \`docs/missing.md\`, \`../outside.md\` and \`THEMING.md\`; rule \`core/other.mdc\`.\n` },
++    files: { "STYLING.md": STYLING_DOC, "THEMING.md": "# Theming\n" },
++  });
++  const { out } = await capture(() => skillsCommand(["references", "suggest"]));
++  expect((JSON.parse(out) as ReferencesSuggestion).references.map((entry) => entry.path)).toEqual(["STYLING.md", "THEMING.md"]);
++});
++
++test("references suggest: a malformed references.json is reported and exits 1 instead of guessing what is declared", async () => {
++  await project({ references: "{ not json" });
++  const { out, err } = await capture(() => skillsCommand(["references", "suggest"]));
++  expect(out).toBe("");
++  expect(err).toContain("is not valid JSON");
++  expect(process.exitCode).toBe(1);
++});
++
++async function importProject(ruleText: string, files: Record<string, string>): Promise<{ root: string; source: string }> {
++  const root = await project({ rules: {}, files });
++  const source = path.join(root, "upstream-rules");
++  await mkdir(source, { recursive: true });
++  await writeFile(path.join(source, "styling.mdc"), ruleText, "utf8");
++  return { root, source };
++}
++
++test("references suggest: skills import --rules ends with the count of undeclared citations and the command to run", async () => {
++  const { source } = await importProject(RULE, { "STYLING.md": STYLING_DOC });
++  const { out } = await capture(() => skillsCommand(["import", "--rules", source]));
++  const lines = out.trimEnd().split("\n");
++  expect(lines.at(-1)).toContain("keryx skills references suggest");
++  expect(lines.at(-2)).toContain("1 cited document");
++  expect(out).toContain("imported");
++});
++
++test("references suggest: skills import --rules prints no hint when every citation is declared or none exists", async () => {
++  const withoutCitation = await importProject("---\ndescription: s\nglobs: src/**/*.css\nalwaysApply: false\n---\n\nNo citation.\n", {});
++  const quiet = await capture(() => skillsCommand(["import", "--rules", withoutCitation.source]));
++  expect(quiet.out).not.toContain("references suggest");
++
++  const declared = await importProject(RULE, { "STYLING.md": STYLING_DOC });
++  await mkdir(path.join(declared.root, ".metaproject", "rules", "project"), { recursive: true });
++  await writeFile(
++    path.join(declared.root, ".metaproject", "rules", "project", "references.json"),
++    `${JSON.stringify({ schema: 1, references: [declaration()] })}\n`,
++    "utf8",
++  );
++  const done = await capture(() => skillsCommand(["import", "--rules", declared.source]));
++  expect(done.out).not.toContain("references suggest");
++});
++
++test("references suggest: skills import --rules --json stays pure JSON", async () => {
++  const { source } = await importProject(RULE, { "STYLING.md": STYLING_DOC });
++  const { out } = await capture(() => skillsCommand(["import", "--rules", source, "--json"]));
++  expect(() => JSON.parse(out)).not.toThrow();
++});
+
+--- src/flow/task-project-context.test.ts
+@@ 1,25 @@
+-import { afterEach, expect, test } from "bun:test";
++import { afterEach, expect, spyOn, test } from "bun:test";
+ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
++import { skillsCommand } from "../commands/skills";
+ import { sha256Hex } from "../gdskills/project-rules";
+ import { createFlowService } from "./service";
+ import type { FlowService } from "./types";
+ 
+ const roots: string[] = [];
+ 
+ afterEach(async () => {
+   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+ });
+ 
+ const RULE = ".metaproject/rules/project/styling.mdc";
+ const RULE_TEXT = "use tokens, not hex\n";
+ 
+ type Fixture = { root: string; dir: string; service: FlowService; flowId: string };
+ 
+ async function fixture(enforcement?: "warn" | "block"): Promise<Fixture> {
+   const root = await mkdtemp(path.join(tmpdir(), "keryx-task-ctx-"));
+   roots.push(root);
+   await mkdir(path.join(root, ".metaproject", "rules", "project"), { recursive: true });
+   await writeFile(path.join(root, RULE), RULE_TEXT, "utf8");
+
+--- src/flow/task-project-context.test.ts
+@@ 99,227 @@
+   await f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: result, resolvedFile: resolved } });
+   expect(await taskStatus(f, "T2")).toBe("done");
+   const journal = await readFile(path.join(f.root, f.dir, "journal.md"), "utf8");
+   expect(journal).toContain("1 miss(es), 0 drifted (enforcement warn)");
+   expect(journal).toContain(RULE);
+ });
+ 
+ test("default install (no config): a miss passes and a task without a result is not checked", async () => {
+   const f = await fixture();
+   const { result, resolved } = await files(f.root, false);
+   await f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: result, resolvedFile: resolved } });
+   await f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T3" });
+   expect(await taskStatus(f, "T3")).toBe("done");
+ });
+ 
+ test("--result without --resolved (or the reverse) is an error in any mode", async () => {
+   const f = await fixture("warn");
+   await expect(f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: "result.json" } })).rejects.toThrow(/go together/);
+   await expect(f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resolvedFile: "resolved.json" } })).rejects.toThrow(/go together/);
+ });
++
++// --- conditional reads (flow 462): the proof of a promoted document, through task done and the standalone check ---
++
++const DOC = "docs/STYLING.md";
++const DOC_TEXT = "# Styling\n\n## Tokens\n\nUse design tokens instead of hex values. Spacing follows the spacing scale.\n\n## Layout\n\nGrid containers carry the gutters.\n";
++const GOOD_SUMMARY = "Use design tokens instead of hex values and follow the spacing scale";
++const BAD_SUMMARY = "I read the whole document carefully and it was all fine really";
++
++async function promotedFiles(root: string, summary: string): Promise<{ result: string; resolved: string }> {
++  const sha = sha256Hex(DOC_TEXT);
++  await mkdir(path.join(root, "docs"), { recursive: true });
++  await writeFile(path.join(root, DOC), DOC_TEXT, "utf8");
++  const resolved = {
++    schema: 1,
++    for: "implement",
++    files: ["src/a.css"],
++    entries: [
++      {
++        kind: "contract",
++        source: "project",
++        path: DOC,
++        sha256: sha,
++        bytes: DOC_TEXT.length,
++        reason: "condition:glob:src/**/*.css",
++        tier: "must_read",
++        anchor: "Tokens",
++        condition: { globs: ["src/**/*.css"], keywords: [] },
++      },
++    ],
++  };
++  const result = {
++    task_id: "task-2",
++    task_name: "Style the form",
++    task_type: "ui_component",
++    status: "success",
++    project_context_applied: [{ path: DOC, sha256: sha, how: "read", anchor: "Tokens", summary }],
++  };
++  await writeFile(path.join(root, "resolved.json"), JSON.stringify(resolved), "utf8");
++  await writeFile(path.join(root, "result.json"), JSON.stringify(result), "utf8");
++  return { result: "result.json", resolved: "resolved.json" };
++}
++
++async function standalone(root: string, files: { result: string; resolved: string }): Promise<{ exitCode: number; lines: string[] }> {
++  const originalCwd = process.cwd();
++  const originalExitCode = process.exitCode;
++  const lines: string[] = [];
++  const logSpy = spyOn(console, "log").mockImplementation((...parts: unknown[]) => void lines.push(parts.join(" ")));
++  const errSpy = spyOn(console, "error").mockImplementation((...parts: unknown[]) => void lines.push(parts.join(" ")));
++  process.exitCode = 0;
++  try {
++    process.chdir(root);
++    await skillsCommand(["contracts", "validate", files.result, "--schema", "task-implementer-output", "--resolved", files.resolved]);
++    return { exitCode: Number(process.exitCode ?? 0), lines };
++  } finally {
++    logSpy.mockRestore();
++    errSpy.mockRestore();
++    process.chdir(originalCwd);
++    process.exitCode = originalExitCode ?? 0;
++  }
++}
++
++test("block: a promoted document cited with a summary that shares no words with the section is refused, and the standalone check exits 1 with the same lines", async () => {
++  const f = await fixture("block");
++  const files = await promotedFiles(f.root, BAD_SUMMARY);
++  const refusal = await f.service
++    .taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: files.result, resolvedFile: files.resolved } })
++    .then(() => undefined, (error: unknown) => error as Error);
++  expect(refusal?.message).toContain("project context: 1 miss(es), 0 drifted (enforcement block)");
++  const refused = (refusal?.message ?? "").split("\n").slice(1);
++  expect(refused).toHaveLength(1);
++  expect(refused[0]).toContain(`project context miss: ${DOC} (condition:glob:src/**/*.css) has a summary that shares 0 distinct word(s)`);
++  expect(await taskStatus(f, "T2")).not.toBe("done");
++
++  const check = await standalone(f.root, files);
++  expect(check.exitCode).toBe(1);
++  expect(check.lines.filter((line) => line.startsWith("- project context"))).toEqual(refused);
++});
++
++test("block: a promoted document cited with its anchor and a summary in the section's words closes the task, and the standalone check exits 0", async () => {
++  const f = await fixture("block");
++  const files = await promotedFiles(f.root, GOOD_SUMMARY);
++  await f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: files.result, resolvedFile: files.resolved } });
++  expect(await taskStatus(f, "T2")).toBe("done");
++  expect((await standalone(f.root, files)).exitCode).toBe(0);
++});
++
++test("warn: the same proof miss passes with exit 0 and the lines go to the flow journal and the standalone output", async () => {
++  const f = await fixture("warn");
++  const files = await promotedFiles(f.root, BAD_SUMMARY);
++  await f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: files.result, resolvedFile: files.resolved } });
++  expect(await taskStatus(f, "T2")).toBe("done");
++  const journal = await readFile(path.join(f.root, f.dir, "journal.md"), "utf8");
++  expect(journal).toContain("1 miss(es), 0 drifted (enforcement warn)");
++  expect(journal).toContain(`miss: ${DOC} (condition:glob:src/**/*.css) has a summary that shares 0 distinct word(s)`);
++
++  const check = await standalone(f.root, files);
++  expect(check.exitCode).toBe(0);
++  expect(check.lines.join("\n")).toContain(`- project context miss: ${DOC} (condition:glob:src/**/*.css) has a summary that shares 0 distinct word(s)`);
++});
++
++test("block: editing a promoted document between resolve and close is drift and refuses the task", async () => {
++  const f = await fixture("block");
++  const files = await promotedFiles(f.root, GOOD_SUMMARY);
++  await writeFile(path.join(f.root, DOC), `${DOC_TEXT}\nA late edit.\n`, "utf8");
++  const refusal = f.service.taskDone({ cwd: f.root, id: f.flowId, taskId: "T2", projectContext: { resultFile: files.result, resolvedFile: files.resolved } });
++  await expect(refusal).rejects.toThrow(/1 drifted/);
++  await expect(refusal).rejects.toThrow(new RegExp(`project context drift: ${DOC.replace(/\./g, "\\.")} \\(must_read\\)`));
++  expect((await standalone(f.root, files)).exitCode).toBe(1);
++});

@@ -1,0 +1,55 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Slices 02 and 03 are clean on the whole: the removed LISTED_FILES, MAX_LISTED, BODY_PREVIEW_* and REPLY_PREVIEW constants and the removed `clip` helper have no remaining reference in src (checked with keryx ctx rg); the removed completeManagedReview import is unused in review.ts and the tui-shell DockRace import survives as a type import at line 125. The hiddenInCard predicate is well named and the reasonOf union result reads clearly at both call sites. Three minor concerns remain: the same 'does the card hide this text' rule now lives in two predicates of different strictness (shownBody and hiddenInCard), the shared helper is defined 300 lines after its first use inside the review_complete section, and completionDispositions repeats a message prefix seven times while validating three fields inline.",
+  "findings": [
+    {
+      "id": "CC-8-1",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 672,
+      "quote": "const hiddenInCard = (text: string): boolean => cardSafe(text) !== text || /[\\p{Cf}\\p{Zl}\\p{Zp}]/u.test(text);",
+      "problem": "Clean Code, DRY E1 / consistent vocabulary: the rule 'the card must show this text exactly as stored' is now implemented twice. hiddenInCard (new, used for reason, dispositions and stored waiver quotes) refuses cardSafe changes plus format, line-separator and paragraph-separator characters. shownBody (line 62-65, used for the post body and every reply body) refuses only `cardSafe(line) !== line`, so a zero-width space, word joiner or BOM inside a post or reply body passes it. The same intent has two definitions with different strictness, and the weaker one guards the two tools whose text goes to a third party.",
+      "impact": "The card says the body is 'shown whole' while a zero-width character the card draws as nothing is still posted, which is the exact class the commit closes for reasons and dispositions (card must show what is stored). Future edits to one predicate will not reach the other. The refusal wording is also duplicated: shownBody line 65 says 'control, escape or bidi' while HIDDEN_IN_CARD says 'control, escape, newline, bidi or zero-width'.",
+      "suggested_fix": "Express shownBody through the one predicate: `const bad = lines.findIndex(hiddenInCard);` (after the tab replacement, which hiddenInCard would also refuse) and reuse a shared refusal wording; move hiddenInCard and HIDDEN_IN_CARD next to shownBody at the top of the file so both reads see one definition.",
+      "evidence": "src/commands/operator-confirm-review.ts:62-65 (shownBody uses only cardSafe(line) !== line) against :672 (hiddenInCard adds \\p{Cf}\\p{Zl}\\p{Zp}). shownBody is consumed by publishSpec (line ~209) and replySpec (line ~509). cardSafe in src/lib/card-safe.ts strips only \\u200e \\u200f \\u202a-\\u202e \\u2066-\\u2069, not U+200B, U+2060 or U+FEFF.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-8-2",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 669,
+      "quote": "const HIDDEN_IN_CARD = \"holds control, escape, newline, bidi or zero-width characters the card would hide or rewrite; send plain single-line text\";",
+      "problem": "Clean Code, functions B3 / SRP at module level: HIDDEN_IN_CARD and hiddenInCard are shared helpers (reasonOf at line 373-377 for review_waive_mutation, review_override_reviewers and review_decide_premise; completionDispositions and quoteWhole for review_complete) but they are declared inside the 'review_complete (flow 464)' section after the constants MAX_DISPOSITIONS and MAX_DISPOSITION_*. reasonOf calls them about 300 lines before they are defined.",
+      "impact": "A reader of the decision and premise tools has to hunt for the validator in an unrelated section; the 'review_complete' header makes it look private to that tool, so a later edit there can change what review_waive_mutation accepts. Module-level consts used before their declaration also work only because every call happens after module load.",
+      "suggested_fix": "Move HIDDEN_IN_CARD and hiddenInCard (with the doc comment) up beside shownBody and packageRef in the shared-helpers block at the top of the file, before section 1; keep only the MAX_DISPOSITION_* constants in section 10.",
+      "evidence": "reasonOf uses hiddenInCard and HIDDEN_IN_CARD at lines 373-377; they are declared at lines 669-672 under the section header '10. review_complete (flow 464)'.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-8-3",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 708,
+      "quote": "if (finding.length > MAX_DISPOSITION_FINDING_CHARS) return { refusal: `dispositions[${index}]: finding is longer than ${MAX_DISPOSITION_FINDING_CHARS} characters` };",
+      "problem": "Clean Code, functions B1/B3 and magic strings E2: completionDispositions (lines 691-718, 28 lines) walks the array, coerces one entry, and applies seven different refusal rules inline, each hand-writing the prefix `dispositions[${index}]: `. The commit added three more rules (finding length, evidence length, hidden characters) to a loop body that already mixed entry parsing with validation. The two-element `for (const [field, value] of [...])` loop to run one predicate over two fields adds indirection for a two-line check.",
+      "impact": "Seven copies of the same prefix drift when the message format changes, and each new limit lengthens the loop body further. Not a defect today; it is the next place a rule is added and a refusal message is mistyped.",
+      "suggested_fix": "Extract `checkDisposition(entry: unknown): FindingDispositionRecord | string` returning either the record or the refusal text without the prefix, and let the loop do `const bad = \"dispositions[\" + index + \"]: \" + result` once. Test the two fields with `hiddenInCard(finding)` and `hiddenInCard(text ?? \"\")` directly instead of the tuple loop.",
+      "evidence": "Prefix `dispositions[${index}]:` appears at lines 702, 704, 706, 708, 710 and 713 (six refusal returns), plus the array-level refusals at 694-695.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    }
+  ],
+  "slices": ["slice-02", "slice-03"],
+  "questions": [
+    "hiddenInCard refuses every \\p{Cf} character, which includes U+200D (zero-width joiner, used in emoji sequences such as family or flag-with-gender emoji) and U+200C (zero-width non-joiner, needed in Persian and some Indic scripts). Is refusing a reason or disposition evidence that contains them intended? If not, the zero-width list should be explicit (U+200B, U+2060, U+FEFF, U+00AD) instead of the whole Cf category. Left as a question because the refusal message tells the model to send plain text and the operator reads English."
+  ]
+}
+```

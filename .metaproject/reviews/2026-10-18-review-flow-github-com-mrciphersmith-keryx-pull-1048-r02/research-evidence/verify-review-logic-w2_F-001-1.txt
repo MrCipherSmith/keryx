@@ -1,0 +1,49 @@
+# keryx review verify-run
+finding: review-logic-w2:F-001
+command: sh /tmp/claude-1000/-home-altsay-keryx/0db7c628-f351-4bbf-bbb9-4cac752e7d4d/scratchpad/m3.sh
+cwd: /home/altsay/keryx/.worktrees/conditional-reads
+time: 2026-10-18T14:09:46.607Z
+exit: 0
+
+--- stdout ---
+--- import --rules --link
+# skills import --rules
+
+linked: 1
+
+- linked `linked.mdc` → .metaproject/rules/project/linked.mdc
+
+import exit=0
+total 8
+drwxrwxr-x 2 altsay altsay 4096 Oct 18 14:09 .
+drwxrwxr-x 3 altsay altsay 4096 Oct 18 14:09 ..
+--- resolve-context (does the resolver see DOC.md through the linked rule?)
+# skills resolve-context (implement)
+
+Files: src/a.ts
+Budget: 106 of 131072 bytes (default)
+
+## must_read (1)
+- /tmp/tmp.J8uw377Ljg/linked.mdc — project rule, always, 106 bytes, sha256 8b412bfae6c1 (linked)
+
+## on_demand (1)
+- DOC.md — project contract, referenced-by:/tmp/tmp.J8uw377Ljg/linked.mdc, 30 bytes, sha256 b0cc3d090efa
+
+Resolved context written to r.json
+resolver entries: [{"path":"/tmp/tmp.J8uw377Ljg/linked.mdc","tier":"must_read","reason":"always"},{"path":"DOC.md","tier":"on_demand","reason":"referenced-by:/tmp/tmp.J8uw377Ljg/linked.mdc"}]
+--- references suggest (should list DOC.md if the scan saw the linked rule)
+{
+  "schema": 1,
+  "references": []
+}
+suggest exit=0
+--- references check with DOC.md declared (a false unused-declaration if the scan misses the linked citation)
+# skills references check
+
+1 declared
+- warning DOC.md [unused-declaration] no project rule cites this document; the declaration works, but nothing points a reader at it
+
+0 errors, 1 warning
+check exit=0
+--- stderr ---
+

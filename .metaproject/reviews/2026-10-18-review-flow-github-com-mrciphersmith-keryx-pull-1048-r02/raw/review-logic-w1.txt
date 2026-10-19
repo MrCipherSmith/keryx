@@ -1,0 +1,88 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-01 holds schemas, skill instruction text, flow docs, user docs, PRD docs and one package.json script; no production TypeScript. Every behavioural claim in the docs was checked against the source at head d6267d4a5 (reference-proof.ts, resolved-context-check.ts, references-config.ts, reference-entries.ts, references-section.ts, references-check.ts, context-resolver.ts, resolve-context-command.ts) and matches: 40-character summary floor, min(3, section words) shared 5+ letter words, how n/a is a miss, anchor equality, 4000-character task text cut, 262144-byte document limit, finding codes with 20/4 thresholds, ATX-only section extraction, cap that warns and never demotes a promoted entry. The skills-resolve-context-result schema additions (undeclared, anchor, section_bytes, condition) match what the resolver emits. No blocker or major defect. Three documentation statements contradict the code or each other and could mislead the operator during the AC20 live run; they are minor. Two info notes follow. Not covered: the src/gdskills/bundled copies of the skills versus the .metaproject copies (sync not compared), and the TUI-states claims (another slice).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-conditional-reads/live-run.md",
+      "line": null,
+      "quote": "пересказ должен делить минимум два различных слова из пяти и более букв с",
+      "problem": "The runbook states the summary threshold as two shared words, and a later paragraph tells the operator that a threshold of two words is too strict. The code (SUMMARY_MIN_SHARED_WORDS = 3 in reference-proof.ts, required = Math.min(3, sectionWords.size)), the README, the cli-reference and the runbook's own expected output (line 224: '3 required') all say three. The two-word text is stale after the threshold change.",
+      "impact": "An operator running AC20 reads 'two words' in the preconditions, then sees '3 required' in the real output, and the later advice ('the two-word threshold is too strict for your project') names a number that does not exist. The operator's judgement of whether the threshold needs tuning rests on the wrong figure, in the one document written to guide that judgement.",
+      "suggested_fix": "Replace 'минимум два различных слова' with 'минимум три различных слова (или все, если в разделе их меньше трёх)' at the first site, and 'порог в два слова' with 'порог в три слова' at the second site (around line 261).",
+      "evidence": "src/gdskills/reference-proof.ts: SUMMARY_MIN_SHARED_WORDS = 3 and 'const required = Math.min(SUMMARY_MIN_SHARED_WORDS, sectionWords.size)'. live-run.md line 39 says two, line 224 shows '3 required', line 261 says 'порог в два слова слишком строг для вашего'.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": null,
+      "quote": "and/or `when.keywords` (at least one), and optionally `anchor` (a heading;",
+      "problem": "The Declare bullet reads 'optionally `anchor` (a heading; only that section is required) and `description`', which makes description look optional. The loader requires it: parseEntry in references-config.ts pushes 'description must be a non-empty string saying what the document governs' and the JSON schema lists description under required.",
+      "impact": "A user following this bullet who leaves description out gets the whole references.json rejected as invalid; promotion is then off for that run (a warning, exit 0), so every conditional read silently stops applying until they read the warning. Trigger: any declaration written from this reference page without a description.",
+      "suggested_fix": "Reword to: 'with `path`, `when` (`globs` and/or `keywords`, at least one) and `description` (all required), and optionally `anchor` ...'.",
+      "evidence": "src/gdskills/references-config.ts: schema 'required: [\"path\", \"when\", \"description\"]' and the description check in parseEntry; a parse error makes loadReferences return ok: false, which the resolver turns into a warning and no promotion.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-conditional-reads/README.md",
+      "line": null,
+      "quote": "A live run on vantage-frontend is an operator run with a runbook (AC18), like AC22 of flow 461.",
+      "problem": "The live run is AC20 in acceptance-criteria.md of flow 462; AC18 is the e2e test (live-run.md itself says the e2e test is AC18). The README also still carries 'Status: DRAFT for the operator; criteria are not frozen.' although the criteria file lists AC1-AC22 and the work is in review.",
+      "impact": "A reader tracing the live-run obligation from the PRD lands on the e2e criterion and may conclude the live run is already covered by a test; the DRAFT line suggests the criteria may still move. Documentation only, no behavioural effect.",
+      "suggested_fix": "Change 'AC18' to 'AC20' and update the Status line to the freeze state recorded in the flow.",
+      "evidence": "acceptance-criteria.md of flow 462: AC20 is the live run, AC18 the e2e test; live-run.md line 17 attributes src/gdskills/conditional-reads.e2e.test.ts to AC18.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/gdskills/reference-proof.ts",
+      "line": null,
+      "quote": "return new Set(text.normalize(\"NFC\").toLowerCase().match(/\\p{L}{5,}/gu) ?? []);",
+      "problem": "Words are runs of 5 or more letters of any script. Scripts written without spaces (Chinese, Japanese) yield one long 'word' per phrase, so an honest summary rarely shares three exact tokens with the section; the anchor heading's own words also count toward the shared set. The PRD names non-English text only in general terms.",
+      "impact": "Under enforcement block, a project documented in an unspaced script could see correct readings rejected, with no way to tune the threshold. Not reachable for the English and Russian projects the flow targets; the proxy nature of the check is already declared as a known limit.",
+      "suggested_fix": "No code change needed now. Add one sentence to the PRD risk table or guide section 5 that the word check assumes space-separated scripts, so a CJK project starts with warn.",
+      "evidence": "Pattern /\\p{L}{5,}/gu has no segmentation; an unspaced run counts as a single token. Reasoned from the code, not run.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 1 },
+  "slices": ["slice-01"],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+## Logic Review (review-logic, wave 1, slice-01)
+
+Scope: PR 1048, merge-base 1658f77d374b2d20189a55eaf44b95d64768d6b6, head d6267d4a5099f39b74e86a71e5c8f61ca47aa63d. Spec gate: ran against the flow 462 acceptance criteria (AC1-AC22). Nothing in this slice leaves a criterion unimplemented. AC20 (live run) is an operator step and out of reach for this reviewer.
+
+Verdict: the slice is logically sound. Stats: blocker 0, major 0, minor 3, info 1.
+
+What was checked against the source at head:
+- Proof of reading: path and whole-file sha256, anchor equal to the declared one, summary of at least 40 characters, at least min(3, section word count) shared 5+ letter words, how "n/a" a miss, drift reported separately. Docs and skill text agree with reference-proof.ts and resolved-context-check.ts.
+- Resolver: reasons declared / condition:glob / condition:keyword, 4000-character task text cut recorded in last.json, 262144-byte document limit, byte cap that warns and never demotes a promoted entry, `undeclared` only when a references file exists.
+- Declarations: duplicate normalised path is an error, description required, unknown properties rejected, BOM tolerated.
+- references check: finding codes and the 20 / 4 thresholds match cli-reference.
+- package.json docs:check: the three named test files exist.
+
+Findings are all documentation drift: F-001 (stale two-word threshold in the live-run runbook), F-002 (description shown as optional in cli-reference), F-003 (AC18/AC20 mislabel and DRAFT status in the PRD README), F-004 (info: tokenisation assumes space-separated scripts).
+
+Not re-raised (settled in the PR body): vocabulary-proxy summary check, `suggest` output not pasteable as is, the separate citation scan in references-check.ts, the two ci-triage-source test failures also on main, mkdocs not run.
+
+Not covered: sync of src/gdskills/bundled/skills copies with the .metaproject copies; TUI-states claims (other slice).

@@ -1,0 +1,89 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-logic",
+  "status": "DONE_WITH_CONCERNS",
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0},
+  "slices": ["slice-01"],
+  "head": "6f47bf35f",
+  "prior_dispositions": [
+    {"id": "C-01", "disposition": "closed", "evidence": "operator-confirm-rosters.test.ts now asserts 19 card tools; OPERATOR_CONFIRM_TOOL_NAMES in src/trigger/unattended.ts holds 19 names; the roster/tools/review-tools test files pass (70 pass, 0 fail)."},
+    {"id": "C-03", "disposition": "closed", "evidence": "operator-confirm-review.ts completeSpec.apply (741-797): the gate runs in its own try; closed is derived from the gate result or from completionFacts status; the completion-confirmation.json write is a separate try. A close without a record now returns isError with 'the round is closed but the confirmation record could not be written', and a bookkeeping stop is reported the same way. The close itself is still not rolled back (managed.ts writes the manifest at line 1030 before clearActiveReview/recordFinishedRound), but the card no longer reports a closed round as 'nothing was recorded'."},
+    {"id": "C-05", "disposition": "closed", "evidence": "Both SKILL.detail.md copies and both SKILL.md Done-when lines now say the agent calls the review_complete card; TM-04 s8 states plainly that plain `keryx review complete` has no TTY check and the card is an agent rule, not a lock. The residual contradiction with the autonomous profile is raised as new finding L-01, not as a regression of C-05."},
+    {"id": "C-06", "disposition": "closed", "evidence": "OperatorConfirmationLog.markUndelivered(id) added (operator-confirmations.ts 60-67); tui-shell.ts onUndelivered calls operatorCards.markUndelivered(cardId); waiting() drops unmirrored cards; pending line says 'Telegram mirror not delivered, answer in the shell'. Unit tests at operator-confirmations.test.ts 58-65."},
+    {"id": "C-13", "disposition": "closed", "evidence": "mirrorApprovalToTopic (tui-shell.ts ~6095-6152) wraps both the inner/race branch in try/finally so answer() runs on a rejection too (finally at 6139-6141)."},
+    {"id": "C-16", "disposition": "open", "evidence": "docs/docs/guides/autonomous-review.md:35 still says 'it stops at the floor and never tells you to run the terminal command'. At head the card tools are excluded from the unattended roster (OPERATOR_CONFIRM_TOOL_NAMES + isUnattendedExcludedTool, unattended.ts) and unattendedRefusal returns '`<tool>` is not offered to an unattended run', which FLOOR_REFUSAL_PATTERNS (autonomous-profile.ts 171-174) does not match, so it is not counted as a floor refusal. The commit says the wording was left on purpose; the sentence is still inaccurate. Confidence medium: I did not trace how the runner records the excluded-tool result."},
+    {"id": "C-17", "disposition": "closed", "evidence": "CHANGELOG.md:10 now says 'a rejected remote answer burns the card, so nothing is applied and the card has to be asked again', which matches the token being deleted before the id/TTL checks."},
+    {"id": "C-18", "disposition": "closed", "evidence": "TM-04 s6a now has the bot-token-file bullet (a holder of the owner-only token file can edit the mirrored card text, so a press proves a press on a card with that text)."},
+    {"id": "C-19", "disposition": "closed", "evidence": "TM-04 s6a now has the restart bullet (token and answered-card list live in shell memory only; a restart inside the hour drops open cards while the Telegram buttons stay visible)."},
+    {"id": "C-20", "disposition": "closed", "evidence": "CHANGELOG.md: '## [Unreleased]' is empty at line 3 and the entries sit under '## [0.3.124] - 2026-10-19'."},
+    {"id": "C-21", "disposition": "partial", "evidence": "The SKILL.md Done-when, hosts-table and detail texts now name the card (both copies). Agent-facing text still sends the operator/agent to the CLI: operator-confirm-review.ts lines 262 and 312 (waive tool descriptions: 'run `keryx review complete` afterwards'), 296 and 358 (tool outputs: 'Run `keryx review complete` to close the review.'), and completion-gate.ts 788/791 (describeBlockers: 'run `keryx review complete` to close the package'). completion-gate.ts 761 was fixed."},
+    {"id": "C-22", "disposition": "closed", "evidence": "The --head input and the prBound re-derivation are gone from operator-confirm-review.ts (no match for prBound/headInput); the card closes against the recorded head and shows the head SHA in the card. completionFacts still reads manifest/report/research itself, but it is now one function with explicit error handling. I did not re-read all of buildCard."},
+    {"id": "C-23", "disposition": "closed", "evidence": "completionFacts (658-692): only ENOENT counts as no coverage waiver; any other read/parse error pushes 'waiver: coverage, could not read research.json (...)'."},
+    {"id": "C-24", "disposition": "closed", "evidence": "remoteApproval now sits above the Flow 173 F-003 JSDoc in tui-shell.ts, so the block documents isToolAvailableToSideWorker again."},
+    {"id": "C-26", "disposition": "partial", "evidence": "A shared reason() helper is hoisted in apply and the headInput duplicate is gone; the 12-character SHA abbreviation and the refusal text are still repeated in places. Cosmetic only."},
+    {"id": "C-32", "disposition": "partial", "evidence": "operator-confirmations.test.ts covers the log (ask/answer/markUndelivered/waiting/lines) and mirror-undelivered.test.ts covers the race leg. The tui-shell wiring (remoteApproval -> confirmedVia remote + pressedBy/pressedAt, and operatorCards.markUndelivered) is only pinned by a source-text assertion: operator-confirmations.test.ts:183 expect(mirror).toContain(\"operatorCards.markUndelivered(cardId)\"). No behavioural test drives the shell seam."},
+    {"id": "C-39", "disposition": "closed", "evidence": "The doc comments now say pressedAt is the shell clock at delivery, not the Telegram press time."},
+    {"id": "C-41", "disposition": "open", "evidence": "Info finding, accepted as is: the factsDigest check still runs before the PR lookup inside completeReviewGated. No code change in the slice; no defect beyond the original info note."},
+    {"id": "C-45", "disposition": "partial", "evidence": "waiting() now filters by REMOTE_CARD_TTL_MS and the pending line says 'Telegram token expired, answer in the shell'. The answered entry is still written from the transport answer in the finally at tui-shell.ts ~6139-6141 (place telegram, yes = decision === allow, pressedBy from the bridge) before the gate re-checks allowed id, token and TTL, so the log can say 'yes, pressed by Telegram user N' for an answer the gate then refused."}
+  ],
+  "findings": [
+    {
+      "id": "L-01",
+      "severity": "minor",
+      "title": "Autonomous profile still tells the child to run `keryx review complete`, which the new docs and SKILL text say an agent never does",
+      "file": "docs/docs/guides/autonomous-review.md",
+      "line": 35,
+      "quote": "An agent completes a review only through the `review_complete` card; the terminal commands stay for a human who finishes the package in a terminal.",
+      "problem": "The slice adds a rule that an agent completes a review only through the review_complete card. An autonomous run cannot use it: review_complete is in OPERATOR_CONFIRM_TOOL_NAMES and excluded from the unattended roster (unattended.ts 55-88, 241-243). Yet src/review/autonomous-profile.ts:144 tells the autonomous child to 'finish it yourself: ... then keryx review complete' and line 153 says 'The run is finished only when keryx review complete has closed the package'; the same guide's exit table says exit 0 is 'closed by `keryx review complete`'. The same sentence also says the run 'never tells you to run the terminal command', but the profile prompt does exactly that.",
+      "impact": "Documentation and agent prompts contradict each other about the only path an unattended run has to close a review. A reader of the guide cannot tell whether an autonomous run may run the CLI; a future change that enforces the 'agent never runs the CLI' rule would break the autonomous exit-0 path with no doc saying so.",
+      "suggested_fix": "State the autonomous exception in the guide and in the SKILL Done-when ('an unattended run closes the package with `keryx review complete` because no card can be answered'), or reword autonomous-profile.ts 144/153 to match the new rule. Pick one and make the exit table agree.",
+      "evidence": "docs/docs/guides/autonomous-review.md:35 (new sentence); src/review/autonomous-profile.ts:144 and 153; src/trigger/unattended.ts:241-243 (unattendedRefusal for excluded card tools).",
+      "confidence": "medium"
+    }
+  ]
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: flow 464 PR 1052, round r03
+- Delta: d2cb377f5..6f47bf35f (slice-01, fix slice)
+- Scope mode: explicit-hash-range
+- Spec compliance gate: skipped, no issue/task provided beyond the attached prior findings
+
+### Summary
+The fix round closes most of the 19 prior findings: the roster test, the closed-but-unrecorded split in review_complete, undelivered mirrors, the try/finally around the topic leg, the CHANGELOG and TM-04 notes. Three prior findings are only partly addressed (C-21, C-26, C-32, C-45 in different degrees) and C-16 is unchanged. One new minor finding: the autonomous path contradicts the new "agent never runs the CLI" wording.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected. The try/finally in mirrorApprovalToTopic fixes the earlier unanswered-entry leak.
+
+### Error Handling
+None detected. The card now distinguishes "refused, nothing recorded" from "closed but the record or bookkeeping failed".
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+Residual (not new): C-45 can still show "yes, pressed by Telegram user N" for an answer the gate refused afterwards.
+
+### Prior dispositions (19)
+closed: C-01, C-03, C-05, C-06, C-13, C-17, C-18, C-19, C-20, C-22, C-23, C-24, C-39 (13). partial: C-21, C-26, C-32, C-45 (4). open: C-16, C-41 (2). withdrawn: 0.
+
+### Suggested Patches
+None.

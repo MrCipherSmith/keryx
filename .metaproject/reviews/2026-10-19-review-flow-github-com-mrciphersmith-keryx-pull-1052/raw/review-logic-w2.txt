@@ -1,0 +1,78 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "slices": ["slice-02"],
+  "summary": "Slice-02 (src/commands, src/flow) is logically sound on the remote-answer path: the allowed-user check, one-time token consumption, the 1-hour expiry, press fields for the remote path only, and the shared completion gates all fail closed. Two defects remain. The review_complete card lists only readiness and coverage waivers, so it can say 'waivers: none' while an operator-decision waiver (mutation-waiver, reviewer-override) is in force, which is short of AC4's 'every waiver'. And review_complete writes completion-confirmation.json after the round is closed, inside the same try, so a failure there reports 'nothing was recorded' for a round that is already closed.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "  const waivers = (manifest.readiness_waivers ?? []).map((waiver) => `waiver: readiness item ${cardSafe(waiver.item)}: \"${cardSafe(clip(waiver.operator_quote))}\"`);",
+      "problem": "completionFacts builds the card's waiver list from manifest.readiness_waivers and the research.json coverage waiver only. The package's operator-decisions.json, which holds the 'mutation-waiver' and 'reviewer-override' decisions (OPERATOR_DECISION_KINDS in src/review/operator-decisions.ts:31), is not read. The completion gates in src/review/coverage.ts honour those decisions, so a completion can proceed on a waiver the card never showed.",
+      "impact": "The card the operator answers yes to can read 'waivers: none' while a mutation waiver or reviewer override is in force. That breaks AC4 ('every waiver with its item and operator quote, taken from the package'). It also makes the factsDigest recheck blind to a change in those decisions between card and answer, so a decision recorded or revoked in that window does not invalidate the card.",
+      "suggested_fix": "In completionFacts, also read the package's operator-decisions.json through the existing reader in src/review/operator-decisions.ts and add a line per decision of kind mutation-waiver or reviewer-override, with its item/target and operator quote, using cardSafe and clip like the other two. The facts, and so the digest, then cover them. Add a test where a mutation waiver is present and the card shows it.",
+      "evidence": "src/commands/operator-confirm-review.ts:663-675 (the only two waiver sources read) and :727 ('waivers: none' when that list is empty); src/review/operator-decisions.ts:23,31 (the decisions file and the two kinds); src/review/coverage.ts:685-775 (completion gates consult confirmed operator decisions); flow 464 acceptance-criteria.md line 19 (AC4 wording).",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:668 (readiness_waivers)",
+          "src/commands/operator-confirm-review.ts:675 (coverage waiver)",
+          "src/commands/operator-confirm-review.ts:727 ('waivers: none' fallback)"
+        ],
+        "enumeration_method": "Read completionFacts and buildCard in full. Listed the waiver kinds the package can carry from OPERATOR_DECISION_KINDS and the manifest readiness_waivers field, and compared them with the kinds completionFacts reads. keryx ctx rg for 'waivers' in operator-confirm-review.ts lists 19 matches, all in this one spec; no other spec builds a completion card."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "        await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE), `${JSON.stringify(record, null, 2)}\\n`);",
+      "problem": "In completeSpec.apply, completeReviewGated closes the manifest (and runs clearActiveReview, recordFinishedRound, writeReviewNotes) and only then is completion-confirmation.json written, all inside one try whose catch returns 'review_complete refused: ... — nothing was recorded'. A failure while writing the operator record, or a throw from a post-close step, takes the catch after the round is already closed.",
+      "impact": "The agent and the operator are told the completion was refused and nothing was recorded, when the round is in fact closed. The operator's quote, press identity and the head/evidence/waivers they approved are not written, so the audit record AC4 and AC2 rely on is missing for a closed round. A retry fails with 'already complete'.",
+      "suggested_fix": "Separate the two steps. Run completeReviewGated in its own try and keep 'nothing was recorded' only for a refusal before the close. Write the record in a second try, and if that write fails say 'the round is closed but the confirmation record could not be written: <error>' with isError true. Alternatively write the record first and remove it when the gate refuses. Treat a post-close throw inside completeManagedReview the same way: report the closed state.",
+      "evidence": "src/commands/operator-confirm-review.ts:749-775 (gate call, record write and catch share one try); src/review/managed.ts:950-1066 (manifest is closed by writeFileAtomic before clearActiveReview, recordFinishedRound and writeReviewNotes, with no rollback). Scenario: the disk is full or the package is read-only after the manifest write; the write at line 765 throws; the card path returns the 'nothing was recorded' refusal. The post-close failures inside completeManagedReview alone also exist on the CLI path and are pre-existing; the new part is the record write.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:765 (record write after the close)",
+          "src/commands/operator-confirm-review.ts:774 (catch message 'nothing was recorded')"
+        ],
+        "enumeration_method": "Compared the effect-versus-record order in every apply in operator-confirm-review.ts and operator-confirm-other.ts. The other specs return their record (cardPressFields via record()) as part of the same atomic step as the effect, so only review_complete writes a separate record file after a multi-step effect. Pre-existing post-close failures in completeManagedReview (managed.ts) are out of this finding and apply to the CLI too."
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-tools.ts",
+      "line": null,
+      "quote": "  pending.delete(token as string);",
+      "problem": "Entries in the pending token map are removed on consumption, on a mismatched request and on confirmationDeclined, but not when the caller never reaches invoke or declined: for example when reserveInvocation() returns false in agent.ts, or when the turn is aborted between confirmation() and the answer.",
+      "impact": "No wrong answer is possible: an orphaned token can still only be used for its own question and is refused after 1 hour in the remote path. The map grows slowly within one process. The TUI path has no expiry for such an entry.",
+      "suggested_fix": "Evict entries older than REMOTE_CARD_TTL_MS when a new confirmation is minted, or cap the map size.",
+      "evidence": "src/commands/operator-confirm-tools.ts invoke logic (delete before apply); src/commands/agent.ts around 6047-6125 (confirmationDeclined called on deny and not-approved, not when reserveInvocation() is false).",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 2, "minor": 0, "info": 1 },
+  "follow_ups": [
+    "Checked and found sound, with no finding: (1) allowed-user check: binding.allowedUserIds() is read fresh from loadRemoteConfig() in shell.ts; an undefined list, an undefined pressedBy/pressedAt, or an id not in the list refuses and fails closed; pressedBy is a number compared with includes() on a number[] (src/remote/config.ts:42), so there is no string/number confusion on the card side. (2) Token consumption: pending.delete runs before the first await in apply, so a double answer in one process cannot apply twice; a wrong-question token is spent; an unknown token is refused. (3) Expiry: issuedAt comes from now() at card build and the 1-hour check is made at invoke, from the same injected clock, only on the remote path. (4) Press fields: confirmationPressedBy/At are forwarded by agent.ts only when via === 'remote', so a TUI answer never records them; cardPressFields spreads them into every record, the flow confirmMint confirmation and StoredConfirmationToken. (5) review_complete uses completeReviewGated, the same function as `keryx review complete` (run profile, narrowed routing, head, evidence level, research, readiness gates), re-run at answer time; factsDigest rejects a change of head, evidence line or waivers between card and answer; a refused gate writes no record because the record write comes after the gate. (6) The evidence-level line on the card and the gate's parser use the same withoutFences/first-match logic in src/review/evidence-level.ts, so they cannot disagree. (7) Model/tool-result text cannot reach the answer path: the answer comes from ApprovalResponse, not from tool output, and card text passes cardSafe.",
+    "Not verified from slice-02: Telegram-side delivery and hub-side identity checks (src/remote/hub.ts:1086), which belong to other slices; AC9 (owner live check) and AC10 (release) are not code defects.",
+    "Merged-PR refusal for review_complete is inherited from completeManagedReview via prLookup; it was not re-derived in this slice beyond confirming prLookup is passed (seams.prLookup ?? trackerPrLookup)."
+  ]
+}
+```
+
+routing audit: graph_used: no (not-relevant, slice diff plus targeted reads); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no

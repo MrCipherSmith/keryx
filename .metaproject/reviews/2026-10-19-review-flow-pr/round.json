@@ -1,0 +1,618 @@
+{
+  "v": 1,
+  "round": 1,
+  "source": "none",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "none",
+      "detail": "no package for this target in this checkout; 4 branch package(s) not on this branch line: 2026-09-23-ingest-feat-agent-platform-expansion-r02, 2026-09-23-ingest-feat-agent-platform-expansion, 2026-09-24-ingest-feat-agent-platform-expansion, 2026-09-02-branch-fix-tui-foreground-operation-cancellatio"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and origin/main (180 days); 4 branch package(s) not on this branch line: 2026-09-23-ingest-feat-agent-platform-expansion-r02, 2026-09-23-ingest-feat-agent-platform-expansion, 2026-09-24-ingest-feat-agent-platform-expansion, 2026-09-02-branch-fix-tui-foreground-operation-cancellatio"
+    },
+    {
+      "source": "github-block",
+      "result": "not-consulted",
+      "detail": "the target is not a pull request"
+    },
+    {
+      "source": "github-comments",
+      "result": "not-consulted",
+      "detail": "the target is not a pull request"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": null,
+  "mode": "first",
+  "range": {
+    "base": "33020cf1e32313e0597d2d0761560fad0b60dd7b",
+    "head": "5974c976823e1a7134723edf3a9140b991246d45"
+  },
+  "fixHunks": [],
+  "newHunks": [
+    {
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "startLine": 162,
+      "endLine": 175
+    },
+    {
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 29
+    },
+    {
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/context.md",
+      "startLine": 1,
+      "endLine": 57
+    },
+    {
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/description.md",
+      "startLine": 1,
+      "endLine": 26
+    },
+    {
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/flow.json",
+      "startLine": 1,
+      "endLine": 371
+    },
+    {
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+      "startLine": 1,
+      "endLine": 27
+    },
+    {
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/plan.md",
+      "startLine": 1,
+      "endLine": 23
+    },
+    {
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "startLine": 1189,
+      "endLine": 1190
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 666,
+      "endLine": 666
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 779,
+      "endLine": 781
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 786,
+      "endLine": 786
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 788,
+      "endLine": 789
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 860,
+      "endLine": 860
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 40,
+      "endLine": 40
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 47,
+      "endLine": 47
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 56,
+      "endLine": 56
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 65,
+      "endLine": 65
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 1060,
+      "endLine": 1060
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 1077,
+      "endLine": 1077
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 1129,
+      "endLine": 1129
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 1570,
+      "endLine": 1570
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "startLine": 99,
+      "endLine": 99
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "startLine": 168,
+      "endLine": 168
+    },
+    {
+      "file": "README.md",
+      "startLine": 1179,
+      "endLine": 1182
+    },
+    {
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "startLine": 8,
+      "endLine": 8
+    },
+    {
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "startLine": 47,
+      "endLine": 47
+    },
+    {
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "startLine": 100,
+      "endLine": 100
+    },
+    {
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "startLine": 122,
+      "endLine": 139
+    },
+    {
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "startLine": 142,
+      "endLine": 142
+    },
+    {
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "startLine": 146,
+      "endLine": 146
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4893,
+      "endLine": 4900
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4924,
+      "endLine": 4926
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4999,
+      "endLine": 5000
+    },
+    {
+      "file": "docs/docs/guides/autonomous-review.md",
+      "startLine": 35,
+      "endLine": 35
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 615,
+      "endLine": 625
+    },
+    {
+      "file": "docs/docs/limitations.md",
+      "startLine": 210,
+      "endLine": 222
+    },
+    {
+      "file": "docs/requirements/keryx-card-any-host/prd.md",
+      "startLine": 1,
+      "endLine": 42
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "startLine": 759,
+      "endLine": 759
+    },
+    {
+      "file": "src/commands/review-host-question.test.ts",
+      "startLine": 1,
+      "endLine": 500
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 11,
+      "endLine": 19
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 22,
+      "endLine": 22
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 28,
+      "endLine": 29
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 43,
+      "endLine": 44
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 60,
+      "endLine": 68
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 73,
+      "endLine": 81
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 86,
+      "endLine": 95
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 103,
+      "endLine": 113
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 165,
+      "endLine": 169
+    },
+    {
+      "file": "src/commands/review-operator.ts",
+      "startLine": 230,
+      "endLine": 438
+    },
+    {
+      "file": "src/decisions/journal.ts",
+      "startLine": 123,
+      "endLine": 124
+    },
+    {
+      "file": "src/decisions/journal.ts",
+      "startLine": 176,
+      "endLine": 176
+    },
+    {
+      "file": "src/decisions/report.ts",
+      "startLine": 183,
+      "endLine": 198
+    },
+    {
+      "file": "src/decisions/report.ts",
+      "startLine": 235,
+      "endLine": 239
+    },
+    {
+      "file": "src/decisions/report.ts",
+      "startLine": 442,
+      "endLine": 457
+    },
+    {
+      "file": "src/decisions/report.ts",
+      "startLine": 480,
+      "endLine": 482
+    },
+    {
+      "file": "src/decisions/report.ts",
+      "startLine": 484,
+      "endLine": 484
+    },
+    {
+      "file": "src/decisions/report.ts",
+      "startLine": 527,
+      "endLine": 527
+    },
+    {
+      "file": "src/decisions/report.ts",
+      "startLine": 723,
+      "endLine": 736
+    },
+    {
+      "file": "src/decisions/report.ts",
+      "startLine": 740,
+      "endLine": 740
+    },
+    {
+      "file": "src/decisions/report.ts",
+      "startLine": 742,
+      "endLine": 747
+    },
+    {
+      "file": "src/decisions/report.ts",
+      "startLine": 752,
+      "endLine": 752
+    },
+    {
+      "file": "src/decisions/report.ts",
+      "startLine": 815,
+      "endLine": 815
+    },
+    {
+      "file": "src/decisions/service.ts",
+      "startLine": 18,
+      "endLine": 18
+    },
+    {
+      "file": "src/decisions/service.ts",
+      "startLine": 46,
+      "endLine": 46
+    },
+    {
+      "file": "src/decisions/service.ts",
+      "startLine": 69,
+      "endLine": 70
+    },
+    {
+      "file": "src/decisions/sources.ts",
+      "startLine": 19,
+      "endLine": 20
+    },
+    {
+      "file": "src/decisions/types.ts",
+      "startLine": 102,
+      "endLine": 115
+    },
+    {
+      "file": "src/decisions/types.ts",
+      "startLine": 165,
+      "endLine": 166
+    },
+    {
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "startLine": 1189,
+      "endLine": 1190
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 666,
+      "endLine": 666
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 779,
+      "endLine": 781
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 786,
+      "endLine": 786
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 788,
+      "endLine": 789
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 860,
+      "endLine": 860
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 40,
+      "endLine": 40
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 47,
+      "endLine": 47
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 56,
+      "endLine": 56
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 65,
+      "endLine": 65
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 1060,
+      "endLine": 1060
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 1077,
+      "endLine": 1077
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 1129,
+      "endLine": 1129
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 1570,
+      "endLine": 1570
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "startLine": 99,
+      "endLine": 99
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "startLine": 168,
+      "endLine": 168
+    },
+    {
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "startLine": 162,
+      "endLine": 175
+    },
+    {
+      "file": "src/review/estimate.ts",
+      "startLine": 16,
+      "endLine": 16
+    },
+    {
+      "file": "src/review/estimate.ts",
+      "startLine": 189,
+      "endLine": 190
+    },
+    {
+      "file": "src/review/estimate.ts",
+      "startLine": 202,
+      "endLine": 203
+    },
+    {
+      "file": "src/review/estimate.ts",
+      "startLine": 206,
+      "endLine": 212
+    },
+    {
+      "file": "src/review/estimate.ts",
+      "startLine": 221,
+      "endLine": 221
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 21,
+      "endLine": 21
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 38,
+      "endLine": 44
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 64,
+      "endLine": 65
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 93,
+      "endLine": 94
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 110,
+      "endLine": 121
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 134,
+      "endLine": 134
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 147,
+      "endLine": 147
+    },
+    {
+      "file": "src/review/operator-decisions.ts",
+      "startLine": 258,
+      "endLine": 258
+    },
+    {
+      "file": "src/review/plan-confirmation.ts",
+      "startLine": 22,
+      "endLine": 22
+    },
+    {
+      "file": "src/review/plan-confirmation.ts",
+      "startLine": 33,
+      "endLine": 34
+    },
+    {
+      "file": "src/review/plan-confirmation.ts",
+      "startLine": 69,
+      "endLine": 69
+    },
+    {
+      "file": "src/review/plan-confirmation.ts",
+      "startLine": 72,
+      "endLine": 72
+    },
+    {
+      "file": "src/review/plan-confirmation.ts",
+      "startLine": 81,
+      "endLine": 81
+    },
+    {
+      "file": "src/review/premise-question.ts",
+      "startLine": 13,
+      "endLine": 13
+    },
+    {
+      "file": "src/review/premise-question.ts",
+      "startLine": 132,
+      "endLine": 133
+    },
+    {
+      "file": "src/review/premise-question.ts",
+      "startLine": 162,
+      "endLine": 162
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 700,
+      "endLine": 700
+    },
+    {
+      "file": "src/review/premise.ts",
+      "startLine": 711,
+      "endLine": 711
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 21,
+      "endLine": 21
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 249,
+      "endLine": 257
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 102,
+      "endLine": 114
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 447,
+      "endLine": 447
+    },
+    {
+      "file": "src/trigger/unattended.ts",
+      "startLine": 116,
+      "endLine": 129
+    },
+    {
+      "file": "src/trigger/unattended.ts",
+      "startLine": 176,
+      "endLine": 179
+    }
+  ],
+  "carried": [],
+  "mergeBase": "33020cf1e32313e0597d2d0761560fad0b60dd7b"
+}

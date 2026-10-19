@@ -1,0 +1,131 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Fix slice slice-01 at head 6f47bf35f closes 13 of the 19 prior findings against source and leaves 6 not fully fixed (4 partial, 2 open). Three new minor findings: the length of review_complete.apply, the error-to-message expression written five times, and operator-facing text that still sends the agent to the terminal command after the card became the agent path. No blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 765,
+      "quote": "const closed = done !== undefined || (await completionFacts(prepared.dir).catch(() => undefined))?.status === \"closed\";",
+      "symbol": "completeSpec.apply",
+      "problem": "completeSpec().apply (lines 741-797, about 57 lines) does five things in one body: re-reads the facts and checks the digest, runs the gate in its own try, decides whether the round closed after a throw by re-reading the manifest, writes the confirmation record, and assembles the output with the 'closed but' problem lines. The abstraction level also jumps between orchestration and string assembly.",
+      "impact": "Each of the four outcomes (refused before close, closed clean, closed with record failure, closed with bookkeeping failure) is reachable only through this one method, so a change to one outcome means reading the other three. The 'did it close after a throw' rule on line 765 is an invariant (the engine closes the manifest before its own bookkeeping) that is easy to break while editing the surrounding code. Minor because the control flow is linear and the outcomes are covered by tests in operator-confirm-review-tools.test.ts.",
+      "suggested_fix": "Split along the existing seams: `recheckFacts(prepared)` returning facts or a refusal output (lines 744-752), `runGate(...)` returning { done, gateError, closed } (lines 753-768), `writeCompletionRecord(...)` returning the record error (lines 769-783), and `completionOutput(...)` building the lines (lines 784-796). apply then reads as four calls.",
+      "evidence": "src/commands/operator-confirm-review.ts lines 741-797 read at head 6f47bf35f. Other apply methods in the file are shorter; this is the longest body added by the slice. No second site, so no class_scope.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 87,
+      "quote": "const failed = (error: unknown): { refusal: string } => ({ refusal: error instanceof Error ? error.message : String(error) });",
+      "symbol": "failed",
+      "problem": "The expression `error instanceof Error ? error.message : String(error)` is written out five times in the operator-confirm code: line 87 (`failed`), line 675 (inline in the research.json card line), line 743 (a local `reason` in apply), and src/commands/operator-confirm-tools.ts lines 183 and 235. Line 87 and line 743 are the same helper under two names in one file, and the slice added the third copy.",
+      "impact": "A change to how an error is shown on a card (for example `cause` chaining or redacting a path) has to be made in five places; one miss leaves a card or an operator message with a different rendering. Also, `failed` and `reason` in one file invite a reader to wonder whether they differ.",
+      "suggested_fix": "Hoist one module-level `const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));` in operator-confirm-review.ts, define `failed` as `(error) => ({ refusal: reasonOf(error) })`, and use `reasonOf` on lines 675, 748, 767, 786 and 787; operator-confirm-tools.ts can import the same helper.",
+      "evidence": "keryx ctx rg --all -n 'instanceof Error' src/commands/operator-confirm-review.ts src/commands/operator-confirm-tools.ts returned exactly the five sites above. A repo-wide search for an existing exported helper (errorMessage, messageOf, toErrorMessage) found none; src/retention/fs-deps.ts describeError has a different purpose. Five sites would be major under the definition's DRY rule; reported as minor under the project default that Clean Code findings are minor, because each site is one line and the failure mode is a cosmetic difference in message text.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-clean-code",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 24,
+      "quote": "// The waiver tools record the waiver only. Closing the review is still `keryx review complete`, which finds the waiver in",
+      "problem": "Now that review_complete is the way an agent closes a round (the header's own line 18 says Flow 464 adds it), the header comment and the agent-facing text of the two waiver tools still say that closing is `keryx review complete`. The sites are: the header comment at lines 24-25, the review_waive_coverage description at line 262 and its output at line 296, the review_waive_readiness description at line 312 and its output at line 358.",
+      "impact": "The tool descriptions and outputs are read by the agent, not only by maintainers. After this slice the guide and the skill say an agent completes a review only through the review_complete card and never sends the operator to a terminal, while the waiver tool tells it to run `keryx review complete` afterwards. The agent is given two instructions that contradict each other; the shell guard blocks the terminal command, so following the stale one wastes a turn. Minor: nothing is recorded wrongly.",
+      "suggested_fix": "Reword the five sites to name the card: 'then call review_complete to close the review', and in the header: 'Closing the review is review_complete for an agent (`keryx review complete` is the terminal path for a human)'. Keep the CLI wording only where the sentence is explicitly about the terminal.",
+      "evidence": "src/commands/operator-confirm-review.ts lines 24-25, 261-262, 296, 312, 358 read at head 6f47bf35f. Compare .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md line 136 and SKILL.detail.md line 669, which now say the agent calls review_complete and never runs the terminal command. The quote is the only line of the five that is unique in the file (lines 262/312 and 296/358 share their phrases), hence the header as the anchor. The related prompt in src/review/autonomous-profile.ts lines 144 and 153 also tells the agent to run `keryx review complete`; that is carried by prior finding C-16 and is not repeated here.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 0 },
+  "slices": ["slice-01"],
+  "prior_dispositions": [
+    { "id": "C-01", "disposition": "closed", "outcome": "fixed", "evidence": "src/commands/operator-confirm-rosters.test.ts now expects 19 card tools; the registry has 19 (review_complete included)." },
+    { "id": "C-03", "disposition": "closed", "outcome": "fixed", "evidence": "operator-confirm-review.ts apply (lines 778-796): a failed write of completion-confirmation.json is caught (recordError) and reported as 'the round is closed but the confirmation record could not be written' with isError, so a closed round without a record is no longer silent." },
+    { "id": "C-05", "disposition": "closed", "outcome": "fixed", "evidence": "SKILL.detail.md line 669 (project copy and src/gdskills/bundled copy) now says: call the review_complete card; an agent completes a review only through that card; `keryx review complete` is for a human in a terminal." },
+    { "id": "C-06", "disposition": "closed", "outcome": "fixed", "evidence": "tui-shell.ts lines 6127-6130: onUndelivered calls operatorCards.markUndelivered(cardId) as well as printing the transcript line; operator-confirmations.test.ts lines 58-65 cover markUndelivered." },
+    { "id": "C-13", "disposition": "closed", "outcome": "fixed", "evidence": "tui-shell.ts mirrorApprovalToTopic: both branches (lines 6104-6110 and 6122-6143) now answer the card in a finally, with 'withdrawn' when the verdict or outcome is missing." },
+    { "id": "C-16", "disposition": "open", "outcome": "not-fixed", "evidence": "docs/docs/guides/autonomous-review.md line 35 still reads 'An autonomous run has nobody to answer them: it stops at the floor and never tells you to run the terminal command.' and now adds 'An agent completes a review only through the review_complete card'. unattended.ts line 242 refuses the card by name ('is not offered to an unattended run') and the autonomous-profile.ts prompt (lines 144 and 153) tells the run to finish with keryx review complete, so the guide still misstates what the operator sees and the new sentence contradicts the unattended path. Whether a refused card counts as a floor refusal (isFloorRefusal, autonomous-profile.ts:177) was not traced to the exit code." },
+    { "id": "C-17", "disposition": "closed", "outcome": "fixed", "evidence": "CHANGELOG.md no longer claims a rejected remote answer 'changes nothing'; operator-confirm-tools.ts lines 196-235 delete the token before the allowed-list and TTL refusals, and the changelog text was brought in line with that." },
+    { "id": "C-18", "disposition": "closed", "outcome": "fixed", "evidence": "TM-04-operator-confirmation-cards.md section 6a now has a bullet stating that a holder of the bot token (an owner-only file the same-OS-user agent can read; BOT_TOKEN_FILE in src/remote/paths.ts:16) can edit the mirrored card's text." },
+    { "id": "C-19", "disposition": "closed", "outcome": "fixed", "evidence": "TM-04 section 6a has a 'Message order' / restart bullet stating that the token and the answered-card list live in shell memory only and a restart inside the hour drops open cards." },
+    { "id": "C-20", "disposition": "closed", "outcome": "fixed", "evidence": "CHANGELOG.md: the [0.3.124] section is no longer placed below a non-empty [Unreleased] block." },
+    { "id": "C-21", "disposition": "closed", "outcome": "fixed", "evidence": "review-orchestrator SKILL.md line 136 (project and bundled copies) now says the review_complete card must be answered, that an agent never runs `keryx review complete`, and uses review_waive_readiness then review_complete in keryx shell; the hosts-table row at line 40 gives the card for keryx shell and the terminal command only for other hosts. The residue in the src tool texts is filed as F-003." },
+    { "id": "C-22", "disposition": "partial", "outcome": "partially", "evidence": "The drift named in the finding is gone: completionFacts (operator-confirm-review.ts 658-692) no longer computes prBound or a --head, and the evidence line comes from the library's evidenceLevelLine (src/review/evidence-level.ts:58). Still true: evidenceLevelLine only trims the line and does not run parseEvidenceLevel, so a malformed line ('static only' with nothing after it) is shown on the card as a valid evidence level and the gate refuses at apply time; manifest, report and research are still read with ad-hoc types in the commands layer." },
+    { "id": "C-23", "disposition": "closed", "outcome": "fixed", "evidence": "operator-confirm-review.ts lines 669-679: only ENOENT is treated as 'no research.json'; any other read or parse error adds 'waiver: coverage, could not read research.json (...); the research gate will refuse' to the card." },
+    { "id": "C-24", "disposition": "closed", "outcome": "fixed", "evidence": "tui-shell.ts: remoteApproval is at lines 571-574, above the isToolAvailableToSideWorker JSDoc block, which again directly precedes the function it documents." },
+    { "id": "C-26", "disposition": "partial", "outcome": "partially", "evidence": "The head normalisation is gone from buildCard and apply (the card no longer takes a head input), and apply now has a local reason() helper. Still true: `.slice(0, 12)` appears unnamed at lines 723, 734 and 784, and the refusal template '... — nothing was recorded' is written twice in apply (lines 748 and 767)." },
+    { "id": "C-32", "disposition": "partial", "outcome": "partially", "evidence": "The log and the gate are now tested (operator-confirmations.test.ts markUndelivered cases; operator-confirm-tools.test.ts remote press cases with pressedBy/pressedAt), but the seam named in the finding is not: tui-shell.test.ts lines 2963-2965 only assert on the source text of mirrorApprovalToTopic, and no test feeds a topic answer with a known fromId through the wrapper and checks the ApprovalResponse carries via 'remote' and that id (remoteApproval, tui-shell.ts 571-574, called at line 6151)." },
+    { "id": "C-39", "disposition": "closed", "outcome": "fixed", "evidence": "The pressedAt wording and TM-04 text now describe it as the shell's clock at delivery of the event, not the time of the Telegram press." },
+    { "id": "C-41", "disposition": "open", "outcome": "not-fixed", "evidence": "operator-confirm-review.ts lines 746-760: the digest is compared, then completeReviewGated runs. completeManagedReview (src/review/managed.ts 957, 981-982, 1015, 1023) reads the manifest and report itself and awaits the PR lookup before closing, with no lock and no second digest check, so a second writer inside that window is still not detected. Remains info and low likelihood (needs a second writer on the package within seconds); not a blocker." },
+    { "id": "C-45", "disposition": "partial", "outcome": "partially", "evidence": "tui-shell.ts line 6141 still writes the card log as 'yes, pressed by Telegram user N' from the transport event (outcome.answer.decision === 'allow') before operatorConfirmTool.invoke re-checks the allowed list, token and TTL, so a press the gate then refuses still reads as accepted in the sidebar and /decisions. The wording of the expired-token state was fixed in operator-confirmations.ts (TTL-aware waiting(), 'Telegram token expired, answer in the shell')." }
+  ]
+}
+```
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `docs/flow-helyx-operator-confirm` (PR 1052, flow 464), round r03, slice `slice-01` (fix slice)
+- Head: `6f47bf35f`; delta base `d2cb377f59f7f9c8553d9f377f99360bff3f6328`
+- Scope mode: explicit-hash-range (fix round)
+- Changed files reviewed: the files shown by slice-01 (`src/commands/operator-confirm-review.ts`, `src/tui/tui-shell.ts`, `src/tui/operator-confirmations.ts`, `src/commands/operator-confirm-tools.ts`, the roster test, docs, changelog and skill text)
+
+### Summary
+The slice repairs most of what earlier rounds raised: the roster count, the closed-without-record window, the unmirrored card cleanup, the research.json swallow and the doc ordering. Code health is good for the size of the change. What remains is minor: one long `apply` method, one error-formatting expression repeated five times, and stale instruction text that still sends the agent to the terminal.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 3  |  info: 0
+- Prior findings: 19 dispositioned (13 fixed, 4 partially, 2 not fixed)
+
+### Findings
+
+#### Naming
+No naming issues found.
+
+#### Functions
+### [F-001] `review_complete.apply` is about 57 lines and mixes five steps
+
+- **Severity**: minor
+- **File**: src/commands/operator-confirm-review.ts:765
+- **Principle**: Clean Code - Functions B1/B3
+- **Problem**: re-check, gate, closed-after-throw decision, record write and output assembly in one body.
+- **Fix**: extract `recheckFacts`, `runGate`, `writeCompletionRecord`, `completionOutput`; apply becomes four calls.
+
+#### Comments
+### [F-003] Header comment and waiver-tool texts still say closing is `keryx review complete`
+
+- **Severity**: minor
+- **File**: src/commands/operator-confirm-review.ts:24 (also 262, 296, 312, 358)
+- **Principle**: Clean Code - Comments C1 (stale text)
+- **Problem**: the card path is now the agent's way to close; five sites still tell the agent to run the terminal command.
+- **Fix**: name the `review_complete` card at each site; keep the CLI wording only for the human terminal path.
+
+#### Error Handling
+No error handling issues found. The research.json catch is now ENOENT-only (C-23) and the record-write failure is surfaced (C-03).
+
+#### DRY
+### [F-002] `error instanceof Error ? error.message : String(error)` written five times
+
+- **Severity**: minor
+- **File**: src/commands/operator-confirm-review.ts:87 (also 675, 743; operator-confirm-tools.ts 183, 235)
+- **Principle**: Clean Code - DRY E1
+- **Problem**: one rendering rule in five places, two of them in one file under the names `failed` and `reason`.
+- **Fix**: one module-level `reasonOf` used by all five.
+
+#### SOLID
+No SOLID violations found. Responsibilities are split between the spec (card and apply), the gate (`completeReviewGated`) and the log (`OperatorConfirmationLog`); `mirrored` stays `readonly` and is replaced by spread.
+
+### Clean Areas
+Naming (A1-A3), argument counts (B2), commented-out code, log-and-rethrow, untyped catch, magic numbers other than the unnamed 12-character SHA abbreviation already carried by C-26, OCP/LSP/ISP/DIP at class level. Constructors do no I/O in the changed classes.

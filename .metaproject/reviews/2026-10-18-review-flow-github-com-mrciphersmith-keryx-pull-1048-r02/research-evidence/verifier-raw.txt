@@ -1,0 +1,66 @@
+STATUS: DONE
+
+```json keryx:verifications
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "9 findings, 9 checked from the parent's saved executions plus site checks at head d6267d4; 9 confirmed, 0 refuted, 0 unverifiable. No command was run by the verifier; each verdict rests on the saved stdout/stderr of the parent's run and the script that produced it.",
+  "verifications": [
+    {
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-architecture-w3:F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-review-architecture-w3_F-001-2.txt (script m1.sh: references.json declares anchor \"Missing heading\" for DOC.md, enforcement block; the simulated worker cites the resolver's own sha256 and anchor and a 40+ character summary). resolve-context exit=0 and warns 'DOC.md: anchor \"Missing heading\" not found ...; the whole file (3021 bytes) is the obligation', entry stays must_read with anchor \"Missing heading\". Immediately after, 'contracts validate ... --resolved' exits 1 and the output ends 'project context: 1 miss(es), 0 drifted (enforcement block) - project context miss: DOC.md (condition:keyword:theme) has a summary that cannot be checked: the anchored section \"Missing heading\" cannot be found in DOC.md now'. The resolver's fallback is not honoured by the validator. Sites at head: src/gdskills/reference-proof.ts:52 currentSection and :61 extractSection(text, entry.anchor); src/gdskills/reference-entries.ts:98 extractSection(read.text, declaration.anchor); references-check.ts:176 also calls extractSection, as the finding's enumeration says."
+    },
+    {
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-logic-w3:F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-review-architecture-w3_F-001-2.txt (same run as the architecture report; this finding is the same defect from the logic reviewer). Observed: resolver warning 'the whole file (3021 bytes) is the obligation' with entry anchor \"Missing heading\" kept at tier must_read; the script's worker result cites the entry's sha256 and anchor with the summary 'Semantic theme tokens describe roles and contrast ratios stay above the minimum for every pair.'; validate then prints 'validate exit=1' and 'project context: 1 miss(es) ... (enforcement block) ... has a summary that cannot be checked: the anchored section \"Missing heading\" cannot be found in DOC.md now'. Sites present at head: reference-proof.ts:52 currentSection / :61 extractSection and reference-entries.ts:98 dead-anchor fallback."
+    },
+    {
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-architecture-w3:F-002",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-review-logic-w2_F-001-1.txt (script m3.sh: rule registered with 'skills import --rules <dir> --link', DOC.md cited by the linked rule). Observed: import prints 'linked: 1' and the .metaproject/rules/project directory listing is empty (no copy); the import output carries no 'cited documents have no declaration' closing line; resolve-context lists '- DOC.md - project contract, referenced-by:/tmp/tmp.J8uw377Ljg/linked.mdc' under on_demand; 'references suggest' prints {\"schema\": 1, \"references\": []}; with DOC.md declared, 'references check' prints '- warning DOC.md [unused-declaration] no project rule cites this document'. Resolver and checker disagree about the same project. Sites at head: references-check.ts:93 scanCitations iterating listRuleRefs at :96, :214 caller, import-rules.ts imports undeclaredCitationHint (:22); the only other listRuleRefs user is project-context-status.ts:86. Not directly observed: the hint's absence is inferred from the import output carrying no such line, not from a separate call of undeclaredCitationHint."
+    },
+    {
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-logic-w2:F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-review-logic-w2_F-001-1.txt (script m3.sh, same run as the architecture linked-rules report). Observed: '--link' import leaves .metaproject/rules/project empty; resolver reports DOC.md as referenced-by the linked rule; 'references suggest' returns an empty references list while resolve-context lists DOC.md; 'references check' with DOC.md declared reports '[unused-declaration] no project rule cites this document'; the import output has no undeclared-count hint line. All three outcomes in the finding's impact (hint, suggest, unused-declaration) match, the first by absence of the line in the import output. Sites at head: references-check.ts:93-96 scanCitations over listRuleRefs, :214 caller; project-context-status.ts:86 is the status-display user the finding names as not a citation scan."
+    },
+    {
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-logic-w3:F-002",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-review-logic-w3_F-002-1.txt, upper half (script m2m4.sh importing keywordOccurs from src/gdskills/reference-entries): '\"fix styles.css please\" \".css\" -> false', '\"use @apply here\" \"@apply\" -> true', '\"a@apply\" \"@apply\" -> false'. Control cases behave as the finding implies: '\"x .css\" \".css\" -> true', '\"the theme\" \"theme\" -> true'. The regex at src/gdskills/reference-entries.ts:44 is the quoted lookaround form, and keywordOccurs is called at :51 only (promotion). A keyword starting with a non-word character is matched only when the preceding character is also a non-word character."
+    },
+    {
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-security-code-w3:F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-review-logic-w3_F-002-1.txt, lower half (script m2m4.sh calling extractSection on '## head' + N spaces + 'x'): 'heading text then 20000 spaces then x: 351 ms', '... 60000 spaces then x: 3171 ms', '... 120000 spaces then x: 12722 ms'. Growth is quadratic (3x length gives about 9x time, 2x gives about 4x). Control in the same file: a heading line with the spaces directly after '##' then x costs 0-1 ms at 20000, 60000 and 120000, so the cost is specific to the shape named in the finding (text, then a run of spaces, then a non-space). Sites at head: src/gdskills/references-section.ts:37 const HEADING = /^ {0,3}(#{1,6})[ \\t]+(.*?)[ \\t]*$/ and :50 text.replace(/[ \\t]+#+$/, \"\") inside stripClosingHashes (:49), called at :74. The run is an in-process extractSection call; the CLI commands the finding lists as triggers were not themselves timed."
+    },
+    {
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-security-code-w4:F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-review-security-code-w4_F-001-1.txt, section M5 (script m5m6m7.sh): 'skills resolve-context --task-text \"rotate key AKIAEXAMPLESECRET12345 in config\"' produced '-rw-rw-r-- 1 altsay altsay 692 ... .metaproject/data/skills/project-context/last.json', the secret grep count is 1, and 'git add -A -n .' lists \"add '.metaproject/data/skills/project-context/last.json'\" (in a fresh temp repo with no ignore rules). In the keryx repo itself: 'check-ignore exit=1 (1 = not ignored)' and 'block mentions project-context: false | mentions stocktake: true' from renderMetaprojectGitignoreBlock(). So the raw task text lands in a group-readable file that neither the repo .gitignore nor the rendered gitignore block ignores. Sites at head: src/gdskills/context-resolver.ts:84 LAST_RESOLVE_PATH, :529 recordLastResolve, :537 writeContained(projectRoot, LAST_RESOLVE_PATH, ...) with no mode argument; sole non-test caller src/gdskills/resolve-context-command.ts:50. Not established by this run: the 'no reader of taskText' claim and the 'git add -A would commit it' effect in the keryx repo itself (the git add -n was shown in a temp repo, the keryx-side evidence is check-ignore)."
+    },
+    {
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-security-code-w4:F-002",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-review-security-code-w4_F-001-1.txt, section M6 (script m5m6m7.sh): a function receiving the double-quoted argument \"<title>: fix the build `printf EXECUTED_BACKTICK` and $(printf EXECUTED_SUBSHELL)\" printed 'ARG=[<title>: fix the build EXECUTED_BACKTICK and EXECUTED_SUBSHELL]', i.e. both the backtick and the $(...) command ran in the shell before the callee saw the argument. The site grep in the same section lists the double-quoted placeholder instructions: task-implementer/SKILL.md:182, job-orchestrator/SKILL.md:749 and :1307, job-orchestrator/orchestrator-prompt.md:132 and :188, flow-orchestrator/SKILL.md:323, tests-creator/SKILL.md:93, and docs/docs/guides/apply-project-rules.md:170 (all under src/gdskills/bundled/skills/... for the first seven). My own search at head also found the same lines in the managed copies under .metaproject/skills/gdskills/ (flow-orchestrator:323, job-orchestrator:749/1307 and orchestrator-prompt:132/188, task-implementer:182, tests-creator:93). Scope of what the run shows: the shell semantics of the instructed quoting form; it does not run an agent that follows the template, and the 'no file or stdin option' claim was not exercised by the run."
+    },
+    {
+      "finding": "2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02#review-security-code-w5:F-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "research-evidence/verify-review-security-code-w4_F-001-1.txt, section M7 (script m5m6m7.sh calling formatProjectReferencesLines with a declaration path 'A\\u001b[2Jb.md', a keyword 'k\\u001b]0;pwn\\u0007', a description with \\u001b[31m and a finding message 'm\\u001b[1Ahidden'): the returned lines keep every control sequence ('A\\u001b[2Jb.md § x', 'when: keyword k\\u001b]0;pwn\\u0007', '[warning] c p: m\\u001b[1Ahidden') and the script prints 'contains raw ESC byte: true'. The grep over src/tui/project-context-inspector.ts matches only line 10 (import of stylePlanText) and line 225 (content: stylePlanText(otui, lines.join(\"\\n\"), \"plain\")); my own search for terminalSafe across project-context-inspector.ts and project-references-view.ts returned 0 matches at head. So the References tab strings reach the TextRenderable unescaped. Limit of the evidence: the byte stream written to a real terminal was not captured, so the repaint/hide effect in the finding's impact is not demonstrated; what is demonstrated is that the formatted lines carry the raw ESC byte and that the inspector applies no terminalSafe before handing them to stylePlanText with tone \"plain\"."
+    }
+  ],
+  "stats": { "confirmed": 9, "refuted": 0, "unverifiable": 0, "not_checked": 0 }
+}
+```

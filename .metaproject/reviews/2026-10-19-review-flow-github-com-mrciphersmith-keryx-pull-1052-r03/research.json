@@ -1,0 +1,497 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w2:F-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-001 (review_complete is the one card whose operator record (quote, confirmedVia, pressedBy/pressedAt, hea) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-architecture-w2:F-001 is the canonical finding D-07 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Raw finding is the primary report for canonical D-07; reported by review-architecture-w2 as F-001.",
+      "finding": "D-07"
+    },
+    {
+      "id": "review-clean-code-w1:F-001",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-001 (completeSpec().apply (lines 741-797, about 57 lines) does five things in one body: re-reads the fact) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w1:F-001 is the canonical finding D-04 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Duplicate or sub-aspect of D-04: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "D-04"
+    },
+    {
+      "id": "review-clean-code-w1:F-002",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-002 (The expression `error instanceof Error ? error.message : String(error)` is written out five times in) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w1:F-002 is the canonical finding D-05 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Raw finding is the primary report for canonical D-05; reported by review-clean-code-w1 as F-002.",
+      "finding": "D-05"
+    },
+    {
+      "id": "review-clean-code-w1:F-003",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-003 (Now that review_complete is the way an agent closes a round (the header's own line 18 says Flow 464 ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w1:F-003 is the canonical finding D-01 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Duplicate or sub-aspect of D-01: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "D-01"
+    },
+    {
+      "id": "review-clean-code-w2:CC-W2-001",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-W2-001 (The delta rewrote the closing instruction of nextStep() as the same clause pasted into all three ret) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w2:CC-W2-001 is the canonical finding D-02 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Raw finding is the primary report for canonical D-02; reported by review-clean-code-w2 as CC-W2-001.",
+      "finding": "D-02"
+    },
+    {
+      "id": "review-clean-code-w2:CC-W2-002",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-W2-002 (describeBlockers still tells the agent to run `keryx review complete` (line 788) and that `keryx rev) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w2:CC-W2-002 is the canonical finding D-03 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Raw finding is the primary report for canonical D-03; reported by review-clean-code-w2 as CC-W2-002.",
+      "finding": "D-03"
+    },
+    {
+      "id": "review-clean-code-w2:CC-W2-003",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-W2-003 (completeSpec().apply is about 57 lines (741-797) and does five jobs in one body: re-reads and compar) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w2:CC-W2-003 is the canonical finding D-04 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Raw finding is the primary report for canonical D-04; reported by review-clean-code-w2 as CC-W2-003.",
+      "finding": "D-04"
+    },
+    {
+      "id": "review-clean-code-w2:CC-W2-004",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-W2-004 (The delta introduced OperatorConfirmationLog.settle(id, outcome, turnAborted) so the mapping from a ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-clean-code-w2:CC-W2-004 is the canonical finding D-06 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Raw finding is the primary report for canonical D-06; reported by review-clean-code-w2 as CC-W2-004.",
+      "finding": "D-06"
+    },
+    {
+      "id": "review-logic-w1:L-01",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding L-01 (The slice adds a rule that an agent completes a review only through the review_complete card. An aut) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-logic-w1:L-01 is the canonical finding D-08 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Raw finding is the primary report for canonical D-08; reported by review-logic-w1 as L-01.",
+      "finding": "D-08"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-001",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-001 (Two statements in the PR's own docs and the code disagree about who closes an autonomous review. New) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-pr-contract-w1:PC-001 is the canonical finding D-08 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Duplicate or sub-aspect of D-08: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "D-08"
+    },
+    {
+      "id": "review-security-code-w1:F-001",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding F-001 (The result strings and tool descriptions of the waiver tools still tell the agent to close the revie) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-security-code-w1:F-001 is the canonical finding D-01 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Raw finding is the primary report for canonical D-01; reported by review-security-code-w1 as F-001.",
+      "finding": "D-01"
+    },
+    {
+      "id": "review-style-w1:F-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-001 (Skill and guide text says an agent never runs `keryx review complete`, while src/review/autonomous-p) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w1:F-001 is the canonical finding D-08 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Duplicate or sub-aspect of D-08: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "D-08"
+    },
+    {
+      "id": "review-style-w2:F-001",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-001 (Comments and card text in this file contradict the delta. The header still advertises `[--head]` alt) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-style-w2:F-001 is the canonical finding D-01 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Duplicate or sub-aspect of D-01: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "D-01"
+    },
+    {
+      "id": "review-testing-practices-w1:N-01",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding N-01 (The post-close recovery path of review_complete (gate throws after the round closed, so the tool mus) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w1:N-01 is the canonical finding D-09 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Raw finding is the primary report for canonical D-09; reported by review-testing-practices-w1 as N-01.",
+      "finding": "D-09"
+    },
+    {
+      "id": "review-testing-practices-w1:N-02",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding N-02 (The onUndelivered wiring and the mirrored/unmirrored settling in mirrorApprovalToTopic are pinned on) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w1:N-02 is the canonical finding D-10 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Raw finding is the primary report for canonical D-10; reported by review-testing-practices-w1 as N-02.",
+      "finding": "D-10"
+    },
+    {
+      "id": "review-testing-practices-w1:N-03",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding N-03 (The new unreadable-research.json branch is tested only in one direction. Inverting the guard so a mi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w1:N-03 is the canonical finding D-11 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Raw finding is the primary report for canonical D-11; reported by review-testing-practices-w1 as N-03.",
+      "finding": "D-11"
+    },
+    {
+      "id": "review-testing-practices-w2:F-001",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-001 (A remote yes is asserted to record remote-card, pressedBy and pressedAt for five of the nine recordi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w2:F-001 is the canonical finding D-12 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Raw finding is the primary report for canonical D-12; reported by review-testing-practices-w2 as F-001.",
+      "finding": "D-12"
+    },
+    {
+      "id": "review-testing-practices-w2:F-002",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-002 (The card text for the report evidence line and for a recorded waiver quote goes through cardSafe, bu) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w2:F-002 is the canonical finding D-13 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Raw finding is the primary report for canonical D-13; reported by review-testing-practices-w2 as F-002.",
+      "finding": "D-13"
+    },
+    {
+      "id": "review-testing-practices-w2:F-003",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-003 (No test makes completeReviewGated close the round and then fail in its bookkeeping, and none makes t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w2:F-003 is the canonical finding D-09 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Duplicate or sub-aspect of D-09: reported by more than one reviewer or slice; the canonical finding carries the consolidated text.",
+      "finding": "D-09"
+    },
+    {
+      "id": "review-testing-practices-w2:F-004",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-004 (The attended-completion nudge was rewritten to name the review_complete card instead of the CLI (lin) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "Raw finding review-testing-practices-w2:F-004 is the canonical finding D-14 in new-findings.json (same site and mechanism), read from the saved raw result.",
+      "reason": "Raw finding is the primary report for canonical D-14; reported by review-testing-practices-w2 as F-004.",
+      "finding": "D-14"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "fixSlicesCovered": [
+      "slice-01"
+    ],
+    "priorDispositions": {
+      "C-01": "closed",
+      "C-02": "closed",
+      "C-03": "closed",
+      "C-04": "closed",
+      "C-05": "closed",
+      "C-06": "closed",
+      "C-07": "closed",
+      "C-08": "closed",
+      "C-09": "open",
+      "C-10": "closed",
+      "C-11": "open",
+      "C-12": "open",
+      "C-13": "closed",
+      "C-14": "partial",
+      "C-15": "open",
+      "C-16": "open",
+      "C-17": "closed",
+      "C-18": "closed",
+      "C-19": "closed",
+      "C-20": "closed",
+      "C-21": "partial",
+      "C-22": "closed",
+      "C-23": "closed",
+      "C-24": "closed",
+      "C-25": "withdrawn",
+      "C-26": "partial",
+      "C-27": "open",
+      "C-28": "open",
+      "C-29": "partial",
+      "C-30": "open",
+      "C-31": "partial",
+      "C-32": "open",
+      "C-33": "partial",
+      "C-34": "open",
+      "C-35": "open",
+      "C-36": "open",
+      "C-37": "open",
+      "C-38": "open",
+      "C-39": "closed",
+      "C-40": "closed",
+      "C-41": "withdrawn",
+      "C-42": "open",
+      "C-43": "open",
+      "C-44": "open",
+      "C-45": "open"
+    },
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:4ab854974e99",
+        "rawEvidence": "raw/review-architecture-w2.txt#sha256:4ab854974e99",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:1cd8fbfaca91",
+        "rawEvidence": "raw/review-clean-code-w2.txt#sha256:1cd8fbfaca91",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:9f04e79a5199",
+        "rawEvidence": "raw/review-highload-w2.txt#sha256:9f04e79a5199",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:1770add4aa7c",
+        "rawEvidence": "raw/review-logic-w1.txt#sha256:1770add4aa7c",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:f49ee6b6f819",
+        "rawEvidence": "raw/review-performance-w1.txt#sha256:f49ee6b6f819",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:34c30c4a7174",
+        "rawEvidence": "raw/review-pr-contract-w2.txt#sha256:34c30c4a7174",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:4adddaabb99c",
+        "rawEvidence": "raw/review-regression-chunk-002.txt#sha256:4adddaabb99c",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:f571e4f04f3e",
+        "rawEvidence": "raw/review-security-code-w1.txt#sha256:f571e4f04f3e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:b49be24a188c",
+        "rawEvidence": "raw/review-style-w2.txt#sha256:b49be24a188c",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:86901161184d",
+        "rawEvidence": "raw/review-testing-practices-w1.txt#sha256:86901161184d",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 22,
+    "known": 0,
+    "unknown": 22,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}

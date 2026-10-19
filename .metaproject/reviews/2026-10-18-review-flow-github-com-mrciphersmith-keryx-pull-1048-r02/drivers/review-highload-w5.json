@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-highload",
+  "wave": 5,
+  "waves": 5,
+  "slices": [
+    "slice-05"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-05",
+      "path": "/home/altsay/keryx/.worktrees/conditional-reads/.metaproject/reviews/2026-10-18-review-flow-github-com-mrciphersmith-keryx-pull-1048-r02/slices/slice-05.diff",
+      "bytes": 25038
+    }
+  ],
+  "result": "raw/review-highload-w5.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+}

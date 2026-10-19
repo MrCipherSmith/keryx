@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-10-19-review-flow-pr",
+  "mode": "review-flow",
+  "status": "draft",
+  "target": {
+    "kind": "branch",
+    "ref": "pr",
+    "base": "https://github.com/MrCipherSmith/keryx/pull/1058",
+    "head": "5974c976823e1a7134723edf3a9140b991246d45"
+  },
+  "artifacts": {
+    "scope": ".metaproject/reviews/2026-10-19-review-flow-pr/scope.md",
+    "coverage": ".metaproject/reviews/2026-10-19-review-flow-pr/coverage.md",
+    "report": ".metaproject/reviews/2026-10-19-review-flow-pr/report.md",
+    "findings": ".metaproject/reviews/2026-10-19-review-flow-pr/findings.json",
+    "learning": ".metaproject/reviews/2026-10-19-review-flow-pr/learning.md",
+    "decisions": ".metaproject/reviews/2026-10-19-review-flow-pr/decisions.md",
+    "research": "research.json",
+    "reviewerDispatch": "research.json"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "filter_stats": {
+    "schema_version": 1,
+    "total": 0,
+    "dropped_prefilter": null,
+    "dropped_low_confidence": null,
+    "dropped_refuted": 0,
+    "dropped_scope_b": null,
+    "dropped_findings_cap": 0,
+    "merged_duplicates": 0,
+    "retained": 0,
+    "dismissed_by_round": null,
+    "by_reason": {},
+    "not_measured": [
+      {
+        "stage": "low_confidence",
+        "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
+      },
+      {
+        "stage": "prefilter",
+        "reason": "no `--scope` was supplied to this ingest. Nothing ran, so nothing is known — this is NOT `dropped 0`."
+      },
+      {
+        "stage": "round_dismissed",
+        "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
+      },
+      {
+        "stage": "scope_b",
+        "reason": "no blast-radius record reached this ingest, so the scope-B screen did not run. `rejected: 0` after a screen that ran is a different fact, and the record keeps them apart."
+      }
+    ]
+  },
+  "report_fields": [
+    "evidence-level"
+  ],
+  "cleanContext": {
+    "startedAt": "2026-10-19T19:45:36.843Z"
+  },
+  "createdAt": "2026-10-19T19:45:36.843Z",
+  "updatedAt": "2026-10-19T19:45:36.843Z",
+  "operatorGate": 1,
+  "roundRecord": {
+    "roundSha256": "43239170fd5b71af9387388569404de068c191478f93ada385fe1c6c34bffa56",
+    "priorFindingsSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "targetKey": "branch:pr",
+    "targetBase": "origin/main"
+  }
+}

@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 45238,
+      "contentHash": "f48b2a44c21f37d624c5da7e077fc96d9b642814de80c0757ba9fc1a54b491e0",
+      "files": [
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        "CHANGELOG.md",
+        "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+        "docs/docs/guides/autonomous-review.md",
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/operator-confirm-rosters.test.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/tui/tui-shell.ts"
+      ],
+      "domain": ".metaproject [docs], . [docs], docs [docs] +4 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-pr-contract",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+          "source code: src/commands/operator-confirm-review.ts, src/tui/tui-shell.ts",
+          "fix slice: answers 19 prior finding(s) C-01, C-03, C-05, C-06, …"
+        ]
+      },
+      "kind": "fix",
+      "findingIds": [
+        "C-01",
+        "C-03",
+        "C-05",
+        "C-06",
+        "C-13",
+        "C-16",
+        "C-17",
+        "C-18",
+        "C-19",
+        "C-20",
+        "C-21",
+        "C-22",
+        "C-23",
+        "C-24",
+        "C-26",
+        "C-32",
+        "C-39",
+        "C-41",
+        "C-45"
+      ]
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 107680,
+      "contentHash": "4a0990a310747794180ba2292fdfdbfecc72f3dd48746d396d3e29ecfde93932",
+      "files": [
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        "CHANGELOG.md",
+        "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+        "docs/docs/cli-reference.md",
+        "docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json",
+        "src/commands/agent.ts",
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/operator-confirm-review-tools.test.ts",
+        "src/commands/operator-confirm-tools.test.ts",
+        "src/commands/shell.test.ts",
+        "src/flow/confirm-token.test.ts",
+        "src/flow/confirm-token.ts",
+        "src/flow/schema.ts",
+        "src/flow/types.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/review/completion-gate.ts",
+        "src/review/types.ts",
+        "src/tui/operator-confirmations.test.ts",
+        "src/tui/operator-confirmations.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "domain": ".metaproject [docs], . [docs], docs [docs] +8 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: src/flow/schema.ts",
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md, src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+          "schema: docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json, src/flow/types.ts, src/review/types.ts",
+          "source code: src/commands/agent.ts, src/commands/operator-confirm-review.ts, src/flow/confirm-token.ts (+4)"
+        ]
+      },
+      "kind": "new"
+    }
+  ],
+  "omissions": [],
+  "totals": {
+    "slices": 2,
+    "bytes": 152918,
+    "files": 24,
+    "omittedFiles": 0,
+    "omittedBytes": 0,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

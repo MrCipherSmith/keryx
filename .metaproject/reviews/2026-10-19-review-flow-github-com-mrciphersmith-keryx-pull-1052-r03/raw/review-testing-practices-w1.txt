@@ -1,0 +1,136 @@
+STATUS: DONE_WITH_CONCERNS
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-testing-practices",
+  "status": "DONE_WITH_CONCERNS",
+  "slices": ["slice-01"],
+  "stats": {
+    "findings": 3,
+    "blocker": 0,
+    "major": 0,
+    "minor": 3,
+    "info": 0,
+    "prior_dispositions": 19,
+    "closed": 13,
+    "partial": 2,
+    "open": 3,
+    "regressed": 0,
+    "withdrawn": 1,
+    "mutants_run": 15,
+    "mutants_killed": 4,
+    "mutants_survived": 11
+  },
+  "wave": "w1",
+  "round": "r03",
+  "pr": "https://github.com/MrCipherSmith/keryx/pull/1052",
+  "head": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264",
+  "graph_context": "unavailable: fix slice only; all claims verified in source at head with keryx ctx rg and direct reads",
+  "prior_dispositions": [
+    {"id": "C-01", "disposition": "closed", "evidence": "operator-confirm-review.ts review_complete now has its own card, apply() and tests in operator-confirm-review-tools.test.ts:553-768; the roster test is updated to 19 and passes."},
+    {"id": "C-03", "disposition": "closed", "evidence": "completionFacts (operator-confirm-review.ts ~650-700) reads research.json and operator decisions; killed by mutants M4 (operator-decisions loop) and M3b."},
+    {"id": "C-05", "disposition": "closed", "evidence": "Text corrected in the card and docs; no enforcement change was needed or made."},
+    {"id": "C-06", "disposition": "closed", "evidence": "Wiring exists in tui-shell.ts 6095-6152 (try/finally in both branches). Behaviour is pinned only by a source-text grep; see N-02 (minor)."},
+    {"id": "C-13", "disposition": "closed", "evidence": "pressedBy/pressedAt are carried by remoteApproval (tui-shell.ts 571-574) and asserted for tui vs remote press in the review_complete describe."},
+    {"id": "C-16", "disposition": "open", "evidence": "docs/docs/guides/autonomous-review.md bullet still says the run 'stops at the floor'; the real mechanism is exclusion of card tools via OPERATOR_CONFIRM_TOOL_NAMES from the unattended roster (src/trigger/unattended.ts:63,86-87). Documentation only, minor."},
+    {"id": "C-17", "disposition": "closed", "evidence": "Card content and refusal paths are asserted in the tools test; surviving mutants are limited to M1/M2/M3 (see N-01, N-03)."},
+    {"id": "C-18", "disposition": "closed", "evidence": "apply() refuses with 'review_complete refused: ... nothing was recorded' when the gate did not close; covered by the refused-gate test."},
+    {"id": "C-19", "disposition": "closed", "evidence": "Record-write failure is reported as 'closed but the confirmation record could not be written' with isError; test at operator-confirm-review-tools.test.ts ~716-724; mutant M5 killed."},
+    {"id": "C-20", "disposition": "closed", "evidence": "Same-gates-as-CLI test present in the review_complete describe."},
+    {"id": "C-21", "disposition": "partial", "evidence": "Waive-tool outputs/descriptions (operator-confirm-review.ts ~261-262, 296, 312, 358) and review.ts errors still say 'run keryx review complete'. Text only."},
+    {"id": "C-22", "disposition": "closed", "evidence": "evidenceLevelLine (src/review/evidence-level.ts:58) is a plain regex match; the prBound re-derivation is removed from the tool and the apply gate refuses a malformed line, so it fails closed."},
+    {"id": "C-23", "disposition": "closed", "evidence": "The head input and prBound re-derivation are removed; the schema carries only package."},
+    {"id": "C-24", "disposition": "closed", "evidence": "The JSDoc is now attached to the correct declaration in operator-confirm-review.ts."},
+    {"id": "C-26", "disposition": "partial", "evidence": "Head duplication is removed; the 12-character head abbreviation remains in card text. Cosmetic."},
+    {"id": "C-32", "disposition": "open", "evidence": "Behavioural gap persists: remoteApproval pressedBy/pressedAt, the topic-first and turn-start fromId pass-through, the telegram yes mapping and the shell.ts:4224-4226 allowedUserIds binding survive deletion (mutants T2, T3, T4, T5, T8, S1 all survive). Minor, test-strength only."},
+    {"id": "C-39", "disposition": "closed", "evidence": "Unreadable research.json is reported as a coverage waiver line and the research gate refuses; killed by M3b (direction ENOENT-silent unpinned: N-03)."},
+    {"id": "C-41", "disposition": "withdrawn", "evidence": "Info finding; the digest check still precedes the awaited gate and no change in the slice affects it."},
+    {"id": "C-45", "disposition": "open", "evidence": "The telegram answer is still logged from the transport event unchanged (tui-shell.ts mirrorApprovalToTopic); not addressed in this slice. Info/minor."}
+  ],
+  "findings": [
+    {
+      "id": "N-01",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 765,
+      "quote": "const closed = done !== undefined || (await completionFacts(prepared.dir).catch(() => undefined))?.status === \"closed\";",
+      "problem": "The post-close recovery path of review_complete (gate throws after the round closed, so the tool must still report closed and surface the bookkeeping error) has no test. The only close-then-fail case in operator-confirm-review-tools.test.ts (around lines 716-724) fails the confirmation record write, not the gate. Deleting the status-closed fallback (mutant M1) and deleting the gateError-after-close problem line (mutant M2) both leave all 50 tests in the file green.",
+      "impact": "A regression that reports a closed round as 'nothing was recorded' (or silently drops the bookkeeping error after close) would ship unnoticed. Lost-confirmation messaging is the whole point of this fix round.",
+      "suggested_fix": "Add a behavioural test that makes completeReviewGated throw after it has written the closed status (inject a failing post-close step, or stub the bookkeeping writer), then assert the tool result is isError, mentions 'the round is closed but its bookkeeping stopped', and does NOT contain 'nothing was recorded'.",
+      "evidence": "mutation: M1 and M2 survive (scratch copy, bun test src/commands/operator-confirm-review-tools.test.ts, 50 pass)",
+      "confidence": 0.85
+    },
+    {
+      "id": "N-02",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6128,
+      "quote": "if (cardId !== undefined) operatorCards.markUndelivered(cardId);",
+      "problem": "The onUndelivered wiring and the mirrored/unmirrored settling in mirrorApprovalToTopic are pinned only by a source-text grep (operator-confirmations.test.ts:180-186 asserts the string 'operatorCards.markUndelivered(cardId)' and two '} finally {'). No behavioural test drives the function. Disabling the wiring (mutant T1: isCard replaced by false) and forcing the unmirrored finally to always answer 'shell' (mutant T6) both survive the TUI and operator-confirm suites. The unit test for OperatorConfirmationLog.markUndelivered passes independently of whether the shell ever calls it.",
+      "impact": "A refactor that keeps the strings but breaks the call order, or removes the call, keeps the grep green while an undelivered card stays on the waiting list or is recorded as answered.",
+      "suggested_fix": "Extract mirrorApprovalToTopic's settle step to a testable seam, or drive it from a tui-shell test with a fake transport that returns undelivered, and assert on the public OperatorConfirmationLog state (waiting() excludes the card; the answered line shows withdrawn) rather than the source text.",
+      "evidence": "mutation: T1 and T6 survive (scratch copy, bun test operator-confirmations.test.ts tui-shell.test.ts operator-confirm-tools.test.ts)",
+      "confidence": 0.8
+    },
+    {
+      "id": "N-03",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 674,
+      "quote": "if ((error as NodeJS.ErrnoException).code !== \"ENOENT\") {",
+      "problem": "The new unreadable-research.json branch is tested only in one direction. Inverting the guard so a missing research.json (ENOENT, the normal no-research case) is reported as a coverage waiver (mutant M3) leaves the suite green; the never-report mutant (M3b) is killed, so only the ENOENT-must-be-silent direction is unpinned.",
+      "impact": "Every review without a research file would show a spurious 'waiver: coverage' line on the confirmation card, training the operator to ignore waiver lines.",
+      "suggested_fix": "Add a card-content test for a package with no research.json and assert the card text contains no 'waiver: coverage' line.",
+      "evidence": "mutation: M3 survives, M3b killed",
+      "confidence": 0.85
+    }
+  ],
+  "mutant_candidates": [
+    {"id": "M1", "file": "src/commands/operator-confirm-review.ts", "line": 765, "change": "drop closed-by-status fallback", "result": "survived"},
+    {"id": "M2", "file": "src/commands/operator-confirm-review.ts", "line": 762, "change": "drop gateError-after-close problem line", "result": "survived"},
+    {"id": "M3", "file": "src/commands/operator-confirm-review.ts", "line": 674, "change": "ENOENT guard inverted", "result": "survived"},
+    {"id": "M3b", "file": "src/commands/operator-confirm-review.ts", "line": 674, "change": "ENOENT guard removed (never report)", "result": "killed"},
+    {"id": "M4", "file": "src/commands/operator-confirm-review.ts", "change": "drop operator-decisions loop", "result": "killed"},
+    {"id": "M5", "file": "src/commands/operator-confirm-review.ts", "change": "drop recordError line", "result": "killed"},
+    {"id": "T1", "file": "src/tui/tui-shell.ts", "line": 6127, "change": "onUndelivered wiring disabled", "result": "survived"},
+    {"id": "T2", "file": "src/tui/tui-shell.ts", "line": 573, "change": "remoteApproval drops pressedBy", "result": "survived"},
+    {"id": "T3", "file": "src/tui/tui-shell.ts", "change": "topic-first path passes undefined fromId", "result": "survived"},
+    {"id": "T4", "file": "src/tui/tui-shell.ts", "change": "turn-start path passes undefined fromId", "result": "survived"},
+    {"id": "T5", "file": "src/tui/tui-shell.ts", "line": 573, "change": "remoteApproval via remote -> tui", "result": "survived"},
+    {"id": "T6", "file": "src/tui/tui-shell.ts", "change": "unmirrored finally always answers shell", "result": "survived"},
+    {"id": "T7", "file": "src/tui/tui-shell.ts", "change": "mirrored finally: outcome undefined answered as shell", "result": "killed"},
+    {"id": "T8", "file": "src/tui/tui-shell.ts", "change": "telegram answer yes always true", "result": "survived"},
+    {"id": "S1", "file": "src/commands/shell.ts", "line": 4224, "change": "allowedUserIds binding returns undefined", "result": "survived (baseline already has 1 unrelated web_search failure)"}
+  ]
+}
+```
+
+## Summary
+
+No blocker or major. Three minor findings, all mutation-evidenced test-strength gaps in the new code: N-01 (post-close gate throw and closed-by-status fallback unpinned), N-02 (onUndelivered and mirror-settling wiring pinned only by a source-text grep), N-03 (ENOENT-silent direction of the research.json read unpinned). No real-network access, no fixed sleeps and no shared-data mutation in the slice's tests; the Iron Law is not triggered.
+
+Prior dispositions (19): closed 13 (C-01, C-03, C-05, C-06, C-13, C-17, C-18, C-19, C-20, C-22, C-23, C-24, C-39), partial 2 (C-21, C-26), open 3 (C-16, C-32, C-45), withdrawn 1 (C-41). The remaining open items are minor or info.
+
+## Mutation table
+
+Run in an isolated scratch copy of src and docs (the read-only worktree was never touched), anchor-count checked and reverted after each run. Suites: operator-confirm-review-tools.test.ts (50 pass baseline); operator-confirmations.test.ts + tui-shell.test.ts + operator-confirm-tools.test.ts; shell.test.ts.
+
+| ID | Gate changed | Result |
+|----|--------------|--------|
+| M1 | closed-by-status fallback removed | survived |
+| M2 | gateError-after-close line removed | survived |
+| M3 | ENOENT guard inverted | survived |
+| M3b | ENOENT guard removed | killed |
+| M4 | operator-decisions loop removed | killed |
+| M5 | recordError line removed | killed |
+| T1 | onUndelivered wiring disabled | survived |
+| T2 | pressedBy dropped | survived |
+| T3 | topic-first fromId undefined | survived |
+| T4 | turn-start fromId undefined | survived |
+| T5 | via remote -> tui | survived |
+| T6 | unmirrored finally always shell | survived |
+| T7 | mirrored finally withdrawn branch removed | killed |
+| T8 | telegram yes always true | survived |
+| S1 | allowedUserIds binding undefined | survived |
+
+15 mutants run: 4 killed (M3b, M4, M5, T7), 11 survived. Cap: 15 mutants, the mutation pass covered every gate added or changed in the slice that has a runnable nearest suite; survivors are reported as minor (N-01..N-03 and the C-32 disposition), no mutant is claimed beyond those run.

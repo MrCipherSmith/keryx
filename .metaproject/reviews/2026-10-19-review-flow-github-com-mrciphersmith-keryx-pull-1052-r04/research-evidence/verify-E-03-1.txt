@@ -1,0 +1,30 @@
+# keryx review verify-run
+finding: E-03
+command: python3 -c 
+import json,sys
+s=json.load(open('docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json'))
+def walk(o):
+    if isinstance(o,dict):
+        if 'readiness_waivers' in o: return o['readiness_waivers']
+        for v in o.values():
+            r=walk(v)
+            if r is not None: return r
+    elif isinstance(o,list):
+        for v in o:
+            r=walk(v)
+            if r is not None: return r
+rw=walk(s); it=rw['items']; print(json.dumps(it)[:600])
+props=it.get('properties',{})
+missing=[k for k in ('confirmedVia','pressedBy','pressedAt') if k not in props]
+print('additionalProperties:',it.get('additionalProperties'),'missing:',missing)
+sys.exit(1 if (missing and it.get('additionalProperties') is False) else 0)
+
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T04:52:22.408Z
+exit: 1
+
+--- stdout ---
+{"type": "object", "additionalProperties": false, "required": ["item", "operator_quote", "time"], "properties": {"item": {"type": "string"}, "operator_quote": {"type": "string", "minLength": 1}, "time": {"type": "string"}}}
+additionalProperties: False missing: ['confirmedVia', 'pressedBy', 'pressedAt']
+--- stderr ---
+

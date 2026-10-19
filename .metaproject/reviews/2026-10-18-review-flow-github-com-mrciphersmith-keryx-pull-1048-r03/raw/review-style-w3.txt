@@ -1,0 +1,73 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice-03 (r03 delta) is style-clean apart from two info items. The --task-text additions in the flow-orchestrator, job-orchestrator, orchestrator-prompt, task-implementer and cli-reference text read the same in the .metaproject and bundled copies. The cardSafe wiring and the reload/poll guard in project-context-inspector.ts read well and carry reason comments. Still open from r02 and not re-filed: review-style-w5:F-001 (tab ids spelled in four places, `let tab: string`), review-style-w5:F-002 (ternary chain in paint, tab-to-formatter mapping duplicated in contentRows), review-style-w5:F-003 (re-export of formatProjectReferencesLines), review-style-w1:F-005 (the promoted-entry obligation restated across the skill files; the --task-text clause adds one more copy of the same command line there).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/gdskills/context-resolver.test.ts",
+      "line": null,
+      "quote": "{ taskText: `${\"x\".repeat(TASK_TEXT_MAX_CHARS + 50)}` }",
+      "problem": "The argument is a template literal whose only content is one interpolation, so it is the string `\"x\".repeat(...)` with extra syntax. The r03 rewrite of this line changed it from the plain call to the wrapped form.",
+      "impact": "Readability only: a reader looks for the rest of the template and there is none.",
+      "suggested_fix": "Pass the call directly: `{ taskText: \"x\".repeat(TASK_TEXT_MAX_CHARS + 50) }`.",
+      "evidence": "context-resolver.test.ts line 432 at head: `await recordLastResolve(root, result, { taskText: `${\"x\".repeat(TASK_TEXT_MAX_CHARS + 50)}` });`. Nothing is concatenated with the interpolation.",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "dedupe_key": "src/gdskills/context-resolver.test.ts:needless-template-literal"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "import { cardSafe } from \"../lib/card-safe\";",
+      "problem": "The new `../lib/card-safe` import sits after `./modal-host`, inside the sibling (`./`) imports. The file's existing order is `../gdskills/...` first, then `./...` siblings (the same shape review-style-w4:F-002 reported for project-context-inspector.test.ts).",
+      "impact": "Convention drift in an import block that is otherwise parent-first. Low weight: src/tui/schedules-inspector.ts line 29 also places `../lib/card-safe` after other imports without grouping, so the project does not enforce an order here.",
+      "suggested_fix": "Move the line directly under the `../gdskills/project-context-status` import, before `./modal-host`.",
+      "evidence": "project-context-inspector.ts lines 8-14 at head: `../gdskills/project-context-status`, `./modal-host`, `../lib/card-safe`, `./execution-plan-inspector`, `./project-references-view`, `./theme`, `./theme-repaint`.",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "dedupe_key": "src/tui/project-context-inspector.ts:import-order-card-safe"
+    }
+  ],
+  "slices": [
+    {"id": "slice-03", "coverage": "all hunks read, plus head versions of context-resolver.test.ts, project-context-inspector.ts, schedules-inspector.ts and the --task-text lines in the skill and doc files", "status": "DONE"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 2}
+}
+```
+
+# Style Review Report
+
+## Verdict: APPROVE
+
+## Summary
+Slice-03 adds `--task-text` to the resolve-context command lines in the skill files (.metaproject and bundled copies match) and to cli-reference.md, a length-only task-text record in context-resolver.test.ts, and cardSafe plus a stale-load and overlapping-poll guard in project-context-inspector.ts. Naming, comments and structure are clean. Two info items are filed; r02 items w5:F-001, w5:F-002, w5:F-003 and w1:F-005 still apply unchanged and are cited, not re-filed.
+
+## Review Scope
+- Branch: `feat/conditional-reads`
+- Merge-base: `d6267d4a5099f39b74e86a71e5c8f61ca47aa63d`
+- Head: `5382b56abf17d23db61108554f3c6c68c8e3c036`
+- Scope mode: supplied slice (slice-03), delta round r03
+
+## Stats
+- major: 0
+- minor: 0
+- info: 2
+
+## Minor & Info
+- [F-001] info, needless single-interpolation template literal, src/gdskills/context-resolver.test.ts
+- [F-002] info, `../lib/card-safe` import placed among the `./` imports, src/tui/project-context-inspector.ts
+
+## Positive Notes
+- The `mine`/`applied`/`polling` guard in the feed has a one-line reason comment on each branch, and the names say what they hold.
+- The test titles state the new contract (length only, never the text), and the assertions check the recorded file text for the leaked token.
+- The bundled and .metaproject copies of each skill file carry the same lines.
+
+Routing audit: graph_used: no (not-relevant, slice supplied); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx diff, keryx ctx rg); raw_rg_used: no

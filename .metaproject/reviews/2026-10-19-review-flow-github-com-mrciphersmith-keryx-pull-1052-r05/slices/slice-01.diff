@@ -1,0 +1,336 @@
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md
+@@ 130,154 @@
+ 
+ - **Profiles.** The default is read-only: one round, no edits. `--fix` hands the findings to `flow-orchestrator` or `task-implementer`; the orchestrator never edits code. Control returns to this main session after each hand-off, which loads this skill again (never the implementer, which would nest); each re-review counts toward the ceiling (it adds 1 to the count).
+ - **Waves.** Split by diff domain (`core` = logic, security, architecture; `domain` = frontend, backend, conventions; `support` = style, tests), in that order; A/B/C/D below keep their dependency order, except Wave C, which starts early and overlaps A and B (see Wave C); Wave D runs after the last verifier pass. A full or `--all` round runs at most 10 reviewers per wave (`MAX_REVIEWERS_PER_WAVE_FULL`).
+ - **Rate limits.** On a reviewer dispatch that fails with a rate-limit or overloaded error (reported as `STATUS: RATE_LIMITED`, a harness signal, not a schema status), halve the wave, requeue the rest and honour `retry-after`, at most 300 seconds (`MAX_RETRY_AFTER_SECONDS`). After at most two halvings (`MAX_RATE_HALVINGS`) stop with `STATUS: BLOCKED rate_limited`, naming the queue left.
+-- **Early verdict.** When every reviewer and the verifier are done, save every verifier pass to `research-evidence/verifications.json`, then run `keryx review verdict <package>` (it reads `<package>/raw`; the shared `.metaproject/data/review/raw` only when passed as `--raw`, which mixes in other rounds) and give the operator the verdict then; refuted findings are excluded only once `verifications.json` exists, held ones only once Wave D's claims are saved to `research-evidence/premises.json`. A verdict given before Wave D ran is provisional, and you say so: it counts as open the findings the judge may still hold or lower. The mutation pass, ledger and `keryx review complete` continue as the tail, and every managed round finishes them. The verdict is interim: the round is not done until `complete` (`SKILL.detail.md` § "Early verdict").
++- **Early verdict.** When every reviewer and the verifier are done, save every verifier pass to `research-evidence/verifications.json`, then run `keryx review verdict <package>` (it reads `<package>/raw`; the shared `.metaproject/data/review/raw` only when passed as `--raw`, which mixes in other rounds) and give the operator the verdict then; refuted findings are excluded only once `verifications.json` exists, held ones only once Wave D's claims are saved to `research-evidence/premises.json`. A verdict given before Wave D ran is provisional, and you say so: it counts as open the findings the judge may still hold or lower. The mutation pass, ledger and the `review_complete` card continue as the tail, and every managed round finishes them. The verdict is interim: the round is not done until `complete` (`SKILL.detail.md` § "Early verdict").
+ - **Recovery.** After a timeout or crash: collect, validate, ingest, then dispatch only what is missing with `keryx review next --package <package>` (all reviewers at once). Never re-dispatch a wave whose results are on disk; after a second timeout of the same reviewer change the task (fewer slices, narrower focus), not only the diff size (`SKILL.detail.md` § "Recovery").
+ - **Done when** the consolidated report and the `keryx:findings` block are emitted and the stage counts and **Not run** are stated. A managed round (not `lightweight`, which is report-only) is also done only when every dispatched reviewer's result is recorded with `keryx review ingest` and the `review_complete` card has been answered (an agent never runs `keryx review complete`; that command is for a human in a terminal). `completed` means `keryx review readiness` passed, or each failing item but `premise-decisions` (answered per finding, never waived) is waived by the operator: in keryx shell call `review_waive_readiness` (a card, never a terminal), then call `review_complete`; elsewhere the operator runs `keryx review complete <package> --waive <item> "<their words>"` in their terminal; unattended, record Not run; publishing to GitHub is held by the same checklist, and a not-ready package goes out only through `keryx review publish --partial` (in keryx shell: `review_publish` with `partial: true`).
+ 
+ ---
+ 
+ ## Step 12 — the `keryx:findings` block
+ 
+ The prose report is for a human. **`keryx review ingest` reads the fenced block,
+ not the prose**, and a round that emits only prose cannot be used to build the
+ next round's input — the reviewer's `confidence`, `evidence`, `impact` and
+ `suggested_fix` do not survive rendering, and no regex recovers what was never
+ written down.
+ 
+ So every report ends with one fenced block whose info string carries
+ `keryx:findings`:
+ 
+ ````text
+ ```json keryx:findings
+ [ { …one object per finding, conforming to review-finding.schema.json… } ]
+ ```
+
+--- .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md
+@@ 762,802 @@
+ 
+ **KEEP THIS FILE**: the ingest at Step 12 is **refused** for a scope-B finding without it — pass it as `review ingest ... --blast-radius blast-radius.json`.
+ 
+ Scope B is bounded and computed: distance ≤ 2 from every changed file, at most 40 files, closest
+ first. Do not pick the files or widen the set. Record it with `--out "<review-package>/blast-radius.md"`,
+ including every file the cap removed; an empty radius is `unresolved`, not clean.
+ 
+ A scope-B reviewer answers one question: does this change break an existing behaviour **at these
+ sites**? The orchestrator refuses, in code, a finding that is `outside-set`, below `major`
+ (`non-regression-severity`), or names nothing the change touched (`no-link-to-change`) — pass
+ `--brief` verbatim so no reviewer spends the round on findings that will be refused. `class_scope`
+ names the caller that breaks.
+ 
+ Recompute scope B on rounds 2..N only when the changed-file set moved, and always on the final round:
+ 
+ ```bash
+ keryx review blast-radius --ref "${BASE_SHA}" --package "${PKG}" --previous blast-radius.json [--final]
+ ```
+ 
+ `PKG` is the review package, created by `keryx review start` before dispatch; `--package` makes scope B read the graph built at the PR head. Give each reviewer `keryx review layers block --package "${PKG}" --files <its slice files> --json` as the payload's `layers` field.
+-When `dropped` is non-empty, run `keryx review chunks plan|estimate|next|record|merge --package "${PKG}"` until `next` has none left. `review complete` refuses while a file is uncovered; the coverage waiver is the operator's alone, never yours: in keryx shell call `review_waive_coverage` (a card, never a terminal), then run `keryx review complete`; elsewhere the operator runs `keryx review complete <package> --waive-coverage "<their words>"`; unattended, record Not run. The chunk-run question (`estimate`) is answered the same way: `review_chunks_answer`, or the operator's `keryx review chunks estimate --package "${PKG}" --answer yes --quote "<their words>"`. Pass `review_wave: {"package": "${PKG}", "pass": "<chunk id>"}` on every `spawn_subagent` of a chunk pass (`"pass": "round"` for the round's own reviewers): each wave counts its own 32 children and one turn opens at most 25 waves; a wave the package does not record is ignored and counts against the turn's 32.
++When `dropped` is non-empty, run `keryx review chunks plan|estimate|next|record|merge --package "${PKG}"` until `next` has none left. `review complete` refuses while a file is uncovered; the coverage waiver is the operator's alone, never yours: in keryx shell call `review_waive_coverage` (a card, never a terminal), then call `review_complete`; elsewhere the operator runs `keryx review complete <package> --waive-coverage "<their words>"`; unattended, record Not run. The chunk-run question (`estimate`) is answered the same way: `review_chunks_answer`, or the operator's `keryx review chunks estimate --package "${PKG}" --answer yes --quote "<their words>"`. Pass `review_wave: {"package": "${PKG}", "pass": "<chunk id>"}` on every `spawn_subagent` of a chunk pass (`"pass": "round"` for the round's own reviewers): each wave counts its own 32 children and one turn opens at most 25 waves; a wave the package does not record is ignored and counts against the turn's 32.
+ The measurements, the rule table and the recompute table: `SKILL.detail.md` § "Scope B — bounds, rejections and recompute".
+ 
+ ### Path Mode
+ 
+ When a path or target is named, collect the candidate files:
+ 
+ ```bash
+ # If a directory path is given:
+ keryx ctx run --raw -- rg --files -g '*.{ts,tsx,js,jsx}' <path> | sort
+ 
+ # If a module name is given (e.g. "UserStore", "pipelines module"):
+ keryx ctx run --raw -- rg --files -g '*<name>*.{ts,tsx}' | sort
+ # Also check common locations: src/stores/, src/modules/, src/components/
+ ```
+ 
+ `--raw` returns plain paths, one per line, and the whole list. The summarized form (`keryx ctx rg --files`) prints header lines among the paths and cuts the list at 120 entries, so a round built on it silently covers a part of the scope. Only path lines are file entries.
+ 
+ Then put the list through the same exclusions before reading anything:
+ 
+ ```bash
+
+--- docs/docs/cli-reference.md
+@@ 4901,4941 @@
+ keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--report-only]
+ keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
+                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                           [--package <review-dir>] [--json|--brief] [--out <file>]
+ keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes <n>] [--wave-bytes <n>] [--out <dir> | --package <review-dir>] [--json]
+ keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--package <review-dir>] [--json]
+ keryx review retry-plan --manifest <file> [--result <file|->] [--reviewer <id>] [--slices a,b] [--covered a,b] [--next-wave]
+                         [--state <file>] [--dry-run] [--json]
+ keryx review next --package <review-dir> [--reviewers a,b] [--apply] [--json]
+ keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff] [--findings <file>] [--dispositions <file>] [--out <file>] [--dry-run] [--json]
+ keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
+ keryx review layers status  --package <review-dir> [--json]
+ keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--force] [--json]
+ keryx review chunks plan|estimate|next|record|merge --package <review-dir> [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive] [--answer yes|no --quote "<words>"] [--json]
+ keryx review coverage --package <review-dir> [--json]
+ keryx review complete ... [--waive-coverage "<operator quote>"] [--head <sha>] [--waive <item> "<operator quote>"]...   (card review_complete)
+ keryx review readiness <review-id-or-path> [--json]
+ keryx review publish <review-id-or-path> [--event COMMENT|REQUEST_CHANGES|APPROVE] [--partial] [--yes]
+ ```
+ 
+-The operator-only steps here (`confirm-plan`, `decide-premise`, `chunks estimate --answer`, `complete`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal. Inside `keryx shell` the agent calls `review_confirm_plan`, `review_decide_premise`, `review_chunks_answer`, `review_complete`, `review_waive_coverage`, `review_waive_readiness` or `review_publish` instead and never sends the operator to a terminal for them: the operator answers a card in the shell or, when remote control is on, in the Telegram topic, and the record carries `confirmedVia: tui-card` or `remote-card` (the latter with `pressedBy` and `pressedAt`). A remote answer is accepted only from an allowed Telegram user id, for this card, once, within one hour; without a reachable topic the card says "Telegram mirror not delivered" and is answered in the shell. `/remote-control` and `/decisions` list the cards waiting and answered. The two waiver tools only record the waiver; the agent then closes the review through the `review_complete` card, never by running `keryx review complete`, which stays for a human in a terminal (TM-04). An autonomous (unattended) run is excluded from this card gate: it is not given the card tools and closes the package through `keryx review complete` as before.
++The operator-only steps here (`confirm-plan`, `decide-premise`, `chunks estimate --answer`, `complete --waive-coverage`, `complete --waive`, `publish`) need a terminal; plain `complete` has no terminal check, so for an agent the card rule below is what binds it (TM-04 section 8). Inside `keryx shell` the agent calls `review_confirm_plan`, `review_decide_premise`, `review_chunks_answer`, `review_complete`, `review_waive_coverage`, `review_waive_readiness` or `review_publish` instead and never sends the operator to a terminal for them: the operator answers a card in the shell or, when remote control is on, in the Telegram topic, and the record carries `confirmedVia: tui-card` or `remote-card` (the latter with `pressedBy` and `pressedAt`). A remote answer is accepted only from an allowed Telegram user id, for this card, once, within one hour; without a reachable topic the card says "Telegram mirror not delivered" and is answered in the shell. `/remote-control` and `/decisions` list the cards waiting and answered. The two waiver tools only record the waiver; the agent then closes the review through the `review_complete` card, never by running `keryx review complete`, which stays for a human in a terminal (TM-04). An autonomous (unattended) run is excluded from this card gate: it is not given the card tools and closes the package through `keryx review complete` as before.
+ 
+ **An unrecognised option is refused, not ignored**, and the command exits 1. A
+ flag that is silently dropped writes nothing and still reports success.
+ 
+ `--head <sha>` is the commit the round ran against, written to
+ `manifest.target.head` and read by the `review` completion gate — which refuses
+ to complete a flow whose last round cannot say which tree it read. Omitted, it
+ is `git rev-parse HEAD`: the tree the reviewers actually read, preferred over a
+ `pr` target's own head so that a round run against something other than what
+ will merge *fails* the gate instead of passing it. With no checkout to ask and a
+ `pr` target, the pull request's head is used instead; with neither, the head is
+ left off and the gate reports it as unobserved.
+ 
+ `review complete --head <sha>` names the commit the round actually reviewed when the one recorded
+ at start is wrong or missing. The completion gate then checks that commit and the closed manifest
+ records it (with a warning when it replaces a different recorded head). The gate is not loosened: a
+ head that is not the pull request's head still needs the first line of `report.md` to name it and
+ say the PR moved, and the SHA must be 7-40 hex characters on a package bound to a pull request.
+ 
+ A package is bound to a pull request when it targets one or when its `--ref` is a pull request URL, whatever `--target` was typed: `review ingest --target report --ref <PR URL>` gets the same check, so a head recorded at ingest that is no longer the PR's head cannot close a package unchecked.
+
+--- src/commands/operator-confirm-review.ts
+@@ 778,788 @@
+           subject: `package ${name}${facts.head === undefined ? "" : `, head ${facts.head.slice(0, 12)}`}`,
+-          prepared: { dir, head: facts.head, digest: factsDigest(facts) },
++          prepared: { dir, head: facts.head, digest: factsDigest(facts), dispositions },
+         };
+       } catch (error) {
+         return failed(error);
+       }
+     },
+     async apply(_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+       if (prepared === undefined) return { output: "review_complete: nothing prepared for this card", isError: true };
+-      const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+       let facts: CompletionFacts;
+       try {
+
+--- src/review/completion-gate.ts
+@@ 765,772 @@
+   if (open.blockers.some((b) => /research|dispatch/.test(b))) {
+-    return "Next: dispatch the reviewers per slice, build the research ledger with `keryx review ledger build <input-dir> --package <review-dir>` (it names every gap), `keryx review ingest ... --research <review-dir>/research.json`, then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).";
++    return `Next: dispatch the reviewers per slice, build the research ledger with \`keryx review ledger build <input-dir> --package <review-dir>\` (it names every gap), \`keryx review ingest ... --research <review-dir>/research.json\`, then ${closeStep(card)}.`;
+   }
+-  return "Next: write or ingest the missing artifacts (`keryx review ingest`), then call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself).";
++  return `Next: write or ingest the missing artifacts (\`keryx review ingest\`), then ${closeStep(card)}.`;
+ }
+ 
+ export type ReviewGateInput = {
+   open: OpenManagedReview | null;
+
+--- src/tui/approval-mirror.ts
+@@ 47,74 @@
+     opened: () => {
+       if (started || settled) return;
+       started = true;
+       void options
+         .topic(topicAbort.signal)
+         .then((answer) => {
+           if (settled) return;
+           if (answer.undelivered === true) options.onUndelivered?.();
++          else if (!isTopicPress(answer) && !topicAbort.signal.aborted) options.onTopicEnded?.();
+           if (!isTopicPress(answer)) return;
+           topicAnswer = answer;
+           dockAbort.abort("topic");
+         })
+         .catch(() => undefined);
+     },
+     topicWon: () => topicAnswer !== undefined,
+   };
+   try {
+     const result = await options.dock(race);
+     if (topicAnswer !== undefined) return { from: "topic", answer: topicAnswer };
+     return { from: "dock", result };
+   } finally {
+     settled = true;
+     // answered in the dock: serve says "answered in the shell"; the turn stopped: "cancelled". A leg that
+     // already ended ignores the abort, so a press that won keeps its own final state.
+     if (topicAnswer === undefined) topicAbort.abort(options.turnSignal.aborted ? "cancelled" : "shell");
+   }
+ }
+
+--- src/tui/operator-confirmations.ts
+@@ 1,16 @@
+ // Flow 464 (AC6): the operator-confirmation cards this shell mirrored to the Telegram topic — each question still
+ // waiting for a press (with its age and the time left of the 1-hour token), and the recent ones with who pressed.
+ // Held in memory only: the stores keep the durable record (`confirmedVia`, `pressedBy`, `pressedAt`); this is the
+ // live view the sidebar, the `/remote-control` status and the `/decisions` modal read.
+ 
++import type { ApprovalResponse } from "../commands/agent";
+ import { REMOTE_CARD_TTL_MS } from "../commands/operator-confirm-tools";
++import type { RemoteApprovalAnswer } from "../remote/shell-bridge";
++import { type ApprovalRaceOutcome, type DockRace, raceApproval } from "./approval-mirror";
+ 
+ /** How many answered cards the view keeps. */
+ export const ANSWERED_CARDS_KEPT = 5;
+ 
+ export type CardAnswerPlace = "telegram" | "shell" | "withdrawn";
+ 
+ export interface ConfirmationEntry {
+
+--- src/tui/tui-shell.ts
+@@ 551,590 @@
+   "shell_task_kill",
+   "shell_task_wait",
+   "shell_job_output",
+   // Flow 274 (agent bus P3, T7): `bus_send` is ALSO `risk: "read"` (specification
+   // §7.1, AC8) — a classifier choice about tool-budget accounting, not an
+   // approval/trust signal (same FROZEN AC6 caveat as `shell_job_kill` above) —
+   // but sending a real peer message under the MAIN session's own bus identity is
+   // exactly the "read-risk-but-actually-mutating" hazard this list exists for. A
+   // side worker answers a transient status question; it must never speak on the
+   // session's behalf.
+   //
+   // review r1 F9: `bus_list` no longer reaches a side worker either — not
+   // because it is unsafe (it genuinely is read-only), but because the side
+   // worker's own `makeAgentDeps` call now passes no bus getter at all (see
+   // that call site's own doc comment), so `bus_list`/`bus_send` are never
+   // even built into `base.tools` for it to filter here. Named anyway, should
+   // that ever change.
+   "bus_send",
+ ]);
+ 
+-/** Flow 464: an approval answered in the topic, carrying the pressing Telegram user and the shell's clock when the press arrived. */
+-function remoteApproval(fingerprint: string, fromId: number | undefined): Extract<ApprovalResponse, { approved: boolean }> {
+-  return { approved: true, fingerprint, via: "remote", ...(fromId !== undefined ? { pressedBy: fromId } : {}), pressedAt: new Date().toISOString() };
+-}
+-
+ /**
+  * Flow 173 F-003 (P2 conversion, flow 277): the side-worker tools filter's
+  * own predicate — `risk === "read"` AND not on {@link SIDE_WORKER_DENIED_TOOL_NAMES}
+  * — extracted from `spawnSideWorker`'s inline `base.tools.filter(...)` so the
+  * rule is a plain, unit-testable function instead of a source-text audit
+  * reading the filter's call site (`tui-shell.test.ts`'s flow 173 F-003
+  * block). Takes a narrow structural type — mirroring `InteractiveTool`'s
+  * `definition.risk`/`definition.name` (`../commands/agent.ts`,
+  * `../harness/tool/builtin/interactive-tools.ts`) — so this module stays free
+  * of importing those types just for this one check.
+  */
+ export function isToolAvailableToSideWorker(tool: { definition: { risk?: string; name: string } }): boolean {
+   return tool.definition.risk === "read" && !SIDE_WORKER_DENIED_TOOL_NAMES.has(tool.definition.name);
+ }
+ 
+ /** Parse a GitHub remote URL into `owner/repo` (if possible). */
+ function parseGitHubRemote(remote: string): string | undefined {
+   const trimmed = remote.trim();
+   if (trimmed.length === 0) {
+     return undefined;
+
+--- src/tui/tui-shell.ts
+@@ 6078,6137 @@
+       io.onSystem?.(
+         decision === "allow" ? `◇ ${brief} approved in Telegram${rememberedNote}.\n` : `◇ ${brief} denied (Telegram answer, timeout or no connection).\n`,
+       );
+       if (decision !== "allow") return false;
+       // Flow 456: answered in the topic — an operator-confirmed card records `confirmedVia: "remote-card"`.
+       return meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, answer.fromId) : true;
+     };
+     // Flow 419 (AC1, AC2): an approval the shell raises for a turn typed here is also posted to the topic
+     // the moment the dock opens (a call that is auto-approved never gets there). The first answer wins: a
+     // press in the topic closes the dock; an answer in the dock removes the buttons in the topic. Silence in
+     // the topic never ends the dock. A Telegram-started turn has its own topic-only path above, on its facade;
+     // this wrapper decides nothing and never reads the bridge-wide Telegram-turn flag.
+     const mirrorApprovalToTopic =
+       (inner: LocalApproval): NonNullable<TuiAgentIo["requestApproval"]> =>
+       async (tool, inputJson, meta) => {
+         const bridge = remoteBridge;
+         // Flow 464 (AC5): an operator card the topic cannot get says so on the card, and is answered here as before.
+         const isCard = meta?.alwaysAsk === true && meta.card !== undefined && meta.card.length > 0 && !isUserPromptApprovalCard(tool);
+         const unmirrored = isCard ? mirrorUndeliveredNote(bridge) : undefined;
+         if (unmirrored !== undefined && meta?.card !== undefined) {
+-          const unmirroredId = operatorCards.ask(meta.card[0] ?? tool, false);
+-          let verdict: Awaited<ReturnType<LocalApproval>> | undefined;
+-          try {
+-            verdict = await inner(tool, inputJson, { ...meta, card: withMirrorNote(meta.card, unmirrored) });
+-            return verdict;
+-          } finally {
+-            operatorCards.answer(unmirroredId, { place: foregroundOperation.signal.aborted || verdict === undefined ? "withdrawn" : "shell", yes: verdict !== undefined && verdict !== false });
+-          }
++          const card = withMirrorNote(meta.card, unmirrored);
++          return askUnmirroredCard(operatorCards, meta.card[0] ?? tool, foregroundOperation.signal, () => inner(tool, inputJson, { ...meta, card }));
+         }
+         if (bridge === undefined || !bridge.active) {
+           return inner(tool, inputJson, meta);
+         }
+         if (operatorCardTooLongForTopic(tool, inputJson, meta)) {
+           void bridge.noticeCardTooLong(tool);
+           return inner(tool, inputJson, meta);
+         }
+         const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
+-        const cardId = isCard && meta?.card !== undefined ? operatorCards.ask(meta.card[0] ?? tool, true) : undefined;
+-        let outcome: ApprovalRaceOutcome<Awaited<ReturnType<LocalApproval>>> | undefined;
+-        try {
+-          outcome = await raceApproval({
+-            turnSignal: foregroundOperation.signal,
+-            ...(isCard
+-              ? {
+-                  onUndelivered: () => {
+-                    if (cardId !== undefined) operatorCards.markUndelivered(cardId);
+-                    io.onSystem?.("◇ Telegram mirror not delivered: the topic did not take the card. Answer it here.\n");
+-                  },
+-                }
+-              : {}),
+-            dock: (race) => inner(tool, inputJson, meta, race),
+-            // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.
+-            topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
+-          });
+-        } finally {
+-          if (cardId !== undefined) operatorCards.settle(cardId, outcome, foregroundOperation.signal.aborted);
+-        }
++        const outcome = await raceMirroredCard({
++          log: operatorCards,
++          question: isCard && meta?.card !== undefined ? (meta.card[0] ?? tool) : undefined,
++          turnSignal: foregroundOperation.signal,
++          onUndelivered: () => io.onSystem?.("◇ Telegram mirror not delivered: the topic did not take the card. Answer it here.\n"),
++          dock: (race) => inner(tool, inputJson, meta, race),
++          // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.
++          topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
++        });
+         if (outcome.from === "dock") return outcome.result;
+         const allowed = outcome.answer.decision === "allow";
+         input.focus();
+         setMainAgent("running", allowed ? "approved (telegram)" : "denied");
+         io.onSystem?.(allowed ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied in Telegram.\n`);
+         if (!allowed) return false;
+         // Flow 456: the topic answered first — an operator-confirmed card records `confirmedVia: "remote-card"`.
+         return meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, outcome.answer.fromId) : true;
+       };
+     io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));
+ 
+     /** Host for ask_user — Claude-style options docked above the composer. */
+     const askUserInteractive = async (req: {
+       question: string;
+       options: Array<{ id: string; label: string; description: string; recommended?: boolean; preselected?: boolean }>;
+     }): Promise<AskUserAnswer> => {
+       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
+       setMainAgent("blocked", "ask");
+       setBusyPhase("waiting for your answer (menu above input)");
+       // Keep a short transcript breadcrumb; the interactive picker is at the input.

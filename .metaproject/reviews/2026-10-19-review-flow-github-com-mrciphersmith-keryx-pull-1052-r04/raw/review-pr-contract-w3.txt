@@ -1,0 +1,61 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-pr-contract, PR 1052 (flow 464), round r04, head b1c6da0e6992e4df473bae6b2fde78bc94d28776, wave 3, slice-04 (slice-04.diff read in full, 2314 lines: confirm-token/schema/service/types in src/flow, the bundled review-orchestrator and review-premise skills, write-land, interactive-tools, learning/decisions, remote client/shell-bridge and mirror-undelivered.test, and the src/review store files). PC-001..PC-005 not re-filed. Both copies of the three skill files (.metaproject/skills/gdskills/review and src/gdskills/bundled/skills/review) are byte-identical at head.
+
+Checklist of PR-body claims against slice-04 and the code at head:
+- "A remote-card answer now records pressedBy and pressedAt": every store in the slice gains the pair through the shared CardPress type and cardPressFields (types.ts 2283-2292): confirm-token (stored token, consumeConfirmationToken, signature), flow service confirmMint, schema.ts, write-land decision file, learning DecisionConfirmation, chunk answer, coverage waiver (written and read back in readCoverageWaiver), readiness waiver, operator decisions, plan confirmation, premise answer, publish. The callers in operator-confirm-other.ts pass them (record(), lines 109-114). Matches.
+- "accepted only from an allowed user id, once, for one question, within 1 hour": enforced in operator-confirm-tools.ts (wave 2); this slice carries the transport side, fromId on ApprovalAnswer/RemoteApprovalAnswer. Matches.
+- "The card says when the Telegram mirror was not delivered; the terminal commands stay as fallback": client.ts returns undelivered:true on every pre-post failure path, shell-bridge mapApprovalAnswer keeps it only on a deny, MIRROR_NOT_DELIVERED / mirrorUndeliveredNote carry the two sentences, mirror-undelivered.test.ts covers each. The post-response "!this.connected" deny (client.ts ~836) is not flagged, which is right: the question was posted. Matches. The skills keep the terminal commands for outside keryx shell.
+- "review_confirm_plan and review_decide_premise answer through the card too": SKILL.md, SKILL.detail.md, review-premise/SKILL.md, plan step 6, chunks-estimate.ts chunkRunBlocker and operator-decisions.ts decisionWriters all name the card first. Matches.
+- "New review_complete card": completeReviewGated (complete-gated.ts) is the shared gate; completion-gate.ts nextStep/continue/stop texts now say to call the review_complete card and name the gate input. Matches (the shell-review wording of this sits in PC-002).
+- "Docs: TM-04 section, review guides, cli-reference, review skills": the skills in this slice are updated. cli-reference.md was edited only in the `review` section (five hunks, 4893-4994); the `flow confirm` section that describes the signature `confirmation` field was not touched. See PC-006.
+- "TUI ...", "flow ac confirm is unchanged", test plan boxes (all unticked, CI passing): outside slice-04 or not contradicted. The PR body has no Documentation/Breaking-change/Screenshots checklist boxes, so no box row exists to contradict. The only new persisted fields are optional, additive.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-pr-contract",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "slice-04 read in full. The PR body's claims about pressedBy/pressedAt recording, the undelivered-mirror note and the card-first skill wording match the slice and the code at head. One minor documentation gap: the flow-confirm reference and the SignatureConfirmation comments still describe the completion signature as a terminal-token record that says nothing about who, while the diff adds pressedBy/pressedAt to that very record for remote-card tokens.",
+  "stats": { "slices_read": 1, "claims_checked": 7, "findings": 1 },
+  "slices": [{ "id": "slice-04", "coverage": "read in full" }],
+  "findings": [
+    {
+      "id": "PC-006",
+      "reviewer": "review-pr-contract",
+      "severity": "minor",
+      "file": "src/flow/types.ts",
+      "line": 173,
+      "quote": " * this AC checksum. It does not say who ran that step (see TM-03).",
+      "problem": "The PR adds `pressedBy` (the Telegram user id) and `pressedAt` to SignatureConfirmation (types.ts 187-189, schema.ts 331-332, consumeConfirmationToken in confirm-token.ts) for remote-card tokens. The description of that same record is left as it was: types.ts:173 'It does not say who ran that step (see TM-03)'; confirm-token.ts:24 'It does not record who ran it'; and docs/docs/cli-reference.md:4399-4409, the `flow confirm` section, which lists the signature's `confirmation` field as `mechanism: \"terminal-token\"`, `tokenRef`, `mintedAt`, `consumedAt` and `boundTo`, and ends 'Not that a human ran it, and not who.' The diff touches cli-reference.md only at 4893-4994 (the `review` section); the `flow confirm` section is outside it. TM-04 6a, added by the PR, does say the record keeps pressedBy beside confirmedVia remote-card, so the three places above now disagree with it.",
+      "impact": "A reader of the CLI reference or of the type comment concludes the signature never carries a Telegram id and has only the terminal-token mechanism, and does not look for pressedBy/pressedAt (or the remote-card-token mechanism) when auditing a completion signature in flow.json. The statement 'not who' is arguably still true of a person (an account id is not a person, as TM-04 6a says), so this is a wording gap, not a wrong claim.",
+      "suggested_fix": "In cli-reference.md `flow confirm`, list the mechanisms (terminal-token, tui-card-token, remote-card-token) and say that a remote-card token also carries pressedBy (Telegram user id) and pressedAt (the shell's clock), with the TM-04 6a limit. Add one clause to the SignatureConfirmation comment (types.ts 170-174) and confirm-token.ts:24 saying that for a remote-card token the record names the allowed account that pressed, not the person.",
+      "evidence": "src/flow/types.ts 168-189 at head (comment above the new fields); src/flow/confirm-token.ts:24 and :42; docs/docs/cli-reference.md 4399-4409 (read at head); git diff 062aa9c...b1c6da0 for docs/docs/cli-reference.md has hunks only at 4893, 4897, 4916, 4921 and 4994; docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md section 6a.",
+      "confidence": "medium",
+      "dedupe_key": "pc:signature-doc-omits-pressedby",
+      "location_class": "in-diff"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "D-01", "disposition": "closed" },
+    { "id": "D-02", "disposition": "open" },
+    { "id": "D-03", "disposition": "partial" },
+    { "id": "D-04", "disposition": "open" },
+    { "id": "D-05", "disposition": "open" },
+    { "id": "D-06", "disposition": "open" },
+    { "id": "D-07", "disposition": "open" },
+    { "id": "D-08", "disposition": "closed" },
+    { "id": "D-09", "disposition": "open" },
+    { "id": "D-10", "disposition": "open" },
+    { "id": "D-11", "disposition": "open" },
+    { "id": "D-12", "disposition": "closed" },
+    { "id": "D-13", "disposition": "open" },
+    { "id": "D-14", "disposition": "open" }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Notes on prior_dispositions: D-01 closed, D-08 closed per waves 1-2. D-12 (completion-gate text) is closed on slice-04: completion-gate.ts nextStep, the continue message and the stop report no longer tell the agent to run `keryx review complete`; they name the review_complete card. D-03 stays partial as wave 2 left it (describeBlockers is outside this lane). The other items are code or test items outside this lane and left open as agreed.

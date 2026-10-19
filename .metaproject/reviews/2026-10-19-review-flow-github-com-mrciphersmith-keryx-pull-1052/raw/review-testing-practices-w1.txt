@@ -1,0 +1,176 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Lens: do the AC1-AC5 tests fail if the guarded behaviour breaks. For the main paths they do: a non-allowed id, a token from another question, a replayed token, an expired token (TTL+1 refused, exactly TTL accepted) and a missing token each leave state unchanged, and tui-card records carry no pressedBy/pressedAt. Real weak points: the fail-open branch for an undefined allowed list is never exercised, only one of the review_complete gates is proven to record nothing when it refuses, and the wiring from the Telegram callback to pressedBy (remoteApproval, shell.ts binding) is not covered end to end in the slice tests. No acceptance criterion in AC1-AC5 is left with no test that can fail; AC5 (card says the mirror was not delivered) is the thinnest. AC9 and AC10 are not filed.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-tools.ts",
+      "line": null,
+      "quote": "if (allowed === undefined || !allowed.includes(pressedBy)) {",
+      "problem": "AC2: the fail-closed branch for an unavailable allow-list (`allowed === undefined`) has no test. Every remote test in operator-confirm-tools.test.ts and operator-confirm-review-tools.test.ts binds `allowedUserIds: () => ALLOWED` (or `[ALLOWED_ID]`), and the only negative cases use a list that exists but does not contain the id, or an empty list. The binding returning `undefined` (what shell.ts returns when loadRemoteConfig is not ok) and a binding with no `allowedUserIds` at all are never driven through a remote press.",
+      "impact": "If the `allowed === undefined ||` half is dropped or inverted (for example `allowed !== undefined && !allowed.includes(...)`, or `allowed?.includes(pressedBy) === false`), every existing test still passes while any remote press is accepted whenever the remote config is missing or unreadable. This is the security gate of AC2 and the one place where a refactor turns a refusal into an acceptance without a red test.",
+      "suggested_fix": "Add two direct invoke tests in the AC2 block of operator-confirm-tools.test.ts: (1) bind `allowedUserIds: () => undefined`, ask, press remote with pressedBy 42 and a valid token, expect isError and unchanged state (no apply side effect, no confirmation record); (2) bind a tool with no `allowedUserIds` at all and do the same. Assert the refusal text contains 'not on the allowed list' and that the token is spent.",
+      "evidence": "operator-confirm-tools.ts line 215 holds the only allow-list check. The tests at operator-confirm-tools.test.ts lines 331-395 all construct the gate with `{ allowedUserIds: () => ALLOWED }`; the review-tools helper `tool()` binds `allowedUserIds: () => [ALLOWED_ID]`. shell.ts line 4224 shows the production binding can return undefined.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:ac2-undefined-allowlist",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-tools.test.ts (AC2 describe block, lines 331-395: every case binds a defined list)",
+          "src/commands/operator-confirm-review-tools.test.ts (tool() helper binds [ALLOWED_ID]; AC3 non-allowed case uses a defined list)",
+          "src/commands/operator-confirm-tools.ts:215 (the only allow-list check)"
+        ],
+        "enumeration_method": "keryx ctx rg for 'allowedUserIds' across src/commands/operator-confirm-tools.test.ts, operator-confirm-review-tools.test.ts and operator-confirm-tools.ts; every test binding was read and none returns undefined or omits the binding on a remote press."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": null,
+      "quote": "expect(result.output).toContain(\"nothing was recorded\");",
+      "problem": "AC4: 'a refused review_complete gate records nothing' is proven for exactly one gate, the evidence-level gate (a report with no evidence line and report_fields:[\"evidence-level\"]). The card now routes through completeReviewGated (run-profile refusal, narrowed-routing refusal, then completeManagedReview with head gate, evidence level, readiness), and the only other refusals tested are 'already closed' and 'head on a non-PR package', both raised before the card is drawn. Nothing drives the head gate (merged PR, moved head), the waiver rules, the run-profile refusal or the routing refusal through the card, and the assertion `toContain(\"nothing was recorded\")` does not identify which gate refused, so the test cannot tell the evidence gate from any other refusal. complete-gated.ts has no test file.",
+      "impact": "The point of AC4 is that the card runs the SAME gates as `keryx review complete`. If completeReviewGated drops or reorders a gate on the card path (for example the head gate is skipped, or the refusal is returned after the write), the suite stays green. Only the evidence gate is protected.",
+      "suggested_fix": "Table-drive the refused-gate test over each gate with a package that trips only that gate: moved head and merged PR (inject prLookup returning the merged or advanced state; today the helper uses `prLookup: async () => null`, which makes complete-head-gate.ts warn and skip the check), a waiver that breaks the waiver rules, a manifest with the operatorGate stamp so runProfileRefusal fires, and a narrowed routing so packageRoutingRefusal fires. For each: press remote yes, expect isError, expect the gate-specific text, expect completion-confirmation.json absent and the manifest unchanged. Add a small complete-gated.test.ts that asserts the CLI runComplete and the card call the same function.",
+      "evidence": "operator-confirm-review.ts line 750 calls completeReviewGated inside apply; src/review/complete-gated.ts holds the four gates; the refused-gate test in operator-confirm-review-tools.test.ts (around line 638) uses only the evidence-level case. The tool() helper's prLookup returns null, and src/review/complete-head-gate.ts line 45 returns a warning and skips the check on a null lookup, so the head gate is inert in these tests.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:ac4-single-gate-refusal",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/review/complete-gated.ts (runProfileRefusal, packageRoutingRefusal, completeManagedReview: four gates, one exercised)",
+          "src/commands/operator-confirm-review-tools.test.ts (review_complete describe: one refused-gate test)",
+          "src/review/complete-head-gate.ts:45 (null lookup skips the head and merge check)"
+        ],
+        "enumeration_method": "Read completeReviewGated and listed its refusal branches; keryx ctx rg for 'nothing was recorded', 'prLookup' and 'review_complete' in the two slice test files to see which branches any test reaches."
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "function remoteApproval(fingerprint: string, fromId: number | undefined): Extract<ApprovalResponse, { approved: boolean }> {",
+      "problem": "AC1/AC2: the wiring that turns a Telegram callback into `confirmationVia: \"remote\"` plus `pressedBy`/`pressedAt` is not covered by the slice tests. remoteApproval is the sole producer of `via: \"remote\"` and is reached only from the mirror wrapper in tui-shell.ts; the tool tests hand `invoke` (or a scripted approver) the press fields directly. The shell.ts binding (`allowedUserIds: () => { const loaded = loadRemoteConfig(); ... }`) is likewise untested.",
+      "impact": "A change that stops passing fromId through (pressedBy becomes undefined, so every remote press is refused) or that stamps the wrong id would not fail any test in the slice. I did not read src/tui/operator-confirmations.test.ts, which may cover part of this.",
+      "suggested_fix": "Add a test at the mirror-wrapper seam that feeds a topic answer with a known fromId through mirrorApprovalToTopic and asserts the ApprovalResponse carries via 'remote' and that same id. Add a shell-level test that the production allowedUserIds binding returns the configured list and returns undefined for a missing or invalid remote config.",
+      "evidence": "tui-shell.ts line 583 defines remoteApproval and it is called at lines 6088 and 6137; shell.ts line 4224 defines the binding; no slice test names either.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:ac1-remote-wiring",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": null,
+      "quote": "expect(result.output).toContain(\"nothing was recorded\");",
+      "problem": "AC1/AC3: the remote-card path with pressedBy and pressedAt is asserted for chunks_answer, decide_premise, confirm_plan and review_complete, but publish, waive_coverage and waive_readiness are exercised on the tui path only. The 'tui-card has no press fields' check is per tool too (review_complete uses `not.toHaveProperty(\"pressedBy\")`, chunks_answer uses a whole-record toEqual).",
+      "impact": "A spec that forgets `cardPressFields(confirmation)` when it builds its record keeps passing for the tui path and loses the press fields silently on the remote path, which is the audit trail AC1 exists for.",
+      "suggested_fix": "Parametrize one 'remote yes records remote-card + pressedBy + pressedAt, tui yes has neither' test over every spec in buildReviewConfirmSpecs that records a confirmation, reading the record that spec writes.",
+      "evidence": "operator-confirm-review.ts line 566 shows the pattern `...cardPressFields(confirmation)` that each recorder must repeat; the tests for publish, waive_coverage and waive_readiness only drive the tui path.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:ac1-per-spec-press-fields",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "line": null,
+      "quote": "test(\"an answer that did not come through the bridge (tool-result text, no token) applies nothing\", async () => {",
+      "problem": "AC2: the 'tool-result text' case calls `invoke` without a token. That proves the missing-token branch, not that a model-produced string (an input field such as `confirmed: true`, or text echoed from a tool result) cannot reach the answer path, because the driver in agent.ts is the only thing that sets confirmationVia/confirmationToken.",
+      "impact": "Low: the guarded behaviour is also protected by the token-binding tests. A regression that lets an input field stand in for the approval would not be caught by this test.",
+      "suggested_fix": "Add a runAgentTurn test where the scripted provider's tool call input carries fields like confirmationVia:'remote', pressedBy, confirmationToken, or confirmed:true, and the approver denies; assert nothing is applied. This pins that the press fields come only from the ApprovalResponse.",
+      "evidence": "operator-confirm-tools.test.ts lines 394-395 build the gate and call invoke with no token; agent.ts passes the confirmation fields from the approver's response only when a card exists.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:ac2-tool-result-text",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-006",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const unmirrored = isCard ? mirrorUndeliveredNote(bridge) : undefined;",
+      "problem": "AC5: the inline branch that adds the 'mirror not delivered' note to a card opened with no reachable bridge (`withMirrorNote`, the `operatorCards` ask/answer pair) has no test in the slice. The pure helpers and the client/bridge `undelivered` flag are tested in src/remote/mirror-undelivered.test.ts, but the wrapper that decides to call them is not. I did not read src/tui/operator-confirmations.test.ts.",
+      "impact": "The wrapper could stop adding the note, or skip the card entirely when the channel is unconfigured, and the helper tests would still pass; the fallback-to-terminal promise in AC5 depends on this branch.",
+      "suggested_fix": "Add a test that runs the mirror wrapper with an unconfigured bridge and with an undelivered ask, and asserts the inner approver receives a card whose lines include the not-delivered note and that the card is logged as answered.",
+      "evidence": "tui-shell.ts lines 6101-6105 hold the branch; no test file in the slice names mirrorApprovalToTopic.",
+      "confidence": "low",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:ac5-unmirrored-branch",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-007",
+      "severity": "minor",
+      "file": "src/remote/mirror-undelivered.test.ts",
+      "line": null,
+      "quote": "race.opened();\n        await new Promise((resolve) => setTimeout(resolve, 10));\n        expect(race.signal.aborted).toBe(false);",
+      "problem": "Fixed sleep in a new test (outside slice-02, noted for completeness). Two raceApproval tests wait 10 ms on a timer to let the race run, then assert on state. The same line appears again in 'a delivered question that simply timed out does not fire it'.",
+      "impact": "The first test's negative assertion (`aborted` is false) passes if the timer is too short to observe an abort, so it can pass for the wrong reason; on a loaded CI runner it is timing-dependent. Fixed sleeps are banned by the testing doctrine.",
+      "suggested_fix": "Replace the timer with an explicit signal: have the topic stub resolve a deferred promise the test controls, then await that deferred (or await a microtask flush) before asserting, so the order is driven by events rather than by 10 ms.",
+      "evidence": "mirror-undelivered.test.ts lines 106 and 125.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:fixed-sleep-mirror-undelivered",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-008",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-tools.ts",
+      "line": null,
+      "quote": "pending.delete(token as string);",
+      "problem": "AC2 'once': replay is tested sequentially (second invoke after the first is refused), but two concurrent invokes with the same token are not. The token is deleted before apply, which makes single use hold, but nothing pins that order.",
+      "impact": "A refactor that moves the delete after the awaited apply would still pass the sequential replay test and reopen a double-apply window.",
+      "suggested_fix": "Add a test that starts two invoke calls with the same token without awaiting the first, with an apply that yields once, and asserts apply ran once and the other call was refused.",
+      "evidence": "operator-confirm-tools.ts lines 196-206 delete the token before the apply call; the replay test in operator-confirm-tools.test.ts is sequential.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:ac2-concurrent-replay",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "finding"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 2, "minor": 5, "info": 1 },
+  "slices": ["slice-02"]
+}
+```
+
+## Summary
+
+Verdict from the testing lens: the AC2 refusals (non-allowed id, other-question token, replay, TTL+1, missing token, missing pressedBy) each have a test that goes red if the guard is removed, and the tui-card/remote-card press-field split is asserted. No AC1-AC5 criterion is left without a test that can fail; AC5 is covered only through the helper and client layers.
+
+Gaps worth fixing before the owner's live check (AC9):
+- F-001 (major): the `allowed === undefined` fail-closed branch has no test; every remote test binds a defined list.
+- F-002 (major): only the evidence-level gate is proven to record nothing on `review_complete`; the head gate is inert in the tests because `prLookup` returns null, and complete-gated.ts has no test.
+- F-003 to F-006 (minor): the remoteApproval/shell.ts wiring, per-spec press fields, a model-input injection case, and the unmirrored-card wrapper branch.
+- F-007 (minor, outside slice-02): two `setTimeout(10)` sleeps in mirror-undelivered.test.ts.
+- F-008 (info): concurrent replay is not tested.
+
+Not read: slices/slice-02.diff in full, review-tty-refusal.test.ts, the contents of complete-head-gate.test.ts, the remote tests of operator-confirm-other.ts and src/tui/operator-confirmations.test.ts; F-003, F-004 and F-006 are marked lower confidence for that reason. No commands were run.
+
+graph_context: unavailable (graphify-out/graph.json was not consulted; verification was by direct reads and keryx ctx rg).
+
+Routing audit: graph_used: no (not-relevant, test-only review with direct reads); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no (two reads went through the `keryx:raw` marker for a schema re-check and a sleep-site quote).

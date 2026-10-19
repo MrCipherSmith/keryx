@@ -1,0 +1,62 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "reviewer": "review-logic",
+  "slice": "slice-05",
+  "slices": ["slice-05"],
+  "slice_kind": "second-look",
+  "status": "DONE",
+  "findings": [],
+  "prior_dispositions": [],
+  "notes": "No new finding. Slice-05 holds docs, two JSON schemas and package.json; every behavioural claim checked against source at head 0f980c407 holds. No prior_findings entry is re-reported (F5-08 on missing docs for the dispositions input stays open as the ledger has it)."
+}
+
+## Logic Review
+
+### Review Scope
+- Branch: `docs/flow-helyx-operator-confirm`
+- Merge-base: `062aa9c36484e7b7f6b8a1dd6140671330646e66`, head `0f980c4078eb937fcb0806fe5a25e7235bf34465`
+- Scope mode: diff, round r06, slice-05 only (second look, unchanged since r05): TM-04, cli-reference, commands-by-task, autonomous-review and review-with-a-record guides, limitations, flow-state and managed-review-package schemas, package.json.
+- Spec compliance gate: skipped (no issue URL; the flow ACs were read by other slices).
+
+### Summary
+The slice is documentation and schema text. I checked each statement a reader would act on against the code, and each one matches. The two schema additions agree with the writers. Nothing in the slice is defective.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 0  |  info: 0
+
+### Claims verified against source
+- Token rules (TM-04 6a, cli-reference, guides): `src/commands/operator-confirm-tools.ts:198-221`. The token is deleted at :206 before the user-id and age checks, so "each refusal leaves the token spent" holds. `allowed === undefined || !allowed.includes(pressedBy)` refuses a binding with no ids ("a binding with none refuses every remote answer"). `REMOTE_CARD_TTL_MS = 60 * 60 * 1000` (:117) matches "one hour". `pressedBy`/`pressedAt` are set only when `remote` (:227), so "a card answered in the shell has neither field" holds.
+- Terminal checks in TM-04 section 8 and cli-reference: `src/commands/review.ts:4556-4571` checks a terminal for `--waive-coverage` and `--waive`; `runComplete` has no terminal check otherwise; `estimate --confirm` checks one (:3402-3405). The statement "plain `review complete` has no TTY check" is accurate.
+- "Nineteen decisions": `OPERATOR_CONFIRM_TOOL_NAMES` in `src/trigger/unattended.ts:63-83` has 19 names, and unattended runs are refused all of them by name (:86-88), which backs TM-04 section 7 and the autonomous-review guide ("not given these tools").
+- Schema `managed-review-package.schema.json` `readiness_waivers.items` (additionalProperties false): the added `confirmedVia` enum `tui-card|remote-card`, `pressedBy` integer and `pressedAt` string equal `ReadinessWaiver = {item, operator_quote, time, confirmedVia?} & CardPress` (`src/review/types.ts:89-102`) and the `waiveReadiness` writer (`src/review/readiness.ts:577`). `validateManagedReviewManifest` runs this schema (managed.ts:1081-1086), so a card-written waiver would have been rejected before this change and is accepted now. No other manifest field carries the press fields (coverage waiver, plan confirmation, premise answer and completion-confirmation live in their own files, not under this schema).
+- Schema `flow-state.schema.json` `flowSignature.confirmation`: `pressedBy` integer and `pressedAt` string are added inside an object with `additionalProperties: true`; `confirm-token.ts:73-76,120` writes the same names and types.
+- package.json: valid JSON, version 0.3.124.
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected.
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected.
+
+### Suggested Patches
+None.
+
+### Routing audit
+graph_used: no (not-relevant, doc slice, direct source reads); wiki_used: no (not-relevant); ctx_used: yes (`keryx ctx rg`); raw_rg_used: no. Targeted `grep`/`git show` of single files used with a stated raw reason.

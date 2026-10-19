@@ -1,0 +1,146 @@
+STATUS: DONE_WITH_CONCERNS
+
+review-testing-practices, wave 4, slice-05 only (PR 1052, flow 464, head b1c6da0e6992e4df473bae6b2fde78bc94d28776, base 062aa9c36484e7b7f6b8a1dd6140671330646e66). Read-only pass: the mutation pass did not run (allowed_tools = read-only), and no test was executed by me, so every "this test would not fail" statement below is from reading the test and the code, not from a run. mutant_candidates are listed for the orchestrator.
+
+graph_context: unavailable (no graphify-out/graph.json consulted; navigation done with `keryx ctx rg` and file reads, every finding verified in code).
+
+Slice content: help-groups.ts and unattended.ts (copy and roster), approval-mirror.ts (onUndelivered), decisions-surface.ts / remote-control-surface.ts (optional confirmation-lines options), the new operator-confirmations.ts, the tui-shell.ts wiring, and one test file, src/tui/operator-confirmations.test.ts (new). Good points first: the new unit test file is colocated, drives the clock through an injected `now` (no timers, no sleeps, no network), asserts public output strings and public state, covers the TTL boundary on both sides (`<=` at exactly TTL, expired at TTL+1), the answered-card cap, undelivered idempotence, and the five outcomes of `settle`. The roster test in operator-confirm-rosters.test.ts (other slice) keeps unattended.ts honest. No fixed sleeps or real-network use in this slice's test.
+
+The concerns are about what the tests do not reach: the one place where the Telegram user id becomes the durable `pressedBy`/`pressedAt` record, and the three option-threading seams, are all inside tui-shell.ts / surface wiring with no test.
+
+Findings (D-12 items already filed in the brief were not re-filed):
+
+### [F-001] The shell hop that turns the pressed Telegram user into `pressedBy`/`pressedAt`, and the card-log orchestration around the race, have no test
+
+- Severity: major
+- File: src/tui/tui-shell.ts:572 (remoteApproval), 6100-6148 (mirrorApprovalToTopic card branches), 6088
+- Problem: `remoteApproval(fingerprint, fromId)` is the only producer of `{ via: "remote", pressedBy, pressedAt }` on the ApprovalResponse, and `mirrorApprovalToTopic` is the only place that calls `operatorCards.ask/answer/markUndelivered/settle` and `io.onSystem` for an undelivered card. Both are closure-private or module-private in tui-shell.ts and nothing in the test suite exercises them: `keryx ctx rg 'remoteApproval|operatorCards|markUndelivered|onUndelivered' --glob '*.test.ts' src` finds only operator-confirmations.test.ts (the log class in isolation) and mirror-undelivered.test.ts (raceApproval with a hand-written callback, plus `withMirrorNote`). The tui-shell.test.ts source-string test at line 2963-2969 still passes unchanged and pins none of the new branches. The upstream hops are tested (shell-bridge.test.ts:617-621 pins `mapApprovalAnswer` keeping `fromId`; operator-confirm-tools.test.ts feeds `{ via: "remote", pressedBy }` by hand), so the one link nobody tests is `answer.fromId -> remoteApproval -> ApprovalResponse`.
+- Why it matters: the PR's claim is that the durable record says who pressed. If the shell passed `undefined` instead of `outcome.answer.fromId`, dropped `pressedAt`, or took the `unmirrored` branch for a delivered card, every test stays green and the record is silently empty or wrong. The same holds for the card log: a `finally` that stops calling `settle` leaves a card "waiting" in the sidebar forever, and no test notices. This is the sibling of the D-12 gap (consumers asserted for 4 of 9 specs) one hop earlier, where the value is produced.
+- Fix: make the seam testable instead of pinning source text. Move `remoteApproval` (take a `now: () => Date` default) and the card-lifecycle code into an exported helper, for example `runMirroredCard({ log, bridge, tool, meta, race: raceApproval, dock, topic, aborted })` in src/tui/approval-mirror.ts or operator-confirmations.ts, and test it with the real `OperatorConfirmationLog` and a fake topic: (1) topic allow with fromId 9 and a fingerprint returns `{ approved: true, fingerprint, via: "remote", pressedBy: 9, pressedAt: <injected ISO> }` and the log entry is `telegram`/`pressedBy: 9`; (2) a topic deny without fromId returns false and logs `yes:false`; (3) a topic that answers `undelivered: true` calls `markUndelivered` so `log.waiting()` is empty and `io.onSystem` receives the "Telegram mirror not delivered" line; (4) `mirrorUndeliveredNote` defined takes the unmirrored branch, asks the dock with the note inside the card, and logs `shell` or, on an aborted turn, `withdrawn`; (5) a throwing race leaves the card `withdrawn` (the `outcome === undefined` path). If extraction is out of scope, the minimum is a tui-shell.test.ts source-string pin of `remoteApproval(meta.fingerprint, outcome.answer.fromId)` and `operatorCards.settle(cardId`, but that is weaker.
+- Evidence: tui-shell.ts:6147 `return meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, outcome.answer.fromId) : true;`; tui-shell.ts:572-574 `remoteApproval` uses `new Date().toISOString()` directly, so even a closure-level test could not pin `pressedAt`; search for `remoteApproval|operatorCards` in `*.test.ts` returns no tui-shell test.
+- Confidence: high (that no test reaches it); medium on severity.
+
+### [F-002] The option-threading seams for the cards (sidebar count, status tab, /decisions modal) are untested; the tests cover only the pure formatters
+
+- Severity: minor
+- File: src/tui/operator-confirmations.test.ts:129-165 (the /remote-control and /decisions tests), src/tui/decisions-surface.ts:450 and 621, src/tui/remote-control-surface.ts:262 and 453, src/tui/tui-shell.ts:4584, 4632, 7355
+- Problem: the sidebar test calls `projectRemoteRow(..., 2)` directly, the status test calls `formatRemoteStatusLines(status, undefined, lines)` directly, and the modal test calls `withConfirmationLines` and then `presentDecisions` with prebuilt text. None goes through `presentRemoteControl({ getConfirmationLines })`, the sidebar's `getWaitingCards`, `openDecisions({ confirmationLines })` or the decisions sidebar's `openWith` that forwards `confirmationLines`. Each of those one-line forwards (`options.getConfirmationLines?.()` at remote-control-surface.ts:262, `options.getWaitingCards?.() ?? 0` at 453, `confirmationLines?.() ?? []` at decisions-surface.ts:450, the spread at 621) can be deleted and every test here still passes.
+- Why it matters: AC6 is "the cards show where the operator already looks". The three surfaces are exactly what the forwards feed; the formatters are right in isolation and the feature still shows nothing if a forward is lost. decisions-surface.test.ts and remote-control-surface.test.ts already have harnesses for these presenters (test seams `count`, `backfilled`, `interval`), so the cost is small.
+- Fix: in decisions-surface.test.ts, call `openDecisions` with a fake `openModal`-compatible host and `confirmationLines: () => ["Operator confirmations (Telegram cards)", "  waiting  X"]` and assert the painted text contains it, and assert `openDecisionsArms` does not. In remote-control-surface.test.ts, call `presentRemoteControl` with `getConfirmationLines` and `createRemotePanel`'s row with `getWaitingCards: () => 2` and assert the rendered row/lines contain "2 cards waiting" and the card heading; add one case where the callback changes after open and the `subscribeChange` repaint shows it.
+- Evidence: forwards at the cited lines; the three tests named above call only `projectRemoteRow`, `formatRemoteStatusLines`, `withConfirmationLines` and `presentDecisions`.
+- Confidence: high.
+
+### [F-003] `raceApproval`: the `if (settled) return` guard ahead of `onUndelivered` is not pinned by any test
+
+- Severity: minor
+- File: src/tui/approval-mirror.ts:51-52 (tests: src/remote/mirror-undelivered.test.ts:94-132, src/tui/approval-mirror.test.ts unchanged)
+- Problem: the change put `onUndelivered` after the `settled` guard on purpose, so a topic leg that comes back "undelivered" after the dock already answered does not print "◇ Telegram mirror not delivered ... Answer it here." over a card that is already answered. Both new raceApproval tests resolve the topic leg before the dock returns (`topic: async () => undelivered` while the dock waits 10 ms); no test makes the dock win first and then lets an undelivered answer arrive. Moving the `onUndelivered` line above the guard would pass both.
+- Why it matters: the spurious system line and a `markUndelivered` call on an answered card are exactly what the ordering prevents; `markUndelivered` itself ignores answered entries, so the only visible symptom is a misleading transcript line, which is why nothing else would catch it.
+- Fix: add a test in approval-mirror.test.ts where the dock resolves first and the topic promise is resolved by hand afterwards with `{ decision: "deny", always: false, undelivered: true }`, then `await` a microtask flush on the already-returned `raceApproval` promise and assert `told === 0`. Drive the ordering with a deferred promise, not a timer (the fixed 10 ms timers in the existing tests are already filed).
+- Evidence: approval-mirror.ts:51 `if (settled) return;` then 52 `if (answer.undelivered === true) options.onUndelivered?.();`.
+- Confidence: high.
+
+### [F-004] Test placement: `withMirrorNote` drags the whole shell module into a remote-layer test, and the surface assertions sit in a module-named catch-all file
+
+- Severity: info
+- File: src/remote/mirror-undelivered.test.ts:10; src/tui/operator-confirmations.test.ts:129-165
+- Problem: `mirror-undelivered.test.ts` imports `withMirrorNote` from `../tui/tui-shell` (a 476 KB module with the OpenTUI surface) to test a three-line pure array helper, so the remote-layer unit test depends on loading the whole shell and a shell refactor can break it. Separately, operator-confirmations.test.ts holds tests of `formatRemoteStatusLines`, `projectRemoteRow`, `presentDecisions`, help-groups and agent-commands, which belong beside remote-control-surface.test.ts, decisions-surface.test.ts and help-groups tests where a person changing those modules would look.
+- Why it matters: discoverability and load cost only; no behaviour risk.
+- Fix: move `withMirrorNote` next to `mirrorUndeliveredNote` (src/remote/shell-bridge.ts) or into approval-mirror.ts and import it from there; when F-002 is done, put the surface cases in the two surface test files and keep operator-confirmations.test.ts for the log and the line formatters.
+- Evidence: import line quoted above; `projectRemoteRow`/`formatRemoteStatusLines` imports in operator-confirmations.test.ts:11.
+- Confidence: medium.
+
+Not flagged (checked): fixed sleeps or real network in operator-confirmations.test.ts (none; the clock is injected); screenshot or coverage gates (none); help/command copy assertions use `toContain(tool)` only, which is the right strength for copy; the `expect(changes).toBe(16)` count is an implementation detail but cheap and stable, left alone.
+
+Mutant candidates (not run):
+1. src/tui/tui-shell.ts:6147 and 6088: replace `outcome.answer.fromId` / `answer.fromId` with `undefined` in the `remoteApproval(...)` call, or drop `pressedAt` in remoteApproval (572-574). Survives today (F-001).
+2. src/tui/tui-shell.ts:6138: delete the `operatorCards.settle(...)` line in the `finally`. Survives (F-001).
+3. src/tui/tui-shell.ts:6128: delete `operatorCards.markUndelivered(cardId)`. Survives (F-001).
+4. src/tui/tui-shell.ts:6100: drop `&& !isUserPromptApprovalCard(tool)`. Survives (F-001).
+5. src/tui/approval-mirror.ts:51-52: swap the `settled` guard and the `onUndelivered` call. Survives (F-003).
+6. src/tui/decisions-surface.ts:450: replace `confirmationLines?.() ?? []` with `[]`; and :621 remove the spread. Survive (F-002).
+7. src/tui/remote-control-surface.ts:262 drop `options.getConfirmationLines?.()`; :453 replace `options.getWaitingCards?.() ?? 0` with `0`. Survive (F-002).
+8. src/tui/operator-confirmations.ts `waiting()`: `<=` to `<` in `now - item.askedAt <= REMOTE_CARD_TTL_MS`. Killed by the TTL boundary test.
+9. src/tui/operator-confirmations.ts `settle`: `outcome.result !== false` to `=== true`, and `turnAborted ? "withdrawn" : "shell"` inverted. Killed by the settle test.
+10. src/tui/operator-confirmations.ts `answer`: `ANSWERED_CARDS_KEPT` off by one. Killed by the cap test.
+
+```json
+REVIEW_RESULT
+{
+  "reviewer": "review-testing-practices",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "slice-05 adds a well-built unit test for the new confirmation log and its formatters (colocated, injected clock, no sleeps, no network, public-output assertions), but the shell-side hop that produces pressedBy/pressedAt and drives the card log, and the three option-threading seams into the sidebar, status tab and /decisions modal, are covered by no test. Mutation pass not run (read-only); no test executed.",
+  "stats": { "findings": 4, "blocker": 0, "major": 1, "minor": 2, "info": 1, "mutation_pass": "not_run_read_only", "tests_executed": false },
+  "slices": ["slice-05"],
+  "graph_context": "unavailable: graphify-out/graph.json not consulted; navigation via keryx ctx rg and file reads",
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-testing-practices",
+      "severity": "major",
+      "file": "src/tui/tui-shell.ts",
+      "line": 6147,
+      "quote": "return meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, outcome.answer.fromId) : true;",
+      "problem": "remoteApproval (the only producer of via/pressedBy/pressedAt on the ApprovalResponse, tui-shell.ts:572) and the card-lifecycle code in mirrorApprovalToTopic (ask/answer/markUndelivered/settle and the undelivered system line, tui-shell.ts:6100-6148) are closure- or module-private and no test reaches them; operator-confirmations.test.ts tests the log class alone and mirror-undelivered.test.ts tests raceApproval with a hand-written callback.",
+      "impact": "Dropping fromId, dropping pressedAt, skipping settle in the finally, or taking the unmirrored branch for a delivered card leaves every test green, so the durable who-pressed record can be silently empty and a card can stay 'waiting' in the sidebar forever. Upstream (mapApprovalAnswer keeps fromId) and downstream (stores consume pressedBy) are tested; the hop between them is not.",
+      "suggested_fix": "Extract remoteApproval (with an injectable clock) and the card-lifecycle orchestration into an exported helper (for example runMirroredCard in src/tui/approval-mirror.ts or operator-confirmations.ts) and test it with the real OperatorConfirmationLog and a fake topic: topic allow with fromId 9 returns {approved:true,fingerprint,via:'remote',pressedBy:9,pressedAt:<injected>} and logs telegram/pressedBy 9; topic deny logs yes:false; an undelivered answer empties log.waiting() and emits the 'Telegram mirror not delivered' line; the unmirrored branch asks the dock with the note in the card and logs shell, or withdrawn on an aborted turn; a throwing race leaves the card withdrawn. Minimum if extraction is out of scope: a tui-shell.test.ts source-string pin of the remoteApproval call and the settle call.",
+      "evidence": "keryx ctx rg 'remoteApproval|operatorCards|markUndelivered|onUndelivered' --glob '*.test.ts' src returns only src/tui/operator-confirmations.test.ts and src/remote/mirror-undelivered.test.ts; tui-shell.test.ts:2963-2969 pins only the wrapper assignment and the absence of telegramTurnActive. shell-bridge.test.ts:617-621 pins mapApprovalAnswer keeping fromId; operator-confirm-tools.test.ts feeds pressedBy by hand. tui-shell.ts:572-574 uses new Date() directly.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.test.ts",
+      "line": 129,
+      "quote": "const withCards = formatRemoteStatusLines(status, undefined, confirmationLines(log.entries(), T0 + 60_000));",
+      "problem": "The sidebar, status-tab and /decisions tests call only the pure formatters (projectRemoteRow, formatRemoteStatusLines, withConfirmationLines, presentDecisions with prebuilt text). None goes through presentRemoteControl({getConfirmationLines}), the sidebar's getWaitingCards, openDecisions({confirmationLines}) or the decisions sidebar's openWith that forwards confirmationLines.",
+      "impact": "Each one-line forward (remote-control-surface.ts:262 and 453, decisions-surface.ts:450 and 621, tui-shell.ts:4584/4632/7355) can be deleted with every test still passing, so AC6 (cards visible on the surfaces the operator already uses) can break without a failing test.",
+      "suggested_fix": "In decisions-surface.test.ts call openDecisions with a fake host and confirmationLines, assert the painted text contains the heading and that openDecisionsArms does not; in remote-control-surface.test.ts call presentRemoteControl with getConfirmationLines and the panel row with getWaitingCards: () => 2, assert '2 cards waiting' and the card heading, and one subscribeChange repaint after the callback result changes.",
+      "evidence": "forwards: decisions-surface.ts:450 `confirmationLines?.() ?? []`, :621 spread of options.confirmationLines; remote-control-surface.ts:262 `options.getConfirmationLines?.()`, :453 `options.getWaitingCards?.() ?? 0`; the three cited tests import only the pure functions.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-testing-practices",
+      "severity": "minor",
+      "file": "src/tui/approval-mirror.ts",
+      "line": 51,
+      "quote": "if (settled) return;",
+      "problem": "onUndelivered is deliberately placed after the settled guard, but both new raceApproval tests (mirror-undelivered.test.ts:94-132) resolve the topic leg before the dock returns. No test lets the dock win first and then delivers an undelivered answer, so moving the onUndelivered line above the guard passes.",
+      "impact": "A late undelivered answer after the dock already settled the card would print a misleading 'Telegram mirror not delivered ... Answer it here.' line over an answered card; markUndelivered ignores answered entries, so nothing else would reveal it.",
+      "suggested_fix": "Add a test in approval-mirror.test.ts where the dock resolves first and the topic promise is then resolved by hand (deferred promise, no timer) with {decision:'deny', always:false, undelivered:true}; after the raceApproval promise resolves and a microtask flush, assert the onUndelivered counter is 0.",
+      "evidence": "approval-mirror.ts:51 `if (settled) return;`, :52 `if (answer.undelivered === true) options.onUndelivered?.();`; src/tui/approval-mirror.test.ts not touched by the PR.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-004",
+      "reviewer": "review-testing-practices",
+      "severity": "info",
+      "file": "src/remote/mirror-undelivered.test.ts",
+      "line": 10,
+      "quote": "import { withMirrorNote } from \"../tui/tui-shell\";",
+      "problem": "A remote-layer unit test imports the 476 KB shell module to test a three-line pure array helper, and the surface assertions for remote-control-surface and decisions-surface live in operator-confirmations.test.ts instead of beside those modules' own test files.",
+      "impact": "Load cost and discoverability only; a shell refactor can break an unrelated remote test.",
+      "suggested_fix": "Move withMirrorNote next to mirrorUndeliveredNote (src/remote/shell-bridge.ts) or into approval-mirror.ts and import it from there; place the surface cases from F-002 in remote-control-surface.test.ts and decisions-surface.test.ts.",
+      "evidence": "mirror-undelivered.test.ts:10; operator-confirmations.test.ts imports formatRemoteStatusLines and projectRemoteRow at line 11.",
+      "confidence": "medium"
+    }
+  ],
+  "mutant_candidates": [
+    "src/tui/tui-shell.ts:6147,6088 replace fromId argument of remoteApproval with undefined (survives today)",
+    "src/tui/tui-shell.ts:572-574 drop pressedAt from remoteApproval (survives today)",
+    "src/tui/tui-shell.ts:6138 delete operatorCards.settle in the finally (survives today)",
+    "src/tui/tui-shell.ts:6128 delete operatorCards.markUndelivered (survives today)",
+    "src/tui/tui-shell.ts:6100 drop !isUserPromptApprovalCard(tool) (survives today)",
+    "src/tui/approval-mirror.ts:51-52 swap settled guard and onUndelivered call (survives today)",
+    "src/tui/decisions-surface.ts:450 replace confirmationLines?.() ?? [] with [] and :621 remove spread (survive today)",
+    "src/tui/remote-control-surface.ts:262 drop getConfirmationLines call; :453 replace getWaitingCards?.() ?? 0 with 0 (survive today)",
+    "src/tui/operator-confirmations.ts waiting(): <= to < on the TTL comparison (expected killed by the TTL boundary test)",
+    "src/tui/operator-confirmations.ts settle(): result !== false to === true, and invert turnAborted (expected killed by the settle test)",
+    "src/tui/operator-confirmations.ts answer(): ANSWERED_CARDS_KEPT off by one (expected killed by the cap test)"
+  ]
+}
+```
+
+Routing audit: graph_used: unavailable (no graph artifact consulted); wiki_used: not-relevant; ctx_used: yes (keryx ctx rg for searches); raw_rg_used: no.

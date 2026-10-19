@@ -1,0 +1,127 @@
+{
+  "judge": "review-premise",
+  "model": "claude-sonnet-5-5",
+  "premises": [
+    {
+      "finding_id": "review-security-code-w4:F-002",
+      "verdict": "upheld",
+      "reasoning": "A double-quoted placeholder for free text still lets the shell expand $(...) and backticks. Every site is introduced by this branch, so no earlier choice exists. The CLI has no file or stdin route, and the MCP route does not apply here. No signal or practice source argues against it, and a security finding is held or upheld only."
+    },
+    {
+      "finding_id": "review-security-code-w4:F-001",
+      "verdict": "upheld",
+      "reasoning": "AC3 (.metaproject/flows/462-2026-10-18-conditional-reads/acceptance-criteria.md:20) requires the truncated task text in the last-resolve record, so persisting it is by design. But the finding's defect is the exposure: an untracked, non-ignored, 0664 file. AC3 does not settle that, and the finding's alternative fix (ignore the directory, mode 0600, shorter prefix) keeps AC3 intact. A criterion this branch introduced is not a prior choice, and a security finding is never downgraded."
+    },
+    {
+      "finding_id": "review-logic-w3:F-002",
+      "verdict": "upheld",
+      "reasoning": "AC5 says 'on a word boundary'. Keywords whose edge is a non-word character ('.css', '@apply') fail against 'styles.css' under the unconditional lookarounds at src/gdskills/reference-entries.ts:44. A conventional \\b would match 'styles.css'. The comment at :41 defines word characters for Unicode letters and digits, not for punctuation edges, so there is no sign this was chosen. The guide (apply-project-rules.md:144) says 'whole word', which a punctuation-edged keyword does not contradict."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-001",
+      "verdict": "upheld",
+      "reasoning": "The resolver falls back to the whole file on a dead anchor and keeps the entry must_read (reference-entries.ts:100-106, AC6). The proof then fails the same entry with no way for the worker to clear it (reference-proof.ts:62, 72). The fail-closed message and the test at resolved-context-check.test.ts:287 cover an anchor that disappears after resolve (drift). The finding's case is a declaration that is already stale at resolve time, which no test pins. Both fixes the finding offers are sound."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-002",
+      "verdict": "upheld",
+      "reasoning": "The exclusion of linked rules is stated in the references-check.ts:16 header and in apply-project-rules.md:258-260. But the branch introduces both statements, and neither gives a reason, so this is a documented limit and not a ratified choice. The resolver reads linked rules, so check and resolver disagree about the same project. AC15 also promises the hint after 'import --rules', and --link is a primary import mode."
+    },
+    {
+      "finding_id": "review-security-code-w3:F-001",
+      "verdict": "upheld",
+      "reasoning": "HEADING (references-section.ts:37) and stripClosingHashes (:50) backtrack quadratically on a long run of spaces. The input is a committed document, so a contributor controls it, and the size cap is 256 KiB. Nothing in the code or docs shows a deliberate trade-off, and a linear match is the accepted practice (CWE-1333 class). The suggested fix is sound, and a security finding is never downgraded."
+    },
+    {
+      "finding_id": "review-security-code-w5:F-001",
+      "verdict": "upheld",
+      "reasoning": "The repo's own rule for attacker-controlled committed-file strings is terminalSafe / terminalSafeBlock (src/lib/terminal-safe.ts header; used by external-diff-modal.ts, research-sync-panel.ts, tui-shell.ts). project-context-inspector.ts paint() does not use it, and the pre-existing Last resolve tab skipping it is an omission, not a choice. The reviewer admits the final terminal byte stream was not captured; that is the verifier's matter. The fix is one sink and consistent with the siblings."
+    },
+    {
+      "finding_id": "review-clean-code-w1:F-004",
+      "verdict": "upheld",
+      "reasoning": "The thresholds sit in code (reference-proof.ts:14-16) while the prose restates them in eight places, and drift has already happened once at one site. Each bundled skill is read on its own, so some repetition is expected, but that is a reason to weigh the fix and not a source against the premise. No intent signal or practice source argues against it."
+    },
+    {
+      "finding_id": "review-clean-code-w1:F-003",
+      "verdict": "upheld",
+      "reasoning": "A general rule follows an inserted special case in the same bullet, which is a readability cost. There is no intent signal and no source against it."
+    },
+    {
+      "finding_id": "review-core-boundaries-w1:F-002",
+      "verdict": "upheld",
+      "reasoning": "docs/docs/cli-reference.md:3545 lists `anchor` after 'optionally' and leaves out that description is required. The loader requires description (AC1), so the doc misleads."
+    },
+    {
+      "finding_id": "review-architecture-w1:F-001",
+      "verdict": "upheld",
+      "reasoning": "live-run.md:39 and :261 say two words. The shipped threshold and AC10 say three, and the runbook's own expected output says '3 required'. The runbook contradicts itself."
+    },
+    {
+      "finding_id": "review-style-w1:F-002",
+      "verdict": "upheld",
+      "reasoning": "live-run.md uses 'missing', 'anchor not found' and 'oversized' where the check emits document-missing, anchor-not-found and document-too-large. 'Риск 6' does not exist, since the PRD risk table has five rows (README.md:94 is one of them)."
+    },
+    {
+      "finding_id": "review-architecture-w1:F-002",
+      "verdict": "upheld",
+      "reasoning": "README.md:98 calls the live run AC18, but AC18 is the end-to-end test and the live run is AC20 (acceptance-criteria.md:35, :37). The other identifier mismatches in the finding repeat the F-002 naming drift."
+    },
+    {
+      "finding_id": "review-style-w1:F-004",
+      "verdict": "upheld",
+      "reasoning": "README.md:3 and description.md:3 say DRAFT / not frozen, but the criteria were frozen in 36ecf5a45. The finding already notes that the acceptance-criteria.md line must change only through `flow ac update`."
+    },
+    {
+      "finding_id": "review-clean-code-w2:F-004",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "src/gdskills/context-resolver.test.ts:302-303",
+          "says": "the sibling size-limit test spells the same boundary as literals, \"x\".repeat(262145) and \"x\".repeat(262144); blame 8d73346bd predates the base 1658f77d3, so it is an existing convention"
+        }
+      ],
+      "reasoning": "The finding itself notes the habit predates the PR. Importing CONTRACT_MAX_BYTES in only one test would make that test differ from the sibling testing the same limit, which is evidence against the premise (consistency question). A literal boundary in a test also fails loudly when the constant moves.",
+      "question": "The size-limit test hard-codes 262145 like the existing sibling test at context-resolver.test.ts:302-303. Keep the literal, or import CONTRACT_MAX_BYTES here (and then in the sibling)?",
+      "options": [
+        "dismiss - keep the literals, as the sibling test does",
+        "uphold - use CONTRACT_MAX_BYTES + 1"
+      ]
+    },
+    {
+      "finding_id": "review-style-w2:F-002",
+      "verdict": "upheld",
+      "reasoning": "A ternary inside a ternary inside a spread in a fixture used by every test in the file is a plain readability cost. No intent signal or source argues against it."
+    },
+    {
+      "finding_id": "review-testing-practices-w1:F-001",
+      "verdict": "upheld",
+      "reasoning": "A test gap stays as reported unless intent or practice shrinks it. The fixture's insertion order equals the sorted order, so removing .sort leaves the test green, and no signal argues against the finding."
+    },
+    {
+      "finding_id": "review-testing-practices-w1:F-002",
+      "verdict": "upheld",
+      "reasoning": "The thresholds (20, 4, 262144) are pinned only far from the boundary, and AC14 states them as numbers. No signal argues against it."
+    },
+    {
+      "finding_id": "review-testing-practices-w1:F-003",
+      "verdict": "upheld",
+      "reasoning": "The reviewer's claim, flagged as low confidence, is that the test name overstates its coverage because ../outside.md does not exist and is excluded as 'missing'. Nothing I read contradicts this, and a minor is upheld or challenged only."
+    },
+    {
+      "finding_id": "review-architecture-w2:F-002",
+      "verdict": "upheld",
+      "reasoning": "The sibling help in skills.ts interpolates TASK_TEXT_MAX_CHARS, so interpolating the exported constants matches the existing convention in the same slice. No signal argues against it."
+    },
+    {
+      "finding_id": "review-architecture-w2:F-001",
+      "verdict": "upheld",
+      "reasoning": "src/commands/skills.ts:1879 (printSkillsHelp) still omits --task-text, while the resolve-context USAGE and cli-reference.md:3452 carry it. The group help is the one left behind, with no sign it was deliberately abbreviated."
+    },
+    {
+      "finding_id": "review-highload-w2:F-001",
+      "verdict": "upheld",
+      "reasoning": "The same double-quoted --task-text template as review-security-code-w4:F-002, so the same reasoning applies and no signal argues against it. A minor is not downgraded. The two findings cover one class of defect."
+    }
+  ]
+}

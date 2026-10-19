@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "repo": "MrCipherSmith/keryx",
+  "number": 1052,
+  "headSha": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264",
+  "collectedAt": "2026-10-19T02:45:01.306Z",
+  "round": 1,
+  "intent": {
+    "round": 1,
+    "title": "Operator review confirmations answered in Telegram (flow 464)",
+    "body": "## Summary\n- A remote-card answer now records `pressedBy` and `pressedAt`; it is accepted only from an allowed user id, once, for one question, within 1 hour.\n- New `review_complete` card (SHA, evidence level, waivers); `review_confirm_plan` and `review_decide_premise` answer through the card too.\n- The card says when the Telegram mirror was not delivered; the terminal commands stay as fallback.\n- TUI: pending and answered operator cards in the remote status tab, sidebar and `/decisions`.\n- Docs: TM-04 section, review guides, cli-reference, review skills. `flow ac confirm` is unchanged (operator decision).\n\nFlow 464, criteria AC1-AC10 (AC9 is the owner's live check from Telegram, AC10 the release).\n\n## Test plan\n- [ ] CI green\n- [ ] `bun test src/commands/operator-confirm-tools.test.ts src/commands/operator-confirm-review-tools.test.ts src/remote/ src/tui/`\n- [ ] Owner live check from the Telegram topic"
+  },
+  "ci": {
+    "state": "pending",
+    "checks": [
+      {
+        "name": "deploy to GitHub Pages",
+        "state": "skipped"
+      },
+      {
+        "name": "standard-pr",
+        "state": "passing"
+      },
+      {
+        "name": "macOS real-host legs — OS sandbox + TUI pty launch",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (darwin-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "wiki validate (gate) + freshness (report)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (darwin-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (cancel-resume)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (terminal)",
+        "state": "passing"
+      },
+      {
+        "name": "dependency-audit",
+        "state": "passing"
+      },
+      {
+        "name": "metrics-contract",
+        "state": "passing"
+      },
+      {
+        "name": "standard-baseline",
+        "state": "passing"
+      },
+      {
+        "name": "linux sandbox (bubblewrap) live smoke",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (runtime)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (streaming)",
+        "state": "passing"
+      },
+      {
+        "name": "AC8 full suite (5000 ms, preload)",
+        "state": "pending"
+      },
+      {
+        "name": "typecheck-and-tests",
+        "state": "pending"
+      },
+      {
+        "name": "vscode-extension",
+        "state": "passing"
+      },
+      {
+        "name": "mkdocs build --strict",
+        "state": "passing"
+      }
+    ],
+    "failing": []
+  },
+  "backendPins": [],
+  "comments": []
+}

@@ -1,0 +1,67 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Slice-06 (second look, 81546 bytes) read in full, with the changed files read at head 5382b56. Surface: the output-schema additions, the resolver wiring (task text, declared references, cap handling, last.json), reference-entries.ts, reference-proof.ts, references-check.ts, references-config.ts, references-section.ts, resolved-context-check.ts, the import-rules hint and project-context-status. No shell, eval, dynamic require or network call; no secret or task text is persisted (last.json keeps taskTextLength and taskTextTruncated only); declared and cited document reads go through lstat, realpath and isPathInside before readFile, with a size cap; the heading scan is a hand-written linear parser. No blocker or major. Two new findings: F-001 (minor) the declared globs of references.json reach globToRegExp and expandBraces with no bound, so a brace or double-star glob of a few dozen tokens hangs `skills resolve-context` (measured: 18 brace groups took 1.15 s, ten `**a` segments against a 64-character path did not finish in 100 s); F-002 (info) the proof of reading is checked against a resolved file the dispatching side supplies and nothing re-derives it from references.json, so the obligation is as strong as the caller's honesty. Prior security findings that still apply unchanged are cited, not re-filed: review-security-code-w1:F-101 (task-text apostrophe escape rule only in flow-orchestrator), w1:F-102 (linked-rule scan skips the sha256 gate, references-check.ts:99), w3:F-002 (heading and other repo text with control characters reaches warnings and the check report; the declared path, anchor and description echoed in resolver warnings and `check` messages are further sources of the same class), w1:F-003 and w3:F-003 (reference-proof.ts currentSection and resolved-context-check.ts currentSha join entry.path from the resolved JSON without containment), w3:F-001 (docs say a linked rule is not scanned), w4:F-003 (a --task-text value starting with -- is dropped by optionValue).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/lib/glob.ts",
+      "line": null,
+      "quote": "for (const expanded of expandBraces(`${head}${alternative}${tail}`)) out.push(expanded);",
+      "problem": "The new `when.globs` of .metaproject/rules/project/references.json are matched in promotionReason (reference-entries.ts) through matchesAnyGlobWithBraces. expandBraces multiplies the alternatives of every brace group (n groups of two give 2^n globs), and globToRegExp turns each `*` into `[^/]*` and each `**` into `.*`, so a glob with several of them backtracks polynomially against a path. parseReferences (references-config.ts) accepts any non-empty glob string: no limit on length, on the number of globs or entries, or on brace groups. The matching code is shared with rule frontmatter globs, but references.json is a new, equally repo-controlled input to the same code on every `skills resolve-context`.",
+      "impact": "Trigger: references.json (committed to the repo, or changed in a PR) contains a glob such as `{a,b}{a,b}...{a,b}x` (about 40 groups, 200 bytes) or `**a**a**a**a**a**a**a**a**a**a**b`, and anyone or any agent runs `keryx skills resolve-context --files <any file>` on that checkout (the orchestrator does it before every implement, test and review dispatch). Outcome: the process pins a CPU and grows memory without end; the resolve never returns, so the dispatch and the flow stall. Measured here at head with bun: `{a,b}` x 18 + `x` took 1150 ms (doubling per group), and `**a` x 10 + `b` against `src/` + 60 `a` + `.css` did not finish within 100 s. Preconditions: write access to the rules folder of the project being resolved, which is the same trust level as the rest of the rules, so this is a local availability problem, not a privilege boundary; it matters most where a tool resolves a contributor's checkout.",
+      "evidence": "Probe run read-only in the scratchpad against src/lib/glob.ts at head: braces18 = 1150 ms; starstar10 killed by the 100 s timeout. src/gdskills/references-config.ts stringList() checks only that each item is a non-empty string; reference-entries.ts promotionReason() calls `matchesAnyGlobWithBraces(file, [candidate])` for every task file.",
+      "suggested_fix": "Bound the input where it enters: in references-config.ts reject a glob longer than a fixed limit (for example 256 characters), more than a few brace groups, and more than a few `*` / `**` segments, and cap entries per file; in expandBraces stop at a fixed number of expansions (for example 64) and report the glob as too broad. Cap the same way in the frontmatter glob path so the two stay one rule. Add a test that a 40-group brace glob is rejected by `parseReferences` in under a second.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "dedupe_key": "glob-unbounded-expansion-references"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/gdskills/resolved-context-check.ts",
+      "line": null,
+      "quote": "if (isPromoted(entry)) misses.push(...(await proofMisses(input.projectRoot, entry, items)));",
+      "problem": "Whether an entry owes the proof is read from the resolved JSON itself (`tier === \"must_read\"` and `reason` starting with `condition:`). checkResolvedContext does not re-run the resolver against references.json and the task files, and the task text is deliberately not kept (last.json stores a length only), so nothing can recompute which references the task should have promoted. `flow task done` also skips the whole check when `--result` and `--resolved` are both omitted and enforcement is not `block`.",
+      "impact": "No attack vector in the changed code: the resolved file is written by the dispatching side, the same trust as flow 461's hash pin, which this change inherits. It is recorded because the new obligation is the first one that depends on a keyword in the task text, which cannot be audited afterwards: a resolved file whose `reason` was edited from `condition:keyword:x` to `declared`, and tier to `on_demand`, passes with no proof and no miss. Info only; what would settle it is whether the orchestrator or the worker can write the resolved file the validator is given.",
+      "suggested_fix": "If the resolved file can be written by the worker, have `flow task done` re-resolve with the glob-only part of each condition (the task files are known) and compare tiers, and keep the keyword case advisory. Otherwise state in docs/requirements/keryx-conditional-reads/README.md that the proof is only as strong as the integrity of resolved/*.json.",
+      "evidence": "src/gdskills/resolved-context-check.ts checkResolvedContext() loops over `input.resolved.entries` and trusts `entry.tier` and `entry.reason`; src/flow/task-project-context.ts:40-49 returns early without a check when no result and resolved file is given and enforcement is not block; src/gdskills/context-resolver.ts recordLastResolve keeps taskTextLength only.",
+      "confidence": "low",
+      "reviewer": "review-security-code",
+      "dedupe_key": "resolved-file-trust-promotion-reason",
+      "publication": "question"
+    }
+  ],
+  "slices": [
+    {
+      "id": "slice-06",
+      "coverage": "Whole diff read in parts; context-resolver.ts, reference-entries.ts, references-section.ts, references-check.ts, glob.ts and task-project-context.ts read at head; glob cost probed read-only.",
+      "status": "DONE"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+## Security Review (round r03, wave 4, slice-06, second look)
+
+Scope: PR #1048, head 5382b56abf17d23db61108554f3c6c68c8e3c036, base d6267d4a5099f39b74e86a71e5c8f61ca47aa63d, delta over r02. Slice-06 only.
+
+Checked and clean for the changed code:
+- Injection: no exec, spawn, eval, SQL or template rendering. Keyword matching builds a RegExp from the declared keyword after escapeRegExp, with lookarounds that are linear; the task text is cut to 4000 characters before it is matched.
+- Path traversal: declared documents (reference-entries.ts readDeclaredFile) go lstat, realpath, isPathInside, isFile and a size cap before readFile; references-config.ts rejects absolute and escaping paths; cited paths are normalised and a spelling that cannot be normalised is refused by name in collectContracts.
+- ReDoS in the parser: the heading scan is hand-written and linear; slugifyHeading and distinctWords use single-pass character classes.
+- Secrets and logging: no secret handling added; last.json no longer holds the task text.
+- Cryptography: sha256 only, for whole-file pinning.
+- Authorization, CSRF, open redirect: not applicable, local CLI with no new permission surface.
+
+Still open from earlier rounds, not re-filed: review-security-code-w1:F-101, w1:F-102, w1:F-003, w3:F-001, w3:F-002, w3:F-003, w4:F-003.
+
+Read-only: no source edited, nothing committed or posted. The probe script lives in the scratchpad.
+
+routing audit: graph_used: no (not-relevant, slice is a diff read), wiki_used: no (not-relevant), ctx_used: yes, raw_rg_used: no

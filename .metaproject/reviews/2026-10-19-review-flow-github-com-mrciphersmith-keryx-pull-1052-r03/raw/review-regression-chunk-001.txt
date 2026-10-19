@@ -1,0 +1,57 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-regression",
+  "status": "DONE",
+  "chunk": "chunk-001",
+  "files_read": [
+    "src/commands/serve-digest.ts",
+    "src/tui/governance-panel.ts",
+    "src/acp/roster.ts",
+    "scripts/benchmark/run-containment.ts (imports, requestApproval site at line 272, grep of changed symbols)",
+    "scripts/benchmark/run-safety.ts (imports, grep of changed symbols)",
+    "src/trigger/unattended.ts (OPERATOR_CONFIRM_TOOL_NAMES, 19 entries)",
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/slices/slice-01.diff",
+    ".metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/slices/slice-02.diff"
+  ],
+  "stats": {
+    "files_in_chunk": 5,
+    "files_with_regression": 0,
+    "findings": 0,
+    "notes": "All five files are hop 2 in the blast radius, reached through src/flow/types.ts (serve-digest, governance-panel, roster) and src/review/completion-gate.ts (run-containment, run-safety). The radius was cut by blast_radius_max_files=40 (17 dropped, covered by chunks.json); this chunk is 5 of those 17. Not the whole dropped set."
+  },
+  "findings": [],
+  "per_file": [
+    {
+      "file": "src/commands/serve-digest.ts",
+      "verdict": "no break",
+      "evidence": "Uses only listProjects, RemoteHub/hubSink, digest-delivery/ticker and runTriggerOnce. Delta changed none of these; the only flow/types.ts change is two optional fields pressedBy?/pressedAt? on SignatureConfirmation, which this file never reads or constructs."
+    },
+    {
+      "file": "src/tui/governance-panel.ts",
+      "verdict": "no break",
+      "evidence": "Depends on governance/service, theme and theme-text only. The flow/types.ts edge is type-only and the added fields are optional, so no construction or exhaustive consumer here is affected."
+    },
+    {
+      "file": "src/acp/roster.ts",
+      "verdict": "no break",
+      "evidence": "buildAcpSessionTools composes builtinReadOnlyTools, buildProjectTools(...).offered, shellExecTool, applyPatchTool and client MCP tools; it never imports operator-confirm-tools or OPERATOR_CONFIRM_TOOL_NAMES. The invariant 'ACP roster offers no operator card tool' still holds at head: bun test src/commands/operator-confirm-rosters.test.ts gives 6 pass, 0 fail, and OPERATOR_CONFIRM_TOOL_NAMES in src/trigger/unattended.ts has 19 entries, matching the updated test count of 19."
+    },
+    {
+      "file": "scripts/benchmark/run-containment.ts",
+      "verdict": "no break",
+      "evidence": "Imports runAgentTurn/AgentDeps/AgentIO from src/commands/agent.ts. The delta there is a comment-only edit on ApprovalResponse.pressedAt; the type is unchanged. Line 272 'requestApproval: async () => true' still satisfies Promise<ApprovalResponse> (boolean arm). It does not import completion-gate; the edge is transitive through agent.ts. The completion-gate nudge text (nextStep) is not read by this script."
+    },
+    {
+      "file": "scripts/benchmark/run-safety.ts",
+      "verdict": "no break",
+      "evidence": "Same import surface as run-containment (agent.ts, metrics, harness tools). The only 'completion-gate' occurrences are comments and log labels at lines 8, 396 and 446 ('# completion-gate honesty'); the script uses its own fixed check tool and does not match the changed nudge text or the 'keryx review complete' wording."
+    }
+  ],
+  "limits": [
+    "The blast radius is a code graph with no runtime edges: a string-keyed or file-handoff consumer of the 'keryx review complete' nudge text, or of the remote shell-bridge answer shape, would not appear in it. This chunk covers only the five files given.",
+    "Non-code changes in the delta (SKILL.md, SKILL.detail.md, docs, flow-state.schema.json) have an empty graph radius; this chunk could not say anything about their consumers."
+  ]
+}
+```

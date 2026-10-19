@@ -1,0 +1,64 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Slice-04 (TUI side of flow 464: approval-mirror, decisions-surface, operator-confirmations, remote-control-surface, tui-shell, operator-confirmations.test) is small, well named and mostly pure functions. Three minor Clean Code defects: a JSDoc block detached from the function it documents, a card-log lifecycle in the mirror wrapper that is duplicated and not exception-safe, and duplicated age/clock formatters. No blocker or major.",
+  "slices": [{ "id": "slice-04", "status": "DONE" }],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "/** Flow 464: an approval answered in the topic, carrying the pressing Telegram user and the press time. */",
+      "problem": "Clean Code C1 (stale or misplaced comment). `remoteApproval` was inserted between the long Flow 173 F-003 JSDoc block (src/tui/tui-shell.ts:571-581, which describes the side-worker tools predicate) and `isToolAvailableToSideWorker`, the function that block documents. The old block is now attached to `remoteApproval` by position, and the function it describes has only the Flow 464 line above its neighbour.",
+      "evidence": "Head of src/tui/tui-shell.ts lines 571-589: the `Flow 173 F-003 (P2 conversion, flow 277): the side-worker tools filter's own predicate` block closes at 581, `/** Flow 464 ... */ function remoteApproval(...)` follows at 582-585, then `export function isToolAvailableToSideWorker` at 587 with no doc of its own. Editors and generated docs bind a JSDoc to the next declaration, so hover text on `isToolAvailableToSideWorker` is lost and the predicate's rationale reads as if it were about an approval helper.",
+      "impact": "Misleading documentation on a security-relevant predicate (which tools a side worker may use) and on the new helper; the next editor who moves or edits the helper will take the long comment with it.",
+      "suggested_fix": "Move `remoteApproval` (with its one-line doc) above the Flow 173 F-003 block, or below `isToolAvailableToSideWorker`, so each JSDoc sits directly on its function.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "operatorCards.answer(unmirroredId, { place: foregroundOperation.signal.aborted ? \"withdrawn\" : \"shell\", yes: verdict !== false });",
+      "problem": "Clean Code B1/E1/D1. The `mirrorApprovalToTopic` wrapper now carries the card-log lifecycle inline in three places (unmirrored branch, dock-won branch, topic-won branch). The place/yes derivation `foregroundOperation.signal.aborted ? \"withdrawn\" : \"shell\"` plus `result !== false` is written twice (unmirrored branch and the `outcome.from === \"dock\"` branch), and the closure grew from roughly 30 to about 45 lines, mixing transport racing with view-log bookkeeping. `operatorCards.ask(...)` is never paired with `answer(...)` if `inner(...)` or `raceApproval(...)` rejects: neither call site has try/finally, so a throw leaves the entry unanswered.",
+      "evidence": "Head of src/tui/tui-shell.ts, `mirrorApprovalToTopic` (lines ~6095-6150): `const unmirroredId = operatorCards.ask(meta.card[0] ?? tool, false); const verdict = await inner(...); operatorCards.answer(unmirroredId, ...)` and `const cardId = isCard && meta?.card !== undefined ? operatorCards.ask(...) : undefined; const outcome = await raceApproval(...)`. `OperatorConfirmationLog` (src/tui/operator-confirmations.ts) only prunes answered entries, so an unanswered one stays in `entries()` and, when mirrored, in `waiting()` for the life of the shell: the sidebar keeps showing `N card waiting` and the status tab shows `token expired, ask again`.",
+      "impact": "Low in practice (the dock normally returns a boolean), but when a dock or renderer error does propagate the sidebar and modals show a card that nobody can answer. The duplicated expression is the kind that drifts (for example if a third answer place is added).",
+      "suggested_fix": "Extract a small helper next to `operatorCards`, for example `const recordShellAnswer = (id: number, verdict: boolean | object) => operatorCards.answer(id, { place: foregroundOperation.signal.aborted ? \"withdrawn\" : \"shell\", yes: verdict !== false })`, and wrap each `ask`..`answer` pair in try/finally that answers as `withdrawn` on a throw.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": null,
+      "quote": "function age(ms: number): string {",
+      "problem": "Clean Code E1 (DRY, two occurrences). `age` and `clock` are new private helpers that repeat `formatAge` and `clock` already in src/tui/remote-control-surface.ts, the module this file feeds. The two age formatters differ in rounding and format (`3m` / `1h05m` here, `Math.round` and `2h` there), so the same duration can read differently in the sidebar row, the status tab and the new card lines.",
+      "evidence": "Diff, src/tui/operator-confirmations.ts `function age(ms)` and `function clock(at)`; head of src/tui/remote-control-surface.ts `export function formatAge(ms: number)` and `function clock(at: number)`. remote-control-surface.ts now imports `waitingCardsText` from operator-confirmations.ts, so reusing `formatAge` from there would make the import circular, which is probably why it was copied.",
+      "impact": "Two near-identical formatters with divergent output inside one feature; a later fix to one will miss the other.",
+      "suggested_fix": "Move `formatAge` and `clock` into a small shared module (or an existing theme/format helper) and import it from both files. If the `1h05m` form is intended only for the token countdown, name it for that and keep `formatAge` for the rest.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 0 }
+}
+```
+
+## Clean Code Review (slice-04)
+
+Checked: naming (OperatorConfirmationLog, ConfirmationEntry, CardAnswerPlace, waitingCardsText, withMirrorNote: intention-revealing, consistent), function size in the new pure helpers (all under 20 lines), argument counts (formatRemoteStatusLines gains a third optional parameter, acceptable; no boolean control flags introduced into behavior: `mirrored` on `ask` is recorded data, not flow control), error handling in `raceApproval` (`onUndelivered` is optional, called only while not settled, exceptions from the topic leg still swallowed as before), comments (new ones explain intent and cite the flow/AC), SOLID (the log class has one reason to change and depends on injected `now`; surfaces receive `confirmationLines` as callbacks, so no DIP concern in this slice).
+
+Not reported (judged non-defects): `confirmationLines: _cards` unused destructure in `openDecisionsArms` (deliberate omission of the option from `...rest`); `card[card.length - 1] as string` in `withMirrorNote` (guarded by the empty check); the literal "1-hour token" in line text next to `REMOTE_CARD_TTL_MS` (wording only).
+
+Security-relevant observation in this lens: in this slice `pressedBy` comes only from `answer.fromId` of the topic answer in `remoteApproval`, and the TUI/unmirrored path never calls it, so nothing here records `pressedBy` for a shell answer. The allowed-user check, token binding and expiry live outside slice-04 and are not assessed here.

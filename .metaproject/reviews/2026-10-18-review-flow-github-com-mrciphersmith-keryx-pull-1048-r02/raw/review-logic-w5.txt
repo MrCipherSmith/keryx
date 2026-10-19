@@ -1,0 +1,57 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice 05 (the References tab, the refs sidebar segment, the polling ProjectContextFeed and the tui-shell wiring) is logically sound for the paths I could trace. The declared/cited split by `condition`, the `refs promoted/declared` counters, the `-` before any resolve and the `?` for an invalid file all match what the code can produce. Three low-severity points: a stale poll can overwrite a newer explicit reload, the feed's `stop` is never called, and the modal height is fixed at open while the polled content can change.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "const next = await options.load();\n    if (!sameStatus(current, next)) {\n      current = next;",
+      "problem": "poll() and the explicit reload() (modal `e` toggle, showProjectContext, setProjectContextEnforcement) share one `reload` with no ordering guard. A poll that started its file reads before the enforcement write but resolves after the explicit reload assigns `current` and notifies listeners with the older snapshot.",
+      "impact": "Trigger: the user presses `e` in the modal while a 5s poll is in flight. The modal's `.then(next => status = next)` sets the fresh status, then the subscribed listener (or the poll resolving later) repaints the modal and the sidebar with the pre-toggle enforcement. The next poll, up to 5s later, corrects it. Meanwhile a second `e` press would toggle from the stale `status.enforcement`. Self-healing, so minor.",
+      "suggested_fix": "Give reload() a monotonically increasing sequence number taken before `options.load()` and discard a result whose sequence is lower than the last one applied, or serialise load calls through one in-flight promise.",
+      "evidence": "reload() and poll() in createProjectContextFeed; the modal key handler calls options.loadStatus(), which tui-shell binds to projectContextFeed.reload, while the interval calls the same reload. loadProjectContextStatus is async over several file reads, so two loads can finish out of start order.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const projectContextFeed = createProjectContextFeed({",
+      "problem": "The feed starts a 5s interval at construction and returns `stop`, but tui-shell never calls projectContextFeed.stop() (the only references are current, subscribe and reload). The interval is unref'd, so it cannot hold the process open, but it keeps running after the shell is torn down.",
+      "impact": "Where the shell is disposed while the process lives (test harnesses, an in-process restart), each poll still runs loadProjectContextStatus, which now includes checkReferences. When the status then changes, the sidebar listener touches destroyed renderables; that throw happens inside reload(), is caught by poll and reported once through io.onSystem. The throw also aborts the remaining listeners after `current` was already updated, so they are never re-notified of that change.",
+      "suggested_fix": "Call projectContextFeed.stop() in the shell's teardown path next to disposeExecutionPlanPanel and liveSchedules.dispose(). Optionally wrap each listener call in try/catch so one failing subscriber does not starve the others.",
+      "evidence": "keryx ctx rg --all projectContextFeed src/tui/tui-shell.ts lists 5 matches, none a stop call; a teardown block exists around disposeExecutionPlanPanel?.() / liveSchedules?.dispose().",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/tui/project-context-inspector.ts",
+      "line": null,
+      "quote": "contentRows:\n      Math.max(\n        formatProjectContextStatusLines(status).length,",
+      "problem": "The modal height is computed once, from the status at open. The new subscribe listener repaints the open tab in place when a resolve is recorded, and the References tab then has a different number of lines (for example the `over the cap` line, or findings appearing), but contentRows and the footer are not recomputed.",
+      "impact": "A tab that grows after open may be clipped or need scrolling. I did not trace modal-host's scroll behaviour, so this is an observation; confirm by opening /projectctx refs and recording a resolve over the cap while it is open.",
+      "suggested_fix": "Either size contentRows from the larger of the current and a worst-case line count, or accept the fixed height and document it.",
+      "evidence": "resolveModalPanelSize takes contentRows once; presentProjectContext passes it only in the openModalFn input.",
+      "confidence": "low",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "slices": ["slice-05"],
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+Checked and found sound: `/projectctx refs` parsing and the usage text; `entryFor` matching on `path` plus `condition !== undefined` (paths are unique after the duplicate-path fix); the `-`/`?`/`!k` sidebar segment arms; the first reload notifying the sidebar because `current` starts undefined; the sidebar row staying hidden only when nothing at all is present; sameStatus via JSON.stringify (the status holds only plain data).
+
+routing audit: graph_used: no (not-relevant, slice-local TUI code); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no

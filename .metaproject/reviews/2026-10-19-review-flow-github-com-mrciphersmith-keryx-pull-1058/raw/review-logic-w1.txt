@@ -1,0 +1,100 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Logic Review
+
+Slice slice-01 holds no TypeScript: it is the finding schema, four skill files (both review-orchestrator files, job-orchestrator, review-premise), the README section and flow 467's own files. I checked the skill and schema text against the code it describes (src/commands/review-operator.ts, src/review/operator-decisions.ts, src/trigger/unattended.ts, tests in shell-env) because a skill that disagrees with the verb is a spec gap. No blocker or major. Skill text matches the verbs on source names, flags and --reason placement. Findings are instruction gaps, one schema gap, one code backstop that is narrower than its own option list, and a flow-record gap.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Skills, schema and README agree with the four verbs on sources, flags and --reason. No blocker or major. Gaps: the skills never say a confirm-plan question must carry the plan's numbers (the verb refuses otherwise); the verb's decline check is first-word-only and does not cover its own declared decline option for two verbs; the schema does not enforce the host-question/hostQuestion pairing the code enforces; the keryx-shell source is unreachable from an agent shell; AC12 is not tracked by the flow.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "the question as you would put it on a card, with the verb's options: yes or no, and for `decide-premise` `uphold` or `dismiss`.",
+      "problem": "The skill tells the agent to put the question 'as you would put it on a card' and never says that for confirm-plan the question text must show the plan's dispatch count and minute range. recordHostQuestion refuses a confirm-plan whose --question-text lacks those numbers: `if (![estimate.dispatches, estimate.minutes.min, estimate.minutes.max].every((value) => shown.has(String(value)))) { throw new Error(\"The plan changed, or the question does not show it ...\") }` (src/commands/review-operator.ts:378-384). Only the verb's --help (review-operator.ts:91-92) carries the rule. The same gap is in SKILL.detail.md item 4 (the `confirm-plan ... --answered-by` sentence) and SKILL.md Round plan step 6.",
+      "impact": "An agent that follows the skill asks 'Run the plan?' with no figures, gets the operator's yes, and the verb refuses as 'stale plan'. The operator is asked twice; the agent is pushed to rewrite --question-text with numbers it did not show, which makes the recorded question differ from the one asked.",
+      "suggested_fix": "In SKILL.md Operator decisions (and Round plan step 6) add: for confirm-plan the question states the dispatch count and the minute range exactly as `keryx review estimate` prints them; --question-text carries that same text.",
+      "evidence": "Skill text read in slice-01 (SKILL.md Hosts, Operator decisions paragraph) has no mention of numbers; review-operator.ts:378-384 refuses without them.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/review-operator.ts",
+      "line": null,
+      "quote": "if (words.length === 0 || LEAD_DECLINE.has(words[0] as string)) {",
+      "problem": "Outside slice-01 but it decides whether the skill's 'a decline is not a decision' holds. refuseDecline looks only at the first word against LEAD_DECLINE (n, no, nope, nah, not, never, cancel, stop, decline, declined, reject, нет, не, отмена). (a) HOST_OPTIONS declares the decline option of waive-mutation and override-reviewers as \"keep\" (review-operator.ts:258, 266) and the journal entry lists it, but \"keep\" is not in LEAD_DECLINE, so --answer-text \"Keep: run the mutation pass\" is recorded as a waiver. (b) wordsOf splits \"don't\" into [\"don\",\"t\"], so \"Don't run it\" and \"Do not waive\" pass for confirm-plan, waive-mutation and override-reviewers; the NEGATIONS set that catches \"don\"/\"t\" is applied only by refuseOtherChoice on decide-premise.",
+      "impact": "An honest agent that passes the operator's refusal in those wordings records a plan confirmation, a mutation waiver or a reviewer override the operator declined; the gate then relaxes. AC3 only names empty, n and no, so this is beyond the AC, but the code states 'a declined question records nothing' and journals Waive/Keep as the options.",
+      "suggested_fix": "Add the verb's own decline id (HOST_OPTIONS[verb].decline) to the leading-decline test, and refuse when a NEGATIONS word precedes or is the first token (\"don\", \"do not\"); or reduce the claim in --help to 'a leading n or no'.",
+      "evidence": "review-operator.ts:238-271 (options), 274 (LEAD_DECLINE), 281-283 (NEGATIONS, wordsOf), 301-307 (refuseDecline), 316 (negation applied only in refuseOtherChoice).",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "line": null,
+      "quote": "\"description\": \"Set with confirmedVia host-question only: the question the host asked the operator and the answer that came back, as the agent reported them.\",",
+      "problem": "The description says hostQuestion is set with confirmedVia host-question only, but the schema has no conditional: `operator` carries no allOf/if-then, so confirmedVia host-question without hostQuestion, and hostQuestion beside confirmedVia terminal, both validate. The code enforces the pairing for decisions (`viaConsistent`, src/review/operator-decisions.ts:118-120, 134, 147) and plan confirmations (estimate.ts:221).",
+      "impact": "A findings.json whose premise.operator says host-question with no question and answer is schema-valid, so a consumer trusting the schema sees a host-question record with nothing to check against the Telegram log.",
+      "suggested_fix": "Add to the `operator` object an allOf with {if confirmedVia const host-question then required [hostQuestion]} and the converse (hostQuestion absent otherwise), in both copies of the schema (src/gdskills/contracts and .metaproject/core).",
+      "evidence": "Diff lines 23-37 of slice-01: enum extended and hostQuestion added to properties; required stays [answer, reason, at, actor].",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "Ask the operator with the host's own question tool (`AskUserQuestion`, Codex's question tool, a Telegram poll through Helyx, `ask_user`)",
+      "problem": "The same paragraph lists `ask_user` (keryx shell's tool) as a host question tool and `keryx-shell` as a valid <source>. The verb refuses the flag whenever KERYX_TOOL_CALL=1 (review-operator.ts:332-337), and every keryx shell shell_exec child carries it (src/harness/process/shell-env.test.ts:60 'every shell_exec env carries KERYX_TOOL_CALL=1'; src/commands/bus.ts:11 'set only on shell_exec children'). An agent in keryx shell that asks with ask_user and then runs the verb through shell_exec is always refused.",
+      "impact": "A path the skill offers cannot succeed. The refusal message does say to use the card, so the cost is a wasted call and a wrong expectation, not a wrong record.",
+      "suggested_fix": "Drop `ask_user` from the list (or say that in keryx shell the card is the only path and keryx-shell is for a keryx started outside an agent's shell).",
+      "evidence": "SKILL.md Operator decisions paragraph vs review-operator.ts:332-337 and shell-env.test.ts:60-64. Whether any caller outside shell_exec uses source keryx-shell is not visible in the slice; AC3 names the source, so it stays.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "`<ref>` is the question id; for a Helyx poll, the poll id and the message id.",
+      "problem": "The Hosts table sends Codex to 'its question tool, else the question in your reply'. A question put in a reply has no id, and the verb refuses an empty ref (parseAnsweredBy, review-operator.ts:297). The skill does not say what ref to give there, nor the separator for 'poll id and message id'.",
+      "impact": "The agent invents a ref, which weakens the one trace a reviewer has to check the record against the host's log. No wrong record follows.",
+      "suggested_fix": "State the ref convention for a reply-question host and the poll/message separator (for example `<pollId>/<messageId>`).",
+      "evidence": "SKILL.md Hosts table row 'Question' and the Operator decisions paragraph.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": ".metaproject/flows/467-2026-10-19-operator-acts-answered-by-the-host-s-own/journal.md",
+      "line": null,
+      "quote": "- 2026-10-19T19:23:00.022Z - frozen: 11 criteria; checksum recorded",
+      "problem": "acceptance-criteria.md lists AC1-AC12, but the flow froze 11: flow.json `acKinds` ends at AC11. AC12 is written `- AC12 (operator-only): ...`, which does not match the `- ACn: <criterion>` format the file's own rules require, so the gate does not see it. AC11 ('PR 1052 decisions recorded through the new verb') has a [verify: judged] marker but no task and no evidence in this diff; plan.md step 5 defers it to after merge.",
+      "impact": "`flow complete` can pass without AC12, the one criterion the operator alone confirms, and without AC11. Flows 336 and 338 use the same parenthesised AC form, so this may be accepted practice; pr-process, not code.",
+      "suggested_fix": "Write AC12 as `- AC12: (operator-only) ...` and re-seal with `keryx flow ac update`, or record why it stays outside the gate; track AC11 with a task.",
+      "evidence": "Journal line above; flow.json acKinds keys AC1..AC11; acceptance-criteria.md line 29.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "pr-process"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 2 },
+  "slices": ["slice-01"]
+}
+```
+
+### Summary
+No spec gap against AC1-AC10 in slice-01 text: the four verbs, the sources, the flags, --reason placement and the complete/--waive exclusion are stated consistently in all four skills and the README. The findings above are instruction gaps (F-001, F-004, F-005), a decline backstop that does not cover its own options (F-002, code outside the slice), a schema that does not enforce the pairing the code enforces (F-003) and a flow record that leaves AC12 outside the gate (F-006).

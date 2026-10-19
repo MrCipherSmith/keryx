@@ -1,0 +1,1504 @@
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 1,154 @@
+ // Flow 456 (AC2, AC4): the four review gates as operator-confirmed tools. Each is driven the way the agent loop drives it:
+ // `confirmation` builds the card from the package on disk, and `invoke` with the card's token applies the effect in process.
+ // A "no" never reaches `invoke`, so the package must be byte-for-byte what it was.
+ 
+ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+ import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
++import { validateAgainstSchemaObject } from "../contracts/validator";
+ import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
++import { READY_COVERAGE_MD, READY_DISPATCH } from "../review/dispatch.test-helpers";
++import { createManagedReviewPackage } from "../review/managed";
+ import { ensureChunkPlan } from "../review/chunks";
+ import { readChunkEstimate } from "../review/chunks-estimate";
+ import { computeCoverage, readCoverageWaiver } from "../review/coverage-complete";
+ import { heldFinding, heldPremise } from "../review/premise-fixtures";
+ import { computeReadiness } from "../review/readiness";
+ import { computeVerdict } from "../review/verdict";
+ import type { PostResult, ReviewEvent } from "../review/publish";
+ import { buildReviewConfirmSpecs, reviewConfirmSpecs } from "./operator-confirm-review";
+ import { operatorConfirmTool, operatorConfirmToolNames } from "./operator-confirm-tools";
+ 
+ const NOW = new Date("2026-10-15T19:00:00.000Z");
+ const PR = "https://github.com/Presight-AI/vantage-frontend/pull/7932";
++const ALLOWED_ID = 446593035;
++const PRESSED_AT = "2026-10-15T19:00:05.000Z";
+ 
+ let root: string;
+ let pkg: string;
+ const posts: Array<{ ref: string; event: ReviewEvent; body: string }> = [];
+ 
+ const post = async (ref: string, event: ReviewEvent, body: string): Promise<PostResult> => {
+   posts.push({ ref, event, body });
+   return { ok: true, detail: "ok" };
+ };
+ 
+-function tool(name: string): InteractiveTool {
+-  const spec = buildReviewConfirmSpecs({ prLookup: async () => null, prFiles: async () => null, postReview: post }).find((entry) => entry.name === name);
++function tool(name: string, seams: Partial<Parameters<typeof buildReviewConfirmSpecs>[0]> = {}): InteractiveTool {
++  const spec = buildReviewConfirmSpecs({ prLookup: async () => null, prFiles: async () => null, postReview: post, ...seams }).find((entry) => entry.name === name);
+   if (spec === undefined) throw new Error(`no spec ${name}`);
+-  return operatorConfirmTool(spec, { projectRoot: root, now: () => NOW, env: {} });
++  return operatorConfirmTool(spec, { projectRoot: root, now: () => NOW, env: {}, allowedUserIds: () => [ALLOWED_ID] });
+ }
+ 
+ type Asked = { card: readonly string[]; title: string; token: string };
+ 
+ /** Ask for the card. A refusal comes back as `{ error }`. */
+ async function ask(t: InteractiveTool, input: Record<string, unknown>): Promise<Asked | { error: string }> {
+   const result = await t.confirmation!(input);
+   return result as Asked | { error: string };
+ }
+ 
+ const asked = (value: Asked | { error: string }): Asked => {
+   if ("error" in value) throw new Error(`expected a card, got a refusal: ${value.error}`);
+   return value;
+ };
+ 
+-async function yes(t: InteractiveTool, input: Record<string, unknown>, via?: "remote"): Promise<{ output: string; isError?: boolean; card: readonly string[] }> {
++async function yes(t: InteractiveTool, input: Record<string, unknown>, via?: "remote", pressedBy: number = ALLOWED_ID): Promise<{ output: string; isError?: boolean; card: readonly string[] }> {
+   const card = asked(await ask(t, input));
+-  const result = await t.invoke(input, { confirmationToken: card.token, ...(via === undefined ? {} : { confirmationVia: via }) } as never);
++  const press = via === undefined ? {} : { confirmationVia: via, confirmationPressedBy: pressedBy, confirmationPressedAt: PRESSED_AT };
++  const result = await t.invoke(input, { confirmationToken: card.token, ...press } as never);
+   return { output: result.output, isError: result.isError ?? false, card: card.card };
+ }
+ 
+ const read = (name: string): string => readFileSync(path.join(pkg, name), "utf8");
+ const readJson = (name: string): Record<string, any> => JSON.parse(read(name)) as Record<string, any>;
+ const put = (name: string, value: unknown): void => {
+   mkdirSync(path.dirname(path.join(pkg, name)), { recursive: true });
+   writeFileSync(path.join(pkg, name), typeof value === "string" ? value : JSON.stringify(value, null, 2));
+ };
+ 
+ beforeEach(() => {
+   posts.length = 0;
+   root = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-confirm-review-")));
+   mkdirSync(path.join(root, ".git"));
+   mkdirSync(path.join(root, ".metaproject"));
+   pkg = path.join(root, ".metaproject", "reviews", "pr7932-r1");
+   mkdirSync(pkg, { recursive: true });
+ });
+ afterEach(() => {
+   rmSync(root, { recursive: true, force: true });
+ });
+ 
+ test("the review gates are registered and listed for the unattended refusal", () => {
+   const names = reviewConfirmSpecs().map((spec) => spec.name);
+   expect(names).toEqual([
+     "review_chunks_answer",
+     "review_publish",
+     "review_waive_coverage",
+     "review_waive_readiness",
+     "review_waive_mutation",
+     "review_override_reviewers",
+     "review_comments_reply",
+     "review_confirm_plan",
+     "review_decide_premise",
++    "review_complete",
+   ]);
+   for (const name of names) expect(operatorConfirmToolNames()).toContain(name);
+ });
+ 
+ describe("review_chunks_answer", () => {
+   function dropFiles(count: number): void {
+     const dropped = Array.from({ length: count }, (_, index) => ({ file: `src/d-${String(index).padStart(4, "0")}.ts`, hop: 1, fanIn: 1, via: "src/a.ts", source: "graph", reason: "cap", detail: "over the cap" }));
+     put("blast-radius.json", { schemaVersion: 1, changedFiles: ["src/a.ts"], files: [], dropped });
+   }
+ 
+   test("the card shows the pass count over the ceiling; yes records the answer, the card quote and confirmedVia", async () => {
+     dropFiles(1100);
+     await ensureChunkPlan(pkg, root);
+     const t = tool("review_chunks_answer");
+     const result = await yes(t, { package: pkg, answer: "yes" });
+     expect(result.card[0]).toBe("Allow 28 review passes, over the 25-pass ceiling, for .metaproject/reviews/pr7932-r1?");
+     expect(result.card.join("\n")).toContain("passes requested: 28");
+     expect(result.card.join("\n")).toContain("ceiling: 25 passes (1000 files), from the default; 3 over");
+     expect(result.card.at(-1)).toBe("subject: package .metaproject/reviews/pr7932-r1");
+     expect(result.isError).toBe(false);
+     const record = await readChunkEstimate(pkg);
+     expect(record?.answer).toEqual({
+       value: "yes",
+       quote: "Allow 28 review passes, over the 25-pass ceiling, for .metaproject/reviews/pr7932-r1?: yes",
+       at: NOW.toISOString(),
+       confirmedVia: "tui-card",
+     });
+   });
+ 
+   test("a yes answered in the remote topic is recorded as remote-card; answer=no records a declined run", async () => {
+     dropFiles(1100);
+     await ensureChunkPlan(pkg, root);
+     const t = tool("review_chunks_answer");
+     const result = await yes(t, { package: pkg, answer: "no" }, "remote");
+     expect(result.card[0]).toContain("Stop the 28-pass chunk run");
+     const answer = (await readChunkEstimate(pkg))?.answer;
+     expect(answer?.value).toBe("no");
+     expect(answer?.confirmedVia).toBe("remote-card");
++    expect(answer?.pressedBy).toBe(ALLOWED_ID);
++    expect(answer?.pressedAt).toBe(PRESSED_AT);
+   });
+ 
+   test("a no changes nothing: the card was built, the tool was never invoked, no estimate is on disk", async () => {
+     dropFiles(1100);
+     await ensureChunkPlan(pkg, root);
+     const t = tool("review_chunks_answer");
+     const card = asked(await ask(t, { package: pkg, answer: "yes" }));
+     t.confirmationDeclined!(card.token);
+     expect(existsSync(path.join(pkg, "chunk-estimate.json"))).toBe(false);
+     // A declined card's token is dead: replaying it applies nothing.
+     const replay = await t.invoke({ package: pkg, answer: "yes" }, { confirmationToken: card.token } as never);
+     expect(replay.isError).toBe(true);
+     expect(existsSync(path.join(pkg, "chunk-estimate.json"))).toBe(false);
+   });
+ 
+   test("asking never writes chunks.json: no plan yet is a refusal naming the command, and a no leaves the package as it was", async () => {
+     dropFiles(1100);
+     const t = tool("review_chunks_answer");
+     const refused = await ask(t, { package: pkg, answer: "yes" });
+     expect(refused).toEqual({ error: expect.stringContaining("keryx review chunks plan") });
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 363,418 @@
+       target: { kind: "pr", ref: PR },
+       artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
+       coverage: [],
+     });
+     put("findings.json", [{ id: "f-1", severity: "major", title: "unverified claim" }]);
+     put("report.md", "# Review\n\nRequest changes.\n");
+     put("coverage.md", "# Reviewer Coverage\n\nreviewer: review-logic\nstatus: run\nreason: read the diff\n");
+   }
+ 
+   test("the card names the item and its current failing detail; yes records the waiver with confirmedVia and the report header", async () => {
+     makePackage();
+     const t = tool("review_waive_readiness");
+     const result = await yes(t, { package: pkg, item: "verifier" });
+     const text = result.card.join("\n");
+     expect(result.card[0]).toBe("Accept failing readiness item 4 (verifier) of .metaproject/reviews/pr7932-r1 as it is?");
+     expect(text).toContain("item 4 verifier:");
+     expect(text).toContain("failing: ");
+     expect(text).toContain("repair would be:");
+     expect(result.card.at(-1)).toBe("subject: package .metaproject/reviews/pr7932-r1, item verifier");
+     expect(result.isError).toBe(false);
++    expect(result.output).toContain("Call review_complete to close the review.");
++    expect(result.output).not.toContain("keryx review complete");
+     expect(readJson("manifest.json").readiness_waivers).toEqual([
+       { item: "verifier", operator_quote: "Accept failing readiness item 4 (verifier) of .metaproject/reviews/pr7932-r1 as it is?: yes", time: NOW.toISOString(), confirmedVia: "tui-card" },
+     ]);
+     expect(read("report.md").startsWith("Partial review: verifier waived by the operator:")).toBe(true);
+   });
+ 
++  test("the manifest schema accepts a readiness waiver a card recorded, tui or remote with the press fields", () => {
++    const schema = JSON.parse(readFileSync(path.resolve(import.meta.dir, "../../docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json"), "utf8")) as { properties: { readiness_waivers: Record<string, unknown> } };
++    const base = { item: "verifier", operator_quote: "Accept it?: yes", time: NOW.toISOString() };
++    const waivers = [{ ...base, confirmedVia: "tui-card" }, { ...base, confirmedVia: "remote-card", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT }, base];
++    expect(validateAgainstSchemaObject(schema.properties.readiness_waivers, waivers).errors).toEqual([]);
++    expect(validateAgainstSchemaObject(schema.properties.readiness_waivers, [{ ...base, confirmedVia: "somewhere" }]).errors).not.toEqual([]);
++  });
++
+   test("a no changes nothing", async () => {
+     makePackage();
+     const manifest = read("manifest.json");
+     const report = read("report.md");
+     const t = tool("review_waive_readiness");
+     t.confirmationDeclined!(asked(await ask(t, { package: pkg, item: "4" })).token);
+     expect(read("manifest.json")).toBe(manifest);
+     expect(read("report.md")).toBe(report);
+   });
+ 
+   test("item 11 (premise-decisions) is refused before a card is drawn, naming review_decide_premise (review RG2-003)", async () => {
+     makePackage();
+     put("findings.json", [heldFinding({ global_id: "pr7932-r1#LY-003" })]);
+     const t = tool("review_waive_readiness");
+     for (const item of ["premise-decisions", "11"]) {
+       expect(await ask(t, { package: pkg, item })).toEqual({ error: expect.stringContaining("review_decide_premise") });
+     }
+     expect(readJson("manifest.json").readiness_waivers).toBeUndefined();
+   });
+ 
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 453,493 @@
+     expect(result.card[0]).toBe("Dismiss finding pr7932-r1#LY-003 in .metaproject/reviews/pr7932-r1 as incorrect?");
+     expect(text).toContain("finding: pr7932-r1#LY-003 (major): timeline pinned LTR");
+     expect(text).toContain("premise judge: challenged: Should the timeline mirror?");
+     expect(text).toContain("reason: platforms do not mirror media controls");
+     expect(result.isError).toBe(false);
+     const decisions = readJson("operator-decisions.json").decisions;
+     expect(decisions).toHaveLength(1);
+     expect(decisions[0]).toMatchObject({ kind: "premise-question", finding: "pr7932-r1#LY-003", answer: "dismiss", reason: "platforms do not mirror media controls", at: NOW.toISOString(), actor: "operator", confirmedVia: "tui-card" });
+     // The operator's words are the card they said yes to, as for the sibling decisions.
+     expect(decisions[0].quote).toContain(result.card[0]);
+     expect(decisions[0].subject).toMatchObject({ severity: "major", verdict: "challenged" });
+     expect(readJson("findings.json")[0].disposition.state).toBe("dismissed-incorrect");
+     expect((await readiness())?.status).toBe("pass");
+   });
+ 
+   test("uphold keeps the original severity and a remote yes is recorded as remote-card", async () => {
+     makePackage();
+     const t = tool("review_decide_premise");
+     const result = await yes(t, { package: pkg, finding: "pr7932-r1#LY-003", answer: "uphold", reason: "mirror it" }, "remote");
+     expect(result.card[0]).toBe("Uphold finding pr7932-r1#LY-003 in .metaproject/reviews/pr7932-r1 at major?");
+-    expect(readJson("operator-decisions.json").decisions[0]).toMatchObject({ answer: "uphold", confirmedVia: "remote-card" });
++    expect(readJson("operator-decisions.json").decisions[0]).toMatchObject({ answer: "uphold", confirmedVia: "remote-card", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT });
+     expect((await computeVerdict(pkg)).open.map((entry) => [entry.id, entry.severity])).toEqual([["LY-003", "major"]]);
+   });
+ 
+   test("a no records nothing", async () => {
+     makePackage();
+     const t = tool("review_decide_premise");
+     t.confirmationDeclined!(asked(await ask(t, { package: pkg, finding: "LY-003", answer: "dismiss", reason: "r" })).token);
+     expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
+     expect((await readiness())?.status).toBe("fail");
+   });
+ 
+   test("an unknown finding, a finding that is not held, a missing reason and a bad answer are refusals", async () => {
+     makePackage([held, { ...held, id: "LY-004", global_id: "pr7932-r1#LY-004", premise: { verdict: "upheld", judge: "review-premise" } }]);
+     const t = tool("review_decide_premise");
+     expect(await ask(t, { package: pkg, finding: "LY-999", answer: "dismiss", reason: "r" })).toEqual({ error: expect.stringContaining("No finding") });
+     expect(await ask(t, { package: pkg, finding: "LY-004", answer: "dismiss", reason: "r" })).toEqual({ error: expect.stringContaining("not held") });
+     expect(await ask(t, { package: pkg, finding: "LY-003", answer: "dismiss" })).toEqual({ error: expect.stringContaining("reason is required") });
+     expect(await ask(t, { package: pkg, finding: "LY-003", answer: "maybe", reason: "r" })).toEqual({ error: expect.stringContaining("uphold") });
+   });
+ 
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 499,737 @@
+     put("findings.json", [{ ...held, severity: "minor" }]);
+     const result = await t.invoke(input, { confirmationToken: card.token } as never);
+     expect(result.isError).toBe(true);
+     expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
+   });
+ 
+   test("a change to the problem or the judge's question after the card was shown also refuses", async () => {
+     const verdictChanged = { ...held, premise: heldPremise({ verdict: "owner-decision", question: "Should the timeline mirror?", options: ["mirror", "keep LTR"] }) };
+     for (const changed of [{ ...held, problem: "a different defect" }, { ...held, premise: heldPremise({ question: "a different question?" }) }, verdictChanged]) {
+       makePackage();
+       const t = tool("review_decide_premise");
+       const input = { package: pkg, finding: "LY-003", answer: "dismiss", reason: "r" };
+       const card = asked(await ask(t, input));
+       put("findings.json", [changed]);
+       const result = await t.invoke(input, { confirmationToken: card.token } as never);
+       expect(result.isError).toBe(true);
+       expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
+     }
+   });
+ });
++
++// Flow 464 (AC3): the plan and premise cards answer through the remote card, per tool, both paths, "no" included.
++describe("review_confirm_plan and review_decide_premise through the remote card", () => {
++  const held = heldFinding({ global_id: "pr7932-r1#LY-003", premise: heldPremise({ question: "Should the timeline mirror?" }) });
++
++  function overThresholdPackage(): void {
++    put("manifest.json", {
++      schemaVersion: 1,
++      reviewId: "pr7932-r1",
++      mode: "review-flow",
++      status: "draft",
++      target: { kind: "pr", ref: PR },
++      artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
++      coverage: [],
++    });
++    put("findings.json", [held]);
++    writeFileSync(path.join(root, "routing.config.json"), JSON.stringify({ reviewPlan: { maxDispatches: 1, maxMinutes: 1 } }));
++  }
++
++  const planFile = (): Record<string, any> | undefined => (existsSync(path.join(pkg, "plan-confirmation.json")) ? readJson("plan-confirmation.json") : undefined);
++  const premiseInput = { package: "", finding: "LY-003", answer: "dismiss", reason: "platforms do not mirror" };
++
++  test("confirm_plan: a local yes records tui-card with no press; a remote yes records remote-card, who and when", async () => {
++    overThresholdPackage();
++    const t = tool("review_confirm_plan");
++    expect((await yes(t, { package: pkg })).isError).toBe(false);
++    expect(planFile()).toMatchObject({ confirmedVia: "tui-card" });
++    expect(planFile()?.["pressedBy"]).toBeUndefined();
++    rmSync(path.join(pkg, "plan-confirmation.json"));
++    const remote = await yes(t, { package: pkg }, "remote");
++    expect(remote.isError).toBe(false);
++    expect(planFile()).toMatchObject({ confirmedVia: "remote-card", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT });
++  });
++
++  test("confirm_plan: a no, local or remote, records nothing", async () => {
++    overThresholdPackage();
++    const t = tool("review_confirm_plan");
++    for (let attempt = 0; attempt < 2; attempt += 1) {
++      t.confirmationDeclined!(asked(await ask(t, { package: pkg })).token);
++      expect(planFile()).toBeUndefined();
++    }
++  });
++
++  test("confirm_plan: a remote yes from an id outside the allowed list records nothing and says why", async () => {
++    overThresholdPackage();
++    const result = await yes(tool("review_confirm_plan"), { package: pkg }, "remote", 1234);
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("Telegram user 1234 is not on the allowed list");
++    expect(planFile()).toBeUndefined();
++  });
++
++  test("decide_premise: a local yes records tui-card with no press; a remote yes records remote-card, who and when", async () => {
++    overThresholdPackage();
++    const t = tool("review_decide_premise");
++    const input = { ...premiseInput, package: pkg };
++    expect((await yes(t, input)).isError).toBe(false);
++    expect(readJson("operator-decisions.json").decisions[0]).toMatchObject({ confirmedVia: "tui-card" });
++    expect(readJson("operator-decisions.json").decisions[0].pressedBy).toBeUndefined();
++    expect((await yes(t, { ...input, answer: "uphold" }, "remote")).isError).toBe(false);
++    const decisions = readJson("operator-decisions.json").decisions;
++    expect(decisions.at(-1)).toMatchObject({ answer: "uphold", confirmedVia: "remote-card", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT });
++  });
++
++  test("decide_premise: a no, local or remote, records nothing", async () => {
++    overThresholdPackage();
++    const t = tool("review_decide_premise");
++    for (let attempt = 0; attempt < 2; attempt += 1) {
++      t.confirmationDeclined!(asked(await ask(t, { ...premiseInput, package: pkg })).token);
++      expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
++    }
++  });
++
++  test("decide_premise: a remote yes from an id outside the allowed list records nothing and says why", async () => {
++    overThresholdPackage();
++    const result = await yes(tool("review_decide_premise"), { ...premiseInput, package: pkg }, "remote", 1234);
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("Telegram user 1234 is not on the allowed list");
++    expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
++  });
++});
++
++// Flow 464 (AC4): review_complete, the one card that closes a round.
++describe("review_complete", () => {
++  const HEAD = "0123456789abcdef0123456789abcdef01234567";
++  const EVIDENCE = "Evidence level: static only — did not run: tests";
++
++  async function makeRound(over: { target?: { kind: "pr" | "report"; ref: string; head?: string }; report?: string; id?: string; findings?: Array<Record<string, unknown>> } = {}): Promise<string> {
++    mkdirSync(path.join(root, "docs", "requirements", "managed-review-feedback-loop", "schemas"), { recursive: true });
++    writeFileSync(path.join(root, "docs", "requirements", "managed-review-feedback-loop", "schemas", "managed-review-package.schema.json"), `{"type":"object"}`);
++    const created = await createManagedReviewPackage({
++      cwd: root,
++      mode: "ingest",
++      reviewId: over.id ?? "2026-10-15-complete",
++      target: over.target ?? { kind: "report", ref: "review.md" },
++      reportText: over.report ?? `# Round\n\nNo findings.\n${EVIDENCE}\n`,
++      findings: (over.findings ?? []) as never,
++      now: NOW,
++    });
++    pkg = path.join(root, created.path);
++    put("research.json", { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: READY_DISPATCH });
++    put("coverage.md", READY_COVERAGE_MD);
++    if (over.target === undefined) put("manifest.json", { ...readJson("manifest.json"), target: { kind: "pr", ref: PR, head: HEAD } });
++    return pkg;
++  }
++
++  const status = (): string => readJson("manifest.json")["status"] as string;
++
++  test("the card shows the head SHA and the evidence level; with no waiver it says so; yes closes the round and records who pressed", async () => {
++    await makeRound();
++    const result = await yes(tool("review_complete"), { package: pkg }, "remote");
++    const text = result.card.join("\n");
++    expect(result.card[0]).toContain(`Complete review 2026-10-15-complete at ${HEAD.slice(0, 12)}?`);
++    expect(text).toContain(`reviewed head: ${HEAD}`);
++    expect(text).toContain(EVIDENCE);
++    expect(text).toContain("waivers: none");
++    expect(result.output).toContain("complete at 0123456789ab (remote-card");
++    expect(result.isError).toBe(false);
++    expect(status()).toBe("closed");
++    const record = readJson("completion-confirmation.json");
++    expect(record).toMatchObject({ confirmedVia: "remote-card", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT, head: HEAD, waivers: [] });
++  });
++
++  test("a tui yes records no press fields", async () => {
++    await makeRound();
++    await yes(tool("review_complete"), { package: pkg });
++    expect(status()).toBe("closed");
++    const record = readJson("completion-confirmation.json");
++    expect(record["confirmedVia"]).toBe("tui-card");
++    expect(record).not.toHaveProperty("pressedBy");
++  });
++
++  test("the card lists every readiness waiver (item and quote) and the coverage waiver", async () => {
++    await makeRound();
++    const manifest = readJson("manifest.json");
++    manifest["readiness_waivers"] = [
++      { item: "verifier", operator_quote: "Accept failing readiness item 4 (verifier) as it is?: yes", time: NOW.toISOString(), confirmedVia: "tui-card" },
++      { item: "ledger", operator_quote: "Accept failing readiness item 7 (ledger) as it is?: yes", time: NOW.toISOString(), confirmedVia: "tui-card" },
++    ];
++    put("manifest.json", manifest);
++    const research = readJson("research.json");
++    research["dispatch"] = { ...(research["dispatch"] ?? {}), coverageWaiver: { operatorQuote: "Waive coverage of 2 files?: yes", time: NOW.toISOString(), files: ["src/a.ts", "src/b.ts"] } };
++    put("research.json", research);
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
++    expect(card).toContain('waiver: readiness item verifier: "Accept failing readiness item 4 (verifier) as it is?: yes"');
++    expect(card).toContain('waiver: readiness item ledger: "Accept failing readiness item 7 (ledger) as it is?: yes"');
++    expect(card).toContain('waiver: coverage, 2 file(s) not reviewed: "Waive coverage of 2 files?: yes"');
++    expect(card).not.toContain("waivers: none");
++  });
++
++  test("the card lists the mutation waiver and the reviewer override from operator-decisions.json, with item and quote", async () => {
++    await makeRound();
++    put("operator-decisions.json", {
++      schemaVersion: 1,
++      decisions: [
++        { kind: "mutation-waiver", quote: "Waive the mutation pass?: yes", reason: "no time", confirmedVia: "tui-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["m1", "m2"] } },
++        { kind: "reviewer-override", quote: "Run a smaller reviewer set?: yes", reason: "small diff", confirmedVia: "remote-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["review-security-code"] } },
++      ],
++    });
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
++    expect(card).toContain('waiver: mutation pass not run m1, m2: "Waive the mutation pass?: yes" (tui-card)');
++    expect(card).toContain('waiver: reviewer override, left out review-security-code: "Run a smaller reviewer set?: yes" (remote-card)');
++    expect(card).not.toContain("waivers: none");
++  });
++
++  test("an operator decision added between the card and the yes records nothing", async () => {
++    await makeRound();
++    const t = tool("review_complete");
++    const card = asked(await ask(t, { package: pkg }));
++    put("operator-decisions.json", {
++      schemaVersion: 1,
++      decisions: [{ kind: "mutation-waiver", quote: "sneaked in", reason: "x", confirmedVia: "tui-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["m1"] } }],
++    });
++    const result = await t.invoke({ package: pkg }, { confirmationToken: card.token } as never);
++    expect(result.isError).toBe(true);
++    expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
++  });
++
++  test("a research.json that cannot be read is shown as such, not as 'waivers: none'", async () => {
++    await makeRound();
++    writeFileSync(path.join(pkg, "research.json"), "{ not json");
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
++    expect(card).toContain("waiver: coverage, could not read research.json");
++    expect(card).not.toContain("waivers: none");
++  });
++
++  const GLOBAL = "2026-10-15-complete#review-logic-w1:F-001";
++  const F1 = { id: "review-logic-w1:F-001", reviewer: "review-logic", severity: "minor", problem: "p", impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" };
++
++  test("dispositions: the card lists each one, and yes records them on the findings as the terminal command does", async () => {
++    await makeRound({ findings: [F1] });
++    const input = { package: pkg, dispositions: [{ finding: GLOBAL, disposition: "acted-on", evidence: "closed by 380bf3b0" }] };
++    const result = await yes(tool("review_complete"), input);
++    expect(result.card.join("\n")).toContain(`disposition: ${GLOBAL} → acted-on: "closed by 380bf3b0"`);
++    expect(result.isError).toBe(false);
++    expect(status()).toBe("closed");
++    const findings = readJson("findings.json") as unknown as Array<{ disposition?: { state: string; evidence?: string } }>;
++    expect(findings[0]?.disposition).toMatchObject({ state: "acted-on", evidence: "closed by 380bf3b0" });
++    expect(readJson("completion-confirmation.json")["dispositions"]).toEqual([{ finding: GLOBAL, state: "acted-on", evidence: "closed by 380bf3b0" }]);
++  });
++
++  test("dispositions: a finding the package does not have refuses the close and records nothing", async () => {
++    await makeRound({ findings: [F1] });
++    const before = read("manifest.json");
++    const result = await yes(tool("review_complete"), { package: pkg, dispositions: [{ finding: "F-404", disposition: "acted-on", evidence: "x" }] });
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("nothing was recorded");
++    expect(read("manifest.json")).toBe(before);
++    expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
++  });
++
++  test("dispositions: a malformed entry refuses the card before it is drawn", async () => {
++    await makeRound({ findings: [F1] });
++    const t = tool("review_complete");
++    expect(await ask(t, { package: pkg, dispositions: "acted-on" })).toEqual({ error: expect.stringContaining("must be an array") });
++    expect(await ask(t, { package: pkg, dispositions: [{ disposition: "acted-on" }] })).toEqual({ error: expect.stringContaining("dispositions[0]: finding is required") });
++    expect(await ask(t, { package: pkg, dispositions: [{ finding: "F-001", disposition: "done" }] })).toEqual({ error: expect.stringContaining("dispositions[0]: disposition must be one of") });
++    expect(await ask(t, { package: pkg, dispositions: [{ finding: "F-001", disposition: "acted-on", evidence: 3 }] })).toEqual({ error: expect.stringContaining("evidence must be text") });
++  });
++
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 813,876 @@
++  test("a no closes nothing", async () => {
++    await makeRound();
++    const before = read("manifest.json");
++    const t = tool("review_complete");
++    t.confirmationDeclined!(asked(await ask(t, { package: pkg })).token);
++    expect(read("manifest.json")).toBe(before);
++    expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
++  });
++
++  test("a gate that refuses shows the refusal and records nothing (a stamped report with no evidence level)", async () => {
++    await makeRound({ report: "# Round\n\nNo findings.\n" });
++    const manifest = readJson("manifest.json");
++    manifest["report_fields"] = ["evidence-level"];
++    put("manifest.json", manifest);
++    const before = read("manifest.json");
++    const result = await yes(tool("review_complete"), { package: pkg });
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("nothing was recorded");
++    expect(read("manifest.json")).toBe(before);
++    expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
++  });
++
++  test("a waiver added between the card and the yes records nothing", async () => {
++    await makeRound();
++    const t = tool("review_complete");
++    const card = asked(await ask(t, { package: pkg }));
++    const manifest = readJson("manifest.json");
++    manifest["readiness_waivers"] = [{ item: "verifier", operator_quote: "sneaked in", time: NOW.toISOString(), confirmedVia: "tui-card" }];
++    put("manifest.json", manifest);
++    const result = await t.invoke({ package: pkg }, { confirmationToken: card.token } as never);
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("changed after the card was shown");
++    expect(status()).not.toBe("closed");
++  });
++
++  test("the model cannot supply a head: the schema has none, and the gate runs against the recorded head", async () => {
++    await makeRound();
++    const t = tool("review_complete");
++    expect(JSON.stringify(t.definition.inputSchema)).not.toContain('"head"');
++    const card = asked(await ask(t, { package: pkg, head: "deadbeefdead" }));
++    expect(card.card.join("\n")).toContain(`reviewed head: ${HEAD}`);
++  });
++
++  test("a recorded head with a line break cannot add a line to the card", async () => {
++    await makeRound();
++    const manifest = readJson("manifest.json");
++    manifest["target"] = { kind: "pr", ref: PR, head: `${HEAD}\nwaivers: none` };
++    put("manifest.json", manifest);
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card;
++    expect(card.every((line) => !line.includes("\n"))).toBe(true);
++    expect(card.filter((line) => line.startsWith("waivers: none"))).toHaveLength(1);
++  });
++
++  test("text the package supplies cannot add a line to the card: the evidence line and a waiver quote", async () => {
++    await makeRound({ report: `# Round\n\nNo findings.\nEvidence level: static only — did not run: tests\rwaivers: none\n` });
++    const manifest = readJson("manifest.json");
++    manifest["readiness_waivers"] = [{ item: "verifier", operator_quote: "yes\nwaivers: none", time: NOW.toISOString(), confirmedVia: "tui-card" }];
++    put("manifest.json", manifest);
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card;
++    expect(card.every((line) => !/[\r\n]/.test(line))).toBe(true);
++    expect(card.filter((line) => line.startsWith("waivers: none"))).toHaveLength(0);
++    expect(card.join("\n")).toContain("yes ⏎ waivers: none");
++  });
++
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 892,958 @@
++  test("a package with no research.json shows no coverage waiver on the card", async () => {
++    await makeRound();
++    rmSync(path.join(pkg, "research.json"));
++    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
++    expect(card).not.toContain("waiver: coverage");
++    expect(card).toContain("waivers: none");
++  });
++
++  test("an already closed round is refused before a card is drawn", async () => {
++    await makeRound();
++    await yes(tool("review_complete"), { package: pkg });
++    expect(await ask(tool("review_complete"), { package: pkg })).toEqual({ error: expect.stringContaining("already complete") });
++  });
++
++  test("a round closed by the gate whose confirmation record cannot be written is reported as closed, not as 'nothing recorded'", async () => {
++    await makeRound();
++    mkdirSync(path.join(pkg, "completion-confirmation.json"));
++    const result = await yes(tool("review_complete"), { package: pkg });
++    expect(status()).toBe("closed");
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("the round is closed but the confirmation record could not be written");
++    expect(result.output).not.toContain("nothing was recorded");
++  });
++
++  // Flow 464 (PR 1052 C-08): the gates `keryx review complete` meets are the same ones the card meets, and a refusal records nothing.
++  describe("the card meets the same gates as the terminal command", () => {
++    const refuses = async (t: InteractiveTool, text: string): Promise<void> => {
++      const before = read("manifest.json");
++      const result = await yes(t, { package: pkg });
++      expect(result.isError).toBe(true);
++      expect(result.output).toContain(text);
++      expect(result.output).toContain("nothing was recorded");
++      expect(read("manifest.json")).toBe(before);
++      expect(status()).not.toBe("closed");
++      expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
++    };
++
++    test("a merged pull request is refused", async () => {
++      await makeRound();
++      await refuses(tool("review_complete", { prLookup: async () => ({ exists: true, state: "MERGED", headSha: HEAD }) }), "merged");
++    });
++
++    test("a head that moved is refused", async () => {
++      await makeRound();
++      await refuses(tool("review_complete", { prLookup: async () => ({ exists: true, state: "OPEN", headSha: "f".repeat(40) }) }), "fffffff");
++    });
++
++    test("a held finding the operator has not answered is refused (the premise rule, never waived through this card)", async () => {
++      await makeRound();
++      put("findings.json", [heldFinding({ global_id: "pr7932-r1#LY-003" })]);
++      await refuses(tool("review_complete"), "premise-decisions");
++    });
++
++    test("a package stamped with the operator gate and no run-profile.json is refused", async () => {
++      await makeRound();
++      put("manifest.json", { ...readJson("manifest.json"), operatorGate: 1 });
++      await refuses(tool("review_complete"), "run-profile.json");
++    });
++
++    test("a slice the manifest routes narrower than its content needs is refused", async () => {
++      await makeRound();
++      put("slices/manifest.json", { slices: [{ id: "s1", path: "s1.diff", roles: [], depth: "light" }] });
++      put("slices/s1.diff", "diff --git a/src/a.ts b/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n+import { spawn } from \"node:child_process\";\n+spawn(process.argv[2]);\n");
++      await refuses(tool("review_complete"), "slices/manifest.json");
++    });
++  });
++});
+
+--- src/commands/operator-confirm-rosters.test.ts
+@@ 1,37 @@
+ // Flow 456: the operator card tools exist in ONE roster — the interactive TUI shell's. They are absent from
+ // the MCP tool registry, ACP sessions, spawn_subagent child rosters and the readline (non-TUI) shell, so a
+ // second surface never grows a way to put a decision to the operator that it cannot render or protect.
+ 
+ import { expect, test } from "bun:test";
+ import { readFileSync } from "node:fs";
+ import { buildAcpSessionTools } from "../acp/roster";
+ import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
+ import type { NormalizedEvent, NormalizedRequest, ProviderDescription, ProviderPort } from "../harness/provider/types";
+ import { buildToolRegistry } from "../mcp/tools";
+ import { OPERATOR_CONFIRM_TOOL_NAMES } from "../trigger/unattended";
+ import { operatorConfirmToolNames } from "./operator-confirm-tools";
+ 
+ const NAMES = operatorConfirmToolNames();
+ 
+-test("there are 18 operator card tools to keep out of the other rosters", () => {
+-  expect(NAMES).toHaveLength(18);
++test("there are 19 operator card tools to keep out of the other rosters", () => {
++  expect(NAMES).toHaveLength(19);
+ });
+ 
+ test("the unattended exclusion list names exactly the registered operator card tools", () => {
+   expect([...OPERATOR_CONFIRM_TOOL_NAMES].sort()).toEqual([...NAMES].sort());
+ });
+ 
+ test("the MCP tool registry offers none of them", () => {
+   const names = buildToolRegistry().map((entry) => entry.name);
+   for (const name of NAMES) expect(names).not.toContain(name);
+ });
+ 
+ test("an ACP session roster offers none of them", () => {
+   const names = buildAcpSessionTools({
+     root: "/nonexistent-root",
+     clientCapabilities: undefined,
+     readViaClient: async () => "",
+   }).map((tool) => tool.definition.name);
+   for (const name of NAMES) expect(names).not.toContain(name);
+ });
+ 
+
+--- src/commands/operator-confirm-tools.test.ts
+@@ 1,29 @@
+ // Flow 456 (AC1): the operator-confirm framework, driven through the REAL agent loop with a
+ // tiny gate built by the helper. The model is scripted. The card must be asked in every
+ // permission mode (auto included), never answered by review-auto or a session grant, denied
+ // with no approver (an unattended run), and its token must apply the effect at most once.
+ 
+ import { afterEach, describe, expect, test } from "bun:test";
+ import { runAgentTurn, type AgentDeps, type AgentIO, type ApprovalMeta, type ApprovalResponse } from "./agent";
+ import {
++  REMOTE_CARD_TTL_MS,
+   operatorConfirmTool,
+   operatorConfirmToolNames,
+   operatorConfirmTools,
+   type OperatorConfirmation,
+   type OperatorConfirmSpec,
+ } from "./operator-confirm-tools";
+ import type { NormalizedEvent, NormalizedMessage, NormalizedRequest, ProviderDescription, ProviderPort, StreamOptions } from "../harness/provider/types";
+ import { reviewAutoGrants, setReviewSystem } from "../review/review-system";
+ import { isUnattendedExcludedTool, unattendedRefusal } from "../trigger/unattended";
+ import { buildUnattendedRoster } from "./trigger-dispatch";
+ import { operatorCardDialog } from "../tui/tui-shell";
+ import { initialChoiceSelection } from "../tui/composer-choice";
+ 
+ const DESCRIPTION: ProviderDescription = {
+   capabilities: {
+     streaming: true,
+     toolCalls: true,
+     parallelToolCalls: false,
+     structuredOutput: false,
+     reasoningMetadata: false,
+
+--- src/commands/operator-confirm-tools.test.ts
+@@ 41,236 @@
+     describe: () => DESCRIPTION,
+     stream: (_request: NormalizedRequest, opts: StreamOptions) => {
+       const round: Partial<NormalizedEvent>[] =
+         call === 0
+           ? [
+               { kind: "tool_call_start", toolCallId: "c1", toolName },
+               { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify(input) },
+               { kind: "model_end" },
+             ]
+           : [{ kind: "text_delta", text: "ok" }, { kind: "model_end" }];
+       call += 1;
+       return (async function* (): AsyncGenerator<NormalizedEvent> {
+         let sequence = 0;
+         for (const partial of round) yield { sequence: sequence++, attemptId: opts.attemptId, kind: "model_end", ...partial } as NormalizedEvent;
+       })();
+     },
+   };
+ }
+ 
+ const NOW = new Date("2026-10-15T18:30:00.000Z");
++const ALLOWED = [446593035];
++const PRESSED_AT = "2026-10-15T18:30:00.000Z";
+ 
+ /** The test gate: lifts a counter's ceiling. Its card reads "state" the test controls. */
+-function testGate(state: { ceiling: number; refuse?: string }) {
++function testGate(
++  state: { ceiling: number; refuse?: string },
++  binding: { allowedUserIds?: () => readonly number[] | undefined; now?: () => Date } = {},
++) {
+   const applied: { input: Record<string, unknown>; confirmation: OperatorConfirmation; prepared: { ceiling: number } | undefined }[] = [];
+   const spec: OperatorConfirmSpec<{ ceiling: number }> = {
+     name: "test_lift_ceiling",
+     description: "Lift the test ceiling.",
+     inputSchema: {
+       type: "object",
+       properties: { to: { type: "integer" } },
+       required: ["to"],
+       additionalProperties: false,
+     },
+     buildCard: async (input) => {
+       if (state.refuse !== undefined) return { refusal: state.refuse };
+       const to = input["to"] as number;
+       return {
+         title: `Lift the test ceiling from ${state.ceiling} to ${to}?`,
+         lines: [`current ceiling: ${state.ceiling}`, `new ceiling: ${to}`],
+         subject: "package pkg-1",
+         prepared: { ceiling: state.ceiling },
+       };
+     },
+     apply: async (input, _ctx, confirmation, prepared) => {
+       applied.push({ input, confirmation, prepared });
+       return { output: `ceiling lifted to ${String(input["to"])}` };
+     },
+   };
+-  return { spec, applied, tool: operatorConfirmTool(spec, { projectRoot: "/nonexistent-root", now: () => NOW }) };
++  return { spec, applied, tool: operatorConfirmTool(spec, { projectRoot: "/nonexistent-root", now: () => NOW, ...binding }) };
+ }
+ 
+ const CARD = ["Lift the test ceiling from 25 to 31?", "current ceiling: 25", "new ceiling: 31", "subject: package pkg-1"];
+ 
+ async function turn(options: {
+   mode: "ask" | "trust" | "auto";
+   answer?: (meta: ApprovalMeta | undefined) => ApprovalResponse;
+   /** Leave the approver out: an unattended run. */
+   unattended?: boolean;
+   state?: { ceiling: number; refuse?: string };
+   trustedMcpTools?: Map<string, string>;
++  allowedUserIds?: readonly number[];
+ }) {
+-  const gate = testGate(options.state ?? { ceiling: 25 });
++  const gate = testGate(options.state ?? { ceiling: 25 }, { allowedUserIds: () => options.allowedUserIds ?? ALLOWED });
+   const asked: { tool: string; meta: ApprovalMeta | undefined }[] = [];
+   const autoApproved: string[] = [];
+   const history: NormalizedMessage[] = [];
+   const deps: AgentDeps = {
+     provider: scripted("test_lift_ceiling", { to: 31 }),
+     providerId: "scripted",
+     modelId: "m",
+     tools: [gate.tool],
+     systemInstruction: "test",
+     idSeq: (() => {
+       let n = 0;
+       return () => `id${n++}`;
+     })(),
+   };
+   const io: AgentIO = {
+     write: () => {},
+     permissionMode: () => options.mode,
+     readOnly: () => false,
+     ...(options.unattended === true
+       ? {}
+       : {
+           requestApproval: async (tool: string, _input: string, meta?: ApprovalMeta) => {
+             asked.push({ tool, meta });
+             return options.answer?.(meta) ?? false;
+           },
+         }),
+     onAutoApproved: (tool) => {
+       autoApproved.push(tool);
+     },
+     ...(options.trustedMcpTools !== undefined ? { trustedMcpTools: options.trustedMcpTools } : {}),
+   };
+   await runAgentTurn(io, deps, history, "lift the ceiling to 31");
+   const toolOutput = history.filter((m) => m.role === "tool").map((m) => m.content).join("\n");
+   return { asked, autoApproved, toolOutput, applied: gate.applied };
+ }
+ 
+ const yes = (meta: ApprovalMeta | undefined): ApprovalResponse => ({ approved: true, fingerprint: meta!.fingerprint });
++const remoteYes = (meta: ApprovalMeta | undefined, pressedBy: number = ALLOWED[0]!): ApprovalResponse => ({
++  approved: true,
++  fingerprint: meta!.fingerprint,
++  via: "remote",
++  pressedBy,
++  pressedAt: PRESSED_AT,
++});
+ 
+ afterEach(() => {
+   setReviewSystem("inherit");
+ });
+ 
+ describe("AC1: the driver asks for an operator-confirm card in every mode", () => {
+   for (const mode of ["auto", "trust", "ask"] as const) {
+     test(`under "${mode}" the card is asked, never auto-approved, and "no" applies nothing`, async () => {
+       const result = await turn({ mode, answer: () => false });
+       expect(result.autoApproved).toEqual([]);
+       expect(result.asked).toHaveLength(1);
+       const meta = result.asked[0]!.meta!;
+       expect(meta.alwaysAsk).toBe(true);
+       expect(meta.card).toEqual(CARD);
+       expect(meta.cardTitle).toBe("Lift the test ceiling from 25 to 31?");
+       expect(result.applied).toEqual([]);
+       expect(result.toolOutput).toContain("test_lift_ceiling not confirmed by the operator");
+     });
+   }
+ 
+   test("yes applies the effect once, with the confirmation record and what the card prepared", async () => {
+     const result = await turn({ mode: "auto", answer: yes });
+     expect(result.applied).toHaveLength(1);
+     const applied = result.applied[0]!;
+     expect(applied.input).toEqual({ to: 31 });
+     expect(applied.prepared).toEqual({ ceiling: 25 });
+     expect(applied.confirmation).toEqual({
+       quote: "Lift the test ceiling from 25 to 31?: yes",
+       answer: "yes",
+       at: NOW.toISOString(),
+       confirmedVia: "tui-card",
+       subject: "package pkg-1",
+       card: CARD,
+     });
+     expect(result.toolOutput).toContain("ceiling lifted to 31");
+   });
+ 
+-  test("a yes answered in the remote topic is recorded as remote-card", async () => {
+-    const result = await turn({ mode: "ask", answer: (meta) => ({ approved: true, fingerprint: meta!.fingerprint, via: "remote" }) });
++  test("a yes answered in the remote topic is recorded as remote-card, with who pressed and when", async () => {
++    const result = await turn({ mode: "ask", answer: remoteYes });
+     expect(result.applied).toHaveLength(1);
+-    expect(result.applied[0]!.confirmation.confirmedVia).toBe("remote-card");
++    const confirmation = result.applied[0]!.confirmation;
++    expect(confirmation.confirmedVia).toBe("remote-card");
++    expect(confirmation.pressedBy).toBe(ALLOWED[0]);
++    expect(confirmation.pressedAt).toBe(PRESSED_AT);
++  });
++
++  test("a yes pressed in this shell records neither pressedBy nor pressedAt", async () => {
++    const result = await turn({ mode: "ask", answer: yes });
++    const confirmation = result.applied[0]!.confirmation;
++    expect(confirmation.confirmedVia).toBe("tui-card");
++    expect("pressedBy" in confirmation).toBe(false);
++    expect("pressedAt" in confirmation).toBe(false);
++  });
++
++  test("a remote yes from an id outside the allowed list applies nothing and says why", async () => {
++    const result = await turn({ mode: "ask", answer: (meta) => remoteYes(meta, 1234), allowedUserIds: ALLOWED });
++    expect(result.applied).toEqual([]);
++    expect(result.toolOutput).toContain("Telegram user 1234 is not on the allowed list — nothing was changed");
++  });
++
++  test("a remote yes with no allowed list bound applies nothing", async () => {
++    const result = await turn({ mode: "ask", answer: remoteYes, allowedUserIds: [] });
++    expect(result.applied).toEqual([]);
++    expect(result.toolOutput).toContain("not on the allowed list");
+   });
+ 
+   test("a yes for a different call (fingerprint mismatch) is a no", async () => {
+     const result = await turn({ mode: "auto", answer: () => ({ approved: true, fingerprint: "someone-else" }) });
+     expect(result.applied).toEqual([]);
+     expect(result.toolOutput).toContain("not confirmed by the operator");
+   });
+ 
+   test("a card that cannot be built refuses without asking", async () => {
+     const result = await turn({ mode: "auto", answer: yes, state: { ceiling: 25, refuse: "the package has no estimate yet" } });
+     expect(result.asked).toEqual([]);
+     expect(result.applied).toEqual([]);
+     expect(result.toolOutput).toContain("test_lift_ceiling refused: the package has no estimate yet");
+   });
+ });
+ 
+ describe("AC1: nothing but the operator answers the card", () => {
+   test("review-auto never grants it: the human is still asked", async () => {
+     setReviewSystem("review-auto");
+     const result = await turn({ mode: "auto", answer: yes });
+
+--- src/commands/operator-confirm-tools.test.ts
+@@ 297,441 @@
+     expect((await gate.tool.invoke({ to: 31 }, { confirmationToken: confirmation.token! })).isError).toBe(true);
+     expect(gate.applied).toEqual([]);
+   });
+ 
+   test("a declined card's token is dropped", async () => {
+     const gate = testGate({ ceiling: 25 });
+     const confirmation = await gate.tool.confirmation!({ to: 31 });
+     if ("error" in confirmation) throw new Error(confirmation.error);
+     gate.tool.confirmationDeclined!(confirmation.token!);
+     expect((await gate.tool.invoke({ to: 31 }, { confirmationToken: confirmation.token! })).isError).toBe(true);
+     expect(gate.applied).toEqual([]);
+   });
+ 
+   test("the tool is write-risk and tells the model it cannot confirm", () => {
+     const gate = testGate({ ceiling: 25 });
+     expect(gate.tool.definition.risk).toBe("write");
+     expect(gate.tool.definition.description).toContain("you cannot confirm it");
+   });
+ });
+ 
++describe("AC2: a remote answer is accepted only for this question, once, within an hour", () => {
++  const remote = (token: string, extra: { pressedBy?: number } = {}) => ({
++    confirmationToken: token,
++    confirmationVia: "remote" as const,
++    confirmationPressedBy: extra.pressedBy ?? ALLOWED[0]!,
++    confirmationPressedAt: PRESSED_AT,
++  });
++  const issue = async (gate: ReturnType<typeof testGate>, to = 31) => {
++    const confirmation = await gate.tool.confirmation!({ to });
++    if ("error" in confirmation) throw new Error(confirmation.error);
++    return confirmation.token!;
++  };
++
++  test("an allowed id, this question's token, unused, inside the hour is accepted", async () => {
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
++    const result = await gate.tool.invoke({ to: 31 }, remote(await issue(gate)));
++    expect(result.isError).toBe(false);
++    expect(gate.applied).toHaveLength(1);
++  });
++
++  test("an id that is not allowed is refused, says why, and changes nothing", async () => {
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
++    const result = await gate.tool.invoke({ to: 31 }, remote(await issue(gate), { pressedBy: 777 }));
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("Telegram user 777 is not on the allowed list — nothing was changed");
++    expect(gate.applied).toEqual([]);
++  });
++
++  test("with no allowed-id list to check (the provider returns undefined) a remote answer is refused and the token is spent", async () => {
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => undefined });
++    const token = await issue(gate);
++    const result = await gate.tool.invoke({ to: 31 }, remote(token));
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("is not on the allowed list — nothing was changed");
++    expect(gate.applied).toEqual([]);
++    expect((await gate.tool.invoke({ to: 31 }, remote(token))).output).toContain("no operator-confirmed card");
++  });
++
++  test("with no allowed-id provider bound at all a remote answer is refused", async () => {
++    const gate = testGate({ ceiling: 25 });
++    const result = await gate.tool.invoke({ to: 31 }, remote(await issue(gate)));
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("is not on the allowed list — nothing was changed");
++    expect(gate.applied).toEqual([]);
++  });
++
++  test("another question's token is refused, changes nothing, and is spent", async () => {
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
++    const token = await issue(gate, 31);
++    const result = await gate.tool.invoke({ to: 99 }, remote(token));
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("no operator-confirmed card for this request — nothing was changed");
++    expect(gate.applied).toEqual([]);
++    expect((await gate.tool.invoke({ to: 31 }, remote(token))).isError).toBe(true);
++  });
++
++  test("a replay of a used token is refused", async () => {
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
++    const token = await issue(gate);
++    expect((await gate.tool.invoke({ to: 31 }, remote(token))).isError).toBe(false);
++    const replay = await gate.tool.invoke({ to: 31 }, remote(token));
++    expect(replay.isError).toBe(true);
++    expect(replay.output).toContain("nothing was changed");
++    expect(gate.applied).toHaveLength(1);
++  });
++
++  test("a token older than one hour is refused, says why, and is spent", async () => {
++    let clock = NOW.getTime();
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED, now: () => new Date(clock) });
++    const token = await issue(gate);
++    clock += REMOTE_CARD_TTL_MS + 1;
++    const result = await gate.tool.invoke({ to: 31 }, remote(token));
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("older than 1 hour");
++    expect(gate.applied).toEqual([]);
++    expect((await gate.tool.invoke({ to: 31 }, remote(token))).isError).toBe(true);
++  });
++
++  test("a token exactly at the hour is still accepted", async () => {
++    let clock = NOW.getTime();
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED, now: () => new Date(clock) });
++    const token = await issue(gate);
++    clock += REMOTE_CARD_TTL_MS;
++    expect((await gate.tool.invoke({ to: 31 }, remote(token))).isError).toBe(false);
++  });
++
++  test("a remote answer that does not say who pressed it is refused", async () => {
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
++    const token = await issue(gate);
++    const result = await gate.tool.invoke({ to: 31 }, { confirmationToken: token, confirmationVia: "remote" });
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("did not say who pressed it");
++    expect(gate.applied).toEqual([]);
++  });
++
++  test("an answer that did not come through the bridge (tool-result text, no token) applies nothing", async () => {
++    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
++    await issue(gate);
++    const result = await gate.tool.invoke({ to: 31 }, { confirmationVia: "remote", confirmationPressedBy: ALLOWED[0]!, confirmationPressedAt: PRESSED_AT });
++    expect(result.isError).toBe(true);
++    expect(result.output).toContain("no operator-confirmed card for this request — nothing was changed");
++    expect(gate.applied).toEqual([]);
++  });
++});
++
+ describe("nested shell defence", () => {
+   test("every card is refused when this keryx runs with KERYX_TOOL_CALL=1", async () => {
+     const gate = testGate({ ceiling: 25 });
+     const nested = operatorConfirmTool(gate.spec, { projectRoot: "/nonexistent-root", now: () => NOW, env: { KERYX_TOOL_CALL: "1" } });
+     const result = await nested.confirmation!({ to: 31 });
+     expect("error" in result && result.error).toContain("KERYX_TOOL_CALL=1");
+     expect((await nested.invoke({ to: 31 }, { confirmationToken: "anything" })).isError).toBe(true);
+     expect(gate.applied).toEqual([]);
+   });
+   test("a shell outside an agent's shell_exec still asks", async () => {
+     const gate = testGate({ ceiling: 25 });
+     const plain = operatorConfirmTool(gate.spec, { projectRoot: "/nonexistent-root", now: () => NOW, env: {} });
+     expect("card" in (await plain.confirmation!({ to: 31 }))).toBe(true);
+   });
+ });
+ describe("AC1: the TUI dialog wording", () => {
+   test("No is the default selection, so an Enter typed as the dock opens declines", () => {
+     const dialog = operatorCardDialog("Lift the test ceiling from 25 to 31?");
+     expect(initialChoiceSelection([dialog.yes, dialog.no])).toBe(1);
+     expect(initialChoiceSelection([dialog.yes, dialog.no])).toBe([dialog.yes, dialog.no].findIndex((o) => o.id === dialog.no.id));
+
+--- src/commands/shell.test.ts
+@@ 860,900 @@
+     "graph_path",
+     "graph_query",
+     "graph_symbol",
+     "health_status",
+     // Flow 393: working-memory recall (read-only) and the Notes writer.
+     "history_search",
+     "learn_accept",
+     "learn_graduate",
+     "learn_promote",
+     "list_dir",
+     "memory_search",
+     "plan_get",
+     "plan_set",
+     "plan_update",
+     "read_file",
+     "read_wiki",
+     "recall_step",
+     "repomap",
+     "review_chunks_answer",
+     "review_comments_reply",
++    "review_complete",
+     "review_confirm_plan",
+     "review_decide_premise",
+     "review_override_reviewers",
+     "review_publish",
+     "review_waive_coverage",
+     "review_waive_mutation",
+     "review_waive_readiness",
+     // Flow 295: operator-confirmed scheduling — schedule_create always asks and shows
+     // the card; schedule_list is read-only. TUI roster only.
+     "schedule_create",
+     "schedule_list",
+     "schedule_pause",
+     "schedule_remove",
+     "schedule_resume",
+     "schedule_run",
+     "search_code",
+     // The MCP consumer pair (keryx-mcp-servers P0). TWO entries however many
+     // servers the operator has connected — if a qualified name like
+     // `linear__create_issue` ever appears in this list, the package's whole
+     // premise has been reversed.
+
+--- src/flow/confirm-token.test.ts
+@@ 468,510 @@
+   await expect(
+     service.confirmMint({ cwd: ROOT, id, expect: { acChecksum: String(flow.acChecksum), target: "pr:https://github.com/acme/app/pull/999" } }),
+   ).rejects.toThrow(/completion target changed after the confirmation card/);
+   await expect(readFile(confirmTokenPath(ROOT, dir), "utf8")).rejects.toThrow();
+   const ok = await service.confirmMint({ cwd: ROOT, id, expect: { acChecksum: String(flow.acChecksum), target: `pr:${PR}` } });
+   expect(ok.token.length).toBeGreaterThan(0);
+ });
+ 
+ test("456: a card-minted token is spent with a card mechanism in the signature", async () => {
+   const service = await fresh();
+   const { id, dir } = await readyFlow(service);
+   const minted = await service.confirmMint({ cwd: ROOT, id, confirmation: { confirmedVia: "remote-card", quote: "Confirm?: yes" } });
+   clock = new Date(clock.getTime() + 60_000);
+   const result = await service.complete({ cwd: ROOT, id, confirmToken: minted.token, signedBy: "Aleks" });
+   expect(result.passed).toBe(true);
+   const flow = await onDisk(dir);
+   expect(flow.signatures?.find((candidate) => candidate.kind === "complete")?.confirmation?.mechanism).toBe("remote-card-token");
+   expect(validateAgainstSchemaObject(flowStateSchema(), flow).valid).toBe(true);
+ });
+ 
++test("464: a remote-card token carries who pressed the card and when into the signature", async () => {
++  const service = await fresh();
++  const { id, dir } = await readyFlow(service);
++  const minted = await service.confirmMint({
++    cwd: ROOT,
++    id,
++    confirmation: { confirmedVia: "remote-card", quote: "Confirm?: yes", pressedBy: 446593035, pressedAt: "2026-10-15T18:30:00.000Z" },
++  });
++  clock = new Date(clock.getTime() + 60_000);
++  await service.complete({ cwd: ROOT, id, confirmToken: minted.token, signedBy: "Aleks" });
++  const flow = await onDisk(dir);
++  const confirmation = flow.signatures?.find((candidate) => candidate.kind === "complete")?.confirmation;
++  expect(confirmation).toMatchObject({ mechanism: "remote-card-token", pressedBy: 446593035, pressedAt: "2026-10-15T18:30:00.000Z" });
++  expect(validateAgainstSchemaObject(flowStateSchema(), flow).valid).toBe(true);
++});
++
+ test("456: the refusal text names the flow_confirm tool in keryx shell and the terminal outside it", () => {
+   for (const reason of ["token_required", "token_not_minted", "token_expired", "token_target_mismatch"] as const) {
+     const text = describeConfirmationFailure(reason, "42");
+     expect(text).toContain("`flow_confirm` tool inside keryx shell");
+     expect(text).toContain("from a terminal outside it: `keryx flow confirm 42`");
+   }
+ });
+
+--- src/flow/confirm-token.ts
+@@ 55,97 @@
+   flowId: string;
+   kind: "complete";
+   acChecksum: string;
+   /**
+    * The completion target the operator was shown when minting (security
+    * review of PR #661): `pr:<url>` for a pull-request completion, `merged` for
+    * a direct-merge one. `flow complete` refuses a token spent on any other
+    * target, so a token minted while looking at pull/1 cannot close pull/999.
+    */
+   target: string;
+   mintedAt: string;
+   expiresAt: string;
+   usedAt?: string | undefined;
+   /**
+    * Flow 456: how the operator's yes arrived when it was not the terminal challenge — `tui-card`
+    * for the shell's yes/no card — and the card text that answer was given to. Absent on a token
+    * minted by `keryx flow confirm` in a terminal, and on every token minted before flow 456.
+    */
+   confirmedVia?: string | undefined;
+   confirmationQuote?: string | undefined;
++  /** Flow 464: the Telegram user id that pressed the remote card and the shell's clock when the press arrived. */
++  pressedBy?: number | undefined;
++  pressedAt?: string | undefined;
+ };
+ 
+ export type ConfirmationTokenFailure =
+   | "token_required"
+   | "token_not_minted"
+   | "token_unreadable"
+   | "token_mismatch"
+   | "token_expired"
+   | "token_used"
+   | "token_other_flow"
+   | "token_stale_criteria"
+   | "token_target_mismatch";
+ 
+ export type ConfirmationTokenCheck =
+   | { ok: true; stored: StoredConfirmationToken }
+   | { ok: false; reason: ConfirmationTokenFailure };
+ 
+ export function confirmTokenPath(cwd: string, dir: string): string {
+   return path.join(flowsRoot(cwd), dir, CONFIRM_TOKEN_FILE);
+ }
+
+--- src/flow/confirm-token.ts
+@@ 100,161 @@
+  * The completion target a token binds to: `merged` for a direct-merge
+  * completion, `pr:<url>` for a pull-request one, `pr:none` when no PR is
+  * recorded (a completion that the pull-request gate will fail anyway).
+  */
+ export function completionTarget(input: { merged: boolean; prUrl: string | null }): string {
+   return input.merged ? "merged" : `pr:${input.prUrl ?? "none"}`;
+ }
+ 
+ function sha256(text: string): string {
+   return createHash("sha256").update(text).digest("hex");
+ }
+ 
+ /**
+  * Write a fresh token's hash for `flowId`, replacing any earlier one: only the
+  * latest mint is spendable. Returns the plaintext token, once, to the caller.
+  * The caller holds the flow lock.
+  */
+ export async function mintConfirmationToken(
+   cwd: string,
+   dir: string,
+-  binding: { flowId: string; acChecksum: string; target: string; confirmedVia?: string; confirmationQuote?: string },
++  binding: { flowId: string; acChecksum: string; target: string; confirmedVia?: string; confirmationQuote?: string; pressedBy?: number; pressedAt?: string },
+   deps: { now: () => Date; randomToken?: () => string },
+ ): Promise<{ token: string; stored: StoredConfirmationToken }> {
+   // The flow id is the token's visible prefix, so a token pasted into the wrong
+   // flow is refused as "other flow" rather than as an anonymous mismatch.
+   const token = `${binding.flowId}.${(deps.randomToken ?? (() => randomBytes(24).toString("base64url")))()}`;
+   const mintedAt = deps.now();
+   const hash = sha256(token);
+   const stored: StoredConfirmationToken = {
+     schemaVersion: 1,
+     hash,
+     tokenRef: hash.slice(0, TOKEN_REF_LENGTH),
+     flowId: binding.flowId,
+     kind: "complete",
+     acChecksum: binding.acChecksum,
+     target: binding.target,
+     mintedAt: mintedAt.toISOString(),
+     expiresAt: new Date(mintedAt.getTime() + CONFIRMATION_TOKEN_TTL_MS).toISOString(),
+     ...(binding.confirmedVia !== undefined ? { confirmedVia: binding.confirmedVia } : {}),
+     ...(binding.confirmationQuote !== undefined ? { confirmationQuote: binding.confirmationQuote } : {}),
++    ...(binding.pressedBy !== undefined ? { pressedBy: binding.pressedBy } : {}),
++    ...(binding.pressedAt !== undefined ? { pressedAt: binding.pressedAt } : {}),
+   };
+   await writeFileAtomic(confirmTokenPath(cwd, dir), `${JSON.stringify(stored, null, 2)}\n`);
+   return { token, stored };
+ }
+ 
+ const isString = (value: unknown): value is string => typeof value === "string" && value.length > 0;
+ const isInstant = (value: unknown): value is string => isString(value) && Number.isFinite(Date.parse(value));
+ 
+ /**
+  * The store's shape, checked before anything in it is trusted (security review
+  * of PR #661). `null`, an array, a missing or non-string field, or an
+  * `expiresAt` that does not parse is `token_unreadable`. An unparsable expiry
+  * must never read as "never expires": `NaN <= now` is false, which is exactly
+  * that bug.
+  */
+ function parseStoredToken(raw: unknown): StoredConfirmationToken | undefined {
+   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+   const record = raw as Record<string, unknown>;
+   if (
+     !isString(record["hash"]) ||
+
+--- src/flow/confirm-token.ts
+@@ 215,256 @@
+ export async function consumeConfirmationToken(
+   cwd: string,
+   dir: string,
+   stored: StoredConfirmationToken,
+   now: Date,
+ ): Promise<SignatureConfirmation> {
+   const consumedAt = now.toISOString();
+   await writeFileAtomic(
+     confirmTokenPath(cwd, dir),
+     `${JSON.stringify({ ...stored, usedAt: consumedAt }, null, 2)}\n`,
+   );
+   // A card-minted token (flow 456) says so in the signature: "tui-card-token" / "remote-card-token".
+   const mechanism: SignatureConfirmation["mechanism"] =
+     stored.confirmedVia === "tui-card" ? "tui-card-token" : stored.confirmedVia === "remote-card" ? "remote-card-token" : "terminal-token";
+   return {
+     mechanism,
+     tokenRef: stored.tokenRef,
+     mintedAt: stored.mintedAt,
+     consumedAt,
+     boundTo: { kind: stored.kind, acChecksum: stored.acChecksum, target: stored.target },
++    ...(stored.pressedBy !== undefined ? { pressedBy: stored.pressedBy } : {}),
++    ...(stored.pressedAt !== undefined ? { pressedAt: stored.pressedAt } : {}),
+   };
+ }
+ 
+ /** One operator-facing sentence per refusal. Never echoes the token. */
+ export function describeConfirmationFailure(reason: ConfirmationTokenFailure, flowId: string): string {
+   const mint =
+     "mint one with the `flow_confirm` tool inside keryx shell (the operator presses yes on a card), " +
+     `or from a terminal outside it: \`keryx flow confirm ${flowId}\``;
+   switch (reason) {
+     case "token_required":
+       return `this flow requires a confirmation token, passed as --confirm-token; ${mint}`;
+     case "token_not_minted":
+       return `no confirmation token was minted for this flow; ${mint}`;
+     case "token_unreadable":
+       return `the confirmation token store could not be read; ${mint}`;
+     case "token_mismatch":
+       return `the confirmation token does not match the one minted for this flow (only the latest mint is valid); ${mint}`;
+     case "token_expired":
+       return `the confirmation token expired; ${mint}`;
+     case "token_used":
+
+--- src/flow/schema.ts
+@@ 311,352 @@
+             additionalProperties: true,
+             required: ["mechanism", "tokenRef", "mintedAt", "consumedAt", "boundTo"],
+             properties: {
+               mechanism: { type: "string", enum: ["terminal-token", "tui-card-token", "remote-card-token"] },
+               tokenRef: { type: "string", description: "A prefix of the stored token hash. Never the token." },
+               mintedAt: { type: "string" },
+               consumedAt: { type: "string" },
+               boundTo: {
+                 type: "object",
+                 additionalProperties: true,
+                 required: ["kind", "acChecksum"],
+                 properties: {
+                   kind: { type: "string", enum: ["complete"] },
+                   acChecksum: { type: "string" },
+                   target: {
+                     type: "string",
+                     description: "The completion target the token was minted for: `pr:<url>` or `merged`.",
+                   },
+                 },
+               },
++              pressedBy: { type: "integer", description: "Flow 464: on a remote-card token, the Telegram user id that pressed the card." },
++              pressedAt: { type: "string", description: "Flow 464: on a remote-card token, the shell's clock when the press arrived." },
+             },
+           },
+         },
+       },
+       completionAttempt: {
+         type: "object",
+         description:
+           "flow 291: one `flow complete` attempt, on the record — every gate it evaluated, whether the attempt passed overall, and the AC checksum in force. Never mutated once written.",
+         additionalProperties: true,
+         required: ["at", "gates", "passed", "acChecksum"],
+         properties: {
+           at: { type: "string" },
+           gates: {
+             type: "array",
+             items: { $ref: "#/definitions/gateOutcome" },
+           },
+           passed: { type: "boolean" },
+           acChecksum: {
+             type: ["string", "null"],
+             description: "The acceptance-criteria checksum in force when this attempt ran.",
+
+--- src/flow/service.ts
+@@ 1658,1703 @@
+         if (expect !== undefined) {
+           const nowTarget = completionTarget({ merged: merged === true, prUrl: flow.pr.url });
+           if (flow.acChecksum !== expect.acChecksum || nowTarget !== expect.target) {
+             throw new Error(
+               `flow confirm: flow ${flow.id}'s ${flow.acChecksum !== expect.acChecksum ? "acceptance criteria" : "completion target"} ` +
+                 "changed after the confirmation card was shown; no token was minted. Ask for a new card.",
+             );
+           }
+         }
+         const criteria = await readAcCriteria(cwd, dir);
+         const { token, stored } = await mintConfirmationToken(
+           cwd,
+           dir,
+           {
+             flowId: flow.id,
+             acChecksum: flow.acChecksum,
+             // The target the CLI just showed the operator (security review of
+             // PR #661): a later `flow implemented --pr <other>` cannot reuse it.
+             target: completionTarget({ merged: merged === true, prUrl: flow.pr.url }),
+             ...(confirmation !== undefined
+-              ? { confirmedVia: confirmation.confirmedVia, confirmationQuote: confirmation.quote }
++              ? {
++                  confirmedVia: confirmation.confirmedVia,
++                  confirmationQuote: confirmation.quote,
++                  ...(confirmation.pressedBy !== undefined ? { pressedBy: confirmation.pressedBy } : {}),
++                  ...(confirmation.pressedAt !== undefined ? { pressedAt: confirmation.pressedAt } : {}),
++                }
+               : {}),
+           },
+           { now: deps.now },
+         );
+         // History names the token by its hash prefix only: the plaintext token
+         // exists once, in this function's return value.
+         flow = await save(cwd, dir, flow, "confirmation-minted", `token ${stored.tokenRef}, expires ${stored.expiresAt}`);
+         return {
+           flow,
+           token,
+           tokenRef: stored.tokenRef,
+           mintedAt: stored.mintedAt,
+           expiresAt: stored.expiresAt,
+           acChecksum: stored.acChecksum,
+           confirmedCriteria: criteria.filter((criterion) => Boolean(flow.acConfirmed[criterion])).length,
+           totalCriteria: criteria.length,
+           target: flow.pr.url ?? null,
+         };
+       });
+     },
+
+--- src/flow/types.ts
+@@ 167,209 @@
+ };
+ 
+ /**
+  * What a confirmation token recorded when it was spent on a completion
+  * (flow 299, AC3). This is a record of a mechanism, not an identity: it says
+  * an interactive confirmation step ran within the token's TTL for exactly
+  * this AC checksum. It does not say who ran that step (see TM-03).
+  */
+ export type SignatureConfirmation = {
+   mechanism: "terminal-token" | "tui-card-token" | "remote-card-token";
+   /** A prefix of the stored hash, for correlation. Never the token. */
+   tokenRef: string;
+   mintedAt: string;
+   consumedAt: string;
+   /**
+    * `target` (security review of PR #661): `pr:<url>` or `merged`, the
+    * completion the operator was shown. Optional in the type so a signature
+    * written before it existed still reads.
+    */
+   boundTo: { kind: "complete"; acChecksum: string; target?: string | undefined };
++  /** Flow 464: for a remote-card token, the Telegram user id that pressed the card and the shell's clock when the press arrived. */
++  pressedBy?: number | undefined;
++  pressedAt?: string | undefined;
+ };
+ 
+ /**
+  * One append-only signature (flow 289, AC4): who signed, when, and exactly
+  * what they signed. Pushed onto `FlowState.signatures`, never mutated once
+  * written — a repeated `ac confirm`/`complete` records a NEW entry rather
+  * than replacing the last one, so the full signing history survives even
+  * when (e.g.) an AC is reconfirmed.
+  */
+ export type FlowSignature = {
+   at: string;
+   kind: "ac-confirm" | "complete";
+   identity: Identity;
+   /** The AC id this signs. Present only for `kind: "ac-confirm"`. */
+   criterion?: string | undefined;
+   /**
+    * The acceptance-criteria checksum in force at signing time. Null when the
+    * criteria were not frozen yet (mirrors `FlowState.acChecksum`).
+    */
+   acChecksum: string | null;
+
+--- src/flow/types.ts
+@@ 765,805 @@
+    * nothing (flow 364, AC4): no status transition, no `completionAttempts`
+    * entry, no signature, no lock, no spent token.
+    */
+   checkComplete(input: {
+     cwd: string;
+     id: string;
+     mergedCommit?: string | undefined;
+     confirmToken?: string | undefined;
+   }): Promise<FlowCompletionCheck>;
+   /**
+    * Mint a completion confirmation token (flow 299, AC1). The service checks the
+    * flow's state; the CLI verb adds the terminal and typed-challenge
+    * requirements, which the service cannot observe. Returns the plaintext
+    * token once; only its hash is stored.
+    */
+   confirmMint(input: {
+     cwd: string;
+     id: string;
+     merged?: boolean | undefined;
+     /** Flow 456: set by the shell's yes/no card; recorded in the token store. Absent for the terminal verb. */
+-    confirmation?: { confirmedVia: string; quote: string } | undefined;
++    confirmation?: { confirmedVia: string; quote: string; pressedBy?: number | undefined; pressedAt?: string | undefined } | undefined;
+     /**
+      * Flow 456: the criteria checksum and completion target the operator was SHOWN on the card. Checked
+      * under the flow lock; if either changed since, nothing is minted.
+      */
+     expect?: { acChecksum: string; target: string } | undefined;
+   }): Promise<FlowConfirmMintResult>;
+   /**
+    * Move a flow stuck in `completing` back to `in-progress` (flow 299, AC6),
+    * recording why. Refuses from any other status, and while another process
+    * holds the flow lock (a `complete` still running).
+    */
+   recover(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
+   block(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
+   unblock(input: { cwd: string; id: string }): Promise<FlowState>;
+   check(input: { cwd: string }): Promise<FlowCheckResult>;
+   /**
+    * Change a flow's number. The only sanctioned way to do it: `flow.json` is
+    * CLI-owned and the move must be recorded so old references stay traceable.
+    */
+   renumber(input: {

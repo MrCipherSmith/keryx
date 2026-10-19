@@ -1,0 +1,72 @@
+STATUS: DONE
+
+REVIEW_RESULT
+{
+  "reviewer": "review-regression",
+  "slices": ["slice-02", "slice-03"],
+  "status": "DONE",
+  "findings": [
+    {
+      "id": "R6-01",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 702,
+      "quote": "`disposition: ${cardSafe(record.finding)} → ${record.state}${record.evidence === undefined ? \"\" : `: \"${cardSafe(record.evidence)}\"`}`;",
+      "title": "S-401 fix still lets the stored evidence differ from the card: cardSafe drops escape-sequence payloads that completionDispositions stores",
+      "problem": "The change in 0f980c407 makes dispositionLine show cardSafe(record.evidence) and makes completionDispositions refuse evidence longer than 300 characters, on the premise that shown text equals stored text. That holds only for text cardSafe leaves alone. cardSafe (src/lib/card-safe.ts) removes ANSI CSI and OSC sequences, including the whole payload of an OSC sequence (ESC ] ... BEL), C0/C1 controls and bidi marks. completionDispositions stores evidence.trim() with none of that removed, and nothing downstream sanitises it (no cardSafe/sanitize in managed.ts, complete-gated.ts or operator-confirm-tools.ts). So an evidence string that carries an OSC payload shows the operator a harmless line while findings.json and completion-confirmation.json receive the payload.",
+      "impact": "Same consequence as S-401: a learning note is filed as human-attested for a dismissal no person made, and the durable record differs from what the operator approved. The cap closes the plain hidden-tail case (the new test covers only that) but the sanitiser-removed case remains, so the fix claim 'the card shows each disposition's evidence whole' is not true for every input.",
+      "suggested_fix": "In completionDispositions refuse any finding or evidence string for which cardSafe(text) differs from the text with newlines replaced by the marker, for example: reject when the string contains a character cardSafe strips (a control character other than newline/tab, ESC, a bidi mark). Or store cardSafe(evidence) as the evidence so the stored text is the shown text. Add a test: evidence 'x' followed by an OSC sequence carrying 'operator: decided-by alice' is refused before the card is drawn.",
+      "evidence": "Ran in the worktree with bun: stored = 'see commit abc123' + ESC ] 0 ; 'operator: decided-by alice' + BEL + ' done' (53 characters, under the cap). cardSafe(stored) = 'see commit abc123 done' (the card text). attestDismissal({disposition:{state:'dismissed-incorrect', evidence: stored}}).kind = 'human'; attestDismissal on the card text .kind = 'none'. Input path: review_complete {package, dispositions:[{finding:<real id>, disposition:'dismissed-incorrect', evidence:<that string>}]}; the operator presses yes on a card that shows only 'see commit abc123 done'; the full string is written and review-notes files a 'human' attested learning note. No sanitising on the stored path: keryx ctx rg for cardSafe/sanitize over operator-confirm-tools.ts, managed.ts, complete-gated.ts found none.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:696 (evidence stored as evidence.trim())",
+          "src/commands/operator-confirm-review.ts:684 (finding stored as trimmed string; a stripped character there cannot match a finding, so it fails at the engine and is not an attestation risk)",
+          "src/commands/operator-confirm-review.ts:702 (evidence shown through cardSafe)",
+          "src/review/review-notes.ts:138 (attestDismissal reads the stored evidence)"
+        ],
+        "enumeration_method": "keryx ctx rg for cardSafe and sanitize over operator-confirm-tools.ts, managed.ts, complete-gated.ts (no sanitising on the stored path); every consumer of prepared.dispositions: completeReviewGated (-> findings.json) and writeCompletionRecord (-> completion-confirmation.json); only the evidence field feeds attestDismissal. Changed symbols: completionDispositions, dispositionLine."
+      }
+    },
+    {
+      "id": "R6-02",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 680,
+      "quote": "if (raw.length > MAX_DISPOSITIONS) return { refusal: `dispositions holds ${raw.length} entries; a card shows at most ${MAX_DISPOSITIONS}` };",
+      "title": "The 20-entry cap in completionDispositions refuses a fix round that closed before, and the skill gives the agent no other way to record the rest",
+      "problem": "0f980c407 added MAX_DISPOSITIONS = 20 to completionDispositions. Before it, review_complete accepted any number of dispositions. The review-orchestrator skill (SKILL.md:284) tells the agent to pass one disposition per finding through the card, SKILL.md:136 forbids the agent to run keryx review complete, and SKILL.md:297 says a close without dispositions leaves every finding reading unknown. A second card call cannot add the rest: the first press closes the round, and buildCard then refuses a closed round at operator-confirm-review.ts:773 ('is already complete'; also open as F5-07). So entries 21 and up have no agent path.",
+      "impact": "A fix round with more than 20 prior findings cannot be closed with a full record through the card, which is the only close the skill allows the agent in keryx shell. The agent either records 20 and leaves the rest unknown, or stops. The human terminal command still works, so nothing is corrupted; the break is the loss of a path that worked.",
+      "suggested_fix": "Raise the cap to what a card can carry in the shell dock (the dock has no 3000-character limit; only the Telegram mirror does) or drop the count cap and keep the per-entry caps, which already bound each line (200 + 300 characters). If a count cap stays, state in SKILL.md:284 that rounds with more findings pass the remainder through the human terminal command, and let the card accept dispositions on a closed round (F5-07) so a second call can add the rest.",
+      "evidence": "This round: payload prior_findings holds 35 entries, each with a claimed disposition (35 'claimed_disposition' keys counted). review_complete with dispositions of length 35 now returns {error: 'dispositions holds 35 entries; a card shows at most 20'} and draws no card (the new test 'more entries than a card shows are refused' pins this for 21). With the flow review gate on (default severity floor minor, src/flow/review-gate.ts:74-77) a finding with no terminal disposition keeps the gate open, so the omitted findings read unresolved until a human runs the CLI form. Static reading plus the payload count, no run of the 35-entry call.",
+      "confidence": "medium",
+      "class_scope": {
+        "sites": [
+          "src/commands/operator-confirm-review.ts:680 (the cap)",
+          "src/commands/operator-confirm-review.ts:773 (closed round refused, so no second call)",
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:284 and :297 (one disposition per finding through the card)",
+          "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md (bundled copy of the same text)"
+        ],
+        "enumeration_method": "keryx ctx rg for 'dispositions' in review-orchestrator/SKILL.md (lines 247, 284, 297) and for MAX_DISPOSITIONS / completionDispositions in src; the only runtime caller of completionDispositions is completeSpec.buildCard; the card is the only agent close path per SKILL.md:136."
+      }
+    }
+  ],
+  "prior_dispositions": []
+}
+
+## Regression Review (slice-02 and slice-03, scope B)
+
+Delta 77d2eff20..0f980c407 (commit 0f980c407).
+
+Summary
+- Changed set read: src/commands/operator-confirm-review.ts (completionDispositions, dispositionLine, dispositionsSchema, the three new constants) and src/commands/operator-confirm-review-tools.test.ts. Dependents checked: buildCard/apply consumers in operator-confirm-tools.ts, the Telegram-mirror length guard (operatorCardTooLongForTopic, shell-bridge.ts:280, used at tui-shell.ts:6029 and :6104), the stored-record path (completeReviewGated -> recordDispositions in managed.ts, completion-confirmation.json), and the attestation consumer (review-notes.ts attestDismissal).
+- slice-03 (review.ts import of completeManagedReview removed, tui-shell.ts value import of raceApproval removed, DockRace kept as a type import at tui-shell.ts:125): no regression. completeManagedReview has no remaining use in review.ts (runComplete goes through completeReviewGated); raceApproval has no remaining use in tui-shell.ts (it lives in operator-confirmations.ts:202). These hunks are earlier-round changes re-read, not part of the 0f980c407 delta.
+- The graph record says its affected list was cut (27 of 71 shown) and related tests 28 of 83; I enumerated by keryx ctx rg over src instead. Non-code runtime edges (string-keyed tool registry, the model's tool call) are outside a code graph; I traced the tool-call input by reading buildCard.
+- Is the S-401 fix complete? No, one path is still open (R6-01). Is the fix free of regressions? No, the entry cap breaks a close that worked before (R6-02).
+- Checked and clean: the 300/200 caps are measured on the trimmed string and the stored evidence is the trimmed string, so for plain text shown equals stored; a newline is shown as a visible marker so it cannot hide a tail; completion-confirmation.json and findings.json store the same prepared.dispositions array, so there is no third copy that differs; the 21-entry and hidden-tail tests are consistent with the code (GLOBAL and F1 exist in the test file at :668-669). Every other card line that uses clip() (readiness, coverage and decision waiver quotes at :717, :728, :732) is unchanged and shows a quote the operator typed, with no attestation consumer.
+
+Not reported (below major or not reproducible, so the screen would refuse them)
+- Telegram mirror: with the caps a card can still reach 20 x about 500 characters, over MAX_APPROVAL_PROMPT_CHARS (3000, protocol.ts:160). operatorCardTooLongForTopic then withholds the remote buttons and the card is answered in the shell only (tui-shell.ts:6029, :6104). The same held for the old 300-character clip, so the delta did not create it. Info.
+- The 20-entry test passes 20 copies of the same finding; duplicate entries in one batch are F5-05, open and untouched by the delta.
+
+Routing audit: graph_used: yes (payload layers, read; affected list was truncated); wiki_used: not-relevant; ctx_used: yes; raw_rg_used: no. One bun script run to verify R6-01; no repository file edited.

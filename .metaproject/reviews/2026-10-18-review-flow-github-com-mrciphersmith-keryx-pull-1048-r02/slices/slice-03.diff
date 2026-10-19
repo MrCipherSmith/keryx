@@ -1,0 +1,1729 @@
+--- src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json
+@@ 90,121 @@
+       "items": {
+         "type": "object",
+         "additionalProperties": false,
+         "required": ["path", "reason"],
+         "properties": {
+           "path": { "type": "string", "minLength": 1 },
+           "reason": { "type": "string", "minLength": 1, "description": "Why it was left alone — 'already correct', 'out of scope', 'blocked by <x>'" }
+         }
+       }
+     },
+     "project_context_applied": {
+       "type": "array",
+       "description": "Which of the files `keryx skills resolve-context` listed this run actually used, so a reader can subtract it from the resolver's `must_read` list. `how`: `read` - the file was opened and its text used; `followed` - its rules were applied through a skill or another file that already contains them; `n/a` - the file does not touch the task, with the reason in `notes`. `sha256` is the resolver's value for the file, not a fresh hash: `keryx skills contracts validate --resolved` compares the two.",
+       "items": {
+         "type": "object",
+         "additionalProperties": false,
+         "required": ["path", "sha256", "how"],
+         "properties": {
+           "path": { "type": "string", "minLength": 1, "description": "Repo-relative path exactly as the resolver printed it" },
+           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The resolver's sha256 of the file" },
+-          "how": { "type": "string", "enum": ["read", "followed", "n/a"] }
++          "how": { "type": "string", "enum": ["read", "followed", "n/a"] },
++          "anchor": { "type": "string", "description": "Optional. The heading of the section read, exactly as the resolver printed it for an entry promoted by a declared condition (flow 462)" },
++          "summary": { "type": "string", "description": "Optional. What the section says, in the worker's own words; for a promoted entry `keryx skills contracts validate --resolved` checks it against the anchored section (flow 462)" }
+         }
+       }
+     },
+     "notes": {
+       "type": "string",
+       "description": "Warnings, blockers, or additional context. The three fields above were carved out of this one: free text is where they went before they were declared, and anything that fits one of them belongs there instead."
+     }
+   }
+ }
+
+--- src/gdskills/bundled/skills/quality/tests-creator/output-contract.schema.json
+@@ 78,120 @@
+           "type": "string",
+           "description": "Expected test runner output after generation (before implementation)",
+           "examples": ["all failing (RED phase)", "4 failed, 0 passed"]
+         },
+         "notes": {
+           "type": "string",
+           "description": "Test design decisions, assumptions, or concerns"
+         }
+       }
+     },
+     "project_context_applied": {
+       "type": "array",
+       "description": "Which of the files `keryx skills resolve-context` listed this run actually used, so a reader can subtract it from the resolver's `must_read` list. `how`: `read` - the file was opened and its text used; `followed` - its rules were applied through a skill or another file that already contains them; `n/a` - the file does not touch the task, with the reason in `notes`. `sha256` is the resolver's value for the file, not a fresh hash: `keryx skills contracts validate --resolved` compares the two.",
+       "items": {
+         "type": "object",
+         "additionalProperties": false,
+         "required": ["path", "sha256", "how"],
+         "properties": {
+           "path": { "type": "string", "minLength": 1, "description": "Repo-relative path exactly as the resolver printed it" },
+           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The resolver's sha256 of the file" },
+-          "how": { "type": "string", "enum": ["read", "followed", "n/a"] }
++          "how": { "type": "string", "enum": ["read", "followed", "n/a"] },
++          "anchor": { "type": "string", "description": "Optional. The heading of the section read, exactly as the resolver printed it for an entry promoted by a declared condition (flow 462)" },
++          "summary": { "type": "string", "description": "Optional. What the section says, in the worker's own words; for a promoted entry `keryx skills contracts validate --resolved` checks it against the anchored section (flow 462)" }
+         }
+       }
+     },
+     "status_report": {
+       "type": "object",
+       "required": ["status", "tests_written", "all_criteria_covered"],
+       "properties": {
+         "status": {
+           "type": "string",
+           "enum": ["DONE", "DONE_WITH_CONCERNS", "BLOCKED", "NEEDS_CONTEXT"],
+           "description": "Subagent status protocol value"
+         },
+         "tests_written": {
+           "type": "integer",
+           "minimum": 0,
+           "description": "Total number of test cases written"
+         },
+         "test_files_committed": {
+           "type": "array",
+           "items": { "type": "string" },
+
+--- src/gdskills/context-resolver.ts
+@@ 1,98 @@
+ // Decides, from the files on disk and the arguments alone, which project rules and
+ // project skills a code-writing or test-writing worker must read, and which are
+ // only listed. The result is the record the worker's `project_context_applied` is
+ // checked against. Nothing here asks a model anything.
+ 
+ import { lstat, readdir, readFile, realpath } from "node:fs/promises";
+ import path from "node:path";
+ import { isPathInside, pathExists } from "../lib/fs";
+ import { writeContained } from "../lib/contained-write";
+ import { matchesAnyGlobWithBraces } from "../lib/glob";
+ import { resolveMaxBytes, type ProjectContextSource } from "./project-context-config";
++import { resolveReferences } from "./reference-entries";
++import { isDocumentCitation, loadReferences, normaliseCitedPath, REFERENCES_PATH, type ReferenceCondition, type ReferenceDeclaration } from "./references-config";
+ import { PROJECT_RULES_DIR, projectRulePathFor, readProjectRuleRegistry, sha256Hex, type ProjectRuleRegistryEntry } from "./project-rules";
+ import { PROJECT_SKILLS_MANIFEST_PATH, resolveOriginPath, type ProjectSkillRegistryEntry } from "./project-skills";
+ import { parseRuleFrontmatter, type RuleFrontmatter } from "./rule-frontmatter";
+ import { frontmatterScalar } from "./skill-frontmatter";
+ import { readJsonFileOr } from "../lib/json";
+ 
+ export type ContextFor = "implement" | "test" | "review";
+ export type ContextKind = "rule" | "skill" | "contract";
+ 
+ export type ContextEntry = {
+   kind: ContextKind;
+   source: "project" | "bundled";
+   /** Project-relative, posix; an absolute path for a linked rule whose origin is outside the project. */
+   path: string;
+   sha256: string;
+   bytes: number;
+   reason: string;
+   tier: "must_read" | "on_demand";
+   description?: string;
+   index?: true;
+   linked?: true;
+   shadows?: string;
+   /** Other project paths holding the same bytes (same sha256); citing any of them counts. */
+   also_at?: string[];
++  /** Declared references only: the section that matters, from `references.json`. */
++  anchor?: string;
++  /** Declared references with an anchor: UTF-8 size of the section, the bytes the obligation and the budget count. */
++  section_bytes?: number;
++  /** Declared references only: where the document applies, so an `on_demand` entry says why it was not required. */
++  condition?: ReferenceCondition;
+ };
+ 
+ export type ContextBudget = { limitBytes: number; usedBytes: number; exceeded: boolean; limitSource: ProjectContextSource };
+ 
+ export type ProjectContextResolution = {
+   schema: 1;
+   for: ContextFor;
+   files: string[];
+   entries: ContextEntry[];
+   budget: ContextBudget;
+   warnings: string[];
++  /** Present only when the project has a references file: cited documents it does not declare. */
++  undeclared?: string[];
+ };
+ 
+ export type ResolveContextInput = {
+   projectRoot: string;
+   files: readonly string[];
+   taskType?: string;
+   for: ContextFor;
+   /** The `--max-bytes` flag. */
+   maxBytes?: number;
++  /** What the task is about; matched against the keywords of declared references. Cut to {@link TASK_TEXT_MAX_CHARS}. */
++  taskText?: string;
+ };
+ 
++/** The task text kept for matching and for the last-resolve record, in characters. */
++export const TASK_TEXT_MAX_CHARS = 4000;
++
++/** The text cut to {@link TASK_TEXT_MAX_CHARS} characters (code points, never half a pair), and whether it was cut. */
++export function truncateTaskText(text: string): { text: string; truncated: boolean } {
++  const chars = Array.from(text);
++  return chars.length > TASK_TEXT_MAX_CHARS ? { text: chars.slice(0, TASK_TEXT_MAX_CHARS).join(""), truncated: true } : { text, truncated: false };
++}
++
+ /** An always-apply rule bigger than this is a routing index: listed, never read in full up front. */
+ export const INDEX_THRESHOLD_BYTES = 30720;
+ /** A cited contract file bigger than this is not listed. */
+ export const CONTRACT_MAX_BYTES = 262144;
+ 
+ export const LAST_RESOLVE_PATH = ".metaproject/data/skills/project-context/last.json";
+ 
+ const BUNDLED_RULES_DIR = ".metaproject/rules/core";
+ 
+ const ALWAYS_RULES = ["tdd-workflow", "error-handling", "solid-principles"];
+ const TYPE_RULES: Record<string, string[]> = {
+   ui_component: ["code-style-patterns", "frontend-assistant", "storybook-guidelines"],
+   store_logic: ["code-style-patterns", "mobx-store-template"],
+   service_api: ["code-style-patterns", "nestjs-dto", "api-contracts"],
+ };
+ const TEST_RULES = ["tdd-workflow", "testing-conventions"];
+ 
+ const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+ 
+ function bundledRuleNames(forWhat: ContextFor, taskType: string | undefined): string[] {
+
+--- src/gdskills/context-resolver.ts
+@@ 326,377 @@
+   return entries;
+ }
+ 
+ async function bundledPaths(projectRoot: string, names: readonly string[]): Promise<Map<string, string>> {
+   const map = new Map<string, string>();
+   for (const name of names) {
+     const rel = `${BUNDLED_RULES_DIR}/${name}.mdc`;
+     if (await pathExists(path.join(projectRoot, rel))) map.set(`${name}.mdc`, rel);
+   }
+   return map;
+ }
+ 
+ const CITATION = /`([^`\s]+\.mdc?)`/g;
+ 
+ /** A rule cites `core/X.mdc` or `X.mdc` whichever way the project laid its rules out: the project rules folder as written, then with the `core/` prefix flipped, then the repo path as written. */
+ function citationOptions(cite: string): string[] {
+   const flipped = cite.startsWith("core/") ? cite.slice("core/".length) : `core/${cite}`;
+   return [`${PROJECT_RULES_DIR}/${cite}`, `${PROJECT_RULES_DIR}/${flipped}`, cite];
+ }
+ 
+-async function collectContracts(projectRoot: string, cited: ReadonlyMap<string, string>, taken: ReadonlySet<string>, warnings: string[]): Promise<ContextEntry[]> {
++async function collectContracts(
++  projectRoot: string,
++  cited: ReadonlyMap<string, string>,
++  taken: ReadonlySet<string>,
++  declared: ReadonlySet<string>,
++  warnings: string[],
++): Promise<ContextEntry[]> {
+   const rootReal = await realpath(projectRoot).catch(() => projectRoot);
+   const entries: ContextEntry[] = [];
+   const listed = new Set(taken);
+   for (const [cite, by] of [...cited].sort((a, b) => compare(a[0], b[0]))) {
++    if (declared.has(cite)) continue;
+     const reject = (why: string): void => void warnings.push(`${cite}: cited by ${by} but ${why}; not listed.`);
+     if (path.isAbsolute(cite) || cite.split("/").includes("..")) {
+       reject("is not a repo-relative path");
+       continue;
+     }
+     let rel: string | undefined;
+     let real = "";
+     for (const option of citationOptions(cite)) {
+       try {
+         await lstat(path.join(projectRoot, option));
+         real = await realpath(path.join(projectRoot, option));
+         rel = option;
+         break;
+       } catch {
+         // try the next spelling
+       }
+     }
+     if (rel === undefined) {
+       reject("does not exist");
+       continue;
+
+--- src/gdskills/context-resolver.ts
+@@ 396,436 @@
+       reject("cannot be read");
+       continue;
+     }
+     entries.push({ kind: "contract", source: "project", path: rel, sha256: sha256Hex(text), bytes: Buffer.byteLength(text), reason: `referenced-by:${by}`, tier: "on_demand" });
+   }
+   return entries.sort((a, b) => compare(a.path, b.path));
+ }
+ 
+ export async function resolveProjectContext(input: ResolveContextInput): Promise<ProjectContextResolution> {
+   const { projectRoot } = input;
+   const warnings: string[] = [];
+   const files = normaliseFiles(projectRoot, input.files, warnings);
+   const cap = await resolveMaxBytes(projectRoot, input.maxBytes);
+   warnings.push(...cap.warnings);
+ 
+   const bundledNames = bundledRuleNames(input.for, input.taskType);
+   const shadowable = await bundledPaths(projectRoot, bundledNames);
+   const candidates = await collectProjectRules(projectRoot, warnings);
+   const rules = selectRules(candidates, files, input.taskType, shadowable);
+   const skills = await collectSkills(projectRoot, input.for, files, input.taskType);
++  const declarations = await loadDeclarations(projectRoot, warnings);
+ 
+   let used = 0;
+   let exceeded = false;
+   const projectEntries: ContextEntry[] = [];
+   const fit = (bytes: number): boolean => {
+     if (used + bytes > cap.limitBytes) {
+       exceeded = true;
+       return false;
+     }
+     used += bytes;
+     return true;
+   };
+   const describe = (candidate: RuleCandidate): { description?: string } => (candidate.front.description !== "" ? { description: candidate.front.description } : {});
+ 
+   for (const { candidate, reason, shadows } of rules) {
+     const isIndex = candidate.front.alwaysApply && candidate.bytes > INDEX_THRESHOLD_BYTES;
+     const tier = isIndex ? "on_demand" : fit(candidate.bytes) ? "must_read" : "on_demand";
+     projectEntries.push({
+       kind: "rule",
+       source: "project",
+
+--- src/gdskills/context-resolver.ts
+@@ 438,552 @@
+       sha256: candidate.sha256,
+       bytes: candidate.bytes,
+       reason,
+       tier,
+       ...describe(candidate),
+       ...(isIndex ? { index: true as const } : {}),
+       ...(candidate.linked ? { linked: true as const } : {}),
+       ...(shadows !== undefined ? { shadows } : {}),
+       ...(candidate.alsoAt.length > 0 ? { also_at: candidate.alsoAt } : {}),
+     });
+   }
+   warnings.push(...conflictWarnings(rules.map((rule) => rule.candidate)));
+   for (const skill of skills) projectEntries.push({ ...skill, tier: fit(skill.bytes) ? "must_read" : "on_demand" });
+ 
+   const shadowed = new Set(rules.flatMap((rule) => (rule.shadows !== undefined ? [rule.shadows] : [])));
+   const bundled = (await collectBundled(projectRoot, bundledNames)).filter((entry) => !shadowed.has(entry.path));
+ 
+   const cited = new Map<string, string>();
+   for (const { candidate } of rules) {
+     for (const match of candidate.text.matchAll(CITATION)) {
+-      const rel = match[1]!;
++      // A spelling that cannot be normalised (absolute, climbing out) stays raw so the contract pass can refuse it by name.
++      const rel = normaliseCitedPath(match[1]!) ?? match[1]!;
+       if (!cited.has(rel)) cited.set(rel, candidate.path);
+     }
+   }
+   const taken = new Set([...projectEntries, ...bundled].flatMap((entry) => [entry.path, ...(entry.also_at ?? [])]));
+-  const contracts = await collectContracts(projectRoot, cited, taken, warnings);
++  const task = truncateTaskText(input.taskText ?? "");
++  if (task.truncated && (declarations ?? []).some((declaration) => declaration.when.keywords.length > 0)) {
++    warnings.push(
++      `the task text is longer than ${TASK_TEXT_MAX_CHARS} characters; only the first ${TASK_TEXT_MAX_CHARS} were matched against the keywords of declared references, so a keyword after the cut cannot promote a reference. Put what the task is about first, or match by files.`,
++    );
++  }
++  const references = await resolveReferences({
++    projectRoot,
++    declarations: declarations ?? [],
++    files,
++    taskText: task.text,
++    taken,
++    maxFileBytes: CONTRACT_MAX_BYTES,
++  });
++  warnings.push(...references.warnings);
++  const declaredPaths = new Set(references.entries.map((entry) => entry.path));
++  const contracts = await collectContracts(projectRoot, cited, new Set([...taken, ...declaredPaths]), new Set((declarations ?? []).map((declaration) => declaration.path)), warnings);
+ 
+   if (exceeded) {
+     warnings.push(
+       `project context is over the ${cap.limitBytes}-byte cap (${cap.limitSource}); some entries are on_demand. Raise gdskills.projectContext.maxBytes in .metaproject/tasks.config.json (or pass --max-bytes) instead of cutting rules.`,
+     );
+   }
+ 
++  // A promoted reference is an obligation: the cap never demotes it, it only says so.
++  const total = used + references.promotedBytes;
++  const overCap = total > cap.limitBytes;
++  if (references.promotedBytes > 0 && overCap) {
++    const promoted = references.entries.filter((entry) => entry.tier === "must_read").map((entry) => `${entry.path} (${entry.section_bytes ?? entry.bytes} bytes)`);
++    warnings.push(
++      `promoted references ${promoted.join(", ")} bring the must_read total to ${total} bytes, over the ${cap.limitBytes}-byte cap (${cap.limitSource}); they stay must_read because a matched reference is an obligation. Raise gdskills.projectContext.maxBytes in .metaproject/tasks.config.json (or pass --max-bytes) or narrow the declared anchors.`,
++    );
++  }
++
+   return {
+     schema: 1,
+     for: input.for,
+     files,
+-    entries: [...projectEntries, ...contracts, ...bundled],
+-    budget: { limitBytes: cap.limitBytes, usedBytes: used, exceeded, limitSource: cap.limitSource },
++    entries: [...projectEntries, ...references.entries, ...contracts, ...bundled],
++    budget: { limitBytes: cap.limitBytes, usedBytes: total, exceeded: exceeded || overCap, limitSource: cap.limitSource },
+     warnings,
++    ...(declarations !== undefined ? { undeclared: contracts.map((contract) => contract.path).filter(isDocumentCitation) } : {}),
+   };
+ }
+ 
+-export type RecordedResolve = { recordedAt: string; result: ProjectContextResolution };
++/** The project's declarations, or undefined when there is no usable references file (a bad one warns and reads as absent). */
++async function loadDeclarations(projectRoot: string, warnings: string[]): Promise<ReferenceDeclaration[] | undefined> {
++  const loaded = await loadReferences(projectRoot);
++  if (!loaded.ok) {
++    for (const message of loaded.errors) warnings.push(`${message}; conditional references are ignored. Fix ${REFERENCES_PATH} (\`keryx skills references check\` lists every problem).`);
++    return undefined;
++  }
++  return loaded.present ? loaded.references : undefined;
++}
++
++export type RecordedResolve = {
++  recordedAt: string;
++  result: ProjectContextResolution;
++  /** The task text the resolve was given, cut to {@link TASK_TEXT_MAX_CHARS}; absent when none was given. */
++  taskText?: string;
++  /** True when {@link taskText} is a cut of a longer text. */
++  taskTextTruncated?: true;
++};
+ 
+ /** Best effort: the TUI reads this, so a failed write must not fail a resolve. */
+-export async function recordLastResolve(projectRoot: string, result: ProjectContextResolution): Promise<void> {
++export async function recordLastResolve(projectRoot: string, result: ProjectContextResolution, options: { taskText?: string } = {}): Promise<void> {
+   try {
+-    const record: RecordedResolve = { recordedAt: new Date().toISOString(), result };
++    const task = options.taskText !== undefined && options.taskText.trim() !== "" ? truncateTaskText(options.taskText) : undefined;
++    const record: RecordedResolve = {
++      recordedAt: new Date().toISOString(),
++      result,
++      ...(task !== undefined ? { taskText: task.text, ...(task.truncated ? { taskTextTruncated: true as const } : {}) } : {}),
++    };
+     await writeContained(projectRoot, LAST_RESOLVE_PATH, `${JSON.stringify(record, null, 2)}\n`);
+   } catch {
+     // nothing to do: the record is a convenience
+   }
+ }
+ 
+ export async function readLastResolve(projectRoot: string): Promise<RecordedResolve | undefined> {
+   try {
+     const parsed: unknown = JSON.parse(await readFile(path.join(projectRoot, LAST_RESOLVE_PATH), "utf8"));
+     if (typeof parsed !== "object" || parsed === null) return undefined;
+     const record = parsed as Partial<RecordedResolve>;
+     return typeof record.recordedAt === "string" && typeof record.result === "object" && record.result !== null ? (record as RecordedResolve) : undefined;
+   } catch {
+     return undefined;
+   }
+ }
+
+--- src/gdskills/import-rules.ts
+@@ 2,42 @@
+ import path from "node:path";
+ import { optionValue } from "../lib/args";
+ import { writeContained } from "../lib/contained-write";
+ import {
+   gateRowParts,
+   gateText,
+   onlyMatcher,
+   onlyOption,
+   portableOriginRef,
+   type ImportSecurity,
+ } from "./import-skills";
+ import {
+   projectRulePathFor,
+   readProjectRuleRegistry,
+   sha256Hex,
+   updateProjectRuleRegistry,
+   type ProjectRuleMode,
+   type ProjectRuleRegistryEntry,
+ } from "./project-rules";
+ import { assertProjectWritesContained, PROJECT_SKILLS_MANIFEST_PATH, resolveOriginPath } from "./project-skills";
++import { undeclaredCitationHint } from "./references-check";
+ import { parseRuleFrontmatter } from "./rule-frontmatter";
+ 
+ export type ImportProjectRulesOptions = {
+   projectRoot: string;
+   /** The directory of rules to import. */
+   from: string;
+   /** Globs (`*`, `?`) matched against a rule's relative path or its file name. */
+   only?: string[];
+   dryRun?: boolean;
+   force?: boolean;
+   allowFlagged?: boolean;
+   /** Register the rules where they are instead of copying them. */
+   link?: boolean;
+ };
+ 
+ export type ImportedProjectRuleStatus =
+   | "imported"
+   | "would-import"
+   | "overwritten"
+   | "would-overwrite"
+
+--- src/gdskills/import-rules.ts
+@@ 250,279 @@
+ export function exitNonZeroOnRuleRefusal(result: ImportProjectRulesResult): void {
+   if (result.rules.some((row) => row.status === "refused")) process.exitCode = 1;
+ }
+ 
+ export async function runSkillsImportRulesCommand(args: string[]): Promise<void> {
+   const from = optionValue(args, "--rules");
+   if (from === undefined || from === "") {
+     throw new Error(
+       "Usage: keryx skills import --rules <dir> [--only <glob>]... [--link] [--dry-run] [--force] [--allow-flagged] [--json]",
+     );
+   }
+   const result = await importProjectRules({
+     projectRoot: process.cwd(),
+     from,
+     only: onlyOption(args, "keryx skills import --rules"),
+     dryRun: args.includes("--dry-run"),
+     force: args.includes("--force"),
+     allowFlagged: args.includes("--allow-flagged"),
+     link: args.includes("--link"),
+   });
+-  console.log(args.includes("--json") ? JSON.stringify(result, null, 2) : renderImportProjectRulesMarkdown(result));
++  const json = args.includes("--json");
++  console.log(json ? JSON.stringify(result, null, 2) : renderImportProjectRulesMarkdown(result));
++  // Documents the imported rules cite but nothing declares: say how many, and how to start (flow 462).
++  // Text output only, so --json stays one parseable document.
++  if (!json) {
++    const hint = await undeclaredCitationHint(process.cwd());
++    if (hint.length > 0) console.log(`\n${hint.join("\n")}`);
++  }
+   exitNonZeroOnRuleRefusal(result);
+ }
+
+--- src/gdskills/project-context-status.ts
+@@ 1,104 @@
+ // A read-only snapshot of the project-context feature for the TUI (`/projectctx`,
+ // the `ProjectCtx` sidebar line): the settings, how many project rules there are,
+ // and the last recorded resolve. Every read is fail-soft; a file that cannot be
+ // read is reported in a field, never thrown.
+ 
+ import { readFile } from "node:fs/promises";
+ import path from "node:path";
+ import { pathExists } from "../lib/fs";
+ import { LAST_RESOLVE_PATH, listRuleRefs, type RecordedResolve } from "./context-resolver";
+ import {
+   PROJECT_CONTEXT_CONFIG_PATH,
+   readProjectContextConfig,
+   type ProjectContextConfig,
+ } from "./project-context-config";
+ import { readProjectRuleRegistry } from "./project-rules";
++import { checkReferences, type ReferencesFinding } from "./references-check";
++import { loadReferences, type ReferenceDeclaration } from "./references-config";
++
++/**
++ * The conditional references of the project (flow 462). Absent from the status
++ * when the project has no `references.json`, so a project without one reads
++ * exactly as before.
++ */
++export type ProjectReferencesStatus =
++  | { state: "invalid"; /** Validation messages; each names the file and the entry. */ errors: string[] }
++  | { state: "declared"; declarations: ReferenceDeclaration[]; /** What `keryx skills references check` reports. */ findings: ReferencesFinding[] };
+ 
+ export type ProjectContextStatus = {
+   enforcement: ProjectContextConfig["enforcement"];
+   enforcementSource: ProjectContextConfig["enforcementSource"];
+   maxBytes: number;
+   maxBytesSource: ProjectContextConfig["maxBytesSource"];
+   /** Copied plus linked project rules. */
+   ruleCount: number;
+   linkedCount: number;
+   /** Set when `tasks.config.json` exists but is not a JSON object; the settings above are then the defaults. */
+   configError?: string;
+   last?: RecordedResolve;
+   /** Set when `last.json` exists but cannot be used. */
+   lastError?: string;
++  /** Set when the project has a references file. */
++  references?: ProjectReferencesStatus;
+ };
+ 
+ async function configProblem(projectRoot: string): Promise<string | undefined> {
+   const file = path.join(projectRoot, PROJECT_CONTEXT_CONFIG_PATH);
+   if (!(await pathExists(file))) return undefined;
+   try {
+     const parsed: unknown = JSON.parse(await readFile(file, "utf8"));
+     return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? undefined : `${PROJECT_CONTEXT_CONFIG_PATH} is not a JSON object`;
+   } catch {
+     return `${PROJECT_CONTEXT_CONFIG_PATH} is not valid JSON`;
+   }
+ }
+ 
+ async function readLast(projectRoot: string): Promise<{ last?: RecordedResolve; lastError?: string }> {
+   const file = path.join(projectRoot, LAST_RESOLVE_PATH);
+   if (!(await pathExists(file))) return {};
+   try {
+     const parsed = JSON.parse(await readFile(file, "utf8")) as Partial<RecordedResolve> | null;
+     const result = parsed?.result;
+     if (typeof parsed?.recordedAt !== "string" || typeof result !== "object" || result === null) {
+       return { lastError: `${LAST_RESOLVE_PATH} is not a recorded resolve` };
+     }
+     if ((result as { schema?: unknown }).schema !== 1) {
+       return { lastError: `${LAST_RESOLVE_PATH} has an unknown schema` };
+     }
+     return { last: parsed as RecordedResolve };
+   } catch {
+     return { lastError: `${LAST_RESOLVE_PATH} is not valid JSON` };
+   }
+ }
+ 
++async function readReferences(projectRoot: string): Promise<{ references?: ProjectReferencesStatus }> {
++  const loaded = await loadReferences(projectRoot);
++  if (!loaded.ok) return { references: { state: "invalid", errors: loaded.errors } };
++  if (!loaded.present) return {};
++  const report = await checkReferences(projectRoot);
++  return { references: { state: "declared", declarations: loaded.references, findings: report.findings } };
++}
++
+ export async function loadProjectContextStatus(projectRoot: string): Promise<ProjectContextStatus> {
+-  const [config, configError, refs, registry, last] = await Promise.all([
++  const [config, configError, refs, registry, last, references] = await Promise.all([
+     readProjectContextConfig(projectRoot),
+     configProblem(projectRoot),
+     listRuleRefs(projectRoot),
+     readProjectRuleRegistry(projectRoot),
+     readLast(projectRoot),
++    readReferences(projectRoot),
+   ]);
+   const copied = new Set(refs);
+   const linked = registry.filter((entry) => entry.mode === "link" && !copied.has(entry.ref));
+   return {
+     enforcement: config.enforcement,
+     enforcementSource: config.enforcementSource,
+     maxBytes: config.maxBytes,
+     maxBytesSource: config.maxBytesSource,
+     ruleCount: copied.size + linked.length,
+     linkedCount: linked.length,
+     ...(configError !== undefined ? { configError } : {}),
+     ...last,
++    ...references,
+   };
+ }
+
+--- src/gdskills/reference-entries.ts
+@@ 1,125 @@
++// Turns the project's declared conditional references into resolver entries.
++//
++// A declared document is listed whether or not a rule cites it. It is promoted to
++// `must_read` when a glob of its condition matches a task file or a keyword of its
++// condition occurs in the task text; otherwise it stays `on_demand` with its
++// description, anchor and condition so the worker can see why it was not required.
++// With an anchor the obligation is the anchored section; a dead anchor falls back
++// to the whole file with a warning, never silently.
++
++import { lstat, readFile, realpath } from "node:fs/promises";
++import path from "node:path";
++import { isPathInside } from "../lib/fs";
++import { matchesAnyGlobWithBraces } from "../lib/glob";
++import type { ContextEntry } from "./context-resolver";
++import { sha256Hex } from "./project-rules";
++import { REFERENCES_PATH, type ReferenceDeclaration } from "./references-config";
++import { extractSection } from "./references-section";
++
++export type ResolveReferencesInput = {
++  projectRoot: string;
++  declarations: readonly ReferenceDeclaration[];
++  /** Normalised project-relative task files. */
++  files: readonly string[];
++  /** The task text, already truncated; matched against keywords. */
++  taskText: string;
++  /** Paths already listed as rules, skills or bundled rules; a declaration naming one is skipped with a warning. */
++  taken: ReadonlySet<string>;
++  /** A declared file bigger than this is not listed. */
++  maxFileBytes: number;
++};
++
++export type ResolvedReferences = {
++  entries: ContextEntry[];
++  /** Bytes the promoted entries oblige the worker to read (section bytes with an anchor, file bytes without). */
++  promotedBytes: number;
++  warnings: string[];
++};
++
++const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
++
++/** Case-insensitive, whole-word match; "word" characters are letters, digits and underscore of any script. */
++export function keywordOccurs(text: string, keyword: string): boolean {
++  if (keyword === "") return false;
++  return new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegExp(keyword)}(?![\\p{L}\\p{N}_])`, "iu").test(text);
++}
++
++/** The reason a declaration is promoted, or undefined when its condition does not match. Globs are tried before keywords. */
++export function promotionReason(declaration: ReferenceDeclaration, files: readonly string[], taskText: string): string | undefined {
++  const glob = declaration.when.globs.find((candidate) => files.some((file) => matchesAnyGlobWithBraces(file, [candidate])));
++  if (glob !== undefined) return `condition:glob:${glob}`;
++  const keyword = declaration.when.keywords.find((candidate) => keywordOccurs(taskText, candidate));
++  return keyword !== undefined ? `condition:keyword:${keyword}` : undefined;
++}
++
++type ReadOutcome = { ok: true; text: string } | { ok: false; why: string };
++
++async function readDeclaredFile(projectRoot: string, rootReal: string, rel: string, maxFileBytes: number): Promise<ReadOutcome> {
++  const absolute = path.join(projectRoot, rel);
++  let real: string;
++  try {
++    await lstat(absolute);
++    real = await realpath(absolute);
++  } catch (error) {
++    if (typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT") return { ok: false, why: "does not exist" };
++    return { ok: false, why: `cannot be read (${error instanceof Error ? error.message : String(error)})` };
++  }
++  if (!isPathInside(rootReal, real)) return { ok: false, why: "resolves outside the project root" };
++  try {
++    const info = await lstat(real);
++    if (!info.isFile()) return { ok: false, why: "is not a regular file" };
++    if (info.size > maxFileBytes) return { ok: false, why: `is larger than ${maxFileBytes} bytes` };
++    return { ok: true, text: await readFile(real, "utf8") };
++  } catch (error) {
++    return { ok: false, why: `cannot be read (${error instanceof Error ? error.message : String(error)})` };
++  }
++}
++
++export async function resolveReferences(input: ResolveReferencesInput): Promise<ResolvedReferences> {
++  const warnings: string[] = [];
++  const entries: ContextEntry[] = [];
++  let promotedBytes = 0;
++  const rootReal = await realpath(input.projectRoot).catch(() => input.projectRoot);
++
++  for (const declaration of input.declarations) {
++    const reject = (why: string): void => void warnings.push(`${declaration.path}: declared in ${REFERENCES_PATH} but ${why}; not listed.`);
++    if (input.taken.has(declaration.path)) {
++      reject("is already listed as a project rule or skill");
++      continue;
++    }
++    const read = await readDeclaredFile(input.projectRoot, rootReal, declaration.path, input.maxFileBytes);
++    if (!read.ok) {
++      reject(read.why);
++      continue;
++    }
++    const bytes = Buffer.byteLength(read.text);
++    let sectionBytes: number | undefined;
++    if (declaration.anchor !== undefined) {
++      const section = extractSection(read.text, declaration.anchor);
++      if (section.found) sectionBytes = section.bytes;
++      else {
++        sectionBytes = bytes;
++        const headings = section.available.length > 0 ? ` Headings in the file: ${section.available.join("; ")}.` : "";
++        warnings.push(
++          `${declaration.path}: anchor "${declaration.anchor}" not found (${section.reason}); the whole file (${bytes} bytes) is the obligation.${headings} Fix the anchor in ${REFERENCES_PATH}.`,
++        );
++      }
++    }
++    const reason = promotionReason(declaration, input.files, input.taskText);
++    if (reason !== undefined) promotedBytes += sectionBytes ?? bytes;
++    entries.push({
++      kind: "contract",
++      source: "project",
++      path: declaration.path,
++      sha256: sha256Hex(read.text),
++      bytes,
++      reason: reason ?? "declared",
++      tier: reason !== undefined ? "must_read" : "on_demand",
++      description: declaration.description,
++      ...(declaration.anchor !== undefined ? { anchor: declaration.anchor } : {}),
++      ...(sectionBytes !== undefined ? { section_bytes: sectionBytes } : {}),
++      condition: { globs: declaration.when.globs, keywords: declaration.when.keywords },
++    });
++  }
++  return { entries, promotedBytes, warnings };
++}
+
+--- src/gdskills/reference-proof.ts
+@@ 1,109 @@
++// The proof a worker owes for a document promoted by a condition (flow 462).
++//
++// The hash pins the version; this pins the place and the reading: the cited
++// anchor must be the declared one, the summary long enough, and it must reuse
++// the section's own vocabulary. It is a deterministic proxy, not proof of
++// reading, and says so in the docs: a worker can still fabricate a plausible
++// summary, it just costs more than copying a hash.
++
++import { readFile } from "node:fs/promises";
++import path from "node:path";
++import type { ContextEntry } from "./context-resolver";
++import { extractSection } from "./references-section";
++
++export const SUMMARY_MIN_CHARS = 40;
++export const SUMMARY_MIN_SHARED_WORDS = 3;
++export const WORD_MIN_LETTERS = 5;
++
++export type ProofRule = "how" | "anchor" | "summary-length" | "summary-words";
++
++export type ProofFailure = {
++  rule: ProofRule;
++  /** Continues the sentence "<path> (<reason>) ..." in the report. */
++  detail: string;
++};
++
++/** One `project_context_applied` item, reduced to what the proof reads. */
++export type CitedItem = {
++  sha256: string;
++  how?: string;
++  anchor?: string;
++  summary?: string;
++};
++
++/** A must_read entry the resolver promoted because a declared condition matched. */
++export function isPromoted(entry: ContextEntry): boolean {
++  return entry.tier === "must_read" && entry.reason.startsWith("condition:");
++}
++
++/** Distinct lower-case words of {@link WORD_MIN_LETTERS} letters or more; letters of any script. */
++export function distinctWords(text: string): Set<string> {
++  return new Set(text.normalize("NFC").toLowerCase().match(/\p{L}{5,}/gu) ?? []);
++}
++
++/** The item that stands for the entry: pinned hash and a real reading first, then a real reading, then whatever was cited. */
++export function pickProofItem(items: readonly CitedItem[], pinned: string): CitedItem | undefined {
++  return items.find((item) => item.sha256 === pinned && item.how !== "n/a") ?? items.find((item) => item.how !== "n/a") ?? items[0];
++}
++
++type SectionOutcome = { ok: true; text: string; what: string } | { ok: false; why: string };
++
++/** The anchored section of the file as it is now, or the whole file when the declaration has no anchor. */
++async function currentSection(projectRoot: string, entry: ContextEntry): Promise<SectionOutcome> {
++  const file = path.isAbsolute(entry.path) ? entry.path : path.join(projectRoot, entry.path);
++  let text: string;
++  try {
++    text = await readFile(file, "utf8");
++  } catch (error) {
++    return { ok: false, why: `${entry.path} cannot be read now (${error instanceof Error ? error.message : String(error)})` };
++  }
++  if (entry.anchor === undefined) return { ok: true, text, what: "the file" };
++  const section = extractSection(text, entry.anchor);
++  if (!section.found) return { ok: false, why: `the anchored section "${entry.anchor}" cannot be found in ${entry.path} now (${section.reason})` };
++  return { ok: true, text: section.text, what: `the section "${entry.anchor}"` };
++}
++
++function charCount(text: string): number {
++  return Array.from(text.trim()).length;
++}
++
++async function wordsFailure(projectRoot: string, entry: ContextEntry, summary: string): Promise<ProofFailure | undefined> {
++  const section = await currentSection(projectRoot, entry);
++  if (!section.ok) return { rule: "summary-words", detail: `has a summary that cannot be checked: ${section.why}` };
++  const sectionWords = distinctWords(section.text);
++  const required = Math.min(SUMMARY_MIN_SHARED_WORDS, sectionWords.size);
++  const shared = [...distinctWords(summary)].filter((word) => sectionWords.has(word)).length;
++  if (shared >= required) return undefined;
++  return {
++    rule: "summary-words",
++    detail:
++      `has a summary that shares ${shared} distinct word(s) of ${WORD_MIN_LETTERS} or more letters with ${section.what}; ` +
++      `${required} required. Write the summary in the wording of the text you read`,
++  };
++}
++
++/** Every rule the cited item breaks, each its own failure. Empty when the proof holds. */
++export async function proofFailures(input: { projectRoot: string; entry: ContextEntry; item: CitedItem }): Promise<ProofFailure[]> {
++  const { entry, item } = input;
++  if (item.how === "n/a") {
++    return [{ rule: "how", detail: 'is cited only with how "n/a"; an entry promoted by a condition needs how "read" or "followed", its anchor and a summary' }];
++  }
++  const failures: ProofFailure[] = [];
++  if (entry.anchor !== undefined && item.anchor !== entry.anchor) {
++    failures.push({
++      rule: "anchor",
++      detail: item.anchor === undefined ? `cites no anchor; the declaration says "${entry.anchor}"` : `cites anchor "${item.anchor}"; the declaration says "${entry.anchor}"`,
++    });
++  }
++  if (item.summary === undefined) {
++    failures.push({ rule: "summary-length", detail: `has no summary; a promoted entry needs one of at least ${SUMMARY_MIN_CHARS} characters` });
++    return failures;
++  }
++  const length = charCount(item.summary);
++  if (length < SUMMARY_MIN_CHARS) {
++    failures.push({ rule: "summary-length", detail: `has a summary of ${length} characters; at least ${SUMMARY_MIN_CHARS} are required` });
++  }
++  const words = await wordsFailure(input.projectRoot, entry, item.summary);
++  if (words !== undefined) failures.push(words);
++  return failures;
++}
+
+--- src/gdskills/references-check.ts
+@@ 1,267 @@
++// Authoring help for conditional references (flow 462): what `keryx skills
++// references check|suggest` and the `skills import --rules` hint report.
++//
++// The analysis reads files and decides nothing about them: it compares the
++// documents project rules cite (a backticked `X.md`) with the declarations in
++// `.metaproject/rules/project/references.json`, and looks at each declared
++// document. Expected failures come back as values (a finding, `ok: false`);
++// nothing here throws for a missing or unreadable file.
++//
++// Citation scan. The resolver (context-resolver.ts) scans the contracts a
++// *selected* rule cites; both normalise a cited path and decide what counts as a
++// document with the helpers in references-config.ts. This scan differs on two
++// points: it reads every rule under `.metaproject/rules/project/` (authoring is
++// about the whole project, not one task), and it takes `.md` documents only,
++// because a cited `.mdc` is another rule, not a document someone must be told to
++// read. A linked rule (registered in place, not copied) is not scanned.
++
++import { lstat, readFile, realpath, stat } from "node:fs/promises";
++import path from "node:path";
++import { isPathInside } from "../lib/fs";
++import { CONTRACT_MAX_BYTES, listRuleRefs } from "./context-resolver";
++import { PROJECT_RULES_DIR } from "./project-rules";
++import { isDocumentCitation, loadReferences, normaliseCitedPath, REFERENCES_PATH, type ReferenceDeclaration } from "./references-config";
++import { extractSection, markdownHeadings } from "./references-section";
++
++export const MIN_DESCRIPTION_CHARACTERS = 20;
++export const MIN_KEYWORD_CHARACTERS = 4;
++export const REFERENCES_SUGGEST_COMMAND = "keryx skills references suggest";
++
++export type ReferencesFindingCode =
++  | "invalid-file"
++  | "document-missing"
++  | "document-outside-root"
++  | "document-not-file"
++  | "document-too-large"
++  | "document-unreadable"
++  | "anchor-not-found"
++  | "description-short"
++  | "keyword-short"
++  | "unused-declaration"
++  | "undeclared-citation"
++  | "rule-unreadable";
++
++export type ReferencesFinding = {
++  severity: "error" | "warning";
++  code: ReferencesFindingCode;
++  /** The declaration's path, the cited document's path, or the references file for `invalid-file`. */
++  path: string;
++  message: string;
++};
++
++export type ReferencesCheckReport = {
++  schema: 1;
++  /** True when there is no error; warnings never fail a run. */
++  ok: boolean;
++  /** False when `references.json` does not exist. */
++  present: boolean;
++  declared: number;
++  errors: number;
++  warnings: number;
++  findings: ReferencesFinding[];
++};
++
++/** One undeclared citation, shaped like a `references.json` entry plus the facts that help fill it in. */
++export type ReferenceSkeleton = {
++  path: string;
++  bytes: number;
++  /** Heading texts of the document: candidates for `anchor`. Delete this field before pasting. */
++  anchorCandidates: string[];
++  description: "";
++  when: { globs: string[]; keywords: string[] };
++};
++
++export type ReferencesSuggestion = { schema: 1; references: ReferenceSkeleton[] };
++
++export type SuggestResult = { ok: true; suggestion: ReferencesSuggestion } | { ok: false; errors: string[] };
++
++type Inspection =
++  | { status: "ok"; bytes: number; text: string }
++  | { status: "missing" | "outside-root" | "not-file" | "too-large" | "unreadable"; detail?: string };
++
++const DOCUMENT_CITATION = /`([^`\s]+\.md)`/g;
++const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
++const lengthOf = (text: string): number => [...text.trim()].length;
++const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? "" : "s"}`;
++
++type CitationScan = {
++  /** Every project-relative `.md` path a rule cites, with the rules that cite it. */
++  cited: Map<string, string[]>;
++  unreadableRules: string[];
++};
++
++async function scanCitations(projectRoot: string): Promise<CitationScan> {
++  const cited = new Map<string, string[]>();
++  const unreadableRules: string[] = [];
++  for (const ref of (await listRuleRefs(projectRoot)).sort(compare)) {
++    const rulePath = `${PROJECT_RULES_DIR}/${ref}`;
++    let text: string;
++    try {
++      text = await readFile(path.join(projectRoot, rulePath), "utf8");
++    } catch {
++      unreadableRules.push(rulePath);
++      continue;
++    }
++    for (const match of text.matchAll(DOCUMENT_CITATION)) {
++      const relative = normaliseCitedPath(match[1] ?? "");
++      if (relative === undefined) continue;
++      const by = cited.get(relative) ?? [];
++      if (!by.includes(rulePath)) by.push(rulePath);
++      cited.set(relative, by);
++    }
++  }
++  return { cited, unreadableRules };
++}
++
++async function inspectDocument(projectRoot: string, rootReal: string, relative: string): Promise<Inspection> {
++  const absolute = path.join(projectRoot, relative);
++  try {
++    await lstat(absolute);
++  } catch {
++    return { status: "missing" };
++  }
++  let real: string;
++  try {
++    real = await realpath(absolute);
++  } catch {
++    return { status: "missing", detail: "a link that points nowhere" };
++  }
++  if (!isPathInside(rootReal, real)) return { status: "outside-root" };
++  try {
++    const info = await stat(real);
++    if (!info.isFile()) return { status: "not-file" };
++    if (info.size > CONTRACT_MAX_BYTES) return { status: "too-large", detail: `${info.size} bytes` };
++    return { status: "ok", bytes: info.size, text: await readFile(real, "utf8") };
++  } catch (error) {
++    return { status: "unreadable", detail: error instanceof Error ? error.message : String(error) };
++  }
++}
++
++type Undeclared = { path: string; bytes: number; text: string };
++
++/** Cited documents that exist inside the project, are not rules, and have no declaration. Sorted by path. */
++async function undeclaredCitations(projectRoot: string, rootReal: string, cited: ReadonlyMap<string, string[]>, declared: ReadonlySet<string>): Promise<Undeclared[]> {
++  const found: Undeclared[] = [];
++  for (const relative of [...cited.keys()].sort(compare)) {
++    if (declared.has(relative) || !isDocumentCitation(relative)) continue;
++    const inspection = await inspectDocument(projectRoot, rootReal, relative);
++    if (inspection.status === "ok") found.push({ path: relative, bytes: inspection.bytes, text: inspection.text });
++  }
++  return found;
++}
++
++const rootRealPath = async (projectRoot: string): Promise<string> => realpath(projectRoot).catch(() => projectRoot);
++
++function documentProblem(declaration: ReferenceDeclaration, inspection: Exclude<Inspection, { status: "ok" }>): ReferencesFinding {
++  const where = declaration.path;
++  switch (inspection.status) {
++    case "missing":
++      return { severity: "error", code: "document-missing", path: where, message: `the declared document does not exist${inspection.detail ? ` (${inspection.detail})` : ""}; fix the path or remove the declaration` };
++    case "outside-root":
++      return { severity: "error", code: "document-outside-root", path: where, message: "the declared document resolves outside the project root; a link out of the project is not followed" };
++    case "not-file":
++      return { severity: "error", code: "document-not-file", path: where, message: "the declared path is not a regular file" };
++    case "too-large":
++      return { severity: "error", code: "document-too-large", path: where, message: `the declared document is larger than ${CONTRACT_MAX_BYTES} bytes (${inspection.detail ?? "too large"}); split it or declare a smaller one` };
++    case "unreadable":
++      return { severity: "error", code: "document-unreadable", path: where, message: `the declared document cannot be read (${inspection.detail ?? "unknown reason"})` };
++  }
++}
++
++function declarationFindings(declaration: ReferenceDeclaration, inspection: Inspection, cited: ReadonlyMap<string, string[]>): ReferencesFinding[] {
++  const findings: ReferencesFinding[] = [];
++  const where = declaration.path;
++  if (inspection.status !== "ok") findings.push(documentProblem(declaration, inspection));
++  else if (declaration.anchor !== undefined) {
++    const section = extractSection(inspection.text, declaration.anchor);
++    if (!section.found) {
++      const headings = markdownHeadings(inspection.text).map((heading) => heading.text);
++      const shown = headings.slice(0, 12).join(", ");
++      findings.push({
++        severity: "error",
++        code: "anchor-not-found",
++        path: where,
++        message: `anchor "${declaration.anchor}" matches no heading${headings.length > 0 ? `; the document has: ${shown}${headings.length > 12 ? ", ..." : ""}` : "; the document has no headings"}`,
++      });
++    }
++  }
++  if (lengthOf(declaration.description) < MIN_DESCRIPTION_CHARACTERS) {
++    findings.push({ severity: "warning", code: "description-short", path: where, message: `description is under ${MIN_DESCRIPTION_CHARACTERS} characters; say what the document governs and when to read it` });
++  }
++  for (const keyword of declaration.when.keywords) {
++    if (lengthOf(keyword) < MIN_KEYWORD_CHARACTERS) {
++      findings.push({ severity: "warning", code: "keyword-short", path: where, message: `keyword "${keyword}" is under ${MIN_KEYWORD_CHARACTERS} characters and would match unrelated tasks` });
++    }
++  }
++  if (!cited.has(where)) {
++    findings.push({ severity: "warning", code: "unused-declaration", path: where, message: "no project rule cites this document; the declaration works, but nothing points a reader at it" });
++  }
++  return findings;
++}
++
++function report(present: boolean, declared: number, findings: ReferencesFinding[]): ReferencesCheckReport {
++  const errors = findings.filter((finding) => finding.severity === "error").length;
++  return { schema: 1, ok: errors === 0, present, declared, errors, warnings: findings.length - errors, findings };
++}
++
++/** Check the declarations against the files on disk and the citations in the project rules. */
++export async function checkReferences(projectRoot: string): Promise<ReferencesCheckReport> {
++  const loaded = await loadReferences(projectRoot);
++  if (!loaded.ok) {
++    return report(true, 0, loaded.errors.map((message): ReferencesFinding => ({ severity: "error", code: "invalid-file", path: REFERENCES_PATH, message })));
++  }
++  const rootReal = await rootRealPath(projectRoot);
++  const { cited, unreadableRules } = await scanCitations(projectRoot);
++  const findings: ReferencesFinding[] = [];
++  for (const declaration of loaded.references) {
++    findings.push(...declarationFindings(declaration, await inspectDocument(projectRoot, rootReal, declaration.path), cited));
++  }
++  const declared = new Set(loaded.references.map((declaration) => declaration.path));
++  for (const missing of await undeclaredCitations(projectRoot, rootReal, cited, declared)) {
++    findings.push({
++      severity: "warning",
++      code: "undeclared-citation",
++      path: missing.path,
++      message: `cited by ${(cited.get(missing.path) ?? []).join(", ")} but not declared in ${REFERENCES_PATH}; run \`${REFERENCES_SUGGEST_COMMAND}\``,
++    });
++  }
++  for (const rule of unreadableRules) {
++    findings.push({ severity: "warning", code: "rule-unreadable", path: rule, message: "the rule cannot be read, so the documents it cites were not checked" });
++  }
++  return report(loaded.present, loaded.references.length, findings);
++}
++
++/** A skeleton `references.json` entry for every undeclared citation. Reads files, writes none. */
++export async function suggestReferences(projectRoot: string): Promise<SuggestResult> {
++  const loaded = await loadReferences(projectRoot);
++  if (!loaded.ok) return { ok: false, errors: loaded.errors };
++  const { cited } = await scanCitations(projectRoot);
++  const declared = new Set(loaded.references.map((declaration) => declaration.path));
++  const missing = await undeclaredCitations(projectRoot, await rootRealPath(projectRoot), cited, declared);
++  return {
++    ok: true,
++    suggestion: {
++      schema: 1,
++      references: missing.map((entry) => ({
++        path: entry.path,
++        bytes: entry.bytes,
++        anchorCandidates: markdownHeadings(entry.text).map((heading) => heading.text),
++        description: "" as const,
++        when: { globs: [], keywords: [] },
++      })),
++    },
++  };
++}
++
++/**
++ * The lines `skills import --rules` ends with when documents are cited but not
++ * declared; empty when there are none, or when `references.json` is invalid
++ * (`check` reports that, and a count taken without knowing what is declared
++ * would be a guess).
++ */
++export async function undeclaredCitationHint(projectRoot: string): Promise<string[]> {
++  const result = await suggestReferences(projectRoot);
++  if (!result.ok || result.suggestion.references.length === 0) return [];
++  const count = result.suggestion.references.length;
++  return [`${plural(count, "cited document")} ${count === 1 ? "has" : "have"} no declaration in ${REFERENCES_PATH}.`, `Run: ${REFERENCES_SUGGEST_COMMAND}`];
++}
+
+--- src/gdskills/references-config.ts
+@@ 1,280 @@
++// Declarations of conditional references, read from
++// `.metaproject/rules/project/references.json` (schema 1):
++//
++//   { "schema": 1, "references": [
++//     { "path": "STYLING.md",
++//       "when": { "globs": ["src/**/*.css"], "keywords": ["className"] },
++//       "anchor": "Class conventions",
++//       "description": "What the document governs and when to read it." } ] }
++//
++// The resolver promotes a declared document to `must_read` when its condition
++// matches the task; the validator checks the proof of reading against it. The
++// committed JSON schema is docs/requirements/keryx-conditional-reads/schemas/
++// references.schema.json and REFERENCES_SCHEMA mirrors it (a test keeps them
++// equal). A missing file is "no declarations", not an error. Loading never
++// throws: problems come back as messages that name the file and the entry.
++
++import { readFile } from "node:fs/promises";
++import path from "node:path";
++
++export const REFERENCES_PATH = ".metaproject/rules/project/references.json";
++export const REFERENCES_SCHEMA_VERSION = 1;
++
++/** Where a declared document applies. At least one of the two lists is non-empty. */
++export type ReferenceCondition = {
++  /** Globs matched against the task's files. */
++  globs: string[];
++  /** Words matched against the task text. */
++  keywords: string[];
++};
++
++export type ReferenceDeclaration = {
++  /** Project-relative posix path, normalised, never absolute and never escaping the root. */
++  path: string;
++  when: ReferenceCondition;
++  /** Heading text or slug of the section that matters; absent means the whole file. */
++  anchor?: string;
++  description: string;
++};
++
++export type ParseReferencesResult = { ok: true; references: ReferenceDeclaration[] } | { ok: false; errors: string[] };
++
++export type LoadReferencesResult =
++  | { ok: true; /** False when the file does not exist. */ present: boolean; references: ReferenceDeclaration[] }
++  | { ok: false; errors: string[] };
++
++export const REFERENCES_SCHEMA = {
++  $schema: "https://json-schema.org/draft/2020-12/schema",
++  $id: "https://keryx.dev/schemas/references.schema.json",
++  title: "Keryx conditional reference declarations",
++  description:
++    ".metaproject/rules/project/references.json. See README.md section 5.1. Each entry declares a document that project rules cite, where it applies (file globs and task keywords), the section that matters (anchor) and what it governs. A path must be relative and stay inside the project root; JSON Schema cannot express that normalisation, so the loader (src/gdskills/references-config.ts) also rejects a path that escapes the root. Each document is declared once: two entries whose normalised paths are equal make the file invalid, which JSON Schema cannot express either.",
++  type: "object",
++  additionalProperties: false,
++  required: ["schema", "references"],
++  properties: {
++    schema: { const: 1 },
++    references: {
++      type: "array",
++      items: {
++        type: "object",
++        additionalProperties: false,
++        required: ["path", "when", "description"],
++        properties: {
++          path: {
++            type: "string",
++            minLength: 1,
++            pattern: "^(?![/\\\\])(?![A-Za-z]:).+$",
++            description: "Project-relative path of the document; absolute paths and paths escaping the root are rejected.",
++          },
++          when: {
++            type: "object",
++            additionalProperties: false,
++            anyOf: [{ required: ["globs"] }, { required: ["keywords"] }],
++            properties: {
++              globs: {
++                type: "array",
++                minItems: 1,
++                items: { type: "string", minLength: 1, pattern: "\\S" },
++                description: "Globs matched against the task's files; a match promotes the reference.",
++              },
++              keywords: {
++                type: "array",
++                minItems: 1,
++                items: { type: "string", minLength: 1, pattern: "\\S" },
++                description: "Words matched case-insensitively, on a word boundary, against the task text.",
++              },
++            },
++          },
++          anchor: {
++            type: "string",
++            minLength: 1,
++            pattern: "\\S",
++            description: "Heading text or slug of the section that matters; without it the whole file is the obligation.",
++          },
++          description: {
++            type: "string",
++            minLength: 1,
++            pattern: "\\S",
++            description: "What the document governs and when to read it.",
++          },
++        },
++      },
++    },
++  },
++} as const;
++
++type Json = Record<string, unknown>;
++
++function isObject(value: unknown): value is Json {
++  return typeof value === "object" && value !== null && !Array.isArray(value);
++}
++
++function label(index: number, raw: Json): string {
++  return typeof raw["path"] === "string" ? `references[${index}] ("${raw["path"]}")` : `references[${index}]`;
++}
++
++/** A project-relative posix path, or the reason it is not one. */
++function normaliseRelativePath(raw: string): { path: string } | { problem: string } {
++  const posix = raw.trim().replace(/\\/g, "/");
++  if (posix === "") return { problem: "path is empty" };
++  if (posix.startsWith("/") || /^[A-Za-z]:/.test(posix)) return { problem: "path is absolute; use a path relative to the project root" };
++  const normal = path.posix.normalize(posix);
++  if (normal === ".." || normal.startsWith("../")) return { problem: "path escapes the project root" };
++  if (normal === ".") return { problem: "path names the project root, not a document" };
++  return { path: normal };
++}
++
++/** A path a rule cites, as the project spells it: posix, normalised, never absolute and never climbing out of the root. */
++export function normaliseCitedPath(cited: string): string | undefined {
++  const posix = cited.replace(/\\/g, "/");
++  if (posix.startsWith("/") || /^[A-Za-z]:/.test(posix)) return undefined;
++  const normal = path.posix.normalize(posix);
++  return normal === ".." || normal.startsWith("../") ? undefined : normal;
++}
++
++/** A cited path that names a document someone must be told to read: a `.md` outside the rules folder (a `.mdc` or a file under the rules folder is another rule). */
++export function isDocumentCitation(relative: string): boolean {
++  return relative.endsWith(".md") && !relative.startsWith(".metaproject/rules/");
++}
++
++function stringList(value: unknown, field: string, who: string, errors: string[]): string[] | undefined {
++  if (value === undefined) return undefined;
++  if (!Array.isArray(value)) {
++    errors.push(`${who}: when.${field} must be an array of non-empty strings`);
++    return undefined;
++  }
++  const items: string[] = [];
++  for (const item of value) {
++    if (typeof item !== "string" || item.trim() === "") {
++      errors.push(`${who}: when.${field} must hold only non-empty strings`);
++      return undefined;
++    }
++    items.push(item.trim());
++  }
++  return items;
++}
++
++function parseWhen(value: unknown, who: string, errors: string[]): ReferenceCondition | undefined {
++  if (!isObject(value)) {
++    errors.push(`${who}: when must be an object with globs and/or keywords; a declaration with neither can never match`);
++    return undefined;
++  }
++  const before = errors.length;
++  for (const key of Object.keys(value)) {
++    if (key !== "globs" && key !== "keywords") errors.push(`${who}: when has an unknown property "${key}"`);
++  }
++  const globs = stringList(value["globs"], "globs", who, errors);
++  const keywords = stringList(value["keywords"], "keywords", who, errors);
++  if (errors.length > before) return undefined;
++  if ((globs ?? []).length === 0 && (keywords ?? []).length === 0) {
++    errors.push(`${who}: when needs at least one of globs or keywords; a declaration with neither can never match`);
++    return undefined;
++  }
++  for (const [field, list] of [["globs", globs], ["keywords", keywords]] as const) {
++    if (list?.length === 0) errors.push(`${who}: when.${field} must not be empty; omit it instead`);
++  }
++  return errors.length > before ? undefined : { globs: globs ?? [], keywords: keywords ?? [] };
++}
++
++const ENTRY_KEYS = new Set(["path", "when", "anchor", "description"]);
++
++function parseEntry(raw: unknown, index: number, errors: string[]): ReferenceDeclaration | undefined {
++  if (!isObject(raw)) {
++    errors.push(`references[${index}]: must be an object`);
++    return undefined;
++  }
++  const who = label(index, raw);
++  const before = errors.length;
++  for (const key of Object.keys(raw)) {
++    if (!ENTRY_KEYS.has(key)) errors.push(`${who}: unknown property "${key}"`);
++  }
++
++  let normalised: string | undefined;
++  if (typeof raw["path"] !== "string") {
++    errors.push(`${who}: path must be a string`);
++  } else {
++    const result = normaliseRelativePath(raw["path"]);
++    if ("problem" in result) errors.push(`${who}: ${result.problem}`);
++    else normalised = result.path;
++  }
++
++  const when = parseWhen(raw["when"], who, errors);
++
++  let anchor: string | undefined;
++  if (raw["anchor"] !== undefined) {
++    if (typeof raw["anchor"] !== "string" || raw["anchor"].trim() === "") errors.push(`${who}: anchor must be a non-empty string when present`);
++    else anchor = raw["anchor"].trim();
++  }
++
++  let description = "";
++  if (typeof raw["description"] !== "string" || raw["description"].trim() === "") {
++    errors.push(`${who}: description must be a non-empty string saying what the document governs`);
++  } else {
++    description = raw["description"].trim();
++  }
++
++  if (errors.length > before || normalised === undefined || when === undefined) return undefined;
++  return { path: normalised, when, ...(anchor !== undefined ? { anchor } : {}), description };
++}
++
++/** Validate an already-parsed `references.json`. Every bad entry is reported, not only the first. */
++export function parseReferences(input: unknown): ParseReferencesResult {
++  if (!isObject(input)) return { ok: false, errors: ["references file must be a JSON object"] };
++  const errors: string[] = [];
++  for (const key of Object.keys(input)) {
++    if (key !== "schema" && key !== "references") errors.push(`unknown property "${key}"`);
++  }
++  if (input["schema"] !== REFERENCES_SCHEMA_VERSION) {
++    errors.push(`schema must be ${REFERENCES_SCHEMA_VERSION}; got ${JSON.stringify(input["schema"])}`);
++  }
++  const entries = input["references"];
++  if (!Array.isArray(entries)) {
++    errors.push("references must be an array");
++    return { ok: false, errors };
++  }
++  const references: ReferenceDeclaration[] = [];
++  const firstIndexOf = new Map<string, number>();
++  entries.forEach((raw: unknown, index) => {
++    const entry = parseEntry(raw, index, errors);
++    if (entry === undefined) return;
++    const first = firstIndexOf.get(entry.path);
++    if (first !== undefined) {
++      errors.push(`references[${index}] ("${entry.path}"): the same document is already declared by references[${first}]; declare each document once, with one anchor`);
++      return;
++    }
++    firstIndexOf.set(entry.path, index);
++    references.push(entry);
++  });
++  return errors.length > 0 ? { ok: false, errors } : { ok: true, references };
++}
++
++function isMissingFile(error: unknown): boolean {
++  return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT";
++}
++
++/**
++ * Read and validate the project's declarations. A missing file is an empty list;
++ * unreadable or invalid content is `ok: false` with messages that name the file
++ * (and the entry, for a schema violation).
++ */
++export async function loadReferences(projectRoot: string): Promise<LoadReferencesResult> {
++  let text: string;
++  try {
++    text = await readFile(path.join(projectRoot, REFERENCES_PATH), "utf8");
++  } catch (error) {
++    if (isMissingFile(error)) return { ok: true, present: false, references: [] };
++    const reason = error instanceof Error ? error.message : String(error);
++    return { ok: false, errors: [`${REFERENCES_PATH}: cannot be read (${reason})`] };
++  }
++  let parsed: unknown;
++  try {
++    parsed = JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
++  } catch (error) {
++    const reason = error instanceof Error ? error.message : String(error);
++    return { ok: false, errors: [`${REFERENCES_PATH}: is not valid JSON (${reason})`] };
++  }
++  const result = parseReferences(parsed);
++  if (!result.ok) return { ok: false, errors: result.errors.map((message) => `${REFERENCES_PATH}: ${message}`) };
++  return { ok: true, present: true, references: result.references };
++}
+
+--- src/gdskills/references-section.ts
+@@ 1,108 @@
++// Markdown section extraction for declared references.
++//
++// A reference with an anchor obliges the worker to read one section, not the
++// whole document: the text from the anchored heading to the next heading of the
++// same or a higher level. The resolver budgets that section's bytes; the
++// validator checks a summary against its words.
++//
++// Only ATX headings (`## Title`) count, and headings inside fenced code blocks
++// are ignored. A missing anchor is a value, not a throw: the resolver falls back
++// to the whole file with a warning, and `check` reports it as an error.
++
++export type MarkdownHeading = { level: number; text: string; slug: string };
++
++export type SectionFound = {
++  found: true;
++  /** The heading text as written, without hashes and closing hashes. */
++  heading: string;
++  level: number;
++  /** The section, heading line included, byte for byte as in the file. */
++  text: string;
++  /** UTF-8 size of {@link text}: what the resolver counts against the budget. */
++  bytes: number;
++};
++
++export type SectionMissing = {
++  found: false;
++  anchor: string;
++  reason: string;
++  /** Heading texts the file does have, in order, so a caller can suggest one. */
++  available: string[];
++};
++
++export type SectionResult = SectionFound | SectionMissing;
++
++type HeadingLine = MarkdownHeading & { start: number };
++
++const HEADING = /^ {0,3}(#{1,6})[ \t]+(.*?)[ \t]*$/;
++const FENCE = /^ {0,3}(`{3,}|~{3,})/;
++
++/** GitHub-style slug: lower case, punctuation dropped, spaces to hyphens. Letters of any script are kept. */
++export function slugifyHeading(text: string): string {
++  return text
++    .trim()
++    .toLowerCase()
++    .replace(/[^\p{L}\p{N}\s_-]/gu, "")
++    .replace(/\s/gu, "-");
++}
++
++function stripClosingHashes(text: string): string {
++  return text.replace(/[ \t]+#+$/, "").replace(/^#+$/, "").trim();
++}
++
++/** Every ATX heading outside fenced code, with the byte offset of its line. Offsets keep CRLF intact. */
++function scanHeadings(markdown: string): HeadingLine[] {
++  const headings: HeadingLine[] = [];
++  let fence: { marker: string; length: number } | undefined;
++  let offset = 0;
++  for (const raw of markdown.split("\n")) {
++    const lineStart = offset;
++    offset += raw.length + 1;
++    const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
++    const fenceMatch = FENCE.exec(line);
++    if (fence !== undefined) {
++      const run = fenceMatch?.[1];
++      if (run !== undefined && run[0] === fence.marker && run.length >= fence.length && line.trim() === run) fence = undefined;
++      continue;
++    }
++    if (fenceMatch?.[1] !== undefined) {
++      fence = { marker: fenceMatch[1][0] ?? "`", length: fenceMatch[1].length };
++      continue;
++    }
++    const match = HEADING.exec(line);
++    if (match === null) continue;
++    const text = stripClosingHashes(match[2] ?? "");
++    if (text === "") continue;
++    headings.push({ level: (match[1] ?? "").length, text, slug: slugifyHeading(text), start: lineStart });
++  }
++  return headings;
++}
++
++/** Headings outside fenced code, in document order. */
++export function markdownHeadings(markdown: string): MarkdownHeading[] {
++  return scanHeadings(markdown).map(({ level, text, slug }) => ({ level, text, slug }));
++}
++
++function matchesAnchor(heading: MarkdownHeading, wanted: string, wantedSlug: string): boolean {
++  return heading.text.toLowerCase() === wanted.toLowerCase() || (wantedSlug !== "" && heading.slug === wantedSlug);
++}
++
++/**
++ * The section anchored by `anchor`: a heading text (case-insensitive) or its slug,
++ * with or without a leading `#`. The first matching heading wins.
++ */
++export function extractSection(markdown: string, anchor: string): SectionResult {
++  const headings = scanHeadings(markdown);
++  const wanted = anchor.trim().replace(/^#+\s*/, "").trim();
++  const missing = (reason: string): SectionMissing => ({ found: false, anchor, reason, available: headings.map((h) => h.text) });
++  if (wanted === "") return missing("anchor is empty");
++
++  const wantedSlug = slugifyHeading(wanted);
++  const index = headings.findIndex((heading) => matchesAnchor(heading, wanted, wantedSlug));
++  const heading = headings[index];
++  if (heading === undefined) return missing(`no heading matches anchor "${anchor}"`);
++
++  const next = headings.slice(index + 1).find((candidate) => candidate.level <= heading.level);
++  const text = markdown.slice(heading.start, next?.start ?? markdown.length);
++  return { found: true, heading: heading.text, level: heading.level, text, bytes: Buffer.byteLength(text, "utf8") };
++}
+
+--- src/gdskills/resolve-context-command.ts
+@@ 1,62 @@
+ import { optionValue, optionValues } from "../lib/args";
+ import { writeContained } from "../lib/contained-write";
+ import { type ContextFor, type ProjectContextResolution, recordLastResolve, resolveProjectContext } from "./context-resolver";
+ 
+ const USAGE =
+-  "Usage: keryx skills resolve-context --files <file>[,<file>...] --for implement|test|review [--task-type <type>] [--max-bytes <n>] [--out <path>] [--json]";
++  "Usage: keryx skills resolve-context --files <file>[,<file>...] --for implement|test|review [--task-type <type>] [--task-text <text>] [--max-bytes <n>] [--out <path>] [--json]";
+ 
+ const FOR_VALUES: readonly ContextFor[] = ["implement", "test", "review"];
+ 
+ export function renderResolutionMarkdown(result: ProjectContextResolution): string {
+   const lines = [
+     `# skills resolve-context (${result.for})`,
+     "",
+     `Files: ${result.files.length === 0 ? "-" : result.files.join(", ")}`,
+     `Budget: ${result.budget.usedBytes} of ${result.budget.limitBytes} bytes (${result.budget.limitSource})${result.budget.exceeded ? " — exceeded" : ""}`,
+   ];
+   for (const tier of ["must_read", "on_demand"] as const) {
+     const group = result.entries.filter((entry) => entry.tier === tier);
+     lines.push("", `## ${tier} (${group.length})`);
+     for (const entry of group) {
+-      const flags = [entry.index ? "index" : "", entry.linked ? "linked" : "", entry.shadows ? `shadows ${entry.shadows}` : "", entry.also_at ? `also at ${entry.also_at.join(", ")}` : ""].filter(Boolean);
++      const flags = [entry.index ? "index" : "", entry.linked ? "linked" : "", entry.shadows ? `shadows ${entry.shadows}` : "", entry.also_at ? `also at ${entry.also_at.join(", ")}` : "", entry.anchor ? `anchor "${entry.anchor}"${entry.section_bytes !== undefined ? `, section ${entry.section_bytes} bytes` : ""}` : ""].filter(Boolean);
+       lines.push(`- ${entry.path} — ${entry.source} ${entry.kind}, ${entry.reason}, ${entry.bytes} bytes, sha256 ${entry.sha256.slice(0, 12)}${flags.length > 0 ? ` (${flags.join("; ")})` : ""}`);
+     }
+   }
+   return `${lines.join("\n")}\n`;
+ }
+ 
+ /** `keryx skills resolve-context`. A successful resolve exits 0 whatever the budget says. */
+ export async function runResolveContextCommand(args: string[], projectRoot: string = process.cwd()): Promise<ProjectContextResolution> {
+   const forValue = optionValue(args, "--for");
+   if (forValue === undefined || !FOR_VALUES.includes(forValue as ContextFor)) throw new Error(`--for must be implement, test or review. ${USAGE}`);
+   const files = optionValues(args, "--files")
+     .flatMap((value) => value.split(","))
+     .map((value) => value.trim())
+     .filter((value) => value !== "");
+   if (files.length === 0) throw new Error(`--files needs at least one file. ${USAGE}`);
+   const rawMax = optionValue(args, "--max-bytes");
+   const maxBytes = rawMax === undefined ? undefined : Number(rawMax);
+   const taskType = optionValue(args, "--task-type");
++  const taskText = optionValue(args, "--task-text");
+ 
+   const result = await resolveProjectContext({
+     projectRoot,
+     files,
+     for: forValue as ContextFor,
+     ...(taskType !== undefined && taskType !== "" ? { taskType } : {}),
+     ...(maxBytes !== undefined ? { maxBytes } : {}),
++    ...(taskText !== undefined && taskText.trim() !== "" ? { taskText } : {}),
+   });
+-  await recordLastResolve(projectRoot, result);
++  await recordLastResolve(projectRoot, result, taskText !== undefined ? { taskText } : {});
+ 
+   const json = `${JSON.stringify(result, null, 2)}\n`;
+   const outPath = optionValue(args, "--out");
+   if (outPath !== undefined && outPath !== "") await writeContained(projectRoot, outPath, json);
+   for (const warning of result.warnings) console.error(`warning: ${warning}`);
+   if (args.includes("--json")) console.log(json.trimEnd());
+   else {
+     console.log(renderResolutionMarkdown(result).trimEnd());
+     if (outPath !== undefined && outPath !== "") console.log(`\nResolved context written to ${outPath}`);
+   }
+   return result;
+ }
+
+--- src/gdskills/resolved-context-check.ts
+@@ 1,154 @@
+ // Checks a worker's `project_context_applied` against the resolver output the
+ // worker was dispatched with: every `must_read` entry has to be cited with the
+ // sha256 the resolver pinned, and no resolved file may have changed since (the
+-// standard must not move between the RED and the GREEN commit).
++// standard must not move between the RED and the GREEN commit). An entry promoted
++// by a declared condition also owes a proof of the reading: the declared anchor
++// and a summary in the section's own words (see ./reference-proof).
+ 
+ import { readFile } from "node:fs/promises";
+ import path from "node:path";
+ import { sha256Hex } from "./project-rules";
+ import type { ContextEntry, ProjectContextResolution } from "./context-resolver";
+ import { readProjectContextConfig, type ProjectContextEnforcement } from "./project-context-config";
++import { isPromoted, pickProofItem, proofFailures, type CitedItem, type ProofRule } from "./reference-proof";
+ 
+ export type ResolvedMiss = {
+   path: string;
+   reason: string;
+   /** The resolver's sha256. */
+   expected: string;
+   /** The sha256 the result cited, when it cited the path at all. */
+   cited?: string;
++  /** Set when the entry was cited with the right hash but the proof of the reading failed; absent for a path/hash miss. */
++  rule?: ProofRule;
++  /** What is wrong and what is expected; continues the sentence "<path> (<reason>) ...". Present with {@link rule}. */
++  detail?: string;
+ };
+ 
+ export type ResolvedDrift = {
+   path: string;
+   tier: ContextEntry["tier"];
+   pinned: string;
+   /** Absent when the file can no longer be read. */
+   current?: string;
+ };
+ 
+ export type ResolvedContextReport = {
+   enforcement: ProjectContextEnforcement;
+   misses: ResolvedMiss[];
+   drifted: ResolvedDrift[];
+   warnings: string[];
+   /** Enforcement is `block` and something is wrong. */
+   blocking: boolean;
+ };
+ 
+ export const RESOLVED_SCHEMAS: readonly string[] = ["task-implementer-output", "tests-creator-output"];
+ 
+ export async function readResolvedFile(file: string): Promise<ProjectContextResolution> {
+   let parsed: unknown;
+   try {
+     parsed = JSON.parse(await readFile(file, "utf8"));
+   } catch (error) {
+     throw new Error(`--resolved ${file}: cannot read it as JSON (${error instanceof Error ? error.message : String(error)}).`, { cause: error });
+   }
+   const value = parsed as Partial<ProjectContextResolution> | null;
+   if (value === null || typeof value !== "object" || value.schema !== 1 || !Array.isArray(value.entries)) {
+     throw new Error(`--resolved ${file}: not a resolve-context result (expected {"schema": 1, "entries": [...]}).`);
+   }
+   return value as ProjectContextResolution;
+ }
+ 
+-function appliedOf(result: unknown): Map<string, string> {
+-  const cited = new Map<string, string>();
++function appliedOf(result: unknown): Map<string, CitedItem[]> {
++  const cited = new Map<string, CitedItem[]>();
+   const list = (result as { project_context_applied?: unknown } | null)?.project_context_applied;
+   if (!Array.isArray(list)) return cited;
+   for (const item of list) {
+-    const entry = item as { path?: unknown; sha256?: unknown } | null;
+-    if (typeof entry?.path === "string" && typeof entry.sha256 === "string") cited.set(entry.path, entry.sha256);
++    const entry = item as { path?: unknown; sha256?: unknown; how?: unknown; anchor?: unknown; summary?: unknown } | null;
++    if (typeof entry?.path !== "string" || typeof entry.sha256 !== "string") continue;
++    const kept: CitedItem = {
++      sha256: entry.sha256,
++      ...(typeof entry.how === "string" ? { how: entry.how } : {}),
++      ...(typeof entry.anchor === "string" ? { anchor: entry.anchor } : {}),
++      ...(typeof entry.summary === "string" ? { summary: entry.summary } : {}),
++    };
++    cited.set(entry.path, [...(cited.get(entry.path) ?? []), kept]);
+   }
+   return cited;
+ }
+ 
+ async function currentSha(projectRoot: string, entryPath: string): Promise<string | undefined> {
+   try {
+     return sha256Hex(await readFile(path.isAbsolute(entryPath) ? entryPath : path.join(projectRoot, entryPath), "utf8"));
+   } catch {
+     return undefined;
+   }
+ }
+ 
++/** The proof misses of a promoted entry; none when it was not cited at all (the path miss already says so). */
++async function proofMisses(projectRoot: string, entry: ContextEntry, items: readonly CitedItem[]): Promise<ResolvedMiss[]> {
++  const item = pickProofItem(items, entry.sha256);
++  if (item === undefined) return [];
++  const failures = await proofFailures({ projectRoot, entry, item });
++  return failures.map((failure) => ({ path: entry.path, reason: entry.reason, expected: entry.sha256, rule: failure.rule, detail: failure.detail }));
++}
++
+ export async function checkResolvedContext(input: {
+   projectRoot: string;
+   resolved: ProjectContextResolution;
+   result: unknown;
+ }): Promise<ResolvedContextReport> {
+   const config = await readProjectContextConfig(input.projectRoot);
+   const cited = appliedOf(input.result);
+   const misses: ResolvedMiss[] = [];
+   const drifted: ResolvedDrift[] = [];
+   for (const entry of input.resolved.entries) {
++    const items = [entry.path, ...(entry.also_at ?? [])].flatMap((where) => cited.get(where) ?? []);
+     if (entry.tier === "must_read") {
+-      const shas = [entry.path, ...(entry.also_at ?? [])].flatMap((where) => (cited.has(where) ? [cited.get(where)!] : []));
++      // Flow 461 semantics: the last citation of each path is the one that counts for the hash.
++      const shas = [entry.path, ...(entry.also_at ?? [])].flatMap((where) => {
++        const last = cited.get(where)?.at(-1);
++        return last !== undefined ? [last.sha256] : [];
++      });
+       if (!shas.includes(entry.sha256)) misses.push({ path: entry.path, reason: entry.reason, expected: entry.sha256, ...(shas[0] !== undefined ? { cited: shas[0] } : {}) });
++      if (isPromoted(entry)) misses.push(...(await proofMisses(input.projectRoot, entry, items)));
+     }
+     for (const where of [entry.path, ...(entry.also_at ?? [])]) {
+       const current = await currentSha(input.projectRoot, where);
+       if (current !== entry.sha256) drifted.push({ path: where, tier: entry.tier, pinned: entry.sha256, ...(current !== undefined ? { current } : {}) });
+     }
+   }
+   return {
+     enforcement: config.enforcement,
+     misses,
+     drifted,
+     warnings: config.warnings,
+     blocking: config.enforcement === "block" && (misses.length > 0 || drifted.length > 0),
+   };
+ }
+ 
+ export function formatResolvedHeadline(report: ResolvedContextReport): string {
+   return `project context: ${report.misses.length} miss(es), ${report.drifted.length} drifted (enforcement ${report.enforcement})`;
+ }
+ 
+ export function formatResolvedReport(report: ResolvedContextReport): string[] {
+   const lines: string[] = [];
+   for (const miss of report.misses) {
++    if (miss.detail !== undefined) {
++      lines.push(`- project context miss: ${miss.path} (${miss.reason}) ${miss.detail}`);
++      continue;
++    }
+     lines.push(
+       miss.cited === undefined
+         ? `- project context miss: ${miss.path} (${miss.reason}) is must_read and project_context_applied does not cite it (sha256 ${miss.expected})`
+         : `- project context miss: ${miss.path} (${miss.reason}) is cited with sha256 ${miss.cited}, the resolver pinned ${miss.expected}`,
+     );
+   }
+   for (const drift of report.drifted) {
+     lines.push(
+       drift.current === undefined
+         ? `- project context drift: ${drift.path} (${drift.tier}) can no longer be read; it was pinned at sha256 ${drift.pinned}`
+         : `- project context drift: ${drift.path} (${drift.tier}) now hashes to ${drift.current}; the resolver pinned ${drift.pinned}`,
+     );
+   }
+   return lines;
+ }

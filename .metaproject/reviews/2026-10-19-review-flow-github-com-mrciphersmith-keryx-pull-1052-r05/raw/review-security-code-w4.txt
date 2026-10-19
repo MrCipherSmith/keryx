@@ -1,0 +1,29 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Second-look read of slice-08 (src/tui approval-mirror, decisions-surface, operator-confirmations, remote-control-surface, tui-shell hunks, operator-confirmations.test.ts) at head 77d2eff20. No exploitable defect found; no finding raised. Checked: injection and terminal-control text in the new card lines (the card title that feeds clip() is built in operator-confirm-review.ts from cardSafe()-sanitised values, src/lib/card-safe.ts:7, and the lines are rendered as plain TextRenderable content, so the Telegram/model-influenced path does not reach the sidebar, status tab or /decisions modal unsanitised); authorization of the press (remoteApproval in operator-confirmations.ts:170 only copies fromId and stamps pressedAt from the shell clock, a missing fromId yields no pressedBy and the operator-confirm gate still refuses a remote answer that does not say who pressed, so it fails closed); the in-memory log (OperatorConfirmationLog) is display-only and does not feed any approval decision (answer/settle/markUndelivered change only what is shown, never the returned ApprovalResponse); unmirrored-card path (tui-shell.ts:6095-6099) keeps the card in the local dock, so a disconnected or inactive bridge cannot auto-approve; no secrets, crypto, path, redirect or deserialisation surface in the slice.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [],
+  "slices": [
+    {
+      "id": "slice-08",
+      "coverage": "Whole diff read once (60519 bytes, 6 files); head-state of src/tui/operator-confirmations.ts, tui-shell.ts:6040-6140 and src/remote/shell-bridge.ts:280-310 read to confirm the hunks; card title sanitisation traced to src/lib/card-safe.ts. Categories: injection/escape text, authn/authz of the remote press, privilege/IDOR, input validation, secrets/logging, CSRF/path/redirect, React/NestJS patterns (not applicable).",
+      "status": "DONE"
+    }
+  ],
+  "stats": {
+    "blockers": 0,
+    "majors": 0,
+    "minors": 0,
+    "infos": 0,
+    "findings_total": 0,
+    "files_read": 6
+  }
+}
+```

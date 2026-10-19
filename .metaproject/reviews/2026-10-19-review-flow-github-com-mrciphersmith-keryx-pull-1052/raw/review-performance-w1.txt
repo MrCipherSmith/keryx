@@ -1,0 +1,42 @@
+STATUS: DONE
+
+## Performance Review (review-performance, wave 1, slice-01)
+
+Lens: SKILL file growth in agent context; package.json files/dependency size; generated gdgraph artifacts.
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "No performance findings in slice-01. The SKILL edits add about 0.7 KB in total to files of 139 KB, 71 KB and 14 KB (0.3-0.5 percent), each a replaced line, not a new section. package.json changes only the version string, with no files/dependency/script change.",
+  "findings": [],
+  "slices": [
+    {
+      "id": "slice-01",
+      "coverage": "SKILL.md, SKILL.detail.md, review-premise SKILL.md hunks; package.json hunk; CHANGELOG and docs hunks skimmed for size; gdgraph provenance/summary hunks; flow files",
+      "status": "DONE"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+## What was checked
+
+1. review-orchestrator SKILL.md (138951 bytes at head, loaded every review). Numstat against base: 2 lines added, 2 removed. The two replaced lines are the "Operator decisions" bullet in "Hosts" (adds `review_complete` to the card list and one sentence: call the card, never send the operator to a terminal, the operator may answer in the shell or the Telegram topic) and Round plan step 6 (spells out the card-first rule). Together roughly +0.5 KB, under 0.4 percent. The added text states a behaviour rule the agent needs (call the card, not a terminal command), so it is proportionate. No new section, table or example.
+2. SKILL.detail.md (71256 bytes, read on demand): 1 line replaced, about +0.15 KB.
+3. review-premise SKILL.md (13641 bytes): 1 line replaced, about +0.12 KB.
+4. Bundled copies under src/gdskills/bundled/skills/review/...: same line counts (1/1, 2/2, 1/1), so the npm package grows by the same under 1 KB, not by a second copy of new content.
+5. package.json: the single hunk is `"version": "0.3.123"` to `"0.3.124"`. The visible part of the hunk shows no change to `files`, dependencies, scripts or bin, and numstat reports 1 line added, 1 removed for the whole file. No dependency was added, so no bundle or install size change.
+6. gdgraph artifacts (.provenance.json, summary.md) are machine-written data and are not loaded as agent context by the reviewed code path; the provenance change is a three-line commit/branch/time swap.
+7. Docs and CHANGELOG hunks are prose read by humans on demand, not loaded into agent context at start.
+
+## Notes (no finding raised)
+
+- The same instruction ("call the card, never send the operator to a terminal") now appears in four places across the three skills (Hosts bullet, Round plan step 6, detail readiness paragraph, premise Wave D). Repetition costs a few hundred bytes of context; it is deliberate reinforcement for a rule agents have broken before and is not a performance defect.
+- Pre-existing and untouched by this PR: SKILL.md is about 139 KB (on the order of 35k tokens) and loads on every review. Its size is a standing context cost, tracked separately; this PR adds under 0.4 percent to it.
+
+## Clean areas
+
+N+1, re-renders, memory leaks, bundle imports, sync blocking, pagination and redundant API calls: not applicable to this slice (docs, skill text, version bump, generated data). Source code is in other slices.

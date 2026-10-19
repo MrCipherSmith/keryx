@@ -1,0 +1,537 @@
+{
+  "reviewer": "review-clean-code",
+  "scope_mode": "diff",
+  "round": 2,
+  "base_sha": "d2cb377f59f7f9c8553d9f377f99360bff3f6328",
+  "branch": "docs/flow-helyx-operator-confirm",
+  "review_context": {
+    "request": {
+      "raw": "Final round (r03) of PR https://github.com/MrCipherSmith/keryx/pull/1052 (flow 464), delta d2cb377f5..6f47bf35f over the ingested r01 package. Operator decisions already taken in round 1 and applied in code: C-05 uphold, C-10 uphold, C-25 dismiss. Delta since the previous package (r02 at 672e37687, never ingested): schema fields pressedBy/pressedAt documented in flow-state.schema.json, autonomous-profile wording left on purpose (unattended children are excluded from the card gate), TM-04 TTY claim restated, card head sanitised, completion-gate.ts error-text helper shared.",
+      "mode": "delta"
+    },
+    "scope": {
+      "mode": "diff",
+      "files": [
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        "CHANGELOG.md",
+        "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/autonomous-review.md",
+        "docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json",
+        "src/commands/agent.ts",
+        "src/commands/operator-confirm-review-tools.test.ts",
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/operator-confirm-rosters.test.ts",
+        "src/commands/operator-confirm-tools.test.ts",
+        "src/commands/shell.test.ts",
+        "src/flow/confirm-token.test.ts",
+        "src/flow/confirm-token.ts",
+        "src/flow/schema.ts",
+        "src/flow/types.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/review/completion-gate.ts",
+        "src/review/types.ts",
+        "src/tui/operator-confirmations.test.ts",
+        "src/tui/operator-confirmations.ts",
+        "src/tui/tui-shell.ts"
+      ]
+    },
+    "git": {
+      "base": "d2cb377f59f7f9c8553d9f377f99360bff3f6328",
+      "head": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264",
+      "repo": "MrCipherSmith/keryx",
+      "branch": "docs/flow-helyx-operator-confirm"
+    },
+    "pr": {
+      "number": 1052,
+      "url": "https://github.com/MrCipherSmith/keryx/pull/1052",
+      "title": "Operator review confirmations answered in Telegram (flow 464)",
+      "state": "open",
+      "base": "main",
+      "head": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264"
+    },
+    "memory": {
+      "query": "operator confirmation cards review_complete remote card Telegram pressedBy",
+      "entries": [],
+      "searched": true
+    },
+    "routing": {
+      "selected_reviewers": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-pr-contract",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ]
+    },
+    "token_policy": {
+      "context_mode": "light",
+      "omissions": [
+        "machine-written gdgraph/wiki data not in diff"
+      ]
+    }
+  },
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "tier_resolution": "session-fallback",
+    "inherit": true,
+    "model_discovery": {}
+  },
+  "budget": {
+    "max_findings": 30
+  },
+  "allowed_tools": "read-only",
+  "metaproject": {
+    "memory": [],
+    "wiki": [],
+    "graph": {
+      "note": "see layers block"
+    }
+  },
+  "slices": [
+    "slice-02"
+  ],
+  "is_fix_round": true,
+  "pr_context": "/home/altsay/keryx/.worktrees/helyx-confirm/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/pr-context.md",
+  "skill_path": "/home/altsay/keryx/.worktrees/helyx-confirm/.metaproject/skills/gdskills/review/review-clean-code/SKILL.md",
+  "prior_findings": [
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-09",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "file": "src/review/chunks-estimate.ts",
+        "line": 160,
+        "quote": "export async function answerChunkEstimate(packageDir: string, value: \"yes\" | \"no\", quote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia, press?: CardPress): Promise<ChunkEstimateRecord> {",
+        "problem": "press?: CardPress was added as a sixth positional parameter of answerChunkEstimate (and a fifth of recordCoverageWaiver); a trailing optional positional parameter on a long signature should be an options object.",
+        "impact": "The card caller already holds one object that carries all of it (`confirmation`: quote, at, confirmedVia, pressedBy, pressedAt) and takes it apart again at the call: `answerChunkEstimate(prepared.dir, prepared.answer, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia, cardPressFields(confirmation))` (src/commands/operator-confirm-review.ts:157) and the same for recordCoverageWaiver (operator-confirm-review.ts:294). The next field the confirmation gains is a seventh parameter. The terminal caller src/commands/review-chunks.ts:142 passes three and relies on the defaults, so it does not share the cost. waiveReadiness and recordPlanConfirmation in the same PR already take an options object and are the better pattern.",
+        "suggested_fix": "Give both functions one trailing options/confirmation object, e.g. `confirmation?: { at?: Date; confirmedVia?: ConfirmedVia } & CardPress`, so the card call becomes `answerChunkEstimate(dir, value, quote, confirmation)` and cardPressFields is applied once inside. Keep the existing terminal call shape working by leaving the object optional.",
+        "evidence": "diff of src/review/chunks-estimate.ts (answerChunkEstimate signature, +/-) and src/review/coverage-complete.ts (recordCoverageWaiver signature); callers read at src/commands/operator-confirm-review.ts:157 and :294 and src/commands/review-chunks.ts:142.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-25",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "file": "src/tui/operator-confirmations.ts",
+        "line": 84,
+        "quote": "function age(ms: number): string {",
+        "problem": "operator-confirmations.ts adds private clock and age helpers that duplicate clock and formatAge in remote-control-surface.ts with different rounding, so the same duration can read differently in two surfaces; the width literal 80 appears five times.",
+        "impact": "Two near-identical formatters with divergent output inside one feature; a later fix to one will miss the other.",
+        "suggested_fix": "Move `formatAge` and `clock` into a small shared module (or an existing theme/format helper) and import it from both files. If the `1h05m` form is intended only for the token countdown, name it for that and keep `formatAge` for the rest.",
+        "evidence": "Diff, src/tui/operator-confirmations.ts `function age(ms)` and `function clock(at)`; head of src/tui/remote-control-surface.ts `export function formatAge(ms: number)` and `function clock(at: number)`. remote-control-surface.ts now imports `waitingCardsText` from operator-confirmations.ts, so reusing `formatAge` from there would make the import circular, which is probably why it was copied. Also reported by: review-style-w4:F-002, review-style-w4:F-003.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-27",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "file": "src/commands/operator-confirm-tools.ts",
+        "line": 206,
+        "quote": "pending.delete(token as string);",
+        "problem": "operatorConfirmTool.invoke is now about 40 lines mixing token lookup, remote authorization, confirmation building and apply, and relies on `token as string`, `pressedBy as number`, `pressedAt as string` casts; agent.ts adds three near-identical conditional spreads and module-level lets.",
+        "impact": "The security-relevant rule (allowed id, one hour, who pressed) is the part of this function most worth reading and testing alone, and it is buried between the token bookkeeping and the apply call. The casts will survive a later edit that moves a check, and then hide a bad value instead of failing to compile.",
+        "suggested_fix": "Extract `authorizeRemotePress(ctx, entry, allowed, now)` returning `{ ok: true, pressedBy, pressedAt } | { ok: false, why }`, and take the token as a narrowed const after the first guard so no cast is needed. invoke() then reads: look up, authorize if remote, build confirmation, apply.",
+        "evidence": "operator-confirm-tools.ts lines 198-237 at head: `pending.delete(token as string);` (line 206) and `...(remote ? { pressedBy: pressedBy as number, pressedAt: pressedAt as string } : {}),` (line 227). Behaviour is correct as written (the undefined checks at line 214 come first); this is about structure, not a bug. Also reported by: review-style-w2:F-003, review-style-w2:F-006.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-28",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "file": "src/remote/shell-bridge.ts",
+        "line": 208,
+        "quote": "...(!yes && (o as { undelivered?: unknown }).undelivered === true ? { undelivered: true as const } : {}),",
+        "problem": "shell-bridge.ts mapApprovalAnswer narrows `got` and then re-casts `o` inline to reach the new undelivered field instead of declaring it in the narrowed type.",
+        "impact": "Small, but it is the only field of the three read through an extra cast, so the next field added will copy the pattern. The local cast also compiles whatever the field is called.",
+        "suggested_fix": "Add `undelivered?: unknown` to the type on the `const o = got as { ... }` line and write `o.undelivered === true`.",
+        "evidence": "diff of src/remote/shell-bridge.ts, mapApprovalAnswer. Also reported by: review-style-w3:F-003.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    }
+  ],
+  "layers": {
+    "version": 1,
+    "files": [
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "CHANGELOG.md",
+      "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "docs/docs/cli-reference.md",
+      "docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json",
+      "src/commands/agent.ts",
+      "src/commands/operator-confirm-review-tools.test.ts",
+      "src/commands/operator-confirm-review.ts",
+      "src/commands/operator-confirm-tools.test.ts",
+      "src/commands/shell.test.ts",
+      "src/flow/confirm-token.test.ts",
+      "src/flow/confirm-token.ts",
+      "src/flow/schema.ts",
+      "src/flow/types.ts",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "src/review/completion-gate.ts",
+      "src/review/types.ts",
+      "src/tui/operator-confirmations.test.ts",
+      "src/tui/operator-confirmations.ts",
+      "src/tui/tui-shell.ts"
+    ],
+    "prHead": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264",
+    "graphCommit": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264",
+    "maxBytes": 8192,
+    "affected": {
+      "depth": 1,
+      "files": [
+        "fixtures/routing-shell-pty.ts",
+        "scripts/benchmark/long-runner-turn.test.ts",
+        "scripts/benchmark/run-ablation-long.ts",
+        "scripts/benchmark/run-ablation-mutating.ts",
+        "scripts/benchmark/run-ablation-raw.ts",
+        "scripts/benchmark/run-ablation.ts",
+        "scripts/benchmark/run-containment.ts",
+        "scripts/benchmark/run-safety.ts",
+        "scripts/stress/keryx-shell-stress.ts",
+        "src/acp/agent-io.ts",
+        "src/acp/models.ts",
+        "src/acp/permission.test.ts",
+        "src/acp/permission.ts",
+        "src/acp/server.ts",
+        "src/bus/delivery.integration.test.ts",
+        "src/commands/acp.ts",
+        "src/commands/agent-approval-binding.test.ts",
+        "src/commands/agent-bus-notification.test.ts",
+        "src/commands/agent-destructive-gate.test.ts",
+        "src/commands/agent-fewer-prompts.test.ts",
+        "src/commands/agent-instruction-roster.test.ts",
+        "src/commands/agent-lifecycle-hooks.test.ts"
+      ]
+    },
+    "symbols": [
+      {
+        "file": "src/commands/agent.ts",
+        "name": "ApprovalMeta",
+        "kind": "interface",
+        "line": 172,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/agent.ts",
+        "name": "ApproverProvenance",
+        "kind": "interface",
+        "line": 312,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/agent.ts",
+        "name": "AgentIO",
+        "kind": "interface",
+        "line": 318,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/agent.ts",
+        "name": "AgentDeps",
+        "kind": "interface",
+        "line": 486,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/agent.ts",
+        "name": "appliesToMe",
+        "kind": "method",
+        "line": 724,
+        "callers": [
+          "executeCallUnbounded (src/commands/agent.ts:5657)"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/agent.ts",
+        "name": "heldBy",
+        "kind": "method",
+        "line": 736,
+        "callers": [
+          "executeCallUnbounded (src/commands/agent.ts:5657)"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "name": "post",
+        "kind": "function",
+        "line": 31,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "name": "tool",
+        "kind": "function",
+        "line": 36,
+        "callers": [
+          "src/commands/operator-confirm-review-tools.test.ts"
+        ],
+        "callees": [
+          "buildReviewConfirmSpecs (src/commands/operator-confirm-review.ts:802)",
+          "operatorConfirmTool (src/commands/operator-confirm-tools.ts:147)"
+        ]
+      },
+      {
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "name": "ask",
+        "kind": "function",
+        "line": 45,
+        "callers": [
+          "src/commands/operator-confirm-review-tools.test.ts",
+          "yes (src/commands/operator-confirm-review-tools.test.ts:55)"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "name": "asked",
+        "kind": "function",
+        "line": 50,
+        "callers": [
+          "src/commands/operator-confirm-review-tools.test.ts",
+          "yes (src/commands/operator-confirm-review-tools.test.ts:55)"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "name": "yes",
+        "kind": "function",
+        "line": 55,
+        "callers": [
+          "src/commands/operator-confirm-review-tools.test.ts"
+        ],
+        "callees": [
+          "ask (src/commands/operator-confirm-review-tools.test.ts:45)",
+          "asked (src/commands/operator-confirm-review-tools.test.ts:50)"
+        ]
+      },
+      {
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "name": "read",
+        "kind": "function",
+        "line": 62,
+        "callers": [
+          "src/commands/operator-confirm-review-tools.test.ts"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "ReviewConfirmSeams",
+        "kind": "interface",
+        "line": 55,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "trackerPrLookup",
+        "kind": "function",
+        "line": 65,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "packageRef",
+        "kind": "function",
+        "line": 72,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "resolvePackage",
+        "kind": "function",
+        "line": 78,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": [
+          "placeReviewPath (src/lib/review-path-flags.ts:50)",
+          "resolveReviewPackagePath (src/review/managed.ts:2934)"
+        ]
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "label",
+        "kind": "function",
+        "line": 85,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "failed",
+        "kind": "function",
+        "line": 87,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-tools.test.ts",
+        "name": "scripted",
+        "kind": "function",
+        "line": 38,
+        "callers": [
+          "turn (src/commands/operator-confirm-tools.test.ts:99)"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-tools.test.ts",
+        "name": "testGate",
+        "kind": "function",
+        "line": 65,
+        "callers": [
+          "src/commands/operator-confirm-tools.test.ts",
+          "turn (src/commands/operator-confirm-tools.test.ts:99)"
+        ],
+        "callees": [
+          "operatorConfirmTool (src/commands/operator-confirm-tools.ts:147)"
+        ]
+      },
+      {
+        "file": "src/commands/operator-confirm-tools.test.ts",
+        "name": "turn",
+        "kind": "function",
+        "line": 99,
+        "callers": [
+          "src/commands/operator-confirm-tools.test.ts"
+        ],
+        "callees": [
+          "runAgentTurn (src/commands/agent.ts:2300)",
+          "scripted (src/commands/operator-confirm-tools.test.ts:38)",
+          "testGate (src/commands/operator-confirm-tools.test.ts:65)"
+        ]
+      },
+      {
+        "file": "src/commands/operator-confirm-tools.test.ts",
+        "name": "yes",
+        "kind": "function",
+        "line": 145,
+        "callers": [],
+        "callees": []
+      }
+    ],
+    "relatedTests": [
+      "scripts/benchmark/long-runner-turn.test.ts",
+      "src/acp/permission.test.ts",
+      "src/bus/delivery.integration.test.ts",
+      "src/commands/agent-approval-binding.test.ts",
+      "src/commands/agent-approval-context-p0.test.ts",
+      "src/commands/agent-approval-context.test.ts",
+      "src/commands/agent-bus-notification.test.ts",
+      "src/commands/agent-commands.confusable.test.ts",
+      "src/commands/agent-commands.test.ts",
+      "src/commands/agent-destructive-gate.test.ts",
+      "src/commands/agent-fewer-prompts.test.ts",
+      "src/commands/agent-granted-json.test.ts",
+      "src/commands/agent-hooks.test.ts",
+      "src/commands/agent-instruction-roster.test.ts",
+      "src/commands/agent-lifecycle-hooks.test.ts",
+      "src/commands/agent-orchestrator-log.test.ts",
+      "src/commands/agent-permission-mode.test.ts",
+      "src/commands/agent-question-axis.test.ts",
+      "src/commands/agent-review-gate.test.ts",
+      "src/commands/agent-rewind-seam.test.ts",
+      "src/commands/agent-task-notification.test.ts",
+      "src/commands/agent-tool-call-budget.test.ts",
+      "src/commands/agent-trust-orchestration.test.ts"
+    ],
+    "wiki": [
+      {
+        "page": "architecture/agent-bus.md",
+        "title": "Agent Bus"
+      },
+      {
+        "page": "architecture/os-sandbox.md",
+        "title": "OS Sandbox"
+      },
+      {
+        "page": "components/src-commands.md",
+        "title": "Module src/commands"
+      },
+      {
+        "page": "components/src-flow.md",
+        "title": "Module src/flow"
+      },
+      {
+        "page": "components/src-review.md",
+        "title": "Module src/review"
+      },
+      {
+        "page": "components/src-tui.md",
+        "title": "Module src/tui"
+      }
+    ],
+    "memory": [
+      {
+        "path": "lessons/theme-switch-repaint.md",
+        "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+        "status": "accepted",
+        "module": "src/tui"
+      }
+    ],
+    "truncated": [
+      {
+        "section": "affected",
+        "shown": 22,
+        "total": 241,
+        "command": "keryx gdgraph affected '.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md' --depth 2 --data-dir '.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph'"
+      },
+      {
+        "section": "symbols",
+        "shown": 22,
+        "total": 71,
+        "command": "keryx gdgraph symbol '<name>' --data-dir '.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph'"
+      },
+      {
+        "section": "relatedTests",
+        "shown": 23,
+        "total": 165,
+        "command": "keryx test related '.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md'"
+      }
+    ],
+    "unavailable": []
+  }
+}

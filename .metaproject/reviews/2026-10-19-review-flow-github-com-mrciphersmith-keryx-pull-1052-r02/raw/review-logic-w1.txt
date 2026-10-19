@@ -1,0 +1,135 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "slices": ["slice-01"],
+  "summary": "Round 2 delta d2cb377f5..672e37687 at head 672e37687b7c27184e88c5d6571f8c509a2c671e. The round-1 logic fixes hold: the review_complete card takes no head from the model and works from the recorded head only; the card lists mutation waivers and reviewer-override decisions; the remote answer fails closed when the allowed-id list is undefined, is one-time, honours the 1h TTL, and burns the token on every rejection (the token is deleted before the checks); pressedBy/pressedAt travel from the remote-card press through the answer record and the confirmation token into the signature and the runtime schema; the TUI mirrored card settles on every exit (try/finally, withdrawn on an undefined verdict) and an undelivered mirror is marked. A close-then-throw in completeReviewGated is handled. One confirmed major defect: the runtime flowStateSchema() now has pressedBy/pressedAt under confirmation.properties but the committed docpack schema does not, and src/flow/schema.test.ts fails (verified by running it). Remaining items are minor/info. 131 tests in six related files pass; src/commands/shell.test.ts was not run.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/flow/schema.ts",
+      "line": 331,
+      "quote": "pressedBy: { type: \"integer\", description: \"Flow 464: on a remote-card token, the Telegram user id that pressed the card.\" },",
+      "problem": "The delta adds pressedBy and pressedAt to confirmation.properties in flowStateSchema() (src/flow/schema.ts:331-332) but does not add them to the committed docpack schema docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json (last touched by 496039e1a, not in the delta). src/flow/schema.test.ts lines 124-127 assert that the runtime schema equals the committed one, and that test now fails: the received schema carries two extra properties, pressedAt and pressedBy, under confirmation.properties, and nothing else differs.",
+      "impact": "The test 'runtime flowStateSchema() is consistent with the committed docpack schema' fails at head, so the PR is red on a gate the project enforces, and the documented contract for a signed confirmation does not describe the fields the runtime now writes. A reader of the docpack would conclude a remote-card confirmation has no press fields.",
+      "suggested_fix": "Add the two properties to docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json under confirmation.properties, same key order and descriptions as the runtime: \"pressedBy\": {\"type\":\"integer\",\"description\":\"Flow 464: on a remote-card token, the Telegram user id that pressed the card.\"} and \"pressedAt\": {\"type\":\"string\",\"description\":\"Flow 464: on a remote-card token, the shell's clock when the press arrived.\"}. Re-run bun test src/flow/schema.test.ts.",
+      "evidence": "Ran `keryx ctx run -- bun test src/flow/schema.test.ts` at the reviewed head: 'runtime flowStateSchema() is consistent with the committed docpack schema' fails; the diff shows only +pressedAt and +pressedBy under confirmation.properties. `keryx ctx rg pressedBy` on the docpack schema returns no match. src/flow/schema.ts:331-332 holds the added lines; src/flow/schema.test.ts:124-127 holds the equality assertion.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "dedupe_key": "flow-state-schema-docpack-drift",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "src/flow/schema.ts:331-332 (runtime flowStateSchema(), has the fields)",
+          "docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json (confirmation.properties, lacks the fields)",
+          "src/flow/schema.test.ts:124-127 (the equality guard)"
+        ],
+        "enumeration_method": "flowStateSchema() is compared whole against the committed docpack schema by src/flow/schema.test.ts:124-127, so that test enumerates every drift; running it shows the only difference is these two properties. `keryx ctx rg pressedBy|pressedAt src/flow/schema.ts` lists the two runtime sites; the same pattern on the docpack schema returns none."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 18,
+      "quote": "// Flow 464 adds review_complete (keryx review complete <package> [--head]): one card with the reviewed head, the report's",
+      "problem": "The header comment still describes the card as taking [--head], but the card no longer accepts a head from the model (round-1 C-04 fix); the card works from the recorded head only.",
+      "impact": "A maintainer reading the file header is told the card takes a head argument, which invites re-adding the model-supplied head that the fix removed.",
+      "suggested_fix": "Reword lines 18-19 to say the card shows the recorded head and takes only the package.",
+      "evidence": "src/commands/operator-confirm-review.ts:18 holds `[--head]`; the spec's input has no head field at the reviewed SHA.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "dedupe_key": "stale-head-comment",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": null,
+      "problem": "When the topic leg wins, the TUI log records 'yes, pressed by Telegram user N' from the bridge answer before operatorConfirmTool.invoke runs its allowed-id and TTL checks. A press that invoke then refuses (a press later than one hour after the card, or an id not on the allowed list) still reads as a yes in the log, while nothing was recorded by the gate.",
+      "impact": "The sidebar, /remote-control and /decisions line can show an answered yes for a card the gate refused. The durable record is correct (the gate stores nothing); only the live view is misleading. The same site was raised as C-45 in round 1 as a design remark, so this is not a new defect.",
+      "suggested_fix": "None needed for correctness. If the view should match the gate, settle the log entry from the tool result instead of from the bridge answer.",
+      "evidence": "src/tui/tui-shell.ts mirrorApprovalToTopic, topic outcome of the three-outcome try/finally; src/commands/operator-confirm-tools.ts:198-237 does the checks after the answer has been logged.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "dedupe_key": "tui-log-yes-before-gate",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/flow/confirm-token.ts",
+      "line": null,
+      "quote": null,
+      "problem": "parseStoredToken does not type-check pressedBy/pressedAt from the stored confirm-token.json before consumeConfirmationToken spreads them into the SignatureConfirmation.",
+      "impact": "A hand-edited token store could put a wrong type into a signature. Forging the store is already outside this reviewer's threat model (the store holds only a sha256 hash), so no current observable defect.",
+      "suggested_fix": "Add typeof checks (number for pressedBy, string for pressedAt) in parseStoredToken and drop the fields otherwise.",
+      "evidence": "src/flow/confirm-token.ts consumeConfirmationToken, spread of the stored press fields.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "dedupe_key": "confirm-token-press-fields-untyped",
+      "blocking_merge": false,
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": null,
+      "problem": "completionFacts shows 'the research gate will refuse' for any non-ENOENT error reading research.json, and the waiver lines do not compare subject.head with the recorded head.",
+      "impact": "The first is a coarse but safe wording (a corrupt ledger does make the gate refuse); the second changes nothing because the head gate in completeReviewGated runs on apply. No wrong result reaches the operator's decision.",
+      "suggested_fix": "Optional: name the error class in the waiver line; optional: skip waiver lines whose subject.head differs from the recorded head.",
+      "evidence": "src/commands/operator-confirm-review.ts completionFacts (lines ~650-799 region) versus src/review/managed.ts completeManagedReview head gate (lines 950-1066).",
+      "confidence": "low",
+      "reviewer": "review-logic",
+      "dedupe_key": "completion-facts-wording",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "pre_existing": [
+    {
+      "id": "P-001",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-tools.ts",
+      "problem": "Entries of the process-local pending token map are removed only by invoke or confirmationDeclined; a card whose turn was aborted is never swept. The delta adds issuedAt but no eviction.",
+      "impact": "Memory only, bounded by the number of abandoned cards in one shell session; the tokens are dead after one hour in any case.",
+      "suggested_fix": "Sweep entries older than REMOTE_CARD_TTL_MS when a new card is issued.",
+      "location_class": "pre-existing"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 3 }
+}
+```
+
+## Logic Review (round 2)
+
+### Review Scope
+- Delta: d2cb377f5..672e37687 (24 files), slice-01; head 672e37687b7c27184e88c5d6571f8c509a2c671e
+- Spec compliance gate: ran against the round-1 findings and the four operator focus points
+
+### Operator focus, checked
+1. review_complete card: recorded head only (no model-supplied head); lists readiness waivers, the coverage waiver, and operator-decisions (mutation-waiver as "mutation pass not run", other kinds as "reviewer override, left out"). Digest check before apply; close-then-throw handled. Fixed, no regression.
+2. Remote answer validation: allowed-id list undefined means refuse; `pressedBy` and `pressedAt` required; one-time token deleted before any check; `now() - issuedAt <= REMOTE_CARD_TTL_MS`. Fixed, no regression.
+3. pressedBy/pressedAt: remote press, `ctx`, confirmation record, token store, `consumeConfirmationToken`, SignatureConfirmation, `confirmMint`, runtime schema all carry the pair. The docpack schema does not (F-001, major).
+4. TUI mirrored card: try/finally in both branches, withdrawn on an undefined verdict, `markUndelivered` on `onUndelivered`, TTL-aware `waiting()`. Fixed, no regression.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 1  |  info: 3
+
+### Not re-reported
+C-01..C-08 (round 1); C-25 (dismissed).
+
+### Routing audit
+graph_used: no (not-relevant, narrow delta read directly); wiki_used: no (not-relevant); ctx_used: yes (`keryx ctx rg/read/run`); raw_rg_used: no. Raw `git diff` was run twice with the keryx:raw marker because ctx has no equivalent for a delta diff.

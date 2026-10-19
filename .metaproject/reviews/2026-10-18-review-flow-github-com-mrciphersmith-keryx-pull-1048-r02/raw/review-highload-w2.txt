@@ -1,0 +1,61 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "Slice 02 (src/commands, command tests, flow tests, bundled skill copies) read in full, plus the head source behind it (resolve-context-command.ts, context-resolver.ts, contained-write.ts, reference-entries.ts, references-check.ts, references-config.ts). No blocker or major under concurrency or load. The wave-1 question about parallel resolve-context runs sharing last.json is answered: the write is atomic and cannot corrupt the file, and last-writer-wins loses nothing that enforcement uses, because last.json is read only by the TUI status view and tests. One minor: the new skill prose puts the whole task title and description on the command line inside double quotes.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "--task-text \"<the task's title and description>\"",
+      "problem": "Flow 462 makes every resolve-context dispatch in flow-orchestrator, job-orchestrator, task-implementer and tests-creator pass the task title and description as one double-quoted shell argument. That text comes from issue bodies and plans. In double quotes the shell still expands `$(...)`, backticks and `$VAR`, a literal `\"` ends the argument early, and a description over the kernel's single-argument limit (about 128 KiB on Linux) cannot be passed at all. The resolver cuts the text to 4000 characters only after it has arrived as argv.",
+      "impact": "Trigger: an issue or plan description that contains a backtick span or `$(...)` (common in issue text that quotes code or commands), or a stray double quote. A dispatching agent that pastes it verbatim has the shell run the embedded command, or gets a syntax error or a truncated --task-text. The truncated case is silent: the keyword match then runs on a cut text and a keyword-promoted reference is not promoted, with no warning. Frequency is low because the dispatcher is a model that may quote by hand; the cost when it does not is a command run from untrusted text.",
+      "suggested_fix": "Do not tell the dispatcher to inline free text. Either add a `--task-text-file <path>` (or `--task-text -` for stdin) and have the skills write the task description to a file first, or state in the prose that the text is passed single-quoted with embedded single quotes escaped, and name the first ~500 characters as enough (the resolver keeps 4000). The same sentence appears in job-orchestrator/SKILL.md, job-orchestrator/orchestrator-prompt.md, task-implementer/SKILL.md and tests-creator/SKILL.md.",
+      "evidence": "Slice hunks at flow-orchestrator/SKILL.md (resolve-context line before 'Dispatch payload'), job-orchestrator/SKILL.md Step A and fix loop item 3, orchestrator-prompt.md steps 1 and FIX item 2, task-implementer/SKILL.md 2.0c, tests-creator/SKILL.md 1.2b. runResolveContextCommand reads the flag with optionValue(args, \"--task-text\") and truncates later in truncateTaskText (context-resolver.ts), so no input path avoids argv.",
+      "confidence": "medium",
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/gdskills/context-resolver.ts",
+      "line": null,
+      "quote": "await writeContained(projectRoot, LAST_RESOLVE_PATH, `${JSON.stringify(record, null, 2)}\\n`);",
+      "problem": "Checked, wave-1 question: parallel resolve-context runs (job-orchestrator waves) all write one last.json. writeContained writes a temp file in the same directory (name carries 6 random bytes, opened with 'wx'), then renames over the target, so each write lands whole or not at all and two runs never share a temp file. mkdir is recursive and idempotent. The record holds result and taskText together, so a reader never sees one run's result with another run's task text. Last writer wins.",
+      "impact": "No corruption and no lost enforcement data: the proof check (`contracts validate --resolved`, `task done --resolved`) reads the per-task --out file, which the skills name per task id (results/<task_id>.<for>.resolved.json, resolved/<Tn>.<for>.json), never last.json. The only readers of last.json are project-context-status.ts (TUI /projectctx tab) and tests. In a parallel wave the Last resolve tab shows whichever run finished last. A process killed between open and rename leaves a `.last.json.tmp-<hex>` file beside it; the failure is swallowed by the best-effort catch. No change needed. Not a finding to fix.",
+      "suggested_fix": "None required. If an operator needs per-task history in the TUI, key the record by task or run instead of one file; that is a feature, not a defect.",
+      "evidence": "context-resolver.ts recordLastResolve (try/catch around writeContained); contained-write.ts writeContained non-exclusive branch (tmp 'wx', chmod, rename; rm tmp on error); readers found with search_code on LAST_RESOLVE|last\\.json|RecordedResolve across src: project-context-status.ts, tui/project-context-inspector.ts and tests only.",
+      "confidence": "high",
+      "reviewer": "review-highload",
+      "publication": "omit"
+    }
+  ],
+  "slices": [
+    { "id": "slice-02", "coverage": "full diff read (1321 lines); head source read for resolve-context-command.ts, context-resolver.ts, contained-write.ts, reference-entries.ts, references-check.ts, references-config.ts", "status": "DONE" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "inputs_unreadable": []
+}
+```
+
+## High-Load Review (slice-02)
+
+Load profile: not provided; severity assumes moderate traffic. This is a CLI, so the load-relevant shape is parallel CLI invocations inside job-orchestrator waves.
+
+### Findings
+- F-001 minor: whole task description passed inline as a double-quoted `--task-text` argument in the bundled skills (shell expansion, quote breakage, argv size limit). Outside my usual lane but the load angle is parallel dispatch of many tasks from untrusted issue text.
+- F-002 info (omit): last.json concurrency verified, no defect.
+
+### Clean areas
+- Concurrency and shared state: no module-level mutable state added in src/commands; skills-references.ts is stateless. Tests mutate process.cwd and exitCode but restore both in afterEach.
+- Resource management: references check/suggest read files one at a time, with a 256 KiB cap on each document (CONTRACT_MAX_BYTES) and a realpath containment check. No unbounded Promise.all, no handles left open. The citation scan reads every project rule once; a project has tens of rules. The declarations count has no cap, so a resolve reads and hashes every declared document (up to 256 KiB each) even when it is not promoted; that is needed for the pinned sha256 and costs milliseconds at realistic sizes.
+- Atomic writes: `--out` uses the same writeContained, one file per task id.
+- Retry, queue, cache, DB, idempotency: nothing in this slice. The resolver is a pure function of files on disk plus arguments, so re-running it is idempotent.
+
+### Not covered
+None in slice-02.

@@ -1,0 +1,935 @@
+{
+  "reviewer": "review-logic",
+  "scope_mode": "diff",
+  "round": 2,
+  "base_sha": "d2cb377f59f7f9c8553d9f377f99360bff3f6328",
+  "branch": "docs/flow-helyx-operator-confirm",
+  "review_context": {
+    "request": {
+      "raw": "Final round (r03) of PR https://github.com/MrCipherSmith/keryx/pull/1052 (flow 464), delta d2cb377f5..6f47bf35f over the ingested r01 package. Operator decisions already taken in round 1 and applied in code: C-05 uphold, C-10 uphold, C-25 dismiss. Delta since the previous package (r02 at 672e37687, never ingested): schema fields pressedBy/pressedAt documented in flow-state.schema.json, autonomous-profile wording left on purpose (unattended children are excluded from the card gate), TM-04 TTY claim restated, card head sanitised, completion-gate.ts error-text helper shared.",
+      "mode": "delta"
+    },
+    "scope": {
+      "mode": "diff",
+      "files": [
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        "CHANGELOG.md",
+        "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/autonomous-review.md",
+        "docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json",
+        "src/commands/agent.ts",
+        "src/commands/operator-confirm-review-tools.test.ts",
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/operator-confirm-rosters.test.ts",
+        "src/commands/operator-confirm-tools.test.ts",
+        "src/commands/shell.test.ts",
+        "src/flow/confirm-token.test.ts",
+        "src/flow/confirm-token.ts",
+        "src/flow/schema.ts",
+        "src/flow/types.ts",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/review/completion-gate.ts",
+        "src/review/types.ts",
+        "src/tui/operator-confirmations.test.ts",
+        "src/tui/operator-confirmations.ts",
+        "src/tui/tui-shell.ts"
+      ]
+    },
+    "git": {
+      "base": "d2cb377f59f7f9c8553d9f377f99360bff3f6328",
+      "head": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264",
+      "repo": "MrCipherSmith/keryx",
+      "branch": "docs/flow-helyx-operator-confirm"
+    },
+    "pr": {
+      "number": 1052,
+      "url": "https://github.com/MrCipherSmith/keryx/pull/1052",
+      "title": "Operator review confirmations answered in Telegram (flow 464)",
+      "state": "open",
+      "base": "main",
+      "head": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264"
+    },
+    "memory": {
+      "query": "operator confirmation cards review_complete remote card Telegram pressedBy",
+      "entries": [],
+      "searched": true
+    },
+    "routing": {
+      "selected_reviewers": [
+        "review-architecture",
+        "review-clean-code",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-pr-contract",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ]
+    },
+    "token_policy": {
+      "context_mode": "light",
+      "omissions": [
+        "machine-written gdgraph/wiki data not in diff"
+      ]
+    }
+  },
+  "model": {
+    "tier": "standard",
+    "tier_reasons": [
+      "base:standard",
+      "resolve:ranking-refused"
+    ],
+    "tier_resolution": "session-fallback",
+    "inherit": true,
+    "model_discovery": {}
+  },
+  "budget": {
+    "max_findings": 30
+  },
+  "allowed_tools": "read-only",
+  "metaproject": {
+    "memory": [],
+    "wiki": [],
+    "graph": {
+      "note": "see layers block"
+    }
+  },
+  "slices": [
+    "slice-02"
+  ],
+  "is_fix_round": true,
+  "pr_context": "/home/altsay/keryx/.worktrees/helyx-confirm/.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/pr-context.md",
+  "skill_path": "/home/altsay/keryx/.worktrees/helyx-confirm/.metaproject/skills/gdskills/review/review-logic/SKILL.md",
+  "prior_findings": [
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-02",
+        "reviewer": "review-regression",
+        "severity": "major",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 792,
+        "quote": "    completeSpec(seams),",
+        "problem": "src/commands/shell.test.ts:849 pins the exact sorted TUI tool list without review_complete; 'shellCommand wires web_search into the agent TUI tool set' fails at head.",
+        "impact": "Trigger: running `bun test src/commands/shell.test.ts` (it is in the radius's testsToRun and in the full suite / CI job typecheck-and-tests). Outcome: that test fails with an extra review_complete in the received array, so CI is red for a reason unrelated to the PR's own tests. The PR's test plan only runs operator-confirm-tools, operator-confirm-review-tools, remote and tui tests, which is why the PR author's targeted run would not see it. Same class as the known operator-confirm-rosters.test.ts 18-vs-19 pin, but a different file and a different assertion, so fixing the known one does not fix this.",
+        "suggested_fix": "Add \"review_complete\" to the expected array in src/commands/shell.test.ts, between \"review_comments_reply\" and \"review_confirm_plan\" (sorted order: review_comments_reply, review_complete, review_confirm_plan). Prefer deriving the review card names from reviewConfirmSpecs() so the next card does not repeat this.",
+        "evidence": "src/commands/operator-confirm-review.ts:792 `completeSpec(seams),` and :694 `name: \"review_complete\",`. src/commands/shell.test.ts:849 `expect(toolNames.sort()).toEqual([` with the review_* entries at lines 878-886 and no review_complete. blast-radius.json lists src/commands/shell.test.ts under dropped (hop 1 via src/commands/shell.ts, reason test-consumer) and in testsToRun. Search: `keryx ctx rg -n 'review_complete|review_decide_premise' src --glob '*.test.ts'` returned shell.test.ts:881 as the only roster pin that has review_decide_premise but lacks review_complete (operator-confirm-review-tools.test.ts:93 and tui/operator-confirmations.test.ts:15 already list review_complete; operator-confirm-rosters.test.ts is the known one). I did not run the test (read-only review); the claim rests on the exact-equality assertion and the roster contents above.",
+        "confidence": "high",
+        "class_scope": {
+          "sites": [
+            "src/commands/shell.test.ts:849 (exact sorted TUI tool list lacks review_complete)"
+          ],
+          "enumeration_method": "keryx ctx rg for the sibling card names (review_confirm_plan, review_decide_premise, review_waive_readiness) across all test files, then each hit checked for an exact-list assertion; only shell.test.ts pins the list; the test was run (1 failure at head)"
+        }
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-04",
+        "reviewer": "review-security-code",
+        "severity": "major",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 725,
+        "quote": ": `reviewed head: ${facts.head}${headInput === undefined ? \"\" : \" (given by the agent, replaces the recorded head)\"}`,",
+        "problem": "The review_complete card accepts a model-supplied head (7-40 hex) that managed.ts uses to replace manifest.target.head before completeHeadGate. The card shows the agent value, not the recorded head, and the digest does not cover the difference.",
+        "impact": "Attack vector: an agent (or an injected instruction in the reviewed PR) calls review_complete with head set to the PR's current head SHA after the PR moved past the commit the round actually reviewed. The head gate passes, the manifest records the agent's SHA, and the operator is asked to approve a card whose SHA looks like the current head. The round closes as if it reviewed the latest commit. The brief requires card content (SHA) to come from the package, not from model input; the CLI `--head` is typed by the operator, the card path is typed by the model. Mitigations that keep this from being a blocker: the card does label the value as agent-given, the operator must still press yes, and the gate still demands READY and an evidence level.",
+        "suggested_fix": "Preferred: drop `head` from the review_complete input schema and from buildCard/apply, so the card always completes against the head the package recorded; an operator who really needs a different head uses `keryx review complete --head` in a terminal. Alternative: keep the field but show the recorded head next to it on the card (`recorded head: <sha>; the agent asks to replace it with <sha>`), refuse a value that does not prefix-match the recorded head, and fold the recorded head into factsDigest.",
+        "evidence": "src/commands/operator-confirm-review.ts:703 declares `head` in the tool input; :679 `head: headInput ?? recorded`; :725 renders the agent value without the recorded one; :753 `...(headInput === undefined ? {} : { head: headInput })` is passed to completeReviewGated. src/review/managed.ts:967-979 replaces `manifest.target.head` with the supplied value and only pushes a warning when it differs from the recorded head; :982 runs completeHeadGate on the replaced manifest. The CLI reaches the same code with an operator-typed --head (src/commands/review.ts runComplete -> completeReviewGated).",
+        "confidence": "medium",
+        "class_scope": {
+          "sites": [
+            "src/commands/operator-confirm-review.ts review_complete head parameter (7-40 hex)",
+            "src/review/managed.ts completeReviewGated head override before completeHeadGate"
+          ],
+          "enumeration_method": "keryx ctx rg for completeHeadGate callers (src/review/readiness.ts:337, src/review/managed.ts:982) and for the head parameter in the card spec; only the card path lets a caller-supplied head replace manifest.target.head"
+        }
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-07",
+        "reviewer": "review-testing-practices",
+        "severity": "major",
+        "file": "src/commands/operator-confirm-tools.ts",
+        "line": 215,
+        "quote": "if (allowed === undefined || !allowed.includes(pressedBy)) {",
+        "problem": "No test drives the fail-closed branch of operatorConfirmTool.invoke where the allowed-id list is undefined (config unreadable or no binding), the one branch that makes a remote answer refuse when the allow-list is missing.",
+        "impact": "If the `allowed === undefined ||` half is dropped or inverted (for example `allowed !== undefined && !allowed.includes(...)`, or `allowed?.includes(pressedBy) === false`), every existing test still passes while any remote press is accepted whenever the remote config is missing or unreadable. This is the security gate of AC2 and the one place where a refactor turns a refusal into an acceptance without a red test.",
+        "suggested_fix": "Add two direct invoke tests in the AC2 block of operator-confirm-tools.test.ts: (1) bind `allowedUserIds: () => undefined`, ask, press remote with pressedBy 42 and a valid token, expect isError and unchanged state (no apply side effect, no confirmation record); (2) bind a tool with no `allowedUserIds` at all and do the same. Assert the refusal text contains 'not on the allowed list' and that the token is spent.",
+        "evidence": "operator-confirm-tools.ts line 215 holds the only allow-list check. The tests at operator-confirm-tools.test.ts lines 331-395 all construct the gate with `{ allowedUserIds: () => ALLOWED }`; the review-tools helper `tool()` binds `allowedUserIds: () => [ALLOWED_ID]`. shell.ts line 4224 shows the production binding can return undefined.",
+        "confidence": "high",
+        "class_scope": {
+          "sites": [
+            "src/commands/operator-confirm-tools.ts:215 (allowed === undefined fail-closed branch)"
+          ],
+          "enumeration_method": "keryx ctx rg for 'allowed === undefined' and 'allowedIds === undefined' across src; the branch exists at operator-confirm-tools.ts:215 only (src/trigger/granted-tools.ts:275 is a different gate); the test files operator-confirm-review-tools.test.ts and operator-confirmations.test.ts were read for a case with no allowed list"
+        }
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-08",
+        "reviewer": "review-testing-practices",
+        "severity": "major",
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "line": 638,
+        "quote": "expect(result.output).toContain(\"nothing was recorded\");",
+        "problem": "Only the evidence-level gate is proven to record nothing when review_complete is refused. The head gate, waiver rules, run-profile refusal and routing refusal are never driven through the card, and toContain('nothing was recorded') does not identify the gate that refused.",
+        "impact": "The point of AC4 is that the card runs the SAME gates as `keryx review complete`. If completeReviewGated drops or reorders a gate on the card path (for example the head gate is skipped, or the refusal is returned after the write), the suite stays green. Only the evidence gate is protected.",
+        "suggested_fix": "Table-drive the refused-gate test over each gate with a package that trips only that gate: moved head and merged PR (inject prLookup returning the merged or advanced state; today the helper uses `prLookup: async () => null`, which makes complete-head-gate.ts warn and skip the check), a waiver that breaks the waiver rules, a manifest with the operatorGate stamp so runProfileRefusal fires, and a narrowed routing so packageRoutingRefusal fires. For each: press remote yes, expect isError, expect the gate-specific text, expect completion-confirmation.json absent and the manifest unchanged. Add a small complete-gated.test.ts that asserts the CLI runComplete and the card call the same function.",
+        "evidence": "operator-confirm-review.ts line 750 calls completeReviewGated inside apply; src/review/complete-gated.ts holds the four gates; the refused-gate test in operator-confirm-review-tools.test.ts (around line 638) uses only the evidence-level case. The tool() helper's prLookup returns null, and src/review/complete-head-gate.ts line 45 returns a warning and skips the check on a null lookup, so the head gate is inert in these tests.",
+        "confidence": "high",
+        "class_scope": {
+          "sites": [
+            "src/commands/operator-confirm-review-tools.test.ts (only the evidence-level refusal is driven)",
+            "src/review/complete-head-gate.test.ts (head gate tested directly, not through the card)",
+            "src/review/readiness.test.ts (waiver rules tested directly, not through the card)"
+          ],
+          "enumeration_method": "keryx ctx rg for review_complete across src test files (src/commands/operator-confirm-review-tools.test.ts, src/tui/operator-confirmations.test.ts, src/commands/review-tty-refusal.test.ts) and for each gate name the CLI complete path runs (head, waiver, run-profile, routing, evidence level); only the evidence-level refusal is exercised through the card"
+        }
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-09",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "file": "src/review/chunks-estimate.ts",
+        "line": 160,
+        "quote": "export async function answerChunkEstimate(packageDir: string, value: \"yes\" | \"no\", quote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia, press?: CardPress): Promise<ChunkEstimateRecord> {",
+        "problem": "press?: CardPress was added as a sixth positional parameter of answerChunkEstimate (and a fifth of recordCoverageWaiver); a trailing optional positional parameter on a long signature should be an options object.",
+        "impact": "The card caller already holds one object that carries all of it (`confirmation`: quote, at, confirmedVia, pressedBy, pressedAt) and takes it apart again at the call: `answerChunkEstimate(prepared.dir, prepared.answer, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia, cardPressFields(confirmation))` (src/commands/operator-confirm-review.ts:157) and the same for recordCoverageWaiver (operator-confirm-review.ts:294). The next field the confirmation gains is a seventh parameter. The terminal caller src/commands/review-chunks.ts:142 passes three and relies on the defaults, so it does not share the cost. waiveReadiness and recordPlanConfirmation in the same PR already take an options object and are the better pattern.",
+        "suggested_fix": "Give both functions one trailing options/confirmation object, e.g. `confirmation?: { at?: Date; confirmedVia?: ConfirmedVia } & CardPress`, so the card call becomes `answerChunkEstimate(dir, value, quote, confirmation)` and cardPressFields is applied once inside. Keep the existing terminal call shape working by leaving the object optional.",
+        "evidence": "diff of src/review/chunks-estimate.ts (answerChunkEstimate signature, +/-) and src/review/coverage-complete.ts (recordCoverageWaiver signature); callers read at src/commands/operator-confirm-review.ts:157 and :294 and src/commands/review-chunks.ts:142.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-10",
+        "reviewer": "review-logic",
+        "severity": "minor",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 668,
+        "quote": "  const waivers = (manifest.readiness_waivers ?? []).map((waiver) => `waiver: readiness item ${cardSafe(waiver.item)}: \"${cardSafe(clip(waiver.operator_quote))}\"`);",
+        "problem": "The review_complete card builds its waiver list from manifest readiness_waivers plus the research coverage waiver and ignores operator-decisions.json (mutation-waiver, reviewer-override). The completion gates do not read those decisions, so this is informational on the card, not a gate bypass.",
+        "impact": "The card the operator answers yes to can read 'waivers: none' while a mutation waiver or reviewer override is in force. That breaks AC4 ('every waiver with its item and operator quote, taken from the package'). It also makes the factsDigest recheck blind to a change in those decisions between card and answer, so a decision recorded or revoked in that window does not invalidate the card.",
+        "suggested_fix": "In completionFacts, also read the package's operator-decisions.json through the existing reader in src/review/operator-decisions.ts and add a line per decision of kind mutation-waiver or reviewer-override, with its item/target and operator quote, using cardSafe and clip like the other two. The facts, and so the digest, then cover them. Add a test where a mutation waiver is present and the card shows it.",
+        "evidence": "src/commands/operator-confirm-review.ts:663-675 (the only two waiver sources read) and :727 ('waivers: none' when that list is empty); src/review/operator-decisions.ts:23,31 (the decisions file and the two kinds); src/review/coverage.ts:685-775 (completion gates consult confirmed operator decisions); flow 464 acceptance-criteria.md line 19 (AC4 wording). Also reported by: review-security-code-w3:F-003.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-11",
+        "reviewer": "review-logic",
+        "severity": "minor",
+        "file": "src/review/types.ts",
+        "line": 95,
+        "quote": "export function cardPressFields(source: CardPress | undefined): CardPress {",
+        "problem": "The rule 'pressedBy/pressedAt exist only with confirmedVia remote-card' is enforced in one caller (operatorConfirmTool). cardPressFields and the eight recorders spread whatever press they receive next to any confirmedVia; the harness context carries loose optionals.",
+        "impact": "Defence in depth only. A future caller (or a hand-edited package) can write pressedBy with tui-card or a missing confirmedVia, and readers cannot tell the record was not pressed remotely. No present code path does it.",
+        "suggested_fix": "Give the record writers one helper that takes confirmedVia and the press together and drops the press unless confirmedVia is remote-card, and use it in the seven libraries and in the coverage-complete normaliser.",
+        "evidence": "types.ts cardPressFields reads only source.pressedBy and source.pressedAt. In coverage-complete.ts the normaliser does `...cardPressFields({ pressedBy, pressedAt })` regardless of `via`. The only gate is upstream: operator-confirm-tools.ts invoke sets the press only when the answer came from the remote card, after the allowed-id and 1-hour checks. Callers in operator-confirm-review.ts pass cardPressFields(confirmation) and so inherit that gate. No caller today passes a press with tui-card. Also reported by: review-security-code-w3:F-002, review-architecture-w2:F-003, review-architecture-w3:F-004.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-12",
+        "reviewer": "review-architecture",
+        "severity": "minor",
+        "file": "src/review/estimate.ts",
+        "line": 199,
+        "quote": "pressedBy?: number | undefined;",
+        "problem": "CardPress/cardPressFields were introduced as the single shape for the press pair but pressedBy/pressedAt are re-declared and conditionally spread by hand in estimate.ts, learning/decisions.ts, write-land.ts, confirm-token.ts, operator-confirm-other.ts, flow/service.ts and interactive-tools.ts. operator-decisions.ts also spreads the pair twice (dead duplicate).",
+        "impact": "The invariant 'recorded only for confirmedVia remote-card' is enforced in one place (operatorConfirmTool, commands/operator-confirm-tools.ts:222-228) and the record shape is then free to drift per writer: a rename or a third field (for example a chat id) must be made in six or more files, and the cast in plan-confirmation.ts hides a divergence the compiler would otherwise report. The reason outside-review sites do not use the helper is dependency direction: learning/ and harness/ should not import a review/types module, so the helper is in the wrong layer for its consumers.",
+        "suggested_fix": "Move `CardPress` and `cardPressFields` to a neutral module (for example src/lib/card-press.ts) and re-export them from src/review/types.ts so existing imports keep working. In estimate.ts declare `PlanConfirmation = {...} & CardPress` (or have plan-confirmation.ts re-export estimate.ts's type and drop its copy and the cast). In learning/decisions.ts and write-land.ts use the shared type and `cardPressFields` instead of the hand-written optional pairs.",
+        "evidence": "src/review/types.ts:92-100 defines CardPress and cardPressFields. `keryx ctx rg 'pressedBy|pressedAt' src` (non-test) shows hand-written pairs at src/review/estimate.ts:199-200, src/learning/decisions.ts:33-34, src/harness/external/write-land.ts:173 and :229, src/commands/operator-confirm-other.ts:113-114, src/flow/service.ts:1681-1682, src/flow/confirm-token.ts:76-77 and :140. src/review/plan-confirmation.ts:33 has `} & CardPress;` and :~58 `return estimateReadPlanConfirmation(packageDir) as PlanConfirmation | undefined;`. Also reported by: review-clean-code-w2:F-003, review-style-w2:F-004, review-style-w3:F-001, review-style-w3:F-002, review-clean-code-w3:F-002.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-14",
+        "reviewer": "review-logic",
+        "severity": "minor",
+        "file": "src/tui/operator-confirmations.ts",
+        "line": 105,
+        "quote": "const token = left > 0 ? `${age(left)} left of the 1-hour token` : \"token expired, ask again\";",
+        "problem": "The log's waiting() ignores expiry, and the pending line prints 'token expired, ask again' after 60 minutes for every card, though the 1-hour TTL is enforced only for remote-card answers (a tui-card can still be answered). The countdown is computed only at repaint. docs/commands-by-task.md:153 claims a time left of the token for every pending card, including undelivered ones.",
+        "impact": "AC6 'time left of the 1-hour token' is accurate only at the instant of opening; after expiry the surfaces keep signalling a Telegram-answerable card and tell the operator to ask again instead of answering in the shell.",
+        "suggested_fix": "Make waiting() take `now` and exclude entries past REMOTE_CARD_TTL_MS (or treat them as unmirrored); for an expired but still-open card print 'Telegram token expired, answer in the shell'. If live ages matter, add a coarse interval that calls the modal repaint while a card is waiting.",
+        "evidence": "operator-confirmations.ts waiting() has no time argument; pendingConfirmationLine branches on `left > 0`; operator-confirm-tools.ts lines 207-221 apply the TTL only on the remote path; decisions-surface.ts openDecisions calls `confirmationLines?.()` once. Also reported by: review-highload-w1:F-003, review-pr-contract-w4:PC-001.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-15",
+        "reviewer": "review-logic",
+        "severity": "minor",
+        "file": "src/tui/operator-confirmations.ts",
+        "line": 54,
+        "quote": "for (const old of answered.slice(0, Math.max(0, answered.length - ANSWERED_CARDS_KEPT))) {",
+        "problem": "Answered cards are evicted and displayed in ask order, not answer order, although entries() says newest first; a long-waiting card answered late can be evicted ahead of a quicker one.",
+        "impact": "The line the card exists for ('pressed by Telegram user N') can vanish the moment it is written, when approvals overlap (workers, queued cards). The answered list is not 'recent first' as documented. Sequential single-card use is unaffected, which is all the test covers.",
+        "suggested_fix": "Order and evict by answered.at: sort answered by `answered.at` descending in entries(), and evict the entries with the smallest `answered.at`. Add a test: ask A, ask 5 more and answer them, answer A last; expect A still present and first.",
+        "evidence": "operator-confirmations.ts answer(): `const answered = this.items.filter((item) => item.answered !== undefined)` then slice(0, len-5) of that insertion-ordered array; entries(): `this.items.filter(...answered !== undefined).reverse()`. Trace for A + b1..b5: answer(A) makes 6 answered, slice(0,1) = [A], spliced out. Also reported by: review-highload-w4:F-003.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-25",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "file": "src/tui/operator-confirmations.ts",
+        "line": 84,
+        "quote": "function age(ms: number): string {",
+        "problem": "operator-confirmations.ts adds private clock and age helpers that duplicate clock and formatAge in remote-control-surface.ts with different rounding, so the same duration can read differently in two surfaces; the width literal 80 appears five times.",
+        "impact": "Two near-identical formatters with divergent output inside one feature; a later fix to one will miss the other.",
+        "suggested_fix": "Move `formatAge` and `clock` into a small shared module (or an existing theme/format helper) and import it from both files. If the `1h05m` form is intended only for the token countdown, name it for that and keep `formatAge` for the rest.",
+        "evidence": "Diff, src/tui/operator-confirmations.ts `function age(ms)` and `function clock(at)`; head of src/tui/remote-control-surface.ts `export function formatAge(ms: number)` and `function clock(at: number)`. remote-control-surface.ts now imports `waitingCardsText` from operator-confirmations.ts, so reusing `formatAge` from there would make the import circular, which is probably why it was copied. Also reported by: review-style-w4:F-002, review-style-w4:F-003.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-27",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "file": "src/commands/operator-confirm-tools.ts",
+        "line": 206,
+        "quote": "pending.delete(token as string);",
+        "problem": "operatorConfirmTool.invoke is now about 40 lines mixing token lookup, remote authorization, confirmation building and apply, and relies on `token as string`, `pressedBy as number`, `pressedAt as string` casts; agent.ts adds three near-identical conditional spreads and module-level lets.",
+        "impact": "The security-relevant rule (allowed id, one hour, who pressed) is the part of this function most worth reading and testing alone, and it is buried between the token bookkeeping and the apply call. The casts will survive a later edit that moves a check, and then hide a bad value instead of failing to compile.",
+        "suggested_fix": "Extract `authorizeRemotePress(ctx, entry, allowed, now)` returning `{ ok: true, pressedBy, pressedAt } | { ok: false, why }`, and take the token as a narrowed const after the first guard so no cast is needed. invoke() then reads: look up, authorize if remote, build confirmation, apply.",
+        "evidence": "operator-confirm-tools.ts lines 198-237 at head: `pending.delete(token as string);` (line 206) and `...(remote ? { pressedBy: pressedBy as number, pressedAt: pressedAt as string } : {}),` (line 227). Behaviour is correct as written (the undefined checks at line 214 come first); this is about structure, not a bug. Also reported by: review-style-w2:F-003, review-style-w2:F-006.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-28",
+        "reviewer": "review-clean-code",
+        "severity": "minor",
+        "file": "src/remote/shell-bridge.ts",
+        "line": 208,
+        "quote": "...(!yes && (o as { undelivered?: unknown }).undelivered === true ? { undelivered: true as const } : {}),",
+        "problem": "shell-bridge.ts mapApprovalAnswer narrows `got` and then re-casts `o` inline to reach the new undelivered field instead of declaring it in the narrowed type.",
+        "impact": "Small, but it is the only field of the three read through an extra cast, so the next field added will copy the pattern. The local cast also compiles whatever the field is called.",
+        "suggested_fix": "Add `undelivered?: unknown` to the type on the `const o = got as { ... }` line and write `o.undelivered === true`.",
+        "evidence": "diff of src/remote/shell-bridge.ts, mapApprovalAnswer. Also reported by: review-style-w3:F-003.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-29",
+        "reviewer": "review-architecture",
+        "severity": "minor",
+        "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+        "line": 26,
+        "quote": "| `review_waive_readiness` | `keryx review complete --waive <item>` (records the waiver only) |",
+        "problem": "TM-04 header (status, frozen date, task flow), the count in section 1 ('Thirteen decisions') and the tools table were not extended for review_complete, flow 457/458/464; sibling records TM-02/TM-03 do.",
+        "impact": "TM-04 is the document that docs/docs/cli-reference.md (lines 2773, 3212, 4367) and docs/docs/limitations.md cite for what a card does and does not prove. A reader who audits the card inventory from section 2 will believe the review close is not a card, and the stated count of operator-only decisions does not match the tools the table lists or the ones operatorConfirmSpecs() registers. No runtime effect.",
+        "suggested_fix": "Add rows for `review_confirm_plan` (`keryx review confirm-plan`), `review_decide_premise` (`keryx review decide-premise`) and `review_complete` (`keryx review complete`, the same gates as the CLI) to the table in section 2, change 'Thirteen' to the real count or drop the number, and in section 8 either list the three terminal commands next to the ones already named or state that they are terminal-only by TTY check and not part of touchesHumanConfirmation (src/lib/command-risk.ts has no match for confirm-plan or decide-premise).",
+        "evidence": "TM-04 line 15 'Thirteen keryx decisions...' and the table lines 20-35 list the card tools and omit review_confirm_plan, review_decide_premise and review_complete; line 102 (section 6a, 'Flow 464 puts the four review acts that used to need a terminal ... behind cards: `review_confirm_plan`, `review_decide_premise`, `review_waive_readiness` / `review_waive_coverage`, and `review_complete`') names them. The tools exist: src/commands/operator-confirm-review.ts (header comment lines 16-21 lists review_confirm_plan, review_decide_premise and 'Flow 464 adds review_complete'), and src/trigger/unattended.ts lines 59-71 refuses all of them by name. Section 8 (approval floor) is also unchanged: it lists `review complete --waive-coverage` and `--waive` but not plain `review complete`, `confirm-plan` or `decide-premise`. The omission of confirm-plan and decide-premise predates this PR (flows 457/459); the omission of review_complete is introduced by it. Also reported by: review-architecture-w1:F-002.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-30",
+        "reviewer": "review-style",
+        "severity": "minor",
+        "file": "docs/docs/limitations.md",
+        "line": 187,
+        "quote": "A Telegram or web card for these approvals (the review acts",
+        "problem": "Prose in docs: limitations.md has a ~70-word parenthetical inside a sentence; cli-reference.md relabels three synopsis lines in two different forms; the review-premise SKILL line grew from ~90 to ~290 characters in a hard-wrapped paragraph; review-with-a-record.md pastes the same clauses twice and uses 300-600 char lines; flow 464 description.md/plan.md still say 'draft for operator approval'.",
+        "impact": "The limitation reads as self-contradictory on a first pass. A reader who skims it takes away that review cards do not exist.",
+        "suggested_fix": "Keep the original sentence unchanged. Add a separate sentence or short paragraph after the existing parenthetical, with a link: 'The review acts review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage and review_complete already have a Telegram card in a shell driven from a topic. A press proves an allowed account pressed this card, not that no one else holds the bot token or can write the stores as the same OS user ([TM-04 section 6a](../decisions/keryx-harness/TM-04-operator-confirmation-cards.md)).'",
+        "evidence": "docs/docs/limitations.md, section 'Remote approvals apply only where tools are registered', the sentence beginning 'A Telegram or web card for these approvals'. The slice diff adds the parenthetical inside the original sentence. Also reported by: review-style-w1:F-002, review-style-w1:F-003, review-style-w1:F-004, review-style-w1:F-005, review-style-w1:F-007.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-31",
+        "reviewer": "review-pr-contract",
+        "severity": "minor",
+        "file": "docs/docs/guides/drive-keryx-remotely.md",
+        "line": 481,
+        "quote": "- Approvals (Allow, Deny, Always, `/mode`, grants) have no such path: typing \"yes\" or",
+        "problem": "drive-keryx-remotely.md and cli-reference.md (the /remote-control and /decisions entries) do not mention the review cards this PR makes answerable and visible there, although the PR body says the guides were updated; the slash-command descriptions are not mirrored.",
+        "impact": "A user who reads only the Telegram guide does not learn that a review card can be answered from the topic, or that a late press after an hour resolves nothing. Nothing in the guide is made wrong by the diff, so this is an omission, not a contradiction.",
+        "suggested_fix": "Add a short paragraph next to 'Questions from the agent' naming the five cards, the 1-hour token and the allowed-user rule, or link to docs/docs/cli-reference.md and TM-04.",
+        "evidence": "keryx ctx rg for 'review|operator card|mirror' over docs/docs/guides/drive-keryx-remotely.md and answer-remote-approvals.md returns four unrelated hits (lines 131, 143, 527, 616) and none about review cards. The guide was not in the PR's file list. Also reported by: review-pr-contract-w4:PC-002, review-pr-contract-w2:PC-001.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-33",
+        "reviewer": "review-testing-practices",
+        "severity": "minor",
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "line": 638,
+        "quote": "expect(result.output).toContain(\"nothing was recorded\");",
+        "problem": "Test breadth: publish, waive_coverage and waive_readiness are exercised on the tui path only; the press-field recording per recorder is untested at the record layer; the 'tool-result text' case calls invoke without a token; the RemoteClient undelivered test reaches only one of five return sites; fixed 10 ms sleeps; concurrent same-token invokes; the TTL boundary; raceApproval undelivered-after-dock-win.",
+        "impact": "A spec that forgets `cardPressFields(confirmation)` when it builds its record keeps passing for the tui path and loses the press fields silently on the remote path, which is the audit trail AC1 exists for.",
+        "suggested_fix": "Parametrize one 'remote yes records remote-card + pressedBy + pressedAt, tui yes has neither' test over every spec in buildReviewConfirmSpecs that records a confirmation, reading the record that spec writes.",
+        "evidence": "operator-confirm-review.ts line 566 shows the pattern `...cardPressFields(confirmation)` that each recorder must repeat; the tests for publish, waive_coverage and waive_readiness only drive the tui path. Also reported by: review-testing-practices-w1:F-005, review-testing-practices-w1:F-007, review-testing-practices-w1:F-008, review-testing-practices-w2:F-001, review-testing-practices-w2:F-002, review-testing-practices-w2:F-003, review-testing-practices-w3:F-004.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-34",
+        "reviewer": "review-pr-contract",
+        "severity": "minor",
+        "problem": "The PR test plan lists three unticked boxes and omits the commands the criteria name: AC5 src/commands/review-tty-refusal.test.ts and AC7 bun test src/trigger/ src/gdskills/; AC3 line coverage also depends on the full suite.",
+        "impact": "A reviewer who ticks the three boxes has not run the checks that guard the docs and the skill copies (AC7) or the TTY fallback (AC5). CI may cover them (the AC8 full suite is pending); this is a gap in what the body promises, not a defect in the code.",
+        "suggested_fix": "Add the AC5 and AC7 commands to the Test plan, or state that CI's full suite is the check for them.",
+        "evidence": "pr-context.md 'Test plan' versus .metaproject/flows/464-2026-10-18-helyx-operator-confirm/acceptance-criteria.md lines for AC5, AC7, AC8 (slice-01 diff). Unverified: whether those commands pass on the head; they are run by CI jobs still pending. Also reported by: review-pr-contract-w3:PC-002.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-35",
+        "reviewer": "review-architecture",
+        "severity": "info",
+        "file": "src/standard/help-groups.ts",
+        "line": 600,
+        "quote": "Also takes the review cards (review_confirm_plan",
+        "problem": "The list of the five Telegram-answerable review cards is hand-written in four user-facing strings (help-groups.ts, agent-commands.ts descriptions) of 330-560 characters each; no single source.",
+        "impact": "Low. Adding a sixth remote-answerable card means editing five places; a missed one leaves help text that names the wrong set.",
+        "suggested_fix": "Build the parenthesised list from one exported constant of the remote-answerable card names, or add a small test that every `review_*` name in those strings is in the registry.",
+        "evidence": "`keryx ctx rg -n --all 'review_confirm_plan, review_decide_premise' src` (non-test): src/standard/help-groups.ts:582 and :600, src/commands/agent-commands.ts:187 and :304. Also reported by: review-clean-code-w2:F-008, review-style-w2:F-008, review-style-w3:F-004.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-36",
+        "reviewer": "review-architecture",
+        "severity": "info",
+        "file": "src/tui/remote-control-surface.ts",
+        "line": 393,
+        "quote": "if (cards !== undefined) return {",
+        "problem": "projectRemoteRow returns early on waiting cards ahead of the flow-397 branch, so a row with a card and an unconfirmed approval drops the 'N unconfirmed' note, and the card count is truncated first on the 30-column sidebar for long topic names.",
+        "impact": "Low: the /remote-control status tab still prints 'Approvals not confirmed: N'. Noted because the row is the only always-visible surface and its width budget is 26 columns.",
+        "suggested_fix": "Compose both fragments (`${topic} · ${cards} · ${unconfirmed} unconf.`) with the existing fit(), or document that cards take precedence.",
+        "evidence": "remote-control-surface.ts projectRemoteRow: the `cards` branch returns before the `unconfirmed > 0` branch. Also reported by: review-logic-w4:F-005.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-37",
+        "reviewer": "review-architecture",
+        "severity": "info",
+        "file": "src/tui/tui-shell.ts",
+        "line": 6028,
+        "quote": "const requestApprovalForTelegramTurn: NonNullable<TuiAgentIo[\"requestApproval\"]> = async (tool, inputJson, meta) => {",
+        "problem": "The topic-only path for a Telegram-started turn (requestApprovalForTelegramTurn) never calls operatorCards.ask/answer and has no undelivered fallback; isCard also covers schedule_* cards.",
+        "impact": "A review_complete or confirm-plan card raised during a Telegram-started turn, which is the main case where a remote-card answer with pressedBy is recorded, is absent from the sidebar count, the status tab and the /decisions list. The 'who pressed' view is blind exactly to the cards answered remotely from a Telegram turn. Display only; the durable record is written by the gate.",
+        "suggested_fix": "Put the ask/answer bookkeeping at one seam both wrappers share (a small `trackOperatorCard(meta, run)` helper in operator-confirmations.ts, or a wrapper applied to both wrappers), instead of inlining it in one branch of one closure.",
+        "evidence": "ctx rg for `operatorCards` in src: ask() at tui-shell.ts:6103 and :6116 only; requestApprovalForTelegramTurn spans :6028-6089 with no reference to operatorCards. Also reported by: review-logic-w4:F-006, review-security-code-w4:F-003, review-regression-w4:RG-W4-001.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-38",
+        "reviewer": "review-highload",
+        "severity": "info",
+        "file": "src/remote/client.ts",
+        "line": 459,
+        "quote": "      approvalId = id;\n    } catch {\n      return { decision: \"deny\", undelivered: true };",
+        "problem": "client.askApproval edge cases: the catch around POST plus response.json() marks a lost response as undelivered (false positive), a post-POST disconnect returns deny with no undelivered flag and leaves the topic card open (false negative), RemoteBridge does not set the flag on throw, and raceApproval can accept a late topic press just before settled is set.",
+        "impact": "Failure mode: after a slow bridge response the operator sees 'mirror not delivered' in the TUI but may still press the Telegram card; that press finds no waiter and is dropped, so it is harmless to state (fail-closed) but the note is wrong in that window. A cosmetic mislabel, not a data-integrity issue.",
+        "suggested_fix": "Mark undelivered: true only when the failure is known to precede the request being accepted (not connected, non-ok response, missing id); for a thrown error after send, either omit the flag or word the note as 'delivery unconfirmed'.",
+        "evidence": "src/remote/client.ts lines 450-462: one catch for post(), response.ok, and json() failures, returning undelivered: true. Also reported by: review-highload-w3:F-004, review-highload-w3:F-002, review-logic-w3:F-004, review-logic-w3:F-005.",
+        "confidence": "low"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-40",
+        "reviewer": "review-security-code",
+        "severity": "info",
+        "file": "src/flow/confirm-token.ts",
+        "line": 228,
+        "quote": "stored.confirmedVia === \"tui-card\" ? \"tui-card-token\" : stored.confirmedVia === \"remote-card\" ? \"remote-card-token\" : \"terminal-token\";",
+        "problem": "consumeConfirmationToken builds the SignatureConfirmation without pressedBy/pressedAt although mintConfirmationToken stores them (record gap on the flow-confirm token).",
+        "impact": "No attack vector; an audit-completeness gap. A reader of the signature alone sees 'remote-card-token' without who pressed it.",
+        "suggested_fix": "If the signature is meant to be self-contained provenance, copy pressedBy/pressedAt into the returned SignatureConfirmation (types.ts already allows them on the confirmation block). Otherwise state in TM-04 that the signature references the token and the token record holds the presser.",
+        "evidence": "confirm-token.ts:140 stores pressedBy; confirm-token.ts:215-236 consumeConfirmationToken returns no pressedBy/pressedAt.",
+        "confidence": "medium"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-42",
+        "reviewer": "review-highload",
+        "severity": "info",
+        "file": "src/commands/operator-confirm-tools.ts",
+        "line": 192,
+        "quote": "pending.set(token, {",
+        "problem": "Pre-existing: entries in the process-local pending token map are removed only by invoke or confirmationDeclined; abandoned cards are never swept (the PR adds issuedAt but no eviction).",
+        "impact": "One small object per abandoned card. A single operator shell asks a handful of cards a day, so growth is negligible. It is a leak only in a shell that runs for months with many abandoned cards.",
+        "suggested_fix": "Optional: on each `confirmation()` call, drop entries older than REMOTE_CARD_TTL_MS, using the `issuedAt` this PR already stores.",
+        "evidence": "src/commands/operator-confirm-tools.ts: `pending.set(token, { input: key(input), card, shown, prepared: built.prepared, issuedAt: now().getTime() })` at line 192. The 1-hour TTL is checked only inside invoke for remote answers, and no timer or sweep exists. The Map and its set/delete pattern pre-date this PR; the PR only adds `issuedAt`. Also reported by: review-logic-w2:F-003, review-performance-w2:F-002.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-43",
+        "reviewer": "review-performance",
+        "severity": "info",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 666,
+        "quote": "const report = readFileSync(path.join(dir, \"report.md\"), \"utf8\");",
+        "problem": "completionFacts reads manifest.json, report.md and research.json synchronously, twice per card plus a third time in completeReviewGated; negligible at this load.",
+        "impact": "Negligible. At most a single-digit-ms stall of the TUI loop on an operator action. No scaling with N and no repetition inside a loop.",
+        "suggested_fix": "None required. If the file ever grows large or the card is rendered on a timer, switch to fs/promises readFile; the surrounding specs already import sync fs helpers, so the sync form is consistent with the file.",
+        "evidence": "Diff hunk @@ 746-877 of operator-confirm-review.ts: completionFacts() is called from buildCard and from apply. It runs in the keryx shell process, so each call blocks the event loop for the length of the three reads. Frequency: once per review_complete card plus once per yes, both driven by an operator pressing a button, a few times per review round. report.md is a text report of tens to a few hundred KB; a local read is sub-millisecond to low milliseconds. evidenceLevelLine is a linear scan (src/review/evidence-level.ts:58) and loadRemoteConfig (src/remote/config.ts:172) is one small file read, once per remote press.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    },
+    {
+      "round": 1,
+      "finding": {
+        "id": "C-44",
+        "reviewer": "review-style",
+        "severity": "info",
+        "file": "src/commands/operator-confirm-review.ts",
+        "line": 43,
+        "quote": "import { writeFileAtomic } from \"../lib/fs\";",
+        "problem": "Small style items: imports dropped mid-group in operator-confirm-review.ts, prBound without is/has prefix, factsDigest as arrow const among function declarations, placeholder package: '' in test inputs, JSDoc of formatRemoteStatusLines and projectRemoteRow not updated for the new parameters, stacked ReadinessWaiver JSDoc (pre-existing).",
+        "impact": "Cosmetic. The block was already unsorted before this PR, so this is not a regression, but each flow adds to it and the file now has a ten-line header comment plus about 30 import lines.",
+        "suggested_fix": "Place the two new imports with their group (../lib/* together, ../review/* together) the next time this block is touched; no change required for this PR.",
+        "evidence": "slice-02.diff, operator-confirm-review.ts import block. Also reported by: review-style-w2:F-009, review-style-w2:F-010, review-style-w4:F-005, review-clean-code-w3:F-004, review-style-w3:F-005.",
+        "confidence": "high"
+      },
+      "claimed_disposition": "fixed"
+    }
+  ],
+  "layers": {
+    "version": 1,
+    "files": [
+      ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "CHANGELOG.md",
+      "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "docs/docs/cli-reference.md",
+      "docs/requirements/keryx-metaproject-native/schemas/flow-state.schema.json",
+      "src/commands/agent.ts",
+      "src/commands/operator-confirm-review-tools.test.ts",
+      "src/commands/operator-confirm-review.ts",
+      "src/commands/operator-confirm-tools.test.ts",
+      "src/commands/shell.test.ts",
+      "src/flow/confirm-token.test.ts",
+      "src/flow/confirm-token.ts",
+      "src/flow/schema.ts",
+      "src/flow/types.ts",
+      "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "src/review/completion-gate.ts",
+      "src/review/types.ts",
+      "src/tui/operator-confirmations.test.ts",
+      "src/tui/operator-confirmations.ts",
+      "src/tui/tui-shell.ts"
+    ],
+    "prHead": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264",
+    "graphCommit": "6f47bf35f31c2e8c882e573b61dd4c39fcc81264",
+    "maxBytes": 8192,
+    "affected": {
+      "depth": 1,
+      "files": [
+        "fixtures/routing-shell-pty.ts",
+        "scripts/benchmark/long-runner-turn.test.ts",
+        "scripts/benchmark/run-ablation-long.ts",
+        "scripts/benchmark/run-ablation-mutating.ts",
+        "scripts/benchmark/run-ablation-raw.ts",
+        "scripts/benchmark/run-ablation.ts",
+        "scripts/benchmark/run-containment.ts",
+        "scripts/benchmark/run-safety.ts",
+        "scripts/stress/keryx-shell-stress.ts",
+        "src/acp/agent-io.ts",
+        "src/acp/models.ts",
+        "src/acp/permission.test.ts",
+        "src/acp/permission.ts",
+        "src/acp/server.ts",
+        "src/bus/delivery.integration.test.ts",
+        "src/commands/acp.ts",
+        "src/commands/agent-approval-binding.test.ts",
+        "src/commands/agent-bus-notification.test.ts",
+        "src/commands/agent-destructive-gate.test.ts",
+        "src/commands/agent-fewer-prompts.test.ts",
+        "src/commands/agent-instruction-roster.test.ts",
+        "src/commands/agent-lifecycle-hooks.test.ts"
+      ]
+    },
+    "symbols": [
+      {
+        "file": "src/commands/agent.ts",
+        "name": "ApprovalMeta",
+        "kind": "interface",
+        "line": 172,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/agent.ts",
+        "name": "ApproverProvenance",
+        "kind": "interface",
+        "line": 312,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/agent.ts",
+        "name": "AgentIO",
+        "kind": "interface",
+        "line": 318,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/agent.ts",
+        "name": "AgentDeps",
+        "kind": "interface",
+        "line": 486,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/agent.ts",
+        "name": "appliesToMe",
+        "kind": "method",
+        "line": 724,
+        "callers": [
+          "executeCallUnbounded (src/commands/agent.ts:5657)"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/agent.ts",
+        "name": "heldBy",
+        "kind": "method",
+        "line": 736,
+        "callers": [
+          "executeCallUnbounded (src/commands/agent.ts:5657)"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "name": "post",
+        "kind": "function",
+        "line": 31,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "name": "tool",
+        "kind": "function",
+        "line": 36,
+        "callers": [
+          "src/commands/operator-confirm-review-tools.test.ts"
+        ],
+        "callees": [
+          "buildReviewConfirmSpecs (src/commands/operator-confirm-review.ts:802)",
+          "operatorConfirmTool (src/commands/operator-confirm-tools.ts:147)"
+        ]
+      },
+      {
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "name": "ask",
+        "kind": "function",
+        "line": 45,
+        "callers": [
+          "src/commands/operator-confirm-review-tools.test.ts",
+          "yes (src/commands/operator-confirm-review-tools.test.ts:55)"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "name": "asked",
+        "kind": "function",
+        "line": 50,
+        "callers": [
+          "src/commands/operator-confirm-review-tools.test.ts",
+          "yes (src/commands/operator-confirm-review-tools.test.ts:55)"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "name": "yes",
+        "kind": "function",
+        "line": 55,
+        "callers": [
+          "src/commands/operator-confirm-review-tools.test.ts"
+        ],
+        "callees": [
+          "ask (src/commands/operator-confirm-review-tools.test.ts:45)",
+          "asked (src/commands/operator-confirm-review-tools.test.ts:50)"
+        ]
+      },
+      {
+        "file": "src/commands/operator-confirm-review-tools.test.ts",
+        "name": "read",
+        "kind": "function",
+        "line": 62,
+        "callers": [
+          "src/commands/operator-confirm-review-tools.test.ts"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "ReviewConfirmSeams",
+        "kind": "interface",
+        "line": 55,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "trackerPrLookup",
+        "kind": "function",
+        "line": 65,
+        "callers": [],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "packageRef",
+        "kind": "function",
+        "line": 72,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "resolvePackage",
+        "kind": "function",
+        "line": 78,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": [
+          "placeReviewPath (src/lib/review-path-flags.ts:50)",
+          "resolveReviewPackagePath (src/review/managed.ts:2934)"
+        ]
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "label",
+        "kind": "function",
+        "line": 85,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-review.ts",
+        "name": "failed",
+        "kind": "function",
+        "line": 87,
+        "callers": [
+          "src/commands/operator-confirm-review.ts#buildCard"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-tools.test.ts",
+        "name": "scripted",
+        "kind": "function",
+        "line": 38,
+        "callers": [
+          "turn (src/commands/operator-confirm-tools.test.ts:99)"
+        ],
+        "callees": []
+      },
+      {
+        "file": "src/commands/operator-confirm-tools.test.ts",
+        "name": "testGate",
+        "kind": "function",
+        "line": 65,
+        "callers": [
+          "src/commands/operator-confirm-tools.test.ts",
+          "turn (src/commands/operator-confirm-tools.test.ts:99)"
+        ],
+        "callees": [
+          "operatorConfirmTool (src/commands/operator-confirm-tools.ts:147)"
+        ]
+      },
+      {
+        "file": "src/commands/operator-confirm-tools.test.ts",
+        "name": "turn",
+        "kind": "function",
+        "line": 99,
+        "callers": [
+          "src/commands/operator-confirm-tools.test.ts"
+        ],
+        "callees": [
+          "runAgentTurn (src/commands/agent.ts:2300)",
+          "scripted (src/commands/operator-confirm-tools.test.ts:38)",
+          "testGate (src/commands/operator-confirm-tools.test.ts:65)"
+        ]
+      },
+      {
+        "file": "src/commands/operator-confirm-tools.test.ts",
+        "name": "yes",
+        "kind": "function",
+        "line": 145,
+        "callers": [],
+        "callees": []
+      }
+    ],
+    "relatedTests": [
+      "scripts/benchmark/long-runner-turn.test.ts",
+      "src/acp/permission.test.ts",
+      "src/bus/delivery.integration.test.ts",
+      "src/commands/agent-approval-binding.test.ts",
+      "src/commands/agent-approval-context-p0.test.ts",
+      "src/commands/agent-approval-context.test.ts",
+      "src/commands/agent-bus-notification.test.ts",
+      "src/commands/agent-commands.confusable.test.ts",
+      "src/commands/agent-commands.test.ts",
+      "src/commands/agent-destructive-gate.test.ts",
+      "src/commands/agent-fewer-prompts.test.ts",
+      "src/commands/agent-granted-json.test.ts",
+      "src/commands/agent-hooks.test.ts",
+      "src/commands/agent-instruction-roster.test.ts",
+      "src/commands/agent-lifecycle-hooks.test.ts",
+      "src/commands/agent-orchestrator-log.test.ts",
+      "src/commands/agent-permission-mode.test.ts",
+      "src/commands/agent-question-axis.test.ts",
+      "src/commands/agent-review-gate.test.ts",
+      "src/commands/agent-rewind-seam.test.ts",
+      "src/commands/agent-task-notification.test.ts",
+      "src/commands/agent-tool-call-budget.test.ts",
+      "src/commands/agent-trust-orchestration.test.ts"
+    ],
+    "wiki": [
+      {
+        "page": "architecture/agent-bus.md",
+        "title": "Agent Bus"
+      },
+      {
+        "page": "architecture/os-sandbox.md",
+        "title": "OS Sandbox"
+      },
+      {
+        "page": "components/src-commands.md",
+        "title": "Module src/commands"
+      },
+      {
+        "page": "components/src-flow.md",
+        "title": "Module src/flow"
+      },
+      {
+        "page": "components/src-review.md",
+        "title": "Module src/review"
+      },
+      {
+        "page": "components/src-tui.md",
+        "title": "Module src/tui"
+      }
+    ],
+    "memory": [
+      {
+        "path": "lessons/theme-switch-repaint.md",
+        "title": "Theme switch repaints already-rendered chrome via old-slot value matching",
+        "status": "accepted",
+        "module": "src/tui"
+      }
+    ],
+    "truncated": [
+      {
+        "section": "affected",
+        "shown": 22,
+        "total": 241,
+        "command": "keryx gdgraph affected '.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md' --depth 2 --data-dir '.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph'"
+      },
+      {
+        "section": "symbols",
+        "shown": 22,
+        "total": 71,
+        "command": "keryx gdgraph symbol '<name>' --data-dir '.metaproject/reviews/2026-10-19-review-flow-github-com-mrciphersmith-keryx-pull-1052-r03/layers/graph'"
+      },
+      {
+        "section": "relatedTests",
+        "shown": 23,
+        "total": 165,
+        "command": "keryx test related '.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md'"
+      }
+    ],
+    "unavailable": []
+  }
+}

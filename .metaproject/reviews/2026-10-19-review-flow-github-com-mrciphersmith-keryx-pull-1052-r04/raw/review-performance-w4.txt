@@ -1,0 +1,29 @@
+STATUS: DONE
+
+## Performance Review (wave 4, slice-05)
+
+Scope: PR 1052 (flow 464), head b1c6da0e6992e4df473bae6b2fde78bc94d28776, base 062aa9c36484e7b7f6b8a1dd6140671330646e66. Slice-05 only: src/standard/help-groups.ts, src/trigger/unattended.ts, src/tui/approval-mirror.ts, src/tui/decisions-surface.ts, src/tui/operator-confirmations.ts (+test), src/tui/remote-control-surface.ts, src/tui/tui-shell.ts. Read-only review.
+
+Checked and clean:
+- N+1 / pagination / indexes / bundle imports / sync blocking: no DB access, file IO or new imports of weight in this slice.
+- OperatorConfirmationLog (operator-confirmations.ts): in-memory, one entry per operator card asked in this shell. Unanswered entries are settled in a finally block in mirrorApprovalToTopic (both the unmirrored path and the raced path), and answered entries are pruned to ANSWERED_CARDS_KEPT = 5, so the collection is bounded (no unbounded growth). Per-operation cost is O(n) over n <= a handful of cards; cards are asked at human speed (one per operator confirmation), not per frame or per item.
+- Repaint fan-out: operatorCards.subscribe triggers liveRemotePanel.refresh() plus the open /remote-control modal listeners on each ask/answer/markUndelivered. Frequency is one to three notifications per card, human-paced. Sidebar waiting() is a filter over <= ~6 entries. No render-loop or polling cost added.
+- decisions-surface: confirmationLines() is evaluated once per modal open (openDecisions), not per poll tick; no added work on the sidebar refresh interval.
+- approval-mirror.raceApproval: the added onUndelivered call is a single optional callback inside an existing .then; no extra timers, listeners or abort controllers.
+- Subscription lifetime: operatorCards.subscribe(...) in tui-shell.ts is never unsubscribed, but the log and the shell have the same lifetime (the log is a const local of launchTuiAgentShell), so nothing outlives its owner. Not a leak.
+- unattended.ts: OPERATOR_CONFIRM_TOOL_NAMES gains one entry; isUnattendedExcludedTool does two Array.includes over ~20 strings, called per tool offered at run setup, not in a hot loop.
+- remoteApproval(): one Date allocation per remote answer; negligible.
+
+No findings.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-performance",
+  "status": "DONE",
+  "summary": "Slice-05 (TUI operator-card log, sidebar/status/decisions surfaces, approval race hook, unattended exclusion list) adds only small in-memory, human-paced work. The card log is bounded and always settled; no hot-path, memory, or blocking issue found.",
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 },
+  "slices": ["slice-05"],
+  "findings": []
+}
+```

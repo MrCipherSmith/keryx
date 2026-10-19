@@ -1,0 +1,51 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slices 03 and 04 hold the E-04, E-05 and E-08 fix hunks plus the tool-name wording hunks. The three fixes are complete and cause no layering regression: onTopicEnded is wired in raceApproval, cardAvailable reaches decideReviewGate from the live tool roster, and the card-lifecycle helpers were moved out of the 10k-line tui-shell.ts into a testable module with no import cycle (approval-mirror -> remote type only; operator-confirmations -> approval-mirror, commands/agent as type). The tui-shell refactor is behaviour-equivalent to the removed inline code (checked against git diff b1c6da0e6..77d2eff20). Two minor structural findings remain, both about where the new code landed and how the new 'ended' state is modelled. Not re-raised: A-01, A2-001, A2-002, A2-003, D-03 (overflow line in describeBlockers still names `keryx review complete`; still open), E-46, E-53, E-58 (known infos/minors).",
+  "findings": [
+    {
+      "id": "A3-001",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 3,
+      "quote": "// Held in memory only: the stores keep the durable record (`confirmedVia`, `pressedBy`, `pressedAt`); this is the",
+      "problem": "The E-08 fix put the card control flow into the module that is documented as a passive live view. operator-confirmations.ts now also exports raceMirroredCard and askUnmirroredCard (dock/topic race orchestration, try/finally settle policy) and remoteApproval (the builder of the durable ApprovalResponse fields via/pressedBy/pressedAt), and it value-imports raceApproval from ./approval-mirror. The module header (lines 1-4) still says it is only the in-memory view that sidebar, /remote-control and /decisions read. The test written for these helpers is named card-lifecycle.test.ts, while no card-lifecycle module exists: the module boundary and the test boundary disagree. The view-model class (OperatorConfirmationLog + line formatters) and the approval-race lifecycle are two responsibilities.",
+      "impact": "Every surface that only formats lines (remote-control-surface, decisions-surface) now depends on the approval-race module and on the commands/agent type through a file whose name and header say it is a view. The next change to the race policy lands in the file the surfaces import. This also leaves E-53 (view module value-imports the command registry for one TTL constant) and E-58 (approval-response builders live away from raceApproval) in place instead of settling them: the fix moved them from tui-shell.ts to a second wrong home.",
+      "suggested_fix": "Move raceMirroredCard, askUnmirroredCard and remoteApproval into a module beside raceApproval (src/tui/approval-mirror.ts, or a new src/tui/card-lifecycle.ts matching the existing card-lifecycle.test.ts), typing the log parameter as a narrow interface {ask, answer, settle, markUndelivered}. Keep OperatorConfirmationLog and the formatters in operator-confirmations.ts, and update the header there if anything else is added.",
+      "evidence": "operator-confirmations.ts:1-4 header; exports at :170 (remoteApproval), :175 (askUnmirroredCard), :189 (raceMirroredCard); import at :9 `import { type ApprovalRaceOutcome, type DockRace, raceApproval } from \"./approval-mirror\";`; src/tui/card-lifecycle.test.ts imports all three from ./operator-confirmations. No cycle: approval-mirror.ts imports only a type from ../remote/shell-bridge.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "A3-002",
+      "severity": "minor",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 81,
+      "quote": "this.items[at] = { ...entry, mirrored: false, ...(reason === \"ended\" ? { topicEnded: true as const } : {}) };",
+      "problem": "The E-04 fix models the third topic state (delivered, then ended) as a second flag on top of `mirrored`, and it makes the first flag lie. ConfirmationEntry.mirrored is documented 'Whether the question reached the topic at all (false: the card says the mirror was not delivered)'. For an 'ended' card the question did reach the topic, yet the log sets mirrored:false and adds topicEnded:true; the method that does it is named markUndelivered although its new reason says the opposite (delivered, then the leg ended). The type admits the invalid combination mirrored:true + topicEnded:true, and every reader (waiting(), pendingConfirmationLine at :132) must remember to test mirrored first and topicEnded second.",
+      "impact": "A future reader of `mirrored` (a sidebar count, a metric, the E-46 Telegram-turn pipeline reusing the log) will count ended cards as never delivered, which contradicts the field's own comment. The wording branch at :132 works only because of the order of two booleans.",
+      "suggested_fix": "Replace the pair with one field, for example `topic: \"waiting\" | \"undelivered\" | \"ended\"` (waiting() keeps only \"waiting\"), and rename the method to markTopicGone(id, reason). Update the doc comment of the field and the pendingConfirmationLine branch to switch on it.",
+      "evidence": "operator-confirmations.ts:21 `/** Whether the question reached the topic at all (false: the card says the mirror was not delivered). */`, :24 `readonly topicEnded?: true;`, :77 `markUndelivered(id: number, reason: \"undelivered\" | \"ended\" = \"undelivered\"): void {`, :81 as quoted, :132 `const where = entry.mirrored ? \"\" : entry.topicEnded === true ? ...`; caller approval-mirror.ts:55 `else if (!isTopicPress(answer) && !topicAbort.signal.aborted) options.onTopicEnded?.();`, wired at operator-confirmations.ts:211 `onTopicEnded: () => options.log.markUndelivered(id, \"ended\"),`.",
+      "confidence": "high",
+      "reviewer": "review-architecture"
+    }
+  ],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [
+    {"id": "E-04", "disposition": "closed"},
+    {"id": "E-05", "disposition": "closed"},
+    {"id": "E-08", "disposition": "closed"},
+    {"id": "D-03", "disposition": "open"}
+  ],
+  "slices": [
+    {"id": "slice-03", "coverage": "read in full: completion-gate.ts closeStep/nextStep/describeBlockers/decideReviewGate hunks, approval-mirror.ts onTopicEnded option, operator-confirmations.ts topicEnded/markUndelivered/remoteApproval/askUnmirroredCard/raceMirroredCard, tui-shell.ts import hunks, card-lifecycle.test.ts and operator-confirmations.test.ts; cross-checked at head 77d2eff20 against approval-mirror.ts (full file), agent.ts:3495-3502 (cardAvailable from deps.tools), tui-shell.ts:6090-6126 and git diff b1c6da0e6..77d2eff20 of tui-shell.ts (removed inline code is equivalent to the new helpers)", "status": "DONE"},
+    {"id": "slice-04", "coverage": "read in full: review-orchestrator SKILL.md and bundled copy hunks (identical, no divergence), cli-reference.md hunk (head text at :4921 is consistent with the card rule), review.ts import removal of completeManagedReview, tui-shell.ts import/raceApproval-removal hunks (no remaining use of the removed imports at head)", "status": "DONE"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 0}
+}
+```

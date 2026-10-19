@@ -1,0 +1,27 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-06 (second look: remote-card tests, pressedBy/pressedAt plumbing through confirm-token.ts, flow/types.ts, flow/schema.ts, service.ts confirmMint) reviewed at head 5444f96e4. The press identity is only attached by operatorConfirmTool after the allowed-user list, the one-time token, the same-input binding and the one-hour TTL checks (the token is deleted before those checks, so a refused remote answer spends it); confirmMint receives pressedBy/pressedAt only from that gated confirmation record, and the flow schema types pressedBy as an integer. No exploitable defect found. One info note on parseStoredToken passing the stored pressedBy/pressedAt through unvalidated.",
+  "findings": [
+    {
+      "id": "S-1001",
+      "severity": "info",
+      "file": "src/flow/confirm-token.ts",
+      "line": 173,
+      "quote": "return record as unknown as StoredConfirmationToken;",
+      "problem": "parseStoredToken validates the token's hash, flow, target, checksum and timestamps but not the new pressedBy (number) or pressedAt (string) fields, nor confirmedVia; consumeConfirmationToken copies them into the signature whenever they are not undefined. A stored token whose pressedBy is not an integer would be written into flow.json, where flow/schema.ts declares it an integer.",
+      "impact": "Only a writer of confirm-token.json can plant such values, and that writer can already forge the whole token, which the file's header lists as a known non-goal (a spent token records a mechanism, not who ran it). The only effect is that a forged remote-card attribution (pressedBy) reads like identity evidence next to a caveat that says it is not. Defense in depth, no standalone attack path.",
+      "suggested_fix": "In parseStoredToken, drop pressedBy unless Number.isSafeInteger, and pressedAt unless it is an instant string; or note next to the signature fields that pressedBy is a record of what the shell stored, not proof.",
+      "evidence": "src/flow/confirm-token.ts parseStoredToken (lines 158-174) checks only hash, tokenRef, flowId, kind, acChecksum, target, mintedAt, expiresAt, usedAt; consumeConfirmationToken spreads stored.pressedBy and stored.pressedAt into the returned SignatureConfirmation. The mint side (operator-confirm-tools.ts invoke) is gated on allowedUserIds, and confirmMint in src/flow/service.ts receives the fields only from that gated record.",
+      "confidence": "low",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "slices": ["slice-06"],
+  "questions": []
+}
+```

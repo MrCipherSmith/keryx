@@ -1,0 +1,38 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": ["slice-01"],
+  "summary": "Scope B regression check of the r02->r03 delta (fix commits 4838b1b40, 5382b56ab) over the computed blast radius (20 files, depth 2, cap 40, droppedByCap 0; 29 test consumers dropped as run-not-read and run; 16 changed non-code files unresolved, so the radius says nothing about skill/doc consumers). No regression of major or blocker severity found. Checked each dependency path: (1) RecordedResolve.taskText -> taskTextLength: no non-test reader of taskText exists (project-context-status.ts readLast passes the record through, project-references-view/inspector read only result fields). (2) reference-proof.ts currentSection dead-anchor fallback -> resolved-context-check.ts -> flow/task-project-context.ts: an anchor removed after resolve still blocks under enforcement block through the drift arm (blocking = misses || drifted), and the r02 test at resolved-context-check.test.ts:287 still holds. (3) references-check.ts scanCitations now reading linked rules -> import-rules.ts hint, skills-references.ts, project-context-status.ts (TUI poll): readProjectRuleRegistry never throws (readJsonFileOr fallback), an unreadable link becomes a rule-unreadable warning, not an error, so check exit codes and the TUI poll are unaffected; citation normalisation is project-root relative in both scan and resolver. (4) references-section.ts hand-written heading parser: traced against the removed regexes for 7 hashes, no space after hashes, 4-space indent, empty text, closing hashes, a hash-only text and CR/U+2028 inside the line; behaviour is equivalent, 200000-space heading now 7 ms. (5) keywordOccurs only widens matching for keywords with a non-word edge; word-edged keywords are unchanged. (6) feed reload generation/polling guard and tui-shell stop on destroy: callers (modal toggle, showProjectContext, sidebar subscriber) still receive their own load result; cardSafe on modal lines and the sidebar value: no formatter emits ANSI, tabs or newlines, so nothing visible is stripped. 221 tests across the 12 dependent and changed test files pass at head. Prior dispositions: 16 closed, 5 open (all minor readability/robustness items the delta did not touch).",
+  "findings": [],
+  "prior_dispositions": [
+    { "id": "review-architecture-w3:F-002", "disposition": "closed" },
+    { "id": "review-clean-code-w1:F-003", "disposition": "open" },
+    { "id": "review-clean-code-w2:F-004", "disposition": "closed" },
+    { "id": "review-clean-code-w5:F-001", "disposition": "open" },
+    { "id": "review-clean-code-w5:F-003", "disposition": "open" },
+    { "id": "review-highload-w2:F-001", "disposition": "closed" },
+    { "id": "review-highload-w2:F-002", "disposition": "closed" },
+    { "id": "review-highload-w3:F-001", "disposition": "closed" },
+    { "id": "review-highload-w5:F-002", "disposition": "closed" },
+    { "id": "review-logic-w2:F-001", "disposition": "closed" },
+    { "id": "review-logic-w3:F-001", "disposition": "closed" },
+    { "id": "review-logic-w3:F-002", "disposition": "closed" },
+    { "id": "review-logic-w3:F-003", "disposition": "open" },
+    { "id": "review-performance-w5:F-002", "disposition": "closed" },
+    { "id": "review-security-code-w1:F-001", "disposition": "closed" },
+    { "id": "review-security-code-w1:F-002", "disposition": "closed" },
+    { "id": "review-security-code-w3:F-001", "disposition": "closed" },
+    { "id": "review-security-code-w4:F-001", "disposition": "closed" },
+    { "id": "review-security-code-w4:F-002", "disposition": "closed" },
+    { "id": "review-style-w5:F-002", "disposition": "open" },
+    { "id": "review-testing-practices-w2:F-008", "disposition": "closed" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 0 }
+}
+```
+
+Summary. The delta does not break existing behaviour in the blast radius. The radius is complete for code (nothing was dropped by the cap; the 29 dropped test consumers were run and pass), but it cannot answer for the 16 changed non-code files (skills, docs, flow bookkeeping), which have no graph node. Disposition notes, checked at head 5382b56ab: linked rules are now scanned at their origin in scanCitations, so the arch-w3:F-002 / logic-w2:F-001 class is closed for check, suggest and the import hint. The dead anchor is now satisfiable (the proof compares against the whole file). Keyword boundaries apply per edge, and the testing gap is covered for digits, underscore, Cyrillic, regex metacharacters and c++. Heading parsing is linear. last.json records only the length of the task text. The feed has a generation counter and a polling guard. Every skill template uses a single-quoted --task-text; the four double-quoted examples left in docs are fixed literal strings. Still open: the task-implementer 2.0c bullet is not split (clean-code-w1:F-003). The tab-to-formatter ternary and `let tab: string` remain (clean-code-w5:F-001, style-w5:F-002). Listeners are not isolated (clean-code-w5:F-003). A thrown listener now also skips `applied = Math.max(applied, mine)`, which reopens the ordering window for one older in-flight load in that already rare case; that is minor, so this scope does not raise it. A UTF-8 BOM still hides a first-line heading (logic-w3:F-003): extractSection('﻿# Title\n...', 'Title') still returns found:false at head. Routing audit: graph_used yes (precomputed blast radius), wiki_used not-relevant (bounded delta regression check), ctx_used yes, raw_rg_used no.

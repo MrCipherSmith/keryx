@@ -1,0 +1,13 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Second look at slice-07 (unchanged since r05), judged against head 5444f96e4 sources. No exploitable defect found. Checked: (1) the pressedBy/pressedAt chain from the remote approval frame (client.readApprovalEvent keeps fromId only as a safe integer; hub.ts:1086 drops a press from a user not in allowedUserIds; agent.ts sets confirmationPressedBy/At only when the response is via 'remote'; operator-confirm-tools.ts:210-220 refuses a remote press with no pressedBy/pressedAt, with an id not on binding.allowedUserIds() (undefined or empty list refuses), or older than the card TTL) so write-land.ts, decisions.ts and the interactive-tools context only carry values that already passed that gate, and the decision file is built with JSON.stringify and created O_EXCL; (2) the undelivered flag (client.askApproval, mapApprovalAnswer, RemoteBridge.askApproval) is set only on deny paths and never converts to an allow, so it fails closed and only drives the 'mirror not delivered' note; mirrorUndeliveredNote and RemoteBridge.connected are read-only getters; (3) write-land landWriteRun still verifies the stored patch hash against the confirmed hash, refuses redacted, binary and flagged runs, applies in a throwaway worktree with plumbing only, and resolves the run through findSession over the project's own session list, so a runId from the agent cannot traverse; branch name and base commit come from the stored record, not from the request; (4) the SKILL.md / SKILL.detail.md / review-premise edits only move the agent from a terminal command to the card tools (review_complete, review_confirm_plan, review_decide_premise) and keep 'never write an operator quote yourself', unattended = Not run, premise-decisions not waivable; they loosen no gate. Known minors (D-*, E-*, F5-*, F6-*) not re-reported.",
+  "findings": [],
+  "slices": ["slice-07"],
+  "questions": []
+}
+```

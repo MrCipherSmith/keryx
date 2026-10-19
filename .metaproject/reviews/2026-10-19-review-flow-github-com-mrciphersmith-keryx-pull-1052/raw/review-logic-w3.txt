@@ -1,0 +1,121 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "slices": ["slice-03"],
+  "summary": "Slice-03 is logically sound: no blocker and no major. The optional press parameters are threaded through all seven review libraries and every one of them is a no-op when no press is passed. The refusal order in complete-gated.ts matches the old inline order in runComplete (profile refusal, then package routing, then the managed gates). The mirror-undelivered flag is set only on paths where nothing reached the topic, and mapApprovalAnswer keeps it only on a deny. Six small findings remain: the note is not on the card when the send fails after the dock is open, three false positive/negative edges of the flag, the library not enforcing remote-card-only press fields, and SKILL.md/tool text that still tells the agent to run the CLI complete.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "onUndelivered: () => io.onSystem?.(\"◇ Telegram mirror not delivered: the topic did not take the card. Answer it here.\\n\")",
+      "problem": "AC5 says the card message says the Telegram mirror was not delivered. That holds only when the bridge is inactive or not connected at the moment the card is raised (the withMirrorNote branch). When the bridge is connected but the send fails (POST not ok, no approvalId, POST throws, signal aborted), the dock is already open with the original card text. The only signal is a transcript line through io.onSystem, which the operator may not see while the dock is in front. The card itself never carries the note.",
+      "evidence": "tui-shell.ts mirrorApprovalToTopic: unmirrored = mirrorUndeliveredNote(bridge) is evaluated before the dock opens and decides only on bridge.active and bridge.connected. In the connected case the card goes to inner() unchanged (inner(tool, inputJson, meta, race)), and approval-mirror.ts:52 calls options.onUndelivered after the topic leg resolves with undelivered, which then only writes a system line. The new test in src/remote/mirror-undelivered.test.ts covers the flag and the raceApproval callback, not the card text on a failing send.",
+      "impact": "The operator is not told on the card that Telegram will never show it. They may wait for a Telegram answer that cannot come. The shell dock still works, so nothing is lost or recorded wrongly; the gap is in the AC5 wording for the failing-send case.",
+      "suggested_fix": "Either state in AC5/docs that the failing-send case is reported as a transcript line, or let the dock re-render its subtitle from the race (for example a mutable note the dialog reads) so the card text gains the withMirrorNote line when onUndelivered fires.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/review/types.ts",
+      "line": null,
+      "quote": "export function cardPressFields(source: CardPress | undefined): CardPress {",
+      "problem": "The rule that pressedBy and pressedAt exist only with confirmedVia remote-card is not enforced in the library. cardPressFields spreads whatever press fields it receives and never looks at confirmedVia. The seven record writers accept a press next to any confirmedVia, and coverage-complete.ts normalises a stored waiver by keeping the press fields even when confirmedVia is undefined or tui-card.",
+      "evidence": "types.ts cardPressFields reads only source.pressedBy and source.pressedAt. In coverage-complete.ts the normaliser does `...cardPressFields({ pressedBy, pressedAt })` regardless of `via`. The only gate is upstream: operator-confirm-tools.ts invoke sets the press only when the answer came from the remote card, after the allowed-id and 1-hour checks. Callers in operator-confirm-review.ts pass cardPressFields(confirmation) and so inherit that gate. No caller today passes a press with tui-card.",
+      "impact": "Defence in depth only. A future caller (or a hand-edited package) can write pressedBy with tui-card or a missing confirmedVia, and readers cannot tell the record was not pressed remotely. No present code path does it.",
+      "suggested_fix": "Give the record writers one helper that takes confirmedVia and the press together and drops the press unless confirmedVia is remote-card, and use it in the seven libraries and in the coverage-complete normaliser.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "in keryx shell call `review_waive_readiness` (a card, never a terminal), then run `keryx review complete`",
+      "problem": "The SKILL text disagrees with itself and with the new card. Line 47 lists review_complete among the cards to call, and SKILL.detail.md line 669 says to call the review_complete card or run keryx review complete. Line 136 (Done when) and the output of the review_waive_* tools still tell the agent to run `keryx review complete` after a waiver. A plain `keryx review complete` is not held by the shell guard: command-risk.ts touchesCoverageWaiver matches only commands that carry a --waive flag or an unexpanded word, so a shell_exec of the plain command runs without any card.",
+      "evidence": "SKILL.md lines 47 and 136. command-risk.ts:715-748 (parsedCoverageWaiver and touchesCoverageWaiver) return true only for the --waive flag family or an opaque argument after `review complete`. review.ts runComplete (about line 4539) requires a terminal only when --waive or --waive-coverage is given; a plain complete runs, and the card path in operator-confirm-review.ts writes completion-confirmation.json that the plain path does not. The waive tools in operator-confirm-review.ts still return a line telling the agent to run `keryx review complete` (not anchored: the sentence occurs at several sites).",
+      "impact": "An agent that follows line 136 closes the round through the CLI and never opens the review_complete card, so the operator is never asked to confirm the head SHA, evidence line and waivers. AC5 keeps the CLI working as before, so this is not a gate bypass, but the guidance contradicts AC7 (tell the agent to call the card).",
+      "suggested_fix": "Make line 136 and the waive tool results say: call the review_complete card in keryx shell; the CLI complete is for outside the shell. If the plain CLI complete must also be held in the shell, say so and add a command-risk rule; otherwise record that choice in TM-04.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/remote/client.ts",
+      "line": null,
+      "quote": "    } catch {\n      return { decision: \"deny\", undelivered: true };",
+      "problem": "False positive of the undelivered flag. The catch wraps both the POST and the response.json() read. If the server accepted the approval and posted the buttons but the response was lost (timeout, reset, bad JSON), the client reports undelivered and the shell says the mirror was not delivered, although the topic may hold a live card. No closePrompt is sent in this branch, so those buttons are not taken down when the shell answers.",
+      "evidence": "client.ts askApproval: approvalId is assigned only after post() and json() succeed; every failure before that returns undelivered: true with no approvalId, so there is nothing to pass to closePrompt. I did not verify what serve does with a late press for an approval the client forgot (it is held in earlyDecisions only for a known id).",
+      "impact": "Rare network case. The operator is told the mirror failed while a stale card may exist in the topic. A late press would be ignored by the shell, so no wrong record results.",
+      "suggested_fix": "Say in the note 'may not have been delivered', or have serve expire an approval the client never acknowledged.",
+      "confidence": "low",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/remote/shell-bridge.ts",
+      "line": null,
+      "quote": "    } catch {\n      answer = { decision: \"deny\", always: false };",
+      "problem": "False negative of the undelivered flag. RemoteBridge.askApproval does not set undelivered when client.askApproval throws, and the fallback branch for a client without askApproval (client.requestApproval, which returns only allow or deny) never sets it. A card sent through either path whose send failed is not reported as not delivered.",
+      "evidence": "shell-bridge.ts askApproval: the early return for no client sets undelivered: true, but the catch and the legacy branch build the answer without it. RemoteClient.askApproval itself never throws (it catches the POST and returns undelivered), so the catch is reachable only with another RemoteClientLike, for example a test double or an older client.",
+      "impact": "Not reachable with the production RemoteClient, so no observable defect today. A future client implementation would silently lose the AC5 note.",
+      "suggested_fix": "Set undelivered: true in the catch (the throw happened before an approval id existed) and document that a legacy client cannot report it.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const verdict = await inner(tool, inputJson, { ...meta, card: withMirrorNote(meta.card, unmirrored) });",
+      "problem": "In the new unmirrored branch operatorCards.ask is called first and operatorCards.answer only after inner resolves, with no try/finally. If inner rejects, the pending-confirmation entry is never answered and stays in the pending line.",
+      "evidence": "tui-shell.ts mirrorApprovalToTopic: ask(...) at the unmirroredId line, answer(...) after the await. The mirrored branch has the same shape around raceApproval, so this is the existing pattern. I did not find a path where requestApprovalLocally rejects, so it may not be reachable.",
+      "impact": "A phantom pending card in the TUI if the dock ever rejects. Not shown to be reachable.",
+      "suggested_fix": "Wrap the await in try/finally and answer the card as withdrawn when it threw.",
+      "confidence": "low",
+      "reviewer": "review-logic",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 3 }
+}
+```
+
+## Logic Review (slice-03)
+
+### Scope
+- Branch docs/flow-helyx-operator-confirm, head d2cb377f59f7f9c8553d9f377f99360bff3f6328, base 062aa9c36484e7b7f6b8a1dd6140671330646e66.
+- Spec compliance gate: AC1-AC8 read from the frozen criteria; AC9 and AC10 are not code defects and are not filed.
+
+### Checked and found sound
+- Press fields threaded: answerChunkEstimate, planConfirmationFor/recordPlanConfirmation, recordCoverageWaiver and its normaliser, waiveReadiness, recordOperatorDecision, answerPremiseQuestion, publish. Each spreads cardPressFields(press) or leaves the record unchanged when the press is undefined, so estimate, chunks-estimate, coverage-complete, publish and readiness output is the same as before when no press is given.
+- complete-gated.ts: resolve, runProfileRefusal, packageRoutingRefusal (refuseUnreadable), then completeManagedReview. This is the order runComplete used before, and runComplete now calls it; the CLI and the review_complete card share one path.
+- Mirror flag: set on no stream, aborted signal, POST not ok, missing approvalId and POST throw in client.ts; not set after the POST succeeded and the stream dropped (the card was delivered). mapApprovalAnswer keeps it only on a deny. raceApproval ignores it once the race is settled, so an answer in the dock does not print a spurious note.
+- Unattended roster: review_complete is in OPERATOR_CONFIRM_TOOL_NAMES, so isUnattendedExcludedTool excludes it.
+- SKILL line 47 and SKILL.detail.md line 669 match the code for the card tool names.
+
+### Known slice-02 findings, not re-reported
+- completion-confirmation.json is written after close.
+- The card waiver list may omit operator-decisions.json.
+
+### Routing audit
+- graph_used: no (not-relevant; the diff and call sites were read directly)
+- wiki_used: no (not-relevant)
+- ctx_used: yes (keryx ctx rg for every search)
+- raw_rg_used: no

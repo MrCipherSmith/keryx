@@ -1,0 +1,136 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Slice-02 (src/commands/*, src/flow/*) is mostly clean: the new remote-answer checks in operatorConfirmTool are small and named, and the review_complete card re-derives its facts from the package and compares a digest at answer time. One real defect in my lens: review_complete closes the round first and writes its only operator record (who pressed, which head, which evidence line and waivers were shown) afterwards, inside a catch that then reports 'nothing was recorded' even when the round is already closed. The rest is maintainability: the pressedBy/pressedAt pair is hand-copied at several sites although cardPressFields already exists, invoke() grew to the 40-line mark with two type-assertion casts, and review_complete duplicates small expressions. No naming issue rises above minor; no blocker.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE)",
+      "problem": "review_complete.apply calls completeReviewGated (which closes the round in manifest.json) and only then writes completion-confirmation.json, the one place that keeps confirmedVia, pressedBy, pressedAt, the head, the evidence line and the waivers the operator was shown. Both calls sit in one try whose catch returns `review_complete refused: ... — nothing was recorded`. If the write throws (disk full, permission, crash between the two statements), the round is already closed but the tool tells the model it was refused and nothing was recorded; the operator's press is lost, or never written at all after a crash.",
+      "impact": "The tool result states the opposite of the package state. The agent may report 'not complete' or retry (the retry then fails with 'already complete'). Worse for the PR's own goal: for a remote-card completion, the only durable evidence of who pressed is a file written after the state change, so a failure or crash leaves a closed round with no pressedBy/pressedAt record. Every sibling card records its press inside the library call that changes state; this one does not.",
+      "suggested_fix": "Split the try. Either write the confirmation record before completeReviewGated (as an intent file, removed or marked on refusal), or pass the confirmation into completeManagedReview so it is stored with the close. If the write stays after the close, catch its failure separately and answer `review closed, but completion-confirmation.json could not be written: <error>` instead of the refusal text.",
+      "evidence": "operator-confirm-review.ts, completeSpec.apply (diff hunk @@ 619,798 @@): `const done = await completeReviewGated(...)`, then `const record = {...cardPressFields(confirmation)...}`, then `await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE), ...)`, then the catch `return { output: `review_complete refused: ${...} — nothing was recorded`, isError: true }`. src/review/complete-gated.ts:11-17 shows completeReviewGated ends in completeManagedReview and takes no confirmation, so no other record of the press is written for this tool.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["src/commands/operator-confirm-review.ts: completeSpec.apply (the only apply that writes its operator record after the state change)"],
+        "enumeration_method": "Read every apply() in operator-confirm-review.ts and operator-confirm-other.ts in the diff and at head: the nine other review specs hand the confirmation (with cardPressFields) to the library function that changes state (answerChunkEstimate, publishReview, recordCoverageWaiver, waiveReadiness, recordOperatorDecision, recordPlanConfirmation, answerPremiseQuestion), so the record is part of the state change. review_complete is the only spec with a separate post-close file write."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-tools.ts",
+      "line": null,
+      "quote": "pending.delete(token as string);",
+      "problem": "invoke() is now 40 lines and mixes four levels: token lookup, remote authorization (who, allow-list, TTL), building the confirmation, applying. The remote checks sit in a branch that fills two `let` variables, and the later `pressedBy as number` / `pressedAt as string` and `token as string` casts exist only because the narrowing done in other blocks does not reach them.",
+      "impact": "The security-relevant rule (allowed id, one hour, who pressed) is the part of this function most worth reading and testing alone, and it is buried between the token bookkeeping and the apply call. The casts will survive a later edit that moves a check, and then hide a bad value instead of failing to compile.",
+      "suggested_fix": "Extract `authorizeRemotePress(ctx, entry, allowed, now)` returning `{ ok: true, pressedBy, pressedAt } | { ok: false, why }`, and take the token as a narrowed const after the first guard so no cast is needed. invoke() then reads: look up, authorize if remote, build confirmation, apply.",
+      "evidence": "operator-confirm-tools.ts lines 198-237 at head: `pending.delete(token as string);` (line 206) and `...(remote ? { pressedBy: pressedBy as number, pressedAt: pressedAt as string } : {}),` (line 227). Behaviour is correct as written (the undefined checks at line 214 come first); this is about structure, not a bug.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-other.ts",
+      "line": null,
+      "quote": "...(confirmation.pressedBy === undefined ? {} : { pressedBy: confirmation.pressedBy }),",
+      "problem": "The pressedBy/pressedAt pair is a data clump that the PR copies by hand into several record builders and re-declares as inline `pressedBy?: number; pressedAt?: string` in several types, although src/review/types.ts already exports `CardPress` and `cardPressFields` for exactly this and the review-side files use them.",
+      "impact": "The rule 'press fields exist only for remote-card, nothing else' is now enforced by each site separately. A new site, or a change to the field set (a third field, a different empty-value rule), has to be found by search; one missed site writes or drops the audit field silently.",
+      "suggested_fix": "Use `cardPressFields(confirmation)` in record() (operator-confirm-other.ts), in confirmMint's mint binding (flow/service.ts) and in mintConfirmationToken (flow/confirm-token.ts), and type the fields as `CardPress`. cardPressFields lives in src/review/types.ts; to avoid a flow -> review import, move CardPress and cardPressFields to a neutral module (src/lib) and re-export from review/types.",
+      "evidence": "Hand-written conditional spreads in the slice: src/commands/operator-confirm-other.ts:113-114 (record), src/flow/confirm-token.ts:140-141 (mintConfirmationToken), src/flow/service.ts:1680-1681 (confirmMint), src/commands/agent.ts:254-255 (invoke context, gated on remote). Inline field declarations: agent.ts:303-304, operator-confirm-tools.ts:57, confirm-token.ts:76-77, flow/types.ts confirmMint binding, operator-confirm-other.ts:109 and 625. Outside this slice the same copy exists in src/harness/external/write-land.ts:229 and src/tui/tui-shell.ts:584. Sites that already use the helper: operator-decisions.ts, plan-confirmation.ts, premise-question.ts, readiness.ts, publish.ts, chunks-estimate.ts, coverage-complete.ts. Rated minor, not major, because each copy is one line and none disagrees with the helper today.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "if (prepared === undefined) return { output: \"review_complete: nothing prepared for this card\", isError: true };",
+      "problem": "completeSpec repeats two small pieces of logic. The expression that turns input.head into a normalised `headInput` is written identically in buildCard and apply (only buildCard validates it as a SHA). The refusal text `review_complete refused: ${error instanceof Error ? error.message : String(error)} — nothing was recorded` is written twice in apply.",
+      "impact": "Two copies of the head normalisation must stay in step: if buildCard's rule changes (for example it stops lower-casing), apply feeds completeReviewGated a different head than the one the card showed, and the digest still matches because it is computed from the same input only on the card side. The duplicated message is the text F-001 shows to be wrong in one of its two places.",
+      "suggested_fix": "Add `headOf(input): string | undefined` (trim, lower-case, empty to undefined) and call it from both methods; add `refused(error)` for the message. Validating the SHA inside headOf also gives apply the same check for free.",
+      "evidence": "Diff hunk @@ 619,798 @@: `const headInput = typeof input[\"head\"] === \"string\" && input[\"head\"].trim() !== \"\" ? input[\"head\"].trim().toLowerCase() : undefined;` appears once in buildCard and once in apply (it is the line after the quoted line). The `— nothing was recorded` template appears at the facts read and at the outer catch in apply.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "coverage = undefined;",
+      "problem": "completionFacts swallows every error from reading research.json (missing file, corrupt JSON, wrong shape) and treats it as 'no coverage waiver', with no log and no distinction between ENOENT and a broken file. The card then prints `waivers: none` for a package whose ledger it could not read.",
+      "impact": "The card is the operator's only view of what they are waiving. A line that says 'none' where the truth is 'unreadable' is a false statement on an approval card. The downstream research gate would most likely refuse such a package, so the damage is a misleading card, not a bypass; confidence is medium because I did not trace every gate that reads research.json.",
+      "suggested_fix": "Catch only the missing-file case as 'none'; for any other failure add a card line such as `waivers: could not read research.json (<reason>)`, or let the error propagate so buildCard returns a refusal.",
+      "evidence": "operator-confirm-review.ts completeSpec, completionFacts (diff hunk @@ 619,798 @@): `try { coverage = readCoverageWaiver(JSON.parse(readFileSync(path.join(dir, \"research.json\"), \"utf8\")).dispatch) } catch { coverage = undefined; }`. The manifest and report reads in the same function are not caught and fail the card, so research.json is treated more leniently than its neighbours.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-006",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "// The waiver tools record the waiver only. Closing the review is still `keryx review complete`, which finds the waiver in",
+      "problem": "This PR adds review_complete so the operator can close the round from a card, but the header comment still says closing is done by the terminal command, and both waiver tools still end their output with ``Run `keryx review complete` to close the review.`` That output is read by the model, and OPERATOR_CONFIRM_NOTE tells the model not to ask the operator to run a terminal command.",
+      "impact": "The model gets two opposite instructions in one session: the tool note says never send the operator to a terminal, the waiver result says run the terminal command. It may ask for the terminal step and bypass the new card, or skip the waiver-then-complete order the review_complete description relies on. The comment misleads the next maintainer in the same way.",
+      "suggested_fix": "Change the comment to say the review_complete tool (card) or `keryx review complete` closes the round, and change both waiver outputs to `Call review_complete to close the review.`",
+      "evidence": "Header comment at operator-confirm-review.ts:24-25 (unchanged context in the diff hunk @@ 1,66 @@); output strings in the apply() of waiveCoverageSpec and waiveReadinessSpec (diff hunk @@ 274,314 @@ and @@ 337,377 @@, unchanged lines). The review_complete description in the same diff says 'record the waivers first with review_waive_readiness or review_waive_coverage', so the intended order is waiver tool then review_complete.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-007",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "const at = facts.head === undefined",
+      "problem": "In buildCard, `at` is not a time but the title suffix ` at <sha>`, and it collides in meaning with `confirmation.at` (the ISO answer time) used throughout the same file. The 12-character SHA abbreviation is an unnamed literal in `facts.head.slice(0, 12)`, written three times in completeSpec (title suffix, subject, output).",
+      "impact": "A reader skimming for the time of the answer lands on a string suffix. The abbreviation length is a display rule that has to be changed in three places and must match what the tests expect.",
+      "suggested_fix": "Rename to `headSuffix` and add `const shortSha = (sha: string): string => sha.slice(0, SHORT_SHA_CHARS);` with a named constant next to WAIVER_QUOTE_CHARS.",
+      "evidence": "Diff hunk @@ 619,798 @@: `const at = facts.head === undefined ? \"\" : ` at ${facts.head.slice(0, 12)}`;`, `subject: `package ${name}${facts.head === undefined ? \"\" : `, head ${facts.head.slice(0, 12)}`}``, and in apply `at ${prepared.head.slice(0, 12)}`.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-008",
+      "severity": "info",
+      "file": "src/commands/agent-commands.ts",
+      "line": null,
+      "quote": "description: \"Drive this session from a Telegram topic: /remote-control [name|off|status]. Off by default. Shows the review cards",
+      "problem": "The same hand-written list of five tool names (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete) is pasted into the /remote-control and /decisions descriptions, which grow to roughly 270 and 400 characters.",
+      "impact": "The list is a copy of what the operator-confirm registry holds (ten review tools in the registered set), so it drifts when a gate is added, and long descriptions make the slash-command help hard to scan. No defect today.",
+      "suggested_fix": "Say 'the Telegram review cards waiting or answered' and let the surface list the names, or build the string from one shared constant.",
+      "evidence": "agent-commands.ts, the two edited description lines in diff hunks @@ 167,207 @@ and @@ 284,324 @@. The registered review tool list is in operator-confirm-review-tools.test.ts (names array of ten). I did not verify which of the ten the TUI surfaces show, so I leave the severity at info.",
+      "confidence": "low",
+      "reviewer": "review-clean-code",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 6, "info": 1 },
+  "inputs_unreadable": [],
+  "follow_ups": []
+}
+```
+
+Checked with no finding: ApprovalResponse and agent.ts plumbing (confirmationVia/PressedBy/PressedAt are set only inside the remote branch and spread only when remote); the operatorConfirmTool refusals in operator-confirm-tools.ts (one `refuse` helper, messages name the cause); REMOTE_CARD_TTL_MS and WAIVER_QUOTE_CHARS are named constants; review.ts now delegates to completeReviewGated, so the CLI and the card share one gate function (no duplicated gate code); shell.ts allowedUserIds closure; flow/confirm-token.ts, flow/service.ts, flow/types.ts changes (only the DRY point in F-003); test files in the slice read for naming and duplication only (no finding; the added tests are small and named after the rule they pin).
+
+Routing audit: graph_used no (not-relevant, diff review); wiki_used no (not-relevant); ctx_used yes (keryx ctx rg for usage sites); raw_rg_used no.

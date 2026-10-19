@@ -1,0 +1,25 @@
+STATUS: DONE
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Slices 03 and 04 (head 77d2eff20) read in full and the touched call sites read in the head tree. No new security finding. S-401 (review_complete card clips disposition evidence to 300 chars) is already reported and not repeated. The remote-press path stays fail closed: a topic allow without a user id yields no pressedBy and operator-confirm-tools.ts refuses it; a topic deny or a timeout without fromId never counts as a press (isTopicPress, src/tui/approval-mirror.ts:25) and the dock stays the only place. The new onTopicEnded leg (approval-mirror.ts:55) only flips the card to 'not waiting in the topic' and never grants an approval. cardAvailable (src/commands/agent.ts:3501) is derived from the real tool roster, not from model text, so a model cannot switch the wording to the CLI path. The skill sites named in E-01 (SKILL.md 782, 124, 134, 136; SKILL.detail.md 386, 866) now name the review_complete card, and the bundled mirrors are byte-identical (diff -q empty for SKILL.md and SKILL.detail.md). The cli-reference sentence (E-07) now states that plain complete has no terminal check. Residual, already known and not raised again: plain `keryx review complete` has no TTY check (TM-04 section 8), so the card rule binds an agent by instruction only; a session without the card tool (readline REPL) is told to run the CLI, which is the pre-PR behaviour.",
+  "findings": [],
+  "needs_context": [],
+  "inputs_unreadable": [],
+  "follow_ups": [],
+  "prior_dispositions": [
+    {"id": "E-01", "disposition": "closed"},
+    {"id": "E-04", "disposition": "closed"},
+    {"id": "E-05", "disposition": "closed"},
+    {"id": "E-07", "disposition": "closed"},
+    {"id": "E-08", "disposition": "closed"}
+  ],
+  "slices": [
+    {"id": "slice-03", "coverage": "read in full: completion-gate.ts closeStep/nextStep/describeBlockers/decideReviewGate with cardAvailable, approval-mirror.ts onTopicEnded, operator-confirmations.ts markUndelivered(reason), pendingConfirmationLine, remoteApproval, askUnmirroredCard, raceMirroredCard, tui-shell.ts import and call-site changes, card-lifecycle.test.ts, operator-confirmations.test.ts; call sites re-read at head in tui-shell.ts:6060-6126, approval-mirror.ts, agent.ts:3501, shell-bridge.ts mapApprovalAnswer", "status": "DONE"},
+    {"id": "slice-04", "coverage": "read in full: review-orchestrator SKILL.md hunks (61-64, 104-123, 130-133) and the bundled mirrors, cli-reference.md 4919-4921, review.ts import hunk, tui-shell.ts 92-108 and 6105-6108; the E-01 sites re-read at head (SKILL.md 124, 134, 136, 782; SKILL.detail.md 386, 866) and cli-reference.md:4921", "status": "DONE"}
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 0}
+}
+```

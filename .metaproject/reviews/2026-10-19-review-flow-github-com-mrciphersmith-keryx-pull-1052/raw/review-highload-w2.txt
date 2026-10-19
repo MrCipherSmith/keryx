@@ -1,0 +1,108 @@
+STATUS: DONE_WITH_CONCERNS
+
+## High-Load Review (review-highload, wave 2, slice-02)
+
+### Review Scope
+- Branch: docs/flow-helyx-operator-confirm, head d2cb377f59f7f9c8553d9f377f99360bff3f6328, base 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Slice: slice-02 (src/commands/*, src/flow/*)
+- Load profile: not provided; severity assumes a single operator per shell with at most a handful of concurrent cards. The risk surface is concurrency between two answerers (TUI dock and Telegram topic, or two shells), not throughput.
+
+### Summary
+No blocker or major in my lens. The remote answer path is single-use, input-bound, process-local and fail-closed on every path I followed. One real weakness is that `review_complete` closes the review before it writes the press-record file and then reports "nothing was recorded" when that write fails. Two info notes follow.
+
+### Stats
+blocker 0 | major 0 | minor 1 | info 2
+
+### Findings
+
+#### Concurrency & Race Conditions
+- [F-002] info (TOCTOU window across the GitHub lookup in review_complete.apply). See the REVIEW_RESULT block.
+
+#### Resource Management
+- [F-003] info, pre-existing (`pending` map entries are never swept when a card is neither answered nor declined). See the REVIEW_RESULT block.
+
+#### Caching
+None detected.
+
+#### Database Under Load
+None detected.
+
+#### Async / Queues
+None detected.
+
+#### Retry / Timeout / Circuit Breaker
+None detected. The Telegram send has no retry or backoff loop in this slice. `askApproval` in src/remote/client.ts (lines 439-462) returns `{ decision: "deny", undelivered: true }` on a not-connected client, a non-ok POST, a missing approvalId or a thrown error. The wait is one `setTimeout` per approval, cleared on settle and on abort. There is nothing to storm.
+
+#### Idempotency & Distributed Invariants
+- [F-001] minor (non-atomic close vs press record, false "nothing was recorded"). See the REVIEW_RESULT block.
+
+### Clean Areas (reviewed, no finding)
+- Token single use and binding (src/commands/operator-confirm-tools.ts invoke): the entry is deleted before any check that can refuse, so a refused answer still spends the token. A token presented with a different input also deletes the entry. The `pending` Map is process-local, so there is no cross-process or crash replay. JavaScript is single-threaded and the delete sits ahead of every `await`, so no check-then-set race exists.
+- Allowed-user check: `allowed.includes(pressedBy)` compares number to number from `loadRemoteConfig().allowedUserIds`. Missing `pressedBy`, `pressedAt` or `allowed` are all refused. An unreadable config returns undefined and so refuses (fail closed).
+- TTL: `issuedAt` is taken from the injected `now()` at card build and stored in the process-local entry. It is compared at answer time, never taken from the model or the press.
+- Press fields: `pressedBy` and `pressedAt` are forwarded in agent.ts only when `via === "remote"` and `confirmationVia === "remote"`. `cardPressFields` emits nothing for `tui-card`. Both fields are written by the shell, not by model input.
+- Flow confirm token (src/flow/confirm-token.ts, src/flow/service.ts): additive optional fields, written with `writeFileAtomic` under the existing flow lock. Old tokens without the fields still parse.
+- Two answerers on one card: `raceApproval` (first answer wins) plus hub `pressApproval` (single-use `dropApproval`, session-bound, expiry-checked) leave one decision per card.
+- Concurrent `review_complete` on one package: the second call re-reads the facts and the gates, which refuse an already-complete review, so there is no double close.
+
+### REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "No blocker or major in the concurrency, replay, token-atomicity and Telegram-send lens for slice-02. The token is single-use, input-bound, process-local and fail-closed; the allowed-id check compares numbers; the TTL is measured from a stored issuedAt on an injected clock; press fields exist only for remote answers. One minor: review_complete closes the review before it writes the press-record file, and a failed write returns 'nothing was recorded' after the close. Two info notes.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE)",
+      "problem": "In completeSpec.apply the irreversible close (completeReviewGated) runs first, and the file that records who pressed (completion-confirmation.json, carrying confirmedVia, pressedBy and pressedAt) is written afterwards as a separate, non-transactional step. If that write throws (disk full, permission, process killed between the two awaits), the catch returns 'review_complete refused: ... — nothing was recorded' although the review is already complete.",
+      "evidence": "src/commands/operator-confirm-review.ts lines 750-765: `const done = await completeReviewGated(...)` is awaited, then `await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE), ...)`. The single catch at line 773-774 covers both awaits and always says 'nothing was recorded'. A retry cannot repair it, because the gates refuse a review that is already complete, so the press record cannot be written afterwards.",
+      "impact": "On a write failure or a crash in that window, the review is closed with no record of the operator quote, the confirming channel or the Telegram user id, which is the audit trail this PR adds. The agent and the operator are told the opposite of what happened and may try to close it again. The window is narrow and the failure needs a local I/O fault, so it is not a major.",
+      "suggested_fix": "Write the confirmation record before the close, and remove or roll it back if the gate refuses. Alternatively, pass the press fields into completeManagedReview so they land in the same atomic manifest write. At minimum, split the try block so a failure after the close reports 'review closed, but the confirmation record could not be written: <error>' instead of 'nothing was recorded'.",
+      "confidence": "medium",
+      "reviewer": "review-highload",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "The head, the evidence level or the waivers changed after the card was shown",
+      "problem": "The drift check (factsDigest against prepared.digest) is synchronous and runs before an awaited gate sequence that includes the PR lookup (prLookup / prFiles, network). The digest therefore covers the facts at the start of the gate sequence, not at the moment of the close.",
+      "evidence": "src/commands/operator-confirm-review.ts lines 746-755: digest compare, then `await completeReviewGated(ctx.projectRoot, prepared.dir, { prLookup: ..., prFiles: ..., now: new Date(confirmation.at) })`. I read complete-gated.ts (18 lines) and the call into completeManagedReview but did not trace every re-read inside completeManagedReview, so I cannot say whether the head and evidence gates re-read the package after the lookup.",
+      "impact": "If another process edits the package (a new waiver, a moved head) during the GitHub round trip, the close could apply to facts the operator did not see on the card. This needs a second writer on the same package within seconds, so it is not a likely failure at the current load.",
+      "suggested_fix": "Confirm that completeManagedReview re-reads head, evidence and waivers after the PR lookup. If it does not, recompute factsDigest after the lookup inside the gate, or take the package lock around the digest check and the close.",
+      "confidence": "low",
+      "reviewer": "review-highload",
+      "location_class": "in-diff",
+      "publication": "question"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-tools.ts",
+      "line": null,
+      "quote": "pending.set(token, {",
+      "problem": "Entries in the process-local `pending` Map are removed only by invoke or confirmationDeclined. A card whose confirmation is never answered, declined or aborted keeps its entry, including the prepared package facts, for the life of the shell.",
+      "evidence": "src/commands/operator-confirm-tools.ts: `pending.set(token, { input: key(input), card, shown, prepared: built.prepared, issuedAt: now().getTime() })` at line 192. The 1-hour TTL is checked only inside invoke for remote answers, and no timer or sweep exists. The Map and its set/delete pattern pre-date this PR; the PR only adds `issuedAt`.",
+      "impact": "One small object per abandoned card. A single operator shell asks a handful of cards a day, so growth is negligible. It is a leak only in a shell that runs for months with many abandoned cards.",
+      "suggested_fix": "Optional: on each `confirmation()` call, drop entries older than REMOTE_CARD_TTL_MS, using the `issuedAt` this PR already stores.",
+      "confidence": "high",
+      "reviewer": "review-highload",
+      "location_class": "pre-existing"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 }
+}
+```
+
+### Routing audit
+graph_used: no (not-relevant: the slice is a bounded diff; callers were read directly)
+wiki_used: no (not-relevant)
+ctx_used: yes (keryx ctx rg for symbol and quote lookups)
+raw_rg_used: no

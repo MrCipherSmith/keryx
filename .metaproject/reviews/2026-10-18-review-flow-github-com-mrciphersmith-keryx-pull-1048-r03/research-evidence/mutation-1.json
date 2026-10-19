@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx/.worktrees/conditional-reads",
+  "command": "bun test src/tui/project-context-inspector.test.ts src/gdskills/import-skills-rules.test.ts src/gdskills/context-resolver.test.ts src/gdskills/import-skills-update.test.ts src/gdskills/conditional-reads.e2e.test.ts src/commands/skills-references.test.ts src/gdskills/context-resolver.vantage.test.ts src/gdskills/project-skills-registry-kind.test.ts src/gdskills/references-config.test.ts src/gdskills/references-section.test.ts src/gdskills/project-context-status.test.ts src/gdskills/project-context-config.test.ts src/gdskills/bundled-project-context.test.ts src/mcp/metaproject-tools.test.ts src/harness/tool/metaproject-adapter.test.ts src/gdskills/rule-references.test.ts",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 1167
+  },
+  "mutants": [
+    {
+      "id": "w3-M-01",
+      "file": "src/tui/project-context-inspector.ts",
+      "anchor": "if (polling) return;",
+      "replacement": "",
+      "command": "bun test src/tui/project-context-inspector.test.ts src/gdskills/import-skills-rules.test.ts src/gdskills/context-resolver.test.ts src/gdskills/import-skills-update.test.ts src/gdskills/conditional-reads.e2e.test.ts src/commands/skills-references.test.ts src/gdskills/context-resolver.vantage.test.ts src/gdskills/project-skills-registry-kind.test.ts src/gdskills/references-config.test.ts src/gdskills/references-section.test.ts src/gdskills/project-context-status.test.ts src/gdskills/project-context-config.test.ts src/gdskills/bundled-project-context.test.ts src/mcp/metaproject-tools.test.ts src/harness/tool/metaproject-adapter.test.ts src/gdskills/rule-references.test.ts",
+      "kind": "behavior",
+      "line": 186,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 6136
+    },
+    {
+      "id": "w3-M-02",
+      "file": "src/tui/project-context-inspector.ts",
+      "anchor": "      polling = false;",
+      "replacement": "",
+      "command": "bun test src/tui/project-context-inspector.test.ts src/gdskills/import-skills-rules.test.ts src/gdskills/context-resolver.test.ts src/gdskills/import-skills-update.test.ts src/gdskills/conditional-reads.e2e.test.ts src/commands/skills-references.test.ts src/gdskills/context-resolver.vantage.test.ts src/gdskills/project-skills-registry-kind.test.ts src/gdskills/references-config.test.ts src/gdskills/references-section.test.ts src/gdskills/project-context-status.test.ts src/gdskills/project-context-config.test.ts src/gdskills/bundled-project-context.test.ts src/mcp/metaproject-tools.test.ts src/harness/tool/metaproject-adapter.test.ts src/gdskills/rule-references.test.ts",
+      "kind": "behavior",
+      "line": 195,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1153
+    },
+    {
+      "id": "w3-M-03",
+      "file": "src/tui/project-context-inspector.ts",
+      "anchor": "if (mine > applied && !sameStatus(current, next)) {",
+      "replacement": "if (!sameStatus(current, next)) {",
+      "command": "bun test src/tui/project-context-inspector.test.ts src/gdskills/import-skills-rules.test.ts src/gdskills/context-resolver.test.ts src/gdskills/import-skills-update.test.ts src/gdskills/conditional-reads.e2e.test.ts src/commands/skills-references.test.ts src/gdskills/context-resolver.vantage.test.ts src/gdskills/project-skills-registry-kind.test.ts src/gdskills/references-config.test.ts src/gdskills/references-section.test.ts src/gdskills/project-context-status.test.ts src/gdskills/project-context-config.test.ts src/gdskills/bundled-project-context.test.ts src/mcp/metaproject-tools.test.ts src/harness/tool/metaproject-adapter.test.ts src/gdskills/rule-references.test.ts",
+      "kind": "behavior",
+      "line": 176,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1177
+    },
+    {
+      "id": "w3-M-04",
+      "file": "src/tui/project-context-inspector.ts",
+      "anchor": "applied = Math.max(applied, mine);",
+      "replacement": "applied = mine;",
+      "command": "bun test src/tui/project-context-inspector.test.ts src/gdskills/import-skills-rules.test.ts src/gdskills/context-resolver.test.ts src/gdskills/import-skills-update.test.ts src/gdskills/conditional-reads.e2e.test.ts src/commands/skills-references.test.ts src/gdskills/context-resolver.vantage.test.ts src/gdskills/project-skills-registry-kind.test.ts src/gdskills/references-config.test.ts src/gdskills/references-section.test.ts src/gdskills/project-context-status.test.ts src/gdskills/project-context-config.test.ts src/gdskills/bundled-project-context.test.ts src/mcp/metaproject-tools.test.ts src/harness/tool/metaproject-adapter.test.ts src/gdskills/rule-references.test.ts",
+      "kind": "behavior",
+      "line": 180,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1144
+    },
+    {
+      "id": "w3-M-05",
+      "file": "src/tui/project-context-inspector.ts",
+      "anchor": "return cardSafe(parts.join(\" · \"));",
+      "replacement": "return parts.join(\" · \");",
+      "command": "bun test src/tui/project-context-inspector.test.ts src/gdskills/import-skills-rules.test.ts src/gdskills/context-resolver.test.ts src/gdskills/import-skills-update.test.ts src/gdskills/conditional-reads.e2e.test.ts src/commands/skills-references.test.ts src/gdskills/context-resolver.vantage.test.ts src/gdskills/project-skills-registry-kind.test.ts src/gdskills/references-config.test.ts src/gdskills/references-section.test.ts src/gdskills/project-context-status.test.ts src/gdskills/project-context-config.test.ts src/gdskills/bundled-project-context.test.ts src/mcp/metaproject-tools.test.ts src/harness/tool/metaproject-adapter.test.ts src/gdskills/rule-references.test.ts",
+      "kind": "behavior",
+      "line": 105,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1091
+    },
+    {
+      "id": "w3-M-06",
+      "file": "src/tui/project-context-inspector.ts",
+      "anchor": "stylePlanText(otui, lines.map(cardSafe).join(\"\\n\"), \"plain\")",
+      "replacement": "stylePlanText(otui, lines.join(\"\\n\"), \"plain\")",
+      "command": "bun test src/tui/project-context-inspector.test.ts src/gdskills/import-skills-rules.test.ts src/gdskills/context-resolver.test.ts src/gdskills/import-skills-update.test.ts src/gdskills/conditional-reads.e2e.test.ts src/commands/skills-references.test.ts src/gdskills/context-resolver.vantage.test.ts src/gdskills/project-skills-registry-kind.test.ts src/gdskills/references-config.test.ts src/gdskills/references-section.test.ts src/gdskills/project-context-status.test.ts src/gdskills/project-context-config.test.ts src/gdskills/bundled-project-context.test.ts src/mcp/metaproject-tools.test.ts src/harness/tool/metaproject-adapter.test.ts src/gdskills/rule-references.test.ts",
+      "kind": "behavior",
+      "line": 239,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1148
+    },
+    {
+      "id": "w3-M-07",
+      "file": "src/gdskills/context-resolver.ts",
+      "anchor": "taskTextLength: Array.from(options.taskText!).length",
+      "replacement": "taskTextLength: options.taskText!.length",
+      "command": "bun test src/tui/project-context-inspector.test.ts src/gdskills/import-skills-rules.test.ts src/gdskills/context-resolver.test.ts src/gdskills/import-skills-update.test.ts src/gdskills/conditional-reads.e2e.test.ts src/commands/skills-references.test.ts src/gdskills/context-resolver.vantage.test.ts src/gdskills/project-skills-registry-kind.test.ts src/gdskills/references-config.test.ts src/gdskills/references-section.test.ts src/gdskills/project-context-status.test.ts src/gdskills/project-context-config.test.ts src/gdskills/bundled-project-context.test.ts src/mcp/metaproject-tools.test.ts src/harness/tool/metaproject-adapter.test.ts src/gdskills/rule-references.test.ts",
+      "kind": "behavior",
+      "line": 535,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1160
+    },
+    {
+      "id": "w3-M-08",
+      "file": "src/gdskills/context-resolver.ts",
+      "anchor": "{ taskTextLength: Array.from(options.taskText!).length,",
+      "replacement": "{ taskText: task.text, taskTextLength: Array.from(options.taskText!).length,",
+      "command": "bun test src/tui/project-context-inspector.test.ts src/gdskills/import-skills-rules.test.ts src/gdskills/context-resolver.test.ts src/gdskills/import-skills-update.test.ts src/gdskills/conditional-reads.e2e.test.ts src/commands/skills-references.test.ts src/gdskills/context-resolver.vantage.test.ts src/gdskills/project-skills-registry-kind.test.ts src/gdskills/references-config.test.ts src/gdskills/references-section.test.ts src/gdskills/project-context-status.test.ts src/gdskills/project-context-config.test.ts src/gdskills/bundled-project-context.test.ts src/mcp/metaproject-tools.test.ts src/harness/tool/metaproject-adapter.test.ts src/gdskills/rule-references.test.ts",
+      "kind": "behavior",
+      "line": 535,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1149
+    },
+    {
+      "id": "w3-M-09",
+      "file": "src/gdskills/context-resolver.ts",
+      "anchor": "options.taskText !== undefined && options.taskText.trim() !== \"\" ? truncateTaskText(options.taskText) : undefined",
+      "replacement": "options.taskText !== undefined ? truncateTaskText(options.taskText) : undefined",
+      "command": "bun test src/tui/project-context-inspector.test.ts src/gdskills/import-skills-rules.test.ts src/gdskills/context-resolver.test.ts src/gdskills/import-skills-update.test.ts src/gdskills/conditional-reads.e2e.test.ts src/commands/skills-references.test.ts src/gdskills/context-resolver.vantage.test.ts src/gdskills/project-skills-registry-kind.test.ts src/gdskills/references-config.test.ts src/gdskills/references-section.test.ts src/gdskills/project-context-status.test.ts src/gdskills/project-context-config.test.ts src/gdskills/bundled-project-context.test.ts src/mcp/metaproject-tools.test.ts src/harness/tool/metaproject-adapter.test.ts src/gdskills/rule-references.test.ts",
+      "kind": "behavior",
+      "line": 531,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1129
+    },
+    {
+      "id": "main-M-10",
+      "file": "src/gdskills/reference-entries.ts",
+      "anchor": "const before = WORD_CHAR.test(chars[0] ?? \"\") ? \"(?<![\\\\p{L}\\\\p{N}_])\" : \"\";",
+      "replacement": "const before = \"(?<![\\\\p{L}\\\\p{N}_])\";",
+      "command": "bun test src/tui/project-context-inspector.test.ts src/gdskills/import-skills-rules.test.ts src/gdskills/context-resolver.test.ts src/gdskills/import-skills-update.test.ts src/gdskills/conditional-reads.e2e.test.ts src/commands/skills-references.test.ts src/gdskills/context-resolver.vantage.test.ts src/gdskills/project-skills-registry-kind.test.ts src/gdskills/references-config.test.ts src/gdskills/references-section.test.ts src/gdskills/project-context-status.test.ts src/gdskills/project-context-config.test.ts src/gdskills/bundled-project-context.test.ts src/mcp/metaproject-tools.test.ts src/harness/tool/metaproject-adapter.test.ts src/gdskills/rule-references.test.ts",
+      "kind": "behavior",
+      "line": 51,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1104
+    },
+    {
+      "id": "main-M-11",
+      "file": "src/gdskills/reference-entries.ts",
+      "anchor": "const after = WORD_CHAR.test(chars[chars.length - 1] ?? \"\") ? \"(?![\\\\p{L}\\\\p{N}_])\" : \"\";",
+      "replacement": "const after = \"(?![\\\\p{L}\\\\p{N}_])\";",
+      "command": "bun test src/tui/project-context-inspector.test.ts src/gdskills/import-skills-rules.test.ts src/gdskills/context-resolver.test.ts src/gdskills/import-skills-update.test.ts src/gdskills/conditional-reads.e2e.test.ts src/commands/skills-references.test.ts src/gdskills/context-resolver.vantage.test.ts src/gdskills/project-skills-registry-kind.test.ts src/gdskills/references-config.test.ts src/gdskills/references-section.test.ts src/gdskills/project-context-status.test.ts src/gdskills/project-context-config.test.ts src/gdskills/bundled-project-context.test.ts src/mcp/metaproject-tools.test.ts src/harness/tool/metaproject-adapter.test.ts src/gdskills/rule-references.test.ts",
+      "kind": "behavior",
+      "line": 52,
+      "status": "survived",
+      "exitCode": 0,
+      "ms": 1143
+    },
+    {
+      "id": "main-M-12",
+      "file": "src/gdskills/references-check.ts",
+      "anchor": ".filter((entry) => entry.mode === \"link\" && !copies.includes(entry.ref))",
+      "replacement": ".filter(() => false)",
+      "command": "bun test src/tui/project-context-inspector.test.ts src/gdskills/import-skills-rules.test.ts src/gdskills/context-resolver.test.ts src/gdskills/import-skills-update.test.ts src/gdskills/conditional-reads.e2e.test.ts src/commands/skills-references.test.ts src/gdskills/context-resolver.vantage.test.ts src/gdskills/project-skills-registry-kind.test.ts src/gdskills/references-config.test.ts src/gdskills/references-section.test.ts src/gdskills/project-context-status.test.ts src/gdskills/project-context-config.test.ts src/gdskills/bundled-project-context.test.ts src/mcp/metaproject-tools.test.ts src/harness/tool/metaproject-adapter.test.ts src/gdskills/rule-references.test.ts",
+      "kind": "behavior",
+      "line": 99,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 1086
+    }
+  ],
+  "totals": {
+    "killed": 6,
+    "survived": 6,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

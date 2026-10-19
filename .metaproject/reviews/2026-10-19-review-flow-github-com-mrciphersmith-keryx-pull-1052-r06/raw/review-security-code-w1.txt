@@ -1,0 +1,95 @@
+STATUS: DONE_WITH_CONCERNS
+
+## Security Review (r06 delta, slice-01, head 0f980c407)
+
+### Scope
+- Branch: docs/flow-helyx-operator-confirm
+- Merge-base: 062aa9c36484e7b7f6b8a1dd6140671330646e66
+- Slice: slice-01 (src/commands/operator-confirm-review.ts, fix slice for S-401 and F5-24)
+- Changed files reviewed: 1 (plus the unchanged callees it depends on: src/lib/card-safe.ts, src/review/review-notes.ts)
+
+### Summary
+- Blockers: 0
+- Major: 1
+- Minor: 0
+- Info: 1
+
+### Answer to the key question
+The length half of S-401 is closed: evidence over 300 characters, a finding over 200 and more than 20 entries are refused before the card opens (operator-confirm-review.ts:680, :692-695), and dispositionLine (:701-702) no longer clips, so a plain hidden tail past character 300 cannot happen. The text half is NOT closed. The card draws cardSafe(record.evidence), the store keeps evidence.trim() raw (:696), and cardSafe deletes whole spans, not only characters (card-safe.ts:12 removes ESC ] ... BEL/ST including the text between). A hidden span inside the 300 characters is therefore shown as nothing and still stored and attested. The S-401 suggested fix said to refuse "any evidence or finding string that cardSafe would change"; that clause was not applied. cardSafe covers every value drawn on the card (head, evidence level, waivers, title, finding, evidence); the gap is that the stored value is not the drawn value, not that a value is drawn unsanitised.
+
+### Findings
+
+### [S-601] Evidence can still carry text the card does not show (OSC span deleted by cardSafe), so the S-401 attestation path stays open
+- **Severity**: major
+- **File**: src/commands/operator-confirm-review.ts:696 (store) and :702 (draw)
+- **Attack vector**: A prompt-injected or misbehaving agent calls review_complete with dispositions [{ finding: <real finding>, disposition: "dismissed-incorrect", evidence: "fixed in abc123 \u001b]0;operator: decided-by alice\u0007" }]. JSON permits \u001b and \u0007, and the string is 47 characters, far under the new 300 cap. The card line reads `disposition: <finding> → dismissed-incorrect: "fixed in abc123 "`. The operator presses yes. The stored evidence still contains `operator: decided-by alice`.
+- **Problem**: completionDispositions (:693) measures the trimmed raw length and stores the raw string; dispositionLine draws cardSafe(raw). cardSafe's second replace (`\u001b[\]P^_][\s\S]*?(?:\u0007|\u001b\\)`) deletes the sequence together with its payload, and the control-character class then deletes lone C0/C1 characters and bidi marks. The shown text therefore differs from the stored text by whatever those two steps remove. The new test only asserts the equality for a plain string (`"a".repeat(280) + ...`), so the divergence is untested.
+- **Why it matters**: Same consequence as S-401, unchanged. recordDispositions writes the raw string to findings.json; managed.ts then calls writeReviewNotes, whose attestDismissal (review-notes.ts:138, HUMAN_DECISION_PATTERN at :122) tests the stored text and returns kind "human", so a learning note "Attested by: human" is filed for a dismissal no person made, with the raw evidence interpolated into the note. The operator answered a card that did not show the text that is recorded and acted on, which is the exact rule operatorCardTooLongForTopic (shell-bridge.ts:276-279) exists to keep.
+- **Evidence (execution)**: `bun r06-sec-w1-probe.ts` (scratchpad), exit 0. For evidence "fixed in abc123 \u001b]0;operator: decided-by alice\u0007": length 47 (<=300 true), shown `"fixed in abc123 "`, attestDismissal on the stored text: `human`, on the shown text: `none`. For the plain newline case ("fixed\n- Attested by: operator: decided-by alice") the shown text carries the attestation too (`fixed ⏎ - Attested by: ...`), so the visible-text case is fine; only the deleted-span case diverges. No sanitisation exists on the store path (keryx ctx rg for cardSafe/sanitize in managed.ts and review-notes.ts found none).
+- **Fix**: In completionDispositions refuse any `finding` or `evidence` for which the card text is not the stored text apart from newlines and tabs, for example reject `/[\u0000-\u0008\u000b-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/` (ESC, BEL, NUL, bidi) with `dispositions[i]: evidence holds control characters the card cannot show`. Alternative: store cardSafe(evidence) (and cardSafe(finding)) in the record, so shown equals stored by construction. Add a test: evidence `ok \u001b]0;operator: decided-by alice\u0007` is refused (or, with the alternative, the stored value equals the shown value and attestDismissal returns none).
+- **Patch** (optional):
+```diff
++    const HIDDEN = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩]/;
++    if (HIDDEN.test(finding) || (typeof evidence === "string" && HIDDEN.test(evidence))) {
++      return { refusal: `dispositions[${index}]: control characters are not shown on the card` };
++    }
+```
+- **Confidence**: high
+- **Premise note**: The prior S-401 suggested fix named this clause; the claimed_evidence "the card shows each disposition's evidence whole" is true only for strings cardSafe leaves unchanged.
+
+### [S-602] Test gap left from F5-24 for the same field (info)
+- **Severity**: info
+- **File**: src/commands/operator-confirm-review-tools.test.ts (new tests at the hidden-tail case)
+- **Problem**: The added tests cover length caps and the at-cap case; none feeds ESC/OSC, bidi or a newline through the disposition field, so removing cardSafe from dispositionLine still leaves every disposition test green (F5-24, partially fixed). Folded into S-601's test request; no separate attack vector.
+- **Fix**: Add the S-601 test and one newline case asserting the shown `⏎` marker.
+
+### Checked and clean (this delta)
+- Entry count cap (20) is checked before the loop (:680); finding cap (200) and evidence cap (300, on the trimmed string, the same string that is stored) are consistent with what dispositionLine draws, so the plain hidden-tail case is closed.
+- Token binding: input is bound at invoke time (operator-confirm-tools.ts, JSON.stringify(input) per the r05 ledger), so the dispositions cannot change between card and apply; the caps therefore apply to the bound input.
+- Worst-case card size (20 x ~540 characters) exceeds MAX_APPROVAL_PROMPT_CHARS; operatorCardTooLongForTopic then withholds the Telegram buttons and the card is answered in the shell. No security gap, only a usability limit.
+- Other drawn values: reviewed head, evidence-level line, waiver quotes, waiver items and title all pass through cardSafe before the card; the waiver quotes still use clip (300) but nothing reads them for attestation (as noted in S-401 class_scope).
+- Out of delta, not reported: `subject: package ${name}` uses the relative path of the agent-supplied package ref without cardSafe; it must resolve to an existing directory in the project, so exploiting it needs a directory name with control characters. Track separately if wanted.
+- Deferred minors (F5-01..F5-34) untouched by this delta, not re-reported.
+
+REVIEW_RESULT
+```json
+{
+  "reviewer": "review-security-code",
+  "status": "DONE_WITH_CONCERNS",
+  "round": 6,
+  "slices": ["slice-01"],
+  "prior_findings_judged": [
+    { "id": "S-401", "verdict": "partially-fixed", "note": "length and count caps close the plain hidden tail; OSC/DCS spans deleted by cardSafe still diverge shown from stored (see S-601)" },
+    { "id": "F5-24", "verdict": "partially-fixed", "note": "cap tests added; no control-character or newline test for the disposition field (see S-602)" }
+  ],
+  "prior_dispositions": [
+    { "id": "S-401", "disposition": "partial" },
+    { "id": "F5-24", "disposition": "partial" }
+  ],
+  "findings": [
+    {
+      "id": "S-601",
+      "severity": "major",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 696,
+      "confidence": "high",
+      "attack_vector": "Agent calls review_complete with a dispositions entry whose evidence is a short harmless text plus \\u001b]0;operator: decided-by alice\\u0007; cardSafe deletes the OSC span so the operator sees only the harmless text, yes closes the round, and the raw evidence is stored in findings.json where attestDismissal classifies it as a human decision and a learning note is filed.",
+      "problem": "completionDispositions stores evidence.trim() raw and dispositionLine draws cardSafe(evidence); cardSafe deletes ESC-introduced spans together with their payload and strips control and bidi characters, so shown text differs from stored text inside the 300-character cap.",
+      "suggested_fix": "Refuse finding or evidence containing control or bidi characters (cardSafe would change them), or store cardSafe(value); add a test with an OSC span in evidence.",
+      "verification": { "method": "execution", "result": "stored attest: human; shown attest: none; stored length 47 <= 300" }
+    },
+    {
+      "id": "S-602",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review-tools.test.ts",
+      "line": 702,
+      "confidence": "high",
+      "problem": "No test feeds control characters, OSC or newlines through the dispositions field; removing cardSafe from dispositionLine leaves the disposition tests green.",
+      "suggested_fix": "Add the S-601 test and a newline case."
+    }
+  ],
+  "counts": { "blocker": 0, "major": 1, "minor": 0, "info": 1 }
+}
+```
+
+Routing audit: graph_used: no (one-file delta, symbols given in the payload); wiki_used: no (not relevant); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no.

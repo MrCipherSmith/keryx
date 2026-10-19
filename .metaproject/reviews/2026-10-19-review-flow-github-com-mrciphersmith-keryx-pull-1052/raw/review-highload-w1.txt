@@ -1,0 +1,66 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "slices": ["slice-01"],
+  "summary": "Slice-01 is docs only. The operational claims about the allow-list, single use, token spent on refusal, 1-hour TTL from card build, the shell clock for pressedAt and first-answer-wins were checked against the code and hold. Two minor doc claims go beyond what the code guarantees (autonomous run 'stops at the floor'; restart behaviour of the in-process token not stated) and one info note on a TUI label. No blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/docs/guides/autonomous-review.md",
+      "line": 35,
+      "quote": "- **The review acts (`review_confirm_plan`, `review_decide_premise`, `review_waive_readiness`, `review_waive_coverage`, `review_complete`).** These are cards a person answers, in the shell or in the Telegram topic (one allowed user, once, within an hour; the record keeps `pressedBy` and `pressedAt`). An autonomous run has nobody to answer them: it stops at the floor and never tells you to run the terminal command. The terminal commands remain the fallback when you finish the package yourself.",
+      "problem": "The doc says an autonomous run 'stops at the floor' when it meets a review-act card. The runner sets status `floor` (exit 3) only when a tool result matches isFloorRefusal, and the card denial text does not match it.",
+      "evidence": "src/commands/agent.ts (~6094-6125) denies a card with 'not confirmed by the operator; nothing was written or installed'. src/review/autonomous-profile.ts (171-179) FLOOR_REFUSAL_PATTERNS only match 'not approved by the user; not executed' and the REFUSED_EARLIER text ('refused earlier: choose another path'), the latter only when the same call is repeated. src/review/autonomous-progress.ts (65-73) counts floorRefusals only via isFloorRefusal; src/review/autonomous-run.ts (406-433) returns `floor` only with floorRefusals.length > 0 and an unclosed package, otherwise `incomplete` (exit 2). The review-orchestrator SKILL table says 'refused: recorded Not run', which is a third behaviour.",
+      "impact": "Failure mode: an unattended run that hits a card on its first attempt ends as `incomplete` (exit 2) rather than `floor` (exit 3). A CI or scheduler that branches on exit 3 to mean 'needs a human' will misclassify it and may retry the whole run, spending a fresh review each time. The text that the run 'never tells you to run the terminal command' is not tested by this slice.",
+      "suggested_fix": "Either soften the sentence ('it cannot record the act; it ends as floor or incomplete') or make the card denial text match FLOOR_REFUSAL_PATTERNS so that a first refusal also yields `floor`. Align the SKILL 'recorded Not run' wording with whichever is chosen.",
+      "confidence": "medium",
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "line": 112,
+      "quote": "- **Message order.** Telegram can drop, delay or reorder messages. A dropped card leaves the shell waiting (the dock stays open); a delayed press can arrive after the question was answered or has aged out, and is refused by the token rules above. Nothing in the answer proves the operator saw the card text last shown, only that this token was pressed.",
+      "problem": "The section on ordering and delay does not say that the card token lives only in the shell process memory (the `pending` Map in operator-confirm-tools.ts) and that the TUI view of answered cards (OperatorConfirmationLog, last 5) is also in memory only. A shell restart inside the hour drops every open card, while the Telegram message still shows live buttons.",
+      "evidence": "src/commands/operator-confirm-tools.ts: tokens are randomUUID keys in an in-process `pending` Map, deleted at first use and never persisted. src/tui/operator-confirmations.ts: in-memory only, ANSWERED_CARDS_KEPT = 5. The flow-299 `confirm-token.json` (10 min TTL) is a separate mechanism and does not carry the card. Late presses after a restart or a serve-side expiry are handled by serve and the waiter map (src/remote/shell-bridge.ts askApproval 958-996, src/remote/client.ts askApproval 439-503), not by keryx token rules.",
+      "impact": "Failure mode: after a crash or restart the operator presses an old card; the press fails closed (nothing is recorded), so there is no integrity problem, but the doc's 'refused by the token rules above' suggests a keryx token check explains it, and the 1-hour window implies the card stays answerable for an hour. The operator gets no reason and may press repeatedly or assume the answer was recorded.",
+      "suggested_fix": "Add one sentence: the token and the TUI card view are process memory; a restart drops pending cards and a later press is refused with no record; ask again. Say that a late press is refused by serve's expiry or resolved state as well as by the token.",
+      "confidence": "medium",
+      "reviewer": "review-highload"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/tui/operator-confirmations.ts",
+      "line": 105,
+      "quote": "  const token = left > 0 ? `${age(left)} left of the 1-hour token` : \"token expired, ask again\";",
+      "problem": "The pending line prints 'token expired, ask again' once 60 minutes have passed for every card, but the 1-hour TTL is enforced only for a remote-card answer. A tui-card has no TTL and can still be answered in the dock. The answered view can also show 'pressed by' for an answer that the record later refuses (the view is written before the invoke-time checks).",
+      "evidence": "src/commands/operator-confirm-tools.ts checks `now().getTime() - entry.issuedAt > REMOTE_CARD_TTL_MS` only in the remote branch. src/tui/tui-shell.ts (6040-6170) calls operatorCards.answer(...) with the hub fromId before the invoke-time allow-list check.",
+      "impact": "Failure mode: display only. An operator may think a dock card is dead and re-issue it, producing a second card for the same question. No data integrity effect.",
+      "suggested_fix": "Show the expiry text only for mirrored cards, or word it 'Telegram token expired'. Out of scope for this docs slice; note for the code slices.",
+      "confidence": "medium",
+      "reviewer": "review-highload"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 },
+  "follow_ups": [
+    "Code slices: check that the answered view in the TUI is written only after the invoke-time checks pass, or label it 'pressed' rather than 'accepted'."
+  ]
+}
+```
+
+## High-Load Review (slice-01, docs only)
+
+Load profile: not provided; the flow is operator-paced, so volume is low and the lens is ordering, retry and restart behaviour.
+
+Checked and clean against the code: allow-list check (`allowed === undefined || !allowed.includes(pressedBy)` fails closed, a binding with none refuses every remote answer), single use (token deleted before the remote checks, so each refusal leaves it spent), 1-hour TTL measured from card build (`REMOTE_CARD_TTL_MS`, `issuedAt`), `pressedAt` from the shell clock, `pressedBy`/`pressedAt` only for `remote-card`, first-answer-wins race between dock and topic (`raceApproval`; topic silence never ends the dock), fail-closed paths in askApproval on both client and shell-bridge, and the CHANGELOG 0.3.124 sentence 'a replayed, expired, foreign or text-only answer changes nothing'.
+
+Findings: F-001 (minor) the 'stops at the floor' claim does not hold for a first card refusal; F-002 (minor) the restart lifetime of the in-process token is not documented; F-003 (info) the TUI 'token expired' label for a tui-card.
+
+Stats: blocker 0 | major 0 | minor 2 | info 1. AC9 and AC10 not treated as defects.

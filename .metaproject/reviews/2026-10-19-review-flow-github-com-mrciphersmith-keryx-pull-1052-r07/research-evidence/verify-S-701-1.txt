@@ -1,0 +1,48 @@
+# keryx review verify-run
+finding: S-701
+command: bun /tmp/claude-1000/-home-altsay-keryx/0db7c628-f351-4bbf-bbb9-4cac752e7d4d/scratchpad/r07-probe-shownbody.ts
+cwd: /home/altsay/keryx/.worktrees/helyx-confirm
+time: 2026-10-19T07:36:05.873Z
+exit: 1
+
+--- stdout ---
+{
+ "zeroWidthSpace": {
+  "cardAsked": true,
+  "cardSaysShownWhole": true,
+  "storedHoldsHiddenChar": true
+ },
+ "tagBlockInstruction": {
+  "cardAsked": true,
+  "cardSaysShownWhole": true,
+  "storedHoldsHiddenChar": true
+ },
+ "bom": {
+  "cardAsked": true,
+  "cardSaysShownWhole": true,
+  "storedHoldsHiddenChar": true
+ },
+ "lineSeparator": {
+  "cardAsked": true,
+  "cardSaysShownWhole": true,
+  "storedHoldsHiddenChar": true
+ },
+ "paragraphSeparator": {
+  "cardAsked": true,
+  "cardSaysShownWhole": true,
+  "storedHoldsHiddenChar": true
+ },
+ "wordJoiner": {
+  "cardAsked": true,
+  "cardSaysShownWhole": true,
+  "storedHoldsHiddenChar": true
+ },
+ "softHyphen": {
+  "cardAsked": true,
+  "cardSaysShownWhole": true,
+  "storedHoldsHiddenChar": true
+ }
+}
+DEFECT REPRODUCED: 7 of 7 hidden-character bodies got a card that claims the body is shown whole
+--- stderr ---
+

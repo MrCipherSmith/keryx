@@ -1,0 +1,135 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json REVIEW_RESULT
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-style",
+  "summary": "Slice 02 (docs, PRD, review-operator.ts host-question path, its test file). Names, imports and comment tone are consistent with the file. One major: three docs and the PRD state a refusal (free text is not a decision; for confirm-plan, waive-mutation and override-reviewers 'a yes') that the code does not perform, so the comments describe behaviour that is absent. The rest is minor/info: recordHostQuestion repeats the terminal path and is long, narrowing casts, an argument-stripping filter repeated three times in the test file where the file's own argsFor override already does it, a tautological test, and small literal/vocabulary repeats.",
+  "findings": [
+    {
+      "id": "STY-W2-001",
+      "severity": "major",
+      "file": "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md",
+      "line": 136,
+      "quote": "What the path refuses, with nothing recorded: an answer that is not one of the verb's options (`uphold` or `dismiss` for `decide-premise`; for the others a yes), a decline,",
+      "problem": "The docs describe a refusal the code does not perform. For confirm-plan, waive-mutation and override-reviewers nothing checks that --answer-text is a yes: recordHostQuestion only calls refuseDecline(answerText, command), which refuses an empty text or one whose FIRST word is in LEAD_DECLINE, and --answer is optional and only compared when given. Anything else is recorded as the operator's yes. Same claim in limitations.md:219 ('free text is not a decision'), cli-reference.md:4926 ('Nothing is recorded ... for an answer that is not one of the verb's options (free text is not a decision)') and the PRD (prd.md:24, 'The answer must be one of the options the question offered for that verb ... free text is not a decision', Q2 of poll 227). Distinct from the wave-1 negation finding ('don't waive it'): this is a text that is neither yes nor no.",
+      "impact": "A reader auditing records trusts the stated gate. Input: `keryx review waive-mutation --package P --reason r --answered-by other:1 --answer-text \"what does that mean?\" --question-text \"Waive the mutation pass?\"` (no TTY, no --answer) exits 0 and writes a mutation-waiver with confirmedVia host-question and quote 'what does that mean?'. The same for `confirm-plan --answer-text \"maybe later\" --question-text \"Run 12 reviewer dispatches (30-45 min)?\"` with the plan's real numbers. The docs say both are refused. The only affirmative-answer test (AC3 'an --answer that is not one of the verb's options') feeds --answer, never a non-yes --answer-text, so nothing pins the claim.",
+      "suggested_fix": "Either make the docs true or the code true. Docs: say 'a decline, judged by the first word of --answer-text, and for decide-premise an answer that does not name the chosen option'; drop 'free text is not a decision' and 'for the others a yes'. Code: for the three verbs require an affirmative word in --answer-text (yes, да, waive, override, ...) or require --answer <confirm option>, and add a test with answer-text 'maybe later' that expects a refusal.",
+      "evidence": "src/commands/review-operator.ts:302-307 refuseDecline (first word only) and :355,:361 (--answer optional for the three verbs); call sites :385, :395, :411. Test file has no case with a non-yes, non-decline --answer-text for the three verbs (AC3 'a decline' list: n, N, no, No., no, nope, нет, 'no, not now' are all lead-declines).",
+      "confidence": "high",
+      "reviewer": "review-style",
+      "class_scope": {
+        "sites": [
+          "docs/decisions/keryx-harness/TM-04-operator-confirmation-cards.md:136",
+          "docs/docs/limitations.md:219",
+          "docs/docs/cli-reference.md:4926",
+          "docs/requirements/keryx-card-any-host/prd.md:24"
+        ],
+        "enumeration_method": "keryx ctx rg --hidden --all 'free text is not a decision|for the others a yes' docs src .metaproject/skills: 4 matches in 4 files, all listed; the command help in src/commands/review-operator.ts says 'refused ... for a decline (n, no, an empty answer)' and is accurate"
+      }
+    },
+    {
+      "id": "STY-W2-002",
+      "severity": "minor",
+      "file": "src/commands/review-operator.ts",
+      "line": 343,
+      "quote": "async function recordHostQuestion(",
+      "problem": "One 95-line function with about 15 decision points handles all four verbs, and re-implements pieces of runOperatorCommand: the kind/--selected/subject lines (lines 214-218 vs 407-410, identical), the missing --reason throw (189 vs 373), the missing --finding check. The deferred write is held in a variable named `recorded` that is a function (it reads like a result or a flag), and `line` is the thunk's message.",
+      "impact": "A change to how --selected is parsed or what subject binds (the M4 security binding at line 217) must now be made in two places; the next edit to one path silently diverges from the other. A reader has to track `premiseAnswer`, `reason` and `recorded` across a 70-line if/else to know what is written.",
+      "suggested_fix": "Extract the shared pieces (`waiverSubject(packageDir, command, own)` returning {kind, selected, subject}; `requireReason(own, command)` returning the trimmed reason) and use them from both paths. Split recordHostQuestion into a per-verb prepare step returning `{ commit: () => Promise<string> }` and a thin driver that runs commit then the journal write; rename `recorded` to `commit`.",
+      "evidence": "Diff lines 693-740 (terminal path, unchanged) against 918-926 (host path): same `kind`, `selectedArg`, `selected`, `operatorDecisionSubject(...)` statements.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-W2-003",
+      "severity": "minor",
+      "file": "src/commands/review-operator.ts",
+      "line": 396,
+      "quote": "refuseOtherChoice(answerText, premiseAnswer as \"uphold\" | \"dismiss\");",
+      "problem": "Narrowing is done with `as` casts instead of by the type system: `premiseAnswer as \"uphold\" | \"dismiss\"` at lines 396 and 401, and `(reason as string).trim()` at lines 401 and 413. `premiseAnswer` is a `let` that is only assigned inside the decide-premise branch, and `reason` is checked at 373 with a condition that includes `command !== \"confirm-plan\"`, so the compiler cannot narrow either.",
+      "impact": "If the guard at 358-367 or 373 is later edited (for example the reason check made verb-specific), the casts hide the resulting undefined: `(reason as string).trim()` throws a TypeError after earlier writes were prepared, and the casts give the reader no signal that the invariant lives elsewhere.",
+      "suggested_fix": "Compute once `const why = reason?.trim()` and check `if (command !== \"confirm-plan\" && !why) throw ...` inside the branches that use it, or return a typed value from a `requireReason` helper; make `premiseAnswer` a `const` from a function `parsePremiseAnswer(answerArg)` that returns the narrowed union or throws.",
+      "evidence": "src/commands/review-operator.ts:357-360, 372-373, 396, 401, 413.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-W2-004",
+      "severity": "minor",
+      "file": "src/commands/review-host-question.test.ts",
+      "line": 293,
+      "quote": "const args = (await argsFor(verb, dir)).filter((_, i, all) => ![\"--answered-by\", \"--answer-text\", \"--question-text\"].includes(all[i - 1] ?? \"\") && !",
+      "problem": "The same 150-character filter that strips the three host-question flags and their values is pasted three times (lines 293, 456, 489). The same file already has the cleaner mechanism: `argsFor(verb, dir, { \"--answered-by\": undefined, \"--answer-text\": undefined, \"--question-text\": undefined })`, used at the AC1 equals-form test.",
+      "impact": "The filter drops an argument whenever the PREVIOUS token is one of the flags, so a flag value that is itself `--...` or a future fourth host flag would be missed in only the copies someone remembers to update; as written it is also hard to read at a glance.",
+      "suggested_fix": "Add `const NO_HOST_FLAGS = { \"--answered-by\": undefined, \"--answer-text\": undefined, \"--question-text\": undefined } as const;` and call `argsFor(verb, dir, NO_HOST_FLAGS)` at the three sites.",
+      "evidence": "Sites: test file lines 293, 456, 489 (keryx ctx rg 'filter\\(\\(_, i, all\\)' src/commands/review-host-question.test.ts: three matches).",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-W2-005",
+      "severity": "info",
+      "file": "src/commands/review-host-question.test.ts",
+      "line": 496,
+      "quote": "test(\"the verbs keep their names\", () => {\n    const names: OperatorCommand[] = [...FOUR];\n    expect(names).toHaveLength(4);",
+      "problem": "The test asserts that a copy of a four-element constant has four elements. It cannot fail unless FOUR is edited in the same file, and it does not read OPERATOR_COMMANDS, so the title ('the verbs keep their names') promises a check it does not make. Its only effect is to keep the `OperatorCommand` type import in use.",
+      "impact": "Looks like coverage of the verb list; it is none. If a verb is renamed in OPERATOR_COMMANDS the test still passes. Settling input: rename 'override-reviewers' in src/commands/review-operator.ts and this test stays green.",
+      "suggested_fix": "Assert against the source of truth: `expect(OPERATOR_COMMANDS.filter((c) => c !== \"verify-run\")).toEqual([...FOUR])` (import OPERATOR_COMMANDS), or delete the test and the unused type import.",
+      "evidence": "Test file lines 496-499; FOUR is defined at line 29 of the same file.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-W2-006",
+      "severity": "info",
+      "file": "src/commands/review-operator.ts",
+      "line": 281,
+      "quote": "const NEGATIONS = new Set([\"not\", \"never\", \"no\", \"dont\", \"don\", \"t\", \"nt\", \"не\", \"нет\"]);",
+      "problem": "Two readability points on the word lists. (1) NEGATIONS holds `don`, `t` and `nt` with no comment: they are fragments left by wordsOf splitting \"don't\"/\"can't\" at the apostrophe, which a reader cannot guess, and a bare `t` looks like a typo. (2) `not`, `never`, `no`, `не`, `нет` appear in both NEGATIONS and LEAD_DECLINE, two hand-kept lists of nearly the same vocabulary.",
+      "impact": "A maintainer adding a language or word has to know to update both sets and why `t` is there; removing `t` as 'noise' would silently stop `don't dismiss` from being refused.",
+      "suggested_fix": "Add a one-line comment above NEGATIONS (\"`don`, `t`, `nt` are what wordsOf leaves of don't, can't, isn't\") and build LEAD_DECLINE from a shared base: `const NO_WORDS = [\"no\", \"not\", \"never\", \"нет\", \"не\"]`.",
+      "evidence": "src/commands/review-operator.ts:274, 281, 283.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STY-W2-007",
+      "severity": "info",
+      "file": "src/commands/review-operator.ts",
+      "line": 65,
+      "quote": "<source> is claude-code, codex, keryx-shell, helyx-poll or other; <ref> is the host's own id for the question",
+      "problem": "Repeated literals that already have a single source. The sources list is typed by hand in four help strings (lines 65, 78, 92, 108) while HOST_QUESTION_SOURCES exists and is interpolated in the parseAnsweredBy error at line 289. The string \"host-question\" is spelled out in the three writers (387, 401, 413), in the `where` label (370) and as `salt` (431), next to the `OperatorDecisionVia` union that already names it. The `.slice(0, 80)` / `.slice(0, 40)` truncations in error messages (290, 305, 365) are unnamed.",
+      "impact": "Adding a source to HOST_QUESTION_SOURCES leaves four help texts that name the old list; the error message and the help then disagree.",
+      "suggested_fix": "Interpolate `${HOST_QUESTION_SOURCES.join(\", \")}` in the help strings, add `const HOST_VIA = \"host-question\" as const` (or reuse an exported one from review/types) and `const SHOWN_CHARS = 80`.",
+      "evidence": "src/commands/review-operator.ts:65, 78, 92, 108 (help), 289 (interpolated), 370, 387, 401, 413, 431, 290, 305, 365.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 3,
+    "info": 3
+  },
+  "slices": ["slice-02"]
+}
+```
+
+# Style Review Report (wave 2, slice-02)
+
+## Verdict: REQUEST_CHANGES (one major, a documentation claim the code does not meet)
+
+## Summary
+The new code reads cleanly: names follow the file's conventions, imports are ordered, comments say why. The one major is that TM-04 6b, the CLI reference, the limitations page and the PRD all say a non-option answer is refused ("free text is not a decision", "for the others a yes"), while the three non-premise verbs only refuse an empty or lead-word-decline text. The remaining items are maintainability: `recordHostQuestion` duplicates the terminal path and is long, narrowing casts, a three-times pasted argument filter in the test, a tautological test and small literal repeats.
+
+## Not repeated (wave 1)
+Stale terminal wording at flow-orchestrator SKILL:440 / review-orchestrator SKILL:124; confirm-plan question must carry plan numbers; first-word-only decline ("don't waive it"); schema if/then coupling; ask_user/keryx-shell source unreachable from shell_exec; AC12 outside the flow gate; AC7 negative assertion.
+
+## Positive notes
+- Commit-last structure (all refusals before the first write) is stated in a comment and matches the code.
+- The journal write failing is a warning, not a lost record, and the comment gives the reason.
+- Help text for each verb names the card as the stronger path and lists the refusals.
+
+Routing audit: graph_used no (slice already supplied; not-relevant); wiki_used no (not-relevant); ctx_used yes (keryx ctx rg, three greps); raw_rg_used no.
