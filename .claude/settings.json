@@ -9,6 +9,15 @@
           }
         ],
         "_keryxManaged": "security-agent-hooks"
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "keryx orient claude"
+          }
+        ],
+        "_keryxManaged": "ctx-orient-hooks"
       }
     ],
     "PreToolUse": [
@@ -36,6 +45,7 @@
   },
   "_keryxManaged": [
     "ctx-agent-hooks",
-    "security-agent-hooks"
+    "security-agent-hooks",
+    "ctx-orient-hooks"
   ]
 }
