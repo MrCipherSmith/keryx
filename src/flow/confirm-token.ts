@@ -72,7 +72,7 @@ export type StoredConfirmationToken = {
    */
   confirmedVia?: string | undefined;
   confirmationQuote?: string | undefined;
-  /** Flow 464: the Telegram user id that pressed the remote card and the time of the press. */
+  /** Flow 464: the Telegram user id that pressed the remote card and the shell's clock when the press arrived. */
   pressedBy?: number | undefined;
   pressedAt?: string | undefined;
 };

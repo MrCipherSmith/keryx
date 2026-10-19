@@ -299,7 +299,7 @@ export type ApprovalResponse =
        * operator-confirmed tool writes (`confirmedVia`); it never changes whether the call runs.
        */
       via?: "remote";
-      /** Flow 464: the Telegram user id that pressed the button and the ISO time of the press (remote answers only). */
+      /** Flow 464: the Telegram user id that pressed the button and the ISO time on this shell's clock when the press arrived, not Telegram's time (remote answers only). */
       pressedBy?: number;
       pressedAt?: string;
     };

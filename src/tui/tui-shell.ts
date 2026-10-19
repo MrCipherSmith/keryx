@@ -89,7 +89,7 @@ import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
 import { describeApprovalForTopic, mirrorUndeliveredNote, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
-import { type DockRace, raceApproval } from "./approval-mirror";
+import { type ApprovalRaceOutcome, type DockRace, raceApproval } from "./approval-mirror";
 import { BUSY_REASON } from "../remote/command-gateway";
 import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
 import type { CommandOutcome } from "../remote/command-router";
@@ -568,6 +568,11 @@ export const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([
   "bus_send",
 ]);
 
+/** Flow 464: an approval answered in the topic, carrying the pressing Telegram user and the shell's clock when the press arrived. */
+function remoteApproval(fingerprint: string, fromId: number | undefined): Extract<ApprovalResponse, { approved: boolean }> {
+  return { approved: true, fingerprint, via: "remote", ...(fromId !== undefined ? { pressedBy: fromId } : {}), pressedAt: new Date().toISOString() };
+}
+
 /**
  * Flow 173 F-003 (P2 conversion, flow 277): the side-worker tools filter's
  * own predicate — `risk === "read"` AND not on {@link SIDE_WORKER_DENIED_TOOL_NAMES}
@@ -579,11 +584,6 @@ export const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([
  * `../harness/tool/builtin/interactive-tools.ts`) — so this module stays free
  * of importing those types just for this one check.
  */
-/** Flow 464: an approval answered in the topic, carrying the pressing Telegram user and the press time. */
-function remoteApproval(fingerprint: string, fromId: number | undefined): Extract<ApprovalResponse, { approved: boolean }> {
-  return { approved: true, fingerprint, via: "remote", ...(fromId !== undefined ? { pressedBy: fromId } : {}), pressedAt: new Date().toISOString() };
-}
-
 export function isToolAvailableToSideWorker(tool: { definition: { risk?: string; name: string } }): boolean {
   return tool.definition.risk === "read" && !SIDE_WORKER_DENIED_TOOL_NAMES.has(tool.definition.name);
 }
@@ -6101,9 +6101,13 @@ export async function launchTuiAgentShell(opts: {
         const unmirrored = isCard ? mirrorUndeliveredNote(bridge) : undefined;
         if (unmirrored !== undefined && meta?.card !== undefined) {
           const unmirroredId = operatorCards.ask(meta.card[0] ?? tool, false);
-          const verdict = await inner(tool, inputJson, { ...meta, card: withMirrorNote(meta.card, unmirrored) });
-          operatorCards.answer(unmirroredId, { place: foregroundOperation.signal.aborted ? "withdrawn" : "shell", yes: verdict !== false });
-          return verdict;
+          let verdict: Awaited<ReturnType<LocalApproval>> | undefined;
+          try {
+            verdict = await inner(tool, inputJson, { ...meta, card: withMirrorNote(meta.card, unmirrored) });
+            return verdict;
+          } finally {
+            operatorCards.answer(unmirroredId, { place: foregroundOperation.signal.aborted || verdict === undefined ? "withdrawn" : "shell", yes: verdict !== undefined && verdict !== false });
+          }
         }
         if (bridge === undefined || !bridge.active) {
           return inner(tool, inputJson, meta);
@@ -6114,21 +6118,31 @@ export async function launchTuiAgentShell(opts: {
         }
         const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
         const cardId = isCard && meta?.card !== undefined ? operatorCards.ask(meta.card[0] ?? tool, true) : undefined;
-        const outcome = await raceApproval({
-          turnSignal: foregroundOperation.signal,
-          ...(isCard ? { onUndelivered: () => io.onSystem?.("◇ Telegram mirror not delivered: the topic did not take the card. Answer it here.\n") } : {}),
-          dock: (race) => inner(tool, inputJson, meta, race),
-          // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.
-          topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
-        });
-        if (outcome.from === "dock") {
+        let outcome: ApprovalRaceOutcome<Awaited<ReturnType<LocalApproval>>> | undefined;
+        try {
+          outcome = await raceApproval({
+            turnSignal: foregroundOperation.signal,
+            ...(isCard
+              ? {
+                  onUndelivered: () => {
+                    if (cardId !== undefined) operatorCards.markUndelivered(cardId);
+                    io.onSystem?.("◇ Telegram mirror not delivered: the topic did not take the card. Answer it here.\n");
+                  },
+                }
+              : {}),
+            dock: (race) => inner(tool, inputJson, meta, race),
+            // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.
+            topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
+          });
+        } finally {
           if (cardId !== undefined) {
-            operatorCards.answer(cardId, { place: foregroundOperation.signal.aborted ? "withdrawn" : "shell", yes: outcome.result !== false });
+            if (outcome === undefined) operatorCards.answer(cardId, { place: "withdrawn", yes: false });
+            else if (outcome.from === "dock") operatorCards.answer(cardId, { place: foregroundOperation.signal.aborted ? "withdrawn" : "shell", yes: outcome.result !== false });
+            else operatorCards.answer(cardId, { place: "telegram", yes: outcome.answer.decision === "allow", ...(outcome.answer.fromId === undefined ? {} : { pressedBy: outcome.answer.fromId }) });
           }
-          return outcome.result;
         }
+        if (outcome.from === "dock") return outcome.result;
         const allowed = outcome.answer.decision === "allow";
-        if (cardId !== undefined) operatorCards.answer(cardId, { place: "telegram", yes: allowed, ...(outcome.answer.fromId === undefined ? {} : { pressedBy: outcome.answer.fromId }) });
         input.focus();
         setMainAgent("running", allowed ? "approved (telegram)" : "denied");
         io.onSystem?.(allowed ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied in Telegram.\n`);

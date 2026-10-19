@@ -57,9 +57,19 @@ export class OperatorConfirmationLog {
     this.changed();
   }
 
-  /** Cards waiting for a press in the topic: mirrored and not yet answered. */
+  /** The topic leg did not deliver a card that was logged as mirrored: it no longer waits for a press there. */
+  markUndelivered(id: number): void {
+    const at = this.items.findIndex((item) => item.id === id);
+    const entry = this.items[at];
+    if (entry === undefined || entry.answered !== undefined || !entry.mirrored) return;
+    this.items[at] = { ...entry, mirrored: false };
+    this.changed();
+  }
+
+  /** Cards waiting for a press in the topic: mirrored, not yet answered and inside the 1-hour token. */
   waiting(): readonly ConfirmationEntry[] {
-    return this.items.filter((item) => item.answered === undefined && item.mirrored);
+    const now = this.now();
+    return this.items.filter((item) => item.answered === undefined && item.mirrored && now - item.askedAt <= REMOTE_CARD_TTL_MS);
   }
 
   /** Every card the view holds, waiting first (oldest first), then the answered ones (newest first). */
@@ -102,7 +112,7 @@ function clip(text: string, max: number): string {
 export function pendingConfirmationLine(entry: ConfirmationEntry, now: number): string {
   const elapsed = now - entry.askedAt;
   const left = REMOTE_CARD_TTL_MS - elapsed;
-  const token = left > 0 ? `${age(left)} left of the 1-hour token` : "token expired, ask again";
+  const token = left > 0 ? `${age(left)} left of the 1-hour token` : "Telegram token expired, answer in the shell";
   const where = entry.mirrored ? "" : " · Telegram mirror not delivered, answer in the shell";
   return `${clip(entry.question, 80)} · asked ${age(elapsed)} ago · ${token}${where}`;
 }

@@ -88,7 +88,7 @@ export type ReviewCoverageEntry = {
 /** How an operator decision was taken: the shell's yes/no card, or the remote topic's mirror of it. Absent on a terminal answer and on older records. */
 export type ConfirmedVia = "tui-card" | "remote-card";
 
-/** Flow 464: the Telegram user id that pressed a remote card and the ISO time of the press. Set only with `confirmedVia: "remote-card"`. */
+/** Flow 464: the Telegram user id that pressed a remote card and the ISO time on the shell's clock when the press arrived (not Telegram's time). Set only with `confirmedVia: "remote-card"`. */
 export type CardPress = { pressedBy?: number | undefined; pressedAt?: string | undefined };
 
 /** The press fields of `source` that are set, ready to spread into a record. */

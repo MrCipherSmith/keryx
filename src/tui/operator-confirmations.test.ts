@@ -2,6 +2,8 @@
 // /remote-control status tab and the /decisions modal — with the age and the time left of the 1-hour token while a
 // card waits, and who pressed once it is answered. The help modal and the slash command list name the card tools.
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
 import { REMOTE_CARD_TTL_MS } from "../commands/operator-confirm-tools";
@@ -31,7 +33,37 @@ test("a card past the token says it expired", () => {
   const log = logAt({ now: T0 });
   log.ask("Confirm the plan?", true);
   const [entry] = log.entries();
-  expect(pendingConfirmationLine(entry!, T0 + REMOTE_CARD_TTL_MS + 1000)).toContain("token expired, ask again");
+  expect(pendingConfirmationLine(entry!, T0 + REMOTE_CARD_TTL_MS + 1000)).toContain("Telegram token expired, answer in the shell");
+});
+
+test("a card past the token no longer counts as waiting in the topic", () => {
+  const clock = { now: T0 };
+  const log = logAt(clock);
+  log.ask("Confirm the plan?", true);
+  clock.now = T0 + REMOTE_CARD_TTL_MS;
+  expect(log.waiting()).toHaveLength(1);
+  clock.now = T0 + REMOTE_CARD_TTL_MS + 1;
+  expect(log.waiting()).toHaveLength(0);
+  expect(log.entries()).toHaveLength(1);
+});
+
+test("a card logged as mirrored that the topic never took is marked undelivered and stops waiting there", () => {
+  const log = logAt({ now: T0 });
+  let changes = 0;
+  const id = log.ask("Confirm the plan?", true);
+  log.subscribe(() => {
+    changes += 1;
+  });
+  expect(log.waiting()).toHaveLength(1);
+  log.markUndelivered(id);
+  expect(log.waiting()).toHaveLength(0);
+  expect(pendingConfirmationLine(log.entries()[0]!, T0)).toContain("Telegram mirror not delivered, answer in the shell");
+  expect(changes).toBe(1);
+  log.markUndelivered(id);
+  expect(changes).toBe(1);
+  log.answer(id, { place: "shell", yes: true });
+  log.markUndelivered(id);
+  expect(log.entries()[0]!.answered?.place).toBe("shell");
 });
 
 test("a card whose mirror was not delivered says it must be answered in the shell", () => {
@@ -142,4 +174,13 @@ test("the help modal and the command list name the card tools", () => {
     for (const entry of help) expect(entry.summary).toContain(tool);
     for (const command of commands) expect(command.description).toContain(tool);
   }
+});
+
+// The mirror wrapper lives inside the shell's closure, so its wiring is pinned by source (as remote-queue-wiring.test.ts does).
+test("the shell settles a card's log entry on every exit and tells the log when the topic never took it", () => {
+  const source = readFileSync(path.join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const mirror = source.slice(source.indexOf("const mirrorApprovalToTopic ="), source.indexOf("io.requestApproval = trackApproval(mirrorApprovalToTopic"));
+  expect(mirror).toContain("operatorCards.markUndelivered(cardId)");
+  expect(mirror.match(/\} finally \{/g)).toHaveLength(2);
+  expect(mirror).toContain('outcome === undefined) operatorCards.answer(cardId, { place: "withdrawn"');
 });
