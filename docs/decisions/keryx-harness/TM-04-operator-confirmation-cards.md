@@ -99,6 +99,20 @@ The in-process tool has no such surface. The decision never leaves the shell pro
 
 A card raised while the remote topic is active is mirrored to the topic like any other approval. The first answer wins: a press in the topic closes the dock, an answer in the dock removes the buttons in the topic. When the topic answers, the gate records `confirmedVia: "remote-card"`, so a record always says where the yes came from. Silence in the topic never ends the dock.
 
+### 6a. What a Telegram answer proves, and what it does not
+
+Flow 464 puts the four review acts that used to need a terminal (`review confirm-plan`, `review decide-premise`, `review complete --waive` and `--waive-coverage`, `review complete`) behind cards: `review_confirm_plan`, `review_decide_premise`, `review_waive_readiness` / `review_waive_coverage`, and `review_complete`. A card the topic answers is accepted only when all of these hold: the press comes from a Telegram user id in the binding's `allowedUserIds` (a binding with none refuses every remote answer), it carries this question's token, the token is unused, and it is under one hour old. Each refusal leaves the token spent. The record keeps `pressedBy` (the Telegram user id) and `pressedAt` (the shell's clock, not Telegram's) beside `confirmedVia: "remote-card"`. A card answered in the shell has neither field. If the topic cannot be reached, the card says "Telegram mirror not delivered" and is answered in the shell.
+
+What the press proves: someone logged in to an allowed Telegram account pressed yes on this card, within the hour, once.
+
+What it does not prove:
+
+- **That a person pressed.** An agent running as the same OS user can write the stores the shell reads (the confirmation records, the review package JSON) without any card, exactly the limit TM-03 and §4 state. A card narrows the honest path; it does not stop that agent.
+- **That the bot token is out of the agent's reach.** The token that posts and reads the topic sits in the shell's environment or config, which an agent in the same session can read. Holding it, the agent can post as the bot and read updates. It cannot make Telegram report a press from an allowed user id, but it can talk to the bot API, so a press is evidence of an allowed account, not of an unreachable channel.
+- **Message order.** Telegram can drop, delay or reorder messages. A dropped card leaves the shell waiting (the dock stays open); a delayed press can arrive after the question was answered or has aged out, and is refused by the token rules above. Nothing in the answer proves the operator saw the card text last shown, only that this token was pressed.
+
+The pending cards (age and time left of the token) and the answered ones (with `pressedBy`) are shown in the `/remote-control` status tab, the sidebar Remote row and the `/decisions` modal.
+
 ## 7. Unattended runs
 
 An unattended run has no approver, so the answer to a card is no. `src/trigger/unattended.ts` also lists every card tool as interactive-only and refuses it by name. The skills that used to say "ask the operator to run this in a terminal" now say: in `keryx shell` call the tool and let the operator answer it; never send the operator to a terminal; when the run is unattended, record the item as Not run, as before.
