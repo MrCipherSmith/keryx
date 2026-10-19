@@ -12,7 +12,7 @@
 
 ## 1. Purpose
 
-Thirteen keryx decisions are the operator's alone: lifting a review pass ceiling, posting a review to GitHub, waiving unreviewed files or a readiness item, minting a flow completion token, landing an external agent's patch, accepting, promoting or graduating a learned pattern, and changing or running a schedule. Each CLI path refuses unless stdin and stdout are terminals. Inside `keryx shell` the agent runs commands through `shell_exec`, which has no terminal, so it stopped and told the operator to open another terminal and type a long command.
+Nineteen keryx decisions are the operator's alone: lifting a review pass ceiling, confirming a review plan, deciding a held finding's premise, closing a review round, posting a review to GitHub, waiving unreviewed files or a readiness item, minting a flow completion token, landing an external agent's patch, accepting, promoting or graduating a learned pattern, and changing or running a schedule. Each CLI path refuses unless stdin and stdout are terminals. Inside `keryx shell` the agent runs commands through `shell_exec`, which has no terminal, so it stopped and told the operator to open another terminal and type a long command.
 
 This record replaces that hand-off. In `keryx shell` each decision is a native tool. The tool shows the operator a card (what is decided, the exact effect, the subject) and takes a yes or no. The terminal paths stay exactly as they were.
 
@@ -21,6 +21,9 @@ This record replaces that hand-off. In `keryx shell` each decision is a native t
 | Tool | Same effect as |
 |---|---|
 | `review_chunks_answer` | `keryx review chunks estimate --answer yes\|no` |
+| `review_confirm_plan` | `keryx review confirm-plan` |
+| `review_decide_premise` | `keryx review decide-premise` |
+| `review_complete` | `keryx review complete` (closes the round after every gate passes; the head is the recorded manifest head, not one the model supplies) |
 | `review_publish` | `keryx review publish` |
 | `review_waive_coverage` | `keryx review complete --waive-coverage` (records the waiver only) |
 | `review_waive_readiness` | `keryx review complete --waive <item>` (records the waiver only) |
@@ -108,7 +111,9 @@ What the press proves: someone logged in to an allowed Telegram account pressed 
 What it does not prove:
 
 - **That a person pressed.** An agent running as the same OS user can write the stores the shell reads (the confirmation records, the review package JSON) without any card, exactly the limit TM-03 and §4 state. A card narrows the honest path; it does not stop that agent.
-- **That the bot token is out of the agent's reach.** The token that posts and reads the topic sits in the shell's environment or config, which an agent in the same session can read. Holding it, the agent can post as the bot and read updates. It cannot make Telegram report a press from an allowed user id, but it can talk to the bot API, so a press is evidence of an allowed account, not of an unreachable channel.
+- **That the bot token is out of the agent's reach.** The token that posts and reads the topic sits in the shell's environment or in the `BOT_TOKEN_FILE` file (owner-only, but readable by an agent running as the same OS user). Holding it, the agent can post as the bot and read updates. It cannot make Telegram report a press from an allowed user id, but it can talk to the bot API, so a press is evidence of an allowed account, not of an unreachable channel.
+- **That the operator read the text the shell holds.** Whoever holds the bot token can edit or replace the text of the mirrored card. A press proves a press on a card with the real approval id, not that the operator read what the shell built.
+- **That a card survives a restart.** The token and the TUI card view are process memory. A restart drops every pending card; a later press is refused with no record, and the operator asks again. A late press is also refused by serve's expiry or its resolved state, not only by keryx's token rules.
 - **Message order.** Telegram can drop, delay or reorder messages. A dropped card leaves the shell waiting (the dock stays open); a delayed press can arrive after the question was answered or has aged out, and is refused by the token rules above. Nothing in the answer proves the operator saw the card text last shown, only that this token was pressed.
 
 The pending cards (age and time left of the token) and the answered ones (with `pressedBy`) are shown in the `/remote-control` status tab, the sidebar Remote row and the `/decisions` modal.
@@ -119,7 +124,7 @@ An unattended run has no approver, so the answer to a card is no. `src/trigger/u
 
 ## 8. The CLI paths and the approval floor
 
-In a real terminal every command behaves as it did. Without a terminal each refusal now says: inside `keryx shell`, call the `<tool>` tool, the operator answers it as a card; outside `keryx shell`, run this command in a terminal.
+In a real terminal every command behaves as it did. `review confirm-plan`, `review decide-premise` and `review complete` are terminal-only by a TTY check; without a terminal they point to their card tool. Without a terminal each refusal now says: inside `keryx shell`, call the `<tool>` tool, the operator answers it as a card; outside `keryx shell`, run this command in a terminal.
 
 `touchesHumanConfirmation` (`src/lib/command-risk.ts`) already forced `ask` for `flow confirm`, `schedule add|remove|pause|resume|run`, `review chunks estimate --answer`, `review complete --waive-coverage` and `--waive`, and `review publish`. It now also covers `keryx learn accept|promote|graduate` and `keryx agents external apply` (`touchesOperatorDecision`), so a `shell_exec` attempt of any of them asks in every mode. Like the rest of that floor it is a text match and has the limits TM-03 §5 states.
 
