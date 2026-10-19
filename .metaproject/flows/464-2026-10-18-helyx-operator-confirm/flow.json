@@ -9,17 +9,54 @@
   "id": "464",
   "slug": "helyx-operator-confirm",
   "title": "Operator review confirmations answered in Telegram through Helyx",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-18T21:48:26.505Z",
-  "updatedAt": "2026-10-18T23:48:18.394Z",
+  "updatedAt": "2026-10-19T08:43:44.074Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:38e16e87ab185adaae97f0d5ab1f34fdc60cbf9c4ff5ba1c833efd6d4016ada8",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC10": {
+      "at": "2026-10-19T08:43:32.929Z",
+      "note": "npm view @mrciphersmith/keryx version = 0.3.124 on 2026-10-19; release workflow run 39221321730 green (tag v0.3.124 on merge commit 2874002223e6)"
+    },
+    "AC1": {
+      "at": "2026-10-19T08:43:36.175Z",
+      "note": "PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding"
+    },
+    "AC2": {
+      "at": "2026-10-19T08:43:36.391Z",
+      "note": "PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding"
+    },
+    "AC3": {
+      "at": "2026-10-19T08:43:36.614Z",
+      "note": "PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding"
+    },
+    "AC4": {
+      "at": "2026-10-19T08:43:36.836Z",
+      "note": "PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding"
+    },
+    "AC5": {
+      "at": "2026-10-19T08:43:37.056Z",
+      "note": "PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding"
+    },
+    "AC6": {
+      "at": "2026-10-19T08:43:37.272Z",
+      "note": "PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding"
+    },
+    "AC7": {
+      "at": "2026-10-19T08:43:37.486Z",
+      "note": "PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding"
+    },
+    "AC8": {
+      "at": "2026-10-19T08:43:37.703Z",
+      "note": "PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1052"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -38,7 +75,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -46,14 +83,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "done in PR #1052, merged"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -61,14 +100,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "done in PR #1052, merged"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -76,14 +117,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "done in PR #1052, merged"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -91,7 +134,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "done in PR #1052, merged"
     }
   ],
   "history": [
@@ -107,6 +152,76 @@
     {
       "at": "2026-10-18T23:48:18.394Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-19T08:43:32.929Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: npm view @mrciphersmith/keryx version = 0.3.124 on 2026-10-19; release workflow run 39221321730 green (tag v0.3.124 on merge commit 2874002223e6) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T08:43:36.175Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T08:43:36.391Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T08:43:36.614Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T08:43:36.836Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T08:43:37.056Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T08:43:37.272Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T08:43:37.486Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T08:43:37.703Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: PR #1052 merged (2874002223e6); CI green on head adbb60f55, the criterion's verify command is part of that run; review rounds r02-r07 fixed every major finding (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T08:43:41.069Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-19T08:43:41.284Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-19T08:43:41.495Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-19T08:43:41.711Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-19T08:43:44.074Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1052 (warning: PR is not a draft) (base: main)"
     }
   ],
   "acKinds": {
@@ -149,5 +264,107 @@
       "kind": "exec",
       "check": "npm view @mrciphersmith/keryx version"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-19T08:43:32.929Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:38e16e87ab185adaae97f0d5ab1f34fdc60cbf9c4ff5ba1c833efd6d4016ada8"
+    },
+    {
+      "at": "2026-10-19T08:43:36.175Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:38e16e87ab185adaae97f0d5ab1f34fdc60cbf9c4ff5ba1c833efd6d4016ada8"
+    },
+    {
+      "at": "2026-10-19T08:43:36.391Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:38e16e87ab185adaae97f0d5ab1f34fdc60cbf9c4ff5ba1c833efd6d4016ada8"
+    },
+    {
+      "at": "2026-10-19T08:43:36.614Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:38e16e87ab185adaae97f0d5ab1f34fdc60cbf9c4ff5ba1c833efd6d4016ada8"
+    },
+    {
+      "at": "2026-10-19T08:43:36.836Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:38e16e87ab185adaae97f0d5ab1f34fdc60cbf9c4ff5ba1c833efd6d4016ada8"
+    },
+    {
+      "at": "2026-10-19T08:43:37.056Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:38e16e87ab185adaae97f0d5ab1f34fdc60cbf9c4ff5ba1c833efd6d4016ada8"
+    },
+    {
+      "at": "2026-10-19T08:43:37.272Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:38e16e87ab185adaae97f0d5ab1f34fdc60cbf9c4ff5ba1c833efd6d4016ada8"
+    },
+    {
+      "at": "2026-10-19T08:43:37.486Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:38e16e87ab185adaae97f0d5ab1f34fdc60cbf9c4ff5ba1c833efd6d4016ada8"
+    },
+    {
+      "at": "2026-10-19T08:43:37.703Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:38e16e87ab185adaae97f0d5ab1f34fdc60cbf9c4ff5ba1c833efd6d4016ada8"
+    }
+  ],
+  "baseBranch": "main"
 }
