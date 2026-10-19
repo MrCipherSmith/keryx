@@ -1,66 +1,68 @@
 ---
 Title: Module src/harness/run
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
-Summary: "`src/harness/run` groups 5 file(s). Depends on `src/harness/tool`, `src/harness`, `src/harness/provider`. Exposes 7 public symbol(s)."
+Status: accepted
+Summary: "`src/harness/run` is the offline, deterministic run loop of the harness: `runOffline` assembles startup, provider streaming, policy, tool execution, redaction and the completion gate into one run."
 ---
 ```markdown
 ---
 Title: Module src/harness/run
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
-Summary: "Provides the public run-facing layer of the harness, exposing entry points for describing, executing, and interpreting harness runs with typed interfaces for results, metrics, and unresolved risk."
+Status: accepted
+Summary: "`src/harness/run` is the offline, deterministic run loop of the harness: `runOffline` assembles startup, provider streaming, policy, tool execution, redaction and the completion gate into one run."
 ---
 # Module src/harness/run
 
 ## Overview
 
-`src/harness/run` owns the run-facing layer of the harness. It provides the public contract and entry points used to describe, execute, and interpret harness runs, including dependencies, completion requirements, output shapes, metrics, and unresolved risks.
+`src/harness/run` owns the assembled offline run of a harness turn. Its entry point, `runOffline` in `src/harness/run/run.ts`, wires startup, the provider stream, the policy engine, the tool executor, the session log, redaction and the completion gate into one run, and returns a `RunResult` whose `output` is a schema-valid `HarnessRunOutput`.
 
-The module acts as a coordination surface between tool definitions, providers, policies, sessions, and higher-level consumers such as commands, replay, and resume. It exposes `runOffline` as the primary run function, along with typed interfaces that allow other parts of the system to consume run results without depending on internal execution details.
+The module also exports the typed contract that callers use instead of the execution internals: `RunDeps`, `CompletionRequirements`, `RunResult`, `HarnessRunOutput`, `HarnessRunOutputMetrics` and `UnresolvedRisk`. Modules that depend on it in the code graph, such as `src/commands`, `src/harness/replay` and `src/harness/resume`, consume these types. `cli.ts` adds `runViaCli`, which only delegates to `runOffline`.
 
 ## How it works
 
-- `RunDeps` represents the dependency bundle required to perform a run. It gives the run layer access to the collaborators it needs while keeping the entry point declarative.
-- `runOffline` is the main public function for starting a run. It is the module's primary coordination point for assembling behavior from tools, providers, and harness primitives.
-- `CompletionRequirements` describes the conditions that must be satisfied for a run to be considered complete.
-- `HarnessRunOutput` and `HarnessRunOutputMetrics` describe the results produced by a run, separating qualitative output artifacts from quantitative measures.
-- `UnresolvedRisk` identifies remaining risk or uncertainty surfaced during a run and carried into the result.
-- `RunResult` is the top-level outcome shape consumed by callers of the run layer.
-- `cli.ts` provides the command-line entry point for this module, wrapping the same run path for CLI usage.
-- The main implementation lives in `src/harness/run/run.ts`, with tests covering general behavior, metaproject-level expectations, and completion requirements.
+- **Startup gate first.** `runOffline` calls `startRun` (from `src/harness/startup`) before anything else. Any outcome other than `started` goes to `earlyTermination`, which returns a `failed` output with a `blocker:startup` and never opens a provider stream.
+- **Streaming loop.** The run consumes the events of `deps.provider.stream(...)`. `tool_call_start` only records the tool name for a call id. Each `tool_call_end` is one unit of work, and `model_end` marks the final message and fires the optional `Stop` hook.
+- **Per-call decision pipeline.** Each call is decided in a fixed order. `decide()` from `src/harness/policy/engine` runs first, and the MP-6 blast-radius escalation may tighten an `allow` to `ask`. The optional `PreToolUse` hook runs next, and `composeDecision` (from `src/harness/hooks/compose`) folds its decisions in. The optional `approver` comes last, and it can only turn an `ask` into `allow`, only when the fingerprint it returns equals this call's action fingerprint. Only an `allow` reaches execution.
+- **Guards before execution.** A hard budget ceiling (`budget_exceeded`) and a loop guard (the same action fingerprint reaching `LOOP_THRESHOLD`, which is 3) each record an unresolved risk and a blocker, then stop the loop.
+- **Execution and persistence.** `deps.toolExecutor.invoke` runs the call. A thrown error becomes `blocker:tool-rejected:<id>`, and a result whose status is not `succeeded` becomes a blocker. The result passes through `redactForPersistence` (from `src/harness/evidence/redaction`) with the injected `scan`, then it is appended to an `AppendOnlySession` as a `tool_result` artifact reference.
+- **Completion.** After the loop, `evaluateCompletion` (from `src/harness/completion/gate`) checks the caller's required gates and evidence refs, the undisposed blockers and the final-message flag. `resolveStatus` then maps the outcome: any unresolved risk gives `blocked`, a gate `pass` gives `completed`, a gate `blocked` gives `blocked`, and anything else gives `failed`.
+- **Optional hooks and approver.** With no `deps.hooks`, no hook fires and `RunResult` omits `hookInvocations` and `hookWarnings`. With no `approver` and no interactive channel, `decide()` turns an `ask` into a headless deny.
+- **Determinism.** `run.ts` reads no clock or randomness of its own. Time and ids come only from `deps.clock` and `deps.idSeq`, and the `runId`, `sessionId` and `requestId` values derive from the context manifest hash.
 
 ## Key concepts
 
-- **Run dependencies**: A run does not create its own collaborators directly. Instead, it accepts a `RunDeps` bundle that supplies the tools, providers, policies, sessions, and contracts needed for execution.
-- **Completion requirements**: Runs are evaluated against explicit `CompletionRequirements`. This makes completion a declared condition rather than an implicit side effect.
-- **Run output**: A run produces a `HarnessRunOutput` value that carries the result artifacts exposed to callers.
-- **Run metrics**: `HarnessRunOutputMetrics` captures measurable aspects of the run outcome, allowing consumers to assess performance or quality independently from raw output.
-- **Unresolved risk**: When a run cannot fully satisfy its requirements or still carries uncertainty, `UnresolvedRisk` records that condition for downstream handling.
-- **Run result**: `RunResult` combines the public outcome information into a single interface consumed by commands, replay, resume, and other orchestration layers.
+- **Run dependencies**: `RunDeps` is the injected bundle. Required fields are `provider`, `toolRegistry`, `toolExecutor`, `policyProfile`, `clock`, `idSeq` and `interactive`. Optional fields are `metaprojectPort`, `blastRadiusThreshold`, `scan`, `completionRequirements`, `hooks` and `approver`. The run creates its own `AppendOnlySession`, so a session is not part of `RunDeps`.
+- **Completion requirements**: `CompletionRequirements` lists `requiredGates` (gates that must report `pass`) and `requiredEvidenceRefs` (evidence ids that must appear among the ones the run records). Both default to empty, so an ad-hoc run does not start failing.
+- **Run output**: `HarnessRunOutput` is the terminal document. It carries `status`, `gate`, `artifacts`, `unresolvedBlockerIds` and, when there are stop reasons, `unresolvedRisks`.
+- **Run metrics**: `HarnessRunOutputMetrics` holds `toolCalls`, `modelRequests` and `retries`. In this module the token and wall-time fields are set to `null`, and `reliability` is `"unknown"`.
+- **Unresolved risk**: `UnresolvedRisk` is a string-literal type alias, `"budget_exceeded" | "loop_detected"`, not an interface. It is the typed stop-reason surface, and any entry forces the run to `blocked`.
+- **Blockers**: Undisposed blockers are plain strings such as `blocker:tool-rejected:<id>`, `blocker:redaction-failed:<id>` and `blocker:hook-denied:UserPromptSubmit`. The completion gate checks them.
+- **Run result**: `RunResult` combines `output` with the ordered `events`, `decisions` and `sessionEntries`, plus the hashes (`sessionManifestHash`, `eventLogHash`, `toolRegistryHash`, `transcriptHash`, `expectedStateHash`) that a replay fixture binds to.
 
 ## Main flows
 
 ### 1. Offline run through `runOffline`
 
-1. A caller invokes `runOffline` with a `RunDeps` bundle.
-2. The run layer uses the supplied dependencies to coordinate tools, providers, and harness behavior.
-3. During and after execution, the run evaluates `CompletionRequirements`.
-4. The run returns a `RunResult` that includes `HarnessRunOutput`, optional metrics, and any `UnresolvedRisk` entries.
+1. The caller passes a `HarnessRunInput`, a `HarnessConfig` and a `RunDeps` bundle. `startRun` decides whether the run may start.
+2. If `deps.hooks` fires `UserPromptSubmit` with a `deny` or `ask`, the run ends `blocked` before the stream opens.
+3. The loop streams provider events. For each complete tool call it runs the decision pipeline, then the budget and loop guards, then `toolExecutor.invoke`, then the optional `PostToolUse` or `PostToolUseFailure` hook.
+4. Each result is redacted and appended to the session as a `tool_result` reference, and a `model_end` event sets the final-message flag.
+5. `evaluateCompletion` runs over the collected evidence and blockers, and `resolveStatus` sets the terminal status. The function returns a `RunResult` whose `output` is a `HarnessRunOutput`.
 
-### 2. CLI invocation through `cli.ts`
+### 2. Headless call that is not allowed
 
-1. The CLI entry point in `src/harness/run/cli.ts` exposes the run module to command-line usage.
-2. It prepares the same run path used by programmatic callers.
-3. The resulting `RunResult` is returned to the caller or command handler for display, logging, or further processing.
+1. `decide()` checks the call. With no interactive channel and no `approver`, an `ask` is already a deny.
+2. The decision is pushed to `decisions` and recorded as a `policy_decision` session entry.
+3. A call whose composed decision is not `allow` is skipped with `continue`. It is never sent to `toolExecutor`, and no tool result is recorded.
 
-### 3. Reuse by orchestration modules
+### 3. CLI invocation and replay
 
-1. Modules such as `src/harness`, `src/commands`, `src/harness/replay`, and `src/harness/resume` depend on this module to describe or interpret run outcomes.
-2. These consumers rely on the public interfaces to avoid coupling to internal execution details.
-3. Tests such as `run.metaproject.test.ts` and `run.completion-requirements.test.ts` verify expected run behavior and requirement evaluation.
+1. `runViaCli` in `src/harness/run/cli.ts` delegates to `runOffline` unchanged and returns its `RunResult`.
+2. The CLI adds no policy of its own, so it cannot change a decision made by the in-process engine.
+3. Replay fixtures bind to the `RunResult` hashes (`sessionManifestHash`, `eventLogHash`, `transcriptHash`, `expectedStateHash`), which are recomputed from the same deterministic inputs. The file `src/harness/replay/replay.ts` is the consumer.
 
 ---
 
@@ -126,5 +128,6 @@ The module acts as a coordination surface between tool definitions, providers, p
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - **0.1.0** — Initial draft generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
 ```

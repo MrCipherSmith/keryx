@@ -1,16 +1,16 @@
 ---
 Title: "Module src/harness/process/sandbox"
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 Summary: "`src/harness/process/sandbox` groups 31 file(s). Depends on `src/harness/process`, `src/lib`, `src/harness/policy`. Exposes 17 public symbol(s)."
 ---
 ```markdown
 ---
 Title: "Module src/harness/process/sandbox"
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 Summary: "`src/harness/process/sandbox` owns the sandboxing layer for process execution inside the harness. It defines sandbox profiles, translates policy-derived constraints into concrete sandbox settings, detects available sandbox launchers, and exposes wrappers and adapters that other modules use to run commands under controlled restrictions."
 ---
 
@@ -18,139 +18,111 @@ Summary: "`src/harness/process/sandbox` owns the sandboxing layer for process ex
 
 ## Summary
 
-`src/harness/process/sandbox` owns the sandboxing layer for process execution inside the harness. It defines sandbox profiles, translates policy-derived constraints into concrete sandbox settings, detects available sandbox launchers, and exposes wrappers and adapters that other modules use to run commands under controlled restrictions.
-
-The module is consumed by command execution, web harness flows, and stress-testing tooling whenever a process needs to be isolated from the surrounding environment.
+`src/harness/process/sandbox` is the OS-containment layer under harness process execution. It projects a policy profile onto a sandbox profile (filesystem and network posture), wraps a command in the platform launcher (`sandbox-exec` on macOS, `bwrap` on Linux), and exposes a `ProcessAdapter` that applies this to the real spawn. Restricted-network runs additionally route traffic through a loopback allowlist proxy.
 
 ## Overview
 
-The module provides a bridge between high-level execution requirements and platform-specific sandbox mechanisms. It exposes reusable abstractions for describing what a sandboxed process may or may not access, and then turns those descriptions into runnable wrappers.
+The module bridges what a run may touch and the platform mechanism that enforces it. It takes a `PolicyProfile` (or a default posture), turns it into a `SandboxProfile`, and produces a launcher-wrapped command that the OS enforces on the child process, whatever command was chosen.
 
-Its primary responsibilities are:
+Its responsibilities are:
 
-- defining default and policy-derived sandbox profiles,
-- wrapping commands for sandbox execution,
-- detecting and selecting a usable sandbox launcher,
-- exposing a process adapter for callers that need sandboxed execution,
-- providing helpers for restricted network runs.
+- projecting policy onto a sandbox profile (`sandboxProfileFromPolicy`, `defaultSandboxProfile`),
+- defining the home-relative secret read deny list (`defaultReadDenyList`),
+- wrapping a command for seatbelt or bubblewrap (`wrapWithSandbox`),
+- detecting the launcher and resolving an adapter (`detectSandboxLauncher`, `resolveSandboxAdapter`),
+- running restricted-network commands through a proxy (`setupNetworkRun`).
 
-The module depends on `src/harness/process` for process execution primitives, `src/harness/policy` for policy-shaped inputs, and `src/lib` for shared utilities.
+It depends on `src/harness/process` for the `ProcessAdapter` and `ContainedCommand` types in `executor`, and on `src/harness/policy` for the `PolicyProfile` type.
 
 ## How it works
 
-The module is organized around a small execution pipeline rather than a single monolithic runner.
+The module is a small pipeline that separates deciding the posture from enforcing it.
 
 ### Profile layer
 
-At the foundation are sandbox profile abstractions. The module exposes a default read deny list and a default sandbox profile that represent conservative baseline restrictions. It can also derive a profile from a higher-level policy shape, making it easier for callers to request a sandbox that reflects application or harness policy rather than hand-authored low-level settings.
-
-For Seatbelt-style environments, the module can serialize a profile into a format understood by the sandbox launcher. This keeps profile construction separate from command wrapping.
+`profile.ts` is pure: it reads no clock, environment or filesystem, and callers pass in `cwd`, `tmpDir` and `home`. `sandboxProfileFromPolicy` maps the policy onto a `SandboxProfile` with a mode, a network posture, writable roots, a read deny list, allowed domains and a `required` flag. `defaultSandboxProfile` is the fixed baseline: workspace-write, network off, not required.
 
 ### Wrapping layer
 
-Once a profile exists, the module wraps a command so it runs inside the sandbox. Wrapping is handled for both Seatbelt-style and bubblewrap-style launchers, with helper APIs for constructing the appropriate command arguments and invoking the launcher binary.
-
-This separation lets higher-level callers request "run this command in a sandbox" without needing to know whether the underlying platform uses `sandbox-exec`, `bwrap`, or another mechanism.
+`wrap.ts` dispatches on platform. `danger-full-access` passes through unwrapped, `darwin` goes to `wrapSeatbelt` (`seatbelt.ts`), `linux` goes to `wrapBwrap` (`bwrap.ts`), and any other platform returns a fail-closed reason. On Linux, `network: "restricted"` is refused, because bwrap alone cannot force traffic through the proxy.
 
 ### Detection and adapter layer
 
-Not every environment exposes the same sandbox facilities. The module includes detection logic for discovering an available sandbox launcher and resolving an appropriate adapter. The adapter interface gives callers a stable way to launch sandboxed processes even when the underlying launcher differs.
+`detect.ts` is the only impure file. It checks for `sandbox-exec` at a fixed path on darwin, and searches `PATH` for `bwrap` on linux. It does not spawn anything. `resolveSandboxAdapter` builds a `SandboxedProcessAdapter` from the result and returns the launcher info alongside it.
 
-This is the main integration surface for process execution. Callers obtain an adapter and use it as the execution layer, while the sandbox module continues to handle argument construction and launcher selection underneath.
+`SandboxedProcessAdapter` decorates an inner `ProcessAdapter`. The enclosing `runContainedProcess` guards run on the original command first; the adapter then rewrites the command to its launcher form right before the single spawn. When the launcher is missing or the wrap is refused, it returns a `spawn-error` if the profile is `required`, the network is `restricted`, or `failIfUnavailable` is set (default true). Otherwise it spawns unsandboxed. A launcher exit code 71 on a wrapped command is also reported as a spawn error.
 
 ### Network layer
 
-For networked runs, the module provides helpers for allowlisting traffic and preparing network execution context. These helpers support routing or mediation of outbound connections, matching targets against an allowlist, and creating certificate authority material for the run. This makes it possible to combine filesystem and process isolation with controlled network access.
+`network-run.ts` handles restricted runs. For any other posture, `setupNetworkRun` returns the profile unchanged. For `restricted`, it starts a proxy worker in a worker thread, so the proxy keeps serving while the main thread is blocked in `spawnSync`. It waits for the worker's ready port, sets `proxy` on the returned profile to `127.0.0.1` and that port, and returns proxy environment variables. Each masked credential gets a per-run sentinel in the child's environment; the real value stays in the worker. With `tlsTerminate`, the run CA certificate (created inside the worker, per the file's comment) is written to a temp PEM and the CA-trust variables point at it. The caller must call `close()`.
 
 ### Module composition
 
-The main entry point re-exports the public surface consumed by other modules. Internally, the functionality is split across files for profile handling, launcher detection, network support, command wrapping, and process adapters.
+`index.ts` re-exports the public surface. The implementation is split across `profile.ts`, `detect.ts`, `wrap.ts`, `adapter.ts` and `network-run.ts`, with the platform builders in `seatbelt.ts` and `bwrap.ts`, and proxy and CA helpers in `proxy.ts` and `tls-ca.ts`.
 
 ## Key concepts
 
 ### Sandbox profile
 
-A sandbox profile is the module's canonical representation of what a process is allowed to do. It serves as input to platform-specific wrapping logic.
+A `SandboxProfile` is the canonical posture: a `SandboxMode` (`read-only`, `workspace-write`, `danger-full-access`), a `SandboxNetwork` (`off`, `on`, `restricted`), writable roots, the read deny list, allowed domains, an optional proxy address, and `required`, which means fail closed.
 
 Public APIs:
 
-- `defaultSandboxProfile`: the module's baseline profile.
-- `defaultReadDenyList`: default denied read paths or patterns used to restrict access.
-- `sandboxProfileFromPolicy`: derives a profile from policy-shaped input.
+- `defaultSandboxProfile`: the baseline profile when no policy applies.
+- `defaultReadDenyList`: home-relative secret paths such as `.ssh`, `.aws`, `.config/gh`, `.config/keryx` and `.local/share/keryx`, which holds keryx's own credentials and approval allowlist.
+- `sandboxProfileFromPolicy`: projects a policy profile onto a profile.
 
 ### Sandbox launcher
 
-A sandbox launcher is the external mechanism used to apply the sandbox around a command. The module supports wrappers for Seatbelt and bubblewrap-style launchers.
+The external mechanism that applies containment: `sandbox-exec` (Seatbelt) on macOS and `bwrap` (bubblewrap) on Linux.
 
-Public APIs:
-
-- `SANDBOX_EXEC_PATH`: launcher path identifier for Seatbelt-style execution.
-- `BWRAP_PROGRAM`: launcher program identifier for bubblewrap-style execution.
+- `SANDBOX_EXEC_PATH`: the absolute path checked on macOS.
+- `BWRAP_PROGRAM`: the program name searched for on `PATH` on Linux.
 
 ### Wrappers
 
-Wrappers turn a profile and command into the actual sandboxed invocation.
+Wrappers turn a profile and command into the launcher invocation.
 
-Public APIs:
-
-- `wrapSeatbelt`: wraps a command for Seatbelt-style execution.
-- `wrapBwrap`: wraps a command for bubblewrap-style execution.
-- `wrapWithSandbox`: generic wrapping helper used by callers that want a ready-to-run sandboxed command.
-- `buildSeatbeltProfile`: produces the Seatbelt-facing profile representation.
-- `buildBwrapArgs`: produces bubblewrap-facing arguments.
+- `wrapWithSandbox`: the platform dispatcher; returns a wrapped command, a pass-through, or a fail-closed reason.
+- `wrapSeatbelt` and `buildSeatbeltProfile`: Seatbelt-facing wrapping and profile text.
+- `wrapBwrap` and `buildBwrapArgs`: bubblewrap-facing wrapping and arguments.
 
 ### Adapter and detection
 
-The adapter layer makes sandboxed process execution callable from the rest of the system.
-
-Public APIs:
-
-- `detectSandboxLauncher`: identifies an available sandbox launcher.
-- `resolveSandboxAdapter`: returns an adapter suitable for the current environment.
-- `SandboxedProcessAdapter`: the adapter used to run sandboxed processes.
+- `detectSandboxLauncher`: reports whether the launcher is available, with its path or a reason when it is not.
+- `resolveSandboxAdapter`: builds the adapter for the current environment and returns the launcher info so callers can fail early.
+- `SandboxedProcessAdapter`: the decorator that performs the wrapped spawn.
 
 ### Network controls
 
-Network controls allow the module to support sandboxed execution with restricted outbound access.
-
-Public APIs:
-
-- `createAllowlistProxy`: creates a proxy layer for allowlisted network traffic.
-- `matchesAllowlist`: evaluates whether a target matches the configured allowlist.
-- `setupNetworkRun`: prepares execution context for a network run.
-- `createRunCa`: creates certificate authority material for network execution.
+- `setupNetworkRun`: starts the proxy worker for restricted runs and returns the proxy-addressed profile and environment.
+- `createAllowlistProxy` and `matchesAllowlist`: the allowlist proxy and host matching; these appear to be used by the proxy worker, and `proxy.ts` was not read in detail.
+- `createRunCa`: creates the run CA for opt-in TLS termination; it appears to be used by the proxy worker (`tls-ca.ts`).
 
 ## Main flows
 
 ### Flow 1: Resolve a sandbox adapter and run a command
 
-1. A caller in `src/commands`, `src/harness/web`, or another consumer asks the sandbox module for a way to execute a sandboxed process.
-2. The module uses detection logic to determine which sandbox launcher is available.
-3. It resolves a `SandboxedProcessAdapter` appropriate for that environment.
-4. The caller executes the command through the adapter.
-5. Internally, the adapter uses profile and wrapping logic to construct the sandboxed invocation, while execution primitives come from `src/harness/process`.
-
-This flow is the main integration point for higher-level callers that need sandboxed process execution but should not directly depend on low-level launcher details.
+1. A caller, such as one in `src/commands`, has a `SandboxProfile` and an inner `ProcessAdapter`.
+2. `resolveSandboxAdapter` calls `detectSandboxLauncher` to find the launcher for the platform.
+3. It returns a `SandboxedProcessAdapter` together with the launcher info.
+4. The caller spawns through the adapter. It wraps the command for the platform, and if the launcher is missing or the wrap is refused, it returns a `spawn-error` when the profile is fail-closed.
+5. The inner adapter performs the one real spawn of the wrapped command.
 
 ### Flow 2: Build a sandbox profile from policy
 
-1. A caller starts with a policy from `src/harness/policy` or a desired sandbox shape.
-2. The module derives or selects a profile using `sandboxProfileFromPolicy` or `defaultSandboxProfile`.
-3. If needed, it augments or constrains the profile using `defaultReadDenyList`.
-4. The resulting profile is passed to `buildSeatbeltProfile` or `buildBwrapArgs` depending on the chosen launcher.
-5. The resulting wrapper is executed through `wrapWithSandbox` or an adapter.
-
-This flow keeps policy interpretation separate from platform-specific command construction.
+1. A caller passes a `PolicyProfile` with `cwd`, `tmpDir`, `home` and any allowed domains to `sandboxProfileFromPolicy`. `dangerFullAccess` returns early with no containment.
+2. The mode comes from `defaults.write`, the network from `defaults.network` and the allowed domains, and `required` from `requiredControls.isolation`. Writable roots are `cwd` and `tmpDir` unless the mode is read-only.
+3. The read deny list is filled in from `defaultReadDenyList(home)`.
+4. `wrapWithSandbox`, through `resolveSandboxAdapter`, selects the Seatbelt or bwrap builder by platform. On Linux, a `restricted` profile is refused at this step.
 
 ### Flow 3: Run a networked command with allowlisting
 
-1. A caller needs to run a command that may perform network activity.
-2. The module prepares the network execution context with `setupNetworkRun`.
-3. `createAllowlistProxy` provides the network mediation layer, and `matchesAllowlist` decides which targets are permitted.
-4. `createRunCa` supports certificate-related material for the run.
-5. The command is still launched through the sandbox adapter or wrapper, so filesystem and process isolation are applied alongside network policy.
-
-This flow lets the harness combine sandbox isolation with controlled outbound access in a single execution model.
+1. A caller with a `restricted` profile calls `setupNetworkRun`, optionally with credential masks and `tlsTerminate`.
+2. The function starts the proxy worker in a worker thread, waits up to five seconds for its ready port, and returns the profile with `proxy` set to `127.0.0.1` and that port.
+3. The worker rules on each host against the allowlist and reports each decision back, which is appended to `decisions`.
+4. `envAdditions` supplies the `HTTP(S)_PROXY` variables, CA-trust variables when TLS is terminated, and sentinel values for masked credentials. The worker substitutes the real secret on the wire for the configured hosts.
+5. The command is launched through the adapter, so the launcher allows only the proxy socket on macOS. The caller reads `decisions` and calls `close()` after the run. On Linux this flow fails closed, because `restricted` is not enforced there.
 
 ## Module boundaries
 
@@ -261,5 +233,6 @@ Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that exi
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections enriched for wiki review.
 ```

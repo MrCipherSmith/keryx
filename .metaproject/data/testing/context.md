@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-10-01T09:34:16.051Z
+generatedAt: 2026-10-19T10:13:23.765Z
 status: complete
 
 ## Frameworks
@@ -11,13 +11,14 @@ status: complete
 
 - `check`: `bun run lint && bun run typecheck && bun run typecheck:scripts && bun test`
 - `check:core`: `bun run lint && bun run typecheck && bun run typecheck:scripts && bun run test:core`
+- `docs:check`: `bun run check:doc-links && bun run check:retired-spellings && bun test src/cli-reference-coverage.test.ts src/standard/commands-by-task.test.ts src/standard/help-groups.test.ts`
 - `test`: `bun test`
 - `test:client`: `bun run test:client:terminal && bun run test:client:streaming && bun run test:client:cancel-resume && bun run test:client:runtime`
-- `test:client:cancel-resume`: `bun test src/harness/run/ src/harness/resume/ src/harness/session/ src/session/ src/bus/ src/rewind/ src/remote/ src/commands/sessions`
-- `test:client:runtime`: `bun test src/harness/ src/mcp-client/ src/mcp-servers/ src/agents/ src/commands/agent src/commands/harness src/commands/providers`
+- `test:client:cancel-resume`: `bun test src/harness/run/ src/harness/resume/ src/harness/session/ src/session/ src/bus/ src/rewind/ src/remote/ src/docs/ src/commands/sessions`
+- `test:client:runtime`: `bun test src/harness/ src/mcp-client/ src/mcp-servers/ src/agents/ src/commands/agent src/commands/harness src/commands/providers src/scheduler/ src/intake/`
 - `test:client:streaming`: `bun test src/harness/provider/`
 - `test:client:terminal`: `bun test src/tui/ src/commands/shell`
-- `test:core`: `bun test src/cli src/core src/impact-evidence/ src/shell-source-audits.test.ts src/acp/ src/assets/ src/bundle/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/eval/ src/flow/ src/forgetting/ src/gdgraph/ src/gdskills/ src/governance/ src/product/ src/health/ src/integrations/ src/job/ src/learning/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/retention/ src/review/ src/rules/ src/sac/ src/security/ src/stack/ src/standard/ src/sync/ src/testing/ src/trigger/ src/wiki/ scripts/`
+- `test:core`: `bun test src/cli src/core src/impact-evidence/ src/shell-source-audits.test.ts src/acp/ src/assets/ src/bundle/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/decisions/ src/eval/ src/flow/ src/forgetting/ src/gdgraph/ src/gdskills/ src/governance/ src/product/ src/health/ src/integrations/ src/job/ src/learning/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/retention/ src/review/ src/rules/ src/sac/ src/security/ src/stack/ src/standard/ src/sync/ src/testing/ src/trigger/ src/wiki/ scripts/`
 - `test:guards`: `bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts src/gdskills/agent-catalogue-xref.test.ts src/gdskills/enforcement-claims.test.ts`
 
 ## Configs
@@ -43,12 +44,17 @@ status: complete
 - fixtures/change-impacted-test/src/gamma.test.ts
 - scripts/benchmark/ablation-emission-gating.test.ts
 - scripts/benchmark/build-comparative-report.test.ts
+- scripts/benchmark/long-metrics.test.ts
+- scripts/benchmark/long-runner-turn.test.ts
+- scripts/benchmark/long-tasks.test.ts
 - scripts/benchmark/oracle-emission-gating.test.ts
+- scripts/benchmark/replay-session-shape.test.ts
 - scripts/benchmark/run-ablation-raw.test.ts
 - scripts/benchmark/run-containment.test.ts
 - scripts/benchmark/run-express-oracle.test.ts
 - scripts/benchmark/run-safety.test.ts
 - scripts/benchmark/run-wiki-freshness-scale.test.ts
+- scripts/benchmark/token-metrics.test.ts
 - scripts/benchmark/wiki-freshness-scale-fixture.test.ts
 - scripts/check-doc-links.test.ts
 - scripts/check-retired-cli-spellings.test.ts
@@ -74,6 +80,7 @@ status: complete
 - src/acp/prompt-content.test.ts
 - src/acp/protocol.test.ts
 - src/acp/roster.test.ts
+- src/acp/server-archive.test.ts
 - src/acp/server-mcp.test.ts
 - src/acp/server-models.test.ts
 - src/acp/session-mcp.test.ts
@@ -103,19 +110,14 @@ status: complete
 - src/bundle/external.test.ts
 - src/bundle/hook-audit.e2e.test.ts
 - src/bundle/inspect.test.ts
-- src/bundle/manifest.test.ts
-- src/bundle/own-repo-roundtrip.test.ts
-- src/bundle/paths.test.ts
-- src/bundle/plan.test.ts
-- src/bundle/roundtrip.e2e.test.ts
-- src/bundle/uninstall.test.ts
 
-- ... 1276 more
+- ... 1672 more
 
 ## CI
 
 - .github/workflows/ci.yml
 - .github/workflows/docs.yml
+- .github/workflows/full-check-diagnostic.yml
 - .github/workflows/release.yml
 - .github/workflows/wiki-freshness.yml
 
@@ -148,6 +150,9 @@ status: complete
 - docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: | F-026 | P1 | Sibling worktrees cannot share checkout-rooted SAC state | containment/storage | explicit clone/worktree model test |
 - docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: | F-027 | P1 | Every read performs a durable locked append; no surfaced retention | FWK ledger | 10k-read SLO, prune/repair tests |
 - docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: | F-034 | P1 | Historical test totals are presented as current evidence | SAC docs | evidence pinned to commit/tag/date |
+- docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization
+- docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: https://github.com/a2aproject/A2A/blob/main/docs/specification.md
+- docs/analysis/keryx-improvements-1/2026-08-14/report/ai/report.md: owner_contract_tests
 
 ## Recommendations
 

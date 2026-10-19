@@ -1,119 +1,82 @@
 ---
 Title: Module src/harness/flow
-Version: 0.1.0
-Type: component
-Status: draft
-Summary: "`src/harness/flow` groups 4 file(s). Depends on `src/flow`, `src/harness/completion`, `src/contracts`."
----
-```markdown
----
-Title: Module src/harness/flow
-Version: 0.1.0
+Version: 1.0.0
 Type: component
 Status: accepted
-Summary: "`src/harness/flow` groups 4 files and provides a harness-side integration point for flow behavior. Depends on `src/flow`, `src/harness/completion`, `src/contracts`, and `src/harness/evidence` (tests)."
+Summary: "`src/harness/flow` is the harness-side bridge that maps a completion-gate result onto one Task Manager disposition, and checks that the persisted task agrees with its gate."
 ---
 
 # Module src/harness/flow
 
 ## Summary
 
-`src/harness/flow` provides a controlled boundary between the harness layer and the flow layer. It enables harness code to exercise, validate, and coordinate flow-related behavior without duplicating flow internals.
-
-The module depends on:
-
-- `src/flow` — core flow semantics
-- `src/harness/completion` — completion coordination
-- `src/contracts` — shared type/contract definitions
-- `src/harness/evidence` — test artifact handling (tests only)
+`src/harness/flow` is the harness-side boundary for flow completion. It turns a harness completion-gate result into a single Task Manager call and checks that the resulting task state agrees with the gate. It never advances flow state itself and never writes `flow.json`; the Task Manager stays the only coordinator.
 
 ## Overview
 
-This module owns the harness integration for flow behavior. It exposes a managed boundary where flow primitives can be used, tested, and validated under harness expectations.
+This module owns the harness's channel for advancing a managed flow's completion state. It has two implementation files: `managed-flow-port.ts`, which maps a completion gate onto one `FlowService.taskDone` call, and `parity.ts`, a pure comparison that verifies the gate and the Task Manager task agree. Both are marked as flow 014 work (FI-01 and FI-02) and are bound by the frozen acceptance tags `@SC_R09_SINGLE_COORDINATOR` and `@SC_R09_DIRECT_FLOW_FILE_EDIT_DENIED`.
 
-The two implementation files are:
+## How it works
 
-- **managed-flow-port.ts** — the main harness-facing integration surface
-- **parity.ts** — utilities for consistency validation around flow behavior
+The dependency direction is one-way. `managed-flow-port.ts` imports only types: the Task Manager types from `src/flow/types` and the `CompletionGateResult` type from `src/harness/completion/gate`. It deliberately does not import `src/flow/store`, which is the flow-state writer, and it performs no filesystem or network access. `parity.ts` follows the same rule; it imports only `FlowTask` and `CompletionGateResult` types.
 
-## File Structure
+The port is a factory. `createTaskManagerFlowPort(service)` returns a `ManagedFlowPort` whose `completeFromGate` calls the injected `FlowService.taskDone` exactly once and returns the `FlowState` it produces. The disposition and the reason are computed by two pure helpers, `gateToDisposition` and `gateToReason`, so the mapping from gate to task state lives in one place.
 
-| File | Purpose | Imports | Imported By |
-|------|---------|---------|-------------|
-| `managed-flow-port.ts` | Harness integration surface | 2 | 4 |
-| `parity.ts` | Consistency checking utility | 2 | 1 |
-| `managed-flow-port.test.ts` | Integration tests | 7 | 0 |
-| `parity.test.ts` | Parity utility tests | 7 | 0 |
+Parity checking is a separate, read-only step. `completionParity(task, gate)` compares a persisted `FlowTask` with the gate that should have produced it and returns a `ParityResult` (`consistent`, plus an optional `reason`). `isFailureDisposition` is a companion predicate that treats every gate status other than `pass` as a failure disposition.
 
-## Key Concepts
+## Key concepts
 
-- **Managed flow port**  
-  A harness-controlled boundary around flow behavior. Allows harness code to interact with flow functionality in a constrained, testable way.
+- **Completion gate result.** `CompletionGateResult` from `src/harness/completion/gate`. Its `status` is `pass`, `fail`, `blocked` or `unknown`, and it may carry `unresolvedBlockerIds` and per-check details.
+- **Task disposition.** `TaskDisposition` from `src/flow/types`. The gate maps as follows: `pass` to `completed`, `blocked` to `blocked`, and `fail` or `unknown` to `failed`. The `unknown` case defaults to `failed` so a false completion is never recorded.
+- **Managed-flow port.** `ManagedFlowPort`, the harness's only channel for advancing managed-flow completion. It is built by `createTaskManagerFlowPort`.
+- **Run link and evidence refs.** `TaskRunLink` and `evidenceRefs` are passed through with the `taskDone` call, so a recorded disposition can be traced back to the run and the evidence behind it.
+- **Parity rule.** The agreement the module checks: `pass` requires a task that is `done` and `completed`; `fail` requires `failed`; `blocked` requires `blocked`; and no non-pass gate may coincide with a completed task.
+- **Single coordinator.** The invariant that only the Task Manager (`FlowService`) changes task and flow state. Both files are written to keep it.
 
-- **Flow behavior**  
-  Behavior owned by `src/flow`. This module integrates with the flow layer but does not replace it.
+## Main flows
 
-- **Completion handling**  
-  The module depends on `src/harness/completion`, indicating that completion coordination is part of the harness flow boundary.
+1. **Completing a task from a gate.** A caller supplies `cwd`, `flowId`, `taskId`, the `CompletionGateResult`, the evidence refs and the `TaskRunLink` to `completeFromGate`. The port calls `gateToDisposition`, then `gateToReason`, then `service.taskDone` once, and returns the resulting `FlowState`. A `pass` gate gets no reason. A blocked gate gets a reason of the form `unresolved blockers: <ids>`, and a failing gate joins the detail of each failing check.
 
-- **Contract conformance**  
-  The dependency on `src/contracts` provides shared type boundaries to keep the integration consistent.
+2. **Checking parity after completion.** Given the persisted `FlowTask` and the gate, `completionParity` applies the parity rule. A `pass` gate is consistent only when the task is `done` with disposition `completed`. Any other gate status is inconsistent if the task is completed. A `fail` or `blocked` gate is consistent only when the task's disposition is `failed` or `blocked` respectively. The result is `{ consistent: true }`, or `{ consistent: false, reason }` naming the mismatch.
 
-- **Parity**  
-  Parity utilities check that flow-related behavior remains aligned across modules involved in the harness integration.
+## Reference (from code graph)
 
-- **Evidence**  
-  Tests use `src/harness/evidence` to capture or inspect observable behavior during validation.
+Extracted deterministically by `keryx wiki collect`; regenerated by
+`--force`. The prose sections above are the agent/human-owned part.
 
-## Usage Patterns
+### Key files
 
-### Harness-side use of the managed flow port
+- `src/harness/flow/managed-flow-port.test.ts` - imported by 0, imports 7
+- `src/harness/flow/parity.test.ts` - imported by 0, imports 7
+- `src/harness/flow/managed-flow-port.ts` - imported by 4, imports 2
+- `src/harness/flow/parity.ts` - imported by 1, imports 2
 
-1. A consumer (such as `src/harness/child`) imports `managed-flow-port`.
-2. The port provides a controlled surface for flow behavior instead of exposing internal flow details directly.
-3. The port relies on `src/flow` for flow semantics and `src/harness/completion` for completion coordination.
-4. `src/contracts` provides shared types so the boundary stays consistent.
+### Depends on
 
-### Parity validation
+- `src/flow` - 2 import(s)
+- `src/harness/completion` - 2 import(s)
 
-1. Code or tests use `parity` to compare expected and observed flow behavior.
-2. Comparisons are evaluated against `src/flow`, `src/contracts`, and harness completion behavior.
-3. Tests verify alignment between flow behavior and harness expectations.
+### Dependency basis
 
-### Integration testing with evidence
+- Production imports only: 13 import(s) from test file(s) (e.g. `src/flow/duplicate-ids.test.ts`) excluded from the two sections above in both directions.
 
-1. Tests import multiple dependencies to simulate real integration paths.
-2. `src/harness/evidence` captures observable behavior for inspection.
-3. This turns the module into a verification layer for the harness flow boundary.
+### Graph signals
 
-## Dependencies
+- Files: 4
+- Cross-module imports: 4
 
-### Direct imports from this module
+## Related Wiki
 
-| Module | Import Count |
-|--------|-------------|
-| `src/flow` | 8 |
-| `src/harness/completion` | 4 |
-| `src/contracts` | 2 |
-| `src/harness/evidence` | 1 |
-
-### Consumers of this module
-
-| Module | Import Count |
-|--------|-------------|
-| `src/flow` | 1 |
-| `src/harness/child` | 1 |
-
-## Related Pages
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
+exist are linked, other modules are named as code paths; when enriching, add
+new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/flow](src-flow.md)
 - [Module src/harness/completion](src-harness-completion.md)
-- [Module src/contracts](src-contracts.md)
-- [Module src/harness/evidence](src-harness-evidence.md)
-- [Module src/harness/child](src-harness-child.md)
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
+- 0.1.1 - Generated sections regenerated by `keryx wiki collect --force`; prose untouched.
 - 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
-```

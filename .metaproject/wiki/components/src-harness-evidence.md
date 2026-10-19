@@ -1,92 +1,63 @@
 ---
 Title: Module src/harness/evidence
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
-Summary: "`src/harness/evidence` groups 3 file(s). Depends on `src/contracts`. Exposes 10 public symbol(s)."
+Status: accepted
+Summary: "`src/harness/evidence` defines the evidence record shapes the harness links its actions to, and the pure redaction gate that keeps protected content out of persisted evidence."
 ---
 # Module src/harness/evidence
 
 ## Summary
 
-`src/harness/evidence` provides the shared contract layer for evidence created, scanned, referenced, and redacted by harness-related modules. It defines typed objects that describe evidence: its kind, provenance, artifact linkages, causal relationships, scan outputs, and redaction transformations.
+`src/harness/evidence` owns the evidence vocabulary for the harness: the `EvidenceRecord` shape that ties a harness action to a hash-addressed artifact, and `redactForPersistence`, a pure gate that masks protected content before anything is persisted. The types in `types.ts` mirror the frozen `evidence-record.schema.json`; the only runtime code is the redaction helper in `redaction.ts`.
 
 ## Overview
 
-This module centralizes evidence-related type definitions used across the harness and security subsystems. By exposing a common vocabulary through `src/harness/evidence/types.ts`, other modules can exchange evidence data without duplicating interface definitions.
-
-The module also provides redaction functionality through `src/harness/evidence/redaction.ts`, including the [`redactForPersistence`](#public-api) helper for preparing evidence before storage.
-
-Because evidence often carries sensitive data — file contents, process output, secrets caught mid-flight — this module's redaction layer is a deliberate boundary: anything written to durable storage should pass through it first.
+This module defines what a piece of harness evidence looks like and how sensitive content is kept out of it. `types.ts` holds type-only shapes (`EvidenceRecord` and its causal, artifact and provenance parts) that mirror the frozen `evidence-record.schema.json`, so a constructed record can be validated against that schema unchanged. `redaction.ts` holds the runtime, `redactForPersistence`, which decides what may be written to storage. Its file headers cite acceptance scenario SC_R11 and ADR-0001 item 6, which asks that every meaningful action be linked to a redacted evidence record.
 
 ## How it works
 
-The module consists of three files:
+The two files do not depend on each other at runtime. `types.ts` is declarations only; its header states it has no runtime, so it carries no determinism concerns. A record is assembled from four parts:
 
-| File | Purpose | Import relationships |
-|------|---------|---------------------|
-| `types.ts` | Core evidence shapes and contracts | Imported by 7 modules |
-| `redaction.ts` | Redaction logic and helpers | Imported by 4 modules |
-| `redaction.test.ts` | Unit tests for redaction | Imports 3 dependencies |
+- `EvidenceCausalIds` ties the record to a run, with required `runId`, `sessionId` and `correlationId`, and optional `parentEventId`, `attemptId` and `branchId`.
+- `EvidenceArtifactRef` points at the artifact through `artifactId`, `kind`, an optional `path`, and a lowercase sha-256 `hash`.
+- `EvidenceProvenance` records a `trustLevel` (`trusted`, `untrusted`, `derived` or `unknown`) and a `sourceKind`, with optional `sourceHash` and `taintIds`.
+- `kind` classifies the record with the closed `EvidenceKind` union.
 
-`types.ts` serves as the canonical contract layer. Other modules import evidence types from this file rather than defining local interfaces, which keeps evidence shapes consistent across the codebase and avoids drift between producers and consumers of evidence data.
-
-The module depends on [`src/contracts`](src-contracts.md), aligning evidence definitions with the application's shared contracts.
+`redactForPersistence(content, deps)` is a pure function of its inputs. The secret scanner is not bundled; it is injected as `deps.scan`, which returns a `ScanResult`. The function branches on that result in a fixed order. A `scanFailed` result is terminal: it returns `{ blocked: true, reason }` and nothing else, so unscanned content cannot leak. A flagged result replaces the preview with a placeholder of the form `[redacted:<category>] N chars withheld` and sets provenance `redaction: "full"`. A clean result keeps the preview verbatim, with category `"none"` and `redaction: "none"`. Every non-blocked result also carries a sha-256 hash of the raw content, which callers can use as an artifact `hash`.
 
 ## Key concepts
 
 ### Evidence identity
 
-- **`EvidenceRecord`** — The primary record describing a piece of evidence: what it is, where it came from, and what it relates to.
-- **`EvidenceKind`** — Classification or category for evidence, used to distinguish different flavors of recorded observations.
-- **`EvidenceCausalIds`** — Identifiers linking a piece of evidence back to the events or actions that caused it.
+- **`EvidenceRecord`** — The immutable unit of evidence: `schemaVersion` (always 1), `evidenceId`, `causal`, `kind`, `artifact`, `provenance`, and an RFC3339 `recordedAt`.
+- **`EvidenceKind`** — A closed union: `context`, `tool-result`, `receipt`, `test`, `health`, `security`, `review`, `completion-gate` and `custom`. The tests check that an invented kind fails schema validation.
+- **`EvidenceCausalIds`** — The linkage back to a run. The tests check that a record without it fails schema validation.
 
 ### Provenance and artifacts
 
-- **`EvidenceProvenance`** — Metadata describing where a piece of evidence originated (e.g. which process, run, or scan produced it).
-- **`EvidenceArtifactRef`** — A reference to an artifact (file, output, etc.) related to a piece of evidence.
+- **`EvidenceProvenance`** — Trust and source metadata for a record, identified by `provenanceId`.
+- **`EvidenceArtifactRef`** — The hash-addressed reference to the artifact the record describes.
 
-### Scanning
+### Scanning and redaction
 
-- **`ScanResult`** — The result data produced when evidence is passed through a scanning process.
-
-### Redaction
-
-- **`RedactionDeps`** — Dependencies or context required to perform redaction operations.
-- **`RedactionResult`** — Output shape produced by a redaction operation, containing the sanitized evidence.
-- **`RedactionProvenance`** — Metadata describing what redaction was applied and why.
-- **`redactForPersistence`** — Helper function that transforms evidence into a form safe to persist to storage.
+- **`ScanResult`** — What the injected scanner returns: `hasSecret`, an optional `category`, and `scanFailed`. The scanner reports categories only, not spans.
+- **`RedactionDeps`** — Holds only `scan: (content: string) => ScanResult`.
+- **`RedactionResult`** — A union discriminated on `blocked`. The non-blocked branch carries `preview`, `hash`, `category` and `provenance`; the blocked branch carries only `reason`.
+- **`RedactionProvenance`** — Non-sensitive metadata about the redaction: `source: "harness-redaction"`, `category`, and `redaction: "full" | "none"`.
 
 ## Main flows
 
-### Creating evidence records
+### Redacting content before persistence
 
-1. A consumer module imports evidence types from `src/harness/evidence`.
-2. It constructs an `EvidenceRecord`, classifying it with `EvidenceKind`.
-3. It attaches provenance via `EvidenceProvenance`.
-4. It references related artifacts using `EvidenceArtifactRef`.
-5. It associates causal identifiers through `EvidenceCausalIds`.
+1. The caller supplies a `scan` function in `RedactionDeps`. The module does not choose a scanner.
+2. `redactForPersistence(content, deps)` calls `deps.scan(content)` once.
+3. If the scan reports `scanFailed`, the result is `{ blocked: true, reason }`, and the reason text states that persistence is blocked.
+4. Otherwise the preview is masked when `hasSecret` is true and kept verbatim when it is not. The hash and provenance are attached in both cases.
 
-### Redacting before persistence
+### Building a validated evidence record
 
-Modules that need to sanitize evidence before storage follow this pattern:
-
-1. Gather redaction context into `RedactionDeps`.
-2. Call `redactForPersistence(evidence, deps)`.
-3. Receive a `RedactionResult` containing the transformed evidence and an accompanying `RedactionProvenance` describing what was removed or altered.
-
-### Sharing across modules
-
-The centralized types enable consistent evidence exchange between:
-
-- [`src/harness/child`](src-harness-child.md)
-- [`src/harness/extension`](src-harness-extension.md)
-- [`src/harness/flow`](src-harness-flow.md)
-- [`src/harness/process`](src-harness-process.md)
-- [`src/harness/run`](src-harness-run.md)
-- [`src/security`](src-security.md)
-
-Because all these modules speak the same evidence vocabulary, evidence produced in one part of the harness (e.g. during process execution) can be consumed, scanned, or redacted elsewhere without translation.
+The tests show the intended use. A caller takes the `hash` from a non-blocked redaction result as `artifact.hash`, fills in `causal`, `kind` and `provenance`, and checks the record with `validateAgainstSchema("evidence-record.schema.json", ...)` from `src/contracts/validator`. Nothing in this module constructs records or runs that validator; the step is exercised only by `src/harness/evidence/redaction.test.ts`.
 
 ## Public API
 
@@ -127,4 +98,5 @@ This module is consumed by:
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 0.1.0 — Initial documentation generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z.

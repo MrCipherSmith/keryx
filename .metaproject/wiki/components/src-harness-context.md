@@ -1,14 +1,6 @@
 ---
 Title: Module src/harness/context
-Version: 0.1.0
-Type: component
-Status: draft
-Summary: "`src/harness/context` groups 2 file(s). Depends on `src/contracts`. Exposes 12 public symbol(s)."
----
-```markdown
----
-Title: Module src/harness/context
-Version: 0.1.0
+Version: 1.0.0
 Type: component
 Status: accepted
 Summary: "`src/harness/context` groups 2 file(s). Depends on `src/contracts`. Exposes 12 public symbol(s)."
@@ -18,11 +10,7 @@ Summary: "`src/harness/context` groups 2 file(s). Depends on `src/contracts`. Ex
 
 ## Summary
 
-`src/harness/context` owns the typed model of a harness context manifest. It defines the public shapes used to describe context sources, their scope, and the limits that apply to them.
-
-The module provides a `buildContextManifest` entry point for assembling inputs into a manifest object. This gives the harness and budget layers a shared, inspectable representation of tracked context material.
-
-It depends on `src/contracts`, positioning it near a stable boundary between harness components and shared application contracts.
+`src/harness/context` owns the Release 0 trusted-context manifest: a bounded, deterministic record of which context sources were loaded for a run, how each one is fingerprinted, and whether it may be trusted as policy. Its single builder, `buildContextManifest`, turns caller-supplied source descriptions into a `ContextManifest` object that can be inspected and validated.
 
 ## Overview
 
@@ -30,16 +18,56 @@ It depends on `src/contracts`, positioning it near a stable boundary between har
 
 - `src/harness/context/manifest.ts`
 
-That file defines:
+The module owns the manifest types, the source and scope shapes, the `MAX_CONTEXT_BYTES` and `MAX_CONTEXT_TOKENS` constants, and the `buildContextManifest` builder. Its companion test file (`src/harness/context/manifest.test.ts`) checks the output against the frozen manifest schema through `src/contracts/validator`. It is a declarative record of context state; it does not load files, call the network, or orchestrate anything itself.
 
-- Manifest interfaces
-- Source-related types
-- Context limits
-- A builder function
+## How it works
 
-A companion test file (`src/harness/context/manifest.test.ts`) covers this behavior.
+The builder is a pure function of its inputs plus one injected clock. It runs in a short pipeline inside `buildContextManifest`:
 
-Conceptually, the module acts as a declarative definition of context state rather than a runtime subsystem that performs orchestration. Other modules consume it to make decisions about context accounting, sourcing, and constraints.
+1. **Normalize.** `normalizeSource` coerces each entry of the opaque `sources` array into a `ContextSourceInput`. Anything malformed falls back to safe defaults (`kind` becomes `"unknown"`, `available` becomes `false` unless it is exactly `true`), so bad input cannot silently count as loaded.
+2. **Map each source.** `mapSource` produces a `ContextManifestSource`. The two branches are the core trust rule. An available source is fingerprinted with a sha256 of its content, graded `reliability: "exact"`, and marked `trustedAsPolicy: true`. An unavailable source is kept, not dropped. It gets a fingerprint derived from its kind and path, takes the caller's `skipReason` as its summary, and is graded `reliability: "unknown"` with `trustedAsPolicy: false`.
+3. **Scope.** Distinct non-empty source paths become `scope.paths`, and `scope.scopeHash` is a sha256 of that list.
+4. **Limits.** `actualBytes` sums the UTF-8 byte length of available content. `estimatedTokens` is that byte count divided by four, rounded up. The `maxBytes` and `maxTokens` values are echoed from the caller's `limits` argument. The builder does not compare them against the constants, so enforcing the ceilings is left to callers.
+5. **Hash and stamp.** `contextHash` is a sha256 over `projectRoot`, scope, sources and limits, with no timestamp in it. `createdAt` comes from `deps.clock()`. Two builds over identical input and clock output are byte-identical, which makes the manifest suitable for comparison and caching.
+
+The file imports only `node:crypto`. Keeping time behind `deps.clock` and avoiding filesystem access keeps the builder deterministic and easy to test.
+
+## Key concepts
+
+- **ContextManifest** is the output: `schemaVersion`, `contextHash`, `projectRoot`, `createdAt`, `scope`, `sources` and `limits`. Two optional fields, `worktree` and `freshness`, are declared but this builder never sets them.
+- **ContextSourceInput** is the raw, caller-facing description of one source. It is either `available` with `content`, or unavailable with a `skipReason`.
+- **ContextManifestSource** is the normalized form. Its trust is expressed by the pair `reliability` (`SourceReliability`: `exact`, `estimated`, `unknown`) and `trustedAsPolicy`. Only the `exact` and `unknown` grades are produced here; `estimated` is in the type but never assigned.
+- **SourceRedaction** (`not-needed`, `applied`, `failed-safe`) is declared on the source type, but this file never assigns it.
+- **ContextManifestScope** names the paths the context covers, plus a `scopeHash`. `base` and `head` are optional and not set by the builder.
+- **ContextManifestLimits** pairs the caller's ceilings with the measured `actualBytes` and `estimatedTokens`.
+- **Dependency injection.** `BuildContextManifestDeps` supplies only `clock`. The module's constants (`MAX_CONTEXT_BYTES`, 2 MiB, and `MAX_CONTEXT_TOKENS`, 200,000) are documented Release 0 ceilings; they are exported for callers and are not read by the builder.
+
+## Main flows
+
+### Build a manifest from loaded and skipped sources
+
+1. A caller passes a `BuildContextManifestInput` (`projectRoot`, `sources`, `limits`) and a `BuildContextManifestDeps` with a `clock`.
+2. `buildContextManifest` normalizes and maps every entry. Loaded sources come out trusted, and skipped optional artifacts come out recorded and untrusted.
+3. The builder computes the scope, limits and `contextHash`, then returns the manifest with `createdAt` from the clock.
+
+### Record an unavailable optional artifact
+
+1. A source arrives with `available: false` and a `skipReason`.
+2. `mapSource` emits it with `trustedAsPolicy: false`, `reliability: "unknown"`, and the skip reason as `summary`. It still counts in `scope.paths` and the hash, so a skipped artifact is visible in the record rather than missing from it.
+
+### Verify the output against the contract
+
+1. `manifest.test.ts` builds manifests from fixtures and checks them with `validateAgainstSchema` from `src/contracts/validator`. This is the only place the module touches `src/contracts` at runtime. The production file has no such import.
+2. Other code in `src/` refers to `ContextManifestSource` and `mapSource` only in comments and tests, such as `src/harness/policy/types.ts` and `src/harness/budget/reconcile.test.ts`. The consumer relationship with `src/harness/budget` is described in the Dependents section below; in the source read for this page it appears to rely on those types rather than on imports from this file.
+
+## Dependencies
+
+- **Depends on:** `src/contracts` (1 import)
+
+## Dependents
+
+- `src/harness/budget` — 2 imports
+- `src/harness` — 1 import
 
 ## Public API
 
@@ -67,68 +95,13 @@ Conceptually, the module acts as a declarative definition of context state rathe
 
 - `buildContextManifest` — assembles a `BuildContextManifestInput` into a `ContextManifest`
 
-## Key Concepts
-
-### ContextManifest
-
-The primary output of this module. A normalized representation of context state that includes involved sources and applicable limits. Consumers can inspect this object directly rather than re-deriving context boundaries.
-
-### Input vs. Manifest Representation
-
-The module separates raw input from manifest representation:
-
-| Input Type | Manifest Type | Purpose |
-|------------|---------------|---------|
-| `ContextSourceInput` | `ContextManifestSource` | Transforms user-provided source data into a standardized form |
-
-The builder performs this transform, returning manifest-shaped objects that are easier for consumers to read and reason about.
-
-### Scope and Limits
-
-Two supporting abstractions constrain how context is interpreted:
-
-- `ContextManifestScope` — describes what context applies to (e.g., function, file, or module level)
-- `ContextManifestLimits` — describes capacity boundaries, aligned with exported byte and token caps
-
-### Dependency Injection
-
-`BuildContextManifestDeps` keeps the builder dependency-injected rather than hard-wired to side-effecting services. This design keeps manifest construction testable and portable across environments.
-
-## Main Flows
-
-### Build a Context Manifest
-
-1. A caller from the harness or budget layer invokes `buildContextManifest`.
-2. The call supplies a `BuildContextManifestInput`.
-3. That input includes source data via `ContextSourceInput` and dependencies via `BuildContextManifestDeps`.
-4. The builder produces a `ContextManifest`.
-5. Consumers inspect the manifest for sources, scope, and limits.
-
-### Apply Context Limits
-
-1. The builder references `MAX_CONTEXT_BYTES` and `MAX_CONTEXT_TOKENS`.
-2. These constants provide shared ceilings for context representation.
-3. Downstream modules (especially `src/harness/budget`) use those limits as part of their own accounting logic.
-
-### Consume the Manifest
-
-1. `src/harness/budget` imports from this module and uses its exports.
-2. `src/harness` also imports from it as part of the broader harness surface.
-3. The manifest serves as a shared contract for how context state is represented across harness subsystems.
-
-## Dependencies
-
-- **Depends on:** `src/contracts` (1 import)
-
-## Dependents
-
-- `src/harness/budget` — 2 imports
-- `src/harness` — 1 import
-
 ## Related Pages
 
 - [Wiki Index](../index.md)
 - [Module src/contracts](src-contracts.md)
 - [Module src/harness/budget](src-harness-budget.md)
 - [Module src/harness](src-harness.md)
-```
+
+## Changelog
+
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.

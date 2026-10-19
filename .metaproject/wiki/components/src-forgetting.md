@@ -1,160 +1,96 @@
 ---
 Title: Module src/forgetting
-Version: "0.1.0"
-Type: component
-Status: draft
-Summary: "`src/forgetting` groups 8 file(s). Depends on `src/gdgraph`, `src/wiki`, `src/retention`. Exposes 20 public symbol(s)."
----
-```markdown
----
-Title: Module src/forgetting
-Version: "0.1.0"
+Version: "1.0.0"
 Type: component
 Status: accepted
-Summary: "`src/forgetting` groups 8 file(s). Depends on `src/gdgraph`, `src/wiki`, `src/retention`. Exposes 20 public symbol(s)."
+Summary: "`src/forgetting` owns the deletion trail: it records what knowledge was removed, reconciles the wiki identity layer, and explains absent wiki pages and graph targets. Depends on `src/gdgraph`, `src/wiki`, `src/retention`. Exposes 20 public symbol(s)."
 ---
 
 # Module src/forgetting
 
 ## Overview
 
-The `src/forgetting` module owns the "forgetting" layer for recorded knowledge. It models what has been removed, what is absent, and why that absence is known, then exposes reconciliation and lookup primitives to other parts of the system.
-
-The module sits between knowledge persistence and knowledge consumers. It can:
-
-- Read deletion evidence from a journal
-- Interpret evidence as a forgetting trail
-- Explain coverage and attribution for removals
-- Help callers understand how a missing graph target or wiki page relates to existing forgetting records
+The `src/forgetting` module owns the deletion trail for recorded knowledge. It keeps an append-only record of what was removed, when, by whose request and on what grounds, in its own file tree, so that deleting the knowledge does not delete the evidence of the deletion. Its facade in `src/forgetting/service.ts` runs a reconcile after a removal: it writes wiki identity tombstones, reports every knowledge layer with a cause, and appends a deletion record when the run actually removed something. Other surfaces read the trail to say why a wiki page or graph target is absent.
 
 ### Dependencies
 
-The module depends on related knowledge layers:
-
 | Module | Purpose |
 |--------|---------|
-| `src/gdgraph` | Graph-target related knowledge state |
-| `src/wiki` | Wiki-page related knowledge state |
-| `src/retention` | Retention-aware interpretation of removals |
+| `src/gdgraph` | Code graph access and dangling-edge detection (`loadGraph`, `getDanglingEdges`, `namesDeletedFile`) |
+| `src/wiki` | Section registry and page collection (`syncSectionRegistry`, `readSectionRegistryState`, `resolveSectionIdentity`) |
+| `src/memory` | Memory entries and cross-layer references to wiki knowledge (`collectEntries`, `checkMemoryCrossLayer`) |
+| `src/lib` | Filesystem helpers (`isNotFound`, `pathExists`) |
+| `src/retention` | Retention policy; a journal test pins that retention never sweeps the deletion journal |
 
 Primary callers are `src/commands` and `src/harness/tool`.
 
-## Architecture
+## How it works
 
-The module is organized into layers with distinct responsibilities.
+The module is a facade over three internal concerns: a journal that holds the evidence, a write path that records identity tombstones, and read-side interpretation that turns the journal and live stores into answers. Dependencies point inward toward the journal, and the facade is the only entry point the transports use.
 
-### Public Service Layer
+- **Facade.** `src/forgetting/service.ts` exposes `reconcileForgetting`, which takes a `ForgettingReconcileInput` and returns a `ForgettingReconcile`. It sequences the work, and the order matters: the identity layer is written first, so the propagation report describes the state the run leaves behind rather than the state it found. The facade re-exports the read-side functions so callers never import internals of this directory.
+- **Journal.** `src/forgetting/journal.ts` owns `.metaproject/data/forgetting/journal.jsonl`. Its only write is `appendDeletionRecord`; there is no function that rewrites the file. Reads return a three-state `JournalRead` (`absent`, `present`, `unreadable`), so a damaged file is never mistaken for an empty history. The same file defines attribution: an `Attribution` carries a basis of `stated`, `derived` or `unknown`, and `resolveRequestedBy` and `resolveGrounds` never promote a git identity into a stated requester.
+- **Identity layer.** `src/forgetting/identity.ts` is the one layer the reconcile writes. `applyIdentityLayer` collects pages, builds the section index and calls `syncSectionRegistry`, which only adds tombstones. It returns `tombstonedNow`, the refs this run produced, so a record can claim only its own removals.
+- **Propagation report.** `src/forgetting/propagation.ts` deliberately does not cascade a deletion into other layers. `reportPropagation` builds one `LayerOutcome` per `KnowledgeLayer` (wiki identity, wiki index, wiki freshness, memory, graph, SAC evidence). Each outcome is `examined`, `failed` or `not-examined`, and lists dangling references with their causes. Memory entries and graph edges are reported, not changed.
+- **Trail reads.** `src/forgetting/trail.ts` loads the journal into a `DeletionTrail`, measures `trailCoverage`, and answers lookups with verdicts such as `recorded-removed`, `no-removal-recorded`, `trail-absent` and `trail-unreadable`. Every "no record" answer carries `TRAIL_SCOPE_CAVEAT`, because the trail holds only removals that a reconcile observed. `explainAbsentWikiPage` and `explainAbsentGraphTarget` combine the section registry, the trail and the graph's unresolved imports.
 
-`src/forgetting/service.ts` is the main coordination point. It exposes the reconciliation API:
-
-- `ForgettingReconcileInput`
-- `ForgettingReconcile`
-- `reconcileForgetting`
-
-### Persistence and Evidence
-
-`src/forgetting/journal.ts` handles the deletion journal boundary:
-
-- `deletionJournalPath` - path helper or constant for the deletion journal
-- `readDeletionJournal` - journal reader
-
-The journal is the low-level record from which higher-level forgetting state is derived.
-
-### Trail Interpretation
-
-`src/forgetting/trail.ts` interprets deletion evidence as a `ForgettingTrail`:
-
-- `loadDeletionTrail` - trail loading
-- `searchRemovals`, `lookupRemoval` - search and lookup
-- `trailCoverage`, `describeCoverageAgainst` - coverage reporting
-- `describeRemovalLookup`, `describeOccurrence` - descriptive output
-
-### Identity and Attribution
-
-`src/forgetting/identity.ts` defines the identity and attribution model:
-
-- `RemovedIdentity` - names the thing that was removed
-- `RemovalAttribution` - explains how a removal is understood in context
-- `describeAttribution` - human-readable attribution description
-
-This layer distinguishes between what was removed, its knowledge layer, and what can be attributed to a removal record.
-
-### Propagation
-
-`src/forgetting/propagation.ts` connects the forgetting model to other knowledge layers. It translates forgetting outcomes into context relevant to graph targets, wiki pages, or retention rules:
-
-- `explainAbsentGraphTarget`
-- `explainAbsentWikiPage`
-- `describeCoverageAgainst`
-
-## Key Concepts
+## Key concepts
 
 ### Forgetting Trail
 
-A `ForgettingTrail` is the module's central model of removal state. It is derived from journal data and can be searched, looked up, and described.
+The name covers two related types. `ForgettingTrail` in `service.ts` is the outcome of one reconcile run: `not-a-write` (report-only run), `nothing-removed`, or `recorded`. `DeletionTrail` in `trail.ts` is the journal as it stands on disk, in the `absent`, `present` or `unreadable` states.
 
 ### Deletion Journal
 
-The deletion journal is the low-level evidence store:
-
-- `deletionJournalPath` - journal path
-- `readDeletionJournal` - journal reader
+The journal is the low-level evidence store. Each `DeletionRecord` carries a version `v` (currently `DELETION_JOURNAL_VERSION` = 2), `at`, `observedBy`, an `outcome` of `propagated`, `reported-only` or `refused`, the `removed` and `observedUnrecorded` lists, `untouched` layers with causes, `requestedBy`, `grounds`, `danglingAfter` and `refusals`. In version 2, `removed` means only what the recording run removed. Version 1 records are still read but never rewritten.
 
 ### Removed Identity
 
-`RemovedIdentity` names the thing that was removed. This is the anchor for looking up and attributing removals.
+`RemovedIdentity` names a thing the wiki no longer carries. Its `state` is `tombstoned` (recorded) or `pending` (gone from disk, not yet recorded). Its `recordedBy` is a `RemovalAttribution`: `this-run`, `an-earlier-run` or `not-recorded`. Only `this-run` may be reported as the act of the current run.
 
-### Removal Attribution
+### Attribution
 
-`RemovalAttribution` explains how a removal is understood in context across different knowledge layers.
+`Attribution` (in `journal.ts`) answers "at whose request" and "on what grounds". A value is `stated` when a person supplied it (`--actor`, `KERYX_ACTOR`, `--reason`), `derived` when the machine inferred it, and `unknown` when nothing was available. `describeAttribution` in `trail.ts` renders it so a derived value is never shown as a stated one.
 
 ### Knowledge Layer
 
-`KnowledgeLayer` captures the kind of knowledge domain in which a removal occurred (e.g., graph or wiki knowledge).
+`KnowledgeLayer` is the set of layers a reconcile accounts for: `wiki-identity`, `wiki-index`, `wiki-freshness`, `memory`, `graph` and `sac-evidence`. A layer missing from the report would read as checked and clean, so each one appears, even when it is not inspected.
 
 ### Coverage
 
-Coverage describes how well the current forgetting trail accounts for a requested lookup or set of knowledge targets:
+`trailCoverage` measures what the trail can speak to: how many records exist, which layers have ever had a removal recorded (`layersWithRemovals`), and which layers every record lists as untouched (`layersRecordedUntouched`). Silence about a layer the trail has never recorded carries little weight, and `describeCoverageAgainst` says so.
 
-- `trailCoverage`
-- `describeCoverageAgainst`
-- `TRAIL_SCOPE_CAVEAT`
+### Deletion Window
+
+`DeletionWindow` tells the graph layer which code files were deleted since the graph was built. It is either `determined` (the deleted list may be empty, which is a real answer) or `undetermined` (with a cause). When the window is undetermined and unresolved in-project imports exist, the graph layer is a failed inspection, so the run cannot report `clean`.
 
 ### Reconciliation
 
-Reconciliation is the module's core service operation. It takes a `ForgettingReconcileInput` and produces a `ForgettingReconcile`.
+Reconciliation is the module's core operation. It applies or observes the identity layer, builds the propagation report, and appends a deletion record only when something was removed or refused.
 
-## Main Flows
+## Main flows
 
-### Reconcile a Forgetting Request
+### Reconcile a removal (`keryx sync --apply`)
 
-1. Caller constructs a reconciliation request with `ForgettingReconcileInput`
-2. `service.ts` receives the request
-3. The service reads journal state through `journal.ts`
-4. Journal contents are interpreted as a `ForgettingTrail`
-5. Result is returned as a `ForgettingReconcile`
+1. The caller builds a `ForgettingReconcileInput` with `apply`, `at`, `observedBy`, the stated reason and actor, the deletion window and `graphRebuilt`.
+2. With `apply` set, `applyIdentityLayer` writes tombstones through `syncSectionRegistry`. A refusal is kept as `identity.refusal`, not reported as success. Without `apply`, `reportOnlyIdentityOutcome` is used and nothing is written.
+3. `reportPropagation` loads the wiki knowledge view, collects removed identities, asks `resolveSectionIdentity` what each one now answers, and builds the six layer outcomes.
+4. If the run removed nothing and refused nothing, the result is `nothing-removed` and no record is appended. A report-only run returns `not-a-write`.
+5. Otherwise `resolveRequestedBy` and `resolveGrounds` assign attribution, and `appendDeletionRecord` appends one record. A failed append is returned as a named failure, so the caller never reports a deletion as recorded when it was not.
 
-### Look Up or Search Removals
+### Look up or search removals
 
-1. Caller invokes `lookupRemoval` or `searchRemovals`
-2. Trail layer uses journal data to find matching removals
-3. Results are described using helpers:
-   - `describeRemovalLookup`
-   - `describeAttribution`
-   - `describeOccurrence`
+1. A caller invokes `lookupRemoval` with exact candidate identities, optionally filtered to one layer, or `searchRemovals` with a phrase.
+2. `lookupRemoval` matches only the `ref` or `page` of removed items, with no fuzzy fallback. `searchRemovals` matches `title`, `ref` or `page` and labels each hit with `matchedOn`.
+3. The result is rendered with `describeRemovalLookup`, which uses `describeOccurrence` and `describeAttribution`. The output is tagged with its verdict, so a reader sees the machine answer first.
 
-This flow supports diagnostics, audit views, and command surfaces.
+This flow supports diagnostics, audit views and command surfaces such as `keryx forgetting lookup`.
 
-### Explain an Absent Target
+### Explain an absent target
 
-When a caller asks why something is missing:
-
-1. Caller asks whether a graph target or wiki page is absent
-2. Module evaluates trail coverage and attribution state
-3. Result expressed through explainers:
-   - `explainAbsentGraphTarget`
-   - `explainAbsentWikiPage`
-   - `describeCoverageAgainst`
+1. For a wiki path, `explainAbsentWikiPage` checks the section registry first. A `tombstoned` entry, a `pending-tombstone` entry or an unreadable registry is answered directly. Otherwise it falls back to the trail.
+2. For a graph target, `explainAbsentGraphTarget` looks up the trail restricted to the `graph` layer, then finds unresolved in-project imports that name the path using `getDanglingEdges` and `namesDeletedFile`.
+3. Imports that still name the path give the verdict `referenced-but-unindexed`. This is evidence against "never existed", not proof of removal, because a misspelled import produces the same edge.
 
 ## Reference
 
@@ -198,4 +134,7 @@ When a caller asks why something is missing:
 - [Module src/commands](src-commands.md)
 - [Module src/harness/tool](src-harness-tool.md)
 - [Wiki Index](../index.md)
-```
+
+## Changelog
+
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.

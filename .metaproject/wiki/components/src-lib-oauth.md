@@ -1,92 +1,66 @@
 ---
 Title: Module src/lib/oauth
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
-Summary: "OAuth support layer for device-code login, grant management, token refresh, and authenticated runtime access."
+Status: accepted
+Summary: "OAuth support layer for device-code login (xAI Grok, GitHub Copilot, ChatGPT/Codex), grant storage in auth.json, token refresh, and environment injection of saved access tokens."
 ---
 
 # Module src/lib/oauth
 
 ## Overview
 
-`src/lib/oauth` is the OAuth support layer inside `src/lib`. It provides the building blocks used by CLI commands, the terminal UI, and provider integrations to start a login, manage saved OAuth grants, refresh expired credentials, and make access tokens available to processes that require them.
-
-This module owns OAuth authentication and grant state at a level below user-facing commands. It does not implement the full command UI or provider-specific product flows. Instead, it exposes a reusable API for:
-
-- Starting a device-code login and returning the challenge information needed for the user to continue
-- Recording, loading, listing, and deleting OAuth grants after login
-- Checking whether a stored grant has a usable access token or needs refresh
-- Refreshing provider grants and returning current access tokens
-- Preparing environment variables that make OAuth access available to a process or provider adapter
-
-**Module stats:** 15 files, 19 public symbols, 7 cross-module imports from `src/lib`.
+`src/lib/oauth` is the OAuth support layer inside `src/lib`. It owns sign-in and saved-grant state for providers that authenticate with a device-code flow: xAI Grok, GitHub Copilot, and ChatGPT/Codex. The CLI commands in `src/commands` and the terminal UI in `src/tui` call into it to start a login, store the resulting grant, decide whether a stored grant needs refreshing, and expose the access token to a process. The module does not draw the prompts or run the product flows; those stay with the callers.
 
 ## Key concepts
 
 | Concept | Description |
 |---------|-------------|
-| **`OAuthGrant`** | The normalized credential record for an authenticated provider. Represents state needed to reuse an existing sign-in. |
-| **`OAuthGrantMethod`** | The flow or mechanism through which a grant was obtained. Keeps grant state distinct from raw token values. |
-| **`LoginChallenge`** | Information produced when a login is started and the user must complete an external authorization step. Contains the data needed for the user to continue outside the application. |
-| **`DeviceLoginInput` / `DeviceLoginResult`** | Input and result types for the device-code login operation exposed through `loginDeviceCode`. |
-| **Provider** | A target that can be authenticated through OAuth. Provider identity is visible in grant lifecycle and refresh APIs. |
-| **Refresh** | The process of exchanging a saved grant for a current access token when the previous token is no longer valid. |
-| **OAuth access environment** | An environment object that makes an access token available to an external process or provider runtime. |
+| **`OAuthGrant`** | The stored credential for one provider: `access`, an optional `refresh`, `expires` (epoch milliseconds, absent when the issuer gave no `expires_in`), `accountId`, `obtainedAt` and `lastRefreshedAt`. Persisted in the `oauthGrants` map of the user-global `auth.json` (mode 0600). |
+| **`OAuthGrantMethod`** | How a grant was obtained, `"device-code"` or `"oauth-pkce-loopback"`. The login paths in this module only write `"device-code"`. |
+| **`LoginChallenge`** | What the user needs to finish sign-in outside the process: `userCode`, `verificationUri`, optional `verificationUriComplete`, and human-readable `instructions`. Built by `present` in `login.ts`. |
+| **`DeviceLoginInput` / `DeviceLoginResult`** | Input to `loginDeviceCode`: provider, injected `fetch`, optional `sleep`, `now`, `signal` and `dir`, plus the `onChallenge` callback. The result is `{ ok: true, provider }` or `{ ok: false, error, refused? }`, where `refused` marks a login the catalog forbids. |
+| **`ProviderAuthCatalog` / `AuthMethodKind` / `DeviceCodeEndpoints`** | Declarations in `catalog.ts` of the auth methods a provider sanctions and its device endpoints, client ID, scope and headers. A method is listed only when the vendor allows third-party clients. |
+| **`DeviceCodeChallenge` / `DeviceTokenSet`** | Protocol-level values from `device-code.ts`. The `deviceCode` stays inside the process. |
+| **Provider alias** | `openai` is read and cleared as `openai-codex`. `loadOAuthGrant`, `listOAuthGrantProviders` and `logoutProvider` all apply this mapping. |
+| **Refresh** | Exchanging a saved `refresh` token for a new access token once `expires` is within a 120-second skew window (`grantNeedsRefresh`). |
+| **OAuth access environment** | A fixed mapping, `OAUTH_ENV_KEYS`, from provider to environment variable: `grok` to `XAI_API_KEY` and `github-copilot` to `GITHUB_COPILOT_TOKEN`. |
 
-## Architecture
+## How it works
 
-The module follows a small layered design:
+The module is layered, and each layer depends only on the ones below it.
 
-```
-┌─────────────────────────────────────────────┐
-│             Public API (19 symbols)         │
-├─────────────────────────────────────────────┤
-│  login.ts         │ Central entry point     │
-│  grants.ts        │ Grant model & lifecycle │
-│  catalog.ts       │ Provider metadata       │
-├───────────────────┼─────────────────────────┤
-│  device-code.ts   │ Device-code protocol    │
-│  open-url.ts      │ URL-opening helper      │
-└───────────────────┴─────────────────────────┘
-```
+At the bottom, `catalog.ts` declares, per provider, which auth methods are sanctioned and the device-code endpoints, client IDs and request headers they use (`XAI_GROK_DEVICE`, `GITHUB_COPILOT_DEVICE`). `catalogRefusal` supplies the message for subscription logins the catalog forbids. Protocol code sits next to it. `device-code.ts` implements the generic RFC 8628 steps (request a code, poll the token endpoint, refresh an access token) and reports failures as `DeviceCodeError` with a `kind`. `openai-codex.ts` and `copilot.ts` add the provider-specific steps: the ChatGPT device endpoints, and the exchange of a GitHub token for a Copilot token. `openai-subscription.ts` refreshes ChatGPT grants.
 
-**Key files:**
+In the middle, `grants.ts` is the storage and model layer. It reads and writes the `oauthGrants` map through `src/lib/shell-config`, keyed by provider. `grantFromTokens` turns a token set into an `OAuthGrant` with an absolute expiry time. `oauthGrantStatus` returns the redacted view that `keryx auth status` prints, so token values only leave the store through the access functions. `envWithOAuthAccess` and `applyOAuthAccessToEnv` copy tokens into the fixed environment variables in `OAUTH_ENV_KEYS`.
 
-- `src/lib/oauth/login.ts` — Central login orchestration. Connects `loginDeviceCode` with lower-level helpers.
-- `src/lib/oauth/grants.ts` — Most widely imported file. Owns `OAuthGrant`, `OAuthGrantMethod`, and related functions: `loadOAuthGrant`, `saveOAuthGrant`, `deleteOAuthGrant`, `listOAuthGrantProviders`, `oauthGrantStatus`, `oauthAccessToken`, `grantNeedsRefresh`.
-- `src/lib/oauth/catalog.ts` — Shared provider catalog or metadata. Imported by seven files.
-- `src/lib/oauth/device-code.ts` — Device-code protocol implementation. Produces `LoginChallenge` and completes login.
-- `src/lib/oauth/open-url.ts` — URL-opening support for presenting authorization challenges to users.
+At the top, `login.ts` is the orchestrator. `loginDeviceCode` checks the catalog, chooses the Codex path (`loginCodex`) or the RFC 8628 path (`loginRfc8628`), passes the challenge to the caller's `onChallenge` callback, and then saves the grant. It also holds the refresh entry points, `refreshProviderGrant` and `refreshSavedGrants`, and `logoutProvider`.
+
+`open-url.ts` sits outside this chain. `login.ts` does not import it. The callers (`src/commands/auth.ts`, `src/tui/tui-shell.ts`, `src/commands/select.ts`) call `openVerificationUrl` when they receive a challenge.
 
 ## Main flows
 
 ### Start a device-code login and save the grant
 
-1. A command or TUI action begins a login using `DeviceLoginInput` and calls `loginDeviceCode`.
-2. `login.ts` uses the device-code implementation to produce a `LoginChallenge` for the user.
-3. The application opens the required authorization URL with the URL-opening helper.
-4. After authorization completes, the login call returns a `DeviceLoginResult`.
-5. Tokens from the result can be normalized into an `OAuthGrant` with `grantFromTokens` and recorded with `saveOAuthGrant`.
+1. A command or TUI action (`src/commands/auth.ts`, `src/tui/tui-shell.ts`) calls `loginDeviceCode` with a `DeviceLoginInput`.
+2. `loginDeviceCode` looks up the provider with `authCatalogEntry`. If the provider does not list `device-code`, it returns a refusal or an unsupported error. For `openai-codex` it runs `loginCodex`. For other providers it runs `loginRfc8628`, which requests a device code, calls `onChallenge` with a `LoginChallenge`, and polls for the token. For `github-copilot` the GitHub token is then exchanged with `exchangeGithubTokenForCopilot`, and the returned API base URL is stored with `saveProviderBaseUrl`.
+3. The caller shows the challenge to the user and opens `verificationUriComplete` through `openVerificationUrl`, while the poll continues.
+4. On success, `grantFromTokens("device-code", …)` builds the grant and `saveOAuthGrant` writes it. For Codex, the module reads the grant back and fails with "Could not save ChatGPT login securely" if the stored access token does not match.
+5. Any error becomes `{ ok: false, error }`. A cancelled signal produces "Device authorization was cancelled."
 
-This flow separates user-facing presentation from credential management: the UI handles the challenge, while the module owns login completion and grant creation.
+### Refresh saved grants before a session uses them
 
-### Refresh a saved provider grant
+1. A surface such as `keryx shell` (`src/commands/shell.ts`) or ACP (`src/commands/acp.ts`) calls `refreshSavedGrants` with an HTTP object, a signal that bounds the total time, and the config directory.
+2. It walks the providers `grok`, `github-copilot` and `openai-codex` one at a time, because each refresh rewrites `auth.json` and parallel writes would lose a grant.
+3. For each grant, `grantNeedsRefresh` checks whether `expires` falls within 120 seconds. A grant that has expired and has no refresh token produces a warning that tells the user to run `keryx auth login`, rather than a silent failure.
+4. `refreshProviderGrant` dispatches by provider. ChatGPT grants go to `refreshOpenAiCodexGrant`, Copilot grants go through the GitHub exchange again, and the others go to `refreshAccessToken`. The new grant is stamped with `lastRefreshedAt` and saved with `saveOAuthGrant`.
+5. Failures are returned as warning strings for the caller to display. They are not thrown.
 
-1. A caller asks the module to refresh saved credentials, for example through `refreshSavedGrants` or for a specific provider with `refreshProviderGrant`.
-2. The module may enumerate saved provider identities with `listOAuthGrantProviders` and load individual grants with `loadOAuthGrant`.
-3. `grantNeedsRefresh` determines whether a grant requires a fresh token, and `oauthAccessToken` can return a current token for a usable grant.
-4. When a grant is refreshed, the updated credential can be saved again through `saveOAuthGrant`.
+### Hand an access token to a provider runtime
 
-This flow is useful before provider operations that require a valid token, allowing stored credentials to be reused safely instead of forcing a new interactive login.
-
-### Provide OAuth access to a provider runtime
-
-1. `src/harness/provider` or a command needs an authenticated environment for an external process or provider adapter.
-2. It can call `envWithOAuthAccess` to obtain an environment containing the OAuth token, or `applyOAuthAccessToEnv` to add the token to an existing environment.
-3. The helpers use the module's grant and token helpers so callers do not need to inspect grant internals directly.
-
-This keeps token handling localized to the OAuth module while allowing commands and provider code to work with ordinary environment data.
+1. `applyOAuthAccessToEnv` (called from `src/commands/auth.ts`, `src/tui/tui-shell.ts` and `src/commands/wiki.ts`) or `envWithOAuthAccess` (used by `src/commands/providers.ts`) reads each saved access token through `oauthAccessToken`.
+2. A token is written only to its mapped variable, and only when that variable is unset or empty. `applyOAuthAccessToEnv` returns the keys it applied and records them with `noteSavedCredentialEnv`.
+3. ChatGPT tokens are never copied onto `OPENAI_API_KEY`, because they are not platform API keys. Status and list surfaces (`oauthGrantStatus`, `listOAuthGrantProviders`) report metadata only and never return token values.
 
 ## Public API
 
@@ -164,4 +138,5 @@ This keeps token handling localized to the OAuth module while allowing commands 
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - **0.1.0** — Initial prose draft generated by `keryx wiki collect` (2026-09-16)
