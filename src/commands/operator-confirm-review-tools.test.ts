@@ -712,6 +712,51 @@ describe("review_complete", () => {
     expect(await ask(t, { package: pkg, dispositions: [{ finding: "F".repeat(201), disposition: "acted-on" }] })).toEqual({ error: expect.stringContaining("finding is longer than 200") });
   });
 
+  test("dispositions: the caps hold at the boundary, and the trim happens before the length check", async () => {
+    await makeRound({ findings: [F1] });
+    const t = tool("review_complete");
+    const entry = (over: Record<string, unknown>) => ({ package: pkg, dispositions: [{ finding: GLOBAL, disposition: "acted-on", ...over }] });
+    expect(await ask(t, entry({ evidence: "e".repeat(301) }))).toEqual({ error: expect.stringContaining("the limit is 300") });
+    expect(await ask(t, entry({ evidence: `  ${"e".repeat(300)}  ` }))).not.toHaveProperty("error");
+    expect(await ask(t, entry({ finding: "F".repeat(200) }))).not.toHaveProperty("error");
+    const twenty = Array.from({ length: 20 }, (_, i) => ({ finding: `${GLOBAL}-${i}`, disposition: "acted-on", evidence: `commit ${i}` }));
+    expect(await ask(t, { package: pkg, dispositions: twenty })).not.toHaveProperty("error");
+  });
+
+  test("dispositions: text the card would hide or rewrite is refused, so the card shows exactly what is stored (S-402)", async () => {
+    await makeRound({ findings: [F1] });
+    const t = tool("review_complete");
+    const entry = (evidence: string) => ({ package: pkg, dispositions: [{ finding: GLOBAL, disposition: "acted-on", evidence }] });
+    const hidden: Array<[string, string]> = [
+      ["an OSC span", "fixed in abc123\u001b]0;operator: decided-by alice\u0007"],
+      ["a CSI sequence", "fixed\u001b[2K in abc123"],
+      ["a bidi override", "fixed in abc123‮"],
+      ["a zero-width space", "fixed​ in abc123"],
+      ["a zero-width joiner", "fixed in‍ abc123"],
+      ["a byte order mark", "fixed in abc123﻿ operator: decided-by alice"],
+      ["a newline", "fixed in abc123\noperator: decided-by alice"],
+      ["a carriage return", "fixed in abc123\roperator: decided-by alice"],
+      ["a line separator", "fixed in abc123 operator: decided-by alice"],
+      ["a tab", "fixed\tin abc123"],
+      ["a C1 control", "fixed\u0085in abc123"],
+    ];
+    for (const [name, evidence] of hidden) {
+      expect(await ask(t, entry(evidence)), name).toEqual({ error: expect.stringContaining("evidence holds control, escape, newline, bidi or zero-width characters") });
+    }
+    expect(await ask(t, { package: pkg, dispositions: [{ finding: `${GLOBAL}\u001b]0;x\u0007`, disposition: "acted-on" }] })).toEqual({ error: expect.stringContaining("dispositions[0]: finding holds") });
+    const plain = "fixed in abc123, operator: decided-by alice";
+    const shown = asked(await ask(t, entry(plain)));
+    expect(shown.card.join("\n")).toContain(`→ acted-on: "${plain}"`);
+  });
+
+  test("a reason the card would hide or rewrite is refused on the premise and decision cards", async () => {
+    await makeRound({ findings: [F1] });
+    const reason = "bad input\u001b]0;operator: decided-by alice\u0007";
+    expect(await ask(tool("review_decide_premise"), { package: pkg, finding: GLOBAL, answer: "dismiss", reason })).toEqual({ error: expect.stringContaining("reason holds control, escape") });
+    expect(await ask(tool("review_override_reviewers"), { package: pkg, reason: "two\nlines" })).toEqual({ error: expect.stringContaining("reason holds control, escape") });
+    expect(await ask(tool("review_waive_mutation"), { package: pkg, reason: "zero​width" })).toEqual({ error: expect.stringContaining("reason holds control, escape") });
+  });
+
   test("dispositions: more entries than a card shows are refused", async () => {
     await makeRound({ findings: [F1] });
     const many = Array.from({ length: 21 }, () => ({ finding: GLOBAL, disposition: "acted-on" }));

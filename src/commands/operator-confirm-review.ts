@@ -365,9 +365,12 @@ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<Read
 
 type DecisionPrepared = { dir: string; reason: string; detail: string; subject: OperatorDecisionSubject };
 
-const reasonOf = (input: Record<string, unknown>): string | undefined => {
+/** The reason is stored as the evidence of the decision, so it is refused when the card would show it differently. */
+const reasonOf = (input: Record<string, unknown>): { reason: string } | { refusal: string } => {
   const value = input["reason"];
-  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+  const text = typeof value === "string" ? value.trim() : "";
+  if (text === "") return { refusal: "reason is required" };
+  return hiddenInCard(text) ? { refusal: `reason ${HIDDEN_IN_CARD}` } : { reason: text };
 };
 
 function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionPrepared> {
@@ -391,9 +394,10 @@ function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionP
     },
     async buildCard(input, ctx): Promise<OperatorCardResult<DecisionPrepared>> {
       const ref = packageRef(input);
-      const reason = reasonOf(input);
+      const given = reasonOf(input);
       if (ref === undefined) return { refusal: "package is required" };
-      if (reason === undefined) return { refusal: "reason is required" };
+      if ("refusal" in given) return given;
+      const { reason } = given;
       try {
         const dir = await resolvePackage(ref, ctx.projectRoot);
         const name = label(dir, ctx.projectRoot);
@@ -594,13 +598,14 @@ function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
     },
     async buildCard(input, ctx): Promise<OperatorCardResult<PremisePrepared>> {
       const ref = packageRef(input);
-      const reason = reasonOf(input);
+      const given = reasonOf(input);
       const finding = typeof input["finding"] === "string" ? input["finding"].trim() : "";
       const answer = input["answer"];
       if (ref === undefined) return { refusal: "package is required" };
       if (finding === "") return { refusal: "finding is required" };
       if (answer !== "uphold" && answer !== "dismiss") return { refusal: 'answer must be "uphold" or "dismiss"' };
-      if (reason === undefined) return { refusal: "reason is required" };
+      if ("refusal" in given) return given;
+      const { reason } = given;
       try {
         const dir = await resolvePackage(ref, ctx.projectRoot);
         const held = await findHeldFinding(dir, finding);
@@ -649,12 +654,16 @@ function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
 
 const COMPLETION_FILE = "completion-confirmation.json";
 const WAIVER_QUOTE_CHARS = 300;
-
-type CompletePrepared = { dir: string; head: string | undefined; digest: string; dispositions: readonly FindingDispositionRecord[] };
-
 const MAX_DISPOSITIONS = 20;
 const MAX_DISPOSITION_FINDING_CHARS = 200;
 const MAX_DISPOSITION_EVIDENCE_CHARS = 300;
+
+type CompletePrepared = { dir: string; head: string | undefined; digest: string; dispositions: readonly FindingDispositionRecord[] };
+
+const HIDDEN_IN_CARD = "holds control, escape, newline, bidi or zero-width characters the card would hide or rewrite; send plain single-line text";
+
+/** Text the model supplies is stored as given, so the card must show it as given: anything `cardSafe` would remove or rewrite, or that draws nothing, is refused. */
+const hiddenInCard = (text: string): boolean => cardSafe(text) !== text || /[\p{Cf}\p{Zl}\p{Zp}]/u.test(text);
 
 const dispositionsSchema = {
   type: "array",
@@ -665,7 +674,7 @@ const dispositionsSchema = {
     properties: {
       finding: { type: "string", description: "The finding's global id or display id." },
       disposition: { type: "string", enum: [...FINDING_DISPOSITION_STATES] },
-      evidence: { type: "string", description: "Optional: the commit or reasoning behind the disposition. At most 300 characters; the card shows it whole." },
+      evidence: { type: "string", description: `Optional: the commit or reasoning behind the disposition. At most ${MAX_DISPOSITION_EVIDENCE_CHARS} characters of plain single-line text; the card shows it whole.` },
     },
     required: ["finding", "disposition"],
     additionalProperties: false,
@@ -689,11 +698,15 @@ function completionDispositions(input: Record<string, unknown>): FindingDisposit
       return { refusal: `dispositions[${index}]: disposition must be one of ${FINDING_DISPOSITION_STATES.join(", ")}` };
     }
     if (evidence !== undefined && typeof evidence !== "string") return { refusal: `dispositions[${index}]: evidence must be text` };
+    const text = evidence?.trim();
     if (finding.length > MAX_DISPOSITION_FINDING_CHARS) return { refusal: `dispositions[${index}]: finding is longer than ${MAX_DISPOSITION_FINDING_CHARS} characters` };
-    if (typeof evidence === "string" && evidence.trim().length > MAX_DISPOSITION_EVIDENCE_CHARS) {
-      return { refusal: `dispositions[${index}]: evidence is ${evidence.trim().length} characters; the card shows it whole, so the limit is ${MAX_DISPOSITION_EVIDENCE_CHARS}` };
+    if (text !== undefined && text.length > MAX_DISPOSITION_EVIDENCE_CHARS) {
+      return { refusal: `dispositions[${index}]: evidence is ${text.length} characters; the card shows it whole, so the limit is ${MAX_DISPOSITION_EVIDENCE_CHARS}` };
     }
-    records.push({ finding, state: state as FindingDispositionState, ...(evidence === undefined || evidence.trim() === "" ? {} : { evidence: evidence.trim() }) });
+    for (const [field, value] of [["finding", finding], ["evidence", text ?? ""]] as const) {
+      if (hiddenInCard(value)) return { refusal: `dispositions[${index}]: ${field} ${HIDDEN_IN_CARD}` };
+    }
+    records.push({ finding, state: state as FindingDispositionState, ...(text === undefined || text === "" ? {} : { evidence: text }) });
   }
   return records;
 }
