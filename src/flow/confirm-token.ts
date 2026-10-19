@@ -232,6 +232,8 @@ export async function consumeConfirmationToken(
     mintedAt: stored.mintedAt,
     consumedAt,
     boundTo: { kind: stored.kind, acChecksum: stored.acChecksum, target: stored.target },
+    ...(stored.pressedBy !== undefined ? { pressedBy: stored.pressedBy } : {}),
+    ...(stored.pressedAt !== undefined ? { pressedAt: stored.pressedAt } : {}),
   };
 }
 

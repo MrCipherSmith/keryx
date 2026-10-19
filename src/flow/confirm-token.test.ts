@@ -485,6 +485,22 @@ test("456: a card-minted token is spent with a card mechanism in the signature",
   expect(validateAgainstSchemaObject(flowStateSchema(), flow).valid).toBe(true);
 });
 
+test("464: a remote-card token carries who pressed the card and when into the signature", async () => {
+  const service = await fresh();
+  const { id, dir } = await readyFlow(service);
+  const minted = await service.confirmMint({
+    cwd: ROOT,
+    id,
+    confirmation: { confirmedVia: "remote-card", quote: "Confirm?: yes", pressedBy: 446593035, pressedAt: "2026-10-15T18:30:00.000Z" },
+  });
+  clock = new Date(clock.getTime() + 60_000);
+  await service.complete({ cwd: ROOT, id, confirmToken: minted.token, signedBy: "Aleks" });
+  const flow = await onDisk(dir);
+  const confirmation = flow.signatures?.find((candidate) => candidate.kind === "complete")?.confirmation;
+  expect(confirmation).toMatchObject({ mechanism: "remote-card-token", pressedBy: 446593035, pressedAt: "2026-10-15T18:30:00.000Z" });
+  expect(validateAgainstSchemaObject(flowStateSchema(), flow).valid).toBe(true);
+});
+
 test("456: the refusal text names the flow_confirm tool in keryx shell and the terminal outside it", () => {
   for (const reason of ["token_required", "token_not_minted", "token_expired", "token_target_mismatch"] as const) {
     const text = describeConfirmationFailure(reason, "42");

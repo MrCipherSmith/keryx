@@ -328,6 +328,8 @@ export function flowStateSchema(): Record<string, unknown> {
                   },
                 },
               },
+              pressedBy: { type: "integer", description: "Flow 464: on a remote-card token, the Telegram user id that pressed the card." },
+              pressedAt: { type: "string", description: "Flow 464: on a remote-card token, the shell's clock when the press arrived." },
             },
           },
         },

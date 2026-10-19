@@ -184,6 +184,9 @@ export type SignatureConfirmation = {
    * written before it existed still reads.
    */
   boundTo: { kind: "complete"; acChecksum: string; target?: string | undefined };
+  /** Flow 464: for a remote-card token, the Telegram user id that pressed the card and the shell's clock when the press arrived. */
+  pressedBy?: number | undefined;
+  pressedAt?: string | undefined;
 };
 
 /**
