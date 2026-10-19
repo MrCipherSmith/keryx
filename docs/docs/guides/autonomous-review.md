@@ -32,6 +32,7 @@ to put in a script, a cron line or a CI job. `--target pr` is the only target.
 
 ## What it does where a person would answer
 
+- **The review acts (`review_confirm_plan`, `review_decide_premise`, `review_waive_readiness`, `review_waive_coverage`, `review_complete`).** These are cards a person answers, in the shell or in the Telegram topic (one allowed user, once, within an hour; the record keeps `pressedBy` and `pressedAt`). An autonomous run has nobody to answer them: it stops at the floor and never tells you to run the terminal command. The terminal commands remain the fallback when you finish the package yourself.
 - **A menu (`ask_user`).** A question marked irreversible is refused (the run sees it as
   cancelled). Any other question takes the recommended option, or the first one when none is
   recommended. A question with nothing to choose from is refused. Every automatic answer is
