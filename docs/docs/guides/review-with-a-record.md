@@ -612,6 +612,17 @@ keryx review decide-premise --package .metaproject/reviews/round7 \
 evidence. An agent's shell cannot answer for you: the command
 is refused without a terminal, so the agent never sends you there from keryx shell; it calls the card.
 
+**Without a card: a host question.** In Claude Code, Codex or another host there is no card. The agent asks you the question with the host's own question tool (or a Telegram poll through Helyx) and offers `uphold` or `dismiss`; it then records what you chose, with no terminal:
+
+```bash
+keryx review decide-premise --package .metaproject/reviews/round7 \
+  --finding LY-003 --answer dismiss --reason "platforms do not mirror media controls" \
+  --answered-by helyx-poll:poll-223/msg-214878 \
+  --answer-text "dismiss" --question-text "LY-003: dismiss or uphold?"
+```
+
+The record carries `confirmedVia: "host-question"`, the question and your answer verbatim, and a `keryx decisions` entry is written. keryx does not verify the answer, so it is a weaker record than a card press: it proves the agent reports that you answered, not that it reported truthfully (see [limitations](../limitations.md#a-host-question-is-a-weaker-proof-than-a-card)). The same holds for `confirm-plan`, `waive-mutation` and `override-reviewers`. `review complete` and its waivers still need you at a card or a terminal.
+
 ## Ingest a report someone already wrote
 
 ```bash

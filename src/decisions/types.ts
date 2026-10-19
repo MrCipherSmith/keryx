@@ -99,6 +99,20 @@ export interface OpenRecord {
    * origin (e.g. "poll 17"). Absent on a record from before the field.
    */
   source?: string;
+  /**
+   * Flow 467: set on a question the host asked through its own tool (Claude Code, Codex, keryx shell, a Telegram poll) and
+   * that the agent recorded with a `keryx review` verb: the source and ref the agent named, the verb that recorded it, and the
+   * operator's words. It is a record of what was asked and answered, not a recommendation: it is kept out of every arm and match number.
+   */
+  hostQuestion?: HostQuestionOpen;
+}
+
+/** What an open record keeps of a host question (see `OpenRecord.hostQuestion`). */
+export interface HostQuestionOpen {
+  source: string;
+  ref: string;
+  verb: string;
+  answerText: string;
 }
 
 export interface AnswerRecord {
@@ -148,6 +162,8 @@ export interface OpenInput {
   channel?: string | undefined;
   /** The surface that asked it (see `DECISION_SOURCES`); recorded as `source` on the open record. */
   source?: string | undefined;
+  /** Flow 467: marks the question as a host question (see `OpenRecord.hostQuestion`). */
+  hostQuestion?: HostQuestionOpen | undefined;
   /**
    * False when the surface cannot take free text (a picker menu): the reason is then never asked, so the question is
    * left out of the reason subsample (`reasonRequested: false`). True by default.

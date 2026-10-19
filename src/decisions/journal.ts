@@ -120,7 +120,8 @@ async function openLocked(
   // The arm is a pure function of (repoSalt, seq), so a repeated run assigns it the same way. An irreversible
   // question is always arm A with forced: true, and never blind (AC4).
   const salt = input.salt ?? (await loadRepoSalt(input.cwd));
-  const seq = input.seq ?? records.filter((r) => r.kind === "open").length + 1;
+  // A host question is a record of what was asked, not a draw: it does not move the arm of the next question.
+  const seq = input.seq ?? records.filter((r) => r.kind === "open" && r.hostQuestion === undefined).length + 1;
   const choice = chooseArm({
     salt,
     seq,
@@ -172,6 +173,7 @@ async function openLocked(
     ...(tagged ? { action: input.action?.trim() ?? "" } : {}),
     ...(blindRefused ? { blindRefused: true } : {}),
     ...(input.source !== undefined && input.source.trim().length > 0 ? { source: oneLine(input.source) } : {}),
+    ...(input.hostQuestion === undefined ? {} : { hostQuestion: { source: oneLine(input.hostQuestion.source), ref: oneLine(input.hostQuestion.ref), verb: oneLine(input.hostQuestion.verb), answerText: storedOperatorText(input.hostQuestion.answerText) } }),
     ...(input.session !== undefined && input.session.length > 0 ? { session: input.session } : {}),
   };
   await appendRecord(input.cwd, record);

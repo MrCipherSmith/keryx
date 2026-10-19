@@ -18,7 +18,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
-import { cardPressFields, type CardPress, type ConfirmedVia } from "./types";
+import { HOST_QUESTION_SOURCES, cardPressFields, type CardPress, type ConfirmedVia, type HostQuestion } from "./types";
 
 export const OPERATOR_DECISIONS_FILE = "operator-decisions.json";
 /**
@@ -35,9 +35,13 @@ export const PREMISE_DECISION_KIND = "premise-question";
 /** Every kind the file may hold. */
 export type AnyOperatorDecisionKind = OperatorDecisionKind | typeof PREMISE_DECISION_KIND;
 
-/** How the operator's words reached the package: a shell card, its remote mirror, or a terminal prompt. */
-export type OperatorDecisionVia = ConfirmedVia | "terminal";
-const VIAS: readonly OperatorDecisionVia[] = ["tui-card", "remote-card", "terminal"];
+/**
+ * How the operator's words reached the package: a shell card, its remote mirror, a terminal prompt, or (flow 467) a
+ * question the host asked with its own tool and the agent recorded: weaker than a card, because keryx did not see the
+ * press and takes the question and the answer as the agent reports them. A record of it carries `hostQuestion`.
+ */
+export type OperatorDecisionVia = ConfirmedVia | "terminal" | "host-question";
+const VIAS: readonly OperatorDecisionVia[] = ["tui-card", "remote-card", "terminal", "host-question"];
 
 /** Who answers a premise question. Both writers record this one label; how it was confirmed is `confirmedVia`. */
 export const PREMISE_DECISION_ACTOR = "operator";
@@ -57,6 +61,8 @@ export type OperatorDecision = {
   confirmedVia: OperatorDecisionVia;
   at: string;
   subject?: OperatorDecisionSubject | undefined;
+  /** Set with `confirmedVia: "host-question"` only (flow 467); absent on every older record. */
+  hostQuestion?: HostQuestion | undefined;
 } & CardPress;
 
 /**
@@ -84,6 +90,8 @@ export type PremiseQuestionDecision = {
   subject: PremiseDecisionSubject;
   /** Set when the answer was copied from an earlier round's package for a carried finding (flow 459): that package's path. */
   carriedFrom?: string | undefined;
+  /** Set with `confirmedVia: "host-question"` only (flow 467); absent on every older record. */
+  hostQuestion?: HostQuestion | undefined;
 } & CardPress;
 
 /** What a writer passes: the store fills in the kind and the actor, so both writers record the same convention. */
@@ -99,6 +107,18 @@ function validPremiseSubject(value: unknown): value is PremiseDecisionSubject {
   return text(subject.severity) && text(subject.verdict) && text(subject.problemSha256);
 }
 
+/** A complete host question; one is required exactly when a record says it was confirmed by one. */
+function validHostQuestion(value: unknown): value is HostQuestion {
+  if (value === null || typeof value !== "object") return false;
+  const hq = value as Record<string, unknown>;
+  return (HOST_QUESTION_SOURCES as readonly unknown[]).includes(hq.source) && text(hq.ref) && text(hq.questionText) && text(hq.answerText) && text(hq.time);
+}
+
+/** Older records have no `hostQuestion`; a record that says `host-question` must carry a complete one. */
+function viaConsistent(d: Record<string, unknown>): boolean {
+  return d.confirmedVia === "host-question" ? validHostQuestion(d.hostQuestion) : true;
+}
+
 function validPremise(entry: unknown): entry is PremiseQuestionDecision {
   if (entry === null || typeof entry !== "object") return false;
   const d = entry as Record<string, unknown>;
@@ -111,6 +131,7 @@ function validPremise(entry: unknown): entry is PremiseQuestionDecision {
     text(d.at) &&
     text(d.actor) &&
     VIAS.includes(d.confirmedVia as OperatorDecisionVia) &&
+    viaConsistent(d) &&
     validPremiseSubject(d.subject)
   );
 }
@@ -123,6 +144,7 @@ function validGateDecision(entry: unknown): entry is OperatorDecision {
     text(d.quote) &&
     text(d.reason) &&
     VIAS.includes(d.confirmedVia as OperatorDecisionVia) &&
+    viaConsistent(d) &&
     text(d.at) &&
     (d.subject === undefined || validSubject(d.subject))
   );
@@ -233,6 +255,7 @@ export async function recordPremiseDecisionAfter<A>(
     ...cardPressFields(input),
     subject: input.subject,
     ...(input.carriedFrom === undefined ? {} : { carriedFrom: input.carriedFrom }),
+    ...(input.hostQuestion === undefined ? {} : { hostQuestion: input.hostQuestion }),
   };
   if (!validPremise(kept)) {
     throw new Error("a premise decision needs the finding, an answer of uphold or dismiss, a reason, the operator's words, the time, how it was confirmed and the finding it was shown");

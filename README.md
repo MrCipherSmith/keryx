@@ -1176,6 +1176,10 @@ Every managed review start, attach or ingest (and any `dispatch-check` or `blast
 
 `keryx review complete` on a pull-request package (one that targets a PR, or whose `--ref` is a PR URL under any `--target`) refuses a merged PR or a moved head until the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`; a package ingested before the field existed only warns). `keryx review ingest` reads each finding's quote at its `path` at the reviewed SHA and refuses one that does not resolve there, adds a `citation not found` line to a rebuttal that cites a rule or document missing from the tree (the finding is never deleted), and a finding can close as `narrowed` only with a "what remains" text. See [review with a record](docs/docs/guides/review-with-a-record.md).
 
+### Operator decisions in a review: a card, or a host question
+
+Four review acts are the operator's: `keryx review confirm-plan`, `waive-mutation`, `override-reviewers` and `decide-premise` (a held finding's premise). In `keryx shell` the agent calls a card and you answer it in the shell or in the Telegram topic; a card press is verified by keryx. In Claude Code, Codex or another host there is no card: the agent asks you with the host's own question tool (or a Telegram poll through Helyx) and records your answer with `--answered-by <source>:<ref> --answer-text "<your words, verbatim>" --question-text "<the question as asked>"`, with no terminal. That record carries `confirmedVia: "host-question"` and is weaker than a card: keryx does not verify the answer. Free text is never a decision, an unattended run refuses the flag, and `keryx review complete` with its waivers stays on the card or terminal path. See [limitations](docs/docs/limitations.md#a-host-question-is-a-weaker-proof-than-a-card) and the [CLI reference](docs/docs/cli-reference.md#review).
+
 ### Review bot on pull requests
 
 A GitHub Action reviews each same-repository pull request, has a second model

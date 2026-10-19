@@ -180,6 +180,22 @@ export interface TimingStats {
   medianMs: number | null;
 }
 
+/** Flow 467: one question the host asked through its own tool and a `keryx review` verb recorded. */
+export interface HostQuestionRow {
+  id: string;
+  /** The verb that recorded it: decide-premise, confirm-plan, waive-mutation or override-reviewers. */
+  verb: string;
+  question: string;
+  options: Array<{ id: string; label: string }>;
+  /** The option the operator's answer chose. Empty when the question was opened and never answered. */
+  choice: string;
+  /** The operator's words, as the verb recorded them. */
+  answerText: string;
+  source: string;
+  ref: string;
+  at: string;
+}
+
 export interface DecisionsReport {
   /** Live decisions only; the backfilled ones are counted in `backfilled.total`. */
   total: number;
@@ -216,6 +232,11 @@ export interface DecisionsReport {
   ineligible: IneligibleReport;
   progress: ProgressReport;
   settings: SettingsReport;
+  /**
+   * Flow 467: the questions the host asked and a `keryx review` verb recorded. They are not in `total`, `answered` or any arm
+   * or match number: nothing was recommended, so there is nothing to follow or deviate from. Absent on a report built by older code.
+   */
+  hostQuestions?: HostQuestionRow[];
   /** Journal lines that were unreadable or malformed and left out of every number above. */
   skipped: number;
 }
@@ -418,6 +439,22 @@ function buildLegacy(opens: readonly OpenRecord[], firstOf: (id: string) => Answ
   return out;
 }
 
+function hostQuestionRow(open: OpenRecord, answered: readonly AnswerRecord[]): HostQuestionRow {
+  const latest = [...answered].sort((a, b) => a.seq - b.seq).pop();
+  const host = open.hostQuestion;
+  return {
+    id: open.id,
+    verb: host?.verb ?? "",
+    question: open.question,
+    options: open.options.map((option) => ({ id: option.id, label: option.label })),
+    choice: latest?.choice ?? "",
+    answerText: host?.answerText ?? "",
+    source: host?.source ?? "",
+    ref: host?.ref ?? "",
+    at: open.at,
+  };
+}
+
 export function buildReport(records: readonly DecisionRecord[], skipped = 0, options: ReportOptions = {}): DecisionsReport {
   const opens: OpenRecord[] = [];
   const answers = new Map<string, AnswerRecord[]>();
@@ -440,8 +477,11 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0, opt
 
   const excludeLegacy = options.excludeLegacy === true;
   const settings = options.settings ?? defaultSettings();
+  // Flow 467: a host question is a record of what was asked and answered, never a recommendation: it stays out of every number below.
+  const hostOpens = opens.filter((open) => open.hostQuestion !== undefined);
+  const drawn = opens.filter((open) => open.hostQuestion === undefined);
   // a backfilled record is legacy by definition (imported after the fact, never drawn by the arms)
-  const kept = excludeLegacy ? opens.filter((open) => open.backfilled !== true && !isLegacy(open)) : opens;
+  const kept = excludeLegacy ? drawn.filter((open) => open.backfilled !== true && !isLegacy(open)) : drawn;
   const live = kept.filter((open) => open.backfilled !== true);
   const history = kept.filter((open) => open.backfilled === true);
   const firstAnswer = (id: string): AnswerRecord | undefined => [...(answers.get(id) ?? [])].sort((a, b) => a.seq - b.seq)[0];
@@ -484,6 +524,7 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0, opt
     excludeLegacy,
     quality: buildQualityMatrix(options.quality ?? [], known),
     reasons: buildReasons(compared, headline, firstAnswer, reasons),
+    hostQuestions: hostOpens.map((open) => hostQuestionRow(open, answers.get(open.id) ?? [])),
     ineligible: {
       decisions: randomized.filter((open) => !recordEligible(open)).length,
       answered: randomized.filter((open) => !recordEligible(open) && firstAnswer(open.id) !== undefined).length,
@@ -679,14 +720,36 @@ function seconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+/** Flow 467: the questions the host asked, each with the source that answered it. Empty (no lines at all) when there are none. */
+function renderHostQuestions(report: DecisionsReport): string[] {
+  const rows = report.hostQuestions ?? [];
+  if (rows.length === 0) return [];
+  const lines = [`Host questions (asked through the host's own tool, recorded by a keryx review verb; not in any arm or match number): ${rows.length}`];
+  for (const row of rows) {
+    lines.push(`  ${oneLine(row.id)} [host-question, ${oneLine(row.source)}:${oneLine(row.ref)}, ${oneLine(row.verb)}, ${oneLine(row.at)}]`);
+    lines.push(`    ${oneLine(row.question, FULL_TEXT)}`);
+    lines.push(`    options: ${row.options.map((option) => oneLine(option.id)).join(", ")}; chose ${row.choice === "" ? "(not answered)" : oneLine(row.choice)}`);
+    lines.push(`    answer: ${oneLine(row.answerText, FULL_TEXT)}`);
+  }
+  return lines;
+}
+
 export function renderReport(report: DecisionsReport): string {
   const skippedLine = report.skipped > 0 ? `Skipped ${report.skipped} unreadable journal record${report.skipped === 1 ? "" : "s"}.` : undefined;
   const configLines = report.settings.invalid.length > 0 ? renderSettings(report.settings) : [];
+  const hostLines = renderHostQuestions(report);
   if (report.total === 0 && report.backfilled.total === 0) {
+    if (hostLines.length > 0) {
+      const lines = ["No live decisions recorded yet.", "", ...hostLines];
+      if (configLines.length > 0) lines.push("", ...configLines);
+      if (skippedLine !== undefined) lines.push("", skippedLine);
+      return lines.join("\n");
+    }
     return ["No decisions recorded yet.", ...configLines, ...(skippedLine === undefined ? [] : [skippedLine])].join("\n");
   }
   if (report.total === 0) {
     const lines = ["No live decisions recorded yet.", "", ...renderBackfilled(report.backfilled)];
+    if (hostLines.length > 0) lines.push("", ...hostLines);
     if (configLines.length > 0) lines.push("", ...configLines);
     if (skippedLine !== undefined) lines.push("", skippedLine);
     return lines.join("\n");
@@ -749,6 +812,7 @@ export function renderReport(report: DecisionsReport): string {
   if (report.inferredFlow > 0) {
     lines.push("", `Flow attribution inferred (the one flow in progress, not named by KERYX_FLOW or the branch): ${report.inferredFlow} decision${report.inferredFlow === 1 ? "" : "s"}.`);
   }
+  if (hostLines.length > 0) lines.push("", ...hostLines);
   if (report.backfilled.total > 0) lines.push("", ...renderBackfilled(report.backfilled));
   if (skippedLine !== undefined) lines.push("", skippedLine);
   return lines.join("\n");

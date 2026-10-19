@@ -13,6 +13,7 @@ import { manifestSizeProblem, packWavesByKind, waveBytesOf, type SliceEntry, typ
 import { ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph } from "./waves";
 import { manifestRosterRoles, splitCounts } from "./round-split";
+import { HOST_QUESTION_SOURCES, type HostQuestion } from "./types";
 
 /** A spawned reviewer child is killed after 5 minutes (src/harness/tool/builtin/spawn-subagent-tool.ts), so one dispatch never runs longer than this. */
 export const CHILD_DEADLINE_MINUTES = 5;
@@ -185,8 +186,8 @@ export async function readPlanThresholds(projectRoot: string): Promise<PlanThres
 // `keryx review estimate --confirm --quote` at a terminal. Nothing else may write it.
 // ---------------------------------------------------------------------------
 
-export type PlanConfirmedVia = "tui-card" | "remote-card" | "terminal";
-const CONFIRMED_VIA: readonly PlanConfirmedVia[] = ["tui-card", "remote-card", "terminal"];
+export type PlanConfirmedVia = "tui-card" | "remote-card" | "terminal" | "host-question";
+const CONFIRMED_VIA: readonly PlanConfirmedVia[] = ["tui-card", "remote-card", "terminal", "host-question"];
 
 export type PlanConfirmation = {
   planKey: string;
@@ -198,7 +199,16 @@ export type PlanConfirmation = {
   /** Flow 464: who pressed the remote card and when; set only with `confirmedVia: "remote-card"`. */
   pressedBy?: number | undefined;
   pressedAt?: string | undefined;
+  /** Flow 467: the question the host asked and the answer that came back; set only with `confirmedVia: "host-question"`. */
+  hostQuestion?: HostQuestion | undefined;
 };
+
+function isHostQuestion(value: unknown): boolean {
+  if (value === null || typeof value !== "object") return false;
+  const hq = value as Record<string, unknown>;
+  const filled = (field: unknown): boolean => typeof field === "string" && field.trim() !== "";
+  return (HOST_QUESTION_SOURCES as readonly unknown[]).includes(hq.source) && filled(hq.ref) && filled(hq.questionText) && filled(hq.answerText) && filled(hq.time);
+}
 
 function isPlanConfirmation(value: unknown): value is PlanConfirmation {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
@@ -208,6 +218,7 @@ function isPlanConfirmation(value: unknown): value is PlanConfirmation {
     && Array.isArray(v.minutes) && v.minutes.length === 2 && v.minutes.every((m) => typeof m === "number" && Number.isFinite(m))
     && typeof v.quote === "string" && v.quote.trim() !== ""
     && typeof v.confirmedVia === "string" && (CONFIRMED_VIA as readonly string[]).includes(v.confirmedVia)
+    && (v.confirmedVia !== "host-question" || isHostQuestion(v.hostQuestion))
     && typeof v.at === "string" && v.at !== "";
 }
 

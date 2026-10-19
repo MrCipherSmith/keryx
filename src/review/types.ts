@@ -99,6 +99,19 @@ export function cardPressFields(source: CardPress | undefined): CardPress {
   };
 }
 
+/**
+ * Flow 467: the hosts whose own question tool can carry an operator's answer to the four standalone review verbs.
+ * `keryx review <verb> --answered-by <source>:<ref>` names one of these.
+ */
+export const HOST_QUESTION_SOURCES = ["claude-code", "codex", "keryx-shell", "helyx-poll", "other"] as const;
+export type HostQuestionSource = (typeof HOST_QUESTION_SOURCES)[number];
+
+/**
+ * Flow 467: a question the host asked the operator and the answer that came back, kept verbatim next to the decision it
+ * produced. Set only with `confirmedVia: "host-question"`; it is what the agent reports, not something keryx verified.
+ */
+export type HostQuestion = { source: HostQuestionSource; ref: string; questionText: string; answerText: string; time: string };
+
 export type ReadinessWaiver = { item: string; operator_quote: string; time: string; confirmedVia?: ConfirmedVia | undefined } & CardPress;
 
 export type ManagedReviewManifest = {
@@ -431,7 +444,7 @@ export type PremisePracticeSource = { name: string; says: string };
  * What the operator answered to a held finding, as applied to the record: the fields of the `premise-question`
  * decision it came from. The decision in the package's decisions store is the answer; this copy is its audit trail.
  */
-export type PremiseOperatorAnswer = Pick<PremiseQuestionDecision, "answer" | "reason" | "quote" | "at" | "actor" | "confirmedVia">;
+export type PremiseOperatorAnswer = Pick<PremiseQuestionDecision, "answer" | "reason" | "quote" | "at" | "actor" | "confirmedVia" | "hostQuestion">;
 
 /**
  * One premise judgement, as it is recorded on the finding. `severity` is present for

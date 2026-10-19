@@ -113,6 +113,20 @@ const FORBIDDEN_FLOW_VERBS: readonly RegExp[] = [
   /\bloginctl\b/,
 ];
 
+/**
+ * Flow 467: the four review verbs that take the operator's answer to a question the host asked (`--answered-by`). An
+ * unattended run has no operator to ask, so it never records one. The run's own environment refuses it too
+ * (`runOperatorCommand`); this is the floor under a command that never reaches that check.
+ */
+const HOST_QUESTION_VERBS = /\b(?:decide-premise|confirm-plan|waive-mutation|override-reviewers)\b/;
+const HOST_QUESTION_FLAG = /--answered-by\b/;
+
+/** True when `text` records a host question: one of the four verbs together with `--answered-by`, however quoted or wrapped. */
+function recordsHostQuestion(text: string): boolean {
+  const bare = text.replace(/["'\\]/g, "");
+  return HOST_QUESTION_VERBS.test(bare) && HOST_QUESTION_FLAG.test(bare);
+}
+
 /** Git subcommands that move shared history, rewrite refs directly, or publish. */
 const FORBIDDEN_GIT_VERBS = new Set(["push", "merge", "tag", "update-ref"]);
 
@@ -158,6 +172,10 @@ export function isUnattendedProtectedPath(p: string): boolean {
 export function unattendedShellRefusal(command: string): string | undefined {
   const text = command.trim();
   if (text.length === 0) return undefined;
+
+  if (recordsHostQuestion(text)) {
+    return "`--answered-by` records the operator's answer to a question the host asked — an unattended run has no operator to ask, so it never records one";
+  }
 
   for (const pattern of FORBIDDEN_FLOW_VERBS) {
     const match = pattern.exec(text);

@@ -1186,8 +1186,8 @@ NEEDS_FIX = count(OPEN) > 0
 ```
 
 A HELD finding is neither fixable nor clean: it never enters a fix prompt, and it blocks
-the job until answered. Ask the operator about each one as `review-orchestrator` "Wave
-D" says; an upheld one rejoins OPEN at its severity (carrying `premise_verdict` and
+the job until answered. Ask the operator about each one with the host's question tool and record the answer with `keryx review decide-premise --answered-by …` as `review-orchestrator` "Wave
+D" says (never send them to a terminal); an upheld one rejoins OPEN at its severity (carrying `premise_verdict` and
 `premise_answer` as task-implementer's `FIX_CONTEXT` defines them), a dismissed one
 carries `dismissed-incorrect` from the operator's decision. Unattended: stop and report
 the HELD list; never let the loop end reading clean while HELD is non-empty.

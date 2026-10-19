@@ -5,6 +5,7 @@
 **Status**: Implemented
 **Frozen**: 2026-10-15
 **Task**: flow 456
+**Amended**: 2026-10-19, flow 467 (§6b: the host-question path; reverses the `ask_user` rejection of §5 for four review acts)
 **Depends on**: TM-03 (terminal confirmation token). This record changes where the operator answers, not what the answer is worth. Flow 295 (`schedule_create`) is the pattern it generalises.
 **Reviewer Track**: architecture
 
@@ -43,7 +44,7 @@ The framework is `src/commands/operator-confirm-tools.ts`. The specs are in `ope
 
 ## 3. What a card proves
 
-A person pressed yes, in this keryx shell session or in its remote topic, on a card whose text was built from the state that the decision then changed. For the remote topic, "a person" means an account on the remote allowlist (`src/remote/config.ts`) answering in the session's own topic, the same rule that governs every other remote approval. A card is never weaker than an existing `alwaysAsk` approval.
+A person pressed yes, in this keryx shell session or in its remote topic, on a card whose text was built from the state that the decision then changed. For the remote topic, "a person" means an account on the remote allowlist (`src/remote/config.ts`) answering in the session's own topic, the same rule that governs every other remote approval. A card is never weaker than an existing `alwaysAsk` approval. A card press (`tui-card`, `remote-card`) is the verified kind of record; the host question of §6b (`confirmedVia: "host-question"`) is the weaker one, and a record says which it is.
 
 ## 4. What a card does not prove
 
@@ -96,7 +97,7 @@ The registry moves the boundary to the user, as everywhere else in this document
 
 The first idea was to let the CLI accept an environment variable, a file or a socket that proves "the shell's operator said yes", so the existing commands could stay the only implementation. It was rejected. `shell_exec` runs whatever command line the model writes, in an environment the model controls (`sh -c`), as a user who can read and write everything the operator can. Anything handed to that child can be read, copied or replayed by the model, so the proof would prove only that the model ran the command.
 
-The in-process tool has no such surface. The decision never leaves the shell process: no argument, environment variable, file or socket carries it. `ask_user` was rejected for a different reason: it can be answered by review-auto, the arbiter or an answers file, and its answer returns through the model.
+The in-process tool has no such surface. The decision never leaves the shell process: no argument, environment variable, file or socket carries it. `ask_user` was rejected for a different reason: it can be answered by review-auto, the arbiter or an answers file, and its answer returns through the model. That second rejection was reversed for four review acts by flow 467, on the operator's instruction: see §6b.
 
 ## 6. Remote answering
 
@@ -118,13 +119,31 @@ What it does not prove:
 
 The pending cards (age and time left of the token) and the answered ones (with `pressedBy`) are shown in the `/remote-control` status tab, the sidebar Remote row and the `/decisions` modal.
 
+## 6b. The host-question path (flow 467)
+
+A card exists only in `keryx shell`. An agent in Claude Code, Codex or another host has no card tool, and the CLI still refused without a terminal, so the operator's answer to a question the agent had already asked could not be recorded. Flow 467 adds a second path for four acts: `keryx review decide-premise`, `confirm-plan`, `waive-mutation` and `override-reviewers`. With no terminal they accept `--answered-by <source>:<ref> --answer-text "<the operator's words, verbatim>" --question-text "<the question as asked>"`. The source is `claude-code`, `codex`, `keryx-shell`, `helyx-poll` or `other`; the ref is the question id, and for a Helyx poll the poll id and the message id. `decide-premise` still takes `--answer uphold|dismiss --reason "<why>"`; `waive-mutation` and `override-reviewers` still take `--reason`. The record carries `confirmedVia: "host-question"` with the source, ref, question, answer and time, and a `keryx decisions` entry is written beside it. The review report and the `/decisions` modal show it as a host question, apart from a card.
+
+**This reverses §5 for these four acts, on the operator's instruction (polls 225 and 227, 2026-10-19).** §5 refused `ask_user` and agent-sent polls because their answer returns through the model. The operator accepted that weaker proof, the same trade made for `flow ac confirm` (poll 222): "it should be just a question, every harness can do that". §5 still holds for everything else: `review complete`, `review complete --waive` and `--waive-coverage`, `review chunks estimate`, `review publish`, flow completion and the other acts of §2 stay on the card or terminal path.
+
+What a host question proves: the operator answered a question, and the agent that asked it reports the question and the answer. keryx keeps both verbatim, with the poll or message id, so a reviewer can check them against the host's own log.
+
+What it does not prove:
+
+- **That the agent reported them truthfully.** keryx never sees the question or the answer, only what the agent passes. An agent can invent either one, or ask a different question from the one it records. keryx does not verify them.
+- **That a person answered.** The answer can come from a hook, an answers file, review-auto, the arbiter or the model itself. This is the gap §5 named.
+- **Who answered**, or that they read the question. TM-03 §5 and §4 above apply unchanged: an agent running as the same user can still write the stores directly, and a host question adds an honest-looking path, not a lock.
+
+What the path refuses, with nothing recorded: an answer that is not one of the verb's options (`uphold` or `dismiss` for `decide-premise`; for the others a yes), a decline, an empty answer or question, a missing or malformed `--answered-by`, an unknown package, an unknown or not-held finding, a stale plan, a missing `--reason`. Free text is not a decision. An unattended run and a nested keryx (`KERYX_TOOL_CALL=1`) refuse the flag, since no operator is there to have answered. With no `--answered-by`, the verbs refuse without a terminal exactly as before.
+
+**Two kinds of record.** A verified press (`tui-card`, `remote-card`) is a button pressed on a card keryx built and a token keryx checked; keryx saw it. A host question (`host-question`) is an answer an agent reports; keryx did not see it. Both are the operator's recorded decision, and the second is the weaker. The card stays the first choice wherever a card is available, and the skills and the verbs' help say so.
+
 ## 7. Unattended runs
 
-An unattended run has no approver, so the answer to a card is no. `src/trigger/unattended.ts` also lists every card tool as interactive-only and refuses it by name. The skills that used to say "ask the operator to run this in a terminal" now say: in `keryx shell` call the tool and let the operator answer it; never send the operator to a terminal; when the run is unattended, record the item as Not run, as before.
+An unattended run has no approver, so the answer to a card is no. `src/trigger/unattended.ts` also lists every card tool as interactive-only and refuses it by name. The skills that used to say "ask the operator to run this in a terminal" now say: in `keryx shell` call the tool and let the operator answer it; never send the operator to a terminal; when the run is unattended, record the item as Not run, as before. Outside `keryx shell`, for the four acts of §6b, they say: ask the operator with the host's own question tool and record the answer with the verb and `--answered-by`; `review complete` and its waivers still go to the operator.
 
 ## 8. The CLI paths and the approval floor
 
-In a real terminal every command behaves as it did. `review confirm-plan` and `review decide-premise` check for a terminal, and so do `review complete --waive` and `--waive-coverage`; without one they point to their card tool. A plain `review complete` has no TTY check: the CLI runs the same gates without a terminal, so the card is a rule for the agent, which the skills and the gate messages state, not a lock on the command. The gate's refusals are unchanged. An agent never closes a review with the CLI: it calls the `review_complete` card, and `keryx review complete` is for a human in a terminal. Without a terminal each refusal now says: inside `keryx shell`, call the `<tool>` tool, the operator answers it as a card; outside `keryx shell`, run this command in a terminal.
+In a real terminal every command behaves as it did. (Flow 467 adds the `--answered-by` path of §6b to `confirm-plan`, `decide-premise`, `waive-mutation` and `override-reviewers`; without that flag they behave as described here.) `review confirm-plan` and `review decide-premise` check for a terminal, and so do `review complete --waive` and `--waive-coverage`; without one they point to their card tool. A plain `review complete` has no TTY check: the CLI runs the same gates without a terminal, so the card is a rule for the agent, which the skills and the gate messages state, not a lock on the command. The gate's refusals are unchanged. An agent never closes a review with the CLI: it calls the `review_complete` card, and `keryx review complete` is for a human in a terminal. Without a terminal each refusal now says: inside `keryx shell`, call the `<tool>` tool, the operator answers it as a card; outside `keryx shell`, run this command in a terminal.
 
 `touchesHumanConfirmation` (`src/lib/command-risk.ts`) already forced `ask` for `flow confirm`, `schedule add|remove|pause|resume|run`, `review chunks estimate --answer`, `review complete --waive-coverage` and `--waive`, and `review publish`. It now also covers `keryx learn accept|promote|graduate` and `keryx agents external apply` (`touchesOperatorDecision`), so a `shell_exec` attempt of any of them asks in every mode. Like the rest of that floor it is a text match and has the limits TM-03 §5 states.
 

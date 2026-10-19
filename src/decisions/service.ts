@@ -15,7 +15,7 @@ export * from "./arms";
 export { BLIND_PROBABILITY, DEFAULT_IRREVERSIBLE, isIrreversible, loadDecisionsConfig } from "./blind";
 export { answerDecision, openDecision, recordReason } from "./journal";
 export { buildReport, renderReport, renderReportLine } from "./report";
-export type { AnnotatedRow, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionsReport, DeviationRow, IneligibleReport, LegacyReport, ProgressReport, ReasonShare, ReasonStats, ReportOptions, SettingsReport, Tally, TimingStats } from "./report";
+export type { HostQuestionRow, AnnotatedRow, ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionsReport, DeviationRow, IneligibleReport, LegacyReport, ProgressReport, ReasonShare, ReasonStats, ReportOptions, SettingsReport, Tally, TimingStats } from "./report";
 export { effectiveArm, isLegacy, stampLegacy } from "./legacy";
 export {
   MODEL_LABEL,
@@ -43,6 +43,7 @@ export type {
   DecisionMode,
   DecisionOption,
   DecisionRecommendation,
+  HostQuestionOpen,
   OpenInput,
   OpenResult,
 } from "./types";
@@ -65,7 +66,8 @@ export async function reportLine(cwd: string): Promise<string> {
 
 /** How many LIVE decisions the journal holds; the backfilled ones are counted apart by `backfilledCount`. */
 export async function decisionCount(cwd: string): Promise<number> {
-  return (await loadReport(cwd)).total;
+  const report = await loadReport(cwd);
+  return report.total + (report.hostQuestions?.length ?? 0);
 }
 
 /** How many live decisions carry the operator's own text or a typed reason (flow 401). */

@@ -159,7 +159,20 @@
             "quote": { "type": "string", "minLength": 1, "description": "The operator's own words: what they typed at the terminal, or the card text they said yes to." },
             "at": { "type": "string", "minLength": 1 },
             "actor": { "type": "string", "minLength": 1 },
-            "confirmedVia": { "type": "string", "enum": ["tui-card", "remote-card", "terminal"] }
+            "confirmedVia": { "type": "string", "enum": ["tui-card", "remote-card", "terminal", "host-question"] },
+            "hostQuestion": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["source", "ref", "questionText", "answerText", "time"],
+              "description": "Set with confirmedVia host-question only: the question the host asked the operator and the answer that came back, as the agent reported them.",
+              "properties": {
+                "source": { "type": "string", "enum": ["claude-code", "codex", "keryx-shell", "helyx-poll", "other"] },
+                "ref": { "type": "string", "minLength": 1 },
+                "questionText": { "type": "string", "minLength": 1 },
+                "answerText": { "type": "string", "minLength": 1 },
+                "time": { "type": "string", "minLength": 1 }
+              }
+            }
           }
         }
       },

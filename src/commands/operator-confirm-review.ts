@@ -756,7 +756,7 @@ async function completionFacts(dir: string): Promise<CompletionFacts> {
   for (const decision of await readOperatorDecisions(dir)) {
     const items = decision.subject?.items ?? [];
     const what = decision.kind === "mutation-waiver" ? "mutation pass not run" : "reviewer override, left out";
-    waivers.push(`waiver: ${what}${items.length === 0 ? "" : ` ${cardSafe(items.join(", "))}`}: "${quoteWhole(decision.quote)}" (${decision.confirmedVia})`);
+    waivers.push(`waiver: ${what}${items.length === 0 ? "" : ` ${cardSafe(items.join(", "))}`}: "${quoteWhole(decision.quote)}" (${decision.confirmedVia}${decision.hostQuestion === undefined ? "" : ` ${cardSafe(decision.hostQuestion.source)}:${cardSafe(decision.hostQuestion.ref)}`})`);
   }
   return {
     reviewId: manifest.reviewId ?? path.basename(dir),

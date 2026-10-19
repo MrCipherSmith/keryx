@@ -697,6 +697,7 @@ export function applyPremiseDecision<T extends object>(finding: T, decision: Pre
     at: decision.at,
     actor: decision.actor,
     confirmedVia: decision.confirmedVia,
+    ...(decision.hostQuestion === undefined ? {} : { hostQuestion: decision.hostQuestion }),
   };
   const { disposition: existing, ...rest } = record;
   const current = isRecord(existing) ? existing : undefined;
@@ -707,7 +708,7 @@ export function applyPremiseDecision<T extends object>(finding: T, decision: Pre
     ...(ownDismissal ? rest : record),
     premise: { ...premise, operator },
     ...(decision.answer === "dismiss" && open
-      ? { disposition: { state: "dismissed-incorrect", evidence: `operator (${decision.confirmedVia}, ${decision.at}) on the premise question: ${decision.reason}` } }
+      ? { disposition: { state: "dismissed-incorrect", evidence: `operator (${decision.confirmedVia}${decision.hostQuestion === undefined ? "" : ` ${decision.hostQuestion.source}:${decision.hostQuestion.ref}`}, ${decision.at}) on the premise question: ${decision.reason}` } }
       : {}),
   } as unknown as T;
 }
