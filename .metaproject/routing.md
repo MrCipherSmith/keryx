@@ -89,17 +89,18 @@ Human dashboard: [keryx-dashboard.html](keryx-dashboard.html)
 14. For implementation, review, refactoring, planning, documentation, or quality tasks, check `skills/catalog.md` and project-local gdskills before any external/global skill set.
 15. For Metaproject requirements packages under `docs/requirements` (README, PRD, specification, policies, schemas), use `skills/gdskills/planning/docpack-orchestrator/SKILL.md`; for current-codebase reverse-engineering documentation, use `autodoc-orchestrator` from `skills/catalog.md`.
 16. For known modules/components/stores/services/domain entities, check generated project skills under `project-skills/<module>/<entity>/` before generic guidance.
-17. When orchestrating multi-agent work, dispatch gdskills workers through the schema contracts in `core/gdskills/contracts/` (subagent-dispatch -> subagent-result) and read `rules/core/subagent-status-protocol.md`; validate a concrete message with `keryx skills contracts validate <file> --schema <name>`.
-18. For code quality status (lint, type, test, coverage, complexity, gate, regressions), read `data/health/artifacts/latest.md` or run `keryx health run`; do not claim quality status from raw logs.
-19. For creating, changing, debugging, reviewing, or running tests, read `data/testing/context.md` and use `skills/testing/SKILL.md`; read `data/testing/artifacts/latest.md` before raw test logs.
-20. For lessons learned, known decisions, constraints, repeated mistakes, historical context, or skill verification signals, use `skills/memory/SKILL.md` and `keryx memory search` before broad documentation reads.
-21. When the user asks to start, create, track, or finish a managed piece of work, use `skills/flow/SKILL.md` for state/status commands and use `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` for non-trivial implementation through Task Manager. Never edit flow.json or frozen acceptance criteria by hand.
-22. Before writing external/tool content into memory, wiki, reports, or task context, or when scanning artifacts for secrets/PII/prompt-injection/egress, use `modules/security.md` and `keryx security check-output`/`security scan`; read `data/security/artifacts/latest.md` before claiming security status.
-23. Use relevant skills from `skills/`.
-24. Discover tools: each `modules/*.md` manifest lists that module's `keryx` commands; run `keryx --help` for the full CLI surface.
-25. Use module manifests before reading raw generated data.
-26. Prefer curated artifacts in `data/*/artifacts`.
-27. Run module CLI commands when generated data is stale.
+17. The orchestrators (`review-orchestrator`, `flow-orchestrator`, `job-orchestrator`, `autodoc-orchestrator`) run in the main session: the main agent reads the SKILL.md and runs it inline, and never hands a whole orchestrator to a subagent, because a subagent cannot spawn the reviewers and workers the orchestrator dispatches.
+18. When orchestrating multi-agent work, dispatch gdskills workers through the schema contracts in `core/gdskills/contracts/` (subagent-dispatch -> subagent-result) and read `rules/core/subagent-status-protocol.md`; validate a concrete message with `keryx skills contracts validate <file> --schema <name>`.
+19. For code quality status (lint, type, test, coverage, complexity, gate, regressions), read `data/health/artifacts/latest.md` or run `keryx health run`; do not claim quality status from raw logs.
+20. For creating, changing, debugging, reviewing, or running tests, read `data/testing/context.md` and use `skills/testing/SKILL.md`; read `data/testing/artifacts/latest.md` before raw test logs.
+21. For lessons learned, known decisions, constraints, repeated mistakes, historical context, or skill verification signals, use `skills/memory/SKILL.md` and `keryx memory search` before broad documentation reads.
+22. When the user asks to start, create, track, or finish a managed piece of work, use `skills/flow/SKILL.md` for state/status commands and use `skills/gdskills/orchestration/flow-orchestrator/SKILL.md` for non-trivial implementation through Task Manager. Never edit flow.json or frozen acceptance criteria by hand.
+23. Before writing external/tool content into memory, wiki, reports, or task context, or when scanning artifacts for secrets/PII/prompt-injection/egress, use `modules/security.md` and `keryx security check-output`/`security scan`; read `data/security/artifacts/latest.md` before claiming security status.
+24. Use relevant skills from `skills/`.
+25. Discover tools: each `modules/*.md` manifest lists that module's `keryx` commands; run `keryx --help` for the full CLI surface.
+26. Use module manifests before reading raw generated data.
+27. Prefer curated artifacts in `data/*/artifacts`.
+28. Run module CLI commands when generated data is stale.
 
 ## Data
 

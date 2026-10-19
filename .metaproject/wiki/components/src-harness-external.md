@@ -1,14 +1,14 @@
 ---
 Title: Module src/harness/external
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 Summary: "`src/harness/external` groups 21 file(s). Depends on `src/harness/external/codec`, `src/mcp-client`, `src/harness/monitor`. Exposes 13 public symbol(s)."
 ---
 ```markdown
 ---
 Title: Module src/harness/external
-Version: 0.1.0
+Version: 1.0.0
 Type: component
 Status: accepted
 Summary: "`src/harness/external` groups 21 file(s). Depends on `src/harness/external/codec`, `src/mcp-client`, `src/harness/monitor`. Exposes 13 public symbol(s)."
@@ -18,72 +18,51 @@ Summary: "`src/harness/external` groups 21 file(s). Depends on `src/harness/exte
 
 ## Overview
 
-`src/harness/external` is the harness-facing boundary for running, supervising, and reporting on external agents or child processes. It groups the typed contracts and orchestration helpers used to start external work, interpret its events, and return structured completion outcomes.
+`src/harness/external` owns the harness-facing contract for running external agent CLIs (such as `claude` and `codex`) and ACP agents as supervised child runs. Its public entry point, `runExternalChild`, takes a dispatch's runtime block and returns a typed outcome, so callers never handle process spawning, vendor event formats, or MCP-client details themselves. Consumers named in the module graph are `src/tui`, `src/harness`, `src/commands`, and `scripts/smoke`.
 
-The module is primarily used by `src/tui`, `src/harness`, `src/commands`, and smoke-test entry points that need a consistent interface for external execution rather than directly handling process, codec, monitor, or MCP-client details.
+## How it works
 
-## Architecture
+The module has four cooperating layers, all kept pure except for the injected process and worktree ports:
 
-The module separates its concerns into three layers:
+- **Contract**: `types.ts` holds the vocabulary: `ExternalAgentEntry` (one CLI described as data), `ExternalRunInput`, the canonical `ExternalEvent` union, and `ExternalAgentCodec`. A codec is three pure functions (`buildArgv`, `parseLine`/`parseEvents`, `classifyFailure`), so each vendor adapter can be tested offline against recorded transcripts. The adapters themselves live under `src/harness/external/codec`.
+- **Registry and validation**: `registry.ts` is a static `EXTERNAL_AGENTS` table of metadata (binary, detect argv, known version range, sandbox modes, transport) with lookup helpers. It spawns nothing and never reports a login state; availability is `available`, `binary-missing`, or `not-probed`, and an out-of-range version is only a warning. `dispatch.ts` `validateRuntimeBlock` fails closed in a fixed order: the agent must exist, the CLI must support the requested sandbox, the release gate must allow it, and `read-only` must not contradict `allowed_actions`. Its refusal codes separate "this agent cannot" from "keryx does not do that yet". `worktree-write` is available for ACP agents and, for `claude-cli` and `codex-cli`, only when the caller owns write capture.
+- **Orchestration**: `runtime.ts` `runExternalChild` runs one fixed sequence: capability gate, nesting depth, validation, codec or ACP transport resolution, optional version detection, staged result schema, prompt assembly, disposable worktree creation, execution, structured-result validation, and worktree removal in a `finally`. Every failure returns a named `ExternalCompletionStatus` and stops; it never falls back to another agent.
+- **Supervision**: `supervise.ts` `superviseExternalRun` is the impure line-stream path. It spawns through an injected `ExternalSpawnPort` with stdin never inherited, parses stdout through the codec, counts unparseable lines as drift signals rather than failures, and races stream drain against the wall-clock timeout and any terminal event. Partial output is kept on every exit path. `supervise-mcp.ts` `superviseCodexMcpRun` is a separate path for `codex mcp-server`: it answers each elicitation through `src/mcp-client`, always runs `resolveApprovalDecision`, and default-denies when no approver is wired. `gatedSuperviseCodexMcpRun` applies the capability gate first. This MCP path is not wired into `dispatch.ts`.
 
-| Layer | Purpose | Key Files |
-|-------|---------|-----------|
-| **Contract** | Defines the public vocabulary for external work | `types.ts` |
-| **Orchestration** | Connects run inputs to execution paths | `runtime.ts`, `dispatch.ts`, `registry.ts` |
-| **Supervision** | Observes external children and manages lifecycle | `supervise.ts`, `supervise-mcp.ts` |
+## Key concepts
 
-- **Contract layer**: `src/harness/external/types.ts` defines the public vocabulary for external agents, run inputs, events, codecs, and outcomes. This file is the most widely reused part of the module.
-- **Orchestration layer**: `runtime.ts` and `dispatch.ts` connect run inputs to the appropriate external execution path. `registry.ts` provides registration or lookup semantics for external agent definitions.
-- **Supervision layer**: `supervise.ts` and `supervise-mcp.ts` observe external children and manage lifecycle concerns. The MCP-specific path depends on `src/mcp-client`, while general supervision coordinates monitor and child-process related abstractions.
-- **Codec boundary**: the dependency on `src/harness/external/codec` indicates that external representations are translated to and from typed harness objects.
+- **External agent entry**: `ExternalAgentEntry` describes one agent CLI. Its `transport` is `"line-stream"` (default) or `"acp"`.
+- **Run input**: `ExternalRunInput` is what a codec needs to build argv (prompt, cwd, sandbox, model, schema). `RunExternalChildInput` is the caller-facing input, carrying the runtime block, task, timeout, and parent environment.
+- **Sandbox**: `ExternalSandbox` is `"read-only"` or `"worktree-write"`. The registry records what a CLI supports, and the dispatch layer records what keryx implements; the two are deliberately separate.
+- **External events**: `ExternalEvent` is the canonical event set that vendor streams fold onto. `retry` is non-terminal. `child_finished` and `child_failed` are terminal, as `TERMINAL_EVENT_KINDS` and `isTerminalEvent` define.
+- **Outcomes and status**: `ProcessOutcome` is the input to `classifyFailure`. `ExternalChildOutcome` is the result, carrying `output`, `partial`, `sessionRef`, `argv`, `worktreePath`, and `costUnits`. A missing cost stays absent and is never zero. `ExternalCompletionStatus` names the result; `runtime.ts` itself produces `Completed`, `Timeout`, `Denied`, and `Error`.
+- **Structured result**: a `Completed` run's output must validate against the `subagent-result` schema. A violation becomes `Error`, with the original text moved to `partial`.
+- **Dependency injection**: `RunExternalChildDeps` supplies the spawn port, worktree port, capability gate, optional detector, and callbacks, which keeps the module independent of concrete process implementations.
 
-The public `runExternalChild` function is the main execution entry point. It accepts a `RunExternalChildInput` and a set of `RunExternalChildDeps`, allowing callers to inject the dependencies needed for an external run.
-
-## Key Concepts
-
-- **External agent entry**  
-  `ExternalAgentEntry` represents a describable external agent or integration that can be registered or invoked through the harness.
-
-- **Run input**  
-  `ExternalRunInput` describes the parameters needed to start an external child or agent run.
-
-- **Sandbox boundary**  
-  `ExternalSandbox` names the execution boundary or isolation concept associated with external work.
-
-- **External events**  
-  `ExternalEvent` represents observable activity emitted during an external run. `TERMINAL_EVENT_KINDS` and `isTerminalEvent` identify events that mark completion or finalization.
-
-- **Outcomes and status**  
-  `ProcessOutcome`, `ExternalChildOutcome`, and `ExternalCompletionStatus` provide typed result representations for completed external work.
-
-- **Codec abstraction**  
-  `ExternalAgentCodec` describes translation between harness-side objects and external representations.
-
-- **Dependency injection**  
-  `RunExternalChildDeps` lets callers provide the runtime dependencies required by `runExternalChild`, keeping the module decoupled from concrete process or client implementations.
-
-## Usage Flows
+## Main flows
 
 ### Run an external child
 
-1. A caller constructs a `RunExternalChildInput` describing the external child to start.
-2. The caller supplies `RunExternalChildDeps` with the dependencies required for execution.
-3. `runExternalChild` dispatches the run through the module's runtime or supervisor abstractions.
-4. The result is returned as a typed outcome, such as `ProcessOutcome` or `ExternalChildOutcome`.
+1. A caller builds a `RunExternalChildInput` whose `runtime` block names the agent, sandbox, and limits.
+2. `runExternalChild` checks the capability gate and nesting depth, then `validateRuntimeBlock` resolves the registry entry.
+3. For a line-stream agent it fetches the codec with `getExternalCodec`. For an ACP agent it routes to `runAcpBranch`, which uses `runAcpInWorktree` and, when a project root is set, `persistAcpRun`.
+4. The prompt is assembled, a worktree is created, and the codec's `buildArgv` (or `buildStreamingArgv` for a steerable run) feeds `superviseExternalRun`.
+5. `buildOutcome` maps the run onto a status. A run stopped for size reports its named overflow reason first, then the codec's `classifyFailure` decides. Structured-result validation runs last, and the worktree is removed in the `finally`.
 
-### Observe external execution
+### Observe a line-stream run
 
-1. While an external child runs, it may emit `ExternalEvent` values.
-2. Consumers can inspect events for progress or errors.
-3. `isTerminalEvent` and `TERMINAL_EVENT_KINDS` are used to recognize when an event represents a final state.
-4. Completion is then mapped to an appropriate `ExternalCompletionStatus` or outcome object.
+1. `superviseExternalRun` spawns the child and pumps each stdout line through `codec.parseEvents` (or `parseLine`).
+2. Each parsed event is checked against the output budget, added to the transcript, and passed to `onEvent` as it arrives.
+3. A terminal event starts a settle timer. If the streams do not close in time, the child is killed and the run is treated as ended, not timed out.
+4. On a wall-clock timeout the child is killed, and the outcome is built from the transcript collected so far with `timedOut: true`.
 
-### Supervise an MCP-based external interface
+### Supervise a codex MCP run
 
-1. `supervise-mcp.ts` provides supervision for external interfaces connected through `src/mcp-client`.
-2. MCP client interactions are combined with codec translation through `src/harness/external/codec`.
-3. Monitor-related dependencies from `src/harness/monitor` can be used to observe lifecycle activity.
-4. The final external result is normalized into the module's public outcome types.
+1. `superviseCodexMcpRun` connects to the `codex mcp-server` child and records a `child_started` event.
+2. Each `elicitation/create` request is correlated with a sibling `codex/event` by `call_id` and classified for risk.
+3. `resolveApprovalDecision` runs for every elicitation. An `auto` decision approves; otherwise the request goes to `requestApproval`, raced against a 45-second default timeout that counts as a deny.
+4. Each answer is recorded in the returned `elicitations` array and never added to `events`.
+5. The `tools/call` result becomes `child_finished` or `child_failed`, and the connection is closed.
 
 ---
 
@@ -152,5 +131,6 @@ The public `runExternalChild` function is the main execution entry point. It acc
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
 ```

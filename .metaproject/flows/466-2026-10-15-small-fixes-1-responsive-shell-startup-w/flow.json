@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "466",
+  "slug": "small-fixes-1-responsive-shell-startup-w",
+  "title": "Small fixes 1: responsive shell startup with fresh orientation",
+  "status": "in-progress",
+  "createdAt": "2026-10-15T09:23:51.500Z",
+  "updatedAt": "2026-10-19T10:33:04.904Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:02a2df57f5184ca75e415091b67514a399ad9f84d15ad03ff7117b86271c10e5",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [
+        "AC1",
+        "AC2"
+      ],
+      "evidenceRefs": [
+        ".metaproject/flows/454-2026-10-15-small-fixes-1-responsive-shell-startup-w/context.md"
+      ],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [
+        "AC1",
+        "AC2",
+        "AC3"
+      ],
+      "evidenceRefs": [
+        ".metaproject/flows/454-2026-10-15-small-fixes-1-responsive-shell-startup-w/startup-evidence.md"
+      ],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [
+        "AC4"
+      ],
+      "evidenceRefs": [
+        ".metaproject/flows/454-2026-10-15-small-fixes-1-responsive-shell-startup-w/review.md"
+      ],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-15T09:23:51.500Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-15T09:28:34.999Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-15T09:28:35.266Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-15T10:58:26.877Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-15T10:58:33.261Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-15T10:58:35.639Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-19T10:33:04.904Z",
+      "event": "renumbered",
+      "detail": "454 -> 466: duplicate id 454 on main: shared with 454-2026-10-15-review-orchestrator-log, opened earlier the same day (operator-approved)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/ctx/orient.test.ts src/gdgraph/staleness.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/ctx/orient.test.ts src/gdgraph/staleness.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/lib/shell-startup-trace.test.ts src/commands/agent-hooks.test.ts"
+    },
+    "AC4": {
+      "kind": "judged"
+    },
+    "AC5": {
+      "kind": "judged"
+    }
+  }
+}

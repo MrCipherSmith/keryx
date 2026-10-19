@@ -1,95 +1,73 @@
 ---
 Title: Module src/harness/web
-Version: 0.2.0
+Version: 1.0.0
 Type: component
-Status: draft
-Summary: "`src/harness/web` provides the web-facing execution boundary for the harness. It defines contracts for web page requests and worker execution, wraps web access in a sandboxed transport, normalizes page content, and enforces basic safety limits such as redirect counts and maximum returned text size."
+Status: accepted
+Summary: "`src/harness/web` is the harness's remote-web boundary. Web access goes through `SandboxedWebTransport`, which validates public HTTPS targets and every redirect hop, runs each network request in a sandboxed worker behind an injected `WebWorkerRunner`, and returns only sanitized, size-limited text or a typed failure."
 ---
 
 # Module src/harness/web
 
 ## Summary
 
-`src/harness/web` provides the web-facing execution boundary for the harness. It defines contracts for web page requests and worker execution, wraps web access in a sandboxed transport, normalizes page content, and enforces basic safety limits such as redirect counts and maximum returned text size.
-
-The module depends on [src/harness/process/sandbox](src-harness-process-sandbox.md) for process-level isolation, [src/harness/search](src-harness-search.md) for search integration, and [src/security/detect](src-security-detect.md) along with broader [src/security](src-security.md) utilities for security checks. It is consumed primarily by [src/harness/tool/builtin](src-harness-tool-builtin.md) and by `src/harness/search`.
+`src/harness/web` is the harness's remote-web boundary. Web access goes through `SandboxedWebTransport`, which validates public HTTPS targets and every redirect hop, runs each network request in a sandboxed worker behind an injected `WebWorkerRunner`, and returns only sanitized, size-limited text or a typed failure.
 
 ## Overview
 
-This module is responsible for letting harness components interact with web resources without exposing raw network or worker behavior directly. Its main concern is containment: web requests and worker workloads pass through explicit request/response shapes, configurable limits, and sandboxed execution paths.
-
-The public surface combines interfaces and implementations:
-
-- **Interfaces**: `WebPageRequest`, `WebWorkerRequest`, `WebWorkerResponse`, `WebWorkerRunner`, and `SandboxedWebTransportOptions` describe the expected shapes for web and worker operations.
-- **Implementations**: `SandboxedWebTransport`, `SystemWebWorkerRunner`, and `createSystemWebWorkerRunner` provide concrete mechanisms for running those operations through controlled boundaries.
-- **Policy and content handling**: `web-policy` and `web-content` define rules and transformations for fetched web material, while `WEB_MAX_REDIRECTS` and `WEB_MAX_TEXT_BYTES` enforce shared operational limits.
+`src/harness/web` owns the harness's remote-web boundary: the one path through which harness code fetches public web pages or calls web-backed search providers. Its job is containment. Callers get back sanitized, size-limited text or a typed failure, never raw transport internals or a network client they could use directly.
 
 ## How it works
 
-The module is organized around three concerns: request contracts, isolated execution, and content handling.
+The module has three layers and a policy layer that every network hop passes through.
 
-### Contract layer
+**Contracts.** `WebPageRequest`, `SandboxedWebTransportOptions`, `WebWorkerRequest`, `WebWorkerResponse` and `WebWorkerRunner` in `sandboxed-web-transport.ts` define the shapes. The runner is a constructor-injected port, so `SandboxedWebTransport` reaches the network only through it.
 
-`WebPageRequest` and `SandboxedWebTransportOptions` describe what a web fetch should target and how it should be constrained. Worker-related contracts—`WebWorkerRequest`, `WebWorkerResponse`, and `WebWorkerRunner`—describe the expected input and output of web worker execution.
+**Transport.** `SandboxedWebTransport` has two entry points. `fetchPage` serves page reads and returns `SanitizedWebContent`. `request` is the bridge for search providers: it takes the search module's `SandboxedWebRequest` and maps its `capability` onto flags for the same internal `fetchRaw` loop. `fetchRaw` validates each hop before dispatching it. `parsePublicHttpsUrl` in `web-policy.ts` requires an absolute HTTPS URL without credentials and rejects private or loopback IP literals. `validatePublicTarget` resolves every DNS answer, denies the whole set if any answer is non-public, and pins one address (preferring IPv4) for the worker to connect to. Redirects are followed by hand, each re-validated, and capped at `WEB_MAX_REDIRECTS` (3). The caller's credential is forwarded only while the origin matches the original request.
 
-### Transport layer
+Local search is a separate branch. The `local-search` capability admits only plain `http:` to `localhost`, `127.0.0.1` or `::1`, and refuses redirects.
 
-`SandboxedWebTransport` is the primary class for performing web page operations through a sandboxed boundary. The dependency on [src/harness/process/sandbox](src-harness-process-sandbox.md) implies that execution or access paths are wrapped by process-level sandboxing, while the dependency on [src/security/detect](src-security-detect.md) and [src/security](src-security.md) implies that security checks are applied to requests or content.
+**Worker.** `SystemWebWorkerRunner` in `web-worker-runner.ts` runs one request per child process. It wraps a `bun --eval` script with `wrapWithSandbox` under a read-only profile with network on, the workspace and home directory read-denied, and an empty environment. It refuses to run when the platform launcher is missing (`sandbox-exec` on darwin, `bwrap` on linux). The request goes in on stdin and the child's JSON result comes back on stdout, with a 10-second timeout and a 192,000-byte output cap. The child installs a custom `lookup` that returns only the pinned address, so it does no DNS of its own. For search, the child can send a browser-like header set; `BROWSER_*` constants are emitted into the worker source as text, so the lists a test checks and the lists the worker sends stay the same.
 
-### Worker layer
-
-`SystemWebWorkerRunner` and `createSystemWebWorkerRunner` provide a system-backed implementation of the `WebWorkerRunner` contract. Callers can start and manage web worker workloads through an approved runner abstraction rather than using platform-specific worker code directly.
-
-### Content and policy layer
-
-`web-content` and `web-policy` handle the shape and safety of web material. The constants `WEB_MAX_REDIRECTS` and `WEB_MAX_TEXT_BYTES` bound transport and content handling to reduce runaway requests and oversized payloads.
+**Content.** `sanitizeWebContent` in `web-content.ts` is the only route from a worker body to agent-visible text. For `text/html` it strips `script` and `style` blocks and then all tags. It rejects text that `detectInjection` flags or that matches an imperative tool-instruction pattern, redacts with `redactSensitiveText`, and wraps the result in an "UNTRUSTED EXTERNAL CONTENT" header that names the source, provider and retrieval time.
 
 ## Key concepts
 
-### Web page request
+**Public target.** A `PinnedPublicTarget` (URL, hostname and one validated address) is the only form in which a destination reaches the worker. It is checked once per hop, before dispatch.
 
-A `WebPageRequest` is the normalized description of a web page operation that the transport layer can understand. It gives callers a standard way to express a page-oriented request without depending on low-level network details.
+**Sandboxed transport.** `SandboxedWebTransport` is the module's entry point. It holds no network client. It holds a lookup function, a `WebWorkerRunner` and a clock.
 
-### Sandboxed web transport
+**Worker runner contract.** `WebWorkerRunner.run` takes a `WebWorkerRequest` and an optional abort signal and returns a `WebPolicyResult<WebWorkerResponse>`. `SystemWebWorkerRunner` is the production implementation, and `createSystemWebWorkerRunner` builds one for the current working directory and home directory.
 
-`SandboxedWebTransport` is the module's primary boundary for web access. Instead of exposing direct network calls, it provides a transport object configured through `SandboxedWebTransportOptions`. The sandboxed name indicates that execution context, request behavior, or returned data is constrained by harness policy.
+**Policy result.** `WebPolicyResult<T>` is a union of `{ ok: true, value }` and `{ ok: false, reason }`. Policy and transport failures are returned as values rather than thrown. The search bridge maps them to `policy-denied`, `transport-failed` or `cancelled`.
 
-### Worker runner contract
-
-`WebWorkerRunner` abstracts the execution of web worker tasks. Callers can program against the interface rather than against a particular worker implementation. `WebWorkerRequest` and `WebWorkerResponse` define the data passed into and produced by those tasks.
-
-### System web worker runner
-
-`SystemWebWorkerRunner` and `createSystemWebWorkerRunner` are the concrete system-backed worker implementation. They allow the harness to run worker-like operations using an approved environment while still presenting the `WebWorkerRunner` interface to consumers.
-
-### Content policy and limits
-
-The module includes shared policy constants: `WEB_MAX_REDIRECTS` and `WEB_MAX_TEXT_BYTES`. These ensure web access is subject to explicit operational ceilings, especially around redirect chains and the amount of textual content returned or processed.
+**Limits.** `WEB_MAX_REDIRECTS` (3) and `WEB_MAX_TEXT_BYTES` (128,000) are exported from `sandboxed-web-transport.ts`. The byte cap is applied to the decoded body in `fetchRaw`. The worker applies its own `maxBytes` of 128,000, written as a literal in `web-worker-runner.ts` and not imported from the constant, so the two values appear to have to be kept in step by hand.
 
 ## Main flows
 
-### Flow: builtin tool performs a bounded web fetch
+### Flow: page fetch through `fetchPage`
 
-1. A consumer in [src/harness/tool/builtin](src-harness-tool-builtin.md) prepares a web operation.
-2. The request is represented through the web-facing contracts exposed by this module, such as `WebPageRequest` and transport options.
-3. `SandboxedWebTransport` performs the operation inside the module's controlled boundary.
-4. Policy limits such as redirect count and maximum returned text size constrain the outcome.
-5. Security detection utilities may evaluate the request or returned content before it is treated as safe harness input.
-6. The caller receives a result shaped by the module's contracts rather than by raw transport internals.
+1. The caller builds a `WebPageRequest` with a URL and a provider ID.
+2. `fetchRaw` parses the URL with `parsePublicHttpsUrl` and runs `validatePublicTarget` against the injected lookup.
+3. `SandboxedWebTransport` calls `WebWorkerRunner.run`. The worker returns a status, content type, body and optional `location`.
+4. On a 3xx response the loop re-validates the `location` and continues, failing with "too many redirects" past the cap. On a final response the content type must be readable text and the body within `WEB_MAX_TEXT_BYTES`.
+5. `fetchPage` requires a 2xx status and passes the body to `sanitizeWebContent`, which returns the untrusted-content envelope or a prompt-injection rejection.
 
-### Flow: caller starts a web worker task
+### Flow: search provider request through `request`
 
-1. A caller constructs a `WebWorkerRequest` describing the worker task.
-2. The caller obtains a runner through `createSystemWebWorkerRunner` or uses `SystemWebWorkerRunner` directly.
-3. The runner executes the worker task through the `WebWorkerRunner` contract.
-4. The result is returned as a `WebWorkerResponse`, allowing the caller to handle success, failure, or partial output without knowing the underlying system worker mechanics.
+1. A search provider adapter in `src/harness/search` (which imports `SandboxedWebRequest` from its types) passes a request. Its `capability` selects `localOnly` (`local-search`) or `browserHeaders` (`public-search`).
+2. `request` runs the same `fetchRaw` loop. It does not sanitize: the adapter receives the raw status, final URL, content type and text.
+3. Any failure becomes a response with status 0 and an error code (`cancelled`, `policy-denied` or `transport-failed`), so the adapter does not have to handle exceptions.
 
-### Flow: search consumes normalized web content
+### Flow: system worker execution
 
-1. [src/harness/search](src-harness-search.md) depends on this module for web-facing behavior.
-2. Web page or worker output is normalized and constrained by the web content layer.
-3. Policy limits help ensure that indexed or processed text stays within expected size bounds.
-4. Search integrations receive predictable web-derived content without directly managing transport or worker execution details.
+1. `SystemWebWorkerRunner.run` checks for the platform launcher. If it is absent, the call returns "web sandbox launcher is unavailable".
+2. It wraps the `bun --eval` child with `wrapWithSandbox`, spawns it with an empty environment and piped stdin and stdout, and writes the request JSON.
+3. An abort signal or the 10-second timer kills the process. Output over 192,000 bytes kills it too and returns an "oversized output" failure.
+4. A non-zero exit or unparseable stdout becomes a failure result. Otherwise the parsed `WebPolicyResult` is returned.
+
+## Changelog
+
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 
 ---
 

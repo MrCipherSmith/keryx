@@ -2,57 +2,60 @@
 
 ## Stats
 
-- Source files indexed: 2564
-- Imported asset files indexed: 11
-- Total nodes: 2575
-- Edges: 8652
-- Import edges: 8535
-- Asset edges: 27
-- Unresolved imports: 90
+- Source files indexed: 3253
+- Imported asset files indexed: 14
+- Total nodes: 3267
+- Edges: 11703
+- Import edges: 11550
+- Asset edges: 31
+- Unresolved imports: 122
 - Import resolution: 99%
-- Skipped generated/static directories: 17
+- Skipped generated/static directories: 18
 
 ## Top Modules
 
 | Module | Source Files |
 |---|---:|
-| harness | 386 |
-| commands | 303 |
-| tui | 251 |
-| lib | 191 |
-| review | 113 |
-| gdskills | 96 |
-| security | 75 |
-| flow | 72 |
-| sac | 61 |
-| wiki | 61 |
+| commands | 404 |
+| harness | 400 |
+| tui | 310 |
+| review | 280 |
+| lib | 212 |
+| gdskills | 137 |
+| remote | 132 |
+| flow | 92 |
+| security | 88 |
+| wiki | 70 |
+| scripts | 67 |
+| sac | 65 |
+| health | 57 |
 | learning | 57 |
 | mcp-servers | 56 |
-| scripts | 54 |
-| gdgraph | 52 |
-| health | 52 |
-| remote | 52 |
+| gdgraph | 55 |
 | memory | 49 |
-| acp | 41 |
+| session | 46 |
+| acp | 42 |
 | metrics | 39 |
-| bus | 35 |
 
 ## Unresolved By Type
 
 | Type | Count |
 |---|---:|
-| relative-code | 69 |
-| package | 13 |
+| relative-code | 94 |
+| package | 17 |
+| .js | 3 |
 | . | 2 |
-| .js | 2 |
 | .css | 1 |
+| .slice(4, -3)} | 1 |
 | .scanner | 1 |
 | .scan-helper | 1 |
 | .ts | 1 |
+| .key | 1 |
 
 ## Skipped Directories
 
 - `.claude`
+- `.git`
 - `.metaproject`
 - `bench/jev-review/fixtures/conform-project/.metaproject`
 - `dist`

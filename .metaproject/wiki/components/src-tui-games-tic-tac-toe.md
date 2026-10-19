@@ -1,14 +1,14 @@
 ---
 Title: Module src/tui/games/tic-tac-toe
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 Summary: "`src/tui/games/tic-tac-toe` groups 11 file(s). Depends on `src/tui/games`. Exposes 17 public symbol(s)."
 ---
 ```markdown
 ---
 Title: Module src/tui/games/tic-tac-toe
-Version: 0.1.0
+Version: 1.0.0
 Type: component
 Status: accepted
 Summary: "`src/tui/games/tic-tac-toe` groups 11 file(s). Depends on `src/tui/games`. Exposes 17 public symbol(s)."
@@ -18,108 +18,93 @@ Summary: "`src/tui/games/tic-tac-toe` groups 11 file(s). Depends on `src/tui/gam
 
 ## Summary
 
-`src/tui/games/tic-tac-toe` provides a self-contained Tic-Tac-Toe game component for the TUI layer. It groups 11 files, depends on `src/tui/games`, and exposes 17 public symbols.
+`src/tui/games/tic-tac-toe` implements Tic-tac-toe as one `GameDefinition` for the TUI games area, with the human playing X and the model playing O. It keeps board rules pure, turns model replies into moves, and sizes and renders the board to fit its modal body.
 
 ## Overview
 
-The module implements Tic-Tac-Toe as a reusable TUI game component. It owns:
-
-- Game board state and logic
-- Win/draw detection rules
-- Presentation geometry and layout
-- Prompt helpers for model-assisted play
-
-Its role is to provide a composable Tic-Tac-Toe implementation that integrates with the broader games area via `src/tui/games`.
+This module owns the Tic-tac-toe game for the TUI games area: the board rules (placing marks, detecting wins and draws), the prompts and reply parsing used when the model plays O, the board geometry, and the OpenTUI rendering of the board. `ticTacToeGame` in `game.ts` wires these pieces into the shared game contract that `src/tui/games` drives, and `index.ts` is the public entry point.
 
 ## How It Works
 
-The module is organized around several cooperating layers:
+The code is split into layers. The rule layer knows nothing about rendering or prompts, and `game.ts` is the only place that connects the layers to the shared game contract.
 
 ### Rules and State (`core.ts`)
 
-- `emptyBoard` and `freshGame` create the initial board state
-- `placeMark` applies a move to the board
-- `freeCells` exposes cells that can still be played
-- `checkWinner` and `isGameOver` determine whether the game has ended
+`core.ts` is pure logic. `TicTacToeState` holds the board, the side to move, the winner and winning line, a `draw` flag and a cursor. `placeMark` returns a new state instead of mutating the board. It returns `undefined` for an out-of-range or occupied cell, and it switches `turn` only while play continues. `checkWinner` scans the eight `WIN_LINES`, and `isGameOver` treats a win or a draw as terminal. `bestLocalMove` is a fixed heuristic: take a winning cell, block the opponent's winning cell, then prefer the centre, then corners, then the first free cell.
 
 ### Game Packaging and Export (`game.ts`, `index.ts`)
 
-- `ticTacToeGame` is the public game entry used by the games area
-- `index.ts` aggregates the public API and is the module's entry point
+`game.ts` exports `ticTacToeGame`, a `GameDefinition` with the id `tic-tac-toe`. Its `turn` returns `"human"` for X and `"model"` for O, and its `outcome` maps an X win to human, an O win to model, and a full draw to `"draw"`. `pass` only flips the turn without placing a mark. Key handling is delegated to `./input` (`onKey`, `markFor`), which lies outside the Key files list, and rendering is delegated to `render.ts`. `index.ts` re-exports the public pieces and is the module entry point.
 
 ### Presentation Geometry (`layout.ts`)
 
-- `GAME_CELL_GAP`, `GAME_BOARD_CHROME_X`, and `GAME_CELL_SIZES` describe the board's visual structure
-- `gameBoardWidth` and `resolveCellSize` translate board state into renderable dimensions
+`layout.ts` maps the board onto terminal cells. `GAME_CELL_SIZES` has four sizes, from large to tiny. The horizontal gap is one column and the vertical gap is zero rows, because a terminal cell is roughly twice as tall as it is wide. `gameBoardWidth` and `boardRegionRows` compute the footprint, and `resolveCellSize` picks the largest size that fits. `resolveGameBudget` splits a modal body's rows between the board region, the prompt card (bounded by `PROMPT_MIN_ROWS` and `PROMPT_MAX_ROWS`), and the agent panel's minimum.
 
 ### Rendering (`render.ts`)
 
-- Draws the board and marks using the layout model
-- Focuses on visual presentation rather than game rules
+`render` rebuilds the OpenTUI box tree on every paint. It resolves the cell size from the context width and height, and draws three rows of three bordered cells. The cursor cell gets the focus border, a winning line takes the winner's colour, and a status line is added below the board. It reads state but never decides rules.
 
 ### Model-Assisted Play (`prompts.ts`)
 
-- `gameSystemPrompt` and `gameUserPrompt` provide prompt text for model-assisted move selection
-- `parseModelMove` normalizes model output into a usable move representation
-- `bestLocalMove` supports local move selection or fallback behavior
+`gameSystemPrompt` tells the model that it plays O and must reply with one digit from 0 to 8. `gameUserPrompt` renders the board as a 3×3 grid with `X`, `O` and `.` for empty cells. `parseModelMove` takes the first standalone digit 0 to 8 from the reply and accepts it only if that cell is empty, so unusable replies fail closed. When no model move is usable, the fallback is `bestLocalMove` in `core.ts`.
 
 ## Key Concepts
 
 ### Board
 
-- The 3×3 playing surface used by the game
-- Created with `emptyBoard` or `freshGame` and updated through `placeMark`
+- A `readonly Cell[]` of nine entries in row-major order, indexed 0 to 8
+- `emptyBoard` and `freshGame` create it, and `placeMark` returns an updated copy rather than changing the original
 
 ### Cell and Mark
 
-- A cell is a board position that may contain a player mark or remain empty
-- `freeCells` identifies playable cells
+- A `Cell` is either a `Mark` (`"X"` for the human, `"O"` for the model) or `null` for an empty cell
+- `freeCells` lists the indices that are still `null`
 
 ### Winner and Game-Over State
 
-- `checkWinner` determines whether a winning line exists
-- `isGameOver` determines whether play should stop, either due to a win or a draw
+- `checkWinner` returns the winning mark and its line, or `null`
+- `isGameOver` is true when there is a winner or the `draw` flag is set. `draw` is set only when the board is full and no line won
 
 ### Local Move
 
-- A move selected without external model input
-- `bestLocalMove` contributes to local move selection or fallback behavior
+- A move chosen by `bestLocalMove` without model input
+- Exposed to the games contract as `localMove` in `game.ts`. It appears to serve as the fallback when no model move is usable
 
 ### Model Move
 
-- A move suggested by an external model and then normalized through `parseModelMove`
+- A reply from the model, turned into a cell index by `parseModelMove`. A reply with no digit or an occupied cell yields `undefined`
 
 ### Layout
 
-- The geometry mapping logical board cells to TUI coordinates
-- Represented through constants: `GAME_CELL_GAP`, `GAME_BOARD_CHROME_X`, `GAME_CELL_SIZES`
-- Computed via helpers: `gameBoardWidth`, `resolveCellSize`
+- The geometry that maps logical board cells to terminal size
+- Constants: `GAME_CELL_GAP`, `GAME_BOARD_CHROME_X`, `GAME_CELL_SIZES`
+- Helpers: `gameBoardWidth`, `resolveCellSize`, and the budget function `resolveGameBudget`
 
 ### Game Entry
 
-- `ticTacToeGame` is the public object that makes this game available to `src/tui/games`
+- `ticTacToeGame` is the `GameDefinition` (id `tic-tac-toe`, label "Tic-tac-toe") that `src/tui/games` consumes
 
 ## Main Flows
 
 ### Start or Reset a Game
 
-1. A caller begins or resets play through the module's public entry point or `ticTacToeGame`
-2. `freshGame` and `emptyBoard` create a clean starting board
-3. The surrounding game UI renders the board using layout helpers and `render.ts`
+1. The games area calls `ticTacToeGame.fresh`, which calls `freshGame`
+2. `freshGame` builds an empty board with `emptyBoard`, sets `turn` to `"X"`, and places the cursor on cell 4, the centre
+3. `render` draws the board, using `resolveCellSize` to choose the cell size from the available width and height
 
-### Apply a Local Move
+### Apply a Move
 
-1. The surrounding TUI controller selects a target cell from the current board state
-2. `freeCells` determines whether the selected cell is still playable
-3. `placeMark` applies the move to the board
-4. `checkWinner` and `isGameOver` evaluate whether the move ended the game
+1. The games area calls `applyMove` with a cell index and the player, and `applyMove` converts the player to a mark with `markFor`
+2. `placeMark` returns `undefined` for an occupied or out-of-range cell. Otherwise it returns a new state with the mark placed and `winner`, `winLine` and `draw` computed
+3. `turn` switches only while play continues, and `isOver` reports the terminal state through `isGameOver`
+4. `outcome` maps a win to `"human"` or `"model"`, a draw to `"draw"`, and anything else to `null`
 
 ### Request a Model-Assisted Move
 
-1. `gameSystemPrompt` and `gameUserPrompt` prepare prompt text describing the game context
-2. A model response is passed to `parseModelMove` to obtain a usable move
-3. If the move is valid, it is applied through `placeMark`
-4. If model input is unavailable or invalid, `bestLocalMove` provides a local fallback move
+1. `systemPrompt` and `stateForModel` supply the system prompt and a board-based user prompt through `gameSystemPrompt` and `gameUserPrompt`
+2. The model's reply goes to `parseMove`, which calls `parseModelMove` to get a usable index
+3. A valid index is applied through `placeMark`
+4. If the reply is unusable, `bestLocalMove` provides the fallback through `localMove`
 
 ---
 
@@ -181,5 +166,6 @@ Extracted by `keryx wiki collect`; regenerated with `--force`. The prose section
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - **0.1.0** — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections reviewed and enriched.
 ```

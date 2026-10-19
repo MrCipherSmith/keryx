@@ -1,14 +1,14 @@
 ---
 Title: Module src/harness/budget
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 Summary: "`src/harness/budget` groups 2 file(s). Depends on `src/harness/context`. Exposes 3 public symbol(s)."
 ---
 ```markdown
 ---
 Title: Module src/harness/budget
-Version: 0.1.0
+Version: 1.0.0
 Type: component
 Status: accepted
 Summary: "`src/harness/budget` groups 2 file(s). Depends on `src/harness/context`. Exposes 3 public symbol(s)."
@@ -17,40 +17,34 @@ Summary: "`src/harness/budget` groups 2 file(s). Depends on `src/harness/context
 
 ## Summary
 
-`src/harness/budget` groups 2 file(s). Depends on `src/harness/context`. Exposes 3 public symbol(s).
+`src/harness/budget` is a pure, fail-closed check that turns a planned, reserved and consumed budget into a `remaining` figure. It exposes one function, `reconcileBudget`, and reuses the `SourceReliability` type from `src/harness/context` as a type-only dependency.
 
 ## Overview
 
-This module owns budget-related reconciliation logic within the harness layer. It provides a typed entry point for callers to request budget reconciliation and receive a structured result.
+The `src/harness/budget` module owns budget reconciliation for the harness. A caller supplies a planned, reserved and consumed amount, and the module decides whether the remaining budget is valid. Its public surface is `reconcileBudget` plus the `ReconcileBudgetInput` and `ReconcileBudgetResult` types that define the contract.
 
-Its primary responsibility is to coordinate budget inputs with supporting data from `src/harness/context`, while keeping the public contract small and explicit. The module is intentionally focused on one concern: reconciling budget state through a single exported function and associated type definitions.
+The module is pure and deterministic. Its header in `reconcile.ts` states that it reads only its input and has no clock, randomness, network or filesystem access.
 
 ## How it works
 
-The module is centered on `reconcile.ts`, which contains the main reconciliation behavior and public API surface.
+The logic lives in `reconcile.ts`. `reconcileBudget` checks its input in a fixed order and returns a discriminated union: `{ ok: true, remaining, reliability }` or `{ ok: false, reason }`. It fails closed in three cases: any negative `planned`, `reserved` or `consumed`; `reserved` above `planned`; and `consumed` above `reserved`, which would leave a negative remaining. Equality at each boundary is allowed. On the ok path, `remaining` is `reserved - consumed`, and the `reliability` tag is passed through unchanged.
 
-- `reconcileBudget` is the public entry point.
-- `ReconcileBudgetInput` describes the input contract accepted by the entry point.
-- `ReconcileBudgetResult` describes the output contract returned to callers.
-- The module depends on `src/harness/context`, which supplies contextual information needed during reconciliation.
-- `reconcile.test.ts` verifies the reconciliation logic and protects the public contract.
-
-This structure keeps budget reconciliation isolated from broader harness concerns and makes the dependency direction clear: callers use the budget module, while the budget module consults context as needed.
+The only link to `src/harness/context` is a type-only import of `SourceReliability` from `context/manifest`. The module makes no runtime call into context, so the dependency is a shared vocabulary rather than a collaborator. `reconcile.test.ts` covers the ok path, each boundary, each denial and determinism, including a check that the input is not mutated.
 
 ## Key concepts
 
-- **Budget reconciliation**: The process handled by this module, expressed through `reconcileBudget`.
-- **`ReconcileBudgetInput`**: The typed input object provided by callers.
-- **`ReconcileBudgetResult`**: The typed result returned after reconciliation.
-- **Context dependency**: The module integrates with `src/harness/context` to access supporting state.
-- **Single public entry point**: The public API is anchored around `reconcileBudget`, with supporting types for input and output.
+- **Budget reconciliation**: Validating planned, reserved and consumed amounts, then reducing them to `remaining = reserved - consumed`.
+- **`ReconcileBudgetInput`**: The input object with three numeric amounts and a `reliability` tag.
+- **`ReconcileBudgetResult`**: A discriminated union on `ok`. The ok branch carries `remaining`, and the denial branch carries a `reason` string.
+- **Fail-closed denial**: An invalid budget yields `ok: false` rather than a clamped or partial value. The code cites `SC_R16_BUDGET_RESERVATION`.
+- **Source reliability**: The `SourceReliability` tag from `src/harness/context`, carried through without interpretation.
 
 ## Main flows
 
-1. A caller constructs a `ReconcileBudgetInput` object.
-2. The caller invokes `reconcileBudget` with that input.
-3. The function uses values from `src/harness/context` when needed for reconciliation.
-4. The function returns a `ReconcileBudgetResult` describing the reconciliation outcome.
+1. A caller builds a `ReconcileBudgetInput`, setting `reliability` from the source's `SourceReliability` value.
+2. `reconcileBudget` rejects negative amounts first, then `reserved > planned`, then `consumed > reserved`.
+3. If a check fails, it returns `{ ok: false, reason }` naming the violated rule. The input is not mutated.
+4. Otherwise it returns `{ ok: true, remaining: reserved - consumed, reliability }`.
 
 ## Reference
 
@@ -85,5 +79,6 @@ This structure keeps budget reconciliation isolated from broader harness concern
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 0.1.0 — Generated by `koryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections enriched from generated stubs.
 ```
