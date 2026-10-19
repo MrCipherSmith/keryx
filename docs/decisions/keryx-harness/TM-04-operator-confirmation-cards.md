@@ -23,7 +23,7 @@ This record replaces that hand-off. In `keryx shell` each decision is a native t
 | `review_chunks_answer` | `keryx review chunks estimate --answer yes\|no` |
 | `review_confirm_plan` | `keryx review confirm-plan` |
 | `review_decide_premise` | `keryx review decide-premise` |
-| `review_complete` | `keryx review complete` (closes the round after every gate passes; the head is the recorded manifest head, not one the model supplies) |
+| `review_complete` | `keryx review complete` (closes the round after every gate passes; the head is the recorded manifest head, not one the model supplies. The agent completes a review only through this card; the CLI stays for a human in a terminal) |
 | `review_publish` | `keryx review publish` |
 | `review_waive_coverage` | `keryx review complete --waive-coverage` (records the waiver only) |
 | `review_waive_readiness` | `keryx review complete --waive <item>` (records the waiver only) |
@@ -124,7 +124,7 @@ An unattended run has no approver, so the answer to a card is no. `src/trigger/u
 
 ## 8. The CLI paths and the approval floor
 
-In a real terminal every command behaves as it did. `review confirm-plan`, `review decide-premise` and `review complete` are terminal-only by a TTY check; without a terminal they point to their card tool. Without a terminal each refusal now says: inside `keryx shell`, call the `<tool>` tool, the operator answers it as a card; outside `keryx shell`, run this command in a terminal.
+In a real terminal every command behaves as it did. `review confirm-plan`, `review decide-premise` and `review complete` are terminal-only by a TTY check; without a terminal they point to their card tool. An agent never closes a review with the CLI: it calls the `review_complete` card, and `keryx review complete` is for a human in a terminal. Without a terminal each refusal now says: inside `keryx shell`, call the `<tool>` tool, the operator answers it as a card; outside `keryx shell`, run this command in a terminal.
 
 `touchesHumanConfirmation` (`src/lib/command-risk.ts`) already forced `ask` for `flow confirm`, `schedule add|remove|pause|resume|run`, `review chunks estimate --answer`, `review complete --waive-coverage` and `--waive`, and `review publish`. It now also covers `keryx learn accept|promote|graduate` and `keryx agents external apply` (`touchesOperatorDecision`), so a `shell_exec` attempt of any of them asks in every mode. Like the rest of that floor it is a text match and has the limits TM-03 §5 states.
 
