@@ -508,6 +508,34 @@ describe("collect --force (AC7, AC8)", () => {
     expect(pageVersion(await readFile(alphaPath(), "utf8"))).toBe("0.2.1");
   });
 
+  test("a page an earlier enrich left wrapped in a ```markdown fence is unwrapped, not given a second Reference", async () => {
+    // The shape keryx's own components/src-tui-games.md and four siblings were
+    // left in: outer front matter, then the whole reply fenced, its own front
+    // matter (Status: accepted) included.
+    const meta = ENRICHED_PAGE.slice(0, ENRICHED_PAGE.indexOf("# Module"));
+    const fenced = `${meta}\`\`\`markdown\n${ENRICHED_PAGE.replace("Status: draft", "Status: accepted")}\`\`\`\n`;
+    await seedAlpha(fenced);
+
+    const result = await wikiCollect({ cwd: root, force: true });
+    expect(result.pages.find((page) => page.path.endsWith("components/src-alpha.md"))!.action).toBe("updated");
+    const onDisk = await readFile(alphaPath(), "utf8");
+    expect(onDisk.match(/^## Reference\b/gm)).toHaveLength(1);
+    expect(onDisk.match(/^## Related Wiki\b/gm)).toHaveLength(1);
+    expect(onDisk).not.toContain("```markdown");
+    expect(onDisk.match(/^Status:/gm)).toEqual(["Status:"]);
+    expect(onDisk).toContain("Status: draft");
+    expect(onDisk).toContain("Hand-written prose about alpha that must survive every collect.");
+    expect(onDisk).not.toContain("stale entry from an older graph");
+    expect(parseChangelog(onDisk)!.map((entry) => entry.version)).toEqual(["0.2.1", "0.2.0", "0.1.0"]);
+    expect(pageVersion(onDisk)).toBe("0.2.1");
+
+    const issues = (await wikiValidate(root)).issues.filter((issue) => issue.page.endsWith("components/src-alpha.md"));
+    expect(issues.filter((issue) => issue.kind === "managed-block" || issue.kind === "changelog")).toEqual([]);
+
+    const again = await wikiCollect({ cwd: root, force: true });
+    expect(again.pages.find((page) => page.path.endsWith("components/src-alpha.md"))!.action).toBe("skipped");
+  });
+
   test("a second collect --force over an unchanged graph changes nothing", async () => {
     await seedAlpha(ENRICHED_PAGE);
     await wikiCollect({ cwd: root, force: true });
