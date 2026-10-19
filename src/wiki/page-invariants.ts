@@ -490,6 +490,27 @@ function leadingYamlBlock(markdown: string): string | null {
 }
 
 /**
+ * The page an earlier enrich left before `unwrapFencedReply` existed: the
+ * page's own front matter, then the whole reply inside one ```markdown fence,
+ * a second front matter included. Every reader here skips fences, so such a
+ * page has no sections at all and `collect --force` appended a second
+ * Reference after the fence. Unwrap it: the outer front matter stays (it is
+ * the one `collect` and `validate` read), the inner one is dropped, and the
+ * fenced body becomes the page. Any other page is returned unchanged.
+ */
+export function unwrapFencedPage(markdown: string): string {
+  const source = toLf(markdown);
+  const meta = leadingYamlBlock(source);
+  if (meta === null) return markdown;
+  const body = source.slice(meta.length);
+  const unwrapped = unwrapFencedReply(body);
+  if (unwrapped === body) return markdown;
+  const innerMeta = leadingYamlBlock(unwrapped);
+  const inner = innerMeta === null ? unwrapped : unwrapped.slice(innerMeta.length);
+  return inEolOf(markdown, `${meta}${inner.replace(/^\n+/, "")}`);
+}
+
+/**
  * Make an enriched page keep everything that is not prose, from `original`:
  * its front matter (Status included), its managed Reference block, and its
  * changelog byte for byte, plus one new entry for this write and the Version
@@ -576,7 +597,10 @@ function isDeclaredGenerated(heading: string): boolean {
  * lost prose is not.
  */
 export function mergeGeneratedSections(existing: string, generated: string, entryNote: string): string {
-  const source = toLf(existing);
+  // A fence-wrapped page is migrated first; `next !== source` below then gives
+  // the migration its own changelog entry and Version bump.
+  const original = toLf(existing);
+  const source = toLf(unwrapFencedPage(original));
   const generatedLf = toLf(generated);
   const fresh = new Map(sectionsOf(generatedLf).map((section) => [section.heading.toLowerCase(), section]));
   const enriched = sectionsOf(source).some(
@@ -624,7 +648,7 @@ export function mergeGeneratedSections(existing: string, generated: string, entr
   // a page nothing else changed on is still brought back in order (no new entry:
   // nothing was regenerated, only a defect fixed).
   const repaired = repairVersionAndOrder(next);
-  if (next === source) return repaired === source ? existing : inEolOf(existing, repaired);
+  if (next === original) return repaired === original ? existing : inEolOf(existing, repaired);
   const version = nextPageVersion(repaired);
   return inEolOf(existing, prependChangelogEntry(setPageVersion(repaired, version), `- ${version} - ${entryNote}`));
 }
