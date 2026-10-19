@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx://schemas/learn-probe/comparison.schema.json",
+  "title": "Learn Probe Comparison",
+  "description": "The scored result of one two-arm probe: base harness versus base harness plus one learned pattern, same task, same model, same base ref. An unmeasurable verdict is a first-class outcome: its arms and delta are null and it may carry no runs at all.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "probeId",
+    "patternId",
+    "taskId",
+    "createdAt",
+    "environment",
+    "arms",
+    "delta",
+    "verdict",
+    "runs"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "probeId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{12}$",
+      "description": "First 12 hex characters of sha256 over patternId, taskId, model, provider, commit, taskSetDigest and runs, NUL-separated."
+    },
+    "patternId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "resumed": {
+      "type": "boolean",
+      "description": "True when at least one seed was reused from an earlier interrupted run."
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "provider", "commit", "baseRef", "taskSetDigest"],
+      "properties": {
+        "model": { "type": "string", "minLength": 1 },
+        "provider": { "type": "string", "minLength": 1 },
+        "commit": { "type": "string", "minLength": 7 },
+        "baseRef": { "type": "string", "minLength": 1 },
+        "taskSetDigest": { "type": "string", "minLength": 16 }
+      }
+    },
+    "arms": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["base", "probe"],
+      "properties": {
+        "base": { "oneOf": [{ "$ref": "#/$defs/arm" }, { "type": "null" }] },
+        "probe": { "oneOf": [{ "$ref": "#/$defs/arm" }, { "type": "null" }] }
+      }
+    },
+    "delta": { "oneOf": [{ "$ref": "#/$defs/delta" }, { "type": "null" }] },
+    "verdict": {
+      "type": "string",
+      "enum": ["improved", "regressed", "indistinguishable", "unmeasurable"]
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "no-task",
+        "gold-leak",
+        "run-failed",
+        "underpowered",
+        "budget-exceeded",
+        "environment-drift"
+      ],
+      "description": "Required when verdict is unmeasurable, forbidden otherwise. The six-value vocabulary is the complete set; see specification.md §7."
+    },
+    "runs": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["arm", "seed", "answered", "transcript"],
+        "properties": {
+          "arm": { "type": "string", "enum": ["base", "probe"] },
+          "seed": { "type": "integer", "minimum": 1 },
+          "answered": { "type": "boolean" },
+          "tokens": { "type": ["integer", "null"], "minimum": 0 },
+          "toolCalls": { "type": ["integer", "null"], "minimum": 0 },
+          "transcript": {
+            "type": "string",
+            "description": "Path relative to the probe directory, e.g. runs/base/1.ndjson."
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "verdict": { "const": "unmeasurable" } },
+        "required": ["verdict"]
+      },
+      "then": { "required": ["reason"] },
+      "else": {
+        "properties": {
+          "arms": {
+            "type": "object",
+            "required": ["base", "probe"],
+            "properties": {
+              "base": { "$ref": "#/$defs/arm" },
+              "probe": { "$ref": "#/$defs/arm" }
+            }
+          },
+          "delta": { "$ref": "#/$defs/delta" },
+          "runs": { "minItems": 1 }
+        },
+        "not": { "required": ["reason"] }
+      }
+    }
+  ],
+  "$defs": {
+    "arm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seeds", "successes", "rate", "ci"],
+      "properties": {
+        "seeds": { "type": "integer", "minimum": 1 },
+        "successes": { "type": "integer", "minimum": 0 },
+        "rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "ci": {
+          "type": "array",
+          "description": "Wilson 95% interval for this arm's proportion.",
+          "items": { "type": "number", "minimum": 0, "maximum": 1 },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "tokens": { "type": ["integer", "null"], "minimum": 0 },
+        "toolCalls": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rate", "ci"],
+      "properties": {
+        "rate": { "type": "number", "minimum": -1, "maximum": 1 },
+        "ci": {
+          "type": "array",
+          "description": "Newcombe hybrid-score 95% interval for the difference of two independent proportions.",
+          "items": { "type": "number", "minimum": -1, "maximum": 1 },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "tokens": {
+          "type": ["integer", "null"],
+          "description": "probe tokens minus base tokens, when both reported."
+        },
+        "toolCalls": {
+          "type": ["integer", "null"],
+          "description": "probe tool calls minus base tool calls, when both reported."
+        }
+      }
+    }
+  }
+}
