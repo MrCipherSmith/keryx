@@ -1,8 +1,8 @@
 # Module bench/jev-review/adapters
 
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 
 ## Summary
 
@@ -10,19 +10,39 @@ Status: draft
 
 ## Overview
 
-_Draft - enrich with the gdwiki skill. In 2-4 sentences: what this module owns and its purpose in the app._
+`bench/jev-review/adapters` holds the per-component adapters that the jev-review benchmark runs. Each adapter wraps one reviewed component (CI triage, review conformance, or a placeholder for a component still in flight) and reports its result for two arms: a `without-jev` baseline and a `with-jev` run of the real CLI. The module also owns the registry that fixes the order of components in the benchmark report.
 
 ## How it works
 
-_Draft - the internal architecture in prose: the layers and key abstractions and how they relate. Read the Key files under Reference below._
+The module is flat: one registry plus one file per component, all implementing the `ComponentAdapter` contract imported from `../types`. Each adapter has an `id`, an `available` flag and a `run(arm, ctx)` method that returns a `ComponentResult`.
+
+`registry.ts` exports `registerAdapters()`, which returns the adapters in report display order. Available components come first, so a reader reaches the real numbers before the placeholders. The file comment says the benchmark runner iterates this list (the runner itself is outside this module).
+
+`ci-triage.ts` and `review-conform.ts` are the two real adapters. They differ in how they reach Jev:
+
+- `ci-triage.ts` (`ciTriageAdapter`) uses a synthetic `without-jev` comparator. It flags every failing job as a real regression, the conservative escalate-everything default, and scores that against the truth labels in the eval manifest (`CI_TRIAGE_EVAL_MANIFEST`). The `with-jev` arm spawns `bun` against the CLI in the current worktree, running `review ci-triage --eval` with `--json` and, only when live, `--live`. Offline runs replay committed fixtures, and they inject a placeholder `OPENROUTER_API_KEY` so they never depend on the ambient credential.
+- `review-conform.ts` (`reviewConformAdapter`) runs `review conform` against committed fixtures in both arms. It runs from a separate fixtures project, so the conformance flag is not enabled for the whole repository. The `without-jev` arm marks every clause `not-evaluated`. The `with-jev` arm counts `likely-violated` clauses as candidate findings.
+
+`not-available.ts` builds placeholder adapters through a shared `notAvailableAdapter` factory. It covers flow 328 (`flowCheckAcAdapter`), flow 330 (`reviewJevRulesAdapter`) and the later severity-calibration work (`severityCalibrationAdapter`). Each one reports `available: false` with a reason for both arms and never invokes a CLI, so the module has no code dependency on those flows.
 
 ## Key concepts
 
-_Draft - the domain vocabulary and core objects this module introduces, and how they relate._
+- **ComponentAdapter**: the unit the benchmark runs. It has `id`, `available`, an optional `unavailableReason`, and `run(arm, ctx)`.
+- **Arm**: `without-jev` is the baseline and `with-jev` is the run through the Jev CLI. Both arms produce a result for the same component, so they can be compared.
+- **ComponentResult**: either a `ComponentArmResult` or an unavailable result that carries only a `reason`. The unavailable form is how placeholder adapters report that a component has not landed yet.
+- **ComponentPrediction**: one scored item, with `id`, `flagged` and `correct`. `correct` is `null` when there is no truth label (conformance).
+- **Usage**: `jevCalls`, `inputTokens`, `cost` and `wallClockMs` for an arm. The `ci-triage` adapter estimates `jevCalls` as two per case so the cost-cap pre-flight does not under-count.
+- **addedTruePositives**: a hand-labelled count. Both real adapters set it to `null`, because an unattended run cannot label findings. Conformance candidates appear only as a note.
+- **AdapterRunContext**: `root`, `cliPath`, `bunPath` and `live`. `live` selects real `gh` and Jev calls over the offline fixtures.
+- **Eval manifest and fixtures**: committed under `src/commands/fixtures/` (`ci-triage-eval` and `conform`). The offline benchmark is hermetic because it replays these files.
 
 ## Main flows
 
-_Draft - trace 1-3 concrete flows (e.g. a request from API to store to UI) through the Key files below._
+1. **Registry to report.** `registerAdapters()` in `registry.ts` returns five adapters: `ciTriageAdapter()`, `reviewConformAdapter()`, `flowCheckAcAdapter()`, `reviewJevRulesAdapter()` and `severityCalibrationAdapter()`. The runner calls `run(arm, ctx)` on each one for each arm. The three placeholders return unavailable results immediately.
+
+2. **CI triage, `with-jev` arm.** `ciTriageAdapter().run` calls `withJev`, which calls `runEval`. That spawns `bun` with `review ci-triage --eval <manifest> --json`, adding `--live` only when the context is live. The JSON result is mapped to predictions with `flagged: true` and `correct` taken from `correctAfter`. `cost` comes from `after.costUsd`. The `without-jev` arm skips the subprocess and runs `naiveBaseline`, which reads the same manifest.
+
+3. **Review conformance, both arms.** `reviewConformAdapter().run` calls `runConform` once, spawning `review conform --ref invented-ref.md --pr 999 --fixtures <dir> --json` from `bench/jev-review/fixtures/conform-project`. It then calls `toResult` for the requested arm. The `without-jev` arm marks each clause `flagged: false`. The `with-jev` arm marks each `likely-violated` clause `flagged: true`, and records the count as a note with `addedTruePositives` left `null`.
 
 ---
 
@@ -74,4 +94,5 @@ new links only to pages you have verified.
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-10-19T10:13:19.815Z. Prose sections are drafts for the gdwiki enrich workflow.

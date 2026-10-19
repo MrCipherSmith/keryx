@@ -1,14 +1,14 @@
 ---
 Title: Module src/retention
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 Summary: "`src/retention` groups 7 file(s). Depends on `src/lib`. Exposes 15 public symbol(s)."
 ---
 ```markdown
 ---
 Title: Module src/retention
-Version: 0.1.0
+Version: 1.0.0
 Type: component
 Status: accepted
 Summary: "`src/retention` groups 7 file(s). Depends on `src/lib`. Exposes 15 public symbol(s)."
@@ -18,77 +18,52 @@ Summary: "`src/retention` groups 7 file(s). Depends on `src/lib`. Exposes 15 pub
 
 ## Summary
 
-`src/retention` owns the core abstractions for identifying, describing, and cleaning retention-relevant artifacts. It provides types, constants, and filesystem-facing helpers used to define retention units, entry statistics, and target metadata.
-
-The module is consumed by higher-level orchestration such as [src/commands](src-commands.md) and [src/forgetting](src-forgetting.md). Those consumers discover cleanup targets, apply policy bounds, and perform retention operations without depending directly on lower-level filesystem details.
+`src/retention` owns the policy and filesystem seam for bounding two kinds of content that grow under `.metaproject/` without limit: the gdctx raw and artifact stores, and the refused-write conflict sidecars kept per workspace. It defines what a retention target is, the age and byte limits applied to each, and a sweep engine that reports every target as `ok`, `incomplete` or `empty` rather than folding failures into a clean result.
 
 ## Overview
 
-The module organizes around four cooperating layers:
+`src/retention` decides which retention-relevant artifacts under `.metaproject/` are too old or too large to keep, and removes them. It covers the gdctx raw and artifact directories and the `*-write-conflicts` directories under `.metaproject/workspaces/`, which had no cleanup before this module. The module holds the policy and the mechanism; the `keryx retention sweep` command and the ctx write path decide when a sweep runs.
 
-- **Filesystem abstraction** (`src/retention/fs-deps.ts`): defines `RetentionFsDeps`, a contract for filesystem operations needed by retention logic. `defaultFsDeps` provides the production implementation, and `describeError` normalizes failures for user-facing or test-facing use.
-- **Policy and target model** (`src/retention/policy.ts`): exposes core domain types and constants including `RetentionUnit`, `RetentionEntryStat`, `RetentionTarget`, target discovery result types, and budget/age limits.
-- **Sweep and auto-sweep logic** (`src/retention/sweep.ts`, `src/retention/auto-sweep.ts`): builds on policy types and the filesystem contract to coordinate retention execution.
-- **Test coverage** (`src/retention/auto-sweep.test.ts`, `src/retention/sweep.test.ts`): exercises sweep and auto-sweep paths through the module's public and internal seams.
+## How it works
 
-## Key Concepts
+The module has four layers. `src/retention/fs-deps.ts` defines `RetentionFsDeps` (`readdir`, `statEntry`, `remove`) as the only way sweep logic touches the filesystem. `defaultFsDeps` is the Node `fs/promises` implementation. The seam exists so the unreachable-store path can be tested with a fake that throws, instead of relying on OS permission tricks that fail when run as root.
 
-### Domain Types
+`src/retention/policy.ts` holds the domain types, the limits, and discovery. `gdctxTargets` returns the two fixed gdctx targets. `discoverOwnerConflictTargets` walks `workspaces/<id>/` for `*-write-conflicts` directories, and records unreadable paths as issues instead of hiding them behind an empty result.
 
-- **`RetentionUnit`**: core unit for modeling a retention-managed object or grouping of related entries.
-- **`RetentionEntryStat`**: stats-oriented interface for individual retention entries, including information used to determine cleanup or sweep eligibility.
-- **`RetentionTarget`**: a discovered target that retention logic can act upon.
-- **`TargetDiscoveryResult`**: result type for discovery flows that identify one or more retention targets.
+`src/retention/sweep.ts` is the single place that decides eligibility. It sorts entries oldest first and selects those past the age cutoff, then evicts the oldest survivors until the byte cap holds. Dry run runs the same decision logic with `deps.remove` never called. `sweepAll` runs the targets, and `sweepProject` adds discovery and folds any discovery issue into an `incomplete` report.
 
-### Filesystem Abstraction
+`src/retention/auto-sweep.ts` applies the same policy to the gdctx targets only, at most once per 24 hours, from the ctx write path. A stamp file records start and completion separately, and an exclusive `wx` claim keeps concurrent ctx runs from sweeping at the same time.
 
-- **`RetentionFsDeps`** (interface): contract defining filesystem operations needed by retention logic.
-- **`defaultFsDeps`**: production implementation of `RetentionFsDeps`.
-- **`describeError`**: helper for consistent failure descriptions during retention operations.
+## Key concepts
 
-### Policy Constants
+- **`RetentionUnit`**: `"file" | "directory"`. A file target sweeps one file per entry. A directory target sweeps a whole subdirectory, and `statEntry` recurses to total its bytes.
+- **`RetentionEntryStat`**: the two facts the policy needs, `bytes` and `mtimeMs`.
+- **`RetentionTarget`**: one directory to sweep, with its `id`, `unit`, `maxAgeDays` and `maxBytes`.
+- **`TargetDiscoveryResult`**: `targets` plus `issues`. The two are kept apart so "nothing found" cannot be mistaken for "could not look".
+- **`TargetSweepResult` and `SweepReport`**: each target ends `ok`, `incomplete` or `empty`, with `reasons` whenever it is not `ok`. Report-level `discoveryIssues` make the whole report `incomplete`.
+- **`describeError`**: returns the Node error `code` when there is one, such as `EACCES`, and the message otherwise.
 
-| Constant | Purpose |
-|----------|---------|
-| `DEFAULT_MAX_AGE_DAYS` | Default age limit for retention entries |
-| `GDCTX_RAW_MAX_BYTES` | Size budget for raw gdctx artifacts |
-| `GDCTX_ARTIFACTS_MAX_BYTES` | Size budget for processed gdctx artifacts |
-| `OWNER_CONFLICT_MAX_AGE_DAYS` | Age limit for owner-conflict entries |
-| `OWNER_CONFLICT_MAX_BYTES` | Size budget for owner-conflict cleanup |
+| Constant | Value | Applies to |
+|----------|-------|------------|
+| `DEFAULT_MAX_AGE_DAYS` | 14 | gdctx raw and artifacts |
+| `GDCTX_RAW_MAX_BYTES` | 200 MiB | gdctx raw |
+| `GDCTX_ARTIFACTS_MAX_BYTES` | 50 MiB | gdctx artifacts |
+| `OWNER_CONFLICT_MAX_AGE_DAYS` | 30 | owner write-conflict directories |
+| `OWNER_CONFLICT_MAX_BYTES` | 20 MiB | each owner write-conflict directory |
 
-### Discovery Functions
+## Main flows
 
-- **`discoverTargets`**: general entry point for finding retention targets.
-- **`discoverOwnerConflictTargets`**: specialized discovery for owner-conflict cleanup cases.
-- **`gdctxTargets`**: selects or constructs gdctx-specific retention targets.
+### 1. Discover targets
 
-## Main Flows
+`discoverTargets` concatenates the fixed gdctx pair from `gdctxTargets` with what `discoverOwnerConflictTargets` finds. A missing `workspaces/` directory yields no targets and no issue. An unreadable `workspaces/`, or an unreadable workspace under it, adds to `issues`, and discovery continues with the rest. `sweepProject` carries those issues into the report.
 
-### 1. Discover Retention Targets
+### 2. Sweep one target
 
-Higher-level code uses the discovery surface to identify cleanup candidates:
+`sweepTarget` lists the directory and stats each entry. A failed stat marks the target `incomplete` and skips that entry. Entries older than `maxAgeDays` are selected with reason `age`. If the surviving bytes still exceed `maxBytes`, the oldest unselected entries are selected with reason `bytes-cap` until the total fits. With `dryRun`, selected entries are reported as `would-remove`. Otherwise each is passed to `deps.remove`. A failed removal is recorded as `remove-failed`, and the loop continues. A removal that finds the entry already gone counts as removed.
 
-1. Call `discoverTargets` for general discovery, `gdctxTargets` for gdctx-specific targets, or `discoverOwnerConflictTargets` for owner-conflict cases.
-2. Receive a `TargetDiscoveryResult` containing typed `RetentionTarget` values.
+### 3. Automatic sweep from the ctx write path
 
-### 2. Apply Retention Policy Bounds
-
-Retention behavior is guided by named constants rather than scattered literals:
-
-- **Age limits**: `DEFAULT_MAX_AGE_DAYS`, `OWNER_CONFLICT_MAX_AGE_DAYS`
-- **Size budgets**: `GDCTX_RAW_MAX_BYTES`, `GDCTX_ARTIFACTS_MAX_BYTES`, `OWNER_CONFLICT_MAX_BYTES`
-
-This approach makes policy easier to compare, test, and evolve.
-
-### 3. Execute Filesystem-Backed Retention Operations
-
-After targets are identified, retention execution uses the filesystem abstraction:
-
-1. Operations rely on `RetentionFsDeps` to inspect or mutate filesystem state.
-2. `defaultFsDeps` supplies the production implementation.
-3. `describeError` provides consistent failure interpretation.
-
-This keeps core retention logic testable while supporting real filesystem behavior.
+`maybeAutoSweepGdctx` returns early when `KERYX_RETENTION_AUTO` is `0`, `off` or `false`. Otherwise it reads `.metaproject/data/retention/last-auto-sweep.json`. A stamp whose `startedAtMs` is under 24 hours old throttles the run. A stamp with no `completedAtMs` means a sweep started and its outcome is unknown, so the claim's pid is checked to tell a live sweep (`in-progress`) from a dead one. Otherwise the process takes the `wx` claim, re-reads the stamp under the claim, writes a started-only stamp, runs `sweepAll` over `gdctxTargets` with `dryRun: false`, and writes `completedAtMs` only after the sweep returns. The function is documented as never throwing and never printing. Its result goes back to the caller, and the ctx command's own output is unchanged.
 
 ## Reference
 
@@ -140,5 +115,6 @@ This keeps core retention logic testable while supporting real filesystem behavi
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 0.1.0 — Initial generation by `keryx wiki collect`; prose enriched from public API, key files, and dependency graph.
 ```

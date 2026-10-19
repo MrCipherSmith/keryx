@@ -1,14 +1,14 @@
 ---
 Title: Module src/tui/games
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 Summary: "`src/tui/games` groups terminal UI game features, including game modal presentation, game selection, model turn helpers, agent panel rendering, and shared game types/constants. It exposes 14 public symbols and coordinates with `src/tui`, `src/harness/provider`, and `src/tui/games/tic-tac-toe`."
 ---
 ```markdown
 ---
 Title: Module src/tui/games
-Version: 0.1.0
+Version: 1.0.0
 Type: component
 Status: accepted
 Summary: "`src/tui/games` is the terminal UI package for game-related commands and presentation. It groups 12 files and exposes 14 public symbols for opening and presenting a games modal, identifying game commands, running game-model turns, rendering an agent panel, and formatting turn statistics."
@@ -18,111 +18,67 @@ Summary: "`src/tui/games` is the terminal UI package for game-related commands a
 
 ## Overview
 
-`src/tui/games` provides the terminal UI layer for game-related commands and presentation within the TUI shell. It connects user input to game state by coordinating:
+`src/tui/games` is the terminal UI package behind the `/game` shell command. It hosts a tabbed games modal, recognises game commands, runs model-backed turns for the active game and shows what those turns cost in time and tokens. The package does not own board rules: each game is a `GameDefinition` plugged into a registry, and the reference game is `ticTacToeGame` in `src/tui/games/tic-tac-toe`.
 
-- Game modal lifecycle (open/present)
-- Game command recognition
-- Model-backed turn execution
-- Agent panel rendering
-- Turn statistics formatting
+## How it works
 
-The module relies on `src/tui` for terminal integration, `src/harness/provider` for model-facing behavior, and `src/tui/games/tic-tac-toe` for a concrete game implementation.
+The package has one composition point and a set of pluggable contracts. `modal.ts` (`presentGamesModal`) is the only file that wires the rest together. It opens a single modal through `openModal` from `src/tui/modal-host`, creates one tab per registered game, routes keys, and drives the model turn.
 
-## Architecture
+The boundary is the `GameDefinition` interface in `types.ts`. A game supplies pure state transitions (`fresh`, `turn`, `isOver`, `applyMove`), the model-facing prompt pair (`systemPrompt`, `stateForModel`), reply parsing (`parseMove`), fallback moves (`localMove`, `pass`), key handling (`onKey`) and rendering (`render`). The modal only sees that interface, so adding a game means adding one definition to a registry built by `createRegistry` in `registry.ts`.
 
-The package organizes functionality across focused files:
+The agent panel in `agent-panel.ts` is a view with no state of its own. `renderAgentPanel` draws a status card (notice, provider/model, last-turn and session totals) and a bounded, scrollable prompt card that shows the per-turn user prompt before the system prompt. Statistics are plain data in `stats.ts`: each turn yields an `AgentTurnStats`, which `addTurn` folds into `AgentTurnTotals`. `constants.ts` holds the model deadline (`GAME_MODEL_TIMEOUT_MS`, 60 seconds), the footer hints and the row budget (`PANEL_FIXED_ROWS`, `PROMPT_MIN_ROWS`, `PROMPT_MAX_ROWS`). The modal splits the body height between the board and the panel with `resolveGameBudget` from `tic-tac-toe/layout`, so both fit on screen without modal-level scrolling.
 
-| File | Responsibility |
-|------|-----------------|
-| `index.ts` | Public API entry point; exposes 14 symbols |
-| `types.ts` | Shared game contracts; most widely imported file |
-| `constants.ts` | Default games, footer text, timeout config |
-| `modal.ts` | Main coordination point; imports 12 files |
-| `agent-panel.ts` | Renders agent/model response area |
-| `modal.test.ts` | Integration tests; imports 10 files |
-
-### Entry point
-
-`src/tui/games/index.ts` exposes the module's public API to consumers.
-
-### Shared contracts
-
-`src/tui/games/types.ts` defines shapes used across the package and serves as the central contract layer.
-
-### Stable values
-
-`src/tui/games/constants.ts` provides:
-
-- `DEFAULT_GAMES` — list of available games
-- `GAMES_FOOTER` — shared footer text
-- `GAME_MODEL_TIMEOUT_MS` — timeout for model calls
-
-### Coordination
-
-`src/tui/games/modal.ts` is the main integration point, connecting command recognition, game selection, presentation helpers, and game-specific implementations.
-
-## Key Concepts
+## Key concepts
 
 ### Games modal
 
-A terminal UI surface for presenting game options or active game state. Two public helpers manage the lifecycle:
+A tabbed modal titled `/game`, with one tab per game. `openGamesModal` opens it in the real TUI. `presentGamesModal` takes an injectable opener and registry, which lets tests drive it. Its `GamesModalHandle` exposes `close`, `restart`, `activeGameId` and `modelThinking`.
 
-- `openGamesModal` — initializes the modal
-- `presentGamesModal` — renders and displays it
+### Game definition
 
-### Game command
-
-User input classified as game-related via `isGameCommand`. Command classification is kept separate from rendering logic.
+`GameDefinition` in `types.ts` is the unit of extension. It carries an `id` (the tab id), a `label`, and the rules, prompts and rendering listed above. `Player` is `"human" | "model"`. `GameState` and `GameMove` are opaque types that each game defines for itself.
 
 ### Game registry
 
-A container for available games. Use `createRegistry` to build one; `DEFAULT_GAMES` and `ticTacToeGame` provide built-in entries.
+`createRegistry(games)` returns an ordered list with a `get(id)` lookup. `DEFAULT_GAMES` is `[ticTacToeGame]`, and `presentGamesModal` falls back to it when no registry is passed.
+
+### Game command
+
+`isGameCommand` returns true when the first whitespace-separated token of a line is `/game`.
 
 ### Game model turn
 
-A model-backed turn execution, handled by `runGameModelTurn`. Timeouts are configured via `GAME_MODEL_TIMEOUT_MS`.
+`runGameModelTurn` in `model-turn.ts` sends the game's system prompt and state description through `runModelTurn` from `src/harness/provider/single-turn`, with a 256-token output cap, and passes the reply to `parseMove`. It returns the move, an error string if the turn failed, and an `AgentTurnStats` record (provider, model, latency, token usage, reasoning flag).
 
 ### Agent panel
 
-A UI component that displays model or agent responses during game interactions, rendered via `renderAgentPanel`.
+The status and prompt view rendered by `renderAgentPanel`. It shows what the model is being asked, what it last cost and the running session totals, so the operator can see the cost of play.
 
 ### Turn statistics
 
-Lightweight metadata tracking for game sessions:
+`AgentTurnStats` describes one model turn. `AgentTurnTotals` accumulates them per game session; `emptyTurnTotals` starts an accumulator and `addTurn` adds to it. Counts of local fallbacks and errors are kept alongside the token and time sums. `formatMs` and `formatTokens` turn raw numbers into display strings.
 
-- `emptyTurnTotals` — initializes counters
-- `addTurn` — records a turn
-- `formatMs` — formats durations
-- `formatTokens` — formats token counts
-
-## Main Flows
+## Main flows
 
 ### Opening the games modal
 
-1. User issues a game-related command
-2. `isGameCommand` classifies the input
-3. `openGamesModal` initializes the modal
-4. `presentGamesModal` renders it using:
-   - Game definitions from `DEFAULT_GAMES`
-   - Registry from `createRegistry`
-   - `ticTacToeGame` as the demo game
-   - `GAMES_FOOTER` for footer content
+1. `isGameCommand` checks that the input's first token is `/game`.
+2. `openGamesModal` (or `presentGamesModal`) takes a registry, which defaults to `createRegistry(DEFAULT_GAMES)`. It calls `openModal` with one tab per game, the `GAMES_FOOTER` hints and the arrow and key handlers.
+3. When the tab body mounts, `renderTab` records the body width and height and calls `paint`. `paint` computes the board budget with `resolveGameBudget`, calls the active game's `render`, then calls `renderAgentPanel`.
 
-### Running a model-backed turn
+### Playing a move and the model turn
 
-1. Game requires model interaction
-2. `runGameModelTurn` executes with timeout from `GAME_MODEL_TIMEOUT_MS`
-3. `src/harness/provider` supplies the model-facing behavior
-4. Results rendered via `renderAgentPanel`
-5. Turn tracked via `addTurn` using `emptyTurnTotals` for initialization
-6. Display formatted with `formatMs` and `formatTokens`
+1. A key from `options.onKeypress` goes to the active game's `onKey`. The key `r` restarts the game instead. If the next state's `turn` is `"model"`, `applyModelMove` starts, guarded by `modelBusy`.
+2. `applyModelMove` races `runGameModelTurn` against a timer set to `options.timeoutMs`, defaulting to `GAME_MODEL_TIMEOUT_MS`.
+3. On timeout, or when the reply yields no usable move, the modal calls `localMove` and plays that move. If no move results, `pass` hands the turn back, so the game is not left waiting on the model. A reply that carries an error is not replaced by a local move.
+4. The notice names the outcome (agent error, timeout, or local move). `addTurn` updates the session totals, `lastTurn` is recorded, and `paint` redraws the panel.
 
 ### Tic-tac-toe integration
 
-`src/tui/games/tic-tac-toe` has a bidirectional relationship with this module:
+`src/tui/games/tic-tac-toe` depends on this package in both directions:
 
-- **Consumes** shared contracts from `src/tui/games/types.ts` and presentation helpers
-- **Provides** `ticTacToeGame` back to the games registry
+- It consumes the shared contracts in `src/tui/games/types.ts` and the presentation helpers.
+- It provides `ticTacToeGame`, which `modal.ts` registers in `DEFAULT_GAMES`.
 
 ## Reference
 
@@ -180,5 +136,6 @@ Lightweight metadata tracking for game sessions:
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
 ```
