@@ -303,7 +303,7 @@ function parseAnsweredBy(raw: string | undefined, command: HostVerb): Pick<HostQ
   const ref = colon <= 0 ? "" : raw.slice(colon + 1).trim();
   if (!(HOST_QUESTION_SOURCES as readonly string[]).includes(source) || ref === "") return refuse("");
   if (ref.length > REF_MAX_LENGTH) return refuse(`: the ref is ${ref.length} characters`);
-  if (/[\u0000-\u001f\u007f-\u009f]/.test(ref)) return refuse(": the ref holds a control character");
+  if ([...ref].some((char) => /\p{Cc}/u.test(char))) return refuse(": the ref holds a control character");
   return { source: source as HostQuestion["source"], ref };
 }
 
