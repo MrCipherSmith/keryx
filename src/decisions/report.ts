@@ -13,7 +13,7 @@ import { ARMS, defaultSettings, REASON_SUBSAMPLE_ENV, reasonSubsampleOff, record
 import { effectiveArm, isLegacy } from "./legacy";
 import { buildQualityMatrix, renderQualityMatrix, type QualityMatrix, type QualityRecord } from "./quality";
 import { MAX_OPERATOR_TEXT_LENGTH, oneLine } from "./text";
-import type { AnswerRecord, DecisionMode, DecisionRecord, OpenRecord, ReasonRecord } from "./types";
+import { hostQuestionLabel, isHostQuestionEntry, type AnswerRecord, type DecisionMode, type DecisionRecord, type OpenRecord, type ReasonRecord } from "./types";
 
 export interface Tally {
   /** Answered decisions that had a recommendation. */
@@ -183,6 +183,8 @@ export interface TimingStats {
 /** Flow 467: one question the host asked through its own tool and a `keryx review` verb recorded. */
 export interface HostQuestionRow {
   id: string;
+  /** "answered via host question (source:ref)": the label that keeps it apart from a card or terminal answer. */
+  label: string;
   /** The verb that recorded it: decide-premise, confirm-plan, waive-mutation or override-reviewers. */
   verb: string;
   question: string;
@@ -444,6 +446,7 @@ function hostQuestionRow(open: OpenRecord, answered: readonly AnswerRecord[]): H
   const host = open.hostQuestion;
   return {
     id: open.id,
+    label: hostQuestionLabel({ source: host?.source ?? "", ref: host?.ref ?? "" }),
     verb: host?.verb ?? "",
     question: open.question,
     options: open.options.map((option) => ({ id: option.id, label: option.label })),
@@ -478,8 +481,8 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0, opt
   const excludeLegacy = options.excludeLegacy === true;
   const settings = options.settings ?? defaultSettings();
   // Flow 467: a host question is a record of what was asked and answered, never a recommendation: it stays out of every number below.
-  const hostOpens = opens.filter((open) => open.hostQuestion !== undefined);
-  const drawn = opens.filter((open) => open.hostQuestion === undefined);
+  const hostOpens = opens.filter((open) => isHostQuestionEntry(open));
+  const drawn = opens.filter((open) => !isHostQuestionEntry(open));
   // a backfilled record is legacy by definition (imported after the fact, never drawn by the arms)
   const kept = excludeLegacy ? drawn.filter((open) => open.backfilled !== true && !isLegacy(open)) : drawn;
   const live = kept.filter((open) => open.backfilled !== true);
@@ -724,9 +727,9 @@ function seconds(ms: number): string {
 function renderHostQuestions(report: DecisionsReport): string[] {
   const rows = report.hostQuestions ?? [];
   if (rows.length === 0) return [];
-  const lines = [`Host questions (asked through the host's own tool, recorded by a keryx review verb; not in any arm or match number): ${rows.length}`];
+  const lines = [`Host questions (asked through the host's own tool, recorded by a keryx review verb; counted apart from the decisions above, in no arm or match number): ${rows.length}`];
   for (const row of rows) {
-    lines.push(`  ${oneLine(row.id)} [host-question, ${oneLine(row.source)}:${oneLine(row.ref)}, ${oneLine(row.verb)}, ${oneLine(row.at)}]`);
+    lines.push(`  ${oneLine(row.id)} [host-question, ${oneLine(row.label)}, ${oneLine(row.verb)}, ${oneLine(row.at)}]`);
     lines.push(`    ${oneLine(row.question, FULL_TEXT)}`);
     lines.push(`    options: ${row.options.map((option) => oneLine(option.id)).join(", ")}; chose ${row.choice === "" ? "(not answered)" : oneLine(row.choice)}`);
     lines.push(`    answer: ${oneLine(row.answerText, FULL_TEXT)}`);

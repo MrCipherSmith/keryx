@@ -12,8 +12,9 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { loadReport, reportText } from "../decisions/service";
+import { MAX_OPERATOR_TEXT_LENGTH, loadReport, reportText } from "../decisions/service";
 import { ENV_AUTONOMOUS_ANSWERS_FILE } from "../review/autonomous-answers";
+import { operatorDecisionSubject } from "../review/coverage";
 import { readOperatorDecisions, readPremiseDecisions } from "../review/operator-decisions";
 import { estimatePlan, readPlanConfirmation } from "../review/plan-confirmation";
 import { heldFinding } from "../review/premise-fixtures";
@@ -21,7 +22,7 @@ import { computeReadiness, renderReadiness } from "../review/readiness";
 import { buildRunProfile, writeRunProfile } from "../review/run-profile";
 import { formatDecisionsLines } from "../tui/decisions-surface";
 import { unattendedShellRefusal } from "../trigger/unattended";
-import { runOperatorCommand, type OperatorCommand } from "./review-operator";
+import { runOperatorCommand } from "./review-operator";
 
 const CLI = path.join(import.meta.dir, "..", "cli.ts");
 const held = heldFinding();
@@ -60,7 +61,16 @@ async function argsFor(verb: Verb, dir: string, over: Over = {}): Promise<string
     const estimate = await estimatePlan(dir);
     base = { "--package": dir, "--answer-text": "yes, run it", "--question-text": `Run ${estimate.dispatches} reviewer dispatches (${estimate.minutes.min}-${estimate.minutes.max} min) for the plan?` };
   } else {
-    base = { "--package": dir, "--reason": "the suite takes an hour", "--answer-text": verb === "waive-mutation" ? "yes, waive it" : "yes, only logic", "--question-text": verb === "waive-mutation" ? "Waive the mutation pass? The suite takes an hour." : "Run a smaller reviewer set than required?" };
+    // The question names its subject: the unrun mutants (none on the scratch package, so nothing to name) or the count of reviewers left out.
+    const selected = over["--selected"]?.split(",").map((item) => item.trim()).filter(Boolean);
+    const { items } = await operatorDecisionSubject(dir, verb === "waive-mutation" ? "mutation-waiver" : "reviewer-override", verb === "waive-mutation" ? undefined : selected);
+    const question =
+      verb === "waive-mutation"
+        ? items.length === 0
+          ? "Waive the mutation pass? The suite takes an hour."
+          : `Waive the mutation pass? ${items.length} mutants are unrun: ${items.join(", ")}. The suite takes an hour.`
+        : `Run a smaller reviewer set than required? ${items.length} reviewers would be left out.`;
+    base = { "--package": dir, "--reason": "the suite takes an hour", "--answer-text": verb === "waive-mutation" ? "yes, waive it" : "yes, only logic", "--question-text": question };
   }
   base = { "--answered-by": "claude-code:ask-17", ...base, ...over };
   return Object.entries(base).flatMap(([flag, value]) => (value === undefined ? [] : [flag, value]));
@@ -85,6 +95,22 @@ function snapshot(dir: string): Record<string, string> {
 }
 
 const journalFile = () => path.join(repo, ".metaproject", "data", "decisions", "journal.jsonl");
+
+/** The terminal-path flags of a verb: the three host-question flags and their values dropped. */
+function withoutHostFlags(args: string[]): string[] {
+  const hostFlags = ["--answered-by", "--answer-text", "--question-text"];
+  return args.filter((arg, i, all) => !hostFlags.includes(arg) && !hostFlags.includes(all[i - 1] ?? ""));
+}
+
+/** The text of a refusal, for the assertions that read more than a substring of it. */
+async function refusalOf(verb: Verb, args: string[]): Promise<string> {
+  try {
+    await runOperatorCommand(verb, args, seams());
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  throw new Error(`${verb} was accepted: ${args.join(" ")}`);
+}
 
 /** The verb is refused: it throws, the package is byte-identical and the journal has no entry. */
 async function expectRefused(verb: Verb, dir: string, over: Over, message?: string | RegExp, extra: Parameters<typeof seams>[0] = {}): Promise<void> {
@@ -168,7 +194,7 @@ describe("AC2: the same flags work with no TTY on the other three verbs", () => 
     const [decision] = await readOperatorDecisions(dir);
     expect(decision).toMatchObject({ kind: "mutation-waiver", reason: "the suite takes an hour", confirmedVia: "host-question" });
     expect(decision?.quote).toContain("yes, waive it");
-    expect(decision?.subject).toBeDefined();
+    expect(decision?.subject).toMatchObject({ items: [] });
     expect(decision?.hostQuestion).toMatchObject({ source: "claude-code", ref: "ask-17", questionText: "Waive the mutation pass? The suite takes an hour.", answerText: "yes, waive it" });
     expect(decision?.hostQuestion?.time).toBe(decision?.at);
   });
@@ -178,7 +204,8 @@ describe("AC2: the same flags work with no TTY on the other three verbs", () => 
     expect(await runOperatorCommand("override-reviewers", await argsFor("override-reviewers", dir, { "--selected": "review-logic" }), seams())).toBe(0);
     const [decision] = await readOperatorDecisions(dir);
     expect(decision).toMatchObject({ kind: "reviewer-override", reason: "the suite takes an hour", confirmedVia: "host-question" });
-    expect(decision?.subject).toBeDefined();
+    expect(decision?.subject?.items).toBeDefined();
+    expect(decision?.subject?.items).not.toContain("review-logic");
     expect(decision?.hostQuestion).toMatchObject({ source: "claude-code", ref: "ask-17", answerText: "yes, only logic" });
   });
 
@@ -254,10 +281,13 @@ describe("AC3: each refusal records nothing and exits non-zero with a message", 
   });
 
   test("AC3 an --answer-text that is a decline: empty, n, no", async () => {
-    for (const verb of FOUR) {
+    for (const verb of ["confirm-plan", "waive-mutation", "override-reviewers"] as const) {
       for (const declined of ["n", "N", "no", "No.", " no ", "nope", "нет", "no, not now"]) {
         await expectRefused(verb, pkgDir(), { "--answer-text": declined }, /decline/i);
       }
+    }
+    for (const declined of ["n", "N", "no", "No.", " no ", "nope", "нет", "no, not now"]) {
+      await expectRefused("decide-premise", pkgDir(), { "--answer-text": declined }, "--answer-text");
     }
   });
 
@@ -286,11 +316,194 @@ describe("AC3: each refusal records nothing and exits non-zero with a message", 
   });
 });
 
+describe("HQ-01: the three yes-verbs record only an affirmative --answer-text", () => {
+  const YES_VERBS = ["confirm-plan", "waive-mutation", "override-reviewers"] as const;
+  const NEGATIONS = ["not", "never", "no", "nope", "nah", "dont", "don", "t", "nt", "cannot", "cant", "нет", "не", "ни", "без"];
+  const LEAD_DECLINES = ["n", "no", "nope", "nah", "not", "never", "cancel", "stop", "decline", "declined", "reject", "нет", "не", "отмена"];
+  const AFFIRMATIVES = ["yes", "y", "yep", "yeah", "ok", "okay", "sure", "confirm", "confirmed", "approve", "approved", "agree", "agreed", "go", "да", "ок", "окей", "подтверждаю", "согласен", "давай", "запускай"];
+  const CONFIRM_WORD: Record<(typeof YES_VERBS)[number], string> = { "confirm-plan": "yes", "waive-mutation": "waive", "override-reviewers": "override" };
+
+  test("a text that is not a yes is refused on each verb, with nothing recorded and no journal file", async () => {
+    const refused = ["what does that mean?", "uphold", "don't waive it", "I do not want to waive it", "нет, не нужно", "maybe later", "hmm"];
+    for (const verb of YES_VERBS) {
+      for (const text of refused) await expectRefused(verb, pkgDir(), { "--answer-text": text }, "--answer-text");
+    }
+    for (const verb of ["waive-mutation", "override-reviewers"] as const) await expectRefused(verb, pkgDir(), { "--answer-text": "Keep: run the mutation pass" }, "--answer-text");
+  });
+
+  test("every word of the negation family refuses a text that otherwise says yes", async () => {
+    for (const verb of YES_VERBS) {
+      for (const word of NEGATIONS) await expectRefused(verb, pkgDir(), { "--answer-text": `yes ${word} ${CONFIRM_WORD[verb]} it` }, /reads as a decline/);
+    }
+  });
+
+  test("every word of the lead-decline family refuses when it opens the text", async () => {
+    for (const verb of YES_VERBS) {
+      for (const word of LEAD_DECLINES) await expectRefused(verb, pkgDir(), { "--answer-text": `${word} ${CONFIRM_WORD[verb]}` }, /reads as a decline/);
+    }
+  });
+
+  test("the verb's own decline word refuses: keep on the two gate verbs", async () => {
+    await expectRefused("waive-mutation", pkgDir(), { "--answer-text": "yes keep it" }, /names the other option, "keep"/);
+    await expectRefused("override-reviewers", pkgDir(), { "--answer-text": "yes keep it" }, /names the other option, "keep"/);
+  });
+
+  test("a text with no affirmative word is not a yes, and the message says what to pass", async () => {
+    for (const verb of YES_VERBS) {
+      const message = await refusalOf(verb, await argsFor(verb, pkgDir(), { "--answer-text": "what does that mean?" }));
+      expect(message).toContain("--answer-text is not a yes");
+      expect(message).toContain("Nothing was recorded");
+    }
+  });
+
+  test("every affirmative word is accepted on its own, on each verb", async () => {
+    for (const verb of YES_VERBS) {
+      for (const word of AFFIRMATIVES) expect(await runOperatorCommand(verb, await argsFor(verb, pkgDir(), { "--answer-text": word }), seams())).toBe(0);
+    }
+  });
+
+  test("the verb's own confirming word is accepted, and so is run for the plan", async () => {
+    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", pkgDir(), { "--answer-text": "waive" }), seams())).toBe(0);
+    expect(await runOperatorCommand("override-reviewers", await argsFor("override-reviewers", pkgDir(), { "--answer-text": "override it" }), seams())).toBe(0);
+    expect(await runOperatorCommand("confirm-plan", await argsFor("confirm-plan", pkgDir(), { "--answer-text": "run it" }), seams())).toBe(0);
+  });
+
+  test("a yes in either language with the reason after it is accepted", async () => {
+    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", pkgDir(), { "--answer-text": "да, отказываемся" }), seams())).toBe(0);
+    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", pkgDir(), { "--answer-text": "ok" }), seams())).toBe(0);
+    expect(await runOperatorCommand("confirm-plan", await argsFor("confirm-plan", pkgDir(), { "--answer-text": "yes, run it" }), seams())).toBe(0);
+  });
+});
+
+describe("HQ-02: the question must name its subject", () => {
+  /** A package with `ids` proposed as mutants and none run: the unrun mutants a waiver waives. */
+  function pkgWithMutants(ids: string[]): string {
+    const dir = pkgDir();
+    mkdirSync(path.join(dir, "research-evidence"), { recursive: true });
+    writeFileSync(path.join(dir, "research-evidence", "mutants.json"), JSON.stringify({ mutants: ids.map((id) => ({ id, file: "src/a.ts", anchor: "a", replacement: "b" })) }));
+    return dir;
+  }
+  const ask = (text: string) => ({ "--question-text": text });
+
+  test("decide-premise refuses a question that does not name the finding, with nothing recorded", async () => {
+    const dir = pkgDir([held, { ...held, id: "LY-0030", global_id: "r1#LY-0030" }]);
+    const cases: Array<[string, string]> = [
+      ["another finding id", "Premise question on r1#LY-004 (major). Uphold it or dismiss it?"],
+      ["a longer id that contains the id", "Premise question on LY-0030 (major). Uphold it or dismiss it?"],
+      ["a longer key that contains the key", "Premise question on r1#LY-0030 (major). Uphold it or dismiss it?"],
+      ["a longer id the id is the tail of", "Premise question on XLY-003 and ALY-003. Uphold it or dismiss it?"],
+      ["a hyphen-joined id", "Premise question on LY-003-b. Uphold it or dismiss it?"],
+      ["no id at all", "Uphold it or dismiss it?"],
+      ["only a count (the count binds the two gate verbs, not a finding)", "1 finding. Uphold it or dismiss it?"],
+    ];
+    for (const [, question] of cases) await expectRefused("decide-premise", dir, ask(question), "--question-text does not name the finding id: LY-003");
+  });
+
+  test("decide-premise accepts the full global key and the short id, in any case", async () => {
+    for (const question of ["Premise question on r1#LY-003. Uphold or dismiss?", "Premise question on LY-003. Uphold or dismiss?", "Premise on ly-003: uphold or dismiss?", "(LY-003): uphold or dismiss?", "LY-003, major. Uphold or dismiss?"]) {
+      const dir = pkgDir();
+      expect(await runOperatorCommand("decide-premise", await argsFor("decide-premise", dir, ask(question)), seams())).toBe(0);
+    }
+  });
+
+  test("waive-mutation refuses a question that names no unrun mutant and not their count", async () => {
+    const dir = pkgWithMutants(["m-1", "m-2", "m-3"]);
+    const cases = [
+      "Waive the mutation pass?",
+      "Waive the mutation pass? 5 mutants are unrun.",
+      "Waive the mutation pass? 2 mutants are unrun.",
+      "Waive the mutation pass for m-1 and m-2?",
+      "Waive the mutation pass for m-1, m-2 and m-10?",
+      "Waive the mutation pass for m-10, m-20 and m-30?",
+      "Waive the mutation pass for m-1, m-2 and m-3-b?",
+      "Waive the mutation pass? Runs in m-3 min.",
+    ];
+    for (const question of cases) await expectRefused("waive-mutation", dir, ask(question), "--question-text does not name the unrun mutants");
+  });
+
+  test("waive-mutation accepts the ids listed, in any case, or only their count", async () => {
+    for (const question of ["Waive the mutation pass for m-1, m-2, m-3?", "Waive the mutation pass for M-1, M-2 and M-3 (unrun)?", "Waive the mutation pass? 3 mutants are unrun.", "Waive 3 unrun mutants?"]) {
+      const dir = pkgWithMutants(["m-1", "m-2", "m-3"]);
+      expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", dir, ask(question)), seams())).toBe(0);
+    }
+  });
+
+  test("waive-mutation with no unrun mutant has no subject to name, so any question is accepted", async () => {
+    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", pkgDir(), ask("Waive the mutation pass?")), seams())).toBe(0);
+  });
+
+  test("override-reviewers refuses a question that names no reviewer left out and not their count", async () => {
+    const dir = pkgDir();
+    const { items } = await operatorDecisionSubject(dir, "reviewer-override", undefined);
+    expect(items.length).toBeGreaterThan(2);
+    const cases = [
+      "Run a smaller reviewer set than required?",
+      `${items.length + 1} reviewers would be left out.`,
+      `${items.length - 1} reviewers would be left out.`,
+      `${items.length}0 reviewers would be left out.`,
+      `Leave out ${items[0]} only?`,
+      `Leave out ${items.slice(0, -1).join(", ")} only?`,
+      `Leave out ${items.map((item) => `${item}-x`).join(", ")}?`,
+    ];
+    for (const question of cases) await expectRefused("override-reviewers", dir, ask(question), "--question-text does not name the reviewers left out");
+  });
+
+  test("override-reviewers accepts every reviewer listed, in any case, or only the count", async () => {
+    const { items } = await operatorDecisionSubject(pkgDir(), "reviewer-override", undefined);
+    for (const question of [`Leave out ${items.join(", ")}?`, `Leave out ${items.join(" ").toUpperCase()}?`, `Leave out ${items.length} reviewers?`, `${items.length}`]) {
+      const dir = pkgDir();
+      expect(await runOperatorCommand("override-reviewers", await argsFor("override-reviewers", dir, ask(question)), seams())).toBe(0);
+    }
+  });
+
+  test("override-reviewers with --selected binds to the reviewers that selection leaves out", async () => {
+    const dir = pkgDir();
+    const all = (await operatorDecisionSubject(dir, "reviewer-override", undefined)).items;
+    const left = (await operatorDecisionSubject(dir, "reviewer-override", ["review-logic"])).items;
+    expect(left.length).toBe(all.length - 1);
+    await expectRefused("override-reviewers", dir, { "--selected": "review-logic", ...ask(`${all.length} reviewers would be left out.`) }, "does not name the reviewers left out");
+    expect(await runOperatorCommand("override-reviewers", await argsFor("override-reviewers", pkgDir(), { "--selected": "review-logic", ...ask(`${left.length} reviewers would be left out.`) }), seams())).toBe(0);
+  });
+});
+
+describe("HQ-09: the length and shape caps are refused before the first write", () => {
+  test("an --answer-text over the cap, on every verb", async () => {
+    for (const verb of FOUR) {
+      const over = "yes ".repeat(MAX_OPERATOR_TEXT_LENGTH);
+      await expectRefused(verb, pkgDir(), { "--answer-text": over }, `--answer-text is ${over.length} characters; at most ${MAX_OPERATOR_TEXT_LENGTH}`);
+    }
+  });
+
+  test("a --question-text over the cap, on every verb", async () => {
+    for (const verb of FOUR) {
+      const over = "q".repeat(MAX_OPERATOR_TEXT_LENGTH + 1);
+      await expectRefused(verb, pkgDir(), { "--question-text": over }, "--question-text");
+    }
+  });
+
+  test("texts of exactly the cap are accepted", async () => {
+    const answer = `waive ${"w".repeat(MAX_OPERATOR_TEXT_LENGTH - 6)}`;
+    expect(answer.length).toBe(MAX_OPERATOR_TEXT_LENGTH);
+    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", pkgDir(), { "--answer-text": answer }), seams())).toBe(0);
+  });
+
+  test("a ref over 200 characters is refused, and 200 is accepted", async () => {
+    for (const verb of FOUR) await expectRefused(verb, pkgDir(), { "--answered-by": `claude-code:${"r".repeat(201)}` }, "--answered-by");
+    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", pkgDir(), { "--answered-by": `claude-code:${"r".repeat(200)}` }), seams())).toBe(0);
+  });
+
+  test("a control character in the ref is refused", async () => {
+    for (const control of ["\n", "\r", "\t", "\u0000", "\u001b", "\u007f", "\u0085"]) {
+      for (const verb of FOUR) await expectRefused(verb, pkgDir(), { "--answered-by": `codex:ask${control}17` }, "control character");
+    }
+  });
+});
+
 describe("AC4 stays: without the flag the verbs behave as before", () => {
   test("AC4 the refusal without a TTY is unchanged and names the card", async () => {
     for (const verb of FOUR) {
       const dir = pkgDir();
-      const args = (await argsFor(verb, dir)).filter((_, i, all) => !["--answered-by", "--answer-text", "--question-text"].includes(all[i - 1] ?? "") && !["--answered-by", "--answer-text", "--question-text"].includes(all[i] ?? ""));
+      const args = withoutHostFlags(await argsFor(verb, dir));
       await expect(runOperatorCommand(verb, args, seams())).rejects.toThrow(`records the operator's own decision and needs a terminal: refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_${verb.replace("-", "_")} tool`);
     }
   });
@@ -298,7 +511,7 @@ describe("AC4 stays: without the flag the verbs behave as before", () => {
   test("AC4 a terminal with --answered-by still takes the flag path and never asks", async () => {
     const dir = pkgDir();
     const asked: string[] = [];
-    const seam = { isTerminal: () => true, ask: async (question: string) => (asked.push(question), "yes"), cwd: repo, log: () => undefined };
+    const seam = { isTerminal: () => true, ask: async (question: string) => (asked.push(question), "yes"), cwd: repo, log: () => undefined, env: {} };
     expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", dir), seam)).toBe(0);
     expect(asked).toEqual([]);
     expect((await readOperatorDecisions(dir))[0]?.confirmedVia).toBe("host-question");
@@ -339,16 +552,17 @@ describe("AC5: an unattended run and a nested keryx refuse the flag, on every on
     expect(await readPremiseDecisions(dir)).toEqual([]);
   });
 
-  test("AC5 an unattended run's shell floor refuses the flag on each of the four verbs, however the line is wrapped", () => {
+  test("AC5 an unattended run's shell floor refuses the flag on each of the four verbs when one keryx invocation carries it, not on a mere mention", () => {
     for (const verb of FOUR) {
       const line = `keryx review ${verb} --package .metaproject/reviews/r1 --reason x --answered-by claude-code:q1 --answer-text yes --question-text "ok?"`;
       expect(unattendedShellRefusal(line)).toContain("--answered-by");
       expect(unattendedShellRefusal(`sh -c '${line}'`)).toContain("--answered-by");
       expect(unattendedShellRefusal(`bun src/cli.ts review ${verb} --answered-by=codex:1`)).toContain("--answered-by");
     }
-    // The verbs without the flag are not the floor's business, and neither is another command that mentions the flag.
+    // The verbs without the flag are not the floor's business, and neither is another command that only mentions the flag.
     expect(unattendedShellRefusal("keryx review confirm-plan --package p")).toBeUndefined();
     expect(unattendedShellRefusal("keryx review estimate --package p")).toBeUndefined();
+    expect(unattendedShellRefusal("echo 'review confirm-plan' | grep -e --answered-by")).toBeUndefined();
   });
 });
 
@@ -371,7 +585,7 @@ describe("AC6: an accepted host question also writes a keryx decisions entry", (
     expect(report.hostQuestions).toHaveLength(1);
     expect(report.hostQuestions[0]).toMatchObject({ question: "Waive the mutation pass? The suite takes an hour.", choice: "waive", source: "codex", ref: "turn-4" });
     expect(report.hostQuestions[0]?.options.map((option) => option.id)).toEqual(["waive", "keep"]);
-  });
+  }, 60_000);
 
   test("AC6 every verb writes one, with its own options", async () => {
     const expected: Record<Verb, { options: string[]; choice: string }> = {
@@ -394,7 +608,7 @@ describe("AC6: an accepted host question also writes a keryx decisions entry", (
 
   test("AC6 a refused question writes none", async () => {
     const dir = pkgDir();
-    await expectRefused("decide-premise", dir, { "--answer-text": "no" }, /decline/i);
+    await expectRefused("decide-premise", dir, { "--answer-text": "no" }, "--answer-text");
     await expectRefused("confirm-plan", dir, { "--answer-text": "  " }, "--answer-text");
     await expectRefused("waive-mutation", dir, { "--reason": undefined }, "--reason");
     expect(await journalRows()).toEqual([]);
@@ -410,6 +624,106 @@ describe("AC6: an accepted host question also writes a keryx decisions entry", (
   });
 });
 
+describe("HQ-10: the journal entry and a retry", () => {
+  type JournalLine = { type?: string; kind?: string; id?: string; flow?: string; flowSource?: string; stage?: string; options?: Array<{ id: string; description?: string }>; hostQuestion?: { source: string; ref: string; verb: string }; choice?: string };
+  const journalLines = (): JournalLine[] => readFileSync(journalFile(), "utf8").split("\n").filter((line) => line.trim() !== "").map((line) => JSON.parse(line) as JournalLine);
+
+  test("every option of the entry says keryx synthesized it, and the stage names the verb", async () => {
+    for (const verb of FOUR) expect(await runOperatorCommand(verb, await argsFor(verb, pkgDir()), seams())).toBe(0);
+    const opens = journalLines().filter((line) => line.options !== undefined);
+    expect(opens).toHaveLength(4);
+    for (const open of opens) {
+      expect(open.stage).toBe(`review ${open.hostQuestion?.verb}`);
+      for (const option of open.options ?? []) expect(option.description).toContain("Synthesized by keryx");
+    }
+  });
+
+  test("the entry carries the flow the verb ran under", async () => {
+    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", pkgDir()), seams({ env: { KERYX_FLOW: "flow-x" } }))).toBe(0);
+    const open = journalLines().find((line) => line.options !== undefined);
+    expect(open).toMatchObject({ flow: "flow-x", flowSource: "env" });
+  });
+
+  test("the same host question recorded twice is refused the second time, with one record and one journal entry", async () => {
+    for (const verb of ["confirm-plan", "waive-mutation", "override-reviewers"] as const) {
+      const dir = pkgDir();
+      expect(await runOperatorCommand(verb, await argsFor(verb, dir), seams())).toBe(0);
+      const before = snapshot(dir);
+      const opens = journalLines().filter((line) => line.options !== undefined).length;
+      await expect(runOperatorCommand(verb, await argsFor(verb, dir), seams())).rejects.toThrow("already recorded");
+      expect(snapshot(dir)).toEqual(before);
+      expect(journalLines().filter((line) => line.options !== undefined)).toHaveLength(opens);
+    }
+  });
+
+  test("a second question with a new ref is a new answer and a new journal entry", async () => {
+    const dir = pkgDir();
+    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", dir, { "--answered-by": "claude-code:ask-1" }), seams())).toBe(0);
+    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", dir, { "--answered-by": "claude-code:ask-2" }), seams())).toBe(0);
+    expect((await journalRows()).map((row) => row.ref).sort()).toEqual(["ask-1", "ask-2"]);
+  });
+
+  test("two different host questions with the same question text are two entries, not one merged twin", async () => {
+    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", pkgDir(), { "--answered-by": "codex:turn-1" }), seams())).toBe(0);
+    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", pkgDir(), { "--answered-by": "helyx-poll:poll-2" }), seams())).toBe(0);
+    const rows = await journalRows();
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => `${row.source}:${row.ref}`).sort()).toEqual(["codex:turn-1", "helyx-poll:poll-2"]);
+    expect(new Set(rows.map((row) => row.id)).size).toBe(2);
+  });
+
+  test("an unwritable journal leaves the review record written and prints a warning", async () => {
+    mkdirSync(journalFile(), { recursive: true });
+    const dir = pkgDir();
+    const lines: string[] = [];
+    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", dir), seams({ lines }))).toBe(0);
+    expect((await readOperatorDecisions(dir))[0]).toMatchObject({ kind: "mutation-waiver", confirmedVia: "host-question" });
+    expect(lines.join("\n")).toContain("warning: the answer is recorded, but the keryx decisions journal was not updated");
+  });
+});
+
+describe("HQ-10: a stored malformed hostQuestion is not trusted by the readers", () => {
+  const malformed: Array<[string, unknown]> = [
+    ["an unknown source", { source: "telegram", ref: "1", questionText: "q", answerText: "a", time: "2026-10-19T10:00:00.000Z" }],
+    ["a blank ref", { source: "codex", ref: "  ", questionText: "q", answerText: "a", time: "2026-10-19T10:00:00.000Z" }],
+    ["a missing question", { source: "codex", ref: "1", answerText: "a", time: "2026-10-19T10:00:00.000Z" }],
+    ["a non-string answer", { source: "codex", ref: "1", questionText: "q", answerText: 7, time: "2026-10-19T10:00:00.000Z" }],
+    ["a missing time", { source: "codex", ref: "1", questionText: "q", answerText: "a" }],
+    ["a string instead of an object", "claude-code:1"],
+  ];
+
+  /** Rewrites a stored record by hand, as a corrupted or hand-edited file would hold it. */
+  function tamper(file: string, edit: (record: Record<string, unknown>) => void): void {
+    const parsed = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+    const records = Array.isArray(parsed["decisions"]) ? (parsed["decisions"] as Array<Record<string, unknown>>) : [parsed];
+    for (const record of records) edit(record);
+    writeFileSync(file, JSON.stringify(parsed));
+  }
+
+  test("plan-confirmation.json: a malformed hostQuestion reads as no confirmation", async () => {
+    for (const [, bad] of malformed) {
+      const dir = pkgDir();
+      expect(await runOperatorCommand("confirm-plan", await argsFor("confirm-plan", dir), seams())).toBe(0);
+      expect(await readPlanConfirmation(dir)).toBeDefined();
+      tamper(path.join(dir, "plan-confirmation.json"), (record) => void (record["hostQuestion"] = bad));
+      expect(await readPlanConfirmation(dir)).toBeUndefined();
+    }
+  });
+
+  test("operator-decisions.json: a host-question record with a malformed hostQuestion is dropped, premise and gate alike", async () => {
+    for (const [, bad] of malformed) {
+      const dir = pkgDir();
+      expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", dir), seams())).toBe(0);
+      expect(await runOperatorCommand("decide-premise", await argsFor("decide-premise", dir), seams())).toBe(0);
+      expect(await readOperatorDecisions(dir)).toHaveLength(1);
+      expect(await readPremiseDecisions(dir)).toHaveLength(1);
+      tamper(path.join(dir, "operator-decisions.json"), (record) => void (record["hostQuestion"] = bad));
+      expect(await readOperatorDecisions(dir)).toEqual([]);
+      expect(await readPremiseDecisions(dir)).toEqual([]);
+    }
+  });
+});
+
 describe("AC7: review complete refuses the host-question flags", () => {
   function complete(...extra: string[]): { exitCode: number; output: string } {
     const child = Bun.spawnSync(["bun", CLI, "review", "complete", "no-such-review", ...extra], { cwd: repo, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
@@ -419,24 +733,27 @@ describe("AC7: review complete refuses the host-question flags", () => {
   test("AC7 its flag check names --answered-by, --answer-text and --question-text as unknown", () => {
     const result = complete("--answered-by", "claude-code:q1", "--answer-text", "yes", "--question-text", "ok?");
     expect(result.exitCode).not.toBe(0);
+    expect(result.output).toContain("Unknown option");
     expect(result.output).toContain("--answered-by");
     expect(result.output).toContain("--answer-text");
     expect(result.output).toContain("--question-text");
-    expect(result.output.toLowerCase()).toContain("unknown");
-  });
+  }, 60_000);
 
-  test("AC7 each flag alone is refused as unknown, and its own flags stay accepted", () => {
-    for (const flag of ["--answered-by", "--answer-text", "--question-text"]) {
+  for (const flag of ["--answered-by", "--answer-text", "--question-text"]) {
+    test(`AC7 ${flag} alone is refused as an unknown option`, () => {
       const result = complete(flag, "x");
       expect(result.exitCode).not.toBe(0);
+      expect(result.output).toContain("Unknown option");
       expect(result.output).toContain(flag);
-      expect(result.output.toLowerCase()).toContain("unknown");
-    }
-    // --waive and --waive-coverage are still complete's own flags: they get past the flag check.
-    for (const own of [["--waive", "x"], ["--waive-coverage", "x"]]) {
-      expect(complete(...own).output.toLowerCase()).not.toContain("unknown flag");
-    }
-  });
+    }, 60_000);
+  }
+
+  // --waive and --waive-coverage are still complete's own flags: they get past the flag check.
+  for (const own of ["--waive", "--waive-coverage"]) {
+    test(`AC7 ${own} stays accepted by the flag check`, () => {
+      expect(complete(own, "x").output).not.toContain("Unknown option");
+    }, 60_000);
+  }
 });
 
 describe("AC8: the record is visible as a host question, distinct from a card", () => {
@@ -453,7 +770,7 @@ describe("AC8: the record is visible as a host question, distinct from a card", 
   test("AC8 a card or terminal answer reads as before, with no host-question wording", async () => {
     const dir = pkgDir();
     const seam = { isTerminal: () => true, ask: async () => "dismiss it", cwd: repo, log: () => undefined };
-    const args = (await argsFor("decide-premise", dir)).filter((_, i, all) => !["--answered-by", "--answer-text", "--question-text"].includes(all[i - 1] ?? "") && !["--answered-by", "--answer-text", "--question-text"].includes(all[i] ?? ""));
+    const args = withoutHostFlags(await argsFor("decide-premise", dir));
     expect(await runOperatorCommand("decide-premise", args, seam)).toBe(0);
     const evidence = (await computeReadiness(dir)).items.find((item) => item.id === "premise-decisions")?.evidence ?? "";
     expect(evidence).not.toContain("host-question");
@@ -486,15 +803,11 @@ describe("older records stay readable", () => {
   test("an operator-decisions.json with no hostQuestion field reads as before", async () => {
     const dir = pkgDir();
     const seam = { isTerminal: () => true, ask: async () => "yes, waive it", cwd: repo, log: () => undefined };
-    const args = (await argsFor("waive-mutation", dir)).filter((_, i, all) => !["--answered-by", "--answer-text", "--question-text"].includes(all[i - 1] ?? "") && !["--answered-by", "--answer-text", "--question-text"].includes(all[i] ?? ""));
+    const args = withoutHostFlags(await argsFor("waive-mutation", dir));
     expect(await runOperatorCommand("waive-mutation", args, seam)).toBe(0);
     const [decision] = await readOperatorDecisions(dir);
     expect(decision?.confirmedVia).toBe("terminal");
     expect(decision?.hostQuestion).toBeUndefined();
   });
 
-  test("the verbs keep their names", () => {
-    const names: OperatorCommand[] = [...FOUR];
-    expect(names).toHaveLength(4);
-  });
 });

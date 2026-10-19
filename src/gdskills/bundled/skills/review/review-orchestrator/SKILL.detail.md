@@ -783,7 +783,7 @@ the host question recorded with `keryx review waive-mutation --package <review-d
 except `review start --unattended` and `keryx review run --autonomous`, which record `Not run: mutation
 pass` without asking.
 
-These operator gates (cards, terminal-only commands, host questions, plan confirmation, decision records) keep a
+These operator gates (cards, terminal commands, host questions, plan confirmation, decision records) keep a
 cooperating agent from cutting corners and make every decision visible and attributable; they do not
 stop a hostile same-user agent, which can fake a pty, invent a host-question answer or write the JSON
 records itself (the TM-03/TM-04 boundary). The autonomous runner's mutation-gate exemption predates flow 457 and is kept on purpose.

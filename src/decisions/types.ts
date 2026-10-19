@@ -115,6 +115,16 @@ export interface HostQuestionOpen {
   answerText: string;
 }
 
+/** The one test for the separate kind: an open record that came from a host question, not from a recommendation put to the operator. */
+export function isHostQuestionEntry(record: { hostQuestion?: unknown } | null | undefined): record is OpenRecord & { hostQuestion: HostQuestionOpen } {
+  return record !== null && record !== undefined && record.hostQuestion !== undefined && record.hostQuestion !== null;
+}
+
+/** The label every surface shows for that kind, so it is never read as a card or terminal answer. */
+export function hostQuestionLabel(host: Pick<HostQuestionOpen, "source" | "ref">): string {
+  return `answered via host question (${host.source}:${host.ref})`;
+}
+
 export interface AnswerRecord {
   kind: "answer";
   id: string;

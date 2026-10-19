@@ -31,6 +31,7 @@ import {
   HELD_PREMISE_VERDICTS,
   PREMISE_VERDICTS,
   REVIEW_FINDING_SEVERITIES,
+  hostQuestionFields,
   type PremiseClaimInput,
   type PremiseOperatorAnswer,
   type PremiseIntentSignal,
@@ -697,7 +698,7 @@ export function applyPremiseDecision<T extends object>(finding: T, decision: Pre
     at: decision.at,
     actor: decision.actor,
     confirmedVia: decision.confirmedVia,
-    ...(decision.hostQuestion === undefined ? {} : { hostQuestion: decision.hostQuestion }),
+    ...hostQuestionFields(decision),
   };
   const { disposition: existing, ...rest } = record;
   const current = isRecord(existing) ? existing : undefined;

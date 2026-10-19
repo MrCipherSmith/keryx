@@ -112,6 +112,19 @@ export type HostQuestionSource = (typeof HOST_QUESTION_SOURCES)[number];
  */
 export type HostQuestion = { source: HostQuestionSource; ref: string; questionText: string; answerText: string; time: string };
 
+/** A complete host question as a stored record must carry it: a known source and a non-blank ref, both texts and the time. */
+export function isHostQuestion(value: unknown): value is HostQuestion {
+  if (value === null || typeof value !== "object") return false;
+  const hq = value as Record<string, unknown>;
+  const filled = (field: unknown): boolean => typeof field === "string" && field.trim() !== "";
+  return (HOST_QUESTION_SOURCES as readonly unknown[]).includes(hq["source"]) && filled(hq["ref"]) && filled(hq["questionText"]) && filled(hq["answerText"]) && filled(hq["time"]);
+}
+
+/** The spread that carries `hostQuestion` onto a record: present only when the source has one. */
+export function hostQuestionFields(source: { hostQuestion?: HostQuestion | undefined } | undefined): { hostQuestion?: HostQuestion } {
+  return source?.hostQuestion === undefined ? {} : { hostQuestion: source.hostQuestion };
+}
+
 export type ReadinessWaiver = { item: string; operator_quote: string; time: string; confirmedVia?: ConfirmedVia | undefined } & CardPress;
 
 export type ManagedReviewManifest = {

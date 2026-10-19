@@ -13,7 +13,7 @@ import { manifestSizeProblem, packWavesByKind, waveBytesOf, type SliceEntry, typ
 import { ROLES_RUN_WITHOUT_SLICES, ROUTABLE_ROLES, isRoutedManifest } from "./slice-routing";
 import { requiredSlices, sliceGraph } from "./waves";
 import { manifestRosterRoles, splitCounts } from "./round-split";
-import { HOST_QUESTION_SOURCES, type HostQuestion } from "./types";
+import { isHostQuestion, type HostQuestion } from "./types";
 
 /** A spawned reviewer child is killed after 5 minutes (src/harness/tool/builtin/spawn-subagent-tool.ts), so one dispatch never runs longer than this. */
 export const CHILD_DEADLINE_MINUTES = 5;
@@ -202,13 +202,6 @@ export type PlanConfirmation = {
   /** Flow 467: the question the host asked and the answer that came back; set only with `confirmedVia: "host-question"`. */
   hostQuestion?: HostQuestion | undefined;
 };
-
-function isHostQuestion(value: unknown): boolean {
-  if (value === null || typeof value !== "object") return false;
-  const hq = value as Record<string, unknown>;
-  const filled = (field: unknown): boolean => typeof field === "string" && field.trim() !== "";
-  return (HOST_QUESTION_SOURCES as readonly unknown[]).includes(hq.source) && filled(hq.ref) && filled(hq.questionText) && filled(hq.answerText) && filled(hq.time);
-}
 
 function isPlanConfirmation(value: unknown): value is PlanConfirmation {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;

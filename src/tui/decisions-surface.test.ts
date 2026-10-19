@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { answerDecision, journalAsk, loadReport, openDecision, reportText } from "../decisions/service";
+import { answerDecision, decisionCount, hostQuestionCount, journalAsk, loadReport, openDecision, reportText } from "../decisions/service";
 import { findAgentCommand } from "../commands/agent-commands";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import {
@@ -79,6 +79,70 @@ test("projectDecisionsPanel: backfilled decisions are shown apart from the live 
   expect(onlyBefore.visible).toBe(true);
   expect(onlyBefore.text).toContain("60 before");
   expect(onlyBefore.text).not.toContain("0 decisions");
+});
+
+async function seedHostQuestion(): Promise<void> {
+  await openDecision({
+    cwd: root,
+    question: "Waive the mutation pass?",
+    options: [
+      { id: "waive", label: "Waive" },
+      { id: "keep", label: "Keep" },
+    ],
+    id: "hq-1",
+    hostQuestion: { source: "helyx-poll", ref: "poll-229:msg-9", verb: "waive-mutation", answerText: "waive it" },
+  });
+  await answerDecision({ cwd: root, id: "hq-1", choice: "waive" });
+}
+
+test("projectDecisionsPanel: host questions are a labelled kind apart from the decision count", () => {
+  expect(projectDecisionsPanel(0, SIDEBAR_TEXT_WIDTH, 0, 0, 0)).toEqual({ visible: false, text: "" });
+  const both = projectDecisionsPanel(3, SIDEBAR_TEXT_WIDTH, 0, 0, 2);
+  expect(both.text).toContain("3 decisions + 2 via host");
+  expect(both.text.length).toBeLessThanOrEqual(SIDEBAR_TEXT_WIDTH);
+  const only = projectDecisionsPanel(0, SIDEBAR_TEXT_WIDTH, 0, 0, 1);
+  expect(only.visible).toBe(true);
+  expect(only.text).toContain("1 via host");
+  expect(only.text).not.toContain("decision ");
+  expect(projectDecisionsPanel(3, SIDEBAR_TEXT_WIDTH).text).not.toContain("host");
+});
+
+test("an ordinary decision and a host question are counted apart and labelled in the modal text", async () => {
+  await seed();
+  await seedHostQuestion();
+  expect(await decisionCount(root)).toBe(1);
+  expect(await hostQuestionCount(root)).toBe(1);
+  const text = await reportText(root);
+  expect(text).toContain("Decisions: 1 recorded");
+  expect(text).toContain("answered via host question (helyx-poll:poll-229:msg-9)");
+  const arms = await armsText(root);
+  expect(arms).toContain("Answered via host question (a separate kind, not in the comparison): 1");
+});
+
+otuiTest("the sidebar row shows the host-question kind next to, not inside, the decision count", async () => {
+  await seed();
+  await seedHostQuestion();
+  const h = await mountChrome(OTUI!);
+  const timer = manualInterval();
+  const sidebar = mountDecisionsSidebar({
+    otui: OTUI!.core,
+    chrome: h.chrome,
+    parent: h.chrome.sidebarTop,
+    width: 60,
+    cwd: root,
+    onKeypress: keypressSource(h.renderer),
+    interval: timer.interval,
+  });
+  try {
+    await sidebar.refresh();
+    await settle(h);
+    const row = textOf(findById(h.chrome.sidebarTop, "sb-decisions-row"));
+    expect(row).toContain("1 decision + 1 via host");
+    expect(row).not.toContain("2 decisions");
+  } finally {
+    sidebar.dispose();
+    h.destroy();
+  }
 });
 
 test("/decisions is a registered agent command and is allowed while busy", () => {

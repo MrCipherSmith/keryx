@@ -37,6 +37,7 @@ export type { FlowContext, FlowSource } from "./context";
 export { MAX_OPERATOR_TEXT_LENGTH, MAX_TEXT_LENGTH, oneLine, storedOperatorText } from "./text";
 export { changeAnswer, giveReason, latestAnsweredDecision, resolveOptionId } from "./followup";
 export type { ChangeAnswerResult, GiveReasonResult } from "./followup";
+export { hostQuestionLabel, isHostQuestionEntry } from "./types";
 export type {
   AnswerInput,
   AnswerResult,
@@ -64,10 +65,14 @@ export async function reportLine(cwd: string): Promise<string> {
   return renderReportLine(await loadReport(cwd));
 }
 
-/** How many LIVE decisions the journal holds; the backfilled ones are counted apart by `backfilledCount`. */
+/** How many LIVE decisions the journal holds; the backfilled ones are counted apart by `backfilledCount`, the host questions by `hostQuestionCount`. */
 export async function decisionCount(cwd: string): Promise<number> {
-  const report = await loadReport(cwd);
-  return report.total + (report.hostQuestions?.length ?? 0);
+  return (await loadReport(cwd)).total;
+}
+
+/** How many questions the host asked through its own tool and a `keryx review` verb recorded: a separate kind, in no decision total. */
+export async function hostQuestionCount(cwd: string): Promise<number> {
+  return (await loadReport(cwd)).hostQuestions?.length ?? 0;
 }
 
 /** How many live decisions carry the operator's own text or a typed reason (flow 401). */

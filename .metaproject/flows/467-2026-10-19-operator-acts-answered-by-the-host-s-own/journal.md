@@ -25,3 +25,8 @@
 - 2026-10-19T19:44:45.037Z - task-done: T7: Decisions journal entry and report/modal display (AC6, AC8)
 - 2026-10-19T19:44:45.265Z - task-done: T8: Skills (both bundled copies), TM-04, limitations, CLI reference, README, docs site, help text (AC9, AC10)
 - 2026-10-19T19:44:51.761Z - task-done: T9: Verify: run AC verification commands and the full local test slice for touched areas
+- 2026-10-19T20:52:49.554Z - ac-updated: AC12: "(new)" -> "(operator-only) The operator asks for a held finding in a live review, answers a question in Telegram, and sees the decision recorded with `confirmedVia: "host-question"`. The agent does not confirm this criterion. [verify: judged]" (AC12 was written as '- AC12 (operator-only):', which the AC parser skips; rewrite in the '- ACn:' form (review finding HQ-16))
+- 2026-10-19T20:52:57.012Z - ac-updated: remove the duplicate malformed AC12 line left after the AC12 rewrite (HQ-16)
+- 2026-10-19T21:29:26.815Z - decision d-mvfrowln-2a8863 [review decide-premise, ordinary]: chose uphold; no recommendation
+- 2026-10-19T21:29:27.365Z - decision d-mvfrox0x-91ca22 [review decide-premise, ordinary]: chose uphold; no recommendation
+- 2026-10-19T21:29:27.912Z - decision d-mvfroxg4-d5e30b [review decide-premise, ordinary]: chose uphold; no recommendation

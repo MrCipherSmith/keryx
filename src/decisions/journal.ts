@@ -62,11 +62,13 @@ export const OPEN_TWIN_MAX_AGE_MS = 60 * 60 * 1000;
  * not older than `OPEN_TWIN_MAX_AGE_MS`, if any (one scan of the journal). A stale or foreign open is never
  * reused: it would hand the new question an old arm and an old `open.at`, which skews time to answer.
  */
-function findOpenTwin(records: readonly DecisionRecord[], hash: string, session: string | undefined, now: Date): OpenRecord | undefined {
+function findOpenTwin(records: readonly DecisionRecord[], hash: string, session: string | undefined, now: Date, host: OpenInput["hostQuestion"]): OpenRecord | undefined {
   const answered = new Set<string>();
   for (const r of records) if (r.kind === "answer") answered.add(r.id);
   for (const r of records) {
     if (r.kind !== "open" || r.backfilled === true || answered.has(r.id)) continue;
+    // Two host questions that share a question text are two decisions, not one asked twice.
+    if (r.hostQuestion?.source !== host?.source || r.hostQuestion?.ref !== host?.ref || r.hostQuestion?.verb !== host?.verb) continue;
     if ((r.session ?? undefined) !== (session !== undefined && session.length > 0 ? session : undefined)) continue;
     const age = now.getTime() - Date.parse(r.at);
     if (!Number.isFinite(age) || age > OPEN_TWIN_MAX_AGE_MS) continue;
@@ -110,7 +112,7 @@ async function openLocked(
   // Idempotent per question: asking the same question again while it is still unanswered returns the arm already
   // drawn for it, so repeating `open` cannot re-roll the arm. Once it is answered, the next open is a new decision.
   const records = await readRecords(input.cwd);
-  const twin = findOpenTwin(records, questionHash(question, [...ids]), input.session, now);
+  const twin = findOpenTwin(records, questionHash(question, [...ids]), input.session, now, input.hostQuestion);
   if (twin !== undefined) return resultOf(twin);
 
   const config = await loadDecisionsConfig(input.cwd);

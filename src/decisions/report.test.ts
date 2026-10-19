@@ -7,11 +7,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { decisionsCommand } from "../commands/decisions";
 import { assignArm, defaultSettings, reasonSubsample, type Arm } from "./arms";
+import { latestAnsweredDecision } from "./followup";
 import { answerDecision, openDecision, recordReason, REASON_SUBSAMPLE_ENV } from "./journal";
 import { AC11_BLIND, AC11_DECISIONS, buildReport, renderReport } from "./report";
-import { loadReport } from "./service";
+import { decisionCount, hostQuestionCount, loadReport } from "./service";
 import { readRecords } from "./store";
-import type { OpenRecord } from "./types";
+import { hostQuestionLabel, isHostQuestionEntry, type OpenRecord } from "./types";
 
 let root: string;
 let savedReasonEnv: string | undefined;
@@ -546,5 +547,58 @@ describe("F-005: the settings block names the environment switch", () => {
     const off = await report();
     expect(off.settings.reasonSubsampleOff).toBe(true);
     expect(renderReport(off)).toContain("Reason subsample: off (KERYX_DECISIONS_REASON_SUBSAMPLE)");
+  });
+});
+
+describe("flow 467: a host question is a separate labelled kind", () => {
+  async function hostQuestion(): Promise<void> {
+    await openDecision({
+      cwd: root,
+      id: "hq-1",
+      question: "Waive the mutation pass?",
+      options: OPTIONS,
+      hostQuestion: { source: "helyx-poll", ref: "poll-229:msg-9", verb: "waive-mutation", answerText: "waive it" },
+    });
+    await answerDecision({ cwd: root, id: "hq-1", choice: "o0" });
+  }
+
+  test("an ordinary decision and a host question yield separate counts, and the entry is told apart by one predicate", async () => {
+    await decide("A", { follow: true });
+    await hostQuestion();
+    const built = await report();
+    expect(built.total).toBe(1);
+    expect(built.answered).toBe(1);
+    expect(built.byArm.A.decisions).toBe(1);
+    expect(built.hostQuestions).toHaveLength(1);
+    expect(await decisionCount(root)).toBe(1);
+    expect(await hostQuestionCount(root)).toBe(1);
+    const opens = (await readRecords(root)).filter((r): r is OpenRecord => r.kind === "open");
+    expect(opens.filter((open) => isHostQuestionEntry(open)).map((open) => open.id)).toEqual(["hq-1"]);
+  });
+
+  test("the report text labels it as answered via a host question and never as a card or terminal answer", async () => {
+    await decide("A", { follow: true });
+    await hostQuestion();
+    const text = renderReport(await report());
+    expect(text).toContain("Decisions: 1 recorded");
+    expect(text).toContain("[host-question, answered via host question (helyx-poll:poll-229:msg-9), waive-mutation,");
+    expect(text).not.toContain("tui-card");
+    expect(text).not.toContain("terminal");
+    expect(hostQuestionLabel({ source: "codex", ref: "t1" })).toBe("answered via host question (codex:t1)");
+  });
+
+  test("`/decisions change` without an id never reaches a host question", async () => {
+    const ordinary = await decide("A", { follow: true });
+    await hostQuestion();
+    expect(await latestAnsweredDecision(root)).toBe(ordinary);
+  });
+
+  test("a journal holding only host questions reports no live decision and a host-question block", async () => {
+    await hostQuestion();
+    const built = await report();
+    expect(built.total).toBe(0);
+    expect(await decisionCount(root)).toBe(0);
+    expect(renderReport(built)).toContain("No live decisions recorded yet.");
+    expect(renderReport(built)).toContain("Host questions");
   });
 });

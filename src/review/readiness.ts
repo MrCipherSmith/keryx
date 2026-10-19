@@ -263,7 +263,7 @@ function premiseDecisionsCheck(ctx: Context): Verdict {
   }
   return bad(
     evidence,
-    `ask the operator: in keryx shell call the review_decide_premise tool (a card); in a terminal run keryx review decide-premise --package ${ctx.arg} --finding <id> --answer uphold|dismiss --reason "<why>"`,
+    `ask the operator: in keryx shell call the review_decide_premise tool (a card); elsewhere ask with the host's question tool, or in a terminal run keryx review decide-premise --package ${ctx.arg} --finding <id> --answer uphold|dismiss --reason "<why>" (from a host question add --answered-by <source>:<ref> --answer-text "<their words>" --question-text "<the question>")`,
   );
 }
 

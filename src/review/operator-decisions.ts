@@ -18,7 +18,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { withFileLock, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
-import { HOST_QUESTION_SOURCES, cardPressFields, type CardPress, type ConfirmedVia, type HostQuestion } from "./types";
+import { cardPressFields, hostQuestionFields, isHostQuestion, type CardPress, type ConfirmedVia, type HostQuestion } from "./types";
 
 export const OPERATOR_DECISIONS_FILE = "operator-decisions.json";
 /**
@@ -107,16 +107,9 @@ function validPremiseSubject(value: unknown): value is PremiseDecisionSubject {
   return text(subject.severity) && text(subject.verdict) && text(subject.problemSha256);
 }
 
-/** A complete host question; one is required exactly when a record says it was confirmed by one. */
-function validHostQuestion(value: unknown): value is HostQuestion {
-  if (value === null || typeof value !== "object") return false;
-  const hq = value as Record<string, unknown>;
-  return (HOST_QUESTION_SOURCES as readonly unknown[]).includes(hq.source) && text(hq.ref) && text(hq.questionText) && text(hq.answerText) && text(hq.time);
-}
-
 /** Older records have no `hostQuestion`; a record that says `host-question` must carry a complete one. */
 function viaConsistent(d: Record<string, unknown>): boolean {
-  return d.confirmedVia === "host-question" ? validHostQuestion(d.hostQuestion) : true;
+  return d.confirmedVia === "host-question" ? isHostQuestion(d.hostQuestion) : true;
 }
 
 function validPremise(entry: unknown): entry is PremiseQuestionDecision {
@@ -255,7 +248,7 @@ export async function recordPremiseDecisionAfter<A>(
     ...cardPressFields(input),
     subject: input.subject,
     ...(input.carriedFrom === undefined ? {} : { carriedFrom: input.carriedFrom }),
-    ...(input.hostQuestion === undefined ? {} : { hostQuestion: input.hostQuestion }),
+    ...hostQuestionFields(input),
   };
   if (!validPremise(kept)) {
     throw new Error("a premise decision needs the finding, an answer of uphold or dismiss, a reason, the operator's words, the time, how it was confirmed and the finding it was shown");
@@ -306,9 +299,9 @@ export async function recordOperatorDecision(packageDir: string, decision: Opera
 /** The card or command that records `kind`, for a refusal to name. */
 export function decisionWriters(kind: AnyOperatorDecisionKind, packageArg = "<review-dir>"): string {
   if (kind === PREMISE_DECISION_KIND) {
-    return `in keryx shell, call the review_decide_premise tool (the operator answers a card); in a terminal, run \`keryx review decide-premise --package ${packageArg} --finding <id> --answer uphold|dismiss --reason "<why>"\``;
+    return `in keryx shell, call the review_decide_premise tool (the operator answers a card); elsewhere ask the operator with the host's question tool, or in a terminal, run \`keryx review decide-premise --package ${packageArg} --finding <id> --answer uphold|dismiss --reason "<why>"\` (from a host question add --answered-by <source>:<ref> --answer-text "<their words>" --question-text "<the question>")`;
   }
   return kind === "mutation-waiver"
-    ? `in keryx shell, call the review_waive_mutation tool (the operator answers a card); in a terminal, run \`keryx review waive-mutation --package ${packageArg} --reason "<why>"\``
-    : `in keryx shell, call the review_override_reviewers tool (the operator answers a card); in a terminal, run \`keryx review override-reviewers --package ${packageArg} --reason "<why>"\``;
+    ? `in keryx shell, call the review_waive_mutation tool (the operator answers a card); elsewhere ask the operator with the host's question tool, or in a terminal, run \`keryx review waive-mutation --package ${packageArg} --reason "<why>"\` (from a host question add --answered-by <source>:<ref> --answer-text "<their words>" --question-text "<the question>")`
+    : `in keryx shell, call the review_override_reviewers tool (the operator answers a card); elsewhere ask the operator with the host's question tool, or in a terminal, run \`keryx review override-reviewers --package ${packageArg} --reason "<why>"\` (from a host question add --answered-by <source>:<ref> --answer-text "<their words>" --question-text "<the question>")`;
 }

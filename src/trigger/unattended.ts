@@ -31,6 +31,7 @@
 // Pure: no I/O, no clock, no env.
 
 import { parsePatchTargets } from "../lib/patch-risk";
+import { HOST_QUESTION_VERBS } from "../review/host-question-verbs";
 import { commandWord, splitSegments, stripAssignments } from "../lib/shell-syntax";
 import { isPublishCommand, touchesChunkEstimateAnswer, touchesCoverageWaiver } from "../lib/command-risk";
 
@@ -118,13 +119,37 @@ const FORBIDDEN_FLOW_VERBS: readonly RegExp[] = [
  * unattended run has no operator to ask, so it never records one. The run's own environment refuses it too
  * (`runOperatorCommand`); this is the floor under a command that never reaches that check.
  */
-const HOST_QUESTION_VERBS = /\b(?:decide-premise|confirm-plan|waive-mutation|override-reviewers)\b/;
-const HOST_QUESTION_FLAG = /--answered-by\b/;
+const HOST_QUESTION_VERB_SET: ReadonlySet<string> = new Set(HOST_QUESTION_VERBS);
+const KERYX_ENTRY = /(?:^|\/)(?:keryx|cli\.[cm]?[jt]s)$/;
+const SHELL_WRAPPERS: ReadonlySet<string> = new Set(["sh", "bash", "zsh", "dash", "ksh", "eval"]);
+const PRINTING_COMMANDS: ReadonlySet<string> = new Set(["echo", "printf", "grep", "egrep", "fgrep", "rg", "ag", "cat"]);
 
-/** True when `text` records a host question: one of the four verbs together with `--answered-by`, however quoted or wrapped. */
-function recordsHostQuestion(text: string): boolean {
-  const bare = text.replace(/["'\\]/g, "");
-  return HOST_QUESTION_VERBS.test(bare) && HOST_QUESTION_FLAG.test(bare);
+/**
+ * True when one `keryx review <verb>` invocation in `text` carries `--answered-by` in its own arguments, however quoted,
+ * line-wrapped (`\<newline>`), ANSI-C quoted (`$'…'`) or wrapped in `sh -c`. A mention of the verb and the flag in
+ * different commands, or as an argument of echo/grep/rg, is not one. A flag held in a variable (`$FLAG`) cannot be seen here.
+ */
+function recordsHostQuestion(text: string, depth = 0): boolean {
+  const joined = text.replace(/\\\r?\n/g, "").replace(/\$(?=["'])/g, "");
+  const segments = splitSegments(joined);
+  const feedsShell = segments.some((s) => s.precededBy === "|" && SHELL_WRAPPERS.has(commandWord(s.words)));
+  const inner = (words: readonly string[]): boolean => depth < 3 && words.some((w) => /\s/.test(w) && recordsHostQuestion(w, depth + 1));
+  for (const segment of segments) {
+    const words = stripAssignments(segment.words).map((w) => w.replace(/\\/g, "").replace(/^[$(`{]+/, ""));
+    const cmd = commandWord(words);
+    if (PRINTING_COMMANDS.has(cmd)) {
+      if (feedsShell && inner(words)) return true;
+      continue;
+    }
+    if (SHELL_WRAPPERS.has(cmd) && inner(words)) return true;
+    const reviewAt = words.findIndex((w, i) => w === "review" && words.slice(0, i).some((p) => KERYX_ENTRY.test(p)));
+    if (reviewAt < 0) continue;
+    const args = words.slice(reviewAt + 1);
+    const verbAt = args.findIndex((w) => !w.startsWith("-"));
+    if (verbAt < 0 || !HOST_QUESTION_VERB_SET.has(args[verbAt]!)) continue;
+    if (args.slice(verbAt + 1).some((w) => w === "--answered-by" || w.startsWith("--answered-by="))) return true;
+  }
+  return false;
 }
 
 /** Git subcommands that move shared history, rewrite refs directly, or publish. */

@@ -11,12 +11,12 @@
   "title": "Operator acts answered by the host's own question",
   "status": "in-progress",
   "createdAt": "2026-10-19T19:21:21.871Z",
-  "updatedAt": "2026-10-19T19:44:51.761Z",
+  "updatedAt": "2026-10-19T20:52:57.012Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:e0db6f1b05644ebf9b84b6ca57c016141a8d3032df5de15afd59078d1207e36f",
+  "acChecksum": "sha256:39cb551785f9c5785d8431a2ecd503cc7c75e2ba29511c48b83ee21ef21a6f7f",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -315,6 +315,16 @@
       "at": "2026-10-19T19:44:51.761Z",
       "event": "task-done",
       "detail": "T9: Verify: run AC verification commands and the full local test slice for touched areas"
+    },
+    {
+      "at": "2026-10-19T20:52:49.554Z",
+      "event": "ac-updated",
+      "detail": "AC12: \"(new)\" -> \"(operator-only) The operator asks for a held finding in a live review, answers a question in Telegram, and sees the decision recorded with `confirmedVia: \"host-question\"`. The agent does not confirm this criterion. [verify: judged]\" (AC12 was written as '- AC12 (operator-only):', which the AC parser skips; rewrite in the '- ACn:' form (review finding HQ-16))"
+    },
+    {
+      "at": "2026-10-19T20:52:57.012Z",
+      "event": "ac-updated",
+      "detail": "remove the duplicate malformed AC12 line left after the AC12 rewrite (HQ-16)"
     }
   ],
   "origin": {
@@ -365,6 +375,9 @@
       "check": "bun test src/docs src/cli-docs-structure.test.ts src/cli-reference-coverage.test.ts"
     },
     "AC11": {
+      "kind": "judged"
+    },
+    "AC12": {
       "kind": "judged"
     }
   }
