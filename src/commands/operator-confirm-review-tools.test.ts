@@ -806,6 +806,31 @@ describe("review_complete", () => {
     expect(card).not.toContain("waivers: none");
   });
 
+  test("a waiver recorded through a host question shows its source and ref beside the way it was confirmed", async () => {
+    await makeRound();
+    const hostQuestion = { source: "claude-code", ref: "ask-17", questionText: "Waive the mutation pass?", answerText: "yes, waive it", time: NOW.toISOString() };
+    put("operator-decisions.json", {
+      schemaVersion: 1,
+      decisions: [
+        { kind: "mutation-waiver", quote: "yes, waive it", reason: "no time", confirmedVia: "host-question", at: NOW.toISOString(), subject: { head: HEAD, items: ["m1"] }, hostQuestion },
+        { kind: "reviewer-override", quote: "yes, only logic", reason: "small diff", confirmedVia: "host-question", at: NOW.toISOString(), subject: { head: HEAD, items: ["review-security-code"] }, hostQuestion: { ...hostQuestion, source: "helyx-poll", ref: "poll-223:msg-9" } },
+      ],
+    });
+    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
+    expect(card).toContain('waiver: mutation pass not run m1: "yes, waive it" (host-question claude-code:ask-17)');
+    expect(card).toContain('waiver: reviewer override, left out review-security-code: "yes, only logic" (host-question helyx-poll:poll-223:msg-9)');
+  });
+
+  test("a host-question waiver with a malformed hostQuestion is not shown as a waiver at all", async () => {
+    await makeRound();
+    put("operator-decisions.json", {
+      schemaVersion: 1,
+      decisions: [{ kind: "mutation-waiver", quote: "yes", reason: "no time", confirmedVia: "host-question", at: NOW.toISOString(), subject: { head: HEAD, items: ["m1"] }, hostQuestion: { source: "telegram", ref: "1" } }],
+    });
+    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
+    expect(card).not.toContain("mutation pass not run");
+  });
+
   test("an operator decision added between the card and the yes records nothing", async () => {
     await makeRound();
     const t = tool("review_complete");

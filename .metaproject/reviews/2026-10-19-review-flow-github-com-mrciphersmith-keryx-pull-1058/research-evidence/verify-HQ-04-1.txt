@@ -1,0 +1,22 @@
+# keryx review verify-run
+finding: HQ-04
+command: sed -n '60,72p' src/decisions/service.ts
+cwd: /home/altsay/keryx/.worktrees/host-question
+time: 2026-10-19T20:42:20.388Z
+exit: 0
+
+--- stdout ---
+}
+
+/** The report as ONE Russian line, for the daily topic message (`keryx decisions report --line`). */
+export async function reportLine(cwd: string): Promise<string> {
+  return renderReportLine(await loadReport(cwd));
+}
+
+/** How many LIVE decisions the journal holds; the backfilled ones are counted apart by `backfilledCount`. */
+export async function decisionCount(cwd: string): Promise<number> {
+  const report = await loadReport(cwd);
+  return report.total + (report.hostQuestions?.length ?? 0);
+}
+--- stderr ---
+

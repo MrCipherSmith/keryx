@@ -7,18 +7,18 @@
 import { answerDecision, recordReason } from "./journal";
 import { readRecords } from "./store";
 import { oneLine } from "./text";
-import type { AnswerRecord, AnswerResult, OpenRecord } from "./types";
+import { isHostQuestionEntry, type AnswerRecord, type AnswerResult, type OpenRecord } from "./types";
 
 /**
  * The id of the latest LIVE decision that has an answer on record, optionally only one that belongs to `flow`.
- * A backfilled (imported, historical) decision is never "the latest": a bare `/decisions change` must not reach it.
+ * A backfilled (imported, historical) decision and a host question are never "the latest": a bare `/decisions change` must not reach them.
  */
 export async function latestAnsweredDecision(cwd: string, flow?: string): Promise<string | undefined> {
   const records = await readRecords(cwd);
   const answered = new Set(records.filter((r) => r.kind === "answer").map((r) => r.id));
   for (let i = records.length - 1; i >= 0; i -= 1) {
     const record = records[i];
-    if (record !== undefined && record.kind === "open" && record.backfilled !== true && answered.has(record.id) && (flow === undefined || record.flow === flow)) return record.id;
+    if (record !== undefined && record.kind === "open" && record.backfilled !== true && !isHostQuestionEntry(record) && answered.has(record.id) && (flow === undefined || record.flow === flow)) return record.id;
   }
   return undefined;
 }

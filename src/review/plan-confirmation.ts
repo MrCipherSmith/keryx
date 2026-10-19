@@ -19,7 +19,7 @@ import {
   type RoundEstimate,
 } from "./estimate";
 import type { OperatorDecisionVia } from "./operator-decisions";
-import { cardPressFields, type CardPress } from "./types";
+import { cardPressFields, type CardPress, type HostQuestion } from "./types";
 
 export { PLAN_CONFIRMATION_FILE };
 
@@ -30,6 +30,8 @@ export type PlanConfirmation = {
   quote: string;
   confirmedVia: OperatorDecisionVia;
   at: string;
+  /** Flow 467: the question the host asked and the answer that came back; set only with `confirmedVia: "host-question"`. */
+  hostQuestion?: HostQuestion | undefined;
 } & CardPress;
 
 /** The default threshold, as estimate.ts holds it (routing.config.json may change it per project). */
@@ -64,9 +66,10 @@ export async function planConfirmed(packageDir: string, estimate: PlanNumbers): 
 export async function recordPlanConfirmation(
   packageDir: string,
   estimate: PlanNumbers,
-  confirmation: { quote: string; confirmedVia: OperatorDecisionVia; at: string } & CardPress,
+  confirmation: { quote: string; confirmedVia: OperatorDecisionVia; at: string; hostQuestion?: HostQuestion | undefined } & CardPress,
 ): Promise<PlanConfirmation> {
   if (confirmation.quote.trim() === "") throw new Error("a plan confirmation needs the operator's own words");
+  if (confirmation.confirmedVia === "host-question" && confirmation.hostQuestion === undefined) throw new Error("a host-question plan confirmation needs the question and the answer");
   const record: PlanConfirmation = {
     planKey: planKeyOf(estimate),
     dispatches: estimate.dispatches,
@@ -75,6 +78,7 @@ export async function recordPlanConfirmation(
     confirmedVia: confirmation.confirmedVia,
     ...cardPressFields(confirmation),
     at: confirmation.at,
+    ...(confirmation.hostQuestion === undefined ? {} : { hostQuestion: confirmation.hostQuestion }),
   };
   await writeFileAtomic(path.join(packageDir, PLAN_CONFIRMATION_FILE), `${JSON.stringify(record, null, 2)}\n`);
   return record;

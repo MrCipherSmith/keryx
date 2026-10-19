@@ -1,0 +1,22 @@
+# keryx review verify-run
+finding: HQ-01
+command: bun repro-hq.ts
+cwd: /home/altsay/keryx/.worktrees/host-question
+time: 2026-10-19T20:42:19.046Z
+exit: 0
+
+--- stdout ---
+  log: mutation-waiver recorded (host-question, claude-code:q1, 2026-10-19T20:42:18.989Z) in operator-decisions.json
+HQ-01 keep: ACCEPTED exit 0
+  log: reviewer-override recorded (host-question, claude-code:q1, 2026-10-19T20:42:19.004Z) in operator-decisions.json
+HQ-01 non-answer: ACCEPTED exit 0
+  log: mutation-waiver recorded (host-question, claude-code:q1, 2026-10-19T20:42:19.033Z) in operator-decisions.json
+HQ-01 negation: ACCEPTED exit 0
+  log: mutation-waiver recorded (host-question, claude-code:q1, 2026-10-19T20:42:19.035Z) in operator-decisions.json
+HQ-02 unrelated question: ACCEPTED exit 0
+HQ-03 floor on "keryx review waive-mutation --package P --answered-by claude-code:q --answer-text yes --question-text q" -> refused
+HQ-03 floor on "keryx review waive-mutation --package P --answered\\\n-by claude-code:q" -> allowed
+HQ-03 floor on "keryx review $'waive-mutation' --package P --answered-by claude-code:q" -> refused
+HQ-03 floor on "echo 'review waive-mutation' | grep -e --answered-by" -> refused
+--- stderr ---
+
