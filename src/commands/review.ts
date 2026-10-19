@@ -22,7 +22,6 @@ import {
   type LearningSelection,
 } from "../review/review-learning";
 import {
-  completeManagedReview,
   createManagedReviewPackage,
   getManagedReviewStatus,
   parseEmbeddedPremises,
@@ -65,8 +64,8 @@ import { guardReviewPaths } from "../lib/review-path-flags";
 import { ENV_REVIEW_CALLER_TOKEN, startOrchestratorLog } from "../review/orchestrator-log";
 import { parseReviewHost, REVIEW_HOSTS } from "../review/host-profile";
 import { defaultBundledReviewRoot, renderSkillDrift, reviewSkillDrift } from "../review/skill-drift";
-import { buildRunProfile, runProfileRefusal, unattendedStartRefusal, writeRunProfile } from "../review/run-profile";
-import { packageRoutingRefusal } from "../review/routing-check";
+import { buildRunProfile, unattendedStartRefusal, writeRunProfile } from "../review/run-profile";
+import { completeReviewGated } from "../review/complete-gated";
 import { OPERATOR_COMMANDS, printOperatorCommandHelp, runOperatorCommand, type OperatorCommand } from "./review-operator";
 import { printChunksHelp, printCoverageHelp, runChunks, runCoverage } from "./review-chunks";
 import { ensurePackageLayers, printLayersHelp, resolvePackageDir, runLayers } from "./review-layers";
@@ -4562,12 +4561,7 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
   if (readinessWaivers.length > 0 && !isTerminal()) {
     throw new Error("--waive needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_readiness tool: the operator answers it as a card, then run `keryx review complete`. Outside keryx shell, run this command in a terminal.");
   }
-  // Security review M3: slice routing recorded in the manifest may not be narrower than each slice's content needs.
-  const completeDir = await resolveReviewPackagePath(process.cwd(), ref);
-  const profileMissing = runProfileRefusal(completeDir);
-  if (profileMissing !== undefined) throw new Error(`review complete refused: ${profileMissing}`);
-  const narrowedRouting = packageRoutingRefusal(completeDir, resolveProjectRoot(process.cwd()), { refuseUnreadable: true });
-  if (narrowedRouting !== undefined) throw new Error(`review complete refused: ${narrowedRouting}`);
+  // completeReviewGated also refuses slice routing narrower than a slice's content needs (security review M3).
   const {
     manifest,
     reviewNotes,
@@ -4575,7 +4569,7 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
     coverageWaiver,
     readiness,
     warnings,
-  } = await completeManagedReview(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
+  } = await completeReviewGated(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
   for (const warning of warnings) console.error(`warning: ${warning}`);
   if (coverageWaiver !== undefined) {
     const shown = coverageWaiver.files.slice(0, FIRST_FILES).join(", ");

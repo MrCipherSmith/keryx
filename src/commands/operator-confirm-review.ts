@@ -15,6 +15,9 @@
 //   review_comments_reply      keryx review comments reply --final                     -> commentsReplyPass
 //   review_confirm_plan        keryx review confirm-plan --package                     -> recordPlanConfirmation
 //
+// Flow 464 adds review_complete (keryx review complete <package> [--head]): one card with the reviewed head, the report's
+// evidence level and every waiver the package carries; a yes closes the round through the CLI's own gates.
+//
 // Flow 459 adds one more: review_decide_premise (keryx review decide-premise --package --finding --answer --reason ->
 // recordPremiseDecision), the operator's answer to a finding the premise judge held.
 //
@@ -24,7 +27,8 @@
 // Every card is built from the package on disk, never from the model's input alone, and `apply` refuses when the package
 // moved between the card and the yes.
 
-import { existsSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { cardSafe } from "../lib/card-safe";
 import { cardPressFields } from "../review/types";
@@ -33,10 +37,13 @@ import { placeReviewPath } from "../lib/review-path-flags";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
 import { readChunkPlan } from "../review/chunks";
 import { answerChunkEstimate, chunkModeOf, estimateChunkRun, recordChunkEstimate } from "../review/chunks-estimate";
-import { computeCoverage, recordCoverageWaiver } from "../review/coverage-complete";
+import { completeReviewGated } from "../review/complete-gated";
+import { computeCoverage, readCoverageWaiver, recordCoverageWaiver } from "../review/coverage-complete";
+import { evidenceLevelLine } from "../review/evidence-level";
+import { writeFileAtomic } from "../lib/fs";
 import { resolveReviewPackagePath } from "../review/managed";
 import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
-import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, READINESS_ITEMS, readinessItemId, waiveReadiness, type ReadinessOptions } from "../review/readiness";
+import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, READINESS_ITEMS, readinessItemId, readinessLine, waiveReadiness, type ReadinessOptions } from "../review/readiness";
 import type { PrLookup } from "../review/complete-head-gate";
 import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmSpec } from "./operator-confirm-tools";
 import { operatorDecisionSubject, reviewersLeftOut } from "../review/coverage";
@@ -637,6 +644,139 @@ function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
   };
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// 10. review_complete (flow 464)
+
+const COMPLETION_FILE = "completion-confirmation.json";
+const WAIVER_QUOTE_CHARS = 300;
+
+type CompletePrepared = { dir: string; head: string | undefined; digest: string };
+
+type CompletionFacts = { reviewId: string; prBound: boolean; head: string | undefined; evidence: string; waivers: string[]; status: string };
+
+/** What the card shows, read from the package. The same read is repeated in `apply` to see that nothing moved. */
+function completionFacts(dir: string, headInput: string | undefined): CompletionFacts {
+  const manifest = JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8")) as {
+    reviewId?: string;
+    status?: string;
+    target?: { kind?: string; head?: unknown };
+    readiness_waivers?: Array<{ item: string; operator_quote: string }>;
+  };
+  const recorded = typeof manifest.target?.head === "string" && manifest.target.head !== "" ? manifest.target.head : undefined;
+  const report = readFileSync(path.join(dir, "report.md"), "utf8");
+  const evidenceLine = evidenceLevelLine(report);
+  const waivers = (manifest.readiness_waivers ?? []).map((waiver) => `waiver: readiness item ${cardSafe(waiver.item)}: "${cardSafe(clip(waiver.operator_quote))}"`);
+  let coverage: ReturnType<typeof readCoverageWaiver>;
+  try {
+    coverage = readCoverageWaiver((JSON.parse(readFileSync(path.join(dir, "research.json"), "utf8")) as { dispatch?: unknown }).dispatch);
+  } catch {
+    coverage = undefined;
+  }
+  if (coverage !== undefined) waivers.push(`waiver: coverage, ${coverage.files.length} file(s) not reviewed: "${cardSafe(clip(coverage.operatorQuote))}"`);
+  return {
+    reviewId: manifest.reviewId ?? path.basename(dir),
+    prBound: manifest.target?.kind === "pr",
+    head: headInput ?? recorded,
+    evidence: evidenceLine === undefined ? "evidence level: the report has no `Evidence level:` line; the gate will refuse" : cardSafe(evidenceLine),
+    waivers,
+    status: manifest.status ?? "",
+  };
+}
+
+function clip(text: string): string {
+  return text.length > WAIVER_QUOTE_CHARS ? `${text.slice(0, WAIVER_QUOTE_CHARS)}…` : text;
+}
+
+const factsDigest = (facts: CompletionFacts): string => createHash("sha256").update(JSON.stringify(facts)).digest("hex");
+
+function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePrepared> {
+  return {
+    name: "review_complete",
+    description:
+      "Close a review round: the operator sees the reviewed head SHA, the report's evidence level and every waiver the package carries, and says yes before the round is closed. " +
+      "Pass the review package, and head only when the round ran against a commit other than the one recorded. Same gates and same effect as `keryx review complete` at a terminal; " +
+      "record the waivers first with review_waive_readiness or review_waive_coverage. A refused gate closes nothing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        package: packageSchema,
+        head: { type: "string", description: "The commit this round ran against (7-40 hex characters); defaults to the head the package recorded." },
+      },
+      required: ["package"],
+      additionalProperties: false,
+    },
+    async buildCard(input, ctx): Promise<OperatorCardResult<CompletePrepared>> {
+      const ref = packageRef(input);
+      if (ref === undefined) return { refusal: "package is required" };
+      const headInput = typeof input["head"] === "string" && input["head"].trim() !== "" ? input["head"].trim().toLowerCase() : undefined;
+      if (headInput !== undefined && !/^[0-9a-f]{7,40}$/.test(headInput)) return { refusal: `head "${headInput}" is not a commit SHA (7-40 hex characters)` };
+      try {
+        const dir = await resolvePackage(ref, ctx.projectRoot);
+        const facts = completionFacts(dir, headInput);
+        if (facts.status === "closed") return { refusal: `${facts.reviewId} is already complete` };
+        if (headInput !== undefined && !facts.prBound) return { refusal: `head applies to a pull request package; ${facts.reviewId} does not target one` };
+        const name = label(dir, ctx.projectRoot);
+        const at = facts.head === undefined ? "" : ` at ${facts.head.slice(0, 12)}`;
+        return {
+          title: `Complete review ${cardSafe(facts.reviewId)}${at}?`,
+          lines: [
+            facts.head === undefined
+              ? "reviewed head: not recorded (the package does not carry a commit)"
+              : `reviewed head: ${facts.head}${headInput === undefined ? "" : " (given by the agent, replaces the recorded head)"}`,
+            facts.evidence,
+            ...(facts.waivers.length === 0 ? ["waivers: none"] : facts.waivers),
+            "yes: the head, evidence-level, research and readiness gates run now; a refusal closes nothing",
+          ],
+          subject: `package ${name}${facts.head === undefined ? "" : `, head ${facts.head.slice(0, 12)}`}`,
+          prepared: { dir, head: facts.head, digest: factsDigest(facts) },
+        };
+      } catch (error) {
+        return failed(error);
+      }
+    },
+    async apply(input, ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+      if (prepared === undefined) return { output: "review_complete: nothing prepared for this card", isError: true };
+      const headInput = typeof input["head"] === "string" && input["head"].trim() !== "" ? input["head"].trim().toLowerCase() : undefined;
+      let facts: CompletionFacts;
+      try {
+        facts = completionFacts(prepared.dir, headInput);
+      } catch (error) {
+        return { output: `review_complete refused: ${error instanceof Error ? error.message : String(error)} — nothing was recorded`, isError: true };
+      }
+      if (factsDigest(facts) !== prepared.digest) {
+        return { output: "The head, the evidence level or the waivers changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+      }
+      try {
+        const done = await completeReviewGated(ctx.projectRoot, prepared.dir, {
+          prLookup: seams.prLookup ?? trackerPrLookup,
+          prFiles: seams.prFiles ?? githubPrFiles,
+          ...(headInput === undefined ? {} : { head: headInput }),
+          now: new Date(confirmation.at),
+        });
+        const record = {
+          quote: confirmation.quote,
+          confirmedVia: confirmation.confirmedVia,
+          ...cardPressFields(confirmation),
+          at: confirmation.at,
+          head: prepared.head,
+          evidence: facts.evidence,
+          waivers: facts.waivers,
+        };
+        await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE), `${JSON.stringify(record, null, 2)}\n`);
+        return {
+          output: [
+            `review ${done.manifest.reviewId} complete${prepared.head === undefined ? "" : ` at ${prepared.head.slice(0, 12)}`} (${confirmation.confirmedVia}, ${confirmation.at})`,
+            ...(done.readiness === undefined ? [] : [readinessLine(done.readiness)]),
+            ...done.warnings.map((warning) => `warning: ${warning}`),
+          ].join("\n"),
+        };
+      } catch (error) {
+        return { output: `review_complete refused: ${error instanceof Error ? error.message : String(error)} — nothing was recorded`, isError: true };
+      }
+    },
+  };
+}
+
 /** The specs with the tracker seams a test replaces; `reviewConfirmSpecs()` is this with the CLI's defaults. */
 export function buildReviewConfirmSpecs(seams: ReviewConfirmSeams = {}): readonly OperatorConfirmSpec[] {
   return [
@@ -649,6 +789,7 @@ export function buildReviewConfirmSpecs(seams: ReviewConfirmSeams = {}): readonl
     replySpec(),
     confirmPlanSpec(),
     decidePremiseSpec(),
+    completeSpec(seams),
   ] as readonly OperatorConfirmSpec[];
 }
 
