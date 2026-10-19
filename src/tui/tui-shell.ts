@@ -6135,11 +6135,7 @@ export async function launchTuiAgentShell(opts: {
             topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
           });
         } finally {
-          if (cardId !== undefined) {
-            if (outcome === undefined) operatorCards.answer(cardId, { place: "withdrawn", yes: false });
-            else if (outcome.from === "dock") operatorCards.answer(cardId, { place: foregroundOperation.signal.aborted ? "withdrawn" : "shell", yes: outcome.result !== false });
-            else operatorCards.answer(cardId, { place: "telegram", yes: outcome.answer.decision === "allow", ...(outcome.answer.fromId === undefined ? {} : { pressedBy: outcome.answer.fromId }) });
-          }
+          if (cardId !== undefined) operatorCards.settle(cardId, outcome, foregroundOperation.signal.aborted);
         }
         if (outcome.from === "dock") return outcome.result;
         const allowed = outcome.answer.decision === "allow";

@@ -2,8 +2,6 @@
 // /remote-control status tab and the /decisions modal — with the age and the time left of the 1-hour token while a
 // card waits, and who pressed once it is answered. The help modal and the slash command list name the card tools.
 
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
 import { REMOTE_CARD_TTL_MS } from "../commands/operator-confirm-tools";
@@ -176,11 +174,18 @@ test("the help modal and the command list name the card tools", () => {
   }
 });
 
-// The mirror wrapper lives inside the shell's closure, so its wiring is pinned by source (as remote-queue-wiring.test.ts does).
-test("the shell settles a card's log entry on every exit and tells the log when the topic never took it", () => {
-  const source = readFileSync(path.join(import.meta.dir, "tui-shell.ts"), "utf8");
-  const mirror = source.slice(source.indexOf("const mirrorApprovalToTopic ="), source.indexOf("io.requestApproval = trackApproval(mirrorApprovalToTopic"));
-  expect(mirror).toContain("operatorCards.markUndelivered(cardId)");
-  expect(mirror.match(/\} finally \{/g)).toHaveLength(2);
-  expect(mirror).toContain('outcome === undefined) operatorCards.answer(cardId, { place: "withdrawn"');
+test("a mirrored card is settled from how the race ended: dock, topic press, aborted turn, or a race that threw", () => {
+  const log = logAt({ now: T0 });
+  const settled = (outcome: Parameters<OperatorConfirmationLog["settle"]>[1], aborted = false) => {
+    const id = log.ask("Q?", true);
+    log.settle(id, outcome, aborted);
+    return log.entries().find((entry) => entry.id === id)!.answered!;
+  };
+  expect(settled({ from: "dock", result: true })).toMatchObject({ place: "shell", yes: true });
+  expect(settled({ from: "dock", result: false })).toMatchObject({ place: "shell", yes: false });
+  expect(settled({ from: "dock", result: false }, true)).toMatchObject({ place: "withdrawn", yes: false });
+  expect(settled({ from: "topic", answer: { decision: "allow", fromId: 9 } })).toMatchObject({ place: "telegram", yes: true, pressedBy: 9 });
+  expect(settled({ from: "topic", answer: { decision: "deny" } })).toEqual(expect.objectContaining({ place: "telegram", yes: false }));
+  expect(settled(undefined)).toMatchObject({ place: "withdrawn", yes: false });
+  expect(log.waiting()).toHaveLength(0);
 });

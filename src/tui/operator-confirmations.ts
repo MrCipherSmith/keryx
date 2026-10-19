@@ -26,6 +26,10 @@ export interface ConfirmationEntry {
   };
 }
 
+export type MirroredCardOutcome =
+  | { readonly from: "dock"; readonly result: unknown }
+  | { readonly from: "topic"; readonly answer: { readonly decision: string; readonly fromId?: number | undefined } };
+
 export class OperatorConfirmationLog {
   private readonly items: ConfirmationEntry[] = [];
   private nextId = 1;
@@ -55,6 +59,13 @@ export class OperatorConfirmationLog {
       this.items.splice(this.items.indexOf(old), 1);
     }
     this.changed();
+  }
+
+  /** Settle a mirrored card from how its race ended; no outcome means the race threw, so the card is withdrawn. */
+  settle(id: number, outcome: MirroredCardOutcome | undefined, turnAborted: boolean): void {
+    if (outcome === undefined) this.answer(id, { place: "withdrawn", yes: false });
+    else if (outcome.from === "dock") this.answer(id, { place: turnAborted ? "withdrawn" : "shell", yes: outcome.result !== false });
+    else this.answer(id, { place: "telegram", yes: outcome.answer.decision === "allow", ...(outcome.answer.fromId === undefined ? {} : { pressedBy: outcome.answer.fromId }) });
   }
 
   /** The topic leg did not deliver a card that was logged as mirrored: it no longer waits for a press there. */
