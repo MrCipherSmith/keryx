@@ -30,7 +30,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { cardSafe } from "../lib/card-safe";
+import { cardSafe, HIDDEN_IN_CARD, hiddenInCard } from "../lib/card-safe";
 import { cardPressFields, FINDING_DISPOSITION_STATES, type FindingDispositionState } from "../review/types";
 import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/service";
 import { placeReviewPath } from "../lib/review-path-flags";
@@ -41,7 +41,7 @@ import { completeReviewGated } from "../review/complete-gated";
 import { computeCoverage, readCoverageWaiver, recordCoverageWaiver } from "../review/coverage-complete";
 import { evidenceLevelLine } from "../review/evidence-level";
 import { writeFileAtomic } from "../lib/fs";
-import { resolveReviewPackagePath, type FindingDispositionRecord } from "../review/managed";
+import { checkDispositions, resolveReviewPackagePath, type FindingDispositionRecord } from "../review/managed";
 import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
 import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, READINESS_ITEMS, readinessItemId, readinessLine, waiveReadiness, type ReadinessOptions } from "../review/readiness";
 import type { PrLookup } from "../review/complete-head-gate";
@@ -50,19 +50,31 @@ import { operatorDecisionSubject, reviewersLeftOut } from "../review/coverage";
 import { readOperatorDecisions, recordOperatorDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
 import { answerPremiseQuestion, findHeldFinding } from "../review/premise-question";
 import { estimatePlan, planKeyOf, planOverThreshold, recordPlanConfirmation } from "../review/plan-confirmation";
+import type { CommentsReplyRun } from "./review";
 
 /** What the specs read outside the package: the PR tracker. Tests replace these; the defaults are the CLI's. */
 export interface ReviewConfirmSeams {
   prLookup?: PrLookup;
   prFiles?: (ref: string) => Promise<string[] | null>;
   postReview?: (ref: string, event: ReviewEvent, body: string) => Promise<PostResult>;
+  replyPass?: (args: string[], dryRun: boolean) => Promise<CommentsReplyRun>;
 }
 
-/** A body that is posted as written, shown whole line by line. A line holding characters the card would hide or rewrite (a tab shows as a space and is fine) is refused. */
+async function defaultReplyPass(args: string[], dryRun: boolean): Promise<CommentsReplyRun> {
+  const { commentsReplyPass } = await import("./review");
+  return commentsReplyPass(args, dryRun);
+}
+
+/**
+ * A body that is posted as written, shown whole line by line. One predicate (`hiddenInCard`) decides, the same one that
+ * guards reasons, dispositions and quotes; a tab is the single tolerated rewrite (it shows as a space). Only trailing
+ * EMPTY lines are dropped, so a trailing invisible character is tested, not trimmed away.
+ */
 function shownBody(text: string): { lines: string[] } | { refusal: string } {
-  const lines = text.trimEnd().split(/\r?\n/).map((line) => line.replace(/\t/g, " "));
-  const bad = lines.findIndex((line) => cardSafe(line) !== line);
-  if (bad !== -1) return { refusal: `holds control, escape or bidi characters on line ${bad + 1} that the card would hide; it is not shown, so it is not asked` };
+  const lines = text.split(/\r?\n/).map((line) => line.replace(/\t/g, " "));
+  while (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+  const bad = lines.findIndex((line) => hiddenInCard(line));
+  if (bad !== -1) return { refusal: `holds control, escape, bidi or zero-width characters on line ${bad + 1} that the card would hide or rewrite; it is not shown, so it is not asked` };
   return { lines: lines.map((line) => `  ${line}`) };
 }
 
@@ -175,7 +187,7 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
     name: "review_publish",
     description:
       "Post a finished review to its pull request on GitHub. Pass the review package, optionally the event (COMMENT, REQUEST_CHANGES, APPROVE; default COMMENT) and partial=true to post a review whose readiness checklist still has failing items (the page then says what is missing). " +
-      "Same effect as `keryx review publish`; the operator sees the target, the verdict and the start of the body first.",
+      "Same effect as `keryx review publish`; the operator sees the target, the verdict and the whole body first (a body with hidden or control characters is refused; a card over 3000 characters is answered in the shell, not in the Telegram topic).",
     inputSchema: {
       type: "object",
       properties: {
@@ -476,12 +488,13 @@ function replyArgv(input: Record<string, unknown>): string[] | { refusal: string
   return argv;
 }
 
-function replySpec(): OperatorConfirmSpec<ReplyPrepared> {
+function replySpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<ReplyPrepared> {
+  const pass = seams.replyPass ?? defaultReplyPass;
   return {
     name: "review_comments_reply",
     description:
       "Post the final review-comment replies on a pull request (`keryx review comments reply --final`). Pass the repo, the PR number, its head sha, the outcomes file and the review package or result. " +
-      "The operator sees every reply before anything is posted.",
+      "The operator sees every reply whole before anything is posted (a reply with hidden or control characters is refused; a card over 3000 characters is answered in the shell, not in the Telegram topic).",
     inputSchema: {
       type: "object",
       properties: {
@@ -501,8 +514,7 @@ function replySpec(): OperatorConfirmSpec<ReplyPrepared> {
       const argv = replyArgv(input);
       if (!Array.isArray(argv)) return argv;
       try {
-        const { commentsReplyPass } = await import("./review");
-        const dry = await commentsReplyPass([...argv], true);
+        const dry = await pass([...argv], true);
         const requests = dry.result.requests;
         if (requests.length === 0) return { refusal: "The reply pass has nothing to post." };
         const bodies: string[] = [];
@@ -523,10 +535,9 @@ function replySpec(): OperatorConfirmSpec<ReplyPrepared> {
     },
     async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
       if (prepared === undefined) return { output: "review_comments_reply: nothing prepared for this card", isError: true };
-      const { commentsReplyPass } = await import("./review");
-      const again = await commentsReplyPass([...prepared.argv], true);
+      const again = await pass([...prepared.argv], true);
       if (JSON.stringify(again.result.requests) !== prepared.requests) return { output: "The replies changed after the card was shown; nothing was posted. Ask again.", isError: true };
-      const posted = await commentsReplyPass([...prepared.argv], false);
+      const posted = await pass([...prepared.argv], false);
       return { output: `posted ${posted.result.posted.length} reply(ies) (${confirmation.confirmedVia}, ${confirmation.at}); skipped ${posted.result.skipped.length}` };
     },
   };
@@ -660,27 +671,25 @@ function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
 // 10. review_complete (flow 464)
 
 const COMPLETION_FILE = "completion-confirmation.json";
-const MAX_DISPOSITIONS = 20;
 const MAX_DISPOSITION_FINDING_CHARS = 200;
 const MAX_DISPOSITION_EVIDENCE_CHARS = 300;
 
 type CompletePrepared = { dir: string; head: string | undefined; digest: string; dispositions: readonly FindingDispositionRecord[] };
 
-const HIDDEN_IN_CARD = "holds control, escape, newline, bidi or zero-width characters the card would hide or rewrite; send plain single-line text";
-
-/** Text the model supplies is stored as given, so the card must show it as given: anything `cardSafe` would remove or rewrite, or that draws nothing, is refused. */
-const hiddenInCard = (text: string): boolean => cardSafe(text) !== text || /[\p{Cf}\p{Zl}\p{Zp}]/u.test(text);
-
 const dispositionsSchema = {
   type: "array",
   description:
-    "Optional. How each earlier finding was handled in this fix round, recorded when the round closes (the same as `review complete --finding … --disposition … --evidence …`). The operator sees every entry on the card.",
+    "Optional. How each earlier finding was handled in this fix round, recorded when the round closes (the same as `review complete --finding … --disposition … --evidence …`). The operator sees every entry on the card, whole, so a long list makes a long card (a card over the Telegram limit is answered in the shell). A finding the package does not hold, and any state but `unknown` without evidence, refuse the card.",
   items: {
     type: "object",
     properties: {
-      finding: { type: "string", description: "The finding's global id or display id." },
+      finding: { type: "string", maxLength: MAX_DISPOSITION_FINDING_CHARS, description: "The finding's global id or display id; it must be a finding this package holds." },
       disposition: { type: "string", enum: [...FINDING_DISPOSITION_STATES] },
-      evidence: { type: "string", description: `Optional: the commit or reasoning behind the disposition. At most ${MAX_DISPOSITION_EVIDENCE_CHARS} characters of plain single-line text; the card shows it whole.` },
+      evidence: {
+        type: "string",
+        maxLength: MAX_DISPOSITION_EVIDENCE_CHARS,
+        description: `The commit or reasoning behind the disposition; required for every state except \`unknown\`. At most ${MAX_DISPOSITION_EVIDENCE_CHARS} characters of plain single-line text; the card shows it whole.`,
+      },
     },
     required: ["finding", "disposition"],
     additionalProperties: false,
@@ -692,7 +701,6 @@ function completionDispositions(input: Record<string, unknown>): FindingDisposit
   const raw = input["dispositions"];
   if (raw === undefined) return [];
   if (!Array.isArray(raw)) return { refusal: "dispositions must be an array of { finding, disposition, evidence? }" };
-  if (raw.length > MAX_DISPOSITIONS) return { refusal: `dispositions holds ${raw.length} entries; a card shows at most ${MAX_DISPOSITIONS}` };
   const records: FindingDispositionRecord[] = [];
   for (const [index, entry] of raw.entries()) {
     const item = (typeof entry === "object" && entry !== null ? entry : {}) as Record<string, unknown>;
@@ -791,6 +799,7 @@ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePr
         const dir = await resolvePackage(ref, ctx.projectRoot);
         const facts = await completionFacts(dir);
         if (facts.status === "closed") return { refusal: `${facts.reviewId} is already complete` };
+        if (dispositions.length > 0) await checkDispositions(dir, dispositions);
         const name = label(dir, ctx.projectRoot);
         const at = facts.head === undefined ? "" : ` at ${facts.head.slice(0, 12)}`;
         return {
@@ -895,7 +904,7 @@ export function buildReviewConfirmSpecs(seams: ReviewConfirmSeams = {}): readonl
     waiveReadinessSpec(seams),
     decisionSpec("mutation-waiver"),
     decisionSpec("reviewer-override"),
-    replySpec(),
+    replySpec(seams),
     confirmPlanSpec(),
     decidePremiseSpec(),
     completeSpec(seams),

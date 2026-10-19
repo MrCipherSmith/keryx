@@ -227,13 +227,67 @@ describe("review_publish", () => {
 
   test("a body holding an escape or bidi character the card would hide is refused with a stated reason, and nothing is asked", async () => {
     makePackage();
-    for (const hidden of ["\u001b[2Jclean", "ok‮gnp.exe", "bell\u0007"]) {
+    for (const hidden of ["\u001b[2Jclean", "ok\u202egnp.exe", "bell\u0007"]) {
       put("report.md", `# Review\n\nvisible ${hidden}\n`);
       expect(await ask(tool("review_publish"), { package: pkg, event: "REQUEST_CHANGES", partial: true })).toEqual({
-        error: expect.stringContaining("holds control, escape or bidi characters on line"),
+        error: expect.stringContaining("holds control, escape, bidi or zero-width characters on line"),
       });
     }
     expect(posts).toEqual([]);
+  });
+
+  // S-701 / T-706: the body is held to the one predicate the dispositions and quotes use, so a character the card
+  // draws as nothing (zero-width, tag, BOM, soft hyphen, line and paragraph separators) is refused, not posted unseen.
+  test("a body holding a zero-width, tag, BOM, soft-hyphen, line or paragraph separator character is refused with its line number, and nothing is posted (S-701)", async () => {
+    makePackage();
+    const hidden: Array<[string, string]> = [
+      ["a zero-width space", "ship\u200b it"],
+      ["a zero-width joiner", "ship\u200d it"],
+      ["a tag-block instruction", "ship it\u{e0049}\u{e0067}"],
+      ["a byte order mark", "ship\ufeff it"],
+      ["a line separator", "ship\u2028it"],
+      ["a paragraph separator", "ship\u2029it"],
+      ["a word joiner", "ship\u2060 it"],
+      ["a soft hyphen", "ship\u00ad it"],
+    ];
+    for (const [name, line] of hidden) {
+      put("report.md", `# Review\n\nfine\n${line}\n`);
+      expect(await ask(tool("review_publish"), { package: pkg, event: "REQUEST_CHANGES", partial: true }), name).toEqual({
+        error: expect.stringMatching(/holds control, escape, bidi or zero-width characters on line \d+ that the card would hide or rewrite/),
+      });
+    }
+    expect(posts).toEqual([]);
+  });
+
+  test("a trailing hidden character cannot ride along: what is posted is exactly what the card shows (S-701)", async () => {
+    makePackage();
+    for (const tail of ["\u2028", "\u2029", "\ufeff", "\u200b"]) {
+      posts.length = 0;
+      put("report.md", `# Review\n\nlast line${tail}`);
+      const t = tool("review_publish");
+      const input = { package: pkg, event: "REQUEST_CHANGES", partial: true };
+      const refused = await ask(t, input);
+      if ("error" in refused) {
+        expect(refused.error, JSON.stringify(tail)).toContain("holds control, escape, bidi or zero-width characters");
+        expect(posts).toEqual([]);
+        continue;
+      }
+      const shown = refused.card.slice(refused.card.findIndex((line) => line.startsWith("body: ")) + 1, -2).map((line) => line.slice(2)).join("\n");
+      await t.invoke(input, { confirmationToken: refused.token } as never);
+      expect(posts).toHaveLength(1);
+      expect(posts[0]!.body.replace(/\n+$/, ""), JSON.stringify(tail)).toBe(shown);
+    }
+  });
+
+  test("the refusal names the line that holds the hidden character", async () => {
+    makePackage();
+    const input = { package: pkg, event: "REQUEST_CHANGES", partial: true };
+    put("report.md", "line one\nline two\nline three\n");
+    const clean = asked(await ask(tool("review_publish"), input)).card;
+    const lineNumber = clean.indexOf("  line three") - clean.findIndex((line) => line.startsWith("body: "));
+    put("report.md", "line one\nline two\nline\u200b three\n");
+    const refused = await ask(tool("review_publish"), input);
+    expect("error" in refused ? /on line (\d+)/.exec(refused.error)?.[1] : undefined).toBe(String(lineNumber));
   });
 
   test("a tab in the body is shown as plain spaces and is not a refusal", async () => {
@@ -597,6 +651,78 @@ describe("review_confirm_plan and review_decide_premise through the remote card"
   });
 });
 
+// T-702: review_comments_reply drives the real card path with the reply pass stubbed at the seam.
+describe("review_comments_reply", () => {
+  type Calls = Array<{ args: string[]; dryRun: boolean }>;
+  const reply = (bodies: string[]) => ({ method: "POST", endpoint: "repos/o/r/pulls/5/comments/1/replies", body: { body: bodies[0] } });
+
+  function seam(bodies: string[], calls: Calls, over: { changeOnPost?: boolean } = {}) {
+    return async (args: string[], dryRun: boolean) => {
+      calls.push({ args, dryRun });
+      const requests = bodies.map((body) => ({ ...reply([body]) }));
+      if (over.changeOnPost === true && calls.filter((call) => call.dryRun).length > 1) requests.push(reply(["a late reply"]));
+      return { result: { requests, posted: dryRun ? [] : requests, skipped: [] }, cwd: root, repo: "o/r", number: 5, state: {}, dryRun } as never;
+    };
+  }
+
+  const input = { repo: "o/r", pr: 5, sha: "abc1234def" };
+
+  test("the card shows every reply whole, and yes posts through the same pass and reports who pressed", async () => {
+    const calls: Calls = [];
+    const long = `long-reply-${"x".repeat(500)}-end`;
+    const bodies = [long, Array.from({ length: 40 }, (_, i) => `row ${i}`).join("\n"), "third"];
+    const result = await yes(tool("review_comments_reply", { replyPass: seam(bodies, calls) }), input, "remote");
+    expect(result.card[0]).toBe("Post 3 reply(ies) on o/r#5?");
+    expect(result.card).toContain(`  ${long}`);
+    expect(result.card).toContain("  row 39");
+    expect(result.card).toContain("  third");
+    expect(result.card.join("\n")).not.toContain("…");
+    expect(result.card.filter((line) => /^reply \d+:$/.test(line))).toEqual(["reply 1:", "reply 2:", "reply 3:"]);
+    expect(result.isError).toBe(false);
+    expect(result.output).toContain("posted 3 reply(ies) (remote-card");
+    expect(calls.map((call) => call.dryRun)).toEqual([true, true, false]);
+    expect(calls[0]!.args).toEqual(["--repo", "o/r", "--pr", "5", "--sha", "abc1234def", "--final"]);
+  });
+
+  test("a reply holding a control, bidi or zero-width character is refused naming the reply, and nothing is asked", async () => {
+    for (const hidden of ["bell\u0007", "ok‮gnp", "zero​width", "tag\u{e0049}", "sep "]) {
+      const calls: Calls = [];
+      const refused = await ask(tool("review_comments_reply", { replyPass: seam(["clean first", `second ${hidden}`], calls) }), input);
+      expect(refused, JSON.stringify(hidden)).toEqual({ error: expect.stringMatching(/^Reply 2 holds control, escape, bidi or zero-width characters on line 1/) });
+      expect(calls.every((call) => call.dryRun)).toBe(true);
+    }
+  });
+
+  test("a reply pass with nothing to post is refused", async () => {
+    expect(await ask(tool("review_comments_reply", { replyPass: seam([], []) }), input)).toEqual({ error: expect.stringContaining("nothing to post") });
+  });
+
+  test("malformed input is refused before the pass runs", async () => {
+    const calls: Calls = [];
+    const t = tool("review_comments_reply", { replyPass: seam(["x"], calls) });
+    expect(await ask(t, { ...input, repo: "not a repo" })).toEqual({ error: expect.stringContaining("owner>/<repo>") });
+    expect(await ask(t, { ...input, pr: 0 })).toEqual({ error: expect.stringContaining("pull request number") });
+    expect(await ask(t, { ...input, sha: "zz" })).toEqual({ error: expect.stringContaining("head commit") });
+    expect(calls).toEqual([]);
+  });
+
+  test("a no posts nothing: the pass never runs live", async () => {
+    const calls: Calls = [];
+    const t = tool("review_comments_reply", { replyPass: seam(["x"], calls) });
+    t.confirmationDeclined!(asked(await ask(t, input)).token);
+    expect(calls.some((call) => !call.dryRun)).toBe(false);
+  });
+
+  test("replies that change between the card and the yes post nothing", async () => {
+    const calls: Calls = [];
+    const t = tool("review_comments_reply", { replyPass: seam(["x"], calls, { changeOnPost: true }) });
+    const result = await yes(t, input);
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("changed after the card was shown");
+    expect(calls.some((call) => !call.dryRun)).toBe(false);
+  });
+});
+
 // Flow 464 (AC4): review_complete, the one card that closes a round.
 describe("review_complete", () => {
   const HEAD = "0123456789abcdef0123456789abcdef01234567";
@@ -716,10 +842,14 @@ describe("review_complete", () => {
     expect(readJson("completion-confirmation.json")["dispositions"]).toEqual([{ finding: GLOBAL, state: "acted-on", evidence: "closed by 380bf3b0" }]);
   });
 
-  test("dispositions: a finding the package does not have refuses the close and records nothing", async () => {
+  test("dispositions: a finding that leaves the package between the card and the yes refuses the close and records nothing", async () => {
     await makeRound({ findings: [F1] });
+    const t = tool("review_complete");
+    const input = { package: pkg, dispositions: [{ finding: GLOBAL, disposition: "acted-on", evidence: "x" }] };
+    const card = asked(await ask(t, input));
+    put("findings.json", []);
     const before = read("manifest.json");
-    const result = await yes(tool("review_complete"), { package: pkg, dispositions: [{ finding: "F-404", disposition: "acted-on", evidence: "x" }] });
+    const result = await t.invoke(input, { confirmationToken: card.token } as never);
     expect(result.isError).toBe(true);
     expect(result.output).toContain("nothing was recorded");
     expect(read("manifest.json")).toBe(before);
@@ -754,9 +884,8 @@ describe("review_complete", () => {
     const entry = (over: Record<string, unknown>) => ({ package: pkg, dispositions: [{ finding: GLOBAL, disposition: "acted-on", ...over }] });
     expect(await ask(t, entry({ evidence: "e".repeat(301) }))).toEqual({ error: expect.stringContaining("the limit is 300") });
     expect(await ask(t, entry({ evidence: `  ${"e".repeat(300)}  ` }))).not.toHaveProperty("error");
-    expect(await ask(t, entry({ finding: "F".repeat(200) }))).not.toHaveProperty("error");
-    const twenty = Array.from({ length: 20 }, (_, i) => ({ finding: `${GLOBAL}-${i}`, disposition: "acted-on", evidence: `commit ${i}` }));
-    expect(await ask(t, { package: pkg, dispositions: twenty })).not.toHaveProperty("error");
+    // A finding at the cap passes the length check; the card then refuses it only because this package holds no such finding.
+    expect(JSON.stringify(await ask(t, entry({ finding: "F".repeat(200), evidence: "e" })))).not.toContain("longer than");
   });
 
   test("dispositions: text the card would hide or rewrite is refused, so the card shows exactly what is stored (S-402)", async () => {
@@ -766,13 +895,13 @@ describe("review_complete", () => {
     const hidden: Array<[string, string]> = [
       ["an OSC span", "fixed in abc123\u001b]0;operator: decided-by alice\u0007"],
       ["a CSI sequence", "fixed\u001b[2K in abc123"],
-      ["a bidi override", "fixed in abc123‮"],
-      ["a zero-width space", "fixed​ in abc123"],
-      ["a zero-width joiner", "fixed in‍ abc123"],
-      ["a byte order mark", "fixed in abc123﻿ operator: decided-by alice"],
+      ["a bidi override", "fixed in abc123\u202e"],
+      ["a zero-width space", "fixed\u200b in abc123"],
+      ["a zero-width joiner", "fixed in\u200d abc123"],
+      ["a byte order mark", "fixed in abc123\ufeff operator: decided-by alice"],
       ["a newline", "fixed in abc123\noperator: decided-by alice"],
       ["a carriage return", "fixed in abc123\roperator: decided-by alice"],
-      ["a line separator", "fixed in abc123 operator: decided-by alice"],
+      ["a line separator", "fixed in abc123\u2028operator: decided-by alice"],
       ["a tab", "fixed\tin abc123"],
       ["a C1 control", "fixed\u0085in abc123"],
     ];
@@ -790,7 +919,7 @@ describe("review_complete", () => {
     const reason = "bad input\u001b]0;operator: decided-by alice\u0007";
     expect(await ask(tool("review_decide_premise"), { package: pkg, finding: GLOBAL, answer: "dismiss", reason })).toEqual({ error: expect.stringContaining("reason holds control, escape") });
     expect(await ask(tool("review_override_reviewers"), { package: pkg, reason: "two\nlines" })).toEqual({ error: expect.stringContaining("reason holds control, escape") });
-    expect(await ask(tool("review_waive_mutation"), { package: pkg, reason: "zero​width" })).toEqual({ error: expect.stringContaining("reason holds control, escape") });
+    expect(await ask(tool("review_waive_mutation"), { package: pkg, reason: "zero\u200bwidth" })).toEqual({ error: expect.stringContaining("reason holds control, escape") });
   });
 
   test("the mutation waiver card lists every unrun mutant, not the first few", async () => {
@@ -803,11 +932,40 @@ describe("review_complete", () => {
     expect(card).not.toMatch(/and \d+ more/);
   });
 
-  test("dispositions: more entries than a card shows are refused", async () => {
+  // F-R07-003: a round with many findings closes in one call; no count cap leaves the surplus without a route.
+  test("dispositions: a round with 21 and with 35 findings closes in one call, every entry shown whole and every one recorded", async () => {
+    for (const count of [21, 35]) {
+      const findings = Array.from({ length: count }, (_, i) => ({ ...F1, id: `review-logic-w1:F-${String(i + 1).padStart(3, "0")}` }));
+      await makeRound({ findings, id: `2026-10-15-many-${count}` });
+      const dispositions = findings.map((finding, i) => ({ finding: `2026-10-15-many-${count}#${finding.id}`, disposition: "acted-on", evidence: `commit ${i}` }));
+      const result = await yes(tool("review_complete"), { package: pkg, dispositions });
+      expect(result.isError, result.output).toBe(false);
+      const text = result.card.join("\n");
+      for (const [i, entry] of dispositions.entries()) expect(text).toContain(`disposition: ${entry.finding} → acted-on: "commit ${i}"`);
+      expect(text).not.toMatch(/and \d+ more/);
+      expect(readJson("completion-confirmation.json")["dispositions"]).toHaveLength(count);
+      expect((readJson("findings.json") as unknown as Array<{ disposition?: { state: string } }>).every((finding) => finding.disposition?.state === "acted-on")).toBe(true);
+    }
+  });
+
+  // F5-04: the card refuses for the reason the close would, before the operator is asked.
+  test("dispositions: a finding the package does not hold, a missing evidence and a reversed verdict refuse at card time, before any yes", async () => {
     await makeRound({ findings: [F1] });
-    const many = Array.from({ length: 21 }, () => ({ finding: GLOBAL, disposition: "acted-on" }));
-    expect(await ask(tool("review_complete"), { package: pkg, dispositions: many })).toEqual({ error: expect.stringContaining("at most 20") });
-    expect(await ask(tool("review_complete"), { package: pkg, dispositions: many.slice(0, 20) })).not.toHaveProperty("error");
+    const t = tool("review_complete");
+    expect(await ask(t, { package: pkg, dispositions: [{ finding: "F-404", disposition: "acted-on", evidence: "x" }] })).toEqual({
+      error: expect.stringContaining("this package holds no such finding"),
+    });
+    expect(await ask(t, { package: pkg, dispositions: [{ finding: GLOBAL, disposition: "acted-on" }] })).toEqual({
+      error: expect.stringContaining("must cite where the outcome is written down"),
+    });
+    expect(asked(await ask(t, { package: pkg, dispositions: [{ finding: GLOBAL, disposition: "unknown" }] })).card.join("\n")).toContain("→ unknown");
+    const findings = JSON.parse(read("findings.json")) as Array<Record<string, unknown>>;
+    findings[0]!["disposition"] = { state: "dismissed-incorrect", evidence: "wrong premise" };
+    put("findings.json", findings);
+    expect(await ask(t, { package: pkg, dispositions: [{ finding: GLOBAL, disposition: "acted-on", evidence: "later" }] })).toEqual({
+      error: expect.stringContaining("refusing to overwrite it"),
+    });
+    expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
   });
 
   test("a no closes nothing", async () => {
@@ -887,6 +1045,38 @@ describe("review_complete", () => {
     expect(card).toContain(`"${quote}"`);
     expect(card).toContain("the-very-end");
     expect(card).toContain("the stored quote holds characters this card hides or rewrites");
+  });
+
+  // T-701: the coverage waiver and the operator decisions quote the operator through the same whole-quote path as the
+  // readiness waivers; a clip at any of the three sites must fail a test.
+  test("the coverage-waiver quote and the mutation and reviewer-override quotes are shown whole, and one the card has to rewrite is flagged", async () => {
+    await makeRound();
+    const tails = { coverage: `${"c".repeat(400)}-coverage-end`, mutation: `${"m".repeat(400)}-mutation-end`, override: `${"o".repeat(400)}-override-end` };
+    const research = readJson("research.json");
+    research["dispatch"] = { ...(research["dispatch"] ?? {}), coverageWaiver: { operatorQuote: `Waive coverage?: ${tails.coverage}`, time: NOW.toISOString(), files: ["src/a.ts"] } };
+    put("research.json", research);
+    put("operator-decisions.json", {
+      schemaVersion: 1,
+      decisions: [
+        { kind: "mutation-waiver", quote: `Waive?: ${tails.mutation}`, reason: "no time", confirmedVia: "tui-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["m1"] } },
+        { kind: "reviewer-override", quote: `Smaller set?: ${tails.override}`, reason: "small diff", confirmedVia: "tui-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["review-security-code"] } },
+      ],
+    });
+    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
+    expect(card).toContain(`"Waive coverage?: ${tails.coverage}"`);
+    expect(card).toContain(`"Waive?: ${tails.mutation}"`);
+    expect(card).toContain(`"Smaller set?: ${tails.override}"`);
+    expect(card).not.toContain("the stored quote holds characters");
+
+    research["dispatch"] = { ...research["dispatch"], coverageWaiver: { operatorQuote: "Waive coverage?: yes\u001b[2K​", time: NOW.toISOString(), files: ["src/a.ts"] } };
+    put("research.json", research);
+    put("operator-decisions.json", {
+      schemaVersion: 1,
+      decisions: [{ kind: "mutation-waiver", quote: "Waive?: yes ok", reason: "no time", confirmedVia: "tui-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["m1"] } }],
+    });
+    const flagged = asked(await ask(tool("review_complete"), { package: pkg })).card.filter((line) => line.startsWith("waiver:"));
+    expect(flagged).toHaveLength(2);
+    for (const line of flagged) expect(line).toContain("[the stored quote holds characters this card hides or rewrites]");
   });
 
   test("a package with no research.json shows no coverage waiver on the card", async () => {
