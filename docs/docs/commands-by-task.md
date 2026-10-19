@@ -147,10 +147,10 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/permissions` | The saved shell rules (what Always remembered): honoured or not, session grants — remove one. |
 | `/external-diff` | External agent write runs awaiting review: patch and flagged paths — apply (typed hash prefix) or discard. |
 | `/governance` | Flows with their summary and stated effect — check an open one, complete it once the check passes and the PR is merged; the last report in its own tab, or run one in the background. |
-| `/decisions` | Recommendation journal report: match share by mode and stage, the deviations with their reasons, and your own answers and typed reasons in full (marked ✍ in the sidebar row). |
+| `/decisions` | Recommendation journal report: match share by mode and stage, the deviations with their reasons, and your own answers and typed reasons in full (marked ✍ in the sidebar row), and the Telegram review cards waiting or answered (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete). |
 | `/product` | Intents closed in code that nobody looked back at, with their outcome criteria. |
 | `/reviews` | Managed pull request reviews: findings by outcome, precision, resolved before merge. |
-| `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or "✍ Свой ответ" and a reply with your own text). Off by default; [name\|off\|status]. |
+| `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or "✍ Свой ответ" and a reply with your own text). Off by default; [name\|off\|status]. Also takes the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete): each pending one shows with its age and the time left of its 1-hour token, and who pressed. |
 | `/history` | Post the last messages of this session to the Telegram topic, oldest first. [N], 1 to 20; 10 by default. |
 | `/channels` | Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status]. |
 | `/intake` | GitHub work intake: cards that wait for your decision (take, decline, later), pause or resume the poll, poll by hand. [status\|list\|pause\|resume\|poll]. |

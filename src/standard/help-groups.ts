@@ -579,7 +579,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/decisions",
     group: "Automation",
-    summary: "Recommendation journal report: match share by mode and stage, the deviations with their reasons, and your own answers and typed reasons in full (marked ✍ in the sidebar row).",
+    summary: "Recommendation journal report: match share by mode and stage, the deviations with their reasons, and your own answers and typed reasons in full (marked ✍ in the sidebar row), and the Telegram review cards waiting or answered (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete).",
   },
   {
     kind: "slash",
@@ -597,7 +597,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/remote-control",
     group: "Automation",
-    summary: "Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or \"✍ Свой ответ\" and a reply with your own text). Off by default; [name|off|status].",
+    summary: "Drive this session from a Telegram topic: send lines, get replies, answer approvals and questions (an option button, or \"✍ Свой ответ\" and a reply with your own text). Off by default; [name|off|status]. Also takes the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete): each pending one shows with its age and the time left of its 1-hour token, and who pressed.",
   },
   {
     kind: "slash",

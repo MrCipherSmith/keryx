@@ -433,7 +433,11 @@ export function presentDecisions(open: OpenModalFn, otui: unknown, chrome: unkno
   return handle;
 }
 
-export type OpenDecisionsOptions = Omit<PresentDecisionsOptions, "text"> & { cwd: string };
+export type OpenDecisionsOptions = Omit<PresentDecisionsOptions, "text"> & {
+  cwd: string;
+  /** Flow 464 (AC6): the operator cards waiting in the Telegram topic and the recent answers, appended under the report. */
+  confirmationLines?: () => readonly string[];
+};
 
 /** Read the journal and open the modal over what `keryx decisions report` would print. */
 export async function openDecisions(
@@ -441,11 +445,17 @@ export async function openDecisions(
   chrome: Parameters<typeof openModal>[1],
   options: OpenDecisionsOptions,
 ): Promise<HostModalHandle | undefined> {
-  const { cwd, ...rest } = options;
-  const text = await reportText(cwd).catch(() => UNREADABLE);
+  const { cwd, confirmationLines, ...rest } = options;
+  const report = await reportText(cwd).catch(() => UNREADABLE);
+  const text = withConfirmationLines(report, confirmationLines?.() ?? []);
   return presentDecisions((hostOtui, hostChrome, input) => openModal(hostOtui as typeof otui, hostChrome as typeof chrome, input), otui, chrome, { ...rest, text }) as
     | HostModalHandle
     | undefined;
+}
+
+/** The report with the Telegram review cards (waiting, answered) appended under it; unchanged when there are none. */
+export function withConfirmationLines(report: string, cards: readonly string[]): string {
+  return cards.length === 0 ? report : `${report}\n\n${cards.join("\n")}`;
 }
 
 /** Open the same modal over the arm summary (`/decisions arms`, or a click on the arms row). */
@@ -454,7 +464,7 @@ export async function openDecisionsArms(
   chrome: Parameters<typeof openModal>[1],
   options: OpenDecisionsOptions,
 ): Promise<HostModalHandle | undefined> {
-  const { cwd, ...rest } = options;
+  const { cwd, confirmationLines: _cards, ...rest } = options;
   const text = await armsText(cwd);
   return presentDecisions((hostOtui, hostChrome, input) => openModal(hostOtui as typeof otui, hostChrome as typeof chrome, input), otui, chrome, { ...rest, text, tabLabel: "Arms" }) as
     | HostModalHandle
@@ -496,6 +506,8 @@ export interface DecisionsSidebarOptions {
   lastDecisionId?: (() => string | undefined) | undefined;
   /** This session's id, so `/decisions reason|change` without an id stays inside this session's decisions. */
   session?: string | undefined;
+  /** Flow 464 (AC6): the operator cards waiting in the Telegram topic and the recent answers (`pressedBy`). */
+  confirmationLines?: () => readonly string[];
   /** Test seam: how many LIVE decisions the journal holds. */
   count?: () => Promise<number>;
   /** Test seam: how many backfilled (historical) decisions the journal holds. */
@@ -606,6 +618,7 @@ export function mountDecisionsSidebar(options: DecisionsSidebarOptions): Decisio
     modal?.close({ restoreFocus: false });
     modal = await open(core, chrome, {
       cwd: options.cwd,
+      ...(options.confirmationLines !== undefined ? { confirmationLines: options.confirmationLines } : {}),
       ...(options.onKeypress !== undefined ? { onKeypress: options.onKeypress } : {}),
     });
     return modal;

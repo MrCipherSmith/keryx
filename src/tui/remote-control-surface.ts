@@ -10,6 +10,7 @@
 import { parseHistoryArgs } from "../remote/history";
 import { historyArgsOf } from "../remote/history-host";
 import { REMOTE_EVENT_LIMIT, type RemoteEvent, type RemoteState, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+import { waitingCardsText } from "./operator-confirmations";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
 import { guardedThemeRepaint, isRenderableGone } from "./theme-repaint";
@@ -116,7 +117,7 @@ export function formatHistoryStatus(status: RemoteStatus): string {
 }
 
 /** One status block: state, topic, heartbeat age and what turns it on or off. `posture` adds the Telegram permission lines (flow 396). */
-export function formatRemoteStatusLines(status: RemoteStatus, posture?: readonly string[]): string[] {
+export function formatRemoteStatusLines(status: RemoteStatus, posture?: readonly string[], confirmations?: readonly string[]): string[] {
   const lines = [`Remote control: ${STATE_WORDS[status.state]}`];
   if (status.state === "off") {
     lines.push("Topic: none");
@@ -131,6 +132,8 @@ export function formatRemoteStatusLines(status: RemoteStatus, posture?: readonly
     const n = status.unconfirmedApprovals;
     lines.push(`Approvals not confirmed: ${n}. The topic shows ${n === 1 ? "it" : "them"} as "not confirmed" until serve takes the shell's ack.`);
   }
+  // Flow 464 (AC6): the operator cards put to the topic and not answered yet, and who pressed the recent ones.
+  if (confirmations !== undefined && confirmations.length > 0) lines.push("", ...confirmations);
   lines.push(`Turn it off with ${REMOTE_CONTROL_COMMAND} off, or press o here. Rename: ${REMOTE_CONTROL_COMMAND} off, then ${REMOTE_CONTROL_COMMAND} <name>.`);
   if (posture !== undefined && posture.length > 0) {
     lines.push("", "Telegram permissions (change with /remote-policy):", ...posture.map((line) => `  ${line}`));
@@ -194,6 +197,8 @@ export type PresentRemoteOptions = {
   getStatus: () => RemoteStatus;
   /** The Telegram permission lines for the Status tab (flow 396). */
   getPostureLines?: () => readonly string[] | undefined;
+  /** Flow 464 (AC6): the pending and recently answered operator cards, one line each, heading first. */
+  getConfirmationLines?: () => readonly string[] | undefined;
   /** Turn it on (with the name serve picks) when off, off when on. Same code as the typed command. */
   onToggle: () => void;
   /**
@@ -254,7 +259,7 @@ export function presentRemoteControl(
     const status = options.getStatus();
     if (tab === "events") return formatRemoteEventLines(status);
     if (tab === "commands") return formatRemoteCommandLines(status);
-    const lines = formatRemoteStatusLines(status, options.getPostureLines?.());
+    const lines = formatRemoteStatusLines(status, options.getPostureLines?.(), options.getConfirmationLines?.());
     if (historyNote !== undefined) {
       const at = lines.findIndex((line) => line.startsWith("History:"));
       lines.splice(at < 0 ? lines.length : at + 1, 0, historyNote);
@@ -377,12 +382,15 @@ function fit(text: string, width: number): string {
 }
 
 /** `Remote: off | <topic name> | offline`, as the value half of the row. */
-export function projectRemoteRow(status: RemoteStatus | undefined, width: number): RemoteRow {
+export function projectRemoteRow(status: RemoteStatus | undefined, width: number, waitingCards = 0): RemoteRow {
   if (status === undefined || status.state === "off") return { text: fit("off", width), role: "muted", action: "open" };
   const detail = status.history === undefined ? {} : { detail: fit(`history ${status.history.count} · ${clock(status.history.at).slice(0, 5)}`, width) };
   if (status.state === "offline") return { text: fit("offline", width), role: "attention", action: "open", ...detail };
   const topic = status.name ?? "connecting";
   const unconfirmed = status.unconfirmedApprovals ?? 0;
+  // Flow 464 (AC6): an operator card waiting for a press in the topic is attention, like an unconfirmed decision.
+  const cards = waitingCardsText(waitingCards);
+  if (cards !== undefined) return { text: fit(`${topic} · ${cards}`, width), role: "attention", action: "open", ...detail };
   // Flow 397: a decision serve has not confirmed is attention, not "ok": the topic shows it as "not confirmed".
   if (unconfirmed > 0) return { text: fit(`${topic} · ${unconfirmed} unconfirmed`, width), role: "attention", action: "open", ...detail };
   return { text: fit(topic, width), role: "ok", action: "open", ...detail };
@@ -403,6 +411,8 @@ type TextNode = { content: unknown; onMouseDown?: (() => void) | undefined };
 export interface RemotePanelOptions {
   width: number;
   getStatus: () => RemoteStatus;
+  /** Flow 464 (AC6): how many operator cards wait for a press in the topic. */
+  getWaitingCards?: () => number;
   onOpen: () => void;
   /**
    * Flow 396: the Telegram permission posture, one line under the row (`trust · no limit · wait 15m`).
@@ -440,7 +450,7 @@ export function mountRemotePanel(otui: unknown, renderer: unknown, parent: unkno
   const posture = new core.TextRenderable(renderer as never, { id: "sb-remote-p", content: "" }) as unknown as TextNode & { visible?: boolean };
   box.add(posture as never);
 
-  const currentRow = (): RemoteRow => projectRemoteRow(options.getStatus(), options.width);
+  const currentRow = (): RemoteRow => projectRemoteRow(options.getStatus(), options.width, options.getWaitingCards?.() ?? 0);
   const draw = (): void => {
     if (disposed) return;
     const row = currentRow();

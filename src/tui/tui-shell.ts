@@ -123,6 +123,7 @@ import { describeDetachedRuns } from "./trigger-run-now";
 import { mountApprovalsSidebar, routeApprovalsCommand, type ApprovalsSidebar } from "./approvals-sidebar";
 import { intakeConfiguredSync, mountIntakeSidebar, routeIntakeCommand, type IntakeSidebar } from "./intake-surface";
 import { mountDecisionsSidebar, routeDecisionsCommand, type DecisionsSidebar } from "./decisions-surface";
+import { OperatorConfirmationLog, confirmationLines as operatorConfirmationLines } from "./operator-confirmations";
 import { mountResearchSyncPanel, type ResearchSyncPanelHandle } from "./research-sync-panel";
 import { mountExternalDiffSidebar, routeExternalDiffCommand, type ExternalDiffSidebar } from "./external-diff-sidebar";
 import { mountAutoReviewSidebar, routeAutoReviewCommand, type AutoReviewSidebar } from "./autoreview-surface";
@@ -3935,6 +3936,9 @@ export async function launchTuiAgentShell(opts: {
   // topic) on every exit path.
   let remoteBridge: RemoteBridge | undefined;
   let liveRemotePanel: RemotePanelHandle | undefined;
+  // Flow 464 (AC6): the operator cards this shell mirrored to the topic, for the sidebar, the status tab and /decisions.
+  const operatorCards = new OperatorConfirmationLog();
+  const operatorCardLines = (): string[] => operatorConfirmationLines(operatorCards.entries(), Date.now());
   // Flow 377: the Telegram connection of this machine (`/channels`), shared by every shell.
   let liveChannelsPanel: ChannelsPanelHandle | undefined;
   const channelsClient = new ChannelsClient();
@@ -4577,6 +4581,7 @@ export async function launchTuiAgentShell(opts: {
     liveRemotePanel = mountRemotePanel(otui, r, sidebar, {
       width: SIDEBAR_TEXT_WIDTH,
       getStatus: remoteStatus,
+      getWaitingCards: () => operatorCards.waiting().length,
       onOpen: () => showRemoteControl(),
       onOpenPermissions: () => showPermissions(),
       getPosture: () => {
@@ -4624,6 +4629,7 @@ export async function launchTuiAgentShell(opts: {
       notice: (text) => io.onSystem?.(`◇ ${text}\n`),
       lastDecisionId: lastAskUserDecisionId,
       session: askUserSessionId(),
+      confirmationLines: operatorCardLines,
     });
     liveDecisions = decisionsPanel;
     // Flow 404 (AC9): when the Part 1 materials were last synced; a row only in a checkout that has the catalog.
@@ -6094,7 +6100,10 @@ export async function launchTuiAgentShell(opts: {
         const isCard = meta?.alwaysAsk === true && meta.card !== undefined && meta.card.length > 0 && !isUserPromptApprovalCard(tool);
         const unmirrored = isCard ? mirrorUndeliveredNote(bridge) : undefined;
         if (unmirrored !== undefined && meta?.card !== undefined) {
-          return inner(tool, inputJson, { ...meta, card: withMirrorNote(meta.card, unmirrored) });
+          const unmirroredId = operatorCards.ask(meta.card[0] ?? tool, false);
+          const verdict = await inner(tool, inputJson, { ...meta, card: withMirrorNote(meta.card, unmirrored) });
+          operatorCards.answer(unmirroredId, { place: foregroundOperation.signal.aborted ? "withdrawn" : "shell", yes: verdict !== false });
+          return verdict;
         }
         if (bridge === undefined || !bridge.active) {
           return inner(tool, inputJson, meta);
@@ -6104,6 +6113,7 @@ export async function launchTuiAgentShell(opts: {
           return inner(tool, inputJson, meta);
         }
         const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
+        const cardId = isCard && meta?.card !== undefined ? operatorCards.ask(meta.card[0] ?? tool, true) : undefined;
         const outcome = await raceApproval({
           turnSignal: foregroundOperation.signal,
           ...(isCard ? { onUndelivered: () => io.onSystem?.("◇ Telegram mirror not delivered: the topic did not take the card. Answer it here.\n") } : {}),
@@ -6111,8 +6121,14 @@ export async function launchTuiAgentShell(opts: {
           // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.
           topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
         });
-        if (outcome.from === "dock") return outcome.result;
+        if (outcome.from === "dock") {
+          if (cardId !== undefined) {
+            operatorCards.answer(cardId, { place: foregroundOperation.signal.aborted ? "withdrawn" : "shell", yes: outcome.result !== false });
+          }
+          return outcome.result;
+        }
         const allowed = outcome.answer.decision === "allow";
+        if (cardId !== undefined) operatorCards.answer(cardId, { place: "telegram", yes: allowed, ...(outcome.answer.fromId === undefined ? {} : { pressedBy: outcome.answer.fromId }) });
         input.focus();
         setMainAgent("running", allowed ? "approved (telegram)" : "denied");
         io.onSystem?.(allowed ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied in Telegram.\n`);
@@ -7319,9 +7335,14 @@ export async function launchTuiAgentShell(opts: {
     // Flow 397 review L-1: an open /remote-control modal repaints when the bridge reports a change
     // (an approval confirmed or aged out), not only on the next keypress.
     const remoteModalListeners = new Set<() => void>();
+    operatorCards.subscribe(() => {
+      liveRemotePanel?.refresh();
+      remoteModalListeners.forEach((listener) => listener());
+    });
     const showRemoteControl = (): void => {
       openRemoteControl(otui, chrome, {
         getStatus: remoteStatus,
+        getConfirmationLines: operatorCardLines,
         subscribeChange: (listener) => {
           remoteModalListeners.add(listener);
           return () => {
