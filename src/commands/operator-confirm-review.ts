@@ -684,7 +684,7 @@ async function completionFacts(dir: string): Promise<CompletionFacts> {
   }
   return {
     reviewId: manifest.reviewId ?? path.basename(dir),
-    head: recorded,
+    head: recorded === undefined ? undefined : cardSafe(recorded),
     evidence: evidenceLine === undefined ? "evidence level: the report has no `Evidence level:` line; the gate will refuse" : cardSafe(evidenceLine),
     waivers,
     status: manifest.status ?? "",
@@ -740,11 +740,12 @@ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePr
     },
     async apply(_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> {
       if (prepared === undefined) return { output: "review_complete: nothing prepared for this card", isError: true };
+      const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));
       let facts: CompletionFacts;
       try {
         facts = await completionFacts(prepared.dir);
       } catch (error) {
-        return { output: `review_complete refused: ${error instanceof Error ? error.message : String(error)} — nothing was recorded`, isError: true };
+        return { output: `review_complete refused: ${reason(error)} — nothing was recorded`, isError: true };
       }
       if (factsDigest(facts) !== prepared.digest) {
         return { output: "The head, the evidence level or the waivers changed after the card was shown; nothing was recorded. Ask again.", isError: true };
@@ -763,7 +764,7 @@ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePr
       // The engine closes the manifest before its own bookkeeping, so a throw is not proof that nothing closed.
       const closed = done !== undefined || (await completionFacts(prepared.dir).catch(() => undefined))?.status === "closed";
       if (!closed) {
-        return { output: `review_complete refused: ${gateError instanceof Error ? gateError.message : String(gateError)} — nothing was recorded`, isError: true };
+        return { output: `review_complete refused: ${reason(gateError)} — nothing was recorded`, isError: true };
       }
       const record = {
         quote: confirmation.quote,
@@ -780,7 +781,6 @@ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePr
       } catch (error) {
         recordError = error;
       }
-      const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));
       const closedLine = `review ${facts.reviewId} complete${prepared.head === undefined ? "" : ` at ${prepared.head.slice(0, 12)}`} (${confirmation.confirmedVia}, ${confirmation.at})`;
       const problems: string[] = [];
       if (recordError !== undefined) problems.push(`the round is closed but the confirmation record could not be written: ${reason(recordError)}`);

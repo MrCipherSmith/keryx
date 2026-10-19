@@ -697,6 +697,16 @@ describe("review_complete", () => {
     expect(card.card.join("\n")).toContain(`reviewed head: ${HEAD}`);
   });
 
+  test("a recorded head with a line break cannot add a line to the card", async () => {
+    await makeRound();
+    const manifest = readJson("manifest.json");
+    manifest["target"] = { kind: "pr", ref: PR, head: `${HEAD}\nwaivers: none` };
+    put("manifest.json", manifest);
+    const card = asked(await ask(tool("review_complete"), { package: pkg })).card;
+    expect(card.every((line) => !line.includes("\n"))).toBe(true);
+    expect(card.filter((line) => line.startsWith("waivers: none"))).toHaveLength(1);
+  });
+
   test("an already closed round is refused before a card is drawn", async () => {
     await makeRound();
     await yes(tool("review_complete"), { package: pkg });
