@@ -123,3 +123,35 @@ describe("the sentinel is not a path (regression)", () => {
     expect((await issuesOf(cwd, "describes")).join(" ")).toContain("src/gone.ts");
   });
 });
+
+describe("unclosed front matter (regression)", () => {
+  const META = ["---", "Title: Page", "Version: 1.0.0", "Type: component", "Status: accepted"].join("\n");
+
+  test("a front matter that reaches a heading before its closing `---` is reported", async () => {
+    // `components/src-memory.md` looked like this: the `---` rule further down
+    // was read as the close, and everything above it was dropped as metadata.
+    const cwd = await project({
+      "components/a.md": `${META}\n\n# Page\n\n## Overview\n\nProse.\n\n---\n\nMore prose.\n`,
+    });
+    const result = await wikiValidate(cwd);
+    const found = result.issues.filter((issue) => issue.message.includes("no closing `---`"));
+    expect(found.map((issue) => [issue.page, issue.kind])).toEqual([
+      [path.join("components", "a.md"), "metadata"],
+    ]);
+    expect(result.ok).toBe(false);
+  });
+
+  test("a front matter that reaches a fence before its closing `---` is reported", async () => {
+    const cwd = await project({
+      "components/a.md": `${META}\n\n\`\`\`markdown\n## Overview\n\`\`\`\n`,
+    });
+    expect((await issuesOf(cwd, "metadata")).join(" ")).toContain("no closing `---`");
+  });
+
+  test("a closed front matter raises nothing", async () => {
+    const cwd = await project({
+      "components/a.md": `${META}\n---\n\n# Page\n\n## Overview\n\nProse.\n\n---\n\nMore prose.\n`,
+    });
+    expect((await issuesOf(cwd, "metadata")).join(" ")).not.toContain("no closing `---`");
+  });
+});

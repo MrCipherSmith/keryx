@@ -495,6 +495,22 @@ function leadingYamlBlock(markdown: string): string | null {
 }
 
 /**
+ * True when a page opens a YAML front matter with `---` on line 1 and reaches
+ * a `#` heading or a ``` fence before any closing `---` line. `leadingYamlBlock`
+ * refuses such a block rather than borrowing a horizontal rule further down as
+ * its close; this lets `validate` say so instead of passing the page.
+ */
+export function hasUnclosedFrontMatter(markdown: string): boolean {
+  const lines = toLf(markdown).split("\n");
+  if (lines[0]?.trimEnd() !== "---") return false;
+  for (const line of lines.slice(1)) {
+    if (line.trim() === "---") return false;
+    if (line.startsWith("#") || line.startsWith("```")) return true;
+  }
+  return false;
+}
+
+/**
  * The page an earlier enrich left before `unwrapFencedReply` existed: the
  * page's own front matter, then the whole reply inside one ```markdown fence,
  * a second front matter included. Every reader here skips fences, so such a
