@@ -20,6 +20,7 @@ import {
   pageVersion,
   parseChangelog,
   preserveEnrichInvariants,
+  unwrapFencedPage,
   unwrapFencedReply,
 } from "./page-invariants";
 import { createWikiWriteContext, restoreWikiPage, writeWikiPage } from "./history";
@@ -185,6 +186,54 @@ describe("preserveEnrichInvariants", () => {
     ]);
     expect(pageVersion(result)).toBe("0.2.1");
     expect(checkPageInvariants(ENRICHED_PAGE, result)).toEqual([]);
+  });
+});
+
+describe("unwrapFencedPage", () => {
+  test("a front matter with no closing line never borrows a later horizontal rule", () => {
+    // The shape `components/src-memory.md` had: the outer front matter is not
+    // closed, prose follows, then a `---` rule and a fenced older copy whose own
+    // front matter is not closed either. Reading either `---` rule as a close
+    // dropped 260 lines of prose as "metadata".
+    const page = [
+      "---",
+      "Title: Module src/alpha",
+      "Version: 1.1.1",
+      "",
+      "# Module src/alpha",
+      "",
+      "## Overview",
+      "",
+      "Newer prose.",
+      "",
+      "---",
+      "```markdown",
+      "---",
+      "Title: Module src/alpha",
+      "",
+      "# Module src/alpha",
+      "",
+      "## Architecture",
+      "",
+      "Older, detailed prose.",
+      "",
+      "---",
+      "",
+      "## Changelog",
+      "",
+      "- 1.1.1 - Something.",
+      "```",
+      "",
+    ].join("\n");
+
+    const result = unwrapFencedPage(page);
+    expect(result).toContain("Newer prose.");
+    expect(result).toContain("Older, detailed prose.");
+  });
+
+  test("a closed front matter around a fenced page is still unwrapped", () => {
+    const page = "---\nTitle: A\n---\n```markdown\n---\nTitle: A\n---\n# A\n\n## Overview\n\nProse.\n```\n";
+    expect(unwrapFencedPage(page)).toBe("---\nTitle: A\n---\n# A\n\n## Overview\n\nProse.\n");
   });
 });
 
