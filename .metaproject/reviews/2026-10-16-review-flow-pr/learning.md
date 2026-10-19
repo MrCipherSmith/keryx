@@ -1,5 +1,0 @@
-# Learning
-
-## Skill Learning
-
-- none

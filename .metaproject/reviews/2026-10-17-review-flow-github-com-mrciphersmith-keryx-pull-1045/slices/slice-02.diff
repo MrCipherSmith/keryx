@@ -1,0 +1,827 @@
+--- src/commands/review-ledger.test.ts
+@@ 377,418 @@
+   test("a skip of a required reviewer needs the operator's recorded decision (M5); with it the skip leaves the selection as Not run", async () => {
+     const { root, pkg, cleanup } = await packageAt(["reviews", "pkg"]);
+     try {
+       const required = (await requiredReviewers(root, "all", ["src/a.ts"])).required;
+       const skipped = required.find((name) => name !== "review-logic")!;
+       // The agent's flag alone is refused, and names the card and the terminal command.
+       await expect(run([pkg, "--mode", "all", "--json", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).rejects.toThrow(/needs the operator's decision.*review_override_reviewers/s);
+       const subject = await operatorDecisionSubject(pkg, "reviewer-override", required.filter((name) => name !== skipped));
+       expect(subject.items).toEqual([skipped]);
+       await recordOperatorDecision(pkg, { kind: "reviewer-override", quote: "yes, skip it", reason: "hotfix", confirmedVia: "terminal", at: new Date().toISOString(), subject });
+       const out = JSON.parse((await run([pkg, "--mode", "all", "--json", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).text) as Out;
+       expect(out.ledger.dispatch.skipped).toEqual([{ reviewer: skipped, reason: "operator: no style pass on a hotfix" }]);
+       expect(out.ledger.dispatch.notRun).toContain(`Not run: ${skipped} — operator: no style pass on a hotfix`);
+       expect(out.ledger.dispatch.selected).not.toContain(skipped);
+       expect(out.gaps.some((gap) => gap.reviewer === skipped)).toBe(false);
+       expect(out.blockers.join("\n")).not.toContain(skipped);
+       // The gate on the dispatch: the skip counts with the package's recorded decision, never as a dispatch entry alone.
+       const dispatch = out.ledger.dispatch;
+       expect((await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"], packageDir: pkg })).join("\n")).not.toContain("missing");
+       expect((await coverageErrors({ mode: "all", selected: dispatch.selected, skipped: dispatch.skipped }, { root, files: ["src/a.ts"] })).join("\n")).toContain("dispatch.skipped is not accepted");
+-      expect((await coverageErrors({ mode: "all", selected: dispatch.selected }, { root, files: ["src/a.ts"], packageDir: pkg })).join("\n")).toContain(`missing: ${skipped}`);
++      // Flow 460 (B): the recorded decision itself accounts for the reviewer it left out, with or without a dispatch field.
++      expect((await coverageErrors({ mode: "all", selected: dispatch.selected }, { root, files: ["src/a.ts"], packageDir: pkg })).join("\n")).not.toContain("missing");
+ 
+       const text = (await run([pkg, "--mode", "all", "--dry-run", "--skip", skipped, "--reason", "operator: no style pass on a hotfix"])).text;
+       expect(text).toContain(`- Not run: ${skipped} — operator: no style pass on a hotfix`);
+       const verdict = await computeVerdict(pkg);
+       expect(verdict.notRun?.[0]).toBe(`Not run: ${skipped} — operator: no style pass on a hotfix`);
+       // M6: a reviewer the required set dropped by an overlap group or a supersede is named in the verdict, with why.
+       expect(verdict.notRun).toContain("excluded: review-frontend-conventions — overlap group frontend: review-frontend reads the same lines");
+       expect(renderVerdict(verdict, "pkg")).toContain(`Not run: ${skipped} — operator: no style pass on a hotfix`);
+     } finally {
+       await cleanup();
+     }
+   });
+ 
+   test("a skip without a reason or a reason without a skip is refused; a skip of a reviewer the round does not require is only recorded", async () => {
+     expect(() => parseSkips(["--skip", "review-style"])).toThrow("needs --reason");
+     expect(() => parseSkips(["--reason", "why"])).toThrow("must follow");
+     expect(() => parseSkips(["--skip", "a", "--skip", "b", "--reason", "x"])).toThrow("has no --reason");
+     expect(() => parseSkips(["--skip", "a", "--reason", ""])).toThrow("needs a value");
+     expect(parseSkips(["--package", "p", "--skip", "a", "--reason", "x", "--skip", "b", "--reason", "y"])).toEqual([
+       { reviewer: "a", reason: "x" },
+
+--- src/commands/review-plan.test.ts
+@@ 1,32 @@
+ // Flow 458 AC8: `keryx review plan` runs the round's planning steps in order, writes plan.json and never dispatches.
+ // The steps are replaced by a fake that leaves the files the real ones leave; the plan's own reading of them is real.
+ 
+-import { afterEach, beforeEach, expect, test } from "bun:test";
++import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+ import { existsSync } from "node:fs";
+-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
++import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import type { RoundRecord } from "../review/round-record";
+ import { PLAN_FILE, PLAN_FLAGS, nextStepOf, packagePathOf, runPlan, slicesByKind, targetKindOf, type ReviewPlan, type StepResult } from "./review-plan";
+-import { printReviewHelpFor } from "./review";
++import { printReviewHelpFor, reviewCommand } from "./review";
++import { computeReadiness } from "../review/readiness";
+ 
+ const realLog = console.log;
+ let root = "";
+ let pkg = "";
+ let out: string[] = [];
+ let calls: string[][] = [];
+ 
+ beforeEach(async () => {
+   root = await mkdtemp(path.join(tmpdir(), "keryx-review-plan-"));
+   pkg = path.join(root, ".metaproject", "reviews", "r2");
+   await mkdir(pkg, { recursive: true });
+   out = [];
+   calls = [];
+   console.log = (...args: unknown[]) => void out.push(args.map(String).join(" "));
+ });
+ 
+ afterEach(async () => {
+   console.log = realLog;
+   await rm(root, { recursive: true, force: true });
+ });
+
+--- src/commands/review-plan.test.ts
+@@ 163,274 @@
+   expect(out.join("\n")).toContain("keryx review plan --target <pr-url|branch>");
+   expect(calls).toEqual([]);
+   expect(PLAN_FLAGS).toContain("--head");
+ });
+ 
+ test("small readers: target kind, the package path of start's output, slices by kind", () => {
+   expect(targetKindOf("https://github.com/o/r/pull/12")).toBe("pr");
+   expect(targetKindOf("o/r#12")).toBe("pr");
+   expect(targetKindOf("12")).toBe("pr");
+   expect(targetKindOf("feat/review-delta-rounds")).toBe("branch");
+   expect(packagePathOf("a\npath: .metaproject/reviews/r2\nb", root)).toBe(path.join(root, ".metaproject/reviews/r2"));
+   expect(packagePathOf("nothing", root)).toBeUndefined();
+   expect(slicesByKind({ slices: SPLIT as never }).fix.length).toBe(1);
+   expect(slicesByKind({ slices: [{ ...(SPLIT[1] as object), retryOf: ["slice-02"] }] as never })).toEqual({ fix: [], new: [] });
+ });
+ 
+ test("review plan has its own help entry", () => {
+   printReviewHelpFor(["plan"]);
+   expect(out.join("\n")).toContain("keryx review plan --target");
+ });
++
++// Flow 460 (G, AC6): one quote the locator cannot place used to refuse the whole round, so no round was recorded and the
++// next `review plan` found no previous round. Real steps end to end: plan → ingest with an unplaceable quote → fix → plan.
++describe("plan → ingest with an unplaceable quote → fix commit → plan", () => {
++  const ORIGINAL_CWD = process.cwd();
++  const EMAIL = "200531777+MrCipherSmith@users.noreply.github.com";
++  const realError = console.error;
++  const realXdg = process.env.XDG_DATA_HOME;
++  let repo = "";
++
++  const git = (...args: string[]): string => {
++    const run = Bun.spawnSync(["git", ...args], { cwd: repo, env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: EMAIL, GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: EMAIL } });
++    if (run.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${run.stderr.toString()}`);
++    return run.stdout.toString().trim();
++  };
++  const source = (fixed: boolean): string =>
++    [
++      ...Array.from({ length: 12 }, (_, i) => `export const base${i} = ${i};`),
++      "export function total(items: number[]): number {",
++      fixed ? "  return items.reduce((sum, item) => sum + item, 0);" : "  return items.reduce((sum, item) => sum + item);",
++      "}",
++      "",
++    ].join("\n");
++  const finding = (id: string, quote: string) => ({ id, reviewer: "review-logic", severity: "minor", file: "src/a.ts", line: 14, quote, problem: `problem ${id}`, impact: "wrong total", suggested_fix: "seed the reduce", evidence: "read the function", confidence: "high" });
++
++  beforeEach(async () => {
++    repo = await mkdtemp(path.join(tmpdir(), "keryx-plan-e2e-"));
++    process.env.XDG_DATA_HOME = path.join(repo, ".xdg");
++    await mkdir(path.join(repo, ".metaproject"), { recursive: true });
++    await mkdir(path.join(repo, "src"), { recursive: true });
++    git("init", "-q", "-b", "main");
++    await writeFile(path.join(repo, "src", "a.ts"), Array.from({ length: 12 }, (_, i) => `export const base${i} = ${i};`).join("\n") + "\n");
++    git("add", "src/a.ts");
++    git("commit", "-q", "-m", "base");
++    git("checkout", "-q", "-b", "feature");
++    await writeFile(path.join(repo, "src", "a.ts"), source(false));
++    git("add", "src/a.ts");
++    git("commit", "-q", "-m", "add total");
++    process.chdir(repo);
++    console.log = () => {};
++    console.error = () => {};
++    process.exitCode = 0;
++  });
++  afterEach(async () => {
++    console.log = realLog;
++    console.error = realError;
++    process.exitCode = 0;
++    process.chdir(ORIGINAL_CWD);
++    if (realXdg === undefined) delete process.env.XDG_DATA_HOME;
++    else process.env.XDG_DATA_HOME = realXdg;
++    await rm(repo, { recursive: true, force: true });
++  });
++
++  const plan = async (): Promise<ReviewPlan> => {
++    await reviewCommand(["plan", "--target", "feature", "--ref", "main", "--json"]);
++    expect(process.exitCode ?? 0).toBe(0);
++    const latest = (await readdir(path.join(repo, ".metaproject", "reviews"))).filter((name) => existsSync(path.join(repo, ".metaproject", "reviews", name, PLAN_FILE))).sort();
++    const found = await Promise.all(latest.map(async (name) => JSON.parse(await readFile(path.join(repo, ".metaproject", "reviews", name, PLAN_FILE), "utf8")) as ReviewPlan));
++    return found.sort((a, b) => a.round.number - b.round.number)[found.length - 1]!;
++  };
++
++  test("the round with the unplaced quote is recorded, and the plan after the fix is a delta round with a fix slice for the finding", async () => {
++    const first = await plan();
++    expect(first.round.mode).toBe("first");
++    const firstId = path.basename(first.package);
++
++    const report = ["# Round 1", "", "```json keryx:findings", JSON.stringify([finding("F-1", "  return items.reduce((sum, item) => sum + item);"), finding("F-2", "  return items.total();")]), "```", ""].join("\n");
++    await writeFile(path.join(repo, "report.md"), report);
++    await writeFile(path.join(repo, "research.json"), JSON.stringify({ version: 1, scopeReviewed: true, rawReconciled: true, obligations: [] }));
++    await reviewCommand(["ingest", "--target", "branch", "--ref", "feature", "--review-id", firstId, "--report", "report.md", "--research", "research.json"]);
++    expect(process.exitCode ?? 0).toBe(0);
++    const recorded = JSON.parse(await readFile(path.join(first.package, "findings.json"), "utf8")) as Array<Record<string, unknown>>;
++    const byId = Object.fromEntries(recorded.map((entry) => [entry.id, entry]));
++    expect(byId["F-1"]).toMatchObject({ line: 14, locator: { state: "derived" } });
++    expect(byId["F-2"]).toMatchObject({ line: null, quote_unlocated: { reason: "absent" } });
++    expect(await readFile(path.join(first.package, "scope.md"), "utf8")).toContain("## Quotes not located at the reviewed head");
++    expect((await computeReadiness(first.package)).items.find((item) => item.id === "quotes-located")).toMatchObject({ status: "fail" });
++
++    await writeFile(path.join(repo, "src", "a.ts"), source(true));
++    git("add", "src/a.ts");
++    git("commit", "-q", "-m", "fix F-1: seed the reduce");
++
++    const second = await plan();
++    expect(second.package).not.toBe(first.package);
++    expect(second.round).toMatchObject({ number: 2, mode: "delta", previous: firstId });
++    expect(second.round.fixHunks).toBeGreaterThan(0);
++    expect(second.slices.fix.length).toBeGreaterThan(0);
++    const fix = second.slices.fix.find((slice) => slice.findingIds?.includes("F-1"));
++    expect(fix?.files).toContain("src/a.ts");
++    expect(fix?.roles).toEqual(expect.arrayContaining(["review-logic", "review-regression"]));
++  }, 60_000);
++});
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
+@@ 647,687 @@
+ It prints the decision and the reason, and reuses the previous record when
+ nothing moved. The final round recomputes whatever the file set did — otherwise a
+ fix introduced in round 3 gets no regression check at all, and the round that
+ certifies the flow is the one that checked the least.
+ 
+ ## Readiness — the checklist behind `completed` and behind publishing
+ 
+ `keryx review readiness <review-id-or-path> [--json]` reads the package and prints eleven items, READY or NOT READY, each with the evidence and the command that repairs it. It writes nothing, and exits non-zero when the verdict is NOT READY. Only item 9 reaches GitHub (the PR's own file list); the TUI and `review status` read the package alone.
+ 
+ 1. `files-covered` — every changed file is in a wave or carries a recorded waiver.
+ 2. `blast-radius` — no file the blast radius cut is left unreviewed. A cut radius writes `chunks.json`; run `keryx review chunks plan`, `estimate`, `next`/`record`, `merge`. In an unattended run every wave runs without a question, up to the 25-pass ceiling; in an interactive run the operator is asked once: in keryx shell call `review_chunks_answer` (a card, never a terminal); elsewhere the operator runs `keryx review chunks estimate --package <dir> --answer yes --quote "<their words>"` in their terminal; unattended, record Not run.
+ 3. `reviewers` — every planned reviewer was dispatched and its result ingested.
+ 4. `verifier` — the verifier checked every finding it should, or the report says how many it did not.
+ 5. `ledger` — the ledger is READY.
+ 6. `coverage-md` — coverage.md does not list a reviewer as `run` that the dispatch record says did not finish. Re-run `keryx review ingest` for the package.
+ 7. `head` — the report's head is the PR head.
+ 8. `report-names` — pending mutation candidates and parity warnings are named in the report.
+ 9. `pr-files` — the changed-file count equals the PR's own file list. A recount more than 3x the recorded scope is refused: it came from the wrong base. Recount with `keryx review blast-radius --package <ref> --changed <the PR's files>`.
+ 10. `memory-outside-stage` — the orchestrator read memory only in its memory stage ("Clean context" above). Outside keryx shell it reads "not observable on this host" unless this session's keryx calls carry the caller token `keryx review start` printed.
+ 11. `premise-decisions` — every finding `review-premise` held (`challenged` or `owner-decision`) has an operator decision: in keryx shell the card `review_decide_premise`; elsewhere the operator runs `keryx review decide-premise --package <dir> --finding <global_id> --answer uphold|dismiss --reason "<why>"` in their terminal (SKILL.md "Wave D"). Not waivable: each held finding needs its own answer, and `review_waive_readiness` / `--waive` refuse this item.
++12. `quotes-located` — every open finding whose quote `review ingest` could not place (absent from the file at the reviewed head, or in it more than once) has a disposition. Ingest keeps such a finding with no line, flagged `quote_unlocated` and listed in scope.md, instead of refusing the round. Re-quote one distinct line and re-ingest, record a disposition, or the operator waives the item.
+ 
+ `keryx review complete` refuses status `completed` while any item fails. A failing item other than `premise-decisions` is waived only by the operator. In keryx shell call `review_waive_readiness` for the item: the operator answers it as a card, the waiver is recorded with the card text and the time, and then you run `keryx review complete`. Never send the operator to a terminal. Outside keryx shell the operator runs `keryx review complete --waive <item> "<their own words>"` in a terminal, repeatable. Unattended, record the item as Not run. `keryx review publish` is held by the same checklist. Publishing is the operator's decision too: in keryx shell call `review_publish` (a card shows the target and the body; never send the operator to a terminal). A not-ready package goes to GitHub only as a partial review (`review_publish` with `partial: true`, or `keryx review publish --partial`), which puts a "Partial review" header on the post and never approves. The shell guard stops a publish command that runs through the keryx shell; a publisher outside it (CI, another agent, a script file) is not stopped, and that limit is named, not hidden.
+ 
+ ## Fix rounds — dispositions, regressions, withdrawal
+ 
+ ### Every prior finding leaves the round with a disposition
+ 
+ A fix round that reports only new findings is unreadable: the author cannot tell
+ which of their fixes landed. Close the loop explicitly — one line per prior
+ finding, in the report, before the new findings:
+ 
+ | Disposition | Meaning |
+ |---|---|
+ | `closed` | Checked against the code, not against the commit message, and the defect is gone |
+ | `open` | The fix does not reach the defect; say what is still true |
+ | `partial` | One site of the class was fixed and the enumeration named others |
+ | `regressed` | The fix removed this defect and introduced another — file the new one separately |
+ | `withdrawn` | The finding was wrong. See below |
+ 
+ **Check the code, not the commit message.** A commit titled *"report an abandoned
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ 25,65 @@
+ ## Preflight — before Step 0, in this order
+ 
+ 1. **Can it spawn?** The round needs a subagent-spawn tool (`Agent`, `spawn_subagent` or the host's equivalent) and depth budget left: Claude Code nests subagents at most 3 deep, and at the limit `Agent` is withheld. A host with no spawn tool at all (Codex and other AGENTS.md hosts) does not stop here and does not review alone: it runs the round through the autonomous runner, `keryx review run --autonomous --target pr --ref <pull request URL>` (no pull request: `--target branch --ref <base> [--head <commit>]`), and relays its verdict and exit code (see "Hosts"). Only a session that has spent the depth budget (a nested subagent) stops; its whole output is this line, with no tool calls and no review of your own:
+    `STATUS: BLOCKED nested_dispatch_unavailable — run this skill in the main session`
+ 2. **Is a round needed?** List the files with `git diff --name-status --no-renames <base>...HEAD`, so a rename shows both paths. A diff where EVERY file is prose or machine-written data ends here with one line, `round not needed: <reason>`, and no reviewer. Prose is exactly: README or CHANGELOG at any depth; CONTRIBUTING, LICENSE, SECURITY or CODE_OF_CONDUCT at the top level; and under `docs/`, `.metaproject/wiki`, `.metaproject/reviews` or a flow's `journal.md`, a file with extension md, rst or adoc whose name holds a lowercase letter (an all-uppercase name such as AGENT or WARP is steering by convention). Machine-written data is a file under `coverage/` or `__generated__/` with extension lcov, info or map only; json, txt, html and md there are code. Steering is code wherever it sits, `docs/` included: a directory (singular or plural) named agent, skill, command, rule, prompt, instruction, persona, steering or hook, any path segment starting with a dot (`.claude`, `.cursorrules`, `.mcp.json`), a file name starting with SKILL, AGENT, CLAUDE, GEMINI, QWEN, CODEX, WARP, CRUSH, JULES, KNOWLEDGE, GUIDELINES, CONVENTIONS or copilot-instructions, ending in .local, .override, .instructions, .prompt, .agent or .chatmode before the extension, or containing prompt, instruction or system. A flow's `description.md`, `acceptance-criteria.md` and `tasks/` are gate inputs, so they are code. Every other file counts as code too, including lockfiles, committed `dist/` output, CI, auth, migrations, config JSON, and any path with `..`, a backslash, a leading `./` or `//`. `classifyRoundNeed` in `src/review/round-need.ts` is the tested reference of this rule; the host executes this text, and nothing in the CLI calls the function yet. `--all`, an explicit reviewer list or a gating round forces a round.
+ 3. **Round ceiling.** 5 rounds (`REVIEW_ROUND_CAP`) over the same change. Past it: interactive, ask the operator; unattended, `STATUS: BLOCKED round_cap`.
+ 4. **PR state, shown before dispatch.** On a PR target read its state (merged, approved, CI) and tell the operator the risk that it merges before the round ends: a verdict ready at minute 55 and held to minute 119 lost the race to the merge. Depth and the estimate need the package and the slice manifest, so they come later: after `review scope`, `review start` and `review slice`, before the first reviewer starts ("Round plan" steps 5-6; `SKILL.detail.md` § "Preflight 4").
+ 
+ ## Hosts — the same round, different tools
+ 
+ | | keryx shell | Claude Code | Codex, other AGENTS.md hosts | autonomous runner |
+ |---|---|---|---|---|
+ | Spawn | `spawn_subagent` | `Agent` (`subagent_type`) | its spawn tool; none → the runner (Preflight 1) | its own reviewers |
+ | Plan | `plan_set`, `plan_update` | its todo/task list | its plan tool (`update_plan`), else the checklist in your reply | none |
+ | Question | `ask_user` | `AskUserQuestion` | one question in your reply, then wait | none: defaults, unattended |
+ | Operator decision | the card tool | the exact terminal command, for the operator | the exact terminal command, for the operator | refused: recorded Not run |
+ | Result file | `save_result_to: <package>/raw/<reviewer>.txt` | the reviewer writes `<package>/raw/<reviewer>.txt` itself, before it replies | as Claude Code | its own package |
+ | Wave bytes | `--host keryx-shell` (60000: a child dies at 5 min) | `--host claude-code` (150000) | `--host codex` / `--host other` (150000) | its own |
+ 
+ - **Every host keeps the same files, per package** (`<package>` is the directory `keryx review start` created): slices in `<package>/slices/`, one reply per dispatch in `<package>/raw/<reviewer>.txt` (reviewer replies only), one driver per dispatch in `<package>/drivers/<reviewer>.json`, and `research.json` from `keryx review ledger build --package <package>` — never by hand. `retry-plan --package`, `verdict` and `ledger build` read `<package>/raw` by default; the shared `.metaproject/data/review/raw` holds other rounds' replies and is read only when named, so never write there.
+-- **The result is the file, never the spawn tool's output.** keryx shell cuts a child's summary at 16000 characters and Claude Code returns only the last message: parse `<package>/raw/<reviewer>.txt`. A missing file is no result (`BLOCKED`).
++- **The result is the file, never the spawn tool's output.** keryx shell cuts a child's summary at 16000 characters and Claude Code returns only the last message: parse `<package>/raw/<reviewer>.txt`. A missing file is no result (`BLOCKED`). Token spend: keryx shell appends `KERYX_USAGE {"tokens_in":…,"tokens_out":…,"model":…}` to that file itself; on another host, when your spawn tool's result reports the subagent's tokens, append that one line to the file yourself (a dispatch without it is counted unknown, never 0).
+ - **Caller token.** `keryx review start` prints `export KERYX_REVIEW_CALLER_TOKEN=…`; outside keryx shell export it on this session's keryx calls, or readiness item 10 reads "not observable on this host".
+ - **Operator decisions.** In keryx shell the operator answers a card: `review_confirm_plan`, `review_waive_readiness`, `review_waive_coverage`, `review_waive_mutation`, `review_override_reviewers`, `review_chunks_answer`, `review_publish`, `review_comments_reply`, `review_decide_premise`. Elsewhere give the operator the exact command to run in their own terminal — `keryx review confirm-plan --package <package>`, `keryx review complete <package> --waive <item> "<their words>"` or `--waive-coverage "<their words>"`, `keryx review waive-mutation --package <package> --reason "<why>"`, `keryx review override-reviewers --package <package> --reason "<why>"`, `keryx review chunks estimate --package <package> --answer yes --quote "<their words>"`, `keryx review publish <package>`, `keryx review comments reply … --final`, `keryx review decide-premise --package <package> --finding <id> --answer uphold|dismiss --reason "<why>"` — and wait. You never run `--mode automatic` or `--yes`, and never write an operator quote yourself; unattended, the item is Not run.
+ 
+ ## Round plan — the order on every host
+ 
+ 1. `keryx review plan --target <pr-url|branch> [--ref <base>] [--head <sha>] --host <host> [--memory-query "<query>"] [--unattended]` is the one command: it runs start, scope (Step 3), blast-radius (Step 3b), slice, required and estimate, writes `<package>/plan.json` and dispatches nothing. Read the round first (Step 1a), then dispatch from step 7.
+ 2. Without `plan`, run those stages one by one in this order: `keryx review scope --ref <base> --json > .metaproject/data/review/scope.json`, then `keryx review start --target <kind> --ref <ref> --scope .metaproject/data/review/scope.json --memory-query "<query>" --host <host>` (plus `--unattended` when nobody is at the keyboard); `start` searches every prior-round source (local package, git history, the PR's keryx round block, PR comments, flow) and writes `round.json`.
+ 3. `keryx review blast-radius --ref <base> --package <package> --json > blast-radius.json` (Step 3b). Reasoned omissions (`unrelated-symbol`, `hub-damped`, `text-hub`, `test-consumer`) are context, not scope; only cap drops become chunks. Run the tests in `<package>/tests-to-run.json` with the command the radius prints, instead of reading them, and hand the output to the reviewers as context.
+ 4. `keryx review slice --ref <base> --package <package> --host <host>`: each slice carries `roles`, `depth` (deep or light) and `audit`.
+ 5. `keryx review required --mode all --scope .metaproject/data/review/scope.json --depth auto --package <package>`.
+ 6. `keryx review estimate --package <package>`. Over threshold, the operator confirms (card `review_confirm_plan`, or `keryx review confirm-plan --package <package>` in their terminal); `dispatch-check` and `ledger build` refuse an unconfirmed plan, so never dispatch one. Unattended: report the estimate and stop with `STATUS: BLOCKED plan_over_threshold`.
+ 7. Dispatch by slice roles: each role gets the slices that name it; a deep slice names every roster role its path gates allow, an `audit` one the whole core set. A major or worse on a light slice comes back from `review next` as an `escalated` dispatch: dispatch the core roles on it.
+ 8. Verifier on the first blocker or major (Step 10). It runs no command itself: run `keryx review verify-run --package <package> --finding <id> -- <command>` and hand it the saved `research-evidence/verify-<id>-<n>.txt` as context. After it (no verifier ran: after the last reviewer), Wave D: `review-premise` (Step 10b).
+ 9. `keryx review verdict <package>` to the operator, then the tail: mutation pass, `ledger build`, `ingest` (with `--premises`), the operator's answer to each held finding (Wave D), `readiness`, `complete`.
+ 
+ ## Clean context — the round starts empty
+ 
+ Context comes only from your own context stages: scope, the Review Context Pack, the memory stage and the layers. Your session memory, the auto-memory index (`MEMORY.md`), remembered feedback and the earlier conversation are not inputs: do not read, quote or apply them.
+ - **Accepted exceptions, the only three:** `prior_findings` of an earlier round of the same package; review-notes and learning that reach you through the memory stage; a reviewer's own `memory_search`.
+ - **One memory read.** Run the stage query once and record it with `keryx review start … --memory-query "<query>"`. keryx writes `<package>/tool-calls/orchestrator.jsonl` itself from the moment the package starts: never create, edit or append to it. Readiness item 10, `memory-outside-stage`, blocks `review complete` and `review publish` on any other memory call; only the operator's waiver lifts it: in keryx shell call `review_waive_readiness` (a card, never a terminal), outside it `--waive memory-outside-stage "<operator quote>"` in a terminal; unattended, record it as Not run. Detail: `SKILL.detail.md` § "Clean context".
+
+--- src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ 274,314 @@
+   later round cannot be screened against a set nobody recomputed.
+ 
+ Do **not** write the record inside the package directory before the ingest. A round that names no `--review-id` has not allocated that directory yet, and creating it makes the ingest take the next free name instead.
+ 
+ `--refuted` takes the findings this round **raised and then dismissed**, in the
+ same finding shape, each carrying `disposition: {state, evidence}` with one of
+ the `dismissed-*` states. Without it a package keeps only the survivors of an
+ unlogged triage — which is why precision measured over the recorded corpus
+ returns 100% whatever the reviewers actually got right.
+ 
+ `review complete --finding <id> --disposition <state> --evidence <ref>` records
+ what became of a finding when the fix round closes; the triple is repeatable, one
+ group per finding. States: `unknown`, `acted-on`, `dismissed-incorrect`,
+ `dismissed-wont-fix`, `dismissed-out-of-scope`, `dismissed-deprioritised`.
+ Everything except `unknown` must cite where the outcome is written down — the
+ commit, the test, the decision. A recorded state and its citation cannot be
+ overwritten by a later close; record a correction as a new round.
+ 
+ `review complete` on a PR-bound package refuses a merged PR or a moved head unless `report.md`'s first line names the reviewed SHA and says so; a package with no PR binding is unaffected.
+ `review complete` refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed only warns.
+-`review ingest` refuses an internal finding whose `quote` is not at its `path` at the reviewed SHA, and adds a `citation not found` line, never a deletion, to a rebuttal citing a rule or document that is not in the tree.
++`review ingest` keeps an internal finding whose `quote` is not at its `path` at the reviewed SHA (absent, or in several places) with no line, flagged `quote_unlocated`, instead of refusing the round (readiness item `quotes-located` lists it until it has a disposition), and adds a `citation not found` line, never a deletion, to a rebuttal citing a rule or document that is not in the tree.
+ A finding may close as `narrowed` (research obligation `"status":"narrowed","remains":"<what remains>"`); it counts as closed only with that text, and the report keeps it under "Refuted and narrowed".
+ 
+ **Closing a fix round without dispositions leaves every finding reading `unknown`.** That is not "the reviewers were right"; it is "nobody wrote down what happened", and it is the single reason the precision figure cannot be read.
+ 
+ Managed modes:
+ 
+ - `lightweight`: report-only; no flow or managed review artifacts are created, and nothing is posted — no `comments reply`.
+ - `attach-review`: write under
+   `.metaproject/flows/<flow-dir>/reviews/<review-id>/`.
+ - `review-flow`: write under `.metaproject/reviews/<review-id>/`.
+ - `ingest`: convert an existing review report into managed findings, decisions,
+   and learning handoff, attached to a flow when one is explicit or matched.
+ 
+ Required artifacts for managed modes:
+ 
+ - `manifest.json`
+ - `scope.md`
+ - `coverage.md`
+ - `report.md`
+ - `findings.json`
+
+--- src/gdskills/contracts/review-finding.schema.json
+@@ 205,254 @@
+         "state": { "type": "string", "enum": ["derived", "unlocatable"] },
+         "method": { "type": "string", "enum": ["exact", "whitespace-normalised"] },
+         "reason": { "type": ["string", "null"] },
+         "reported_line": { "type": ["integer", "null"], "minimum": 1 }
+       },
+       "allOf": [
+         {
+           "if": { "properties": { "state": { "const": "derived" } }, "required": ["state"] },
+           "then": { "required": ["method"] }
+         },
+         {
+           "if": { "properties": { "state": { "const": "unlocatable" } }, "required": ["state"] },
+           "then": { "required": ["reason"] }
+         }
+       ]
+     },
+     "path_missing": {
+       "type": "boolean",
+       "description": "Written, as true, only by `review ingest` when `file` does not exist at the round's reviewed head (a cat-file existence check of `<head>:<file>`). The finding is kept, never dropped, and is listed in scope.md: a finding that cites a path nobody can open is the reviewer's claim, not a located site."
+     },
++    "quote_unlocated": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["reason"],
++      "description": "Written only by `review ingest` when `quote` was checked against `file` at the round's reviewed head and is absent from it (`absent`) or matches more than one place (`ambiguous`, with the matched lines in `candidate_lines`, bounded by the scan). The finding is kept with `line` null, never relocated by similarity or proximity, listed in scope.md and by readiness item `quotes-located`; the round is recorded rather than refused.",
++      "properties": {
++        "reason": { "type": "string", "enum": ["absent", "ambiguous"] },
++        "candidate_lines": { "type": "array", "items": { "type": "integer", "minimum": 1 } }
++      }
++    },
+     "symbol": { "type": ["string", "null"] },
+     "problem": { "type": "string" },
+     "impact": { "type": "string" },
+     "suggested_fix": { "type": "string" },
+     "evidence": { "type": "string" },
+     "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+     "dedupe_key": { "type": ["string", "null"] },
+     "blocking_merge": { "type": "boolean", "default": false },
+     "related_skill": { "type": ["string", "null"] },
+     "learning_candidate": { "type": "boolean", "default": false },
+     "source": {
+       "title": "Who raised this finding: one of our reviewers, or somebody on the pull request",
+       "type": "string",
+       "enum": ["internal", "external"],
+       "default": "internal",
+       "description": "Absent reads as `internal`, which is every reviewer-emitted finding and all 83 pre-contract records; it is written only for `external`, on the same rule as `disposition` — a property present on every record says nothing. The value is not descriptive: three mechanisms branch on it. An external finding cannot be removed by the verifier (a machine deciding a human's question was invalid is not an answer), is not truncated by the per-reviewer findings cap, and blocks `flow complete` while it has no reply. A finding that lost this property would quietly acquire all three of the behaviours the criteria forbid."
+     },
+     "external_ref": {
+       "title": "The GitHub comment this finding is the record of",
+       "type": "object",
+
+--- src/harness/tool/builtin/spawn-subagent-tool.test.ts
+@@ 4,45 @@
+ import path from "node:path";
+ import {
+   createSpawnSubagentTool,
+   ENV_SUBAGENT_MAX_TOOL_CALLS,
+   ENV_SUBAGENT_TIMEOUT_MS,
+   resolveSubagentMaxToolCalls,
+   subagentFleetDetail,
+   subagentStatusForFinishReason,
+   renderContextFiles,
+   SUBAGENT_CHILD_RESERVATION_MS,
+   DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS,
+   SUBAGENT_TURN_MAX_CHILDREN,
+   SUBAGENT_TURN_MAX_WAVES,
+   SUBAGENT_WAVE_MAX_CHILDREN,
+   type SpawnSubagentFleetEvent,
+ } from "./spawn-subagent-tool";
+ import { harnessEnvelopePrefix, runAgentTurn } from "../../../commands/agent";
+ import type { NormalizedEvent, NormalizedRequest, ProviderPort, StreamOptions } from "../../provider/types";
+ import { loadRoutingConfigRaw } from "../../routing/config";
+ import { approveProjectRouting } from "../../routing/trust";
++import { splitUsage } from "../../../review/dispatch-usage";
++import { parseReviewResult } from "../../../review/ledger";
+ 
+ function stubProvider(text: string): ProviderPort {
+   return {
+     describe() {
+       return {
+         capabilities: {
+           streaming: true,
+           toolCalls: false,
+           parallelToolCalls: false,
+           structuredOutput: false,
+           reasoningMetadata: false,
+           promptCaching: false,
+           vision: false,
+           tokenCounting: false,
+           modelListing: false,
+         },
+         descriptor: { providerId: "stub" },
+       };
+     },
+     async *stream(_req, opts: StreamOptions): AsyncIterable<NormalizedEvent> {
+
+--- src/harness/tool/builtin/spawn-subagent-tool.test.ts
+@@ 554,615 @@
+ }
+ 
+ test("status: Completed on a clean model finish", async () => {
+   const tool = createSpawnSubagentTool({
+     cwd: process.cwd(),
+     getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+     makeProvider: () => textProvider("clean finish"),
+     getDetectedProviders: () => [{ name: "ollama" }],
+     idSeq: (() => {
+       let n = 0;
+       return () => `id-${n++}`;
+     })(),
+     clock: () => "2020-01-01T00:00:00.000Z",
+   });
+   const result = await tool.invoke({ task: "finish cleanly", mode: "read_only" });
+   expect(result.status).toBe("Completed");
+   expect(result.isError).toBe(false);
+   expect(result.partial).toBeUndefined();
+ });
+ 
++test("flow 460 E: a child that ends with no text and submitted nothing is an error outcome, not Completed", async () => {
++  const events: SpawnSubagentFleetEvent[] = [];
++  const tool = createSpawnSubagentTool({
++    cwd: process.cwd(),
++    getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
++    makeProvider: () => textProvider(""),
++    getDetectedProviders: () => [{ name: "ollama" }],
++    idSeq: (() => {
++      let n = 0;
++      return () => `id-${n++}`;
++    })(),
++    clock: () => "2020-01-01T00:00:00.000Z",
++    onFleetEvent: (event) => events.push(event),
++  });
++  const result = await tool.invoke({ task: "say nothing", mode: "read_only" });
++  expect(result.isError).toBe(true);
++  expect(result.status).not.toBe("Completed");
++  expect(result.output).toContain("no text");
++  expect(result.output).not.toContain("--- summary ---");
++  expect(lastUpsert(events)?.status).toBe("failed");
++});
++
+ test("status: BudgetExhausted when the child's round budget exhausts before a clean finish (AC5)", async () => {
+   let requests = 0;
+   const events: SpawnSubagentFleetEvent[] = [];
+   const tool = createSpawnSubagentTool({
+     cwd: process.cwd(),
+     getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
+     makeProvider: () => distinctToolCallProvider(() => { requests += 1; }),
+     getDetectedProviders: () => [{ name: "ollama" }],
+     idSeq: (() => {
+       let n = 0;
+       return () => `id-${n++}`;
+     })(),
+     clock: () => "2020-01-01T00:00:00.000Z",
+     onFleetEvent: (event) => events.push(event),
+   });
+   // A strict round budget of 1 admits exactly one tool-bearing provider
+   // request and its `probe_1` call. Flow 347 T7 (AC5): exactly ONE more
+   // request follows — the submit_result-only wrap-up — and no tool runs in it
+   // (this provider answers it with `probe_2`, which is refused).
+   const result = await tool.invoke({ task: "exhaust the child's round budget", mode: "read_only", max_rounds: 1 });
+
+--- src/harness/tool/builtin/spawn-subagent-tool.test.ts
+@@ 1327,1403 @@
+     expect(await readFile(path.join(root, ".metaproject/data/review/raw/logic.txt"), "utf8")).toContain("REVIEW_RESULT body");
+ 
+     await symlink(outside, path.join(root, "linkdir"));
+     for (const bad of ["../escape.txt", "linkdir/x.txt", ".env.local", ".git/hooks/x", ""]) {
+       const r = await tool.invoke({ task: "review", save_result_to: bad });
+       expect(r.isError).toBe(true);
+     }
+     await mkdir(path.join(root, "adir"));
+     expect((await tool.invoke({ task: "review", save_result_to: "adir" })).isError).toBe(true);
+     expect((await tool.invoke({ task: "review", save_result_to: 5 as unknown as string })).isError).toBe(true);
+ 
+     const ext = await tool.invoke({ task: "review", runtime: { kind: "external", agent: "claude" }, save_result_to: "r.txt" });
+     expect(ext.isError).toBe(true);
+     expect(String(ext.output)).toContain("save_result_to is not supported for external");
+   } finally {
+     await rm(root, { recursive: true, force: true });
+     await rm(outside, { recursive: true, force: true });
+   }
+ });
+ 
++test("flow 460 (H): save_result_to carries the child's token use as a KERYX_USAGE line; none reported writes none (unknown)", async () => {
++  const root = await mkdtemp(path.join(tmpdir(), "keryx-saveusage-"));
++  const usageProvider = (usage?: { inputTokens: number; outputTokens: number }): ProviderPort => ({
++    describe: () => ({ capabilities: PROBE_CAPABILITIES, descriptor: { providerId: "text" } }),
++    async *stream(_req, opts: StreamOptions): AsyncGenerator<NormalizedEvent> {
++      yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: 'REVIEW_RESULT {"reviewer":"review-logic","status":"DONE","findings":[]}' };
++      if (usage !== undefined) yield { kind: "usage_update", sequence: 1, attemptId: opts.attemptId, usage: { ...usage, exact: true } };
++      yield { kind: "model_end", sequence: 2, attemptId: opts.attemptId };
++    },
++  });
++  try {
++    const measured = createSpawnSubagentTool({
++      cwd: root,
++      getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
++      makeProvider: () => usageProvider({ inputTokens: 1200, outputTokens: 340 }),
++      getDetectedProviders: () => [{ name: "ollama" }],
++    });
++    expect((await measured.invoke({ task: "review", save_result_to: "raw/review-logic.txt" })).status).toBe("Completed");
++    const saved = await readFile(path.join(root, "raw/review-logic.txt"), "utf8");
++    const { body, usage } = splitUsage(saved);
++    expect(usage).toEqual({ tokens_in: 1200, tokens_out: 340, model: "ollama/fake" });
++    expect(parseReviewResult(saved)).toMatchObject({ reviewer: "review-logic", status: "DONE" });
++    expect(body).not.toContain("KERYX_USAGE");
++
++    const silent = createSpawnSubagentTool({
++      cwd: root,
++      getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
++      makeProvider: () => usageProvider(),
++      getDetectedProviders: () => [{ name: "ollama" }],
++    });
++    await silent.invoke({ task: "review", save_result_to: "raw/review-style.txt" });
++    expect(await readFile(path.join(root, "raw/review-style.txt"), "utf8")).not.toContain("KERYX_USAGE");
++  } finally {
++    await rm(root, { recursive: true, force: true });
++  }
++});
++
+ // Flow 453: the child count is kept per review wave.
+ 
+ async function reviewProject(chunkIds: readonly string[]): Promise<{ root: string; pkg: string }> {
+   const root = await mkdtemp(path.join(tmpdir(), "keryx-wave-"));
+   const pkg = ".metaproject/reviews/pkg";
+   await mkdir(path.join(root, pkg), { recursive: true });
+   await writeFile(path.join(root, pkg, "manifest.json"), "{}");
+   await writeFile(
+     path.join(root, pkg, "chunks.json"),
+     JSON.stringify({
+       schemaVersion: 1,
+       reviewer: "review-logic",
+       tier: "middle",
+       source: "blast-radius.json",
+       maxFiles: 40,
+       maxBytes: 1,
+       dropped: 0,
+       chunks: chunkIds.map((id) => ({ id, files: [], bytes: 0 })),
+     }),
+   );
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 6,46 @@
+ //   3) returns a quarantined summary to the parent
+ //
+ // Risk: `delegate` (agent driver requires approval when an approver is present).
+ 
+ import { tracePhase } from "../../../lib/phase-trace";
+ import { createHash, randomUUID } from "node:crypto";
+ import { execFile } from "node:child_process";
+ import { lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { promisify } from "node:util";
+ import type { InteractiveTool, InteractiveToolContext } from "./interactive-tools";
+ import { builtinReadOnlyTools, confineToRoot } from "./interactive-tools";
+ import { makeKeryxRunner, builtinMetaprojectTools } from "./metaproject-tools";
+ import { reviewerCallerId, withOrchestratorLog } from "../../../review/orchestrator-log";
+ import { slateWriteSeedTool } from "./slate-tool";
+ import { createMetaprojectAdapter } from "../metaproject-adapter";
+ import { RemainingBudgetLedger } from "../../child/ledger";
+ import { DEFAULT_MAX_PASSES } from "../../../review/chunks-estimate";
+ import { describeReviewWave, resolveReviewWave } from "../../../review/wave-key";
++import { formatUsageLine } from "../../../review/dispatch-usage";
+ import { spawnSubagent, foldChildSummary } from "../../child/orchestrate";
+ import type { SubagentContext } from "../../child/orchestrate";
+ import type { HookRuntime } from "../../hooks";
+ import { shellChildReadOnlyProfile, shellParentProfile } from "../../policy/profiles";
+ import type { Provenance } from "../../session/types";
+ import {
+   generateControlNonce,
+   runAgentTurn,
+   type AgentDeps,
+   type AgentFinishReason,
+   type AgentIO,
+   type RunAgentTurnResult,
+ } from "../../../commands/agent";
+ import type { ShellHookContext } from "../../../commands/agent-hooks";
+ import type { ProviderPort } from "../../provider/types";
+ import {
+   readSlate,
+   renderAnchorsBlock,
+   slateLockPath,
+   writeSlate,
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 1879,1944 @@
+           "but is still capped at a few attempts, so do not retry the same query hoping for a " +
+           "different answer. If a graph/symbol/wiki lookup returns empty or 'not found', that tool " +
+           "has no index for this — do not re-run it with a slightly reworded query; switch tool " +
+           "(e.g. a direct file read or a plain text/code search) or report the gap instead of " +
+           "spending rounds probing the same dead end. When a tool result says your budget is nearly " +
+           "spent, stop exploring and return your result. If a limit is reached you get one final round " +
+           "in which the only tool is submit_result — use it to hand back a partial result. " +
+           "End with a short factual summary the parent can use.",
+         idSeq: () => idSeq(),
+         // Flow 347 T17: the child's OWN control-nudge nonce, never the parent's —
+         // a child that echoes its nudges back cannot hand the parent a marker
+         // the parent's instruction would accept.
+         controlNonce: generateControlNonce(),
+         maxRounds,
+         ...(configuredMaxToolCalls === undefined ? {} : { maxToolCalls: configuredMaxToolCalls }),
+         subagentBudget: advisoryToolCalls === undefined ? {} : { advisoryToolCalls },
+       };
+ 
+       let assistant = "";
+       let closed = false;
++      // Flow 460 (H): the child's token use, summed over its provider requests; written into `save_result_to` as a
++      // `KERYX_USAGE` line so `review ledger build` can state the round's spend. Unknown (no line) when nothing reported.
++      const childUsage = { tokens_in: 0, tokens_out: 0, known: false };
++      const usageSuffix = (): string =>
++        childUsage.known ? `\n${formatUsageLine({ tokens_in: childUsage.tokens_in, tokens_out: childUsage.tokens_out, model: `${runModel.provider}/${runModel.model}` })}` : "";
+       // AC6 (flow 352 audit): `internalAbort` is triggered by THIS function's
+       // own reasons (the deadline below, the catch block's cleanup) exactly
+       // as `childAbort` always was; `composed` additionally aborts when the
+       // PARENT turn does (`ctx.signal`, `commands/agent.ts`), so interrupting
+       // the parent reaches an in-flight child instead of leaving it running
+       // past the turn that spawned it. Same composition `deep-enrich.ts` uses
+       // for its own deadline-vs-caller-cancellation signal (`lib/abort-compose.ts`).
+       const internalAbort = new AbortController();
+       const composed = composeAbortSignals(toolCtx?.signal, internalAbort.signal);
+       const io: AgentIO = {
+         write: (s) => {
+           assistant += s;
+         },
++        onUsage: (usage) => {
++          const tokensIn = Number.isFinite(usage.inputTokens) ? (usage.inputTokens as number) : undefined;
++          const tokensOut = Number.isFinite(usage.outputTokens) ? (usage.outputTokens as number) : undefined;
++          if (tokensIn === undefined && tokensOut === undefined) return;
++          childUsage.tokens_in += tokensIn ?? 0;
++          childUsage.tokens_out += tokensOut ?? 0;
++          childUsage.known = true;
++        },
+         onAssistantText: (text) => {
+           assistant = text;
+           if (closed) {
+             return;
+           }
+           emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "text", text } });
+         },
+         onReasoning: (text) => {
+           if (closed) {
+             return;
+           }
+           emitFleetEvent({ kind: "log", id: workerId, entry: { kind: "reasoning", text } });
+         },
+         onToolCall: (name) => {
+           if (closed) {
+             return;
+           }
+           emitFleetEvent({
+             kind: "upsert",
+             id: workerId,
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 2224,2264 @@
+           if (outcome === "timeout") {
+             closed = true;
+             internalAbort.abort();
+             void turn.catch(() => {
+               // abandoned turn; do not surface after the parent already timed out
+             });
+             composed.dispose();
+             releaseBudget();
+             emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "timeout", task });
+             await foldChildSlateAndCleanup("incomplete");
+             await fireSubagentStop("Timeout");
+             // AC3 (flow 352 audit): this is child-authored free text same as
+             // every other exit path's summary/submitted-result — an abandoned
+             // child can still have written instruction-shaped prose before the
+             // deadline hit — so it gets the same `foldChildSummary` quarantine
+             // pass those paths already use, not a raw pass-through.
+             const partial = assistant.trim();
+             const foldedPartial = partial.length > 0 ? foldChildSummary(partial).text : "";
+             // Flow 457 (T7, audit row 14): the parent parses the saved file, never the bounded tool output, so a
+             // child that ran out of time still leaves everything it wrote in `save_result_to`.
+-            const partialSaved = saveTarget.abs === undefined || partial.length === 0 ? undefined : await saveTimedOutPartial(saveTarget.abs, partial);
++            const partialSaved = saveTarget.abs === undefined || partial.length === 0 ? undefined : await saveTimedOutPartial(saveTarget.abs, `${partial}${usageSuffix()}`);
+             const partialSaveNote =
+               partialSaved === undefined
+                 ? ""
+                 : "error" in partialSaved
+                   ? `\n[partial result could NOT be saved to ${String(input.save_result_to)}]`
+                   : partialSaved.saved === saveTarget.abs
+                     ? `\n[partial result saved to ${String(input.save_result_to)}]`
+                     : `\n[partial result saved to ${String(input.save_result_to)}.partial; the complete result already at ${String(input.save_result_to)} was kept]`;
+             return {
+               status: "Timeout",
+               output:
+                 `subagent ${label} (${workerId}) timed out after ${deadlineMs}ms and was abandoned ` +
+                 `(tighten or disable with ${ENV_SUBAGENT_TIMEOUT_MS})` +
+                 (foldedPartial.length > 0 ? `\n--- partial output ---\n${boundSummary(foldedPartial)}` : "") +
+                 partialSaveNote,
+               isError: true,
+               ...(foldedPartial.length > 0 ? { partial: boundSummary(foldedPartial) } : {}),
+             };
+           }
+           // `turn` already settled ("done" branch above) — re-awaiting the same
+
+--- src/harness/tool/builtin/spawn-subagent-tool.ts
+@@ 2294,2383 @@
+           await foldChildSlateAndCleanup("incomplete");
+           await fireSubagentStop("Error");
+           // Earlier rounds may have produced text before the refusal: hand it back (quarantined, bounded) so the
+           // parent keeps that context when it requeues the task.
+           const hadText = raw !== "(subagent produced no text)";
+           const earlier = hadText ? boundSummary(folded.text) : undefined;
+           return {
+             status: "Error",
+             isError: true,
+             output:
+               `${rateLimitedStatusLine(turnResult.rateLimited.retryAfterMs)}\nsubagent ${label} (${workerId}) via ${runModel.provider}/${runModel.model}: the provider refused the request for load (rate limit or overloaded); nothing was retried inside the child.` +
+               (earlier === undefined ? "" : `\n--- output before the refusal ---\n${earlier}`),
+             ...(earlier === undefined ? {} : { partial: earlier }),
+           };
+         }
+         // D2b: a clean stream/text finish is NOT automatically "Completed" —
+         // check whether `runAgentTurnCore` itself cut the turn short for one
+         // of D2a's two internal reasons FIRST. No new detection here; this
+         // only labels what `finishReason` (D2a) already computed.
+         const status = subagentStatusForFinishReason(turnResult?.finishReason);
++        // Flow 460 E: a child that ended with no text and submitted nothing produced no result. It is an
++        // error outcome, never "Completed" with a placeholder summary the parent could read as success.
++        if (status === "Completed" && raw === "(subagent produced no text)" && turnResult?.submittedResult === undefined) {
++          emitFleetEvent({
++            kind: "upsert",
++            id: workerId,
++            label,
++            status: "failed",
++            detail: "empty-reply",
++            model: `${runModel.provider}/${runModel.model}`,
++            task,
++          });
++          await foldChildSlateAndCleanup("incomplete");
++          await fireSubagentStop("Error");
++          return {
++            status: "Error",
++            isError: true,
++            output:
++              `subagent ${label} (${workerId}) via ${runModel.provider}/${runModel.model} ended with no text and submitted no result; ` +
++              "treat the task as not done and re-dispatch it.",
++          };
++        }
+         // PRD R9 guard: `status` is advisory for the PARENT MODEL's own
+         // judgment only — do not add auto-retry/auto-extend logic here keyed
+         // off it.
+         const isError = status !== "Completed";
+         // Flow 347 T7 (AC5): a child the harness stopped is never reported as
+         // `done`, and its slate folds as incomplete.
+         emitFleetEvent({
+           kind: "upsert",
+           id: workerId,
+           label,
+           status: isError ? "failed" : "done",
+           detail: subagentFleetDetail(status),
+           model: `${runModel.provider}/${runModel.model}`,
+           task,
+         });
+         await foldChildSlateAndCleanup(isError ? "incomplete" : "completed");
+         await fireSubagentStop(status);
+         const header =
+           `subagent ${label} (${workerId}) ${mode} via ${runModel.provider}/${runModel.model}\n` +
+           `MAE reservation: rounds≤${maxRounds} ` +
+           (configuredMaxToolCalls === undefined ? "" : `calls≤${configuredMaxToolCalls} `) +
+           (advisoryToolCalls === undefined ? "" : `calls~${advisoryToolCalls}(advisory) `) +
+           `runtime≤${spawned.reservation.maxRuntimeMs}ms children=${ledger.childCount}\n` +
+           (tierRecord === undefined ? "" : `${tierRecord}\n`);
+         const saveNote =
+           saveTarget.abs === undefined
+             ? ""
+-            : `\n[full result ${(await saveChildResult(saveTarget.abs, raw)) === undefined ? "saved to" : "could NOT be saved to"} ${String(input.save_result_to)}]`;
++            : `\n[full result ${(await saveChildResult(saveTarget.abs, `${raw}${usageSuffix()}`)) === undefined ? "saved to" : "could NOT be saved to"} ${String(input.save_result_to)}]`;
+         if (status === "Completed") {
+           return { status, isError, output: `${header}--- summary ---\n${boundSummary(folded.text)}${saveNote}` };
+         }
+         const statusLine = formatStoppedStatusLine(status, turnResult);
+         const submitted = turnResult?.submittedResult;
+         // The submitted payload is child-authored text entering the parent's
+         // history, so it gets the same quarantine pass as the summary.
+         const resultBlock =
+           submitted !== undefined
+             ? foldChildSummary(
+                 `--- submitted result (${submitted.status}) ---\n` +
+                   `summary: ${submitted.summary}\n` +
+                   `result:\n${typeof submitted.result === "string" ? submitted.result : JSON.stringify(submitted.result, null, 2)}`,
+               ).text
+             : // Flow 347 review F-008: `submitResultError` echoes child-controlled
+               // text (the tool name it called, its JSON keys), so the whole block
+               // — not just the last output — goes through the quarantine pass.
+               foldChildSummary(
+                 `no result submitted${turnResult?.submitResultError !== undefined ? ` (${turnResult.submitResultError})` : ""}\n` +
+                   `--- last output ---\n${raw}`,
