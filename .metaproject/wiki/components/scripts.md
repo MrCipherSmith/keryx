@@ -36,6 +36,7 @@ The installer test isolates everything under a temporary workspace. It builds a 
   Synthetic, seeded data for the policy-experiment evaluator. Identifiers use a `synthetic-` prefix, timestamps are fixed, and the split uses a published seed. The generated set is `receipts.jsonl`, `corpus.json`, `manifest.json`, `evaluation-report.json` and `sandbox/execution-receipts.json`, plus one file per recorded outcome. `src/sac` appears to consume the generator; the graph records the import but not which symbols are used.
 
 - **Retired spelling**  
+  <!-- retired-spellings-ok: line — names the retired spellings that check-retired-cli-spellings.ts detects; it does not teach them -->
   `keryx mcp serve`, `keryx mcp install` and `keryx mcp uninstall`. They still work, which is why prose drifts back to them. The replacements are `keryx serve-mcp` and `keryx integrate [--remove]`, per decision D-04 in `docs/requirements/keryx-mcp-servers/decisions.md`.
 
 - **Declared exemption**  
