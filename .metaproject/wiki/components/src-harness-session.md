@@ -1,71 +1,54 @@
 ---
 Title: Module src/harness/session
-Version: 0.1.1
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 Summary: "`src/harness/session` groups 3 file(s). Depends on `src/contracts`. Exposes 13 public symbol(s)."
 ---
 # Module src/harness/session
 
 ## Summary
 
-The `src/harness/session` module provides the core data shapes, interfaces, and runtime helpers for representing, building, resuming, and migrating harness sessions. It depends on `src/contracts` and exposes 13 public symbols.
+`src/harness/session` is the append-only session core of the harness. It defines the entry, manifest and seed contracts in `types.ts`, implements the in-memory `AppendOnlySession` store in `session.ts`, and provides `resumeSession` and `migrateSession` for reloading and upgrading persisted sessions. It depends on `src/contracts` and exposes 13 public symbols.
 
 ## Overview
 
-`src/harness/session` owns the session-oriented abstractions used by the harness layer. It provides:
+`src/harness/session` owns the durable record of harness activity: an ordered, immutable list of session entries plus a manifest that describes the session head. Other harness modules (child, resume, branch, run) build on these shapes. The module is deterministic by design. Clock and ID generation are injected through `SessionDeps`, and the store never opens a socket or writes to the filesystem.
 
-- **Data contracts** — Type and interface definitions for session state, entries, manifests, seeds, dependencies, artifact references, and append options.
-- **Runtime helpers** — Operations for appending to sessions, resuming from existing session data, and migrating session data across schema changes.
+## How it works
 
-These abstractions ensure consistent session information across all dependent harness modules.
+The module has two layers. `types.ts` holds pure structural contracts that mirror the frozen session-manifest, session-entry and harness-envelope schemas, with no runtime code. `SessionEntryPayload` is a discriminated union on `type`, `SessionEntryCausal` carries the run, session and correlation IDs with an optional parent link, and `SessionManifest` is the head record (append cursor, current leaf, policy and context fingerprints). `session.ts` re-exports these types and adds the runtime.
 
-## Structure
-
-The module is organized around two layers:
-
-| Layer | Purpose |
-|-------|---------|
-| **Session types** | Type and interface definitions that describe the shape of session data. |
-| **Session operations** | Exported helpers that support session lifecycle actions such as resuming and migrating. |
-
-**File layout:**
-
-| File | Role |
-|------|------|
-| `src/harness/session/types.ts` | Main public type definitions; widely imported (25 consumers). |
-| `src/harness/session/session.ts` | Session implementation surface; imports `types.ts`. |
-| `src/harness/session/session.test.ts` | Unit tests for session behavior. |
+The central class, `AppendOnlySession`, is built from a `SessionSeed`, a `SessionDeps` and optionally prior entries. It keeps entries in an array and in a map keyed by content hash. An entry's `entryId` is the SHA-256 of the key-sorted serialization of its payload and parent ID, so appending identical content returns the existing entry rather than a duplicate. `manifest()` and `currentLeaf()` derive the head from that state, and each appended entry is deep-frozen, so it cannot be changed afterwards. The implementation's tests live in `session.test.ts`.
 
 ## Key concepts
 
-- **Session** — A structured record of harness activity, expressed through manifests, entries, and related data.
-- **SessionEntry** — An individual record within a session.
-- **SessionEntryPayload** — The payload data carried by a session entry.
-- **SessionEntryCausal** — A causal view of session entry data, linking related session records.
-- **SessionManifest** — Metadata describing a session as a whole.
-- **SessionSeed** — Initial data used to create or bootstrap a session.
-- **SessionDeps** — Dependencies required to construct or operate on a session.
-- **AppendOptions** — Options controlling how entries are appended to a session.
-- **ArtifactRef** — A reference to an artifact associated with session data.
-- **Provenance** — Metadata describing the origin or source of session-related data.
-- **SchemaMigrationError** — An error thrown when session schema migration fails.
+- **Session** — The append-only record of one run's activity, described by a `SessionManifest` and an ordered list of `SessionEntry` values.
+- **SessionEntry** — An immutable record with `entryId`, `sequence`, `timestamp`, `causal` and `entry` fields.
+- **SessionEntryPayload** — A union on `type`: messages (`user_message`, `assistant_message`), model request/response/error, tool and approval events, and lifecycle markers such as `checkpoint`, `compaction`, `run_pause` and `run_end`. Each branch carries either text or an `ArtifactRef`.
+- **SessionEntryCausal** — The run, session and correlation IDs of an entry, plus optional `parentEventId`, `attemptId` and `branchId` links.
+- **SessionManifest** — The session head: schema version, IDs, `appendCursor`, `currentLeafEntryId`, policy and context fingerprints, and an optional parent session.
+- **SessionSeed** — The immutable inputs a session starts from. The manifest is derived from it.
+- **SessionDeps** — The injected `clock` and `idSeq` functions that keep the store deterministic.
+- **AppendOptions** — Per-append hints: `parentEntryId`, `correlationId`, `attemptId`, `branchId` and `evidenceId`. `evidenceId` is bookkeeping for the caller and is not stored on the entry.
+- **ArtifactRef** — A pointer to an external artifact by `artifactId`, `kind`, optional `path`, and `hash`.
+- **Provenance** — Trust level, source kind and hash, and taint IDs. Optional on message entries.
+- **SchemaMigrationError** — Thrown when a session's `schemaVersion` is missing, non-numeric, or newer than this reader supports.
 
 ## Main flows
 
-### Session setup
+### Session start
 
-Construct or resume a session using a `SessionSeed`, `SessionDeps`, and manifest-related data. These values initialize the session in a consistent state before entries are added.
+`new AppendOnlySession(seed, deps)` creates an empty session. Its `manifest()` reports an append cursor of 0 and no current leaf until the first append.
 
 ### Entry append
 
-When harness activity occurs, append an entry or entry payload through the session surface. Use `AppendOptions` to shape the append behavior. Provenance and artifact reference concepts allow the resulting session data to carry contextual information.
+`append(payload, opts)` computes a content key from the payload and `opts.parentEntryId`. If an entry with that key already exists, it is returned unchanged, so a replayed append adds no sequence number and no evidence. Otherwise the store builds the causal block from `opts.correlationId` or `deps.idSeq()`, assigns the next sequence number and a `deps.clock()` timestamp, freezes the entry, and makes it the current leaf.
 
 ### Resume and migration
 
-- `resumeSession` — Resumes a session from existing session data.
-- `migrateSession` — Transforms session data across schema changes.
-- `SchemaMigrationError` — Signals failure when migration cannot be performed safely.
+- `resumeSession(persisted, deps)` rebuilds a live session from a manifest and its entries. It restores the current leaf and the dedup index, so re-appending accepted work stays idempotent.
+- `migrateSession(prior)` takes a prior record of loose shape. It rejects a `schemaVersion` that is missing, non-numeric, or above 1 by throwing `SchemaMigrationError`. Otherwise it fills missing IDs and timestamps with deterministic defaults and returns a schema-1 manifest and entries, without mutating its input.
 
 ## Public API
 
@@ -161,5 +144,6 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 0.1.1 - Generated sections regenerated by `keryx wiki collect --force`; prose untouched.
 - 0.1.0 — Initial release. Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z.

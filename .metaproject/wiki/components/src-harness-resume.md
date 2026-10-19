@@ -1,8 +1,8 @@
 ---
 Title: Module src/harness/resume
-Version: 0.1.1
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 Summary: "`src/harness/resume` groups 7 file(s). Depends on `src/harness/session`, `src/contracts`, `src/harness`. Exposes 5 public symbol(s)."
 ---
 
@@ -10,7 +10,7 @@ Summary: "`src/harness/resume` groups 7 file(s). Depends on `src/harness/session
 
 ## Summary
 
-Provides the resumable-session layer of the [harness](src-harness.md). This module enables capturing session state, persisting it, and recovering execution when a session resumes later. It defines contracts for snapshots, checkpoints, and storage, along with an in-memory store implementation.
+`src/harness/resume` is the resumable-session layer of `src/harness`. It defines the `SessionStore` boundary that a resume reads a persisted session from, a resume path that decides whether recorded work can continue or must start a new attempt, a bounded retry wrapper over `runOffline`, and a pure crash-recovery classifier. An offline `InMemorySessionStore` backs it today.
 
 **Key facts:**
 - 7 files, 25 cross-module imports
@@ -19,71 +19,60 @@ Provides the resumable-session layer of the [harness](src-harness.md). This modu
 
 ## Overview
 
-This module owns the resumable-session layer of the harness. It provides shared abstractions for:
+This module owns how a harness session survives interruption. It turns a persisted session back into a live one, decides what a resume may do given the recorded environment fingerprints, retries transient provider failures within a fixed attempt budget, and classifies how to recover from a crash, a torn write or a cancellation. Every source of non-determinism is injected, and storage sits behind an interface, so a durable backend can replace the in-memory store without changing resume logic.
 
-- **Capturing** session state at a point in time
-- **Storing** that state through a storage abstraction
-- **Recovering** state when execution continues later
+## Key concepts
 
-This separation lets callers reason about state restoration independently of storage details, and keeps recovery behavior and error handling separate from the core state contracts.
+- **Session snapshot** — `SessionSnapshot`: the authoritative append-only `manifest` and `entries` read back for a resume, plus an optional `checkpoint`.
+- **Checkpoint** — `Checkpoint`: a derived recovery view that records the `atEntryId`, `stateHash` and `evidenceLedgerCursor` a recovery may resume against. It never replaces history or evidence, and resume does not require it; `resumeSessionFrom` reads the manifest and entries.
+- **Session store** — `SessionStore`: the durable boundary with `read`, `append` (idempotent by `entryId`) and `writeCheckpoint`. Implementations must not mutate a persisted entry.
+- **In-memory store** — `InMemorySessionStore`: a `Map` seeded at construction, with no filesystem, clock or network. It serves tests and the offline scenarios.
+- **Fingerprints** — the recorded and current environment fingerprints compared by `fingerprintsMatch`. Drift marks the recorded work as stale.
+- **Resume reason and attempt** — `ResumeReason` (`continue`, `stale-fingerprint`, `new-work`) and `ResumeResult`. A stale resume starts a new attempt one above the base attempt.
+- **Recovery decision** — `RecoveryDecision`, the typed and inert output of `recoverFrom`. The caller enacts it.
+- **Typed errors** — `UnknownSessionError` is thrown by the store's `append` and `writeCheckpoint` for an unknown session id. `ResumeSessionNotFoundError` is thrown by `resumeSessionFrom` when the store has no snapshot.
 
-## Key Concepts
+## How it works
 
-- **Session snapshot** — A persistable representation of session state, allowing a session to survive process restarts or move across boundaries.
-- **Checkpoint** — A resumable point in a session's progress; the operational unit that resume flows work against.
-- **Session store** — A persistence abstraction (the `SessionStore` interface) for managing snapshots. Callers depend on the interface rather than a specific backend.
-- **In-memory store** — `InMemorySessionStore` is a concrete implementation for process-local use, tests, and development.
-- **Unknown session error** — `UnknownSessionError` is a typed error for missing or unidentifiable sessions.
+### Contracts
 
-## Architecture
-
-### Contracts (state interfaces)
-
-| Symbol | Purpose |
-|--------|---------|
-| `SessionSnapshot` | Describes a persisted representation of session state |
-| `Checkpoint` | Describes a resumable point in a session's progress |
-| `SessionStore` | Defines how snapshots are saved, retrieved, and managed |
+`store.ts` defines `SessionStore` and the `Checkpoint` interface, which mirrors `checkpoint.schema.json`. `resume.ts` defines `SessionSnapshot`, `ResumeInput` and `ResumeResult`. The snapshot's `entries` are the source of truth; the checkpoint is an optional side view.
 
 ### Persistence
 
-- `InMemorySessionStore` implements `SessionStore` for in-process scenarios.
-- Keeps the resume path usable without external infrastructure.
-- Alternative stores can satisfy the same `SessionStore` interface, making persistence storage-agnostic.
+`InMemorySessionStore` keeps snapshots in a map keyed by session id. `append` skips an entry whose `entryId` is already stored, and otherwise advances the manifest's `appendCursor` and `currentLeafEntryId`. `read` returns the live snapshot object, so the resume path treats it as read-only. A different backend would implement the same three methods.
+
+### Resume
+
+`resumeSessionFrom` reads the snapshot, rebuilds the leaf with `resumeSession` from `src/harness/session`, and then compares fingerprints. It never appends, so prior entries and any pending approval are left as they were.
+
+### Retry
+
+`runWithResume` in `resume.ts` calls `runOffline` from `src/harness/run` once per attempt, up to `maxAttempts`. `runOffline` itself is not modified. Events from every attempt are kept, so a failed `provider_error` remains in the trail.
 
 ### Recovery
 
-- `recovery.ts` contains the logic that determines whether a requested session's state is available and usable.
-- `UnknownSessionError` surfaces missing sessions as a typed error rather than a generic failure.
+`recovery.ts` holds `recoverFrom`, a pure function that maps an injected `Failpoint` to a `RecoveryDecision`. Its only dependency beyond its inputs is the frozen session-entry schema, which `lastIntactEntryId` uses to find the last entry that still validates. `UnknownSessionError` is defined in `store.ts`.
 
-### Harness Integration
+## Main flows
 
-The module integrates with the broader [harness](src-harness.md) through its dependencies:
+### 1. Durable resume
 
-- [src/harness/session](src-harness-session.md) — 9 imports
-- [src/contracts](src-contracts.md) — 4 imports
-- [src/harness](src-harness.md) — 4 imports
+1. `resumeSessionFrom` calls `store.read`. A missing snapshot throws `ResumeSessionNotFoundError`.
+2. It rebuilds the session with `resumeSession` and derives the base attempt from the distinct `causal.attemptId` values on the entries.
+3. With no entries the result is `new-work`. With matching fingerprints it is `continue` at the base attempt. Otherwise it is `stale-fingerprint`, with `attempt` one higher and `startedNewAttempt` set to true.
 
-Resumed state re-enters the harness execution flow rather than existing as an isolated data structure.
+### 2. Bounded transient retry
 
-## Main Flows
+1. `runWithResume` runs one `runOffline` attempt, then checks the status.
+2. It stops when the status is `completed`, or when no event is a `provider_error` with `retryable: true`.
+3. Otherwise it records another attempt, up to `max(1, maxAttempts)`. The result carries the events of all attempts and the number of attempts, and its output is the last attempt's.
 
-### 1. Prepare state for resume
+### 3. Crash and torn-write classification
 
-1. Session-related state is captured as snapshot- or checkpoint-shaped data.
-2. Downstream harness components consume this state without needing to know its origin.
-
-### 2. Persist and reload snapshots
-
-1. `InMemorySessionStore` accepts snapshot values.
-2. It returns them later within the same process.
-3. Because persistence sits behind the `SessionStore` interface, resume behavior remains storage-agnostic — other implementations can be swapped in without changing callers.
-
-### 3. Handle unknown sessions
-
-1. Recovery attempts to resolve the requested session state.
-2. If resolution fails, `UnknownSessionError` is raised.
-3. Callers can distinguish unknown or unavailable sessions from other runtime failures.
+1. `recoverFrom` receives a snapshot, a `Failpoint` and, for a post-effect crash, an optional `ExecutionReceipt`. It returns a decision and performs no action.
+2. `crash-pre-effect` gives `safe-reexecute`. `crash-post-effect` gives `reconciled` only when the receipt outcome is `effect-confirmed`. Any other outcome, or no receipt, gives `blocked-unknown-outcome` with a reason.
+3. `torn-write` gives `recovered-torn-write` at the last entry that validates. `cancellation` gives `cancelled-resumable`, and `isolated-replay-reexecute` gives `replay-deferred`.
 
 ## Public API
 
@@ -194,5 +183,6 @@ new links only to pages you have verified.
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 0.1.1 - Generated sections regenerated by `keryx wiki collect --force`; prose untouched.
 - **0.1.0** — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z
