@@ -10,6 +10,15 @@
 
 - **Fixed:** a backticked citation that carries a heading anchor, such as `` `docs/x.md#some-heading` `` or `` `core/x.mdc#part` ``, now counts as a citation of the file. `keryx skills resolve-context` lists it as a `referenced-by` contract, and `keryx skills references check` / `suggest` see it, so a declared document cited only by `path#anchor` is no longer reported as `unused-declaration`.
 
+## [0.3.124] - 2026-10-19
+
+### Review confirmations answered in Telegram
+
+- **Added:** a `review_complete` card in keryx shell shows the reviewed head SHA, the evidence level and every waiver with its operator quote, and completes the review in process under the same gates as `keryx review complete`. `review_confirm_plan` and `review_decide_premise` answer through the same card.
+- **Added:** a card answered in the Telegram topic records `pressedBy` (the pressing user id) and `pressedAt` next to `confirmedVia: "remote-card"`. A remote answer is accepted only from an allowed user id, once, for that one question, within 1 hour; a replayed, expired, foreign or text-only answer changes nothing. A card whose Telegram mirror was not delivered says so, and the terminal commands keep working as before.
+- **Added:** pending and answered operator cards appear in the remote status tab, the Remote sidebar row and `/decisions`.
+- **Docs:** TM-04 states what a Telegram answer proves and what it does not; the review guides, `cli-reference.md`, both review-orchestrator skill copies and the review-premise skill tell the agent to call the card and never send the operator to a terminal. `keryx flow ac confirm` is unchanged.
+
 ## [0.3.123] - 2026-10-18
 
 ### Conditional mandatory reads for documents cited by project rules (flow 462, PR #1048)
