@@ -58,9 +58,13 @@ export interface ReviewConfirmSeams {
   postReview?: (ref: string, event: ReviewEvent, body: string) => Promise<PostResult>;
 }
 
-const LISTED_FILES = 15;
-const BODY_PREVIEW_LINES = 8;
-const BODY_PREVIEW_CHARS = 140;
+/** A body that is posted as written, shown whole line by line. A line holding characters the card would hide or rewrite (a tab shows as a space and is fine) is refused. */
+function shownBody(text: string): { lines: string[] } | { refusal: string } {
+  const lines = text.trimEnd().split(/\r?\n/).map((line) => line.replace(/\t/g, " "));
+  const bad = lines.findIndex((line) => cardSafe(line) !== line);
+  if (bad !== -1) return { refusal: `holds control, escape or bidi characters on line ${bad + 1} that the card would hide; it is not shown, so it is not asked` };
+  return { lines: lines.map((line) => `  ${line}`) };
+}
 
 async function trackerPrLookup(ref: string): Promise<Awaited<ReturnType<PrLookup>>> {
   if (!(await githubAdapter.detect())) return null;
@@ -87,8 +91,7 @@ const label = (dir: string, projectRoot: string): string => path.relative(projec
 const failed = (error: unknown): { refusal: string } => ({ refusal: error instanceof Error ? error.message : String(error) });
 
 function listFiles(files: readonly string[]): string[] {
-  const shown = files.slice(0, LISTED_FILES).map((file) => `  ${file}`);
-  return files.length > LISTED_FILES ? [...shown, `  … and ${files.length - LISTED_FILES} more`] : shown;
+  return files.map((file) => `  ${file}`);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -202,8 +205,9 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
             return false;
           },
         });
-        const bodyLines = result.body.trimEnd().split(/\r?\n/);
-        const preview = bodyLines.slice(0, BODY_PREVIEW_LINES).map((line) => `  ${cardSafe(line.length > BODY_PREVIEW_CHARS ? `${line.slice(0, BODY_PREVIEW_CHARS)}…` : line)}`);
+        const shownReview = shownBody(result.body);
+        if ("refusal" in shownReview) return { refusal: `The review body ${shownReview.refusal}` };
+        const bodyLines = shownReview.lines;
         const failing = result.readiness.items.filter((item) => item.status === "fail").map((item) => item.id);
         const name = label(dir, ctx.projectRoot);
         return {
@@ -212,8 +216,8 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
             `target: ${cardSafe(target)}`,
             `verdict: ${result.event}`,
             result.partial ? `partial: yes — readiness is failing: ${cardSafe(failing.join(", "))}` : "partial: no — the readiness checklist passes",
-            `body: ${result.body.length} characters, ${bodyLines.length} lines; the first ${Math.min(BODY_PREVIEW_LINES, bodyLines.length)}:`,
-            ...preview,
+            `body: ${result.body.length} characters, ${bodyLines.length} lines, shown whole:`,
+            ...bodyLines,
             "yes: the review is posted to GitHub and cannot be taken back from here",
           ],
           subject: `${cardSafe(target)} (package ${name})`,
@@ -408,7 +412,7 @@ function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionP
           return {
             title: `Waive the mutation pass for ${name}: ${pending} proposed mutant(s) stay unrun?`,
             lines: [
-              `unrun mutants: ${pending} (research-evidence/mutants.json): ${cardSafe(subject.items.slice(0, LISTED_FILES).join(", "))}${pending > LISTED_FILES ? ` … and ${pending - LISTED_FILES} more` : ""}`,
+              `unrun mutants: ${pending} (research-evidence/mutants.json): ${cardSafe(subject.items.join(", "))}`,
               `head: ${cardSafe(subject.head ?? "not recorded")}`,
               `reason: ${cardSafe(reason)}`,
               "yes: the review records `Not run: mutation pass` with your words for these mutants at this head; a new head or a new mutant asks again",
@@ -427,7 +431,7 @@ function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionP
             `required (mode all): ${required.length} reviewer(s)`,
             `head: ${cardSafe(subject.head ?? "not recorded")}`,
             selected === undefined ? "selected: not named" : `selected: ${cardSafe(selected.join(", "))}`,
-            `not run: ${cardSafe(missing.slice(0, LISTED_FILES).join(", ") || "none")}${missing.length > LISTED_FILES ? ` … and ${missing.length - LISTED_FILES} more` : ""}`,
+            `not run: ${cardSafe(missing.join(", ") || "none")}`,
             `reason: ${cardSafe(reason)}`,
             "yes: the gate accepts leaving out exactly these reviewers at this head; dropping another one or a new head asks again",
           ],
@@ -455,8 +459,6 @@ function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionP
 // 7. review_comments_reply (flow 457)
 
 type ReplyPrepared = { argv: string[]; requests: string };
-
-const REPLY_PREVIEW = 6;
 
 function replyArgv(input: Record<string, unknown>): string[] | { refusal: string } {
   const repo = input["repo"];
@@ -503,10 +505,15 @@ function replySpec(): OperatorConfirmSpec<ReplyPrepared> {
         const dry = await commentsReplyPass([...argv], true);
         const requests = dry.result.requests;
         if (requests.length === 0) return { refusal: "The reply pass has nothing to post." };
-        const bodies = requests.slice(0, REPLY_PREVIEW).map((request) => `  ${cardSafe(((request.body as { body?: string }).body ?? "").slice(0, BODY_PREVIEW_CHARS))}`);
+        const bodies: string[] = [];
+        for (const [index, request] of requests.entries()) {
+          const shown = shownBody((request.body as { body?: string }).body ?? "");
+          if ("refusal" in shown) return { refusal: `Reply ${index + 1} ${shown.refusal}` };
+          bodies.push(`reply ${index + 1}:`, ...shown.lines);
+        }
         return {
           title: `Post ${requests.length} reply(ies) on ${cardSafe(dry.repo)}#${dry.number}?`,
-          lines: [`replies: ${requests.length}; the first ${Math.min(REPLY_PREVIEW, requests.length)}:`, ...bodies, "yes: the replies are posted on the pull request and cannot be taken back from here"],
+          lines: [`replies: ${requests.length}, each shown whole:`, ...bodies,"yes: the replies are posted on the pull request and cannot be taken back from here"],
           subject: `${cardSafe(dry.repo)}#${dry.number}`,
           prepared: { argv, requests: JSON.stringify(requests) },
         };
@@ -553,7 +560,7 @@ function confirmPlanSpec(): OperatorConfirmSpec<PlanPrepared> {
             `dispatches: ${estimate.dispatches} (${estimate.roles} roles, ${estimate.slices} slices, ${estimate.sequentialBatches} batch(es) one after another)`,
             `expected duration: ${estimate.minutes.min}-${estimate.minutes.max} min`,
             `threshold: ${estimate.thresholds.maxDispatches} dispatches or ${estimate.thresholds.maxMinutes} min (${estimate.overReasons.join("; ")})`,
-            ...estimate.perRole.slice(0, LISTED_FILES).map((role) => `  ${cardSafe(role.role)}: ${role.slices} slice(s), ${role.waves} wave(s)`),
+            ...estimate.perRole.map((role) => `  ${cardSafe(role.role)}: ${role.slices} slice(s), ${role.waves} wave(s)`),
             "yes: this plan may run; a re-cut plan asks again",
           ],
           subject: `package ${name}`,
@@ -653,7 +660,6 @@ function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
 // 10. review_complete (flow 464)
 
 const COMPLETION_FILE = "completion-confirmation.json";
-const WAIVER_QUOTE_CHARS = 300;
 const MAX_DISPOSITIONS = 20;
 const MAX_DISPOSITION_FINDING_CHARS = 200;
 const MAX_DISPOSITION_EVIDENCE_CHARS = 300;
@@ -727,7 +733,7 @@ async function completionFacts(dir: string): Promise<CompletionFacts> {
   const recorded = typeof manifest.target?.head === "string" && manifest.target.head !== "" ? manifest.target.head : undefined;
   const report = readFileSync(path.join(dir, "report.md"), "utf8");
   const evidenceLine = evidenceLevelLine(report);
-  const waivers = (manifest.readiness_waivers ?? []).map((waiver) => `waiver: readiness item ${cardSafe(waiver.item)}: "${cardSafe(clip(waiver.operator_quote))}"`);
+  const waivers = (manifest.readiness_waivers ?? []).map((waiver) => `waiver: readiness item ${cardSafe(waiver.item)}: "${quoteWhole(waiver.operator_quote)}"`);
   let coverage: ReturnType<typeof readCoverageWaiver>;
   try {
     coverage = readCoverageWaiver((JSON.parse(readFileSync(path.join(dir, "research.json"), "utf8")) as { dispatch?: unknown }).dispatch);
@@ -738,11 +744,11 @@ async function completionFacts(dir: string): Promise<CompletionFacts> {
     }
     coverage = undefined;
   }
-  if (coverage !== undefined) waivers.push(`waiver: coverage, ${coverage.files.length} file(s) not reviewed: "${cardSafe(clip(coverage.operatorQuote))}"`);
+  if (coverage !== undefined) waivers.push(`waiver: coverage, ${coverage.files.length} file(s) not reviewed: "${quoteWhole(coverage.operatorQuote)}"`);
   for (const decision of await readOperatorDecisions(dir)) {
     const items = decision.subject?.items ?? [];
     const what = decision.kind === "mutation-waiver" ? "mutation pass not run" : "reviewer override, left out";
-    waivers.push(`waiver: ${what}${items.length === 0 ? "" : ` ${cardSafe(items.join(", "))}`}: "${cardSafe(clip(decision.quote))}" (${decision.confirmedVia})`);
+    waivers.push(`waiver: ${what}${items.length === 0 ? "" : ` ${cardSafe(items.join(", "))}`}: "${quoteWhole(decision.quote)}" (${decision.confirmedVia})`);
   }
   return {
     reviewId: manifest.reviewId ?? path.basename(dir),
@@ -753,8 +759,9 @@ async function completionFacts(dir: string): Promise<CompletionFacts> {
   };
 }
 
-function clip(text: string): string {
-  return text.length > WAIVER_QUOTE_CHARS ? `${text.slice(0, WAIVER_QUOTE_CHARS)}…` : text;
+/** A stored waiver quote shown whole; when the card has to rewrite or hide something in it, the card says so. */
+function quoteWhole(text: string): string {
+  return hiddenInCard(text) ? `${cardSafe(text)} [the stored quote holds characters this card hides or rewrites]` : text;
 }
 
 const factsDigest = (facts: CompletionFacts): string => createHash("sha256").update(JSON.stringify(facts)).digest("hex");

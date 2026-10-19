@@ -208,6 +208,42 @@ describe("review_publish", () => {
     expect(readJson("published.json")).toMatchObject({ pr: PR, event: "REQUEST_CHANGES", partial: true, failing: ["verifier"], time: NOW.toISOString(), confirmedVia: "tui-card" });
   });
 
+  test("the card shows the posted body whole: every line, none cut at a width, no 'first N' preview", async () => {
+    makePackage();
+    const long = `long-line-${"x".repeat(400)}-end`;
+    const tail = "last line of the report";
+    put("report.md", `# Review\n\n${Array.from({ length: 30 }, (_, index) => `line ${index}`).join("\n")}\n${long}\n${tail}\n`);
+    const result = await yes(tool("review_publish"), { package: pkg, event: "REQUEST_CHANGES", partial: true });
+    expect(result.isError).toBe(false);
+    expect(result.card).toContain(`  ${long}`);
+    expect(result.card).toContain(`  ${tail}`);
+    expect(result.card).toContain("  line 29");
+    const text = result.card.join("\n");
+    expect(text).toContain("shown whole");
+    expect(text).not.toContain("the first");
+    expect(text).not.toContain("…");
+    expect(posts[0]!.body).toContain(long);
+  });
+
+  test("a body holding an escape or bidi character the card would hide is refused with a stated reason, and nothing is asked", async () => {
+    makePackage();
+    for (const hidden of ["\u001b[2Jclean", "ok‮gnp.exe", "bell\u0007"]) {
+      put("report.md", `# Review\n\nvisible ${hidden}\n`);
+      expect(await ask(tool("review_publish"), { package: pkg, event: "REQUEST_CHANGES", partial: true })).toEqual({
+        error: expect.stringContaining("holds control, escape or bidi characters on line"),
+      });
+    }
+    expect(posts).toEqual([]);
+  });
+
+  test("a tab in the body is shown as plain spaces and is not a refusal", async () => {
+    makePackage();
+    put("report.md", "# Review\n\ncol\tone\n");
+    const result = await yes(tool("review_publish"), { package: pkg, event: "REQUEST_CHANGES", partial: true });
+    expect(result.isError).toBe(false);
+    expect(result.card.some((line) => line.includes("col one"))).toBe(true);
+  });
+
   test("a no posts nothing and writes nothing", async () => {
     makePackage();
     const t = tool("review_publish");
@@ -757,6 +793,16 @@ describe("review_complete", () => {
     expect(await ask(tool("review_waive_mutation"), { package: pkg, reason: "zero​width" })).toEqual({ error: expect.stringContaining("reason holds control, escape") });
   });
 
+  test("the mutation waiver card lists every unrun mutant, not the first few", async () => {
+    await makeRound({ findings: [F1] });
+    const mutants = Array.from({ length: 30 }, (_, index) => ({ id: `mut-${String(index).padStart(2, "0")}`, file: "src/a.ts", anchor: "a", replacement: "b" }));
+    put("research-evidence/mutants.json", { mutants });
+    const card = asked(await ask(tool("review_waive_mutation"), { package: pkg, reason: "tests cannot run here" })).card.join("\n");
+    expect(card).toContain("unrun mutants: 30");
+    for (const mutant of mutants) expect(card).toContain(mutant.id);
+    expect(card).not.toMatch(/and \d+ more/);
+  });
+
   test("dispositions: more entries than a card shows are refused", async () => {
     await makeRound({ findings: [F1] });
     const many = Array.from({ length: 21 }, () => ({ finding: GLOBAL, disposition: "acted-on" }));
@@ -826,6 +872,21 @@ describe("review_complete", () => {
     expect(card.every((line) => !/[\r\n]/.test(line))).toBe(true);
     expect(card.filter((line) => line.startsWith("waivers: none"))).toHaveLength(0);
     expect(card.join("\n")).toContain("yes ⏎ waivers: none");
+  });
+
+  test("a waiver quote longer than any old cap is shown whole, and a quote the card has to rewrite is flagged", async () => {
+    await makeRound();
+    const quote = `Accept it: ${"word ".repeat(200)}the-very-end`;
+    const manifest = readJson("manifest.json");
+    manifest["readiness_waivers"] = [
+      { item: "verifier", operator_quote: quote, time: NOW.toISOString(), confirmedVia: "tui-card" },
+      { item: "ledger", operator_quote: "yes\u001b[2K", time: NOW.toISOString(), confirmedVia: "tui-card" },
+    ];
+    put("manifest.json", manifest);
+    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
+    expect(card).toContain(`"${quote}"`);
+    expect(card).toContain("the-very-end");
+    expect(card).toContain("the stored quote holds characters this card hides or rewrites");
   });
 
   test("a package with no research.json shows no coverage waiver on the card", async () => {

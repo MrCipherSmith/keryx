@@ -73,8 +73,6 @@ export interface OtherConfirmSeams {
 // shared helpers
 // ---------------------------------------------------------------------------------------------
 
-const MAX_LISTED = 12;
-
 function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
@@ -99,11 +97,6 @@ function sha256(value: string): string {
 /** Stable digest of a value as it was SHOWN on a card, so `apply` can refuse content that changed after the yes was asked for. */
 function contentDigest(value: unknown): string {
   return sha256(JSON.stringify(value ?? null));
-}
-
-function limited(lines: readonly string[]): string[] {
-  if (lines.length <= MAX_LISTED) return [...lines];
-  return [...lines.slice(0, MAX_LISTED), `  ... and ${lines.length - MAX_LISTED} more`];
 }
 
 function record(confirmation: OperatorConfirmation): { confirmedVia: string; quote: string; pressedBy?: number; pressedAt?: string } {
@@ -308,9 +301,9 @@ function externalApplySpec(seams: OtherConfirmSeams): OperatorConfirmSpec<Extern
           `branch: ${branch} (new, local; cut from base commit ${cardSafe(run.baseCommit)})`,
           `patch hash (sha256): ${hash}`,
           `changed files: ${run.files.length}`,
-          ...limited(files),
+          ...files,
           ...(run.flaggedPaths.length > 0
-            ? [`FLAGGED PATHS (${run.flaggedPaths.length}) - repo plumbing, CI, hooks or agent config:`, ...limited(run.flaggedPaths.map((p) => `  ! ${cardSafe(p)}`))]
+            ? [`FLAGGED PATHS (${run.flaggedPaths.length}) - repo plumbing, CI, hooks or agent config:`, ...run.flaggedPaths.map((p) => `  ! ${cardSafe(p)}`)]
             : []),
           "effect: your current branch, HEAD, index and working tree are never touched",
         ],
