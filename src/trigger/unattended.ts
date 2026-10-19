@@ -56,6 +56,9 @@ export const UNATTENDED_EXCLUDED_TOOLS: readonly string[] = [
  * Flow 456 (AC1): the operator-confirmed gates (`../commands/operator-confirm-tools.ts`). Listed here, not
  * imported, because a core owner must not import a command module; `operator-confirm-rosters.test.ts` fails
  * when this list and the registry differ, so a new gate is excluded the moment it is registered.
+ * Flow 464: the review acts `review_confirm_plan`, `review_decide_premise`, `review_waive_readiness`,
+ * `review_waive_coverage` and `review_complete` are answered as cards (in the shell or the Telegram topic). An
+ * unattended run has nobody to answer them: it never sends the operator to a terminal and records the item as Not run.
  */
 export const OPERATOR_CONFIRM_TOOL_NAMES: readonly string[] = [
   "review_chunks_answer",
