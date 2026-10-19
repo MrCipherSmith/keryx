@@ -10,3 +10,4 @@
 - 2026-10-15T10:58:26.877Z - task-done: T1: Collect remaining context
 - 2026-10-15T10:58:33.261Z - task-done: T2: Implement per plan
 - 2026-10-15T10:58:35.639Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-19T10:33:04.904Z - renumbered: 454 -> 466: duplicate id 454 on main: shared with 454-2026-10-15-review-orchestrator-log, opened earlier the same day (operator-approved)

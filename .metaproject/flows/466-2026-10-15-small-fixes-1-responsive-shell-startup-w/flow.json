@@ -6,12 +6,12 @@
     "owner": true,
     "folderCommitted": true
   },
-  "id": "454",
+  "id": "466",
   "slug": "small-fixes-1-responsive-shell-startup-w",
   "title": "Small fixes 1: responsive shell startup with fresh orientation",
   "status": "in-progress",
   "createdAt": "2026-10-15T09:23:51.500Z",
-  "updatedAt": "2026-10-15T10:58:35.639Z",
+  "updatedAt": "2026-10-19T10:33:04.904Z",
   "source": {
     "type": "description",
     "ref": null
@@ -131,6 +131,11 @@
       "at": "2026-10-15T10:58:35.639Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-19T10:33:04.904Z",
+      "event": "renumbered",
+      "detail": "454 -> 466: duplicate id 454 on main: shared with 454-2026-10-15-review-orchestrator-log, opened earlier the same day (operator-approved)"
     }
   ],
   "acKinds": {

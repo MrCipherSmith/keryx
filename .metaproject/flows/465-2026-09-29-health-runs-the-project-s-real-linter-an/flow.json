@@ -5,12 +5,12 @@
     "review": true,
     "owner": true
   },
-  "id": "352",
+  "id": "465",
   "slug": "health-runs-the-project-s-real-linter-an",
   "title": "Health runs the project's real linter and tsc",
   "status": "in-progress",
   "createdAt": "2026-09-29T16:28:10.925Z",
-  "updatedAt": "2026-09-29T17:13:08.684Z",
+  "updatedAt": "2026-10-19T10:33:04.240Z",
   "source": {
     "type": "description",
     "ref": null
@@ -228,6 +228,11 @@
       "at": "2026-09-29T17:13:08.684Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-19T10:33:04.240Z",
+      "event": "renumbered",
+      "detail": "352 -> 465: duplicate id 352 on main: shared with the earlier 352-2026-09-27-audit-fixes flow; the later-opened flow takes a free id (operator-approved)"
     }
   ],
   "acKinds": {

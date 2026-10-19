@@ -14,3 +14,4 @@
 - 2026-09-29T16:49:59.116Z - task-done: T8: Name missing eslint and typescript binaries
 - 2026-09-29T17:13:08.521Z - task-done: T9: Verify oxlint, eslint, and local tsc fixtures
 - 2026-09-29T17:13:08.684Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-19T10:33:04.240Z - renumbered: 352 -> 465: duplicate id 352 on main: shared with the earlier 352-2026-09-27-audit-fixes flow; the later-opened flow takes a free id (operator-approved)

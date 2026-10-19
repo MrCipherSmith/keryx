@@ -430,5 +430,21 @@
     "toDir": "421-2026-10-10-review-completion-gate",
     "at": "2026-10-10T07:54:40.108Z",
     "reason": "420 is the id the 0.3.91-0.3.93 changelog entries cite for the review-start/help work, which lives in another clone"
+  },
+  {
+    "from": "352",
+    "to": "465",
+    "fromDir": "352-2026-09-29-health-runs-the-project-s-real-linter-an",
+    "toDir": "465-2026-09-29-health-runs-the-project-s-real-linter-an",
+    "at": "2026-10-19T10:33:04.240Z",
+    "reason": "duplicate id 352 on main: shared with the earlier 352-2026-09-27-audit-fixes flow; the later-opened flow takes a free id (operator-approved)"
+  },
+  {
+    "from": "454",
+    "to": "466",
+    "fromDir": "454-2026-10-15-small-fixes-1-responsive-shell-startup-w",
+    "toDir": "466-2026-10-15-small-fixes-1-responsive-shell-startup-w",
+    "at": "2026-10-19T10:33:04.903Z",
+    "reason": "duplicate id 454 on main: shared with 454-2026-10-15-review-orchestrator-log, opened earlier the same day (operator-approved)"
   }
 ]

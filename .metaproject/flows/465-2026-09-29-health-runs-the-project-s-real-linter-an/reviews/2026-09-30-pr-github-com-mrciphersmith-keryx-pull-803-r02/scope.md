@@ -3,8 +3,8 @@
 target: report
 ref: https://github.com/MrCipherSmith/keryx/pull/803
 mode: ingest
-flow: 352 (explicit-flow-id)
-created_at: 2026-09-30T07:27:09.629Z
+flow: 465 (explicit-flow-id)
+created_at: 2026-09-30T08:13:10.472Z
 context_mode: light
 
 ## Stage counts
@@ -15,16 +15,18 @@ construction, refused as a baseline).
 
 ### Dropped by the pre-filter
 
-files_seen: 21
-files_retained: 21
+files_seen: 41
+files_retained: 41
 files_dropped: 0
-blocks_seen: 34
-blocks_retained: 34
-blocks_dropped: 0
-changed_lines_retained: 1177
-changed_lines_dropped: 0
+blocks_seen: 78
+blocks_retained: 77
+blocks_dropped: 1
+changed_lines_retained: 3463
+changed_lines_dropped: 2
 
-_the pre-filter ran and dropped nothing_
+| path | where | reason | why |
+|---|---|---|---|
+| src/health/service.ts | lines 328-329 (2) | comment-only | comment-only: every changed line is a comment in .ts and none is a tool directive |
 
 ### Refuted by the verifier
 
@@ -33,16 +35,16 @@ claims_received: 5
 claims_applied: 5
 claims_rejected: 0
 verdicts_capped_to_unverifiable: 0
-confirmed: 4
+confirmed: 5
 refuted: 0
-unverifiable: 1
-unverified: 0
+unverifiable: 0
+unverified: 8
 
 ### Retained
 
-findings_in: 5
+findings_in: 13
 findings_removed_by_verifier: 0
-findings_retained: 5
+findings_retained: 13
 
 ### Verification claims discarded
 
@@ -58,10 +60,10 @@ cap that dropped nothing are different facts.
 ### Findings cap
 
 limit_per_reviewer: 10
-findings_seen: 5
-findings_retained: 5
+findings_seen: 13
+findings_retained: 13
 findings_truncated: 0
-blockers_exempt: 1
+blockers_exempt: 0
 reviewers_truncated: 0
 
 _the findings cap ran and truncated nothing_
@@ -92,18 +94,18 @@ The machine-readable copy is `filter_stats` in `manifest.json`; this block is
 rendered from the same record, never re-parsed out of the prose above.
 `null` means the stage did not run. It never means `0`.
 
-total: 5
-dropped_prefilter: 0
+total: 13
+dropped_prefilter: 1
 dropped_low_confidence: null — this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing.
 dropped_refuted: 0
 dropped_scope_b: 0
 dropped_findings_cap: 0
 dismissed_by_round: null — the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction.
-retained: 5
+retained: 13
 
 ### by_reason
 
-_no drop was attributed to a reason; every stage that ran removed nothing_
+prefilter:comment-only: 1
 
 `dropped_prefilter` counts diff material — whole files and change blocks removed
 before any reviewer read them. Every other count is findings, and only those are

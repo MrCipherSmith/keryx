@@ -3,8 +3,8 @@
 target: report
 ref: https://github.com/MrCipherSmith/keryx/pull/803
 mode: ingest
-flow: 352 (explicit-flow-id)
-created_at: 2026-09-30T13:22:17.773Z
+flow: 465 (explicit-flow-id)
+created_at: 2026-09-30T07:27:09.629Z
 context_mode: light
 
 ## Stage counts
@@ -15,13 +15,13 @@ construction, refused as a baseline).
 
 ### Dropped by the pre-filter
 
-files_seen: 61
-files_retained: 61
+files_seen: 21
+files_retained: 21
 files_dropped: 0
-blocks_seen: 105
-blocks_retained: 105
+blocks_seen: 34
+blocks_retained: 34
 blocks_dropped: 0
-changed_lines_retained: 7674
+changed_lines_retained: 1177
 changed_lines_dropped: 0
 
 _the pre-filter ran and dropped nothing_
@@ -29,20 +29,20 @@ _the pre-filter ran and dropped nothing_
 ### Refuted by the verifier
 
 verification_mode: annotate
-claims_received: 2
-claims_applied: 2
+claims_received: 5
+claims_applied: 5
 claims_rejected: 0
 verdicts_capped_to_unverifiable: 0
-confirmed: 2
+confirmed: 4
 refuted: 0
-unverifiable: 0
-unverified: 7
+unverifiable: 1
+unverified: 0
 
 ### Retained
 
-findings_in: 9
+findings_in: 5
 findings_removed_by_verifier: 0
-findings_retained: 9
+findings_retained: 5
 
 ### Verification claims discarded
 
@@ -58,10 +58,10 @@ cap that dropped nothing are different facts.
 ### Findings cap
 
 limit_per_reviewer: 10
-findings_seen: 9
-findings_retained: 9
+findings_seen: 5
+findings_retained: 5
 findings_truncated: 0
-blockers_exempt: 0
+blockers_exempt: 1
 reviewers_truncated: 0
 
 _the findings cap ran and truncated nothing_
@@ -77,12 +77,12 @@ not recorded — no dispatch plan was supplied for this package.
 ## Scope B rejections
 
 severity_floor: major
-accepted: 0
+accepted: 1
 rejected: 0
 exempted: 0
 
 _every scope-B finding was a regression claim inside the computed set._
-scope_b_findings: 0
+scope_b_findings: 1
 scope_b_exempted: 0
 blast_radius_record: supplied by the caller (--blast-radius)
 
@@ -92,14 +92,14 @@ The machine-readable copy is `filter_stats` in `manifest.json`; this block is
 rendered from the same record, never re-parsed out of the prose above.
 `null` means the stage did not run. It never means `0`.
 
-total: 9
+total: 5
 dropped_prefilter: 0
 dropped_low_confidence: null — this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing.
 dropped_refuted: 0
 dropped_scope_b: 0
 dropped_findings_cap: 0
 dismissed_by_round: null — the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction.
-retained: 9
+retained: 5
 
 ### by_reason
 
