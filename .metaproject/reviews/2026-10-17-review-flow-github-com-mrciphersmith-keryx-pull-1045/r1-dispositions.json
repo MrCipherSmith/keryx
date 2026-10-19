@@ -1,0 +1,896 @@
+[
+ {
+  "id": "review-architecture-w1:F-001",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-architecture-w1:F-002",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-architecture-w1:F-003",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-architecture-w1:F-004",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-architecture-w2:F-001",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-architecture-w2:F-002",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-architecture-w2:F-003",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-architecture-w2:F-004",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-architecture-w2:F-005",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-architecture-w2:F-006",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-architecture-w3:F-001",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-architecture-w3:F-002",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-architecture-w3:F-003",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-architecture-w3:F-004",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-architecture-w3:F-005",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-architecture-w3:F-006",
+  "status": "finding",
+  "evidence": "raw/review-architecture-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w1:F-001",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w1:F-002",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w1:F-003",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w1:F-004",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w1:F-005",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w2:F-001",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w2:F-002",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w2:F-003",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w2:F-004",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w2:F-005",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w2:F-006",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w2:F-007",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w3:CC-1",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w3:CC-2",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w3:CC-3",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w3:CC-4",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w3:CC-5",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w3:CC-6",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w3:CC-7",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w3:CC-8",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w3:CC-9",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w3:CC-10",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w3:CC-11",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w3:CC-12",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-clean-code-w3:CC-13",
+  "status": "finding",
+  "evidence": "raw/review-clean-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-core-boundaries-w1:F-001",
+  "status": "finding",
+  "evidence": "raw/review-core-boundaries-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-core-boundaries-w1:F-002",
+  "status": "finding",
+  "evidence": "raw/review-core-boundaries-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-core-boundaries-w1:F-003",
+  "status": "finding",
+  "evidence": "raw/review-core-boundaries-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-core-boundaries-w1:F-004",
+  "status": "finding",
+  "evidence": "raw/review-core-boundaries-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-core-boundaries-w1:F-005",
+  "status": "finding",
+  "evidence": "raw/review-core-boundaries-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-core-boundaries-w1:F-006",
+  "status": "finding",
+  "evidence": "raw/review-core-boundaries-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-highload-w1:F-001",
+  "status": "finding",
+  "evidence": "raw/review-highload-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-highload-w1:F-002",
+  "status": "finding",
+  "evidence": "raw/review-highload-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-highload-w1:F-003",
+  "status": "finding",
+  "evidence": "raw/review-highload-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-highload-w2:F-001",
+  "status": "finding",
+  "evidence": "raw/review-highload-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-highload-w2:F-002",
+  "status": "finding",
+  "evidence": "raw/review-highload-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-highload-w2:F-003",
+  "status": "finding",
+  "evidence": "raw/review-highload-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-highload-w2:F-004",
+  "status": "finding",
+  "evidence": "raw/review-highload-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-highload-w2:F-005",
+  "status": "finding",
+  "evidence": "raw/review-highload-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-highload-w3:F-001",
+  "status": "finding",
+  "evidence": "raw/review-highload-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-highload-w3:F-002",
+  "status": "finding",
+  "evidence": "raw/review-highload-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-highload-w3:F-003",
+  "status": "finding",
+  "evidence": "raw/review-highload-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-highload-w3:F-004",
+  "status": "finding",
+  "evidence": "raw/review-highload-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-highload-w3:F-005",
+  "status": "finding",
+  "evidence": "raw/review-highload-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w1:LG-001",
+  "status": "finding",
+  "evidence": "raw/review-logic-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w1:LG-002",
+  "status": "finding",
+  "evidence": "raw/review-logic-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w1:LG-003",
+  "status": "finding",
+  "evidence": "raw/review-logic-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w1:LG-004",
+  "status": "finding",
+  "evidence": "raw/review-logic-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w1:LG-005",
+  "status": "finding",
+  "evidence": "raw/review-logic-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w1:LG-006",
+  "status": "finding",
+  "evidence": "raw/review-logic-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w1:LG-007",
+  "status": "finding",
+  "evidence": "raw/review-logic-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w2:F-001",
+  "status": "finding",
+  "evidence": "raw/review-logic-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w2:F-002",
+  "status": "finding",
+  "evidence": "raw/review-logic-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w2:F-003",
+  "status": "finding",
+  "evidence": "raw/review-logic-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w2:F-004",
+  "status": "finding",
+  "evidence": "raw/review-logic-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w2:F-005",
+  "status": "finding",
+  "evidence": "raw/review-logic-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w3:F-001",
+  "status": "finding",
+  "evidence": "raw/review-logic-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w3:F-002",
+  "status": "finding",
+  "evidence": "raw/review-logic-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w3:F-003",
+  "status": "finding",
+  "evidence": "raw/review-logic-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w3:F-004",
+  "status": "finding",
+  "evidence": "raw/review-logic-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w3:F-005",
+  "status": "finding",
+  "evidence": "raw/review-logic-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w4:F-001",
+  "status": "finding",
+  "evidence": "raw/review-logic-w4.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w4:F-002",
+  "status": "finding",
+  "evidence": "raw/review-logic-w4.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w4:F-003",
+  "status": "finding",
+  "evidence": "raw/review-logic-w4.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w4:F-004",
+  "status": "finding",
+  "evidence": "raw/review-logic-w4.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w4:F-005",
+  "status": "finding",
+  "evidence": "raw/review-logic-w4.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w4:F-006",
+  "status": "finding",
+  "evidence": "raw/review-logic-w4.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w4:F-007",
+  "status": "finding",
+  "evidence": "raw/review-logic-w4.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w4:F-008",
+  "status": "finding",
+  "evidence": "raw/review-logic-w4.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-logic-w4:F-009",
+  "status": "finding",
+  "evidence": "raw/review-logic-w4.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-performance-w2:F-001",
+  "status": "finding",
+  "evidence": "raw/review-performance-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-performance-w3:PERF-001",
+  "status": "finding",
+  "evidence": "raw/review-performance-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-performance-w3:PERF-002",
+  "status": "finding",
+  "evidence": "raw/review-performance-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-performance-w3:PERF-003",
+  "status": "finding",
+  "evidence": "raw/review-performance-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-performance-w3:PERF-004",
+  "status": "finding",
+  "evidence": "raw/review-performance-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-performance-w3:PERF-005",
+  "status": "finding",
+  "evidence": "raw/review-performance-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-performance-w3:PERF-006",
+  "status": "finding",
+  "evidence": "raw/review-performance-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-performance-w3:PERF-007",
+  "status": "finding",
+  "evidence": "raw/review-performance-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-regression-w1:F-001",
+  "status": "finding",
+  "evidence": "raw/review-regression-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-regression-w1:F-002",
+  "status": "finding",
+  "evidence": "raw/review-regression-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-regression-w1:F-003",
+  "status": "finding",
+  "evidence": "raw/review-regression-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-regression-w1:F-004",
+  "status": "finding",
+  "evidence": "raw/review-regression-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-regression-w2:F-001",
+  "status": "finding",
+  "evidence": "raw/review-regression-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-regression-w2:F-002",
+  "status": "finding",
+  "evidence": "raw/review-regression-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-regression-w2:F-003",
+  "status": "finding",
+  "evidence": "raw/review-regression-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-regression-w2:F-004",
+  "status": "finding",
+  "evidence": "raw/review-regression-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-regression-w3:REG-W3-001",
+  "status": "finding",
+  "evidence": "raw/review-regression-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-regression-w3:REG-W3-002",
+  "status": "finding",
+  "evidence": "raw/review-regression-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-regression-w3:REG-W3-003",
+  "status": "finding",
+  "evidence": "raw/review-regression-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-regression-w3:REG-W3-004",
+  "status": "finding",
+  "evidence": "raw/review-regression-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-regression-w3:REG-W3-005",
+  "status": "finding",
+  "evidence": "raw/review-regression-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-security-code-w1:SEC-001",
+  "status": "finding",
+  "evidence": "raw/review-security-code-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-security-code-w1:SEC-002",
+  "status": "finding",
+  "evidence": "raw/review-security-code-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-security-code-w1:SEC-003",
+  "status": "finding",
+  "evidence": "raw/review-security-code-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-security-code-w1:SEC-004",
+  "status": "finding",
+  "evidence": "raw/review-security-code-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-security-code-w2:SEC-W2-001",
+  "status": "finding",
+  "evidence": "raw/review-security-code-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-security-code-w2:SEC-W2-002",
+  "status": "finding",
+  "evidence": "raw/review-security-code-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-security-code-w3:SEC-001",
+  "status": "finding",
+  "evidence": "raw/review-security-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-security-code-w3:SEC-002",
+  "status": "finding",
+  "evidence": "raw/review-security-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-security-code-w3:SEC-003",
+  "status": "finding",
+  "evidence": "raw/review-security-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-security-code-w3:SEC-004",
+  "status": "finding",
+  "evidence": "raw/review-security-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-security-code-w3:SEC-005",
+  "status": "finding",
+  "evidence": "raw/review-security-code-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w1:F-001",
+  "status": "finding",
+  "evidence": "raw/review-style-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w1:F-002",
+  "status": "finding",
+  "evidence": "raw/review-style-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w1:F-003",
+  "status": "finding",
+  "evidence": "raw/review-style-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w1:F-004",
+  "status": "finding",
+  "evidence": "raw/review-style-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w1:F-005",
+  "status": "finding",
+  "evidence": "raw/review-style-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w1:F-006",
+  "status": "finding",
+  "evidence": "raw/review-style-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w2:S-1",
+  "status": "finding",
+  "evidence": "raw/review-style-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w2:S-2",
+  "status": "finding",
+  "evidence": "raw/review-style-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w2:S-3",
+  "status": "finding",
+  "evidence": "raw/review-style-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w2:S-4",
+  "status": "finding",
+  "evidence": "raw/review-style-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w2:S-5",
+  "status": "finding",
+  "evidence": "raw/review-style-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w3:F-001",
+  "status": "finding",
+  "evidence": "raw/review-style-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w3:F-002",
+  "status": "finding",
+  "evidence": "raw/review-style-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w3:F-003",
+  "status": "finding",
+  "evidence": "raw/review-style-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w3:F-004",
+  "status": "finding",
+  "evidence": "raw/review-style-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w3:F-005",
+  "status": "finding",
+  "evidence": "raw/review-style-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w3:F-006",
+  "status": "finding",
+  "evidence": "raw/review-style-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w3:F-007",
+  "status": "finding",
+  "evidence": "raw/review-style-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-style-w3:F-008",
+  "status": "finding",
+  "evidence": "raw/review-style-w3.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-testing-practices-w1:F-001",
+  "status": "finding",
+  "evidence": "raw/review-testing-practices-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-testing-practices-w1:F-002",
+  "status": "finding",
+  "evidence": "raw/review-testing-practices-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-testing-practices-w1:F-003",
+  "status": "finding",
+  "evidence": "raw/review-testing-practices-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-testing-practices-w1:F-004",
+  "status": "finding",
+  "evidence": "raw/review-testing-practices-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-testing-practices-w1:F-005",
+  "status": "finding",
+  "evidence": "raw/review-testing-practices-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-testing-practices-w1:F-006",
+  "status": "finding",
+  "evidence": "raw/review-testing-practices-w1.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-testing-practices-w2:T-001",
+  "status": "finding",
+  "evidence": "raw/review-testing-practices-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-testing-practices-w2:T-002",
+  "status": "finding",
+  "evidence": "raw/review-testing-practices-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-testing-practices-w2:T-003",
+  "status": "finding",
+  "evidence": "raw/review-testing-practices-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-testing-practices-w2:T-004",
+  "status": "finding",
+  "evidence": "raw/review-testing-practices-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-testing-practices-w2:T-005",
+  "status": "finding",
+  "evidence": "raw/review-testing-practices-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ },
+ {
+  "id": "review-testing-practices-w2:T-006",
+  "status": "finding",
+  "evidence": "raw/review-testing-practices-w2.txt",
+  "reason": "kept as reported; premise judged in raw/review-premise-*.txt"
+ }
+]

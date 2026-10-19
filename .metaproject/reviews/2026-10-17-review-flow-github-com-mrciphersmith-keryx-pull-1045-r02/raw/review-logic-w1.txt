@@ -1,0 +1,171 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "slices": ["slice-01"],
+  "summary": "Fix slice-01 of PR #1045 round 2, reviewed at head 375279e78. The round-1 fixes in the slice hold up. The completion gate now reads only this session's own keryx review commands, scans text in linear time, and honours an older package once the session names it. The unreadable-input detector no longer matches defect prose. retry-eval follows the ledger's no-slices rule. The light recheck records --base and refuses an empty range. Routed-out roles are labelled. Three minor defects remain. The empty-reply and timeout save treats a placeholder left by an earlier dispatch as a complete result. The new scope-B closure matches on reviewer plus bare id, which is ambiguous across waves. The narrowed detector misses the schema file name that dispatches actually give. No blocker or major.",
+  "findings": [
+    {
+      "id": "LG-001",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 331,
+      "quote": "const target = existing.trim() === \"\" ? abs : `${abs}.partial`;",
+      "problem": "saveTimedOutPartial now also saves the empty-reply record (line 2328) and the no-text timeout record (line 2260). It counts any non-blank file at the target as a complete result. But the file a previous empty dispatch left there, `(subagent produced no text)` plus a KERYX_USAGE line, is non-blank, and every raw reader treats it as empty (RawFile.empty, ledger.ts:74). Trigger: a read_only reviewer ends empty. The tool's own advice (line 2334) says to re-dispatch it once. If that retry also ends empty, or times out after writing part of a review, its text and its usage line go to `<target>.partial`, which no raw-result reader picks up (the docstring at 325-328).",
+      "impact": "The retry's partial review text never reaches the ledger or retry-eval, and its token spend is not counted. The ledger sees one empty dispatch where two ran, and that one is the stale placeholder. The round's stated spend undercounts silently, and the retry's partial findings are lost to the ledger.",
+      "suggested_fix": "In saveTimedOutPartial, treat the target as free when its body without the usage line is empty or is the placeholder. Use the same test the readers apply, e.g. `isEmptyOutput(splitUsage(existing).body)`. Then overwrite it. Add a spawn test where an empty dispatch is followed by a timed-out one with text, and assert that the text lands at the target path.",
+      "evidence": "spawn-subagent-tool.ts:329-334 (`existing.trim() === \"\"`), :2260 and :2328 (callers that write the placeholder), :2334 (advice to re-dispatch once); src/review/ledger.ts:74 (`empty` covers the placeholder).",
+      "confidence": "high"
+    },
+    {
+      "id": "LG-002",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/ledger.ts",
+      "line": 613,
+      "quote": "(input.screened ?? []).find((entry) => entry.id === oid || (entry.reviewer === reviewer && entry.id === fid));",
+      "problem": "The new scope-B closure falls back to matching on (reviewer, bare raw id). The reviewer is the role name (`review-logic`), not the raw stem, so one reviewer's waves share it. When canonical findings use bare ids, ingest records the screened finding as {id: \"F-001\", reviewer: \"review-logic\"} (managed.ts:690). Then a different wave's raw F-001 also matches: wave 3's `review-logic-w3:F-001` and wave 4's `review-logic-w4:F-001` are both F-001 from `review-logic`, as the prior round's own findings.json shows. That second obligation closes `out-of-scope`, citing a screen that screened another finding.",
+      "impact": "A raw finding nobody reconciled closes silently, and the ledger can report READY with it unanswered. Only bare-id canonical findings are affected. The `<raw stem>:<id>` form matches through `entry.id === oid` exactly.",
+      "suggested_fix": "Record the raw stem (or the obligation id) on each IngestScreened entry, and match only on `oid`. Failing that, use the (reviewer, fid) fallback only when that reviewer has a single raw file. The pre-existing canonicalByReviewer/absorbedInto (ledger.ts:597-602) has the same cross-wave identity and should be narrowed the same way.",
+      "evidence": "ledger.ts:612-613 screenedAs; ledger.ts:599-602 canonicalByReviewer (same reviewer+id identity); managed.ts:686-691 screenedRecord stores the canonical id and reviewer; the prior findings.json holds review-logic-w3:F-001 and review-logic-w4:F-001, both reviewer=review-logic.",
+      "confidence": "medium"
+    },
+    {
+      "id": "LG-003",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/ledger.ts",
+      "line": 20,
+      "quote": "(?:review(?:er)?[_ -])?schema|context[_ -]?file|payload|slice[_ -]?manifest)\";",
+      "problem": "The narrowed detector (flow 460 D) now misses the commonest real claim. The result schema reaches reviewers as `reviewer-finding.schema.json`, and no MANDATORY_INPUT alternative matches that name: `(?:review(?:er)?[_ -])?schema` needs `reviewer-schema` or `schema` right there, not `reviewer-finding.schema`. So `I could not read reviewer-finding.schema.json` matches neither pattern. The narrowing also dropped the round-1 fix's `does not exist`, `no such file` and `permission denied` forms, so `pr_context.json does not exist at the given path` is not caught either.",
+      "impact": "A DONE reply that says it never read its result schema, or that its PR context file did not exist, counts as a complete run with scopeComplete true. That is the outcome D exists to prevent.",
+      "suggested_fix": "Add `(?:[\\w.-]*[_ -])?schema(?:\\.json)?` (or the literal `reviewer-finding\\.schema(?:\\.json)?`) to MANDATORY_INPUT. Add the noun-first, sentence-anchored forms `<input> (?:does not exist|no such file|permission denied)`. Add both phrasings to the positive cases in ledger.test.ts:1147.",
+      "evidence": "ledger.ts:20-37 (MANDATORY_INPUT, both UNREADABLE_INPUT patterns); ledger.test.ts:1147 positive cases name only pr_context.json, 'the result schema' and 'the context file'.",
+      "confidence": "high"
+    },
+    {
+      "id": "LG-004",
+      "severity": "info",
+      "reviewer": "review-logic",
+      "file": "src/review/completion-gate.ts",
+      "line": 178,
+      "quote": "const root = path.resolve(cwd, prefix === \"\" ? \".\" : prefix);",
+      "problem": "Paths from keryx's own output are resolved against the agent's cwd. `review start` prints `path:` relative to its own process cwd (managed.ts:588). If the command ran as `cd sub && keryx review start ...`, the printed `.metaproject/reviews/<id>` resolves to `<cwd>/.metaproject/reviews/<id>` rather than `<cwd>/sub/...`, and `sub` never becomes a root. The gate then returns NO_PACKAGE_BLOCKER, which says `keryx review start` has not opened one, although it did. The same holds before this PR. Not reproduced: it is unknown how often the keryx agent runs review commands through `cd`.",
+      "impact": "In that case the nudge is misdirected. It soft-stops after three unchanged continues.",
+      "suggested_fix": "Have `review start|attach` print an absolute `path:`, or record the `cd <dir> &&` prefix of the tool call and resolve against it.",
+      "evidence": "completion-gate.ts:170 and :175-182; managed.ts:588 `path: path.relative(input.cwd, packageDir)`; review.ts:1082.",
+      "confidence": "medium"
+    },
+    {
+      "id": "LG-005",
+      "severity": "info",
+      "reviewer": "review-logic",
+      "file": "src/review/completion-gate.ts",
+      "line": 137,
+      "quote": "if (history.length < this.cursor || (this.cursor > 0 && history[this.cursor - 1] !== this.last)) this.reset();",
+      "problem": "When the history is rewritten, the tracker resets and rescans only what survived. If compaction summarises away the tool call that named an older package (for example `keryx review status <old-id>`), that package is no longer named this session. The gate then drops a resumed review back to the placeholder. Not established: whether agent.ts compaction keeps toolCalls arguments. That would settle it.",
+      "impact": "A long resumed review can lose its package after compaction until the model names it again, which the new nextStep text tells it to do.",
+      "suggested_fix": "Keep names already collected across a reset caused by compaction, or carry the named package dirs and ids in the compaction summary.",
+      "evidence": "completion-gate.ts:136-156 (update/reset), :252 and :280 (the older-package path depends on namedBySession).",
+      "confidence": "low"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "review-architecture-w3:F-004", "disposition": "closed", "evidence": "src/review/coverage.ts:557 comments the lazy import's cycle (prior-round -> publish -> readiness -> coverage)" },
+    { "id": "review-architecture-w3:F-005", "disposition": "closed", "evidence": "src/review/completion-gate.ts:158-183 roots come only from keryx review tool-call arguments and keryx's own path:/# managed review: lines, inside cwd (:179)" },
+    { "id": "review-clean-code-w1:F-004", "disposition": "closed", "evidence": "src/commands/review-ledger.ts LedgerReportExtras options object; sole caller review-ledger.ts:360 passes it" },
+    { "id": "review-clean-code-w1:F-005", "disposition": "closed", "evidence": "src/commands/review-ledger.ts help: 'scopeReviewed and rawReconciled are true only when established.' now precedes the Token spend paragraph" },
+    { "id": "review-clean-code-w2:F-003", "disposition": "closed", "evidence": "spawn-subagent-tool.ts:2190-2194 failChild used by the timeout, rate-limit, empty-reply and error exits" },
+    { "id": "review-clean-code-w2:F-006", "disposition": "open", "evidence": "spawn-subagent-tool.ts onUsage still adds every usage_update (childUsage.tokens_in += tokensIn); adapters not checked; info" },
+    { "id": "review-clean-code-w3:CC-10", "disposition": "closed", "evidence": "ledger.ts:22-39 bounds removed, CLAIM_QUOTE_CHARS named; positive and negative cases ledger.test.ts:1145-1177" },
+    { "id": "review-clean-code-w3:CC-11", "disposition": "closed", "evidence": "completion-gate.ts:266-287 pickPackage extracted; pointer read split over :273-282" },
+    { "id": "review-clean-code-w3:CC-13", "disposition": "partial", "evidence": "managed.ts:1227 uses the typed research.ts dispatchRuns; an unrecognised status still falls to 'failed: not run' at managed.ts:1234" },
+    { "id": "review-clean-code-w3:CC-2", "disposition": "open", "evidence": "src/review/locate.ts:62-66 '/** How a finding's `line` was arrived at. */' is still a stacked doc comment, now above LocateMethod's doc, not above LocatorRecord (:69)" },
+    { "id": "review-clean-code-w3:CC-3", "disposition": "closed", "evidence": "coverage.ts:537 readPackageTarget, :553 resolveDiffBase, :565 diffOfTarget; lazy import commented :557" },
+    { "id": "review-clean-code-w3:CC-4", "disposition": "closed", "evidence": "coverage.ts:544 nominalBase computed once, used :530 and :568-570" },
+    { "id": "review-clean-code-w3:CC-7", "disposition": "closed", "evidence": "mutate.ts:359-368 MUTATION_RECORD_FILE and mutationRecordNames used by :347, :372 and :379" },
+    { "id": "review-clean-code-w3:CC-9", "disposition": "closed", "evidence": "dispatch-usage.ts:30 exported RunUsage; ledger.ts runUsage returns RunUsage | \"unknown\"" },
+    { "id": "review-core-boundaries-w1:F-004", "disposition": "closed", "evidence": "dispatch-usage.ts:9-14 now says the figure is reported, a reviewer line cannot be told from the host's, and no gate reads usage (the option the finding offered)" },
+    { "id": "review-highload-w1:F-001", "disposition": "closed", "evidence": "completion-gate.ts:65-85 reviewPackagePaths uses indexOf, a bounded walk-back (MAX_PREFIX_CHARS) and a floor; test completion-gate.test.ts:287-295" },
+    { "id": "review-highload-w1:F-002", "disposition": "closed", "evidence": "completion-gate.ts:51 MAX_SESSION_REVIEW_ROOTS = 8 via remember(); incremental tracker :136-146" },
+    { "id": "review-highload-w1:F-003", "disposition": "partial", "evidence": "dispatch-usage.ts:9-14 comment corrected; USAGE_LINE (:36) still accepts a line anywhere, last wins, rather than only the last non-empty line" },
+    { "id": "review-highload-w2:F-001", "disposition": "closed", "evidence": "spawn-subagent-tool.ts:2332-2335 states a retry cap; :2328 records the empty dispatch's usage" },
+    { "id": "review-highload-w2:F-003", "disposition": "open", "evidence": "onUsage still sums per usage_update; no per-request last-seen tracking; info" },
+    { "id": "review-highload-w3:F-001", "disposition": "closed", "evidence": "completion-gate.ts:65-85 linear scan; applied only to keryx review call arguments and their own output (:158-173)" },
+    { "id": "review-highload-w3:F-002", "disposition": "closed", "evidence": "completion-gate.ts:179 inside(cwd, root), :181 cap via remember(MAX_SESSION_REVIEW_ROOTS); cached per history :186-200" },
+    { "id": "review-highload-w3:F-004", "disposition": "closed", "evidence": "dispatch-usage.ts:36 `[^\\n]*` with no backtracking JSON group; :44-52 usageOfLine caps at MAX_USAGE_LINE_CHARS" },
+    { "id": "review-highload-w3:F-005", "disposition": "closed", "evidence": "completion-gate.ts:279 `Date.parse(pointer.startedAt) >= since`: NaN is not fresh" },
+    { "id": "review-logic-w1:LG-002", "disposition": "closed", "evidence": "docs/docs/cli-reference.md (hunk 4829): ingest keeps an absent/ambiguous quote flagged quote_unlocated and refuses only an uncheckable one" },
+    { "id": "review-logic-w1:LG-005", "disposition": "closed", "evidence": "completion-gate.ts:46 PREFIX_DELIMITERS includes '='; test completion-gate.test.ts:257-267" },
+    { "id": "review-logic-w2:F-002", "disposition": "closed", "evidence": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md (hunk 274): 'it still refuses, naming the finding, a quote it could not check at all'" },
+    { "id": "review-logic-w2:F-005", "disposition": "open", "evidence": "spawn-subagent-tool.ts:2328 deliberately keeps an existing result and writes the empty record to .partial (comment :2326-2327); a stale earlier result still reads as current. See new LG-001 for the placeholder case" },
+    { "id": "review-logic-w3:F-002", "disposition": "open", "evidence": "completion-gate.test.ts:207-216 unchanged except the call shape; pr-7975 is still the only fresh package, so the test passes without the pointer branch (completion-gate.ts:272-283)" },
+    { "id": "review-logic-w3:F-004", "disposition": "closed", "evidence": "ingest-locator-sha.test.ts comment now says only an uncheckable quote refuses; absent/ambiguous is kept and flagged quote_unlocated" },
+    { "id": "review-logic-w4:F-001", "disposition": "closed", "evidence": "ledger.ts:32-37 anchored to own-statement plus reading verb; the finding's examples are negative cases at ledger.test.ts:1157-1164" },
+    { "id": "review-logic-w4:F-002", "disposition": "closed", "evidence": "completion-gate.ts:252 keeps an older package the session names; :280 honours an older pointer the session names; tests completion-gate.test.ts:301-314" },
+    { "id": "review-logic-w4:F-003", "disposition": "closed", "evidence": "completion-gate.ts:158-183 roots only from own keryx review commands and own output, inside cwd; '=' delimiter :46" },
+    { "id": "review-logic-w4:F-004", "disposition": "closed", "evidence": "src/commands/review.ts:1044-1048 writes --base into input.target.base; r02 manifest target carries base origin/main" },
+    { "id": "review-logic-w4:F-005", "disposition": "closed", "evidence": "coverage.ts:561-562 emptyRangeWarning turns an empty range into an error, so the full set applies" },
+    { "id": "review-logic-w4:F-006", "disposition": "closed", "evidence": "managed.ts:1231 routedOut complete runs are recorded 'routed out ... not dispatched'" },
+    { "id": "review-performance-w3:PERF-001", "disposition": "closed", "evidence": "completion-gate.ts:65-85 literal-first indexOf scan, bounded walk-back" },
+    { "id": "review-performance-w3:PERF-002", "disposition": "closed", "evidence": "completion-gate.ts:136-139 cursor-based incremental scan, cached per history in a WeakMap :186-200" },
+    { "id": "review-performance-w3:PERF-004", "disposition": "closed", "evidence": "coverage.ts:500 gitTopLevel cached per directory; prior-round.ts:323 base probes run with Promise.all; result cached per package/target :547" },
+    { "id": "review-performance-w3:PERF-006", "disposition": "partial", "evidence": "ledger.ts:45 still runs both patterns through map before find (no short-circuit), though the {0,80} windows are gone" },
+    { "id": "review-performance-w3:PERF-007", "disposition": "open", "evidence": "completion-gate.ts:316-321 roots still scanned one after another, and every candidate is collected before pickPackage reads the pointer" },
+    { "id": "review-regression-w3:REG-W3-001", "disposition": "closed", "evidence": "retry-eval.ts:82 no slices claims none; :74 skips a reply with unreadableInputClaim" },
+    { "id": "review-regression-w3:REG-W3-002", "disposition": "closed", "evidence": "completion-gate.ts:252 and :280 accept an older package or pointer the session's commands name; nextStep tells the model to name it" },
+    { "id": "review-security-code-w1:SEC-001", "disposition": "closed", "evidence": "completion-gate.ts:158-183 roots only from own commands and output, inside cwd; :324 closedAt only under the chosen package's root; :290-294 displayId with SAFE_REVIEW_ID" },
+    { "id": "review-security-code-w1:SEC-004", "disposition": "closed", "evidence": "no fix required; the quotes-located readiness item still gates (schema description unchanged in intent)" },
+    { "id": "review-security-code-w2:SEC-W2-001", "disposition": "partial", "evidence": "dispatch-usage.ts:9-14 comment corrected; spawn still saves child-authored KERYX_USAGE lines when the host has no usage" },
+    { "id": "review-security-code-w3:SEC-001", "disposition": "closed", "evidence": "completion-gate.ts:65-85 linear scan; 1 MB token test completion-gate.test.ts:287-292" },
+    { "id": "review-security-code-w3:SEC-002", "disposition": "closed", "evidence": "completion-gate.ts:158-183 roots only from own commands, inside cwd; :324 closedAt per chosen root; test completion-gate.test.ts:335-345" },
+    { "id": "review-security-code-w3:SEC-003", "disposition": "partial", "evidence": "dispatch-usage.ts:12-14 documents the limitation and that no gate reads usage; no sidecar, and the reviewer's lines are not stripped" },
+    { "id": "review-security-code-w3:SEC-005", "disposition": "open", "evidence": "research.ts:53 dispatchRuns accepts any non-empty reviewer string, and managed.ts:1227 copies it into coverage unchecked" },
+    { "id": "review-style-w1:F-003", "disposition": "closed", "evidence": "review-ledger.ts help: the scopeReviewed sentence now precedes the Token spend paragraph" },
+    { "id": "review-style-w3:F-003", "disposition": "closed", "evidence": "mutate.ts:359 one MUTATION_RECORD_FILE constant" },
+    { "id": "review-style-w3:F-004", "disposition": "closed", "evidence": "coverage.ts:544 nominalBase" },
+    { "id": "review-style-w3:F-005", "disposition": "closed", "evidence": "dispatch-usage.ts:41 toTokenCount" },
+    { "id": "review-style-w3:F-006", "disposition": "closed", "evidence": "managed.ts:1250 `const named = ...` used at :1251 and :1255" },
+    { "id": "review-testing-practices-w1:F-003", "disposition": "closed", "evidence": "spawn-subagent-tool.test.ts:1391 several usage_update events; :1412-1426 timeout partial and no-text cases" },
+    { "id": "review-testing-practices-w2:T-001", "disposition": "open", "evidence": "completion-gate.test.ts:207-216 the pointer still names the only fresh package; no fixture where the pointer and the session filter disagree" },
+    { "id": "review-testing-practices-w2:T-002", "disposition": "closed", "evidence": "locate.test.ts:83 normalised ambiguity kind and candidates; :90 and :97 kind bound" },
+    { "id": "review-logic-w1:LG-006", "disposition": "partial", "evidence": "spawn now writes a raw file for empty (:2328) and no-text timeout (:2260) dispatches, so they count; a driver with no raw file at all is still absent from dispatches/unknown (ledger.ts runUsage over `mine` raws)" },
+    { "id": "review-logic-w1:LG-007", "disposition": "open", "evidence": ".metaproject/core/gdskills/contracts/review-finding.schema.json:232 candidate_lines still has no if/then excluding reason absent (both copies identical)" },
+    { "id": "review-logic-w2:F-003", "disposition": "closed", "evidence": "spawn-subagent-tool.ts:2260 timeout line marked partial and placeholder written with no text; :2328 empty reply recorded; dispatch-usage.ts:112 a partial makes totals incomplete" },
+    { "id": "review-logic-w2:F-004", "disposition": "open", "evidence": "spawn-subagent-tool.ts:2324 still checks `turnResult?.submittedResult === undefined` with status Completed; dead but harmless, info" },
+    { "id": "review-logic-w3:F-001", "disposition": "closed", "evidence": "ledger.ts:32-37; the finding's examples are negative cases at ledger.test.ts:1157-1159" },
+    { "id": "review-logic-w3:F-003", "disposition": "closed", "evidence": "ingest-locator-sha.test.ts:99-126 exemptions pinned on an uncheckable head, with a control proving the open internal finding refuses (:116)" },
+    { "id": "review-logic-w4:F-007", "disposition": "closed", "evidence": "managed.ts:277-279 attribution default built from coverage/--reviewers without research; ATTRIBUTION_FALLBACK :1240" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 2 }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `fix/review-gate-consistency`
+- Parent ref: `origin/main`
+- Reviewed head: `375279e781f043c42373b29e06092a2c4177a82a` (round 1 head `dff7a38a1`)
+- Scope mode: fix slice `slice-01` (17 files), with read-only checks of the head sources the hunks truncate
+- Spec compliance gate: ran against the flow 460 description for the parts this slice touches
+
+### Summary
+The fixes in this slice close the round-1 gate defects. The completion gate takes roots, package dirs and ids only from this session's own `keryx review` commands and keryx's own output, inside cwd. It scans that text in linear time, incrementally, with capped roots, and it accepts an older package or pointer once the session names it. The unreadable-input detector (D) no longer matches defect prose. retry-eval follows the ledger's no-slices rule. The light recheck records `--base` and refuses an empty range. Routed-out roles are labelled in coverage.md. The token usage parser no longer backtracks. Three minor defects remain, and two info notes.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 3 | info: 2
+- prior dispositions (65): closed 49 | open 10 | partial 6 | regressed 0
+
+### Logic Bugs
+- LG-001 (minor): `saveTimedOutPartial` treats a placeholder left by an earlier empty dispatch as a complete result. A retry's partial text and its usage line then go to `.partial`, which no reader picks up.
+- LG-002 (minor): `screenedAs` falls back to matching on (reviewer, bare id). With bare-id canonical findings, one reviewer's waves share that key, so a screened finding from one wave closes another wave's obligation as out-of-scope.
+- LG-003 (minor): the narrowed D detector misses `reviewer-finding.schema.json`, the schema file name dispatches actually give, and the `does not exist`, `no such file` and `permission denied` claims.
+
+### Edge Cases
+- LG-004 (info): the relative `path:` from a `cd sub && keryx review start` is resolved against the agent's cwd, so the gate misses the package.
+- LG-005 (info): when compaction resets the tracker, names the session gave earlier can be lost.
+
+### Prior findings still open
+CC-2, the non-decisive pointer test (logic-w3:F-002 / T-001), PERF-007, SEC-W3-005, LG-007, logic-w2:F-004/F-005 and the usage-summing infos. Partial: CC-13, PERF-006, highload-w1:F-003, SEC-W2-001, SEC-W3-003, LG-006.

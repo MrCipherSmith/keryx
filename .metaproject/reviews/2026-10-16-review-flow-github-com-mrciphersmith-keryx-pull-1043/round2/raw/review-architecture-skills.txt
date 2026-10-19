@@ -1,0 +1,32 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-architecture",
+  "status": "DONE",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/rules/core/session-plan-bridge.mdc",
+      "line": 39,
+      "quote": "| `review-orchestrator` | `step-0` … `step-14`, from its own numbered checklist | its Workflow section |",
+      "problem": "The fix publishes `step-10b` in review-orchestrator Step 6a and rule 0 (SKILL.md:105, :120), but the session-plan-bridge rule that owns the id contract still lists only step-0..step-14. The .metaproject copy (line 39) is the same.",
+      "impact": "A host or reviewer that follows the rule rather than the skill publishes a plan with no Wave D item; the plan runs ahead of the artifacts, the exact gap round 1 F-005 named.",
+      "suggested_fix": "Change the row to `step-0` … `step-14` plus `step-10b` in both rule copies.",
+      "confidence": "high"
+    }
+  ],
+  "prior_dispositions": [
+    {"id": "review-architecture-skills#F-001", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:110 and reviewer-input.schema.json allowed_tools now allow read-only git log/blame/show for every reviewer incl. review-premise; review-architecture/SKILL.md:69 matches"},
+    {"id": "review-architecture-skills#F-002", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:1127 requires global_id, real reviewer and source, finding_id = global_id; review-premise Input Contract row and example id (global_id form) updated"},
+    {"id": "review-architecture-skills#F-003", "disposition": "closed", "evidence": "review-premise/SKILL.md:93 verdict table and Iron Law row forbid downgrading an external finding (and minors, security); matches premise.ts downgrade-below-threshold / external-downgrade"},
+    {"id": "review-architecture-skills#F-004", "disposition": "closed", "evidence": "review-pr-feedback/SKILL.md:366 rule 7: operator-dismissed comment takes verdict disagree citing the recorded answer, answered in Step 10"},
+    {"id": "review-architecture-skills#F-005", "disposition": "partial", "evidence": "step-10b added to Step 6a and rule 0 (review-orchestrator/SKILL.md:105,120) but session-plan-bridge.mdc:39 still says step-0..step-14 (new finding F-001)"},
+    {"id": "review-architecture-skills#F-006", "disposition": "closed", "evidence": "flow-orchestrator/SKILL.md:277 gives source value, claims sink <flow-dir>/premise/<n>.json, by-hand merge rules; feature-dev/SKILL.md:42 points to it; review-premise Input Contract source row documents it"},
+    {"id": "review-architecture-skills#F-007", "disposition": "closed", "evidence": "job-orchestrator/SKILL.md:1174 defines HELD/OPEN/NEEDS_FIX with unattended stop, :1344 loop-end clause; feature-dev/SKILL.md:116 mirrors unattended wording"}
+  ]
+}
+```
+
+Summary: all seven round-1 findings addressed; six closed, F-005 partial because the session-plan-bridge rule (both copies) still lists step-0..step-14 without step-10b. One new minor. The task-implementer schema if/then (draft 2020-12) and the premise code constraints are consistent with the skill text.

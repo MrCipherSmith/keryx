@@ -1,0 +1,64 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B regression check of slice-03 (PR #1045 round 2). Two regressions: (1) the flow 460 (H) placeholder that spawn_subagent now writes for an empty/no-text dispatch makes saveTimedOutPartial treat the raw file as a complete result, so a re-dispatch that times out with text is diverted to <target>.partial and lost to the ledger; (2) after an ingest with several --premises files, research-evidence/premises.json holds an array that readPremiseFile (review.ts) refuses, which breaks the re-ingest the premise refusal message itself prescribes.",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "RG-001",
+      "severity": "major",
+      "reviewer": "review-regression",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "quote": "const target = existing.trim() === \"\" ? abs : `${abs}.partial`;",
+      "symbol": "saveTimedOutPartial",
+      "problem": "Flow 460 (H) changed spawn-subagent-tool.ts so that a child ending with no text (the timeout path with an empty `partial`, and the new empty-reply path) now writes NO_TEXT_PLACEHOLDER plus a KERYX_USAGE line into `save_result_to` via saveTimedOutPartial. Before this change such a dispatch left no file. saveTimedOutPartial still decides 'a complete result is already there' by `existing.trim() === \"\"`, and the placeholder is non-blank, so it is treated as a complete result. The next dispatch to the same driver result path (the re-dispatch the empty-reply advice itself prescribes, or `review next` handing the same wave again) that times out after writing text has that text diverted to `<target>.partial`, which no raw reader (loadRaws in review-ledger.ts, latestResults in review-next.ts, collectLateResults in retry-eval.ts) reads. The tool output then says `the complete result already at ... was kept`, which is false: what was kept is the empty placeholder. The same test also sends a second empty dispatch's usage line to `.partial`, so that dispatch's tokens are not counted by the ledger.",
+      "impact": "Trigger: a reviewer dispatched with save_result_to ends empty (empty reply, or timeout before any text), is re-dispatched to the same raw/<reviewer>-w<n>.txt, and the re-dispatch times out after emitting text (possibly its whole REVIEW_RESULT block). Outcome: the ledger reads the placeholder as an empty reply (isEmptyOutput), the reviewer's partial or complete findings are silently set aside in .partial, the slices stay uncovered, and the parent is told a complete result was preserved. Before flow 460 that second dispatch's text landed at the target and was parsed.",
+      "suggested_fix": "In saveTimedOutPartial treat an existing file that is empty by the readers' own rule as empty: `const target = existing.trim() === \"\" || isEmptyOutput(existing) ? abs : `${abs}.partial`;` (isEmptyOutput from src/review/ledger.ts already strips the usage line and matches the placeholder), and word the `.partial` note from that same decision. Add a test: empty dispatch, then a timed-out dispatch with a REVIEW_RESULT to the same path, and assert the target parses.",
+      "evidence": "spawn-subagent-tool.ts:331 `const target = existing.trim() === \"\" ? abs : ...`; callers at :2260 (timeout: `partial.length > 0 ? partial : NO_TEXT_PLACEHOLDER`) and :2328 (empty reply: `${NO_TEXT_PLACEHOLDER}${usageSuffix()}`) both added/changed by this PR. ledger.ts:425 isEmptyOutput returns true for the placeholder plus usage line (the new spawn test asserts `isEmptyOutput(empty)` is true), so the ledger counts it empty. Only the completed path (:2369, saveChildResult) overwrites the placeholder; the timeout path does not. The docstring of saveTimedOutPartial says `.partial` is read by no raw-result reader.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:331",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:2260",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:2328",
+          "src/commands/review-ledger.ts:loadRaws"
+        ],
+        "enumeration_method": "keryx ctx rg \"saveTimedOutPartial|usageSuffix|saveChildResult\" over spawn-subagent-tool.ts: 2 callers of saveTimedOutPartial (timeout, empty-reply) both route through the blank-only test; the completed path (saveChildResult) overwrites and is unaffected. Raw readers enumerated with keryx ctx rg \"isEmptyOutput|readFile\" over review-ledger.ts, review-next.ts, retry-eval.ts: none reads .partial."
+      }
+    },
+    {
+      "id": "RG-002",
+      "severity": "major",
+      "reviewer": "review-regression",
+      "file": "src/commands/review.ts",
+      "quote": "  parsePremiseClaims(parsed);",
+      "symbol": "readPremiseFile",
+      "problem": "Flow 460 made `review ingest --premises` repeatable: with several files readPremises returns a PremiseSource[] and managed.ts writes it unchanged to research-evidence/premises.json (`JSON.stringify(input.premises)`), so that file is now a JSON array of `{judge, premises}` objects. readPremiseFile in review.ts still validates every --premises file with parsePremiseClaims, which throws `A premise result must be an object ..., not an array` for an array. verdict.ts reads the same file with parsePremiseClaimSets and accepts it, so the package's own record is readable by one consumer and refused by the other.",
+      "impact": "Trigger: an ingest with two or more --premises files, then a re-ingest of the same package (`ingest --review-id`, e.g. after a ledger rebuild) that passes the package's own record, which is exactly what refuseInheritance in premise.ts tells the operator to do (`Pass --premises <file> ... (research-evidence/premises.json, or research-evidence/premises.superseded.json from an earlier ingest)`). Outcome: the re-ingest is refused with a misleading 'not an array' error and the held findings cannot be carried through the documented path; the operator has to reconstruct the original per-judge files by hand.",
+      "suggested_fix": "In readPremiseFile validate with parsePremiseClaimSets instead of parsePremiseClaims and, when the parsed value is an array of claim sets, return it as PremiseSource[] (readPremises flattening nested lists when several files are given). Add a round-trip test: ingest with two --premises files, then re-ingest with --premises <pkg>/research-evidence/premises.json.",
+      "evidence": "review.ts:3654 `parsePremiseClaims(parsed);` inside readPremiseFile; premise.ts:147-152 parsePremiseClaims throws for any non-record; premise.ts:180 parsePremiseClaimSets accepts the array form; managed.ts:526 writes `input.premises` (array when several files) to PREMISES_FILE; verdict.ts:212 reads it with parsePremiseClaimSets; premise.ts:911 refusal names PREMISES_FILE / PREMISES_SUPERSEDED_FILE as the file to pass back to --premises.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/commands/review.ts:3654",
+          "src/review/managed.ts:526",
+          "src/review/premise.ts:911",
+          "src/review/verdict.ts:212"
+        ],
+        "enumeration_method": "keryx ctx rg \"PREMISES_FILE|premises\\.json\" over src (non-test): one writer (managed.ts:526), two readers — verdict.ts readPremiseClaimsFile (parsePremiseClaimSets, accepts arrays) and review.ts readPremiseFile via --premises (parsePremiseClaims, refuses arrays); the refusal text in premise.ts:911 is the instruction that routes the file back into the refusing reader."
+      }
+    }
+  ],
+  "stats": { "blocker": 0, "major": 2, "minor": 0, "info": 0 }
+}
+```
+
+Summary (review-regression, wave 3, slice-03, kind new):
+
+- RG-001 (major): spawn-subagent-tool.ts saveTimedOutPartial treats the new flow-460 empty placeholder as a complete result. A re-dispatch that times out with text is diverted to `.partial`, the ledger never reads it, and the tool output falsely says a complete result was kept.
+- RG-002 (major): once an ingest takes several --premises files, research-evidence/premises.json is an array. readPremiseFile (review.ts) refuses it, which breaks the re-ingest that premise.ts's own refusal message prescribes.
+
+Checked and found no regression: the sessionReviewRoots→sessionReviewNames rename (agent.ts is the only production caller); ledgerBlockers now running packageCoverageErrors (the same options review complete and readiness use); the renderLedgerReport options object (one caller); pendingMutants/packageChangedLines still exported for parity.ts, review-panel.ts and research.ts; the locator `substring` method (both schema copies and types.ts carry it); READINESS_ITEMS.length in the waive card (publish-guard.ts hardcodes no count); target.base now recorded (layers.ts, coverage.ts and prior-round.ts already read it and guard leading '-'); review-plan.ts, which takes only isDeltaRound from round-split.
+
+Coverage: the blast radius cap was 40 files. 21 candidates were dropped by the cap, 167 as test consumers, 91 as text hubs and 105 as unrelated symbols, so the sweep was not complete. 13 changed files are non-code (skills, schemas, flow files), and the radius could not answer the question for them. Both findings go through runtime edges the code graph does not carry: the raw/*.txt file handoff from spawn_subagent to the ledger, and the premises.json handoff between ingest runs. They were traced by hand.

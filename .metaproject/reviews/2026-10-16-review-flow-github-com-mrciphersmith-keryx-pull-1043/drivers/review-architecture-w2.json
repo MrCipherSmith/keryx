@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-architecture",
+  "wave": 2,
+  "waves": 9,
+  "slices": [
+    "slice-02"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-02",
+      "path": "/Users/Goodea/goodea/keryx/.claude/worktrees/blissful-poitras-27beb5/.metaproject/reviews/2026-10-16-review-flow-github-com-mrciphersmith-keryx-pull-1043/slices/slice-02.diff",
+      "bytes": 148430
+    }
+  ],
+  "result": "raw/review-architecture-w2.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+}

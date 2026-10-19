@@ -1,0 +1,68 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Round 3 (fix delta f47ebb0ec..8a9ae3d20). Of 9 prior review-regression findings: 8 closed, 1 partial (RG2-004: the claims file is kept, but an ingest without --premises still drops every hold and prints no warning). The delta introduced no new blocker, major or minor. 2 new info findings, both edge cases in the new RG2-001/RG2-004 code.",
+  "prior_dispositions": [
+    {"id": "r2-review-regression-code#RG2-001", "disposition": "closed", "evidence": "src/review/premise-question.ts:199 asks registryVouchesPackage before the findings.json write, and :209 re-records with event decide-premise only when the package was vouched for. src/review/round-registry.ts:182 adds the check, and valid() accepts the new event. Test: src/review/prior-round.test.ts 'an operator's premise answer rewrites findings.json and re-records the round' (delta is kept, the answer is carried). Both writers pass cwd: review-operator.ts:156 and operator-confirm-review.ts:629."},
+    {"id": "r2-review-regression-code#RG2-002", "disposition": "closed", "evidence": "src/review/dedupe.ts:359 moves an absorbed premise only when member.severity === canonical.severity. Held verdicts are never merged at all (dedupe.test.ts covers challenged and owner-decision). A blocker re-statement now stays unjudged, and Wave D judges it."},
+    {"id": "r2-review-regression-code#RG2-003", "disposition": "closed", "evidence": "src/commands/operator-confirm-review.ts:319 refuses premise-decisions in buildCard, before any card is drawn, using the shared PREMISE_DECISIONS_NOT_WAIVABLE message (readiness.ts). The schema text at :306 now says (1-11). A test was added in operator-confirm-review-tools.test.ts."},
+    {"id": "r2-review-regression-code#RG2-004", "disposition": "partial", "evidence": "src/review/managed.ts:507-511 now renames research-evidence/premises.json to premises.superseded.json instead of deleting it, so the judge's record survives and can be passed back with --premises. Not done from the suggested fix: the 'print a warning' half and the 'refuse' alternative. The main trigger (Wave D saved the claims, then the ingest ran without --premises) still silently writes findings.json with no premise. Readiness item 11 then passes as 'no finding is held' (readiness.ts:199), and the judge's challenged findings reach the fix loop as ordinary open findings with no message saying so."},
+    {"id": "r2-review-regression-skills#NEW-1", "disposition": "closed", "evidence": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:1127 now says a new finding has no global_id until ingest mints it. Display ids must be unique (a collision is renumbered before dispatch), and a claim names the id. premise.ts claimTargets/mergedKeyNames resolve bare ids through merged_from."},
+    {"id": "r2-review-regression-skills#NEW-2", "disposition": "closed", "evidence": "review-premise/SKILL.md:65 and review-pr-feedback/SKILL.md:366 both say the id is the collected C-NNN and the URL goes in `url`. The claims are now saved beside the durable record as .metaproject/reviews/pr-comments/<owner>__<repo>__<n>.premise.json. The .metaproject mirrors are byte-identical."},
+    {"id": "r2-review-regression-skills#NEW-3", "disposition": "closed", "evidence": "src/gdskills/bundled/rules/core/session-plan-bridge.mdc:39 names `step-0` … `step-14` and `step-10b`, and session-plan-bridge-contract.test.ts now pins both the skill and the rule. The mirror rule is identical."},
+    {"id": "review-regression-w8#RG8-003", "disposition": "closed", "evidence": "src/commands/operator-confirm-review.ts:306 now says 'its number (1-11)' and that item 11 is never waived."},
+    {"id": "review-regression-skills#RG-002", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:59 now orders the tail as ingest (with --premises), then the operator's answers, then readiness and complete. :1129 says to ask 'at the tail, after `ingest --premises` wrote `findings.json` (never during Wave D, before the ingest)'. Remaining nit: :59 still labels the answer step '(Wave D)'."}
+  ],
+  "findings": [
+    {
+      "id": "RG3-001",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": 511,
+      "quote": "await rename(path.join(packageDir, PREMISES_FILE), path.join(packageDir, PREMISES_SUPERSEDED_FILE));",
+      "problem": "The RG2-004 fix moves the claims file to one fixed name. rename() replaces an existing premises.superseded.json without a word, so a second supersession destroys the first preserved record. Sequence: ingest --premises P1, ingest without, ingest --premises P2, ingest without. After that P1 is gone.",
+      "impact": "Narrow. It needs repeated re-ingests that alternate with and without --premises. In that case it loses exactly the record the fix exists to keep, and nothing reports the loss.",
+      "suggested_fix": "Give the superseded file a unique name (a timestamp or counter suffix), or refuse the move when the target exists. Print a line naming where the claims went, which also covers the missing warning in RG2-004.",
+      "evidence": "managed.ts:507-511; premise.ts:62 (one constant name); review-premises-cli.test.ts covers only one supersession.",
+      "confidence": "high",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "RG3-002",
+      "severity": "info",
+      "file": "src/review/premise-question.ts",
+      "line": 209,
+      "quote": "const recorded = recordFinishedRound(packageDir, \"decide-premise\", registryPlace(registry));",
+      "problem": "The vouch check (line 199) runs inside the decisions lock, but the re-record (line 209) runs after the lock is released. Two answers can overlap: A writes and releases, B checks (not vouched yet, because A has not re-recorded), A re-records its own state, then B writes and skips its re-record. The registry is left holding A's findings hash.",
+      "impact": "Needs two operator answers on the same package at the same moment, for example a card and a terminal. The result is the RG2-001 symptom again for that package: the next round runs full and asks again about findings already answered. No trust is granted wrongly.",
+      "suggested_fix": "Run recordFinishedRound inside the lock, in recordPremiseDecision's critical section after appendDecision succeeds. Or compute `vouched` and re-record within one lock span.",
+      "evidence": "premise-question.ts:195-212; operator-decisions.ts:195-203 (the lock covers only applyFirst and the append).",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 2}
+}
+```
+
+Summary: review-regression, code fix delta of round 3 (f47ebb0ec..8a9ae3d20), read-only.
+
+Prior findings: 8 closed, 1 partial.
+- Closed: RG2-001 (the round is re-recorded after an answer to a vouched package, with a test proving the next round stays a delta and the answer carries), RG2-002 (a premise moves only between equal severities), RG2-003 and RG8-003 (the card refuses item 11 before drawing, and the schema says 1-11), NEW-1, NEW-2, NEW-3 and RG-002 (the skills/rule wording is fixed and the mirrors are identical).
+- Partial: RG2-004. The claims file is kept as premises.superseded.json, but an ingest without --premises still drops every hold silently: there is no warning and no refusal.
+
+New in this delta: 0 blocker, 0 major, 0 minor, 2 info.
+- RG3-001: a second supersession overwrites premises.superseded.json.
+- RG3-002: the registry re-record runs outside the decisions lock, so two answers at the same moment can leave the registry stale.
+
+Also checked, no defect found:
+- SEC2-002: dismissed* no longer lifts a hold. Every premiseHoldState caller that matters passes the decisions (verdict, readiness, flow-gate withPremiseHolds).
+- isReviewPackageDir accepts both real package roots: .metaproject/reviews/<id> and flows/<flow>/reviews/<id>.
+- The automatic-review guard: case folding, segments at any depth, symlinks resolved, and a dangling link is refused.
+- The ingest and recordDispositions writes now take the decisions lock, and no caller nests it.
+- readiness `ingested` comes straight from the verdict's useRound.
+- The premiseClaims to premisedFindings rename has no leftover readers.
+- Every importer now takes cardSafe from src/lib/card-safe.
+
+Routing audit: graph_used: no (not-relevant: a bounded diff review with the files named), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx rg), raw_rg_used: no.

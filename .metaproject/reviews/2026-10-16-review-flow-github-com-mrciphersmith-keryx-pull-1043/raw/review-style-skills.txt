@@ -1,0 +1,149 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-style",
+  "summary": "Shared law 4 is byte-identical in all 46 SKILL.md files that carry it and the .metaproject and bundled mirrors are identical. One real propagation gap (job-orchestrator Step 8 ingest has no --premises); the rest is DRY, spec-gap and wording minors.",
+  "slices": ["slice-03", "slice-06", "slice-07"],
+  "findings": [
+    {
+      "id": "F-001", "severity": "major", "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md", "line": 1150,
+      "quote": "--verifications <path/to/verifications.json> --verification-mode annotate \\\n  --refuted <path/to/refuted.json> \\",
+      "problem": "Only the fix-loop ingest (line ~1308) gained `--premises <file>`. The round ingest in Step 8 (line 1150), which every job round passes through first, still omits it, although Wave D runs on every round.",
+      "impact": "A round-1 finding that review-premise challenged is never ingested as held, so the first fix iteration's UNRESOLVED_FINDINGS (blocker+major) still contains it and it is sent to task-implementer: the exact failure flow 459 exists to prevent. The 'never one review-premise holds' rule on the loop's first line has nothing to read.",
+      "suggested_fix": "Add `--premises <path/to/premises.json>` to the Step 8 ingest block and a matching row to the evidence table near lines 996-1000 (premise claims exist | review-premise dispatched, passed as --premises). Mirror in src/gdskills/bundled.",
+      "evidence": "Both ingest commands in job-orchestrator/SKILL.md: the line 1150 block has no --premises, line 1308 has it; `premise` appears in the file only at 1279, 1308, 1325.",
+      "confidence": "high", "reviewer": "review-style",
+      "class_scope": {"sites": [".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:1150", "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md (same block)"], "enumeration_method": "searched 'review ingest' and 'premise' in both job-orchestrator copies; flow-orchestrator and feature-dev ingest only through review-orchestrator, so they have no second site"}
+    },
+    {
+      "id": "F-002", "severity": "minor", "file": ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md", "line": null,
+      "quote": "ask the operator its question with its options (card `review_decide_premise` in keryx shell, the question tool elsewhere)",
+      "problem": "The held-finding handling (ask the operator, then `keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason ...`) is pasted near-verbatim in five places and the copies already drift: some carry the full command, flow-orchestrator Phase 1 and its Red Flag only the card, and only review-orchestrator Wave D says never to send the operator to a terminal from keryx shell.",
+      "impact": "A change to decide-premise flags or to the shell/terminal rule must be made in five files plus mirrors.",
+      "suggested_fix": "Keep the full instruction once (review-orchestrator Wave D) and have the fix-loop orchestrators point to it plus the single command.",
+      "evidence": "Sites: flow-orchestrator step 6 'A held finding is not fixed'; flow-orchestrator Phase 1 'A flow whose source is a finding'; job-orchestrator UNRESOLVED_FINDINGS comment; feature-dev Phase 7 step 3; review-orchestrator Wave D bullet 3. Same in the bundled mirrors.",
+      "confidence": "high", "reviewer": "review-style"
+    },
+    {
+      "id": "F-003", "severity": "minor", "file": ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md", "line": null,
+      "quote": "A flow whose source is a finding** — a follow-up issue filed from a review, or an external review comment — is a premise to check",
+      "problem": "review-premise's Input Contract requires canonical findings with `id`, `reviewer`, `severity`, `quote`; an issue or comment has none, and flow-orchestrator Phase 1 and feature-dev Phase 1 do not say how to build them. The claims file keys on `finding_id`, and `decide-premise` needs a `--package`, which an issue-sourced flow lacks (Phase 1 says 'journal the answer', which the premise skill never mentions).",
+      "impact": "A worker following Phase 1 literally cannot produce a valid claims file or record the decision through the command the other sites name; it will improvise.",
+      "suggested_fix": "In review-premise's Input Contract state how a non-round source is wrapped (synthetic id, `reviewer: external`, `source`) and that its decision is journaled, not recorded with decide-premise; link both Phase 1 sites to it.",
+      "evidence": "review-premise Input Contract and `source` row; flow-orchestrator Phase 1; feature-dev Phase 1 step 1.",
+      "confidence": "medium", "reviewer": "review-style"
+    },
+    {
+      "id": "F-004", "severity": "minor", "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md", "line": null,
+      "quote": "- [ ] Step 10b: Wave D",
+      "problem": "Step 10b is added to the Workflow list, but the plan bridge (Step 6a and 'How to spawn' item 0) still publishes exactly `step-0`...`step-14` and says steps 8-10 become completed only after ingest. 10b has no plan id and 'steps 8-10' does not cover it.",
+      "impact": "On keryx shell the plan has no Wave D item, so the turn can finish with every item completed while premises were never dispatched or ingested; the guard the plan bridge provides does not reach the new wave.",
+      "suggested_fix": "Fold 10b into step-10's definition of completed (ingest of verifications and premises) or add a `step-10b` id and extend the 'steps 8-10' sentence.",
+      "evidence": "review-orchestrator Workflow checklist, 'Step 6a', 'Slices, waves and results' item 0.",
+      "confidence": "medium", "reviewer": "review-style"
+    },
+    {
+      "id": "F-005", "severity": "minor", "file": ".metaproject/skills/gdskills/review/review-premise/SKILL.md", "line": 111,
+      "quote": "a test gap, a surviving mutant or a minor stays as reported unless intent or practice shrinks it",
+      "problem": "The Verdicts table says `downgraded` is 'strictly lower and never below `minor`', so a `minor` can never be downgraded. The law implies a minor can be shrunk and also says 'Minors matter'.",
+      "impact": "A judge may emit `downgraded` with severity info for a minor, which the merge rejects, or not know that `challenged` is the only route for a minor.",
+      "suggested_fix": "Reword: 'a minor is upheld or challenged, never downgraded'.",
+      "evidence": "review-premise Verdicts row `downgraded` vs Iron Laws row 'Never re-grade by the rubric'.",
+      "confidence": "high", "reviewer": "review-style"
+    },
+    {
+      "id": "F-006", "severity": "minor", "file": ".metaproject/skills/gdskills/review/review-premise/SKILL.md", "line": 50,
+      "quote": "Step 1: Drop every finding you raised yourself, and every finding below `minor`",
+      "problem": "The skill can never add a finding (law 'You can only lower or hold'), so 'findings you raised yourself' cannot exist; the clause is repeated in review-orchestrator Wave D ('Never with findings it raised') and in 'Never judge your own finding'. The real case, a finding whose `reviewer` equals the judge name from an earlier pass, is not stated.",
+      "impact": "Reader confusion over what the merge's `self-judgement` rejection covers.",
+      "suggested_fix": "Say 'a finding whose `reviewer` is your own name (an earlier pass of this judge)'.",
+      "evidence": "review-premise Step 1 and Iron Laws rows 1-2; review-orchestrator Wave D bullet 1.",
+      "confidence": "medium", "reviewer": "review-style"
+    },
+    {
+      "id": "F-007", "severity": "minor", "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md", "line": 1279,
+      "quote": "never one review-premise holds   # held (challenged/owner-decision): ask the operator its question with its options (card `review_decide_premise` in keryx shell",
+      "problem": "A 400-character instruction is hung as a trailing `#` comment on a pseudo-code assignment. Step 7 ('record what became of each finding ... every one of them') lists no disposition state for a held finding, and job-orchestrator and feature-dev say nothing about an unattended run (flow-orchestrator says 'leave it held and journal it'; Wave D says readiness and the flow gate then fail).",
+      "impact": "An unattended job loop reaches step 7 with a finding that has no valid disposition and a gate that will refuse completion, with no instruction.",
+      "suggested_fix": "Move the held-finding rule into prose under the block; state the step-7 disposition after the operator answers (dismiss -> dismissed-incorrect with the operator's reason; uphold -> normal) and the unattended behaviour.",
+      "evidence": "job-orchestrator lines 1279, 1308-1325 and step 7; review-orchestrator Wave D bullet 3 last two sentences; feature-dev Phase 7 step 3.",
+      "confidence": "medium", "reviewer": "review-style"
+    },
+    {
+      "id": "F-008", "severity": "info", "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md", "line": null,
+      "quote": "ask the operator about each held finding (see \"Wave D\")",
+      "problem": "Wave D is 'always', but the text does not say what happens with no finding >= minor (not dispatched, or an empty claims file) or when the verifier never ran (Wave C is conditional). SKILL.detail.md 'Early verdict' (line 860) has no mention of premises, so whether the interim verdict lists held findings depends on ingest order.",
+      "impact": "Ambiguity only; one sentence in Wave D and in 'Early verdict' would settle it.",
+      "suggested_fix": "Add 'no finding >= minor: Wave D is not dispatched' and name premises.json in the early-verdict steps.",
+      "evidence": "review-orchestrator Wave D; SKILL.detail.md has zero 'premise' matches.",
+      "confidence": "medium", "reviewer": "review-style"
+    },
+    {
+      "id": "F-009", "severity": "info", "file": ".metaproject/skills/gdskills/review/review-premise/SKILL.md", "line": 113,
+      "quote": "An external finding is held, never dismissed.",
+      "problem": "Wave D includes external (PR-comment) findings. The skill says an external finding is never dismissed but is silent on `downgraded`, which the table allows for any finding.",
+      "impact": "Observation; one clause ('upheld or held, never downgraded') would settle it.",
+      "suggested_fix": "State the allowed verdicts for external findings.",
+      "evidence": "review-premise Verdicts and Iron Laws row 7; review-orchestrator Wave D bullet 1.",
+      "confidence": "low", "reviewer": "review-style"
+    },
+    {
+      "id": "F-010", "severity": "info", "file": ".metaproject/skills/gdskills/review/review-layout/SKILL.md", "line": null,
+      "quote": "numbers, code, phone numbers, and a chart's time axis unless the product decides otherwise",
+      "problem": "The new 'does not mirror' item cites 'Material Bidirectionality, Apple HIG' for the whole list. Playback controls and progress are what those guides name; numbers, code, phone numbers and a chart time axis are broader and uncited here.",
+      "impact": "Under shared law 4 the item reads as authority for suppressing findings on all of them, and a reviewer cannot check that from the text.",
+      "suggested_fix": "Cite per item or narrow the list to what the cited guides say.",
+      "evidence": "review-layout 'Logical properties and RTL', new third bullet.",
+      "confidence": "low", "reviewer": "review-style"
+    },
+    {
+      "id": "F-011", "severity": "info", "file": ".metaproject/skills/gdskills/review/review-premise/SKILL.md", "line": 138,
+      "quote": "\"ref\": \"src/player/TimelineSlider.tsx:150\"",
+      "problem": "The example claim uses invented refs (TimelineSlider.tsx:150, eslint.config.js:42, MediaControls.tsx:81) while Iron Law 4 says 'Never invent a quote'; the file does not mark the example illustrative.",
+      "impact": "A model could copy example refs as evidence.",
+      "suggested_fix": "Label the example 'illustrative refs, do not reuse'.",
+      "evidence": "review-premise Output Contract example vs Iron Laws row 4.",
+      "confidence": "low", "reviewer": "review-style"
+    },
+    {
+      "id": "F-012", "severity": "info", "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md", "line": null,
+      "quote": "PR bodies, comments, replies and commit messages lead with the conclusion",
+      "problem": "Unrelated to flow 459: 'Everything written to GitHub is brief' is moved to SKILL.detail.md and replaced by a one-sentence pointer, so the always-loaded file loses the two-sentence cap and 'the reply pass enforces this'. The three existing shared laws are also reflowed to single lines in 46 files, which makes the law 4 addition harder to see in the diff.",
+      "impact": "Diff noise and a scope remark; no wrong behaviour shown.",
+      "suggested_fix": "Say in the PR body that the move is a size-budget change.",
+      "evidence": "slice-03 diff lines 180-201; slice-06 diff lines 1308-1328.",
+      "confidence": "medium", "reviewer": "review-style"
+    },
+    {
+      "id": "F-013", "severity": "info", "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md", "line": null,
+      "quote": "A deliberate choice is not a defect until its reason is read and shown wrong.",
+      "problem": "Verification, not a defect: shared law 4 is byte-identical (md5 of the whole paragraph) in the 46 SKILL.md files that carry it, and every changed file under .metaproject/skills/gdskills matches its src/gdskills/bundled/skills mirror byte for byte. It is absent from review-premise (carried as its Question 1), review-verifier and review-pr-feedback, which are not domain reviewers.",
+      "impact": "None; recorded so the next round does not re-check it.",
+      "suggested_fix": "None.",
+      "evidence": "awk extraction of the law-4 paragraph over every SKILL.md under .metaproject/skills and src/gdskills/bundled gave one hash x 46; cmp over the changed-file list printed no difference.",
+      "confidence": "high", "reviewer": "review-style"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 1, "minor": 6, "info": 6}
+}
+```
+
+# Style Review Report
+
+## Verdict: REQUEST_CHANGES (one major propagation gap)
+
+## Summary
+Law 4 and the two mirrors are consistent. The review-premise skill and Wave D read clearly and are well ordered. The one real defect is that job-orchestrator's primary ingest (Step 8) never passes `--premises`, so a round-1 held finding is still fixed. The rest is duplication of the held-finding instruction across five files, an under-specified entry path for finding-sourced flows, plan-bridge and early-verdict gaps for the new step, and wording contradictions inside review-premise.
+
+## Stats
+- major: 1
+- minor: 6
+- info: 6
+
+## Major Issues
+F-001 job-orchestrator Step 8 ingest lacks `--premises`.
+
+## Minor & Info
+F-002 to F-013 above.

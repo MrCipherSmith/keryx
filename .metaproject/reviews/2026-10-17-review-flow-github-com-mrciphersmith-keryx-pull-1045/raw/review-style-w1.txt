@@ -1,0 +1,81 @@
+```json keryx:findings
+{
+  "reviewer": "review-style",
+  "status": "DONE",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "quote": "reads the package and prints eleven items, READY or NOT READY",
+      "title": "Readiness section still says eleven items after item 12 was added",
+      "problem": "The diff appends item 12 `quotes-located` to the list directly under this sentence and cli-reference.md was updated to 'twelve-item', but the unchanged lead sentence still says eleven.",
+      "impact": "Misleading count in the orchestrator's own detail doc; the list and the sentence disagree.",
+      "suggested_fix": "Change 'prints eleven items' to 'prints twelve items'.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "quote": "and refuses one that does not resolve there",
+      "title": "Stale cli-reference paragraph contradicts the new quote_unlocated behaviour",
+      "problem": "The paragraph (an unchanged context line in the diff) still says `review ingest` refuses an internal finding whose quote does not resolve. The same PR rewrites SKILL.md, review-with-a-record.md and the locator section of this file to say the round is kept and the finding flagged quote_unlocated.",
+      "impact": "Same doc now states both behaviours; a reader cannot tell which holds.",
+      "suggested_fix": "Reword to: 'keeps one that does not resolve there, flagged quote_unlocated (readiness item quotes-located)', matching SKILL.md.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/review-ledger.ts",
+      "quote": "scopeReviewed and rawReconciled",
+      "title": "Help text: unrelated sentence left dangling after the inserted Token spend paragraph",
+      "problem": "The model sentence originally ran straight into 'scopeReviewed and rawReconciled are true only when established'. The diff inserts the Token spend paragraph in between, so the next line now begins mid-paragraph with that unrelated sentence.",
+      "impact": "Reads as if the usage paragraph ends with a claim about scopeReviewed/rawReconciled.",
+      "suggested_fix": "Move the Token spend paragraph after the 'scopeReviewed and rawReconciled are true only when established.' sentence, or give that sentence its own line.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/commands/review-ledger.ts",
+      "quote": "diagnosis: explainUnparsedResult(splitUsage(body).body)",
+      "title": "splitUsage(body) computed twice in the same statement block",
+      "problem": "`const { usage } = splitUsage(body);` is followed on the next line by a second `splitUsage(body)` call to get `.body`. Both come from one call.",
+      "impact": "Redundant work and two sources for one value; a later edit to one call can drift from the other.",
+      "suggested_fix": "const { usage, body: reply } = splitUsage(body); then use explainUnparsedResult(reply).",
+      "confidence": "high"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/commands/review-ledger.ts",
+      "quote": "models: ReadonlyArray<{ reviewer: string; model?: string | undefined }> = [], usage?: UsageTotals",
+      "title": "renderLedgerReport grows to nine positional parameters",
+      "problem": "Another optional positional parameter is appended to a signature that already had eight, several of them defaulted booleans and arrays.",
+      "impact": "Call sites like the one in the --json branch are hard to read and easy to reorder wrongly.",
+      "suggested_fix": "Not blocking; fold the trailing optionals (dryRun, notRun, models, usage) into one options object when next touched.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "quote": "\"branch\": \"release/0.3.121\",",
+      "title": "Regenerated gdgraph build artifacts ride along in the PR",
+      "problem": "provenance.json, module-map.json and summary.md changed only because the graph was rebuilt on another branch; they carry no change related to flow 460.",
+      "impact": "Noise in the diff and a provenance record naming a branch other than the PR's.",
+      "suggested_fix": "Drop the generated graph files from this PR unless the repository convention is to commit every rebuild.",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
+# Style Review Report (slice-01)
+
+Verdict: APPROVE_WITH_SUGGESTIONS. Slice 01 is mostly flow.json bookkeeping, docs and help text; the code touched (agent.ts import, review-ledger.ts usage wiring) is clean and consistently named. Four minors are stale or awkward text, none functional.
+
+Stats: major 0, minor 4, info 2.

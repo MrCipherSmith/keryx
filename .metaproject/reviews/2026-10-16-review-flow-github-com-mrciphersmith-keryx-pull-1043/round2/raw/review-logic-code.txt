@@ -1,0 +1,117 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Round 2 fix delta (c144874f..90f0861ab, read at HEAD f47ebb0ec). 17 of 18 attached review-logic findings are closed; LG8-002 is partial (an absorbed key resolves only when the claim names its global_id, not its bare id). The delta adds no blocker or major. It adds two minors (a case-sensitive operator-only guard on a case-insensitive filesystem, and a carried-premise normalisation that can write a 'downgrade' the tightened schema forbids) and three info observations.",
+  "prior_dispositions": [
+    { "id": "review-logic-w4#F-001", "disposition": "closed", "evidence": "src/review/premise-question.ts:54 reads the hold from the finding record only; the premises.json fallback is gone." },
+    { "id": "review-logic-w4#F-003", "disposition": "closed", "evidence": "src/flow/review-gate.ts:1452-1469 counts atFloor separately from heldBelow in the pass detail; the violated detail names held findings." },
+    { "id": "review-logic-w8#LG8-001", "disposition": "closed", "evidence": "premise-question.ts:54 (no raw-claim fallback); managed.ts:508 removes a stale premises.json on an ingest without --premises; verdict.ts:228 no longer re-applies the file to an ingested round." },
+    { "id": "review-logic-w8#LG8-002", "disposition": "partial", "evidence": "premise.ts:205-208 resolves through merged_from, but merged_from holds global_ids (dedupe.ts:102,330; minted before dedupe at managed.ts:303). A claim naming the bare id of an absorbed finding (the form review-premise SKILL.md:150 shows, and the only one a judge has before ingest mints the ids) still matches nothing and is rejected as unknown-finding. The test premise.test.ts:281 covers only the global_id form." },
+    { "id": "review-logic-w8#LG8-003", "disposition": "closed", "evidence": "src/review/dedupe.ts:356 copies the premise from an absorbed member onto the merged record when the canonical has none." },
+    { "id": "review-logic-w8#LG8-004", "disposition": "closed", "evidence": "src/review/premise.ts:538: premiseHoldState returns none for a refuted, dismissed* or fixed/acted-on record with no decision. Readiness and the gate share the rule (review-gate.ts:433)." },
+    { "id": "review-logic-w9#F-001", "disposition": "closed", "evidence": "Same root as LG8-001: premise-question.ts:54 accepts only the record's own premise, so a rejected claim is no longer offered." },
+    { "id": "review-logic-w9#F-002", "disposition": "closed", "evidence": "src/review/readiness.ts:337 reads premiseRecords(), the verdict's own record view (verdict.ts verdictRecords). See info N5 for the --raw residue." },
+    { "id": "review-logic-w9#F-003", "disposition": "closed", "evidence": "src/review/verdict.ts:228 (ingested: counts records that carry a premise) and :234 (raw: upheld+downgraded+held); the render line is reworded." },
+    { "id": "review-logic-w9#F-004", "disposition": "closed", "evidence": "src/review/dedupe.ts:356 carries an absorbed member's upheld premise onto a higher-severity canonical that has none." },
+    { "id": "review-logic-w4#F-002", "disposition": "closed", "evidence": "src/commands/review-operator.ts:156 (quote: answer) and operator-confirm-review.ts:625 (quote: confirmation.quote); validPremise requires quote." },
+    { "id": "review-logic-skills#LG-001", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:1129 and :47: card in keryx shell; elsewhere give the operator the command and 'Never run it yourself'. flow-orchestrator SKILL.md:442 says the same." },
+    { "id": "review-logic-skills#LG-002", "disposition": "closed", "evidence": "job-orchestrator SKILL.md:1169-1171 defines HELD and OPEN = blocker+major not in HELD, with NEEDS_FIX = count(OPEN); flow-orchestrator SKILL.md:532,536 excludes held findings from the exit and the fix round." },
+    { "id": "review-logic-skills#LG-003", "disposition": "closed", "evidence": "review-orchestrator SKILL.md:110 allows git log/blame/show for reviewers (review-premise too); review-logic SKILL.md:30,72 say the same." },
+    { "id": "review-logic-skills#LG-004", "disposition": "closed", "evidence": "review-premise SKILL.md:93,113 rule out downgrading an external or security finding; review-pr-feedback SKILL.md:366 passes only comments of severity minor or above." },
+    { "id": "review-logic-skills#LG-005", "disposition": "closed", "evidence": "review-premise SKILL.md:65 shapes an issue or comment as a finding (id URL, reviewer author, severity else minor); flow-orchestrator SKILL.md:279 saves the claims to <flow-dir>/premise/<n>.json and plans only what the operator upholds." },
+    { "id": "review-logic-skills#LG-006", "disposition": "closed", "evidence": "review-orchestrator SKILL.md:134 calls a verdict given before Wave D provisional; :88,105,120 add step-10b to the plan ids." },
+    { "id": "review-logic-skills#LG-007", "disposition": "closed", "evidence": "review-layout SKILL.md:124-125: 'usually deliberate: read its signals (law 4)' and 'An event timeline, calendar row or chart axis often does mirror'." }
+  ],
+  "findings": [
+    {
+      "id": "LG2-001",
+      "severity": "minor",
+      "file": "src/commands/automatic-review.ts",
+      "line": 268,
+      "quote": "!OPERATOR_ONLY_FILES.has(path.relative(dir, resolved))",
+      "problem": "The new operator-only guard on apply_patch compares the relative path case-sensitively. The extension check on the line above lowercases the path, so it already accounts for case variance. On a case-insensitive filesystem (the macOS and Windows defaults), a patch target `OPERATOR-DECISIONS.json` or `Operator-Decisions.json` passes the guard and writes the real operator-decisions.json. The same holds for any spelling that path.relative does not normalise to exactly `operator-decisions.json`.",
+      "impact": "In automatic review an agent's patch to the decisions file is approved without asking, which is the case the guard was added to stop (\"an agent cannot write an answer the operator did not give\"). A hand-written premise-question record with a subject, quote and confirmedVia is all validPremise checks, so the forged answer is accepted by the verdict, readiness and the flow gate.",
+      "suggested_fix": "Compare case-folded: `OPERATOR_ONLY_FILES` lowercased, checked against `path.relative(dir, resolved).toLowerCase()`. Better still, compare against realpath of the existing file when it exists. Add a test with an upper-case spelling.",
+      "evidence": "automatic-review.ts:266-268: the extension check uses `.toLowerCase()`, the operator-only check does not. operator-decisions.ts validPremise checks shape only.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LG2-002",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "line": null,
+      "quote": "return { ...finding, premise: { ...judgement, ...(stale ? { severity: finding.severity } : {}) } } as T;",
+      "problem": "normaliseCarriedPremise handles a carried `downgraded` premise whose `severity` disagrees with the finding's by overwriting premise.severity with finding.severity. It keeps verdict `downgraded` and original_severity. The result can be a 'downgrade' to the original severity (blocker -> blocker), to a higher one, or to `info`. The same delta tightened review-finding.schema.json so a downgraded premise.severity is only major|minor and original_severity only blocker|major. It also documents in premise.ts that a downgrade is strictly lower. The normalisation writes exactly the records the schema and that invariant reject.",
+      "impact": "Trigger: a delta round's --findings carries a downgraded finding whose severity was edited, or whose severity is `info`. This is the 'stale' case the function exists for. The ingested record then claims a downgrade that did not lower anything. scope.md and the published block report it as judge-downgraded, and any schema validation of findings.json fails on it.",
+      "suggested_fix": "When stale, either keep the judge's premise.severity and set the finding's severity to it (the judgement wins), or, if finding.severity is not strictly below original_severity or is outside major|minor, drop the downgrade (strip severity/original_severity and record verdict `upheld`, or drop the premise so the round's judge re-judges it). Add a test for a carried downgraded finding at blocker and at info.",
+      "evidence": "premise.ts normaliseCarriedPremise (the `stale` branch); review-finding.schema.json premise.severity enum [major, minor], original_severity enum [blocker, major]; the verifier never changes severity (verification.ts:25), so the only source of a mismatch is the input itself.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LG2-003",
+      "severity": "info",
+      "file": "src/commands/review-operator.ts",
+      "line": 156,
+      "quote": "await answerPremiseQuestion(packageDir, { finding, answer: answerArg, reason: reason.trim(), quote: answer, at, confirmedVia: \"terminal\" });",
+      "problem": "The card path re-reads the finding and compares its digest before recording (operator-confirm-review.ts:619-621). The terminal path records with the subject from the lookup it did before the prompt, which can wait indefinitely. If findings.json is re-ingested meanwhile, the decision is bound to the old subject. latestPremiseDecision then matches nothing, so answerPremiseQuestion's findings.json write is a no-op, yet the CLI logs 'recorded ... in operator-decisions.json and findings.json'.",
+      "impact": "No false application, because the subject binding protects it. Only the success line is wrong: the operator believes the question is answered while readiness still reports it awaiting.",
+      "suggested_fix": "Re-run findHeldFinding after the prompt and refuse when the digest changed, as the card does.",
+      "evidence": "review-operator.ts:142-156 vs operator-confirm-review.ts:619-625.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LG2-004",
+      "severity": "info",
+      "file": "src/review/premise.ts",
+      "line": 538,
+      "quote": "return hasTerminalOutcome(record) ? \"none\" : \"awaiting\";",
+      "problem": "Closing LG8-004 means any `dismissed*`, `fixed` or `acted-on` disposition lifts a premise hold without an operator answer. A disposition is writable by the agent (`keryx review disposition`, or an approved package-data patch to findings.json in automatic review, which the new guard does not cover). The flow gate then falls through to the ordinary disposition-evidence rules (review-gate.ts findingVerdict). So a held finding needs only what any other finding needs to end, not the operator's answer.",
+      "impact": "Intended by the LG8-004 fix and still evidence-gated, so not a defect. Recorded so the owner sees that 'blocks until the operator answers' now means 'until the operator answers or the finding gets an evidenced terminal disposition'.",
+      "suggested_fix": "If the hold must be operator-only, exclude agent-recordable dismissed states from hasTerminalOutcome and keep only refuted/fixed. Otherwise state the rule in the Wave D text.",
+      "evidence": "premise.ts hasTerminalOutcome; review-gate.ts:683-700.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LG2-005",
+      "severity": "info",
+      "file": "src/review/readiness.ts",
+      "line": 337,
+      "quote": "premise: await premiseRecords(packageDir),",
+      "problem": "premiseRecords always reads <package>/raw. `keryx review verdict --raw <dir>` (review.ts:4241) can read raw results elsewhere. Before ingest, the verdict and readiness item 11 can therefore still disagree on what is held. That was the shape of w9#F-002, now narrowed to the --raw case.",
+      "impact": "Only pre-ingest, and only with an explicit --raw outside the package; after ingest both read findings.json.",
+      "suggested_fix": "Accept rawDir in ReadinessOptions and pass it through, or note that readiness reads the package's own raw/.",
+      "evidence": "readiness.ts:337; verdict.ts premiseRecords(options.rawDir ?? <package>/raw).",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 3 }
+}
+```
+
+## Logic Review: PR #1043 round 2 (fix delta)
+
+- Scope: `round2/delta-code.diff` (c144874f..90f0861ab), files read at HEAD f47ebb0ec. I also checked the skill text at HEAD for the skills findings; the bundled copies and the `.metaproject` copies are identical.
+- Spec compliance gate: skipped (no issue/task in the payload).
+
+### Prior findings (18 attached, owner-dismissed and LG8-005 skipped)
+- closed: 17
+- partial: 1. LG8-002: `merged_from` holds global_ids, so a claim that names an absorbed finding by its bare id (the only form a judge has before ingest mints ids) is still rejected as unknown-finding.
+- open: 0, regressed: 0
+
+### New in the delta
+- minor LG2-001: the apply_patch guard compares the operator-decisions.json path case-sensitively, so another spelling of the name gets past it on macOS and Windows filesystems.
+- minor LG2-002: normaliseCarriedPremise can write a `downgraded` premise at the original severity, a higher one, or `info`, which contradicts the schema enums this same delta tightened.
+- info LG2-003: the terminal decide-premise does not re-check the finding after the prompt; the result is safe, but the success line can be wrong.
+- info LG2-004: since LG8-004, an evidenced terminal disposition lifts a hold without an operator answer. This is intended; recorded for the owner.
+- info LG2-005: readiness ignores `verdict --raw`, a pre-ingest residue of w9#F-002.
+
+### Stats
+- blocker: 0 | major: 0 | minor: 2 | info: 3
+
+Routing audit: graph_used: no (not-relevant: a bounded fix delta, read directly; memory notes gdgraph is unreliable on this repo). wiki_used: no (not-relevant). ctx_used: partial (`keryx ctx rg` returned nothing for one query; targeted reads were used with keryx:raw markers). raw_rg_used: yes (grep over src/review once, after `keryx ctx rg` returned empty).

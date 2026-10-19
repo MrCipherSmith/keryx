@@ -1,0 +1,172 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Slice slice-04 covers completion-gate, coverage, dispatch-usage, ledger, locate, managed, mutate, readiness, research and types for flow 460. One major: the new reply check that marks a DONE reviewer unfinished matches ordinary defect prose, so a finished reviewer whose summary says something like 'the X is not Y' near one of the listed input words is held open and re-dispatched on every retry. Eight minors and one info cover the session-scoped completion gate, the light-round base resolution, coverage.md derived from the research record, and doc drift.",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "reviewer": "review-logic",
+      "file": "src/review/ledger.ts",
+      "line": null,
+      "quote": "  new RegExp(`\\\\b${MANDATORY_INPUT}\\\\b[^.\\\\n]{0,80}${UNREADABLE}`, \"i\"),",
+      "problem": "unreadableInputClaim treats any summary in which one of the MANDATORY_INPUT words (payload, schema, review schema, result schema, pr context, context file, slice manifest) is followed within 80 non-period characters by any UNREADABLE alternative as a claim that the reviewer could not read its inputs. UNREADABLE includes the bare negations `is not`, `are not`, `was not`, `can't` and the word `missing`, and the second regex needs no read/open/load verb. Ordinary defect prose matches it. Examples: 'the dispatch payload is missing slices', 'the finding schema is not updated for usage', 'pr-context is not passed to the light check'. In keryx's own review code, which is mostly about payloads, schemas and PR context, this kind of sentence is routine.",
+      "impact": "When it matches, the reviewer's DONE result is recorded as `incomplete`, scopeComplete false, and a gap tells the operator to run retry-plan. Re-dispatching the same scope gets a similar summary and the same rejection. The round cannot reach scopeReviewed until someone rewords the reviewer's prose, so a finished review stays open.",
+      "suggested_fix": "Require an explicit inability phrase tied to a read verb in both patterns, for example `(could not|cannot|unable to|failed to) (read|open|load|access|find|parse) ... <input>` and `<input> ... (not found|does not exist|no such file|permission denied|unreadable)`. Drop the bare `is not` / `are not` / `was not` / `missing` alternatives, or anchor them to a read verb. Add negative tests built from ordinary defect summaries that mention payload, schema and PR context.",
+      "evidence": "ledger.ts:20 defines UNREADABLE with `(?:could|can|did|was|were|is|are)(?:\\s+not|n['’]t)` and `missing`. ledger.ts:23 builds the second pattern as MANDATORY_INPUT, then [^.\\n]{0,80}, then UNREADABLE. ledger.ts (buildLedger) sets `finished = FINISHED.has(status) && asked.length === 0 && unreadable === undefined` and sends unfinished runs to the retry gap. Example: summary 'The payload is missing the layers block' gives regex 2 a match on 'payload is missing'.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/ledger.ts:22", "src/review/ledger.ts:23", "src/review/ledger.ts:20"],
+        "enumeration_method": "keryx ctx rg 'UNREADABLE_INPUT|unreadableInputClaim' src/review: two patterns built from the one UNREADABLE alternation, and one consumer (buildLedger's `finished`)"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "    if (pointer === undefined || Date.parse(pointer.startedAt) < since) continue;",
+      "problem": "findReviewGateState now ignores an open package whose manifest is older than the session's first message (`if (info.mtimeMs < since) continue;`). It also ignores an active-review pointer whose startedAt is older. A shell session that resumes a review opened in an earlier session matches both conditions until something rewrites the manifest. Reading the package (`review status`, `review readiness`, dispatching reviewers) does not rewrite it. In that window the gate returns the placeholder 'no review package exists: `keryx review start` has not opened one', and nextStep tells the model to run `keryx review start --pr <n>`.",
+      "impact": "A resumed review is nudged to open a second package for the same PR instead of finishing the one the pointer names. The flow-460 description asked for the session start to be honoured, but the pointer exists to name the run in progress, and here its age vetoes it.",
+      "suggested_fix": "Honour a live pointer whatever its startedAt when this session's history names its package dir or review id (sessionReviewRoots already scans the history). Alternatively, keep the since-filter for scanned candidates only and not for the pointer.",
+      "evidence": "completion-gate.ts:93 `if (info.mtimeMs < since) continue;` and :126 pointer age check. sessionStartedAt is the first message ts. nextStep, for packageDir === '', prints the `keryx review start` instruction.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "const REVIEW_PACKAGE_PATH = /((?:[A-Za-z]:)?[^\\s\"'`<>|;&()]*?)\\.metaproject[\\\\/]reviews[\\\\/]([^\\\\/\\s\"'`<>|;&()]+)/g;",
+      "problem": "sessionReviewRoots adds a root for every `.metaproject/reviews/<x>` path found in any message content, tool results included, not only in the session's own commands. The pointer loop then takes the first root whose pointer is fresh. When cwd has no fresh pointer, for example before this session ran `review start`, a pointer in another worktree or checkout wins. That only needs some tool output in the history to quote that root's package path while a concurrent session there has started a review after this session began. The prefix also absorbs flag syntax such as `--package=out/x/`, which yields a bogus root (harmless, since readdir fails).",
+      "impact": "Within the narrow window it describes, the gate can again nudge about another session's review, which is the defect C this flow set out to close.",
+      "suggested_fix": "Collect roots only from the session's own tool-call arguments and from the output of `keryx review start|attach`, not from arbitrary tool results. Or prefer the root whose pointer's package dir appears verbatim in the history.",
+      "evidence": "completion-gate.ts:62-71 scans `message.content` (tool results) as well as toolCalls arguments. completion-gate.ts:124-131 takes the first fresh pointer across all roots.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/coverage.ts",
+      "line": null,
+      "quote": "  const recordedBase = str(target.base);",
+      "problem": "packageDiffStats documents that the light recheck diffs 'against the recorded `target.base`', but `keryx review start|ingest` never records one. runCreate builds `target: { kind, ref, head }`, and `--base` is passed only to findPreviousRound (review.ts:1093). Only the bot runner writes target.base. For CLI-started packages recordedBase is always undefined, so a PR whose base is not main/master is diffed against origin/main.",
+      "impact": "For a PR into a long-lived branch such as develop or a stacked PR, `origin/main...head` includes every commit on that branch. A genuinely small PR is then refused its light round, and defect A remains for those targets. This fails safe (full set), so it is minor.",
+      "suggested_fix": "Persist `--base` into manifest.target.base in runCreate (and in review plan's handoff), so the documented base order holds for CLI packages.",
+      "evidence": "src/commands/review.ts:1045 `target: { kind: targetKind, ref: targetRef, ...(head === undefined ? {} : { head }) }`. git grep finds no writer of target.base outside src/review/bot/run.ts:339.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/coverage.ts",
+      "line": null,
+      "quote": "    base = (await resolveBase(defaultGitRunner(cwd), { kind, ref: ref ?? \"\", base: recordedBase }, head))?.ref;",
+      "problem": "When every base candidate gives an empty range, resolveBase returns that empty-range base rather than null. This is the case of a merged PR with no recorded base. packageDiffStats does not check for it, so the diff is empty: files [] and changedLines 0. autoDepth then returns light for 0 files, and a dispatch that says light is accepted on the strength of an empty range.",
+      "impact": "In that case the coverage gate accepts the smaller light reviewer set without having seen the PR's real size. review plan warns loudly on the same range (emptyRangeWarning), but the gate stays silent.",
+      "suggested_fix": "Treat an empty range as unresolved here: call emptyRangeWarning(base, head) and return `{ error }` with that text, so the full set applies until a base is given.",
+      "evidence": "prior-round.ts:320-330 returns `empty` when every candidate's merge-base equals the head. coverage.ts autoDepth returns light when files.length 0 and changedLines 0 pass every gate.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-006",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "    if (status === \"complete\") entries.push({ reviewer, status: \"run\", reason: \"dispatched; the research ledger records it complete\" });",
+      "problem": "coverageFromResearch lists every `status: complete` run as 'dispatched'. That includes the runs buildLedger synthesises for roles that slice routing gave no slice (`routedOut: true`, rawEvidence pointing at manifest#roles). Those reviewers were never dispatched and returned no result.",
+      "impact": "coverage.md, which readiness item 6 holds to 'states the ingest status of each reviewer truthfully', says a routed-out reviewer was dispatched and ran. Readers of the package then see more reviewers run than actually did.",
+      "suggested_fix": "Check `routedOut === true` and record it as `status: run` with reason 'routed out: slice routing gave this role no slice' (or a separate status), not 'dispatched'.",
+      "evidence": "ledger.ts buildLedger pushes `{ status: \"complete\", routedOut: true, ... }` for routedOut roles. coverageFromResearch reads only reviewer/status/notRunReason/executionReason.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-007",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "  return reviewers.length === 1 && reviewers[0] ? reviewers[0] : \"review-orchestrator\";",
+      "problem": "Without --reviewers, the `reviewers` list given to normalizeFindings is now the complete runs from research.json, where it was the stand-in ['review-orchestrator']. If exactly one run is complete, defaultReviewer and legacyReviewer attribute every report finding that names no reviewer to that one reviewer. Example: one reviewer finished and the others are incomplete or not-run, and the orchestrator's report.md is parsed by the legacy reader.",
+      "impact": "Findings written by the orchestrator, or by an unfinished reviewer, are recorded as findings of the one finished reviewer, and per-reviewer stats and learning notes carry the wrong attribution.",
+      "suggested_fix": "Keep the attribution default separate from coverage. Pass ['review-orchestrator'] (or input.reviewers) as the attribution fallback and use coverageFromResearch only for coverage.md.",
+      "evidence": "managed.ts:274-283 derives `reviewers` from coverage status run and passes it to normalizeFindings. managed.ts:2137-2138 defaultReviewer returns the single entry. legacyReviewer at :2271-2277 falls back to it.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-008",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "  if (omitted.length > 0) return bad(`coverage.md omits ${some(omitted)}, which the dispatch record ran`, `re-run keryx review ingest <input> for this package: it writes coverage.md from the dispatch record`);",
+      "problem": "The new omitted-reviewer check fails item 6 whenever coverage.md does not list every run in the dispatch record, including routed-out and not-run entries. The repair it prints is wrong for one path. normalizeCoverage uses an explicit `--reviewers` list ahead of the research record, so re-running ingest with the same `--reviewers a,b` writes the same coverage.md and the item fails again. Packages ingested before this change with the review-orchestrator stand-in also fail, with the same advice.",
+      "impact": "Readiness reports NOT READY and its repair repeats the failing step, so the operator loops until they work out that `--reviewers` must be dropped.",
+      "suggested_fix": "Name the cause in the repair ('re-run ingest without --reviewers so coverage.md is written from research.json'), or let normalizeCoverage merge the research runs into an explicit --reviewers list.",
+      "evidence": "managed.ts normalizeCoverage tries `coverageFromResearch` only when `!(reviewers && reviewers.length > 0)`. review.ts:1028 reads `--reviewers` for ingest.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-009",
+      "severity": "info",
+      "reviewer": "review-logic",
+      "file": "src/review/locate.ts",
+      "line": null,
+      "quote": "/** How a finding's `line` was arrived at. */",
+      "problem": "The new UnlocatableKind block and its JSDoc were inserted between the existing doc comment and LocatorRecord. The 'How a finding's line was arrived at' comment now documents nothing, and LocatorRecord has lost its doc.",
+      "impact": "No runtime effect. Editor hovers and readers lose the LocatorRecord description.",
+      "suggested_fix": "Move the existing comment down to sit directly above `export type LocatorRecord`.",
+      "evidence": "locate.ts:52 comment followed by the UnlocatableKind JSDoc and type, then LocatorRecord.",
+      "confidence": "high"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 7, "info": 1 }
+}
+```
+
+## Logic Review — slice-04 (PR #1045, flow 460)
+
+### Review Scope
+- Branch: fix/review-gate-consistency (worktree blissful-poitras-27beb5), head dff7a38a1
+- Scope mode: supplied slice text (slice-04.diff); history read with git grep/show where needed
+- Spec compliance gate: ran against flow 460 description.md (items A–H touched by this slice)
+
+### Summary
+The slice wires one coverage gate into readiness (A), counts a recorded reviewer-override decision (B), scopes the shell completion gate to the session (C), stops counting DONE-without-slices as coverage (D/E), reconciles coverage.md and the light-round mutation line with what ran (F), keeps unplaceable quotes as flagged findings instead of refusing the ingest (G), and records per-dispatch token use (H). These pieces are mostly sound. The one major is the new reply check from item D: it matches ordinary defect prose, so finished reviewers get held open. The minors are edge gaps in the gate's session scoping, the light-round base resolution, and coverage.md derived from the research record.
+
+### Stats
+- blocker: 0 | major: 1 | minor: 7 | info: 1
+
+### Spec Gaps (blocker)
+None detected. Every outcome item in this slice has an implementation. F-004 notes that the "recorded base" path is dead for CLI packages, which leaves A partially open for non-main targets.
+
+### Logic Bugs
+- F-001 (major): the unreadable-input regex marks a finished DONE reviewer incomplete when its summary contains ordinary prose such as "payload is missing" or "schema is not". (src/review/ledger.ts:20-23)
+- F-005 (minor): a merged PR with no recorded base yields an empty range, and the light dispatch is accepted. (src/review/coverage.ts:531)
+- F-006 (minor): coverage.md says routed-out roles were "dispatched". (src/review/managed.ts:1212)
+- F-007 (minor): with exactly one complete run, findings that name no reviewer are attributed to that reviewer. (src/review/managed.ts:2138)
+
+### Async & Concurrency
+- F-002 (minor): a resumed session's own review is hidden by the since-filter, and the gate tells the model to `review start` again. (src/review/completion-gate.ts:93,126)
+- F-003 (minor): the session roots come from arbitrary tool output, so a foreign fresh pointer can win. (src/review/completion-gate.ts:43)
+
+### Error Handling
+- F-008 (minor): the coverage.md omission repair repeats the failing step when ingest was given `--reviewers`. (src/review/readiness.ts:272)
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+- F-004 (minor): target.base is documented as recorded but no CLI writer sets it. (src/review/coverage.ts:522)
+
+### Edge Cases
+- F-009 (info): an orphaned JSDoc in locate.ts.
+
+Routing audit: graph_used: no (not-relevant; slice text supplied), wiki_used: no (not-relevant; intent in description.md), ctx_used: yes (keryx ctx rg), raw_rg_used: no (git grep and grep for line numbers, marked keryx:raw).

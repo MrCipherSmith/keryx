@@ -1,0 +1,88 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Security review of slice-05 (completion-gate, coverage, dispatch-check, dispatch-usage, display-id, filter-stats, ledger, locate, managed, mutate, premise, prior-round). No exploitable vulnerability found. One minor hardening gap: the light-depth recheck for a PR target now trusts the agent-supplied recorded base. Three info observations on pre-existing trust classes the diff extends. Hardening added by the diff (nudge line flattening and bounding, displayId sanitisation, linear-time usage-line parsing with a length cap, git argv with --end-of-options and assertGitRevision, lexical cwd containment of session-named roots) was checked and holds.",
+  "slices": ["slice-05"],
+  "findings": [
+    {
+      "id": "SEC-001",
+      "severity": "minor",
+      "file": "src/review/coverage.ts",
+      "line": null,
+      "quote": "const resolved = await resolveBase(defaultGitRunner(cwd), { kind: target.kind, ref: target.ref ?? \"\", base: target.recordedBase }, head);",
+      "problem": "The light-round recheck (resolveDiffBase) for a PR target now diffs against manifest.target.base when one is recorded. resolveBase puts it first and keeps it even when the range it gives is small. That base comes from `review start --base <sha|ref>`, which the agent driving the review supplies, and nothing checks it against the pull request's real base. src/review/layers.ts already reads the real base with `gh pr view <ref> --json baseRefOid`. Attack vector: an agent that wants a shorter review (prompt-injected, or looping on the gate) starts the round with `--base <head~1>` on a large PR. The recomputed diff is then within LIGHT_MAX_FILES/LIGHT_MAX_CHANGED_LINES, so a dispatch saying `depth: light` is accepted with the 3-reviewer light set, and readiness and complete both pass.",
+      "impact": "A large PR can close on the light reviewer set. This is the gate-consistency guarantee flow 460 restores, and the recheck exists precisely so that agent-written records (scope-files.json) do not decide depth. Kept at minor because the non-PR path already trusted the agent-supplied target.ref/base the same way (sibling precedent, shared law 4). A recorded full round-depth.json still binds, and an empty range is refused.",
+      "suggested_fix": "For kind \"pr\", check the recorded base against the PR's baseRefOid (the gh lookup layers.ts already performs), or require that merge-base(recordedBase, head) equal merge-base(<PR base branch>, head) before a light depth is accepted. When the lookup cannot be made, fall back to resolveBase's origin/main... chain instead of the recorded base.",
+      "evidence": "src/review/coverage.ts:543 `const recordedBase = str(target.base);` (from manifest.json). src/review/coverage.ts:559 passes it as `base` to resolveBase. src/review/prior-round.ts resolveBase: `if (ref === target.base) return { ref, sha };` keeps an explicit base unconditionally. src/commands/review.ts:1044 reads it from the `--base` flag. src/review/layers.ts:179 shows a baseRefOid lookup already exists.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "SEC-002",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "const standalone = path.join(reviewsRoot(input.cwd), input.reviewId);",
+      "problem": "The new allocatePackage branch (ingest with --flow and --review-id) joins the unvalidated `--review-id` into a reviews-root path. It reads `<that>/manifest.json`, and ingests into that directory when the manifest says mode review-flow. A review id holding `..` resolves outside `.metaproject/reviews`. This is the same class as the pre-existing packagePath (`path.join(reviewsRoot(cwd), reviewId)`), which never validated the id either. No grep over src/commands or src/review found a review-id validator.",
+      "impact": "No external attacker reaches it: the id is a CLI argument of the local operator or agent, and that caller can already write anywhere packagePath allows. Recorded so a later hardening covers both join sites.",
+      "suggested_fix": "Validate --review-id once at the CLI boundary (e.g. /^[A-Za-z0-9._:-]{1,120}$/, the SAFE_REVIEW_ID completion-gate.ts already uses, and not `.`/`..`), and assert that the joined path stays inside reviewsRoot/flowReviewsRoot in packagePath and in this branch.",
+      "evidence": "src/review/managed.ts:2853 (new branch) and src/review/managed.ts:1144-1157 packagePath (pre-existing). Searched with `keryx ctx rg \"review-id.*(must|invalid|refus|not a)|reviewId.*(test\\(|match\\(|includes\\(\\\"\\.\\.)|SAFE_.*ID|validReviewId|isSafeReviewId\" src`, which found only completion-gate's display check.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "pre-existing"
+    },
+    {
+      "id": "SEC-003",
+      "severity": "info",
+      "file": "src/review/ledger.ts",
+      "line": null,
+      "quote": "const screenedAs = (reviewer: string, oid: string, fid: string) =>",
+      "problem": "Ledger obligations for raw findings now close as `out-of-scope` when research-evidence/ingest-screened.json lists them. Ingest writes that file, but it is a plain package file with no binding to the round record. Anything that can write into the package (the agent) can list a reviewer's finding there and close its obligation without writing a disposition.",
+      "impact": "This gives no privilege the agent lacks: it can already close the same obligation through `--dispositions` with its own evidence and reason. The difference is that the closure then reads as the ingest screen's word (the evidence names INGEST_SCREENED_FILE). No attack vector beyond the existing disposition channel, so info.",
+      "suggested_fix": "Optional: have `ledger build` cross-check each screened entry against scope.md's `## Scope B rejections` or the round record's hash, or record the file's sha256 in the manifest at ingest and ignore the file when it differs.",
+      "evidence": "src/review/ledger.ts:612-613 matches by id or reviewer+id. src/review/ledger.ts:635-637 closes with `status: \"out-of-scope\"`. src/review/managed.ts:561 writes the file with writeFileAtomic and records no hash.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "SEC-004",
+      "severity": "info",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "if (!inside(cwd, root)) continue;",
+      "problem": "Session-named project roots are confined to cwd by a lexical path.relative check, not a realpath check. A symlinked directory inside cwd that points elsewhere lets scanRoot/pickPackage read manifest.json files and hash package contents (dirSignature skips symlink entries but not a symlinked root) outside cwd.",
+      "impact": "These are reads only. They feed a harness nudge whose text is already flattened and bounded (nudgeLine, displayId). No write and no disclosure beyond the nudge's blocker lines, so no attack vector. Noted for completeness.",
+      "suggested_fix": "Optional: realpath both cwd and root before `inside`, as active-review's resolver does for the pointer.",
+      "evidence": "src/review/completion-gate.ts:116-119 `inside` uses path.relative only. src/review/completion-gate.ts:177-181 namePaths.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 3 }
+}
+```
+
+## Security Review — slice-05 (PR #1045 round 2)
+
+Scope: slice-05 covers src/review/{completion-gate,coverage,dispatch-check,dispatch-usage,display-id,filter-stats,ledger,locate,managed,mutate,premise,prior-round}.ts. Only read-only commands were run.
+
+Summary: Blockers 0, Major 0, Minor 1, Info 3.
+
+- SEC-001 (minor): for a PR target, the light-depth recheck trusts the agent-supplied `--base`. An agent can record a base next to head and get a light round on a large PR. Fix: check the base against the PR's baseRefOid.
+- SEC-002 (info): `--review-id` is joined into paths without validation. This is pre-existing in packagePath and repeated in the new allocatePackage branch.
+- SEC-003 (info): ingest-screened.json closes ledger obligations without any binding to the round record. It grants the same privilege as `--dispositions`, nothing more.
+- SEC-004 (info): the cwd containment for roots named in the session is lexical, not realpath. The access is read-only and only feeds the nudge.
+
+Clean areas checked:
+- Command injection: every git call uses an argv array with `--end-of-options`, `assertGitRevision`, and refs starting with `-` refused.
+- ReDoS: the KERYX_USAGE regex is linear and the line is capped at 4096 characters. reviewPackagePaths is an indexOf walk with bounded prefix and name.
+- Prompt injection into the harness nudge: blockers are flattened of control and line-separator characters and capped at 20 entries of 300 characters. A review id that is not a safe token is replaced.
+- The operator-override path (overrideRecorded) still requires a confirmed operator decision bound to head and to a superset of the left-out reviewers.
+- Premise multi-file merge keeps per-claim judge attribution.
+- No secrets, crypto, eval or HTML sinks appear in the slice.

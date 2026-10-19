@@ -1,0 +1,47 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Slice-05 is tests, a JSON schema addition, catalog/manifest entries, a tier signal and skill ceilings. No injection, auth, secret, crypto, traversal or redirect surface is introduced. One info observation on the operator-decision record's trust.",
+  "findings": [
+    {
+      "id": "SEC-W5-001",
+      "severity": "info",
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "problem": "The new premise.operator object (answer, reason, at, actor) is a self-asserted record: the schema validates shape only, so any writer of the package can place operator.answer=dismiss on a held finding, and the gate test 'the operator's answer written onto the record is read the same way' treats it as a terminal dismissal.",
+      "impact": "Not exploitable from this slice: package files are local operator/pipeline-owned artifacts, and the code that reads or applies operator decisions (review-gate.ts, operator-decisions.ts) is outside this slice. A reviewer-side forge would need the reviewer schema to admit `premise`, which it deliberately does not. Settling it needs a look at how ingest strips reviewer-supplied premise.operator.",
+      "suggested_fix": "Confirm in the ingest path that premise (especially premise.operator) from reviewer output is dropped and only written by `keryx review decide-premise`.",
+      "evidence": "Schema lines adding premise.operator with required answer/reason/at/actor; test at review-gate.test.ts 'the operator's answer written onto the record is read the same way'.",
+      "confidence": "low",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Security Review
+
+### Scope
+- Slice: slice-05 (tests, schema, catalog, install manifest, model-tier signal, ceilings), PR #1043 at head c144874f
+- Changed files reviewed: 12
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+### Findings
+
+### [SEC-W5-001] Operator record is self-asserted (info)
+- **Severity**: info
+- **File**: src/gdskills/contracts/review-finding.schema.json (premise.operator)
+- **Attack vector**: none reachable in this slice; would require a writer of the review package, or a reviewer able to emit `premise`, to forge operator.answer=dismiss and clear the gate hold.
+- **Problem**: shape-only validation of operator/actor.
+- **Fix**: verify ingest drops reviewer-supplied premise; outside this slice.
+
+### Clean Areas
+Injection, auth/authz, IDOR, input validation, secrets, crypto, CSRF, path traversal (test `--package` path is a temp dir fixture), open redirect, React/NestJS patterns: no findings. The tier floor `premiseJudge` only raises the model tier; no security floor is weakened (security floor still applies after it).

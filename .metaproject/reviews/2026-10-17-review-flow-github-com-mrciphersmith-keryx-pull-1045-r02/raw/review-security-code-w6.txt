@@ -1,0 +1,77 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Second look at slice-11 (src/review/readiness.ts, src/review/research.ts, src/review/types.ts) at head 375279e78. No exploitable vulnerability: no shell construction (packageArg goes through shellWord; the git diff behind packageCoverageErrors is Bun.spawn with an argv array and --end-of-options), no path built from finding data, no secrets or crypto. ingest recomputes quote_unlocated on every round (managed.ts deletes a carried flag), so a reviewer cannot pre-set or suppress it. What remains are gate-integrity gaps: item 12 counts any non-empty disposition state other than 'unknown' as answered, the coverage.md parser can be confused by reviewer names or reasons the writer does not constrain, readiness does not contain a throw from the newly called coverage gate, and item 12's title promises more than the flag covers.",
+  "slices": [{ "id": "slice-11", "coverage": "full", "status": "reviewed" }],
+  "findings": [
+    {
+      "id": "SEC-001",
+      "severity": "minor",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "return typeof state === \"string\" && state !== \"\" && state !== \"unknown\";",
+      "problem": "quotesLocatedCheck treats a finding as answered when disposition.state is any non-empty string other than \"unknown\". It does not check the value against FINDING_DISPOSITION_STATES (src/review/types.ts:212), so a malformed or made-up state (e.g. \"todo\", \"pending\", \"open\") closes item 12.",
+      "impact": "Gate integrity: a findings.json edited by hand or by an agent in the same package can turn quotes-located from FAIL to pass with a state no keryx command would write, and readiness reports READY on an unplaced claim with no real answer. Not an external attacker path: it needs write access to the package, which the orchestrating agent has.",
+      "suggested_fix": "Accept only a member of FINDING_DISPOSITION_STATES other than \"unknown\" (import the const from ./types), and name the finding with an invalid state in the FAIL evidence.",
+      "evidence": "readiness.ts quotesLocatedCheck `answered` compares only against \"\" and \"unknown\"; types.ts:212-220 lists the six real states. The decide/disposition commands write validated states, but readiness reads findings.json as raw records (record() over JSON), so nothing between the file and this check validates the value.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "SEC-002",
+      "severity": "info",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "const COVERAGE_ENTRY = /reviewer:\\s*(\\S+)\\s*\\n\\s*status:\\s*(\\S+)/g;",
+      "problem": "The coverage.md parser is unanchored and captures \\S+, while the writer (managed.ts renderCoverage / coverageFromResearch) puts dispatchRuns' reviewer and the dispatch record's free-text notRunReason/executionReason into the same file unescaped. dispatchRuns (research.ts) accepts any non-empty reviewer string. Two consequences: (a) a reviewer name containing whitespace is parsed as its first word, so item 6's new omitted check names it as omitted forever and its repair (re-ingest) cannot fix it; (b) a reason containing a newline and `reviewer: X\\nstatus: run` adds a phantom entry the parser reads as real.",
+      "impact": "No bypass found: a phantom entry can only add a 'run' claim (which the lying check then tests) or list a reviewer the record already lists, because coverageFromResearch writes every run. The cost is a false FAIL with an unrepairable repair, or a coverage.md whose parsed content differs from its rendered content. What would settle it: whether dispatchErrors rejects reviewer names with whitespace and reasons with newlines.",
+      "suggested_fix": "Anchor the regex to line starts (/^reviewer:[ \\t]*(\\S+)[ \\t]*\\n[ \\t]*status:[ \\t]*(\\S+)/gm) and have renderCoverage collapse newlines in reason; or validate reviewer names (no whitespace) in dispatchRuns.",
+      "evidence": "readiness.ts COVERAGE_ENTRY + coverageMdCheck `omitted`; research.ts dispatchRuns keeps `run.reviewer` if it is a non-empty string; managed.ts:2738 renders `reason: ${entry.reason}` and managed.ts:1233-1234 interpolate executionReason/notRunReason.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "SEC-003",
+      "severity": "info",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "const coverage = problems.length === 0 && ctx.coverageGated ? await packageCoverageErrors(ctx.dir, dispatch) : [];",
+      "problem": "reviewersCheck now calls packageCoverageErrors (scope files, git diff, pending mutants) with no catch. Its other caller, packageResearchErrors, wraps the same call in try/catch and turns a throw into a gate error; readiness does not, so a throw rejects computeReadiness as a whole instead of failing item 3.",
+      "impact": "If any of those readers throws on a malformed package file, `review readiness`, `review status`, the panel and the publish guard error out rather than print a NOT READY checklist. No concrete throwing input was traced (coverage.ts packageChangedLines and the git spawn are themselves guarded), so this is an observation: settle it by checking whether pendingMutants/packageScopeFiles/coverageErrors can throw on bad JSON.",
+      "suggested_fix": "Wrap the call: `.catch((error) => [`coverage gate could not run: ${error instanceof Error ? error.message : String(error)}`])`, so item 3 fails with the reason.",
+      "evidence": "readiness.ts reviewersCheck; research.ts packageResearchErrors has `catch { return [\"research ledger unreadable or invalid JSON\"]; }` around the same packageCoverageErrors call.",
+      "confidence": "low",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "SEC-004",
+      "severity": "info",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "const flagged = ctx.findings.filter((finding) => record(finding.quote_unlocated) !== undefined);",
+      "problem": "Item 12's title says every open finding's quote is placed in its file, but the check reads only the quote_unlocated flag, which ingest sets for locator kinds absent/ambiguous on internal findings (managed.ts:1445). A quote that could not be checked for another reason (path not contained by lexicalRelativePath, file unreadable at head) is left unlocatable with line null and no flag, and passes item 12; its pass evidence says every quoted finding was placed.",
+      "impact": "The checklist can say a quote was placed when it was never checked. Mitigated where path_missing lists the finding in scope.md; whether every unflagged unlocatable case is surfaced elsewhere was not traced.",
+      "suggested_fix": "Either narrow the title/evidence to 'absent or ambiguous', or have the check also count findings whose locator.state is 'unlocatable' and that carry a quote.",
+      "evidence": "readiness.ts READINESS_ITEMS entry 12 and quotesLocatedCheck ok() text; managed.ts:1437-1450 sets quote_unlocated only for locator.kind absent|ambiguous and source !== external.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 3 }
+}
+```
+
+## Summary
+
+Second-look security pass over slice-11 (readiness item 12 `quotes-located`, the coverage gate in item 3, the item 6 omitted-reviewer check, `dispatchRuns`/`packageCoverageErrors`/`ingestScreenedOf` in research.ts, `quote_unlocated` in types.ts) at head 375279e78.
+
+Clean: no command injection (repair text uses shellWord'd `ctx.arg`; the git diff behind the coverage gate is an argv spawn with `--end-of-options`), no path traversal from finding data, no secrets, no crypto. `quote_unlocated` cannot be forged or suppressed by a reviewer because ingest deletes and recomputes it each round.
+
+Findings: 1 minor (SEC-001, item 12 accepts any made-up disposition state as an answer) and 3 info (SEC-002 coverage.md parser vs unconstrained writer, SEC-003 uncaught coverage-gate throw in readiness, SEC-004 item 12 title broader than the flag it reads).

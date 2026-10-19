@@ -1,0 +1,88 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "Slice-01 is mostly flow bookkeeping, docs and the usage plumbing in review-ledger.ts. Code is small and clear; the concerns are two documents that still describe the pre-change behaviour and two small code-shape costs.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "reads the package and prints eleven items, READY or NOT READY",
+      "problem": "The diff adds readiness item 12 (`quotes-located`) directly below the list, but the sentence introducing the list still says it prints eleven items. cli-reference.md was updated to 'twelve-item' in the same diff, so the two documents now disagree. The same stale sentence exists in the bundled mirror src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:654.",
+      "impact": "Stale count misleads the next reader and any agent following the skill. No runtime trigger, so minor.",
+      "suggested_fix": "Change 'eleven items' to 'twelve items' in SKILL.detail.md and the bundled copy.",
+      "evidence": "git grep -i eleven finds .metaproject/skills/.../SKILL.detail.md:654 and src/gdskills/bundled/skills/.../SKILL.detail.md:654; the diff's item 12 is listed under it.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "doc-drift-eleven-items"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": null,
+      "quote": "and refuses one that does not resolve there",
+      "problem": "The paragraph under the `review complete` section still says `review ingest` refuses a finding whose quote does not resolve at its path. The diff changes that behaviour (flagged `quote_unlocated`, round recorded) in SKILL.md, the locator section of cli-reference.md and review-with-a-record.md, but this earlier paragraph in the same file was not updated, so the file contradicts itself.",
+      "impact": "Documentation drift: a reader of this paragraph expects a refused round, which no longer happens.",
+      "suggested_fix": "Rewrite the sentence to say an unplaceable quote is kept unanchored and flagged `quote_unlocated`; refusal remains only for a quote that could not be checked at all.",
+      "evidence": "docs/docs/cli-reference.md:4849 versus the added text in the locator section ('does not refuse the round') in the same file.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "doc-drift-ingest-refuses-quote"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/review-ledger.ts",
+      "line": null,
+      "quote": "diagnosis: explainUnparsedResult(splitUsage(body).body)",
+      "problem": "`splitUsage(body)` is called twice in the same statement block: once destructured as `{ usage }` and again inline for the diagnosis. The second call re-parses the usage line and rebuilds the body for no reason, and the loop now reads the body in two forms (raw for parseReviewResult, stripped for the diagnosis).",
+      "impact": "Redundant work and an easy place for the two forms to diverge on the next edit; cost to the next editor only.",
+      "suggested_fix": "Destructure once: `const { body: reply, usage } = splitUsage(body);` and use `reply` for the diagnosis.",
+      "evidence": "Added lines in the raw-loading loop: `const { usage } = splitUsage(body);` followed by `splitUsage(body).body` in the spread.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/commands/review-ledger.ts",
+      "line": null,
+      "quote": "export function renderLedgerReport(ready: boolean, gaps: LedgerGap[], blockers: string[]",
+      "problem": "The diff adds a ninth positional parameter (`usage?: UsageTotals`) to renderLedgerReport, which already takes eight, four of them defaulted (dryRun boolean, notRun, models). The caller passes them positionally. Clean Code B2: polyadic signature including a boolean flag.",
+      "impact": "Call sites are hard to read and transposing same-typed string-array arguments (`ignored`/`notRun`) would still compile. Maintenance cost only; the diff extends an existing shape.",
+      "suggested_fix": "Move the optional trailing arguments (dryRun, notRun, models, usage) into one options object.",
+      "evidence": "Signature line in the diff; the production call site passes all nine positionally.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/commands/review-ledger.ts",
+      "line": null,
+      "quote": "usage and the round's total (research.json \"usage\") are recorded; a dispatch without one is counted unknown, never 0. scopeReviewed and rawReconciled",
+      "problem": "In the ledger help text the sentence 'scopeReviewed and rawReconciled are true only when established.' used to follow the models sentence; the new token-spend paragraph was inserted between them, so it now trails the usage sentence and reads as qualifying it.",
+      "impact": "Detached sentence in help output; no behaviour change. Info because the original placement was already loose.",
+      "suggested_fix": "Move the Token spend paragraph after the scopeReviewed sentence, or give that sentence its own line.",
+      "evidence": "Diff hunk @@ 1,72 @@ of review-ledger.ts.",
+      "confidence": "low",
+      "reviewer": "review-clean-code"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 1 }
+}
+```
+
+## Clean Code Review (slice-01)
+
+Reviewed: schema addition, flow 458/459/460 bookkeeping (data), review-orchestrator SKILL docs, CHANGELOG, cli-reference, review-with-a-record, agent.ts nudge call, review-ledger.ts usage plumbing.
+
+- Minor: two docs still describe the pre-change behaviour (eleven readiness items; ingest refuses an unplaceable quote).
+- Minor: `splitUsage` called twice; `renderLedgerReport` grows to nine positional parameters.
+- Info: help-text sentence detached from the one it qualified.
+
+Clean areas: naming, code comments, error handling, SOLID (no class-level changes). Flow json/journal/graph files are machine-written data and were not reviewed for style.

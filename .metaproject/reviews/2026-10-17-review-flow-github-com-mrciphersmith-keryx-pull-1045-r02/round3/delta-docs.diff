@@ -1,0 +1,153 @@
+diff --git a/docs/docs/cli-reference.md b/docs/docs/cli-reference.md
+index a6839e650..829d79ed2 100644
+--- a/docs/docs/cli-reference.md
++++ b/docs/docs/cli-reference.md
+@@ -5548,8 +5548,13 @@ Token spend per dispatch: a raw result may end with one line
+ `KERYX_USAGE {"tokens_in":N,"tokens_out":M,"model":"<id>"}`. keryx shell's `spawn_subagent`
+ appends it to the `save_result_to` file itself; a host that saves the reply on its own
+ (Claude Code, Codex) appends it from the token counts its own agent result reports. A
+-reviewer's result object may carry the same `usage` object instead; the line wins. The line
+-is not part of the reply: it never makes an empty reply non-empty. `ledger build` records each
++reviewer's result object may carry the same `usage` object instead; the line wins. When a
++retry writes to the same file, every earlier dispatch's usage is kept as a
++`KERYX_USAGE_OTHER {…}` line and counted as its own dispatch; a complete earlier result is never
++overwritten by an empty or partial one. The lines are not part of the reply: they never make an
++empty reply non-empty. A reviewer that could not read a mandatory input says so in its result's
++`inputs_unreadable` array (e.g. `["pr_context"]`), which makes the run incomplete; its prose is
++never read for this. `ledger build` records each
+ run's `usage` (summed over its waves, with the count of waves that reported none, or
+ `"unknown"`) and the round's total as `research.json` `usage`
+ (`dispatches`, `known`, `unknown`, `tokens_in`, `tokens_out`); it prints `token spend: …`, and
+@@ -6671,12 +6676,13 @@ report, and into the disposition somebody later recorded against it. On a fix
+ round the file has moved under the finding by construction, which is when the
+ reported number is least trustworthy and most acted upon.
+ 
+-Matching is exact first, then with whitespace collapsed, then it stops — nothing
++Matching is exact first, then with whitespace collapsed, then — for a one-line
++quote only — as an exact substring of exactly one line, then it stops — nothing
+ fuzzy. Three outcomes, all recorded in `locator`:
+ 
+ | Outcome | What it means |
+ |---|---|
+-| `derived` | The quote was found; `line` is where, and `reported_line` keeps whatever the reviewer claimed. |
++| `derived` | The quote was found; `line` is where, and `reported_line` keeps whatever the reviewer claimed. `locator.method` records which pass placed it: `exact`, `whitespace-normalised` or `substring`. |
+ | `unlocatable` | It was not, and `line` is `null` rather than a number nobody checked. The `reason` says which: the file is absent at that commit, the quote does not appear, or it appears in more than one place. |
+ | absent | The finding carries no quote — one about the round rather than a site. Its `line` is reported-only, and says so by carrying no locator. |
+ 
+diff --git a/docs/docs/guides/review-with-a-record.md b/docs/docs/guides/review-with-a-record.md
+index 47fcf89da..bcfaf3961 100644
+--- a/docs/docs/guides/review-with-a-record.md
++++ b/docs/docs/guides/review-with-a-record.md
+@@ -644,7 +644,7 @@ status: draft
+ target: report round6-review.md
+ flow: none
+ coverage: 1
+-filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 dismissed_by_round=not-measured retained=3
++filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 merged_duplicates=0 dismissed_by_round=not-measured retained=3
+   low_confidence: not measured — this pipeline has no confidence threshold …
+   scope_b: not measured — no blast-radius record reached this ingest …
+ ```
+@@ -653,7 +653,7 @@ filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=
+ same numbers `scope.md` shows a person, in a form something else can check.
+ `not-measured` is not `0`: it means that stage did not run, and the reason is
+ printed underneath. `status` exits **1** when the numbers do not add up (`total`
+-minus the measured finding-stage drops must equal `retained`) or when a count is
++minus the measured finding-stage drops and `merged_duplicates` must equal `retained`) or when a count is
+ absent with no reason recorded, so a stage that starts dropping findings without
+ counting them is caught on the next status call rather than a release later.
+ 
+@@ -953,7 +953,7 @@ status: draft
+ target: report round6-review.md
+ flow: none
+ coverage: 1
+-filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 dismissed_by_round=not-measured retained=3
++filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=not-measured findings_cap=1 merged_duplicates=0 dismissed_by_round=not-measured retained=3
+   low_confidence: not measured — this pipeline has no confidence threshold …
+   scope_b: not measured — no blast-radius record reached this ingest …
+ ```
+@@ -962,7 +962,7 @@ filter_stats: total=5 prefilter=2 low_confidence=not-measured refuted=1 scope_b=
+ same numbers `scope.md` shows a person, in a form something else can check.
+ `not-measured` is not `0`: it means that stage did not run, and the reason is
+ printed underneath. `status` exits **1** when the numbers do not add up (`total`
+-minus the measured finding-stage drops must equal `retained`) or when a count is
++minus the measured finding-stage drops and `merged_duplicates` must equal `retained`) or when a count is
+ absent with no reason recorded, so a stage that starts dropping findings without
+ counting them is caught on the next status call rather than a release later.
+ 
+diff --git a/src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md b/src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md
+index ba9abee7f..2fd1b02d1 100644
+--- a/src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md
++++ b/src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md
+@@ -526,7 +526,7 @@ the bound plus an escalation — never an unbounded loop.
+ 
+ ### PR review/fix loop
+ 
+-1. Each round — the first and every one after a fix — is `keryx review start` on the PR's current head, then `review-orchestrator` from that package. `review start` finds the previous round itself (local package, git history, the PR's round block, the flow package) and, when the previous reviewed head is an ancestor, reviews the delta: fix changes with a small roster (logic, regression, the findings' authors, the verifier) and the prior findings attached, new changes as round 1, unchanged code carried with its dispositions. Never pass a whole-branch range or `--all` per round; `<package>/round.json` records the round, its source and its mode.
++1. Each round — the first and every one after a fix — is `keryx review start` on the PR's current head, then `review-orchestrator` from that package. `review start` finds the previous round itself (local package, git history, the PR's round block, the flow package) and, when the previous reviewed head is an ancestor, reviews the delta: fix changes with a small roster (logic, regression, the findings' authors, security-code when a security finding is attached, the verifier) and the prior findings attached, new changes as round 1, unchanged code carried with its dispositions. Never pass a whole-branch range or `--all` per round; `<package>/round.json` records the round, its source and its mode.
+ 2. If findings (held ones aside: Phase 3 step 6) or required check failures remain, run a fix round under Phase 3 step 6 (flow fix task, `task-implementer`), push the fix, and run the next round as in step 1.
+ 
+    **A required check failure is not automatically a fix task.** When `review.jev.ci_triage` is on, run `keryx review ci-triage --run <id> --json` on each failed run first: `top: flaky` (or a `deterministic` override) → rerun once (`gh run rerun --failed <id>`), record it in `journal.md`, and treat a second failure as `real-regression` regardless; `top: real-regression` → investigate and fix as usual; `top: infra` → report it in the completion notes and leave the code alone. The verdict is advisory only — never the sole reason to skip a fix task.
+diff --git a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
+index 16647efab..de585a93c 100644
+--- a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
++++ b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md
+@@ -651,7 +651,7 @@ certifies the flow is the one that checked the least.
+ 
+ ## Readiness — the checklist behind `completed` and behind publishing
+ 
+-`keryx review readiness <review-id-or-path> [--json]` reads the package and prints twelve items, READY or NOT READY, each with the evidence and the command that repairs it. It writes nothing, and exits non-zero when the verdict is NOT READY. Only item 9 reaches GitHub (the PR's own file list); the TUI and `review status` read the package alone.
++`keryx review readiness <review-id-or-path> [--json]` reads the package and prints every readiness item, READY or NOT READY, each with the evidence and the command that repairs it. It writes nothing, and exits non-zero when the verdict is NOT READY. Only item 9 reaches GitHub (the PR's own file list); the TUI and `review status` read the package alone.
+ 
+ 1. `files-covered` — every changed file is in a wave or carries a recorded waiver.
+ 2. `blast-radius` — no file the blast radius cut is left unreviewed. A cut radius writes `chunks.json`; run `keryx review chunks plan`, `estimate`, `next`/`record`, `merge`. In an unattended run every wave runs without a question, up to the 25-pass ceiling; in an interactive run the operator is asked once: in keryx shell call `review_chunks_answer` (a card, never a terminal); elsewhere the operator runs `keryx review chunks estimate --package <dir> --answer yes --quote "<their words>"` in their terminal; unattended, record Not run.
+diff --git a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+index dda2c1df0..4ee753ab5 100644
+--- a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ -682,7 +682,7 @@ record `model_assignment: adaptive` with the model you chose.
+ 
+ `keryx review start` (or `keryx review plan`) decides the round; you never pick a range. `<package>/round.json` says round N, the mode (`first`, `delta`, `fallback-first`), the source that found the previous round and the `range`; `<package>/prior_findings.json` holds the earlier findings. "Round 1 — no previous round found (sources tried …)" is a valid outcome: review as a first round and say which sources were tried.
+ 
+-- **`delta` round.** A FIX slice (`kind: fix`, a hunk that answers a prior finding) gets `review-logic`, `review-regression`, the authors of the findings attached to it and the verifier. Set `is_fix_round: true` and attach those findings as `prior_findings` on each of those reviewer inputs. A NEW slice (`kind: new`) is reviewed as round 1, with the roles its slice names. Code of `merge-base..head` that did not change since the previous round gets one cheap second look: SECOND-LOOK slices (`kind: second-look`, listed in `round.json` `secondLookHunks`) are read once per round by `review-logic` and `review-security-code` only, and their findings are ordinary findings. When round.json says "previous round weak: …" (the previous round did not complete, left uncovered slices, skipped required reviewers, had "Not run" lines, or reviewed a narrower scope) that code is `kind: new` instead and gets the full round-1 treatment. `review plan` prints "second-look: N slices / M dispatches". Carried findings keep their dispositions. An empty range (base equals head: a merged pull request read against its own target branch) is refused; pass the recorded base with `review start --base` / `review plan --ref`. A reviewer on a FIX slice returns `prior_dispositions: [{id, disposition}]` in its `REVIEW_RESULT`, one entry for every attached finding id.
++- **`delta` round.** A FIX slice (`kind: fix`, a hunk that answers a prior finding) gets `review-logic`, `review-regression`, the authors of the findings attached to it, `review-security-code` when one of them is a security finding, and the verifier. Set `is_fix_round: true` and attach those findings as `prior_findings` on each of those reviewer inputs. A NEW slice (`kind: new`) is reviewed as round 1, with the roles its slice names. Code of `merge-base..head` that did not change since the previous round gets one cheap second look: SECOND-LOOK slices (`kind: second-look`, listed in `round.json` `secondLookHunks`) are read once per round by `review-logic` and `review-security-code` only, and their findings are ordinary findings. When round.json says "previous round weak: …" (the previous round did not complete, left uncovered slices, skipped required reviewers, had "Not run" lines, or reviewed a narrower scope) that code is `kind: new` instead and gets the full round-1 treatment. `review plan` prints "second-look: N slices / M dispatches". Carried findings keep their dispositions. An empty range (base equals head: a merged pull request read against its own target branch) is refused; pass the recorded base with `review start --base` / `review plan --ref`. A reviewer on a FIX slice returns `prior_dispositions: [{id, disposition}]` in its `REVIEW_RESULT`, one entry for every attached finding id.
+ - **`fallback-first` round** (force-push or rebase: the previous head is not an ancestor). Review `merge-base..head` in full, with the prior findings attached.
+ - **Every attached prior finding leaves the round with a disposition** — `closed`, `open`, `partial`, `regressed` or `withdrawn` — one line each in the report before the new findings, checked against the code and not the commit message. A fix is new code: the report carries a `## Regressions the fixes introduced` section. A finding this round disproves is withdrawn at the top of the report with its evidence. Table, recorded shapes and rationale: `SKILL.detail.md` § "Fix rounds — dispositions, regressions, withdrawal".
+ - **Duplicates.** `keryx review ingest` merges duplicate findings; later waves receive `known_findings` and do not report them again.
+@@ -1223,7 +1223,7 @@ Before consolidation, validate every reviewer result:
+ - Every blocker must include evidence and a concrete suggested fix.
+ - Findings without evidence are downgraded to `info` or returned to the reviewer for clarification.
+ - Duplicate findings are merged by `dedupe_key` or by `(file, quote, problem)`.
+-- **A reply that is not a result is `BLOCKED`.** That covers an empty reply (`(subagent produced no text)`), a reply without a valid `REVIEW_RESULT` block, and a `spawn_subagent` output whose first line is `status: BudgetExhausted (…)` or `status: NoProgress …` — the reviewer was cut short, so whatever fragment it left is not its review. Re-dispatch it exactly once with a larger budget, telling it to return its report before the budget ends (and the same `cwd` when the round reviews a worktree). If that also fails, the pass is **not run**: list it under **Not run** with the reason, and never write its findings yourself — a review nobody ran reported as run is worse than a gap the operator can see.
++- **A reply that is not a result is `BLOCKED`.** That covers an empty reply (`(subagent produced no text)`), a reply without a valid `REVIEW_RESULT` block, and a `spawn_subagent` output whose first line is `status: BudgetExhausted (…)` or `status: NoProgress …` — the reviewer was cut short, so whatever fragment it left is not its review — and a `DONE` result whose `inputs_unreadable` lists a mandatory input it could not read. Re-dispatch it exactly once with a larger budget, telling it to return its report before the budget ends (and the same `cwd` when the round reviews a worktree). If that also fails, the pass is **not run**: list it under **Not run** with the reason, and never write its findings yourself — a review nobody ran reported as run is worse than a gap the operator can see.
+ - **The verifier is held to the same rule.** A finding without an applied verifier verdict is `unverified`; the orchestrator never verifies one itself, and a verifier that returned nothing leaves every finding `unverified`, stated in the stage counts.
+ - If a reviewer exceeds `max_findings`, keep blockers/majors first and summarize lower severity findings.
+ 
+diff --git a/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json b/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json
+index 52330a162..16c6e1c9c 100644
+--- a/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json
++++ b/src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json
+@@ -82,7 +82,7 @@
+             "minimum": 1
+           },
+           "quote": {
+-            "description": "The code this finding is about, copied verbatim out of `file`. A few lines is enough — it is matched against the file at the round's head, exactly first and then with whitespace collapsed. A quote that appears in more than one place is recorded as `unlocatable` rather than anchored to the first hit, so quote enough to be unambiguous.",
++            "description": "The code this finding is about, copied verbatim out of `file`. A few lines is enough — it is matched against the file at the round's head, exactly first, then with whitespace collapsed, then (a one-line quote) as an exact substring of exactly one line. A quote that appears in more than one place is recorded as `unlocatable` rather than anchored to the first hit, so quote enough to be unambiguous.",
+             "type": [
+               "string",
+               "null"
+@@ -184,6 +184,15 @@
+         "type": "string"
+       }
+     },
++    "inputs_unreadable": {
++      "title": "Mandatory inputs the reviewer could not read",
++      "description": "Name each mandatory input of the dispatch the reviewer could not read: pr_context.json, this schema, a context file, the payload, the slice manifest. Empty or absent when it read them all. A DONE or DONE_WITH_CONCERNS result that names any is not a finished run for `ledger build` or `retry-plan`. Only this field is read for it, never the summary's wording.",
++      "type": "array",
++      "items": {
++        "type": "string",
++        "minLength": 1
++      }
++    },
+     "follow_ups": {
+       "title": "Follow-ups handed back to the parent",
+       "description": "Work the reviewer could not do itself and leaves to the parent. Each entry becomes a research obligation `<raw>:fu<N>` (N counts from 1, in this order; a `Parent follow-up:` line after the REVIEW_RESULT block is appended) with status `unresolved`. It closes only through a disposition (`finding`, `refuted`, `out-of-scope` or `narrowed` with a \"what remains\" text); until then the ledger is not reconciled and the report lists it as not verified.",

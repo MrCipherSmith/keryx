@@ -1,0 +1,162 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-architecture",
+  "summary": "Skill-text pass over slices 03, 06, 07 of PR #1043 at c144874f: law 4 is propagated identically; two majors in the premise dispatch contract (git use vs read-only children; non-global finding ids), five minors on held/dismissed/external handling across the orchestrators.",
+  "slices": [
+    "slice-03",
+    "slice-06",
+    "slice-07"
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "line": null,
+      "quote": "| **Read-only.** Run nothing but `git log`, `git blame` and `git show`, and read files. |",
+      "problem": "Shared law 4 (in 23 reviewer skills) and review-premise tell the agent to read a choice's reason with `git log -L` / `git blame` / `git show`, but the dispatch contract says reviewers run no command: review-architecture 'a read-only child has no shell, so run no git command', and review-orchestrator 'Reviewers are read-only: they ... run no command. Only you, the verifier and at most one testing reviewer run commands'. Wave D grants review-premise no exception and, unlike the verifier (verify-run output handed as context), supplies no git history as context_files.",
+      "impact": "On keryx shell (children have no shell) or any dispatch with allowed_tools read-only, the commit-message/blame half of law 4 and premise question 1 is unreachable. The agent either breaks the read-only contract or silently skips a reason that lives only in git history, and reports the deliberate choice as a defect: the incident this flow exists to stop.",
+      "suggested_fix": "Pick one: (a) add review-premise to the orchestrator's short list of roles that may run read-only git (log, blame, show) and give law 4 a clause 'where you can run it; otherwise the supplied history'; or (b) have Wave D pre-run git log -L / blame for the cited sites and pass the output as context_files, as the verifier gets verify-run output. Reword law 4 identically in all 23 skills x 2 trees (the iron-laws test pins it).",
+      "evidence": "review-architecture/SKILL.md 'Supplied text first' paragraph; review-orchestrator/SKILL.md 'How to spawn' bullet 2; review-premise Iron Laws row 'Read-only'; slice-07.diff lines 927-932 and 967.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "class_scope": {
+        "sites": [
+          "review-premise/SKILL.md: Iron Laws 'Read-only' and question 1",
+          "review-orchestrator/SKILL.md: Wave D and 'How to spawn' bullet 2",
+          "law 4 text in the 23 reviewer SKILL.md files, in both .metaproject/skills/gdskills and src/gdskills/bundled/skills"
+        ],
+        "enumeration_method": "keryx ctx rg for 'A deliberate choice is not a defect until' in SKILL.md: 46 hits = 23 skills x 2 trees; run-no-command wording read in review-architecture and review-orchestrator"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "major",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "Dispatch it once after the last verifier pass, over the canonical findings of severity ≥ minor, external (PR-comment) findings included",
+      "problem": "Wave D never says to pass `global_id`, and review-premise's Input Contract only says each finding has 'its id'; its example claim uses finding_id \"LY-003\". Reviewer-local ids are [F-NNN] per reviewer, so two reviewers' F-001 collide. Wave C states the rule ('each carrying global_id and the real originating reviewer'); the verifier skill carries global_id; the premise merge rejects a claim matching more than one finding as `ambiguous-finding` ('use the global_id').",
+      "impact": "In a round where two reviewers each report F-001, a challenged or owner-decision claim on one is discarded whole (ambiguous-finding), the finding is not held, and it flows to the fixer as an open major: the false finding the judge exists to stop is implemented, with only a line in scope.md as trace.",
+      "suggested_fix": "In Wave D and the premise Input Contract: pass each finding with global_id and the real reviewer, state 'finding_id is the global_id', and change the skill example id to a global_id form.",
+      "evidence": "src/review/premise.ts mergePremises: matches by global_id or id, rejects matches.length > 1; review-orchestrator Wave C bullet on global_id; review-premise Input Contract row `findings`.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "class_scope": {
+        "sites": [
+          "review-orchestrator/SKILL.md Wave D first bullet",
+          "review-premise/SKILL.md Input Contract `findings` row and the claim example",
+          "review-pr-feedback rule 7 (collected comments carry C-NNN ids; the dispatch says nothing about which id)"
+        ],
+        "enumeration_method": "keryx ctx rg 'review-premise' over the review and orchestration skills; each dispatch description compared with Wave C's wording"
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+      "line": null,
+      "quote": "| `downgraded` | A defect, but intent or practice shows it is smaller than reported. |",
+      "problem": "The skill and Wave D include external (PR-comment) findings in the judged set, and the verdict table lets the judge downgrade any finding; the merge rejects a downgrade of an external finding (`external-downgrade`: 'challenge it with a question instead'). The Iron Law says only 'an external finding is held, never dismissed'. review-pr-feedback rule 3 also forbids lowering a collector's severity.",
+      "impact": "A judge following the skill emits a downgrade for a PR comment; it is rejected and listed in scope.md, the intended soft correction is lost and the round shows a rejected claim.",
+      "suggested_fix": "Add to the verdict table or Iron Laws: 'an external finding is never downgraded: hold it with challenged or owner-decision'.",
+      "evidence": "premise.ts external-downgrade branch; review-pr-feedback rule 3.",
+      "confidence": "high",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+      "line": null,
+      "quote": "plan it — and pass it in `fix_context.review_feedback` — only if the operator upholds it.",
+      "problem": "Rule 7 says what happens to a held comment the operator upholds, not to one the operator dismisses. Step 8 says a plan item exists only for valid/valid-wider and every other verdict is answered in Step 10 with no code change; a dismissed comment keeps verdict `valid`, and `disagree` requires a reachable decision.",
+      "impact": "The reply pass has no defined verdict or reply for an operator-dismissed comment: it is either planned anyway (verdict still valid) or answered ad hoc.",
+      "suggested_fix": "State in rule 7 that an operator-dismissed comment takes verdict `disagree`, citing the recorded decide-premise decision, and is answered in Step 10 with no code change.",
+      "evidence": "review-pr-feedback verdict table and Step 8 text, slice-07.diff 751-762 and 818-821.",
+      "confidence": "high",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-005",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "- [ ] Step 10b: Wave D — after the verifier, dispatch `review-premise`",
+      "problem": "Step 10b is added to the Workflow checklist, but the plan bridge (Step 6a and rule 0 of 'Slices, waves and results') is defined over fixed ids step-0 to step-14, and its completion rule ('steps 8-10 become completed only after ingest') does not mention 10b. The shell plan has no item for Wave D.",
+      "impact": "A keryx-shell round can finish its published plan with Wave D unrun or untracked: the plan runs ahead of the artifacts, the failure the Red Flags row 'Steps 8-10 are done' names.",
+      "suggested_fix": "Publish `step-10b` in Step 6a and rule 0, or name Wave D in the 'completed only after ingest' sentence (`review ingest --premises`).",
+      "evidence": "Step 6a and rule 0 text in slice-03.diff.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-006",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "dispatch `review-premise` on that finding (its claim, file, quote and the code it names)",
+      "problem": "The pre-freeze check (flow-orchestrator Phase 1, feature-dev Phase 1) dispatches review-premise outside any review package, yet claims are validated only by `review ingest --premises` and decisions recorded only by `decide-premise --package`. Nothing says where the claims go or how the self-judgement, evidence and downgrade rules apply; the answer is only 'journaled'. The `source` input (follow-up-issue, external-comment) is mentioned by neither caller.",
+      "impact": "A pre-freeze verdict is unvalidated prose: an uncited `challenged` can hold a legitimate issue for the operator and no later gate sees the decision.",
+      "suggested_fix": "State the sink (save the claims in the flow package and journal them), pass `source`, and say the uncited-challenge rule is applied by the orchestrator by hand because no ingest runs.",
+      "evidence": "flow-orchestrator Phase 1 added paragraph; feature-dev Phase 1 step 1; review-premise Input Contract `source`.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-007",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "UNRESOLVED_FINDINGS = all blocker + major findings from step 2.6, never one review-premise holds   # held (challenged/owner-decision): ask the operator",
+      "problem": "Two gaps in the fix-loop edits. (1) Unattended: held findings leave UNRESOLVED_FINDINGS, so NEEDS_FIX can go false and the loop ends reading clean while the review gate still fails on them; flow-orchestrator says 'leaves it held and journals it', but job-orchestrator and feature-dev give no unattended branch. (2) The operator procedure sits as a trailing `#` comment on a pseudo-code assignment, easy to skip.",
+      "impact": "An unattended job finishes its fix loop with a held major unanswered; the gate then fails at the end with no instruction on what to do.",
+      "suggested_fix": "Add an explicit 'held' step in the loop (ask, record, recompute NEEDS_FIX; unattended: stop and report the held list) instead of a trailing comment; mirror the unattended wording in feature-dev.",
+      "evidence": "job-orchestrator loop lines slice-06.diff 251 and 299; flow-orchestrator step 6 sub-bullet; Wave D last bullet.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "F-008",
+      "severity": "info",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "4. **A deliberate choice is not a defect until its reason is read and shown wrong.**",
+      "problem": "Checked, no defect: shared law 4 is byte-identical at every site. 46 hits of the full sentence = 23 reviewer skills x 2 trees (.metaproject/skills/gdskills and src/gdskills/bundled/skills), including review-orchestrator, whose 'carries a fifth' note was renumbered. Without it: review-verifier, review-premise, review-pr-feedback (rule 7 instead) and the four legacy code-* profiles (flag-only). The .metaproject and bundled copies of premise, orchestrator, layout, pr-feedback and the four orchestration skills are identical. Several files also had hard-wrapped lines joined into single lines (whitespace only).",
+      "impact": "None; recorded so 'identical everywhere' is evidenced.",
+      "suggested_fix": "No change.",
+      "evidence": "keryx ctx rg and grep -L over SKILL.md in both trees; diff -q of the paired copies.",
+      "confidence": "high",
+      "reviewer": "review-architecture"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 5,
+    "info": 1
+  }
+}
+```
+
+## Architecture Review
+
+### Summary
+Skill-text pass (slices 03, 06, 07). Shared law 4 is identical in all 23 reviewer skills in both trees (46 hits) and the two trees are in sync; Wave D's delete-only/hold design fits the Wave C pattern. The structural problems are in the premise dispatch contract: it tells a read-only child to run git, and it does not carry global_id, so colliding ids silently drop holds.
+
+### Stats
+- blocker: 0  |  major: 2  |  minor: 5  |  info: 1
+
+### Findings
+- F-001 major: law 4 and review-premise require git history that read-only or shell-less reviewers cannot run.
+- F-002 major: Wave D and the premise input omit global_id; colliding F-NNN ids make a claim ambiguous and the hold is lost.
+- F-003 minor: the skill lets the judge downgrade external findings; the merge rejects it.
+- F-004 minor: review-pr-feedback rule 7 has no outcome for an operator-dismissed comment.
+- F-005 minor: Step 10b is absent from the step-0..14 plan bridge.
+- F-006 minor: the pre-freeze premise check has no claims sink or validation.
+- F-007 minor: unattended fix loops end clean with held findings; the instruction is a trailing comment.
+- F-008 info: evidence that law 4 is identical everywhere.
+
+STATUS: DONE_WITH_CONCERNS

@@ -1,0 +1,86 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-highload",
+  "status": "DONE",
+  "summary": "Slice-04 is CLI/gate code with no server-side concurrency. One scan regex in the completion gate is quadratic on long unbroken tokens and runs on the event loop each gate turn; the rest are unbounded fan-out and polling-cost notes.",
+  "slices": ["slice-04"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/review/completion-gate.ts",
+      "quote": "const REVIEW_PACKAGE_PATH = /((?:[A-Za-z]:)?[^\\s\"'`<>|;&()]*?)\\.metaproject[\\\\/]reviews[\\\\/]([^\\\\/\\s\"'`<>|;&()]+)/g;",
+      "title": "Quadratic regex scan over every message and tool result on each gate evaluation",
+      "problem": "The lazy prefix group [^\\s\"'`<>|;&()]*? is tried from every start offset and, for a run of n non-delimiter characters containing no '.metaproject', scans to the end of the run each time: O(n^2) per run. sessionReviewRoots applies it to every history message content and every tool-call argument string, synchronously, on each gate evaluation (up to MAX_REVIEW_GATE_CONTINUES = 20 per run).",
+      "impact": "Failure mode: a tool result holding one unbroken token (base64 blob, minified single line with no spaces/quotes/parens, long hash list) of ~1 MB costs ~5e11 steps and freezes the shell event loop for minutes at the first gate check after it; ~100 KB costs several seconds per gate turn. It repeats every turn because the whole history is rescanned.",
+      "suggested_fix": "Cheap pre-check: skip any text where !text.includes('.metaproject'). Then drop the lazy prefix: match /\\.metaproject[\\\\/]reviews[\\\\/]([^\\\\/\\s\"'`<>|;&()]+)/g and recover the prefix by walking backwards from match.index over the delimiter class (linear). Also scan only messages added since the previous gate call.",
+      "evidence": "regex literal at the REVIEW_PACKAGE_PATH declaration; scan() iterates text.matchAll for each history message and each toolCall.arguments in sessionReviewRoots",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/completion-gate.ts:REVIEW_PACKAGE_PATH", "src/review/completion-gate.ts:sessionReviewRoots scan()"],
+        "enumeration_method": "read the full slice diff; the only new regex over unbounded session text is REVIEW_PACKAGE_PATH, consumed in one scan() closure"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "quote": "  const roots = [cwd, ...extraRoots.filter((r) => path.resolve(r) !== path.resolve(cwd))];",
+      "title": "Session-named roots are unbounded and each is rescanned (readdir, manifest reads, signature hash) every gate turn",
+      "problem": "sessionReviewRoots returns every distinct directory any tool output named through a '.metaproject/reviews/' path, with no cap and no check that the root exists or is a project. findReviewGateState then runs scanRoot (readdir plus a manifest read and stat per package) and resolveActiveReview for each, and findReviewGateState is evaluated again on every continue.",
+      "impact": "Failure mode: a session that greps or reads docs/logs naming many distinct review paths (e.g. a multi-repo listing, dozens to hundreds of roots) multiplies per-turn filesystem work by the root count, for up to 20 continues. Linear, not catastrophic; it also makes gate latency depend on transcript content.",
+      "suggested_fix": "Cap the roots (e.g. most recent 8), drop roots with no .metaproject directory before the loop, and memoise the set across turns by history length.",
+      "evidence": "sessionReviewRoots builds an unbounded Set; findReviewGateState loops all roots",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/review/readiness.ts",
+      "quote": "  const coverage = problems.length === 0 ? await packageCoverageErrors(ctx.dir, dispatch) : [];",
+      "title": "Readiness now runs the full coverage gate, including a 15 s git diff, on every evaluation",
+      "problem": "reviewersCheck used to read files only. It now calls packageCoverageErrors, which for a dispatch that says depth light goes through packageDiffStats and spawns git rev-parse plus git diff -U20 (15 s timeout, 8 MB buffer) and several package reads, on each computeReadiness call. computeReadiness is called from review.ts, operator-confirm-review.ts, the TUI readiness panel and status paths.",
+      "impact": "Failure mode: a status/panel refresh loop or repeated 'review readiness' on a large light-depth PR spawns a diff process per refresh (up to 15 s each, serial), so the panel stalls on large diffs. Bounded by the timeout; not a crash.",
+      "suggested_fix": "Memoise the coverage verdict per (package head, manifest mtime, dispatch hash), or run the git-backed light-depth check only from 'review complete' and have readiness report the cached result.",
+      "evidence": "reviewersCheck awaits packageCoverageErrors unconditionally when the dispatch is valid",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/review/dispatch-usage.ts",
+      "quote": "const USAGE_LINE = /^[ \\t]*KERYX_USAGE[ \\t]+(\\{[^\\n]*\\})[ \\t]*\\r?$/gm;",
+      "title": "Backtracking on a long KERYX_USAGE line with many closing braces",
+      "problem": "For a line that starts with KERYX_USAGE, '\\{[^\\n]*\\}' is greedy then backtracks to each earlier '}' while '[ \\t]*\\r?$' keeps failing, so a line with k '}' characters and a non-matching tail costs O(k * line length). Reviewer replies are model/attacker-influenced text; splitUsage runs on every parse and emptiness check of a raw result.",
+      "impact": "Failure mode: a single 1 MB line of '}' after the marker costs ~1e12 steps on the ingest path. Needs the marker at line start with a bad tail, so it is unlikely by accident.",
+      "suggested_fix": "Match the line with [^\\n]* only, then validate by trimming and checking the last char is '}' and JSON.parse inside the try block; or cap the line length (e.g. 4 KB) before applying the regex.",
+      "evidence": "USAGE_LINE definition; used in splitUsage via matchAll and replace",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/review/completion-gate.ts",
+      "quote": "    if (pointer === undefined || Date.parse(pointer.startedAt) < since) continue;",
+      "title": "A pointer with an unparseable startedAt is treated as fresh",
+      "problem": "Date.parse of a malformed string gives NaN, and NaN < since is false, so the stale-pointer guard does not skip it and the pointer's package becomes the gate target. Settling it: whether resolveActiveReview validates startedAt as an ISO date (not in this slice).",
+      "impact": "No load trigger; correctness note only, so info under shared law 1.",
+      "suggested_fix": "Use !(Date.parse(startedAt) >= since) so NaN is skipped.",
+      "evidence": "single comparison in the pointer loop of findReviewGateState",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
+## High-Load Review (slice-04)
+
+Load profile: not provided (CLI/shell gate code; severity assumes a long-running shell session with large tool outputs).
+
+Stats: blocker 0 | major 1 | minor 3 | info 1
+
+Summary: The new completion-gate root discovery scans all session text with a quadratic regex (F-001, major). Root fan-out (F-002), readiness spawning git per evaluation (F-003) and a backtracking usage-line regex (F-004) are minor. The usage totals in ledger.ts, the locator kind/candidates additions (hit scan is bounded by MAX_HITS) and the coverage-from-research code are linear and bounded.
+
+Clean areas: queues/backpressure, caching, DB, retries/idempotency, connection pools (none present in the slice). The git subprocesses have timeouts and buffer caps, and stderr/stdout are drained concurrently.

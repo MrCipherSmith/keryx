@@ -1,0 +1,41 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "All three prior review-style code findings are closed. The delta introduces no minor or higher style defect; two info notes.",
+  "prior_dispositions": [
+    {"id": "review-style-w8#F-005", "disposition": "closed", "evidence": "src/review/managed.ts:1878 singleEmbeddedBlock holds the fence match, more-than-one guard and embeddedBlockBody call once; parseEmbeddedFindings (:1896) and parseEmbeddedPremises (:1925) both call it"},
+    {"id": "r2-review-style-code#STYLE-R2-001", "disposition": "closed", "evidence": "src/review/managed.ts:2475 ScopeExtras now sits above the renderScope docblock; renderScope at :2501 directly follows its own docblock"},
+    {"id": "r2-review-style-code#STYLE-R2-002", "disposition": "closed", "evidence": "src/review/verdict.ts:228 countPremisedFindings (ingested) and applyPremiseClaims (raw) are split, flag removed; field renamed premisedFindings (:68, :270, :372); no premiseClaims reference left in src"}
+  ],
+  "findings": [
+    {
+      "id": "STYLE-R3-001",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": 1878,
+      "problem": "The long docblock describing the whole embedded-findings convention (one file, opening fence decides presence, indentation allowed) now sits on the generic embeddedFence(tag) helper, which also serves keryx:premises.",
+      "impact": "The prose talks about findings only; a reader of embeddedFence reads a findings-specific contract on a tag-parameterised function.",
+      "suggested_fix": "Move the convention docblock to parseEmbeddedFindings or give embeddedFence a one-line doc of its own.",
+      "evidence": "managed.ts:1858-1870 docblock then function embeddedFence(tag: \"findings\" | \"premises\")",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "STYLE-R3-002",
+      "severity": "info",
+      "file": "src/review/premise-question.ts",
+      "line": 292,
+      "problem": "answerPremiseQuestion sets a closure-mutated `let rerecord` inside the applyFirst callback and reads it after recordPremiseDecision returns; the undo path also resets it.",
+      "impact": "Control flow is carried by a flag mutated across an async callback, which is harder to follow than returning the value; correct as written.",
+      "suggested_fix": "Optional: have applyFirst return { undo, vouched } or compute `vouched` before the call.",
+      "evidence": "premise-question.ts: let rerecord = false; rerecord = vouched; rerecord = false in undo; if (rerecord) after the call",
+      "confidence": "low",
+      "reviewer": "review-style"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 0, "info": 2}
+}
+```
+
+Summary: prior review-style findings F-005, STYLE-R2-001 and STYLE-R2-002 are all closed at HEAD. New: 0 blocker, 0 major, 0 minor, 2 info (doc placement on embeddedFence; closure flag in answerPremiseQuestion).

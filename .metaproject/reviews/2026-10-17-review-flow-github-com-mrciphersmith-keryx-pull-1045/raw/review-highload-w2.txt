@@ -1,0 +1,69 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-highload",
+  "summary": "slice-02: no blocker or major under load. Empty-reply guard and usage accounting are sound; two minors (uncapped re-dispatch wording and unrecorded spend on empty children, sentinel-string coupling) and three infos.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001", "severity": "minor", "reviewer": "review-highload",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts", "line": null,
+      "quote": "\"treat the task as not done and re-dispatch it.\",",
+      "problem": "The new empty-reply error tells the parent to re-dispatch with no bound or backoff, and the path writes no KERYX_USAGE line (it returns before saveChildResult), so the tokens burned by each empty child are recorded as unknown.",
+      "impact": "Failure mode: a model that is persistently empty (context overflow, refusing provider) in a wave of N children is re-dispatched each time, each costing a full prompt; at wave scale spend grows N x retries and the ledger's token spend reads as a lower bound that hides it. The round ceiling and wave budget still bound it, hence minor.",
+      "suggested_fix": "State a retry cap in the message (or rely on a named cap) and, when childUsage.known, still record the usage (append to the save target or put it in the Error output) so failed dispatches count toward spend.",
+      "evidence": "The empty-reply branch returns Error before the saveNote/saveChildResult line that appends usageSuffix().",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-002", "severity": "minor", "reviewer": "review-highload",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts", "line": null,
+      "quote": "if (status === \"Completed\" && raw === \"(subagent produced no text)\" && turnResult?.submittedResult === undefined) {",
+      "problem": "Emptiness is detected by comparing against the placeholder string literal, which is duplicated in the raw computation and in the hadText check; rewording one of the three sites silently disables or misfires the guard.",
+      "impact": "Failure mode: if the placeholder is reworded in one place, empty children return to being reported Completed and the parent treats a no-result reviewer as success on every wave (the defect flow 460 E removes).",
+      "suggested_fix": "Compute a boolean (const producedNoText = ...) once where raw is built and use it at all three sites.",
+      "evidence": "Three occurrences of the literal in this file (raw computation, hadText, new guard).",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003", "severity": "info", "reviewer": "review-highload",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts", "line": null,
+      "quote": "childUsage.tokens_in += tokensIn ?? 0;",
+      "problem": "onUsage sums every usage_update. Anthropic's message_delta restates cumulative counts; if a stream ever emitted more than one usage_update per request, input would be double counted. Current providers emit one per request (Gemini explicitly once before model_end), so no reproducible path was found.",
+      "impact": "Would overstate spend only if a provider emits repeated cumulative updates; settle by confirming one usage_update per request per provider or tracking the last value per request.",
+      "suggested_fix": "Track per-request last-seen values and add them at request end.",
+      "evidence": "gemini-provider pushUsageAndFinish emits once; anthropic emits on message_delta.",
+      "confidence": "low"
+    },
+    {
+      "id": "F-004", "severity": "info", "reviewer": "review-highload",
+      "file": "src/commands/review-plan.test.ts", "line": null,
+      "quote": "process.chdir(repo);",
+      "problem": "The new e2e test mutates process-global cwd, XDG_DATA_HOME and console.* and restores them in afterEach; it is safe only while test files run serially in one process.",
+      "impact": "Under concurrent test execution in one process, other tests would observe the temp cwd; no such configuration was found in the diff.",
+      "suggested_fix": "None needed unless concurrency is enabled; then pass cwd explicitly.",
+      "evidence": "afterEach restores ORIGINAL_CWD.",
+      "confidence": "low"
+    },
+    {
+      "id": "F-005", "severity": "info", "reviewer": "review-highload",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts", "line": null,
+      "quote": "const usageSuffix = (): string =>",
+      "problem": "When no usage was measured the suffix is empty, so a child that writes its own KERYX_USAGE line in its reply is read by splitUsage as host-measured spend; when measured, the host line is last and wins.",
+      "impact": "A model can misstate its own spend only in the unmeasured case; accounting, not safety.",
+      "suggested_fix": "Optionally strip child-authored KERYX_USAGE lines before saving.",
+      "evidence": "USAGE_LINE in src/review/dispatch-usage.ts accepts any line-anchored occurrence, last wins.",
+      "confidence": "low"
+    }
+  ],
+  "stats": {"blocker": 0, "major": 0, "minor": 2, "info": 3}
+}
+```
+
+## High-Load Review (slice-02)
+
+Summary: nothing blocking or major. The empty-reply guard returns before the save path (budget already released), and usage accounting is per-invocation local state with no shared mutable data. Minors: uncapped re-dispatch wording and unrecorded spend on empty children (F-001), sentinel-string coupling (F-002). Infos: F-003, F-004, F-005.
+
+Stats: blocker 0 | major 0 | minor 2 | info 3
+
+Clean areas: concurrency/shared state, pools, caching, database, queues, idempotency.

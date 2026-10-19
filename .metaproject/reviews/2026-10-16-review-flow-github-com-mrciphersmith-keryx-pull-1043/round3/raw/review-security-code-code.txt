@@ -1,0 +1,67 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Round 3 security review of the fix delta f47ebb0ec..8a9ae3d20. SEC2-002 is closed: a dismissed* disposition no longer lifts a premise hold, in premise.ts, the verdict, readiness and the gate. SEC2-001(b), the --prior carry, is closed: create --prior is path-checked and carryPremiseDecisions re-validates its source. SEC2-001(a) is only partly closed. toLowerCase() does not fold U+017F (long s). On APFS `operator-deciſions.json` is the same file as `operator-decisions.json`. While the package has no decisions file yet, which is the normal state while held findings wait for an answer, the guard approves that name, and the decisions store reads it back. I probed this on this machine's APFS against the HEAD code. One info item: the registry re-record runs after the decisions lock is released.",
+  "findings": [
+    {
+      "id": "SEC3-001",
+      "severity": "major",
+      "file": "src/commands/automatic-review.ts",
+      "line": 258,
+      "quote": ".some((segment) => OPERATOR_ONLY_NAMES.has(segment.toLowerCase()));",
+      "problem": "The operator-only guard compares path segments after String.prototype.toLowerCase(). The APFS (and NTFS) name match uses Unicode case folding, and that is wider. U+017F LATIN SMALL LETTER LONG S folds to `s`, and toLowerCase() leaves it as it is, so `operator-deciſions.json` passes `named(dir, resolved)`. The realpath branch catches the name only when operator-decisions.json already exists, because Bun's realpathSync then returns the on-disk name. When it does not exist yet, realTarget appends the missing segment as written, and `named(realDir, real)` misses it too. The extension check passes, since `.json` is unchanged. Once the agent has created the file, the realpath branch returns the agent's own spelling, so later patches are approved as well. readPremiseDecisions opens path.join(dir, 'operator-decisions.json'), and on a case-insensitive volume that finds the agent's file.",
+      "impact": "Attack vector, the same as SEC2-001(a): during an automatic review, hostile PR content steers the orchestrating agent. The agent apply_patches `<bound package>/operator-deciſions.json` with a complete premise-question record: {kind:'premise-question', finding:<held id>, answer:'dismiss', reason, quote, at, actor:'operator', confirmedVia:'terminal', subject:{severity, verdict, problemSha256}}. The subject's problemSha256 is sha256 of the problem text, which the agent can compute. approvesPatchTargets approves the patch with no question. readPremiseDecisions returns the forged record, premiseHoldState returns `dismissed`, and the flow gate and readiness item 11 pass for a held blocker the operator never answered. The precondition is a package with no operator-decisions.json yet, which is the usual state while a held finding waits for its first answer. Probe (scratchpad, HEAD code, APFS): approvesPatchTargets(['.metaproject/reviews/<ID>/operator-deciſions.json']) returns true with no file and again after the file exists; readdir shows only 'operator-deciſions.json'; readFileSync('<dir>/operator-decisions.json') returns its contents.",
+      "suggested_fix": "Do not rely on a JS case mapping to match the filesystem. Either (1) refuse any approved patch target with a segment outside a conservative ASCII set (e.g. /^[A-Za-z0-9._-]+$/), so a name that could alias the operator files always needs the operator; or (2) fold with segment.normalize('NFC').toUpperCase().toLowerCase() (ſ→S→s, Kelvin K→K→k) and keep (1) as defence in depth. Add `operator-deciſions.json` and `.operator-deciſions.lock/x` to the test at automatic-review.test.ts:16-23.",
+      "evidence": "src/commands/automatic-review.ts:216 builds OPERATOR_ONLY_NAMES with toLowerCase(); :232-246 realTarget appends the non-existent tail as written; :253-262 touchesOperatorOnly; :320-324 approvesPatchTargets. A Bun probe shows 'operator-deciſions.json'.toLowerCase() !== 'operator-decisions.json' and that APFS resolves the name to the same file. The guard approved the path before and after creation, and the ASCII path read back the agent-created file.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "class_scope": {
+        "sites": ["src/commands/automatic-review.ts:216", "src/commands/automatic-review.ts:258"],
+        "enumeration_method": "grep toLowerCase|OPERATOR_DECISIONS_FILE in src/commands/automatic-review.ts. The only name compares for operator-only files are the set construction (:216) and the segment test (:258), and both cover both members (decisions file, lock dir). The extension compares at :321-322 fail closed on a folded variant (.jſon is not allowed), so they are outside the class."
+      }
+    },
+    {
+      "id": "SEC3-002",
+      "severity": "info",
+      "file": "src/review/premise-question.ts",
+      "line": 208,
+      "quote": "const recorded = recordFinishedRound(packageDir, \"decide-premise\", registryPlace(registry));",
+      "problem": "answerPremiseQuestion checks registryVouchesPackage inside the decisions lock, but it calls recordFinishedRound after recordPremiseDecision has released the lock. findings.json is also writable by an auto-approved apply_patch, which takes no lock. A write landing between the release and the re-record would be hashed and vouched by the registry as the decide-premise round.",
+      "impact": "No reachable path shown. It needs an agent tool call to run concurrently with the operator's answer, between two adjacent awaits. Settling it means checking whether keryx shell runs an apply_patch concurrently with a confirm-card apply. If it can, a steered agent's edits to findings.json would be vouched as if keryx had finished that round.",
+      "suggested_fix": "Run the re-record inside the same withOperatorDecisionsLock callback, after appendDecision succeeds. Or re-check that findings.json still hashes to the content just written before recording.",
+      "evidence": "src/review/premise-question.ts:177-213: vouched is computed in the applyFirst callback, and the re-record runs after `await recordPremiseDecision(...)` returns; src/review/operator-decisions.ts withOperatorDecisionsLock wraps only applyFirst + appendDecision.",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "prior_dispositions": [
+    {
+      "id": "r2-review-security-code-code#SEC2-001",
+      "disposition": "partial",
+      "evidence": "(b) closed: automatic-review.ts:305 + :527-538 namesReviewPackage refuses a nested --prior; premise-question.ts:82-96 isReviewPackageDir and :118-121 carry re-validate the source and refuse self/containing packages; :131 needs a held verdict. (a) case variants closed for ASCII (:216/:258 lower-case, nested depth and symlinks handled at :232-262), but U+017F still aliases the file on APFS: see SEC3-001."
+    },
+    {
+      "id": "r2-review-security-code-code#SEC2-002",
+      "disposition": "closed",
+      "evidence": "premise.ts:514-518 hasTerminalOutcome lifts a hold only for verifier refuted or acted-on/fixed (the gate backs acted-on with a refuted verdict citing the SHA, review-gate.ts:715-740); verdict.ts:141-142 classifies held before dismissed; readiness and gate share premiseHoldState (review-gate.ts:431-434). Tests: review-gate.test.ts SEC2-002 case, premise-decision.test.ts dismissal loop."
+    },
+    {
+      "id": "review-security-code-w4#F-001",
+      "disposition": "partial",
+      "evidence": "The named paths are still closed (premise.operator ignored, complete records required). The bypass of the automatic-review guard still has one open alias: automatic-review.ts:258 misses a long-s spelling of the decisions file when it does not exist yet (SEC3-001)."
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 0, "info": 1 }
+}
+```
+
+## Summary
+
+- Scope: fix delta f47ebb0ec..8a9ae3d20 (round3/delta-code.diff, 36 files).
+- Prior findings: SEC2-002 closed; SEC2-001 partial; w4#F-001 partial (the same residual).
+- New findings: 1 major (SEC3-001, long-s alias of operator-decisions.json gets past the apply_patch guard on APFS; probed against HEAD code on this machine's APFS volume), 1 info (SEC3-002, the registry re-record runs outside the decisions lock).
+- Checked with nothing found: the --prior path check and the carry re-validation (nested dir, symlink, outside the roots, self-carry); symlink and dangling-link handling in realTarget; the lock-dir guard; refusal of the readiness item 11 waiver before the card is drawn; the cardSafe move (body unchanged); the readPremises error message (file name and errno code only, nothing secret); the ingest rename of premises.json (never re-read); the dedupe premise carry (stricter); normaliseCarriedPremise (drops judgements, never adds one); the mergedKeyNames bare-id match (security-downgrade still checks reported_by).
+- Routing: graph_used no (narrow delta review, not-relevant); wiki_used no (not-relevant); ctx_used yes (keryx ctx rg); raw_rg_used: no (raw grep/sed marked keryx:raw, for exact line evidence).

@@ -1,0 +1,87 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "slice-06 (new): readiness coverage-gate exemption for closed packages, coverage.md entry parsing via dispatchRuns, the flow 460 L6 line-level fix/new partition and narrowed fix roster, late-result unreadable-input guard, multi-file premises plumbing. The partition, fix-roster and routing-check changes are internally consistent (classifyDeltaSlices, fixClaimBacked and expectedFixRoles all use the same lineInHunk/fixFindingIdsOf rule). One major: the closed-package exemption covers only packages closed before flow 460, so a light-round package closed after it still has item 3 recomputed against live git and live depth config.",
+  "slices": ["slice-06"],
+  "findings": [
+    {
+      "id": "LG-001",
+      "severity": "major",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "const coverage = problems.length === 0 && ctx.coverageGated ? await packageCoverageErrors(ctx.dir, dispatch) : [];",
+      "problem": "Context.coverageGated says a closed package's recorded state is final and publish, the publish guard and the panel must not suddenly call it NOT READY. The flag is true for every package whose coverage.md carries COVERAGE_MD_MARK, which includes every package closed after flow 460. So for those closed packages reviewersCheck still runs packageCoverageErrors. For a light dispatch, that call re-derives the depth from live state: coverage.ts effectiveDepth runs packageDiffStats, which does a git diff of base...head at the repository top level, and then decideRoundDepth against the current project config. If the diff cannot be resolved, the depth falls back to full ('if (\"error\" in stats) return { depth: \"full\", refused: stats.error }'), and the full reviewer set then refuses the light dispatch.",
+      "impact": "Trigger: a light-round PR package that closed READY after flow 460 is read again (readiness, the publish guard, the panel) in a checkout without the PR head commit, such as a fresh clone after a squash merge and branch delete. A later change to the depth thresholds or the risk-class config triggers it too. Outcome: item 3 fails with 'coverage gate (as review complete runs it): ... the diff could not be resolved', and a closed review flips to NOT READY. This is the same flip the flag was added to prevent, and the repair it names (dispatch the missing reviewers) cannot apply to a closed round.",
+      "suggested_fix": "On a closed package, do not re-derive the depth from live git or config. Gate packageCoverageErrors on manifest.status !== 'closed' (open packages only), or have the closed path read the depth decision recorded at close (round-depth.json or the dispatch's own depth) instead of rechecking it. Keep the COVERAGE_MD_MARK test only for the item-6 omitted-reviewer check, which reads files and not live state.",
+      "evidence": "src/review/readiness.ts:188 and :417 (coverageGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== \"closed\"). src/review/managed.ts:2736 writes COVERAGE_MD_MARK on every ingest, explicit --reviewers included, so every post-460 package carries it. src/review/coverage.ts:565-572 (diffOfTarget: git diff at gitTopLevel against resolveDiffBase, falling back to origin/main/main). src/review/coverage.ts:592-598 (effectiveDepth: a stats error, or a config decision that is not light, returns depth full). Read at head 375279e78.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "class_scope": {
+        "sites": ["src/review/readiness.ts:188", "src/review/readiness.ts:417", "src/review/coverage.ts:594", "src/review/coverage.ts:597"],
+        "enumeration_method": "Searched for every readiness consumer of coverageGated (keryx ctx rg coverageGated in src/review/readiness.ts: the item 3 gate at :188, the item 6 omitted check, and the definition at :417). Then traced packageCoverageErrors to effectiveDepth, whose two live-state inputs are the diff stats (:594) and the config depth decision (:597). The item 6 check reads only coverage.md and research.json, so it is not a member."
+      }
+    },
+    {
+      "id": "LG-002",
+      "severity": "minor",
+      "file": "src/review/round-split.ts",
+      "line": null,
+      "quote": "contextTruncated: region.contextTruncated,",
+      "problem": "partitionRegionsByFix splits a region that holds both fix and new lines, and the context between the two kinds is shared half and half. On the split side, each piece therefore has fewer context lines than the configured window. Each piece still copies the parent's contextTruncated. If the parent window was complete, every piece says false.",
+      "impact": "ScopedRegion documents contextTruncated as the signal that a window is narrower than asked, so a reviewer does not assume it saw the enclosing code. A fix or new piece cut from a mixed region claims a full window while it can hold as little as one context line on the cut side. The reviewer of the piece loses that warning. No wrong routing results: the cost is to the reader of the slice.",
+      "suggested_fix": "Set contextTruncated to true on every piece that has a neighbouring piece on the split side, for example region.contextTruncated || pieces > 1 per cut. Alternatively, keep the full context on both pieces instead of halving it.",
+      "evidence": "src/review/round-split.ts:121 inside partitionRegionsByFix. src/review/scope.ts:145-152 ScopedRegion, with the doc above it that contextTruncated reports a window narrower than asked.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LG-003",
+      "severity": "info",
+      "file": "src/review/round-split.ts",
+      "line": null,
+      "quote": "const SECURITY_PROBLEM = /\\b(security|secur\\w+|injection|inject\\w*|travers\\w+|secret|credential|password|token leak|xss|csrf|ssrf|rce|privilege|auth(entication|orization)?|",
+      "problem": "isSecurityFinding matches non-security vocabulary that is common in logic and architecture findings: 'untrusted' (review-logic's own checklist item 'JSON.parse without try/catch on untrusted input'), 'inject\\w*' (as in 'dependency injection'), 'travers\\w+' (tree or graph traversal) and a bare 'auth'. A fix slice that answers such a finding gets review-security-code added to its roster.",
+      "impact": "This adds an extra reviewer dispatch to a fix slice and costs tokens. It does not narrow anything and causes no wrong result. A recorded security author or a SEC id already covers the true cases.",
+      "suggested_fix": "Drop the generic words, or require two signals: either a security author or SEC id, or a security class word together with an attack verb.",
+      "evidence": "src/review/round-split.ts:23 and isSecurityFinding/fixRosterRoles in the same file. The review-logic SKILL.md checklist includes 'JSON.parse without try/catch on untrusted input'.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LG-004",
+      "severity": "info",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "const runs = (Array.isArray(dispatch.runs) ? dispatch.runs : []).map(record).filter((run): run is Record<string, unknown> => run !== undefined);",
+      "problem": "This diff introduces dispatchRuns (research.ts) as the lenient reader of dispatch.runs, and coverageMdCheck now uses it. reviewersCheck in the same file keeps its own parse, so the two items read the record differently. A run with no reviewer string is dropped by dispatchRuns, while reviewersCheck turns it into String(undefined) and reports 'not run or incomplete: undefined'. DispatchRun also declares rawEvidence and scopeComplete, which no caller reads.",
+      "impact": "No path in this repository was found that writes a run without a reviewer (ledger.ts buildLedger always sets one), so nothing reaches the divergence today. Settled by routing reviewersCheck through dispatchRuns.",
+      "suggested_fix": "Use dispatchRuns(ctx.research) in reviewersCheck as well. Its fields cover status, scopeComplete and rawEvidence.",
+      "evidence": "src/review/readiness.ts:173 (reviewersCheck) compared with the coverageMdCheck call to dispatchRuns(ctx.research). src/review/research.ts dispatchRuns drops entries with no reviewer string.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    }
+  ],
+  "needs_context": [],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 2 }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `fix/review-gate-consistency` (PR #1045, round 2)
+- Head: `375279e78`
+- Scope mode: one supplied slice, `slice-06` (kind: new)
+- Spec compliance gate: ran against `.metaproject/flows/460-2026-10-17-review-gate-consistency/description.md`. No criterion in this slice is left unimplemented.
+
+### Summary
+The flow 460 L6 split is consistent at every site that uses it. Fix and new lines are partitioned by changed line, and a slice gets the fix roster only when every one of its changed lines falls in a fix hunk; `classifyDeltaSlices`, `fixClaimBacked` and `expectedFixRoles` all apply that rule. A pure deletion matches its hunk through `within(line - 1)`, as `parseDiffHunks` records it. The coverage.md parser refactor and the multi-file premises plumbing are correct.
+
+One gap remains in the readiness exemption for closed packages. It covers only packages closed before flow 460. A light-round package closed after flow 460 still has item 3 recomputed from live git and live depth config, so a closed review can flip to NOT READY (LG-001).
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 1  |  info: 2
+
+### Layers
+`keryx gdgraph affected`, `keryx test related`, wiki and memory were not run. The findings rest on the code read directly at head.

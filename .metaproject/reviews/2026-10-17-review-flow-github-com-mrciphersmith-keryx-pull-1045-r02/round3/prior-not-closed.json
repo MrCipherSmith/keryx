@@ -1,0 +1,248 @@
+[
+ {
+  "id": "r2-review-architecture-w3:AR-003",
+  "disposition": "partial",
+  "evidence": "The three cuts are now one function, deltaRoundCut (src/commands/review-slice.ts:319-345), called once at :255, with a single omissions de-duplication (:342). It still lives in the command module rather than round-split/slice, and the manual `drops: []` (325, 333) is still hand-kept; the command body is no longer the problem.",
+  "_src": "review-architecture-code"
+ },
+ {
+  "id": "r2-review-architecture-w5:AR-001",
+  "disposition": "partial",
+  "evidence": "readiness.ts:212 and :310 and managed.ts:1225 read through dispatchRuns (research.ts:60). coverage-complete.ts:63,80,96, tui/review-panel.ts:96 and compare-reference.ts:165 still parse dispatch.runs by hand.",
+  "_src": "review-architecture-code"
+ },
+ {
+  "id": "review-clean-code-w3:CC-13",
+  "disposition": "partial",
+  "evidence": "managed.ts:1225 uses the typed dispatchRuns (research.ts:60), so the unknown narrowing is gone; normalizeCoverage still carries the third optional research parameter.",
+  "_src": "review-architecture-code"
+ },
+ {
+  "id": "review-performance-w3:PERF-007",
+  "disposition": "open",
+  "evidence": "completion-gate.ts:355-376 still reads the package directories one after another with awaits in the loop; bounded by the cap, info.",
+  "_src": "review-architecture-code"
+ },
+ {
+  "id": "review-security-code-w1:SEC-004",
+  "disposition": "open",
+  "evidence": "review-finding.schema.json:229-235 keeps quote_unlocated as designed (now with a maxItems bound and absent excluding candidate_lines); readiness quotes-located still blocks complete. Accepted, info.",
+  "_src": "review-architecture-code"
+ },
+ {
+  "id": "review-testing-practices-w1:F-003",
+  "disposition": "partial",
+  "evidence": "spawn-subagent-tool.test.ts grew by 34 lines in the delta; accumulation, one-sided and partial-save coverage not individually confirmed in the slice read.",
+  "_src": "review-architecture-code"
+ },
+ {
+  "id": "review-architecture-w1:F-004",
+  "disposition": "open",
+  "evidence": "bundled review-orchestrator/SKILL.md:45 still tells a non-shell orchestrator to append the usage line itself; info, hash covers it.",
+  "_src": "review-architecture-code"
+ },
+ {
+  "id": "review-architecture-w2:F-005",
+  "disposition": "open",
+  "evidence": "spawn-subagent-tool.ts:26 still imports review/dispatch-usage (now also the placeholder); direction accepted, info.",
+  "_src": "review-architecture-code"
+ },
+ {
+  "id": "review-architecture-w3:F-006",
+  "disposition": "open",
+  "evidence": "same import at spawn-subagent-tool.ts:26; accepted, info.",
+  "_src": "review-architecture-code"
+ },
+ {
+  "id": "r2-review-clean-code-w3:CC-002",
+  "disposition": "partial",
+  "evidence": "review.ts:3645-3657 readPremiseFile now returns PremiseSource[] and validates via parsePremiseClaimSets, but still ends in `[parsed as PremiseSource]` (:3657)",
+  "_src": "review-clean-code-code"
+ },
+ {
+  "id": "r2-review-clean-code-w5:CC-003",
+  "disposition": "partial",
+  "evidence": "research.ts:10 exports asRecord, used by research.ts and readiness.ts:93, but round-record.ts:88 and coverage-complete.ts:49 still declare their own `record`, and coverage.ts:265/713/721/806 inline the same cast",
+  "_src": "review-clean-code-code"
+ },
+ {
+  "id": "review-core-boundaries-w1:F-003",
+  "disposition": "open",
+  "evidence": "retry-eval.ts:31 and :42 still JSON.parse the raw file unstripped; file not in the delta",
+  "_src": "review-core-boundaries-code"
+ },
+ {
+  "id": "review-performance-w3:PERF-007",
+  "disposition": "partial",
+  "evidence": "completion-gate.ts:354-380 scanRoot still reads every manifest under every root before pickPackage (roots capped by MAX_SESSION_REVIEW_ROOTS); bounded but unchanged",
+  "_src": "review-core-boundaries-code"
+ },
+ {
+  "id": "review-security-code-w3:SEC-005",
+  "disposition": "open",
+  "evidence": "coverage-md.ts:17 renderCoverageEntry writes entry.reviewer / entry.reason unescaped (a newline in a name forges a coverage entry that parseCoverageEntries at :14 reads back); names come from the CLI-built set",
+  "_src": "review-core-boundaries-code"
+ },
+ {
+  "id": "review-highload-w1:F-003",
+  "disposition": "partial",
+  "evidence": "src/review/dispatch-usage.ts:53 and :101-126: only the trailing block of usage lines states usage, so a quoted mid-reply line no longer counts, and spawn_subagent strips usage lines from child text (spawn-subagent-tool.ts:360). On Claude Code/Codex, where the reviewer writes raw/<reviewer>.txt itself and the host appends none, a reviewer's own trailing line is still read as measured (header comment states this; no gate reads usage).",
+  "_src": "review-highload-code"
+ },
+ {
+  "id": "review-performance-w3:PERF-007",
+  "disposition": "partial",
+  "evidence": "completion-gate.ts:432 scans roots with Promise.all. Candidates of every root are still collected before pickPackage (:433-434) even when a session-named package decides; roots capped at 8 (:52). Info only.",
+  "_src": "review-highload-code"
+ },
+ {
+  "id": "review-security-code-w3:SEC-003",
+  "disposition": "partial",
+  "evidence": "dispatch-usage.ts:101-126 narrows the forgery window to the trailing block and gives the host line (last) priority; a Claude Code/Codex reviewer that writes its own raw file with a trailing line and no host line appended is still read as measured. Documented as acceptable (file header: no gate decision reads usage).",
+  "_src": "review-highload-code"
+ },
+ {
+  "id": "r2-review-logic-w3:LG-002",
+  "disposition": "partial",
+  "evidence": "empty, timeout and rate-limited-with-known-usage exits now record (:2303, :2343, :2368) and re-dispatch usage is kept as KERYX_USAGE_OTHER; the thrown-error exit src/harness/tool/builtin/spawn-subagent-tool.ts:2436-2443 and a rate-limited child with unknown usage (:2343 `childUsage.known ?`) still write no record, so those dispatches are absent from usageTotals (ledger.ts:678), not counted unknown",
+  "_src": "review-logic-code"
+ },
+ {
+  "id": "r2-review-logic-w4:LG-002",
+  "disposition": "partial",
+  "evidence": "src/review/completion-gate.test.ts:388 bound raised to 10_000 ms; src/review/ledger.test.ts:1118 still asserts < 500 ms wall-clock, and the delta adds another 500 ms bound at ledger.test.ts:1168",
+  "_src": "review-logic-code"
+ },
+ {
+  "id": "r2-review-logic-w5:LG-002",
+  "disposition": "partial",
+  "evidence": "src/review/completion-gate.ts:320-322 a `cd sub && keryx review start` that ran alone now resolves keryx's `path:` line in sub and adds the root (test :367-375); but the output is read only when invocation.alone (:295), and shellCommands splits at the `&` of `2>&1` (:165), so `cd sub && keryx review start --pr N 2>&1` never adds sub to roots; see new LG-002",
+  "_src": "review-logic-code"
+ },
+ {
+  "id": "r2-review-logic-w9:LG-003",
+  "disposition": "partial",
+  "evidence": "completion-gate.test.ts:388 now 10 s; ledger.test.ts:1118 and :1168 still 500 ms wall-clock bounds",
+  "_src": "review-logic-code"
+ },
+ {
+  "id": "review-logic-w3:F-002",
+  "disposition": "open",
+  "evidence": "src/review/completion-gate.test.ts:225-234 unchanged: pr-7975 is still the only fresh candidate, so newest(candidates) in pickPackage returns it with the pointer branch removed; no test has two session-named candidates where the pointer must pick the older one (sessionNamed.find(pointed))",
+  "_src": "review-logic-code"
+ },
+ {
+  "id": "review-testing-practices-w2:T-001",
+  "disposition": "open",
+  "evidence": "same as review-logic-w3:F-002: completion-gate.test.ts:225-234 still does not discriminate the pointer branch",
+  "_src": "review-logic-code"
+ },
+ {
+  "id": "review-logic-w4:F-004",
+  "disposition": "partial",
+  "evidence": "src/commands/review.ts:1043-1048 records target.base only when --base is passed; a PR started without --base on a non-main base is still measured against origin/main (coverage.ts:568-576)",
+  "_src": "review-logic-code"
+ },
+ {
+  "id": "review-logic-w2:F-005",
+  "disposition": "partial",
+  "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:348-355 an earlier non-empty file is kept and the parent is now told (recordSaveNote :366-371), but 'complete' is decided by non-emptiness only, so an earlier partial also reads as current; see new LG-001",
+  "_src": "review-logic-code"
+ },
+ {
+  "id": "review-logic-w1:LG-006",
+  "disposition": "partial",
+  "evidence": "rate-limited (known usage) and empty/timeout exits now leave a record; the thrown-error exit src/harness/tool/builtin/spawn-subagent-tool.ts:2436-2443 and an unknown-usage rate-limit still leave no raw file, so the dispatch is missing from dispatches/unknown",
+  "_src": "review-logic-code"
+ },
+ {
+  "id": "review-logic-w2:F-004",
+  "disposition": "open",
+  "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:2364 still tests turnResult?.submittedResult === undefined under status Completed (info)",
+  "_src": "review-logic-code"
+ },
+ {
+  "id": "review-performance-w3:PERF-007",
+  "disposition": "partial",
+  "evidence": "src/review/completion-gate.ts findReviewGateState now scans roots with Promise.all; every candidate is still collected before pickPackage reads the pointers",
+  "_src": "review-logic-code"
+ },
+ {
+  "id": "review-performance-w3:PERF-002",
+  "disposition": "partial",
+  "evidence": "The history scan is incremental (SessionReviewTracker.update cursor). scanRoot (completion-gate.ts:354: readdir + manifest head + stat per package) and dirSignature (:24-38, which reads and sha256-hashes every file under the package, raw/ outputs included, and under the working data dir; called at :441 and :455) still run from scratch on every stop. Bounded by 8 roots; no cache was added.",
+  "_src": "review-performance-code"
+ },
+ {
+  "id": "r2-review-security-code-w1:SEC-R2-001",
+  "disposition": "partial",
+  "evidence": "The token match is gone (namesToken and `commands` removed). Ids now come only from explicit argument positions (src/review/completion-gate.ts:216-231) and from the output of an opening command that ran alone (:295, :303-313). But namedBySession still matches the manifest's own `reviewId` (scanRoot :375-376 passes [head.reviewId, name]; pickPackage :393 passes candidate.id = head.reviewId). Review ids are predictable: date + mode + PR URL slug, e.g. this package's 2026-10-17-review-flow-github-com-mrciphersmith-keryx-pull-1045-r02. A PR can commit `.metaproject/reviews/<other-dir>/manifest.json` (draft, review-flow) whose reviewId is the id `keryx review start` will print. Once that id is named, the package is sessionNamed, and when it is newest it is chosen (:394), so the nudge repeats its blockers. Separately, :228 takes the first non-dash word as the positional id, which can be a flag's value (`readiness --flow 460 <id>` names `460`). Fix: match by package directory/basename only, or require head.reviewId === basename.",
+  "_src": "review-security-code-code"
+ },
+ {
+  "id": "r2-review-security-code-w1:SEC-R2-002",
+  "disposition": "partial",
+  "evidence": "A closed manifest must now be named by this session to release the gate (src/review/completion-gate.ts:437-439), and the test at completion-gate.test.ts:144 pins the unnamed case. The closed entry's ids still include the attacker-controlled manifest reviewId (:370 `ids: [head.reviewId, name]`). A committed closed manifest whose reviewId equals the predictable id of the real package is therefore named. When its checkout mtime is later than the real package's last manifest write, it releases the gate (:439).",
+  "_src": "review-security-code-code"
+ },
+ {
+  "id": "r2-review-security-code-w9:SEC-001",
+  "disposition": "partial",
+  "evidence": "resolveDiffBases (src/review/coverage.ts:568-577) measures the recorded base and the default base (origin/main, main, origin/master, master) and keeps the wider diff, so `--base head~1` cannot shrink a PR when a default base resolves. The test at coverage.test.ts:1809 pins this. If no default branch resolves (a repo whose base is develop/trunk with no main/master ref), `fallback` is null (:571, :575), and the recorded base alone is measured, as before. That narrowing still holds there. The baseRefOid check suggested in round 2 was not adopted.",
+  "_src": "review-security-code-code"
+ },
+ {
+  "id": "review-security-code-w3:SEC-002",
+  "disposition": "partial",
+  "evidence": "As r2-review-security-code-w1:SEC-R2-002: an unnamed closed manifest no longer releases the gate (completion-gate.ts:437). Naming can still come through the committed manifest's own predictable reviewId (:370).",
+  "_src": "review-security-code-code"
+ },
+ {
+  "id": "review-clean-code-w3:CC-13",
+  "disposition": "partial",
+  "evidence": "src/review/managed.ts:1246 normalizeCoverage still takes `research: unknown` (now required, single caller at 276); typed dispatchRuns is used inside, the argument itself is still untyped.",
+  "_src": "review-style-code"
+ },
+ {
+  "id": "review-clean-code-w3:CC-13",
+  "disposition": "partial",
+  "evidence": "src/review/managed.ts:1227 uses typed dispatchRuns, but normalizeCoverage (1246) still takes a third untyped research: unknown",
+  "_src": "review-style-docs"
+ },
+ {
+  "id": "r2-review-testing-practices-w1:T-R2-002",
+  "disposition": "open",
+  "evidence": "info; src/review/retry-plan.test.ts still has every reply naming slices (:83, :118); no fixture omits `slices` (retry-eval.ts:82 claims none then). Not touched by the delta.",
+  "_src": "review-testing-practices-code"
+ },
+ {
+  "id": "r2-review-testing-practices-w2:TP-004",
+  "disposition": "open",
+  "evidence": "info; package.json:48 test:core still runs src/commands/ whole and no script names *.e2e.test.ts; the file now uses shared git-fixture helpers but is still in the fast lane.",
+  "_src": "review-testing-practices-code"
+ },
+ {
+  "id": "r2-review-testing-practices-w3:TP-001",
+  "disposition": "open",
+  "evidence": "info; spawn-subagent-tool.test.ts:1423-1428 `silent` still asserts only status and saved file, never silent.output; only retry.output (:1480) is asserted, so deleting the note-suppression clause leaves the suite green.",
+  "_src": "review-testing-practices-code"
+ },
+ {
+  "id": "r2-review-testing-practices-w3:TP-002",
+  "disposition": "partial",
+  "evidence": "The sibling claim is gone: the test now asserts the kept note, the DONE body, others:[undefined] and no .partial file (spawn-subagent-tool.test.ts:1450-1456), and the retry test pins both dispatches' usage (:1468-1488). Still unpinned: emptySaveNote error branch (spawn-subagent-tool.ts:2369) and a NaN/Infinity usage report (sum test :1403 uses finite values only).",
+  "_src": "review-testing-practices-code"
+ },
+ {
+  "id": "r2-review-testing-practices-w4:TP-002",
+  "disposition": "partial",
+  "evidence": "completion-gate.test.ts:388 widened to 10_000 with a comment. ledger.test.ts:1118 is still an absolute 500 ms bound, and the delta added a second one at :1168 (see NTP-001).",
+  "_src": "review-testing-practices-code"
+ },
+ {
+  "id": "r2-review-testing-practices-w4:TP-007",
+  "disposition": "open",
+  "evidence": "info; managed.test.ts:275 still `as unknown as BlastRadiusScreenInput`.",
+  "_src": "review-testing-practices-code"
+ }
+]

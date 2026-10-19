@@ -1,0 +1,70 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-performance",
+  "status": "DONE",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/flow/review-gate.ts",
+      "line": 2363,
+      "problem": "readFlowReviewRounds awaits readPremiseDecisions(packageDir) for every review package in the flow, even when no finding in the package carries a premise record. This is one extra readFile and JSON.parse of operator-decisions.json per package on each gate evaluation, and withPremiseAnswers only uses the result when finding.premise is defined.",
+      "impact": "Cost is one small file read per round package for each flow-complete gate run. This is not a hot path: it is a CLI gate, with a handful of rounds. It is wasted work for every flow that never ran the premise judge, which is every flow before this change.",
+      "suggested_fix": "Read the decisions only when some finding has a premise: compute the findings first, then `const answers = findings.some((f) => f.premise !== undefined) ? await readPremiseDecisions(packageDir) : [];`.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/review/operator-decisions.ts",
+      "line": 109,
+      "problem": "premiseDecisionFor filters the whole decisions array and then takes at(-1), once per finding. A reverse scan with early exit would do the same without the allocation. The cost is O(findings x decisions) allocations per package.",
+      "impact": "Negligible: decisions are operator-typed, so a handful per package, and the call is made only when a decision exists. It would matter only if decisions grew into the thousands.",
+      "suggested_fix": "Leave as is, or iterate from the end and return the first match.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/flow/review-gate.ts",
+      "line": 2298,
+      "problem": "parsePremiseStats runs matchLine (a new RegExp compiled per call) once to test presence and again inside each matchNumber: 5 RegExp compilations plus scans of scope.md per package. premiseGateState is also evaluated twice per held finding (the blocking filter, then findingVerdict).",
+      "impact": "Negligible and consistent with parseVerificationStats, which already uses the same pattern. Not measurable at gate scale.",
+      "suggested_fix": "None needed. If the helpers are ever tuned, tune both parsers together.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 530,
+      "problem": "findHeldFinding(dir, finding) reads and parses findings.json at card build, and again in apply() to detect that the finding changed. The CLI path in review-operator.ts reads it once more.",
+      "impact": "One read per operator confirmation, which is interactive and rare. The re-read is the intentional guard against a moved package, so it is a deliberate choice, not a defect.",
+      "suggested_fix": "None.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/commands/review.ts",
+      "line": 1026,
+      "problem": "readPremises parses the --premises file with parseEmbeddedPremises and validates it with parsePremiseClaims, and the merge then re-runs the per-claim rules. Validation therefore happens twice on the same small payload.",
+      "impact": "One premise claim per finding, at most hundreds per ingest. Negligible. The early check is the stated purpose: refuse a malformed file before anything is written.",
+      "suggested_fix": "None.",
+      "confidence": "high"
+    }
+  ],
+  "clean_areas": ["N+1 queries", "React re-renders", "memory leaks", "bundle imports", "sync blocking", "pagination", "redundant API calls", "MobX derived state", "routing-corpus ratchet constants (static)", "docs/tests/fixtures (no runtime cost)"]
+}
+```
+
+## Performance Review
+
+Slice-04 holds the CLI wiring for `--premises`/`--premise`/`decide-premise`, the operator card, the gate changes in `review-gate.ts`, docs, tests and fixtures. Everything runs in a CLI or gate process over a few packages and findings. None of it is a render path, a request handler or a tight loop.
+
+- Blockers: 0
+- Major: 0
+- Minor: 1 (F-001: needless operator-decisions.json read per round package when no finding has a premise)
+- Info: 4 (F-002 to F-005)

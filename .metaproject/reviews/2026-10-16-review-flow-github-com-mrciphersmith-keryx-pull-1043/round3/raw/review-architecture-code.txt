@@ -1,0 +1,51 @@
+REVIEW_RESULT review-architecture round 3 (fix delta f47ebb0ec..8a9ae3d20)
+
+```json keryx:findings
+{
+  "reviewer": "review-architecture",
+  "prior_dispositions": [
+    {"id": "r2-review-architecture-code#F-001", "disposition": "closed", "evidence": "managed.ts:527 (ingest findings.json write) and managed.ts:1763 (recordDispositions) now take withOperatorDecisionsLock; operator-decisions.ts:20-26 header names every writer. Lock is non-reentrant but neither call site runs inside another lock holder."},
+    {"id": "r2-review-architecture-code#F-002", "disposition": "closed", "evidence": "readiness.ts:203-207 returns an 'ingest first with --premises' remedy when premiseRecords reports ingested=false (verdict.ts premiseRecords now returns useRound), so the answer command is only named once findings.json exists."},
+    {"id": "r2-review-architecture-code#F-003", "disposition": "closed", "evidence": "Owner decision verified: cardSafe now lives in src/lib/card-safe.ts:7; schedules.ts, operator-confirm-other.ts, operator-confirm-review.ts, review-operator.ts:19, tui/schedules-inspector.ts, tui/schedules-sidebar.ts and schedule-security.test.ts import it from ../lib/card-safe; no importer of it from trigger/schedules remains and the old definition is deleted."},
+    {"id": "r2-review-architecture-skills#F-001", "disposition": "closed", "evidence": "session-plan-bridge.mdc:39 (bundled and .metaproject copies) lists step-0 .. step-14 and step-10b."},
+    {"id": "review-architecture-skills#F-005", "disposition": "closed", "evidence": "Same as r2 skills F-001: session-plan-bridge.mdc:39 now carries step-10b, matching review-orchestrator Step 6a / rule 0."}
+  ],
+  "findings": [
+    {
+      "id": "R3-ARCH-001",
+      "severity": "minor",
+      "file": "src/review/premise-question.ts",
+      "line": 81,
+      "problem": "isReviewPackageDir hard-codes the package layout (.metaproject/reviews/<id> and .metaproject/flows/<flow>/reviews/<id>) in the premise-answer module, a third encoding of it beside reviewsRoot/flowsRoot in managed.ts:89 and PACKAGE_GLOBS in prior-round.ts:128. commands/automatic-review.ts (the approval policy) now imports this predicate from the answer module.",
+      "impact": "A change to the package location (a new root, a configurable reviews dir) must be made in three places; if premise-question's copy lags, --prior and carryPremiseDecisions refuse a real package, silently (carry returns []) while the other two accept it. The approval policy depends on an unrelated answer module for a layout fact.",
+      "suggested_fix": "Move the predicate next to reviewsRoot/flowsRoot (managed.ts or a small package-location module) and build it from those roots; import it from there in premise-question.ts and automatic-review.ts.",
+      "evidence": "premise-question.ts:81-95; managed.ts:89,1110-1115; prior-round.ts:128; automatic-review.ts:14 import.",
+      "confidence": "medium"
+    },
+    {
+      "id": "R3-ARCH-002",
+      "severity": "info",
+      "file": "src/review/premise-question.ts",
+      "line": 209,
+      "problem": "answerPremiseQuestion now also owns round-registry re-recording (RegistryOptions with cwd/dir/warn, registryVouchesPackage before the write, recordFinishedRound after). The registry write runs after the decisions lock is released, so it is outside the lock the header (operator-decisions.ts:20-26) says serialises findings.json writers, and the answer module gained a dependency on round-registry.",
+      "impact": "Low: a concurrent complete/publish records the same registry entry, so the worst case is the later hash winning; but the 'findings.json writers are serialised' contract no longer covers the hash that vouches for that file. Every caller must now remember to pass cwd or the registry silently stays stale (next round runs full).",
+      "suggested_fix": "Either note in the lock header that the registry entry is re-recorded outside the lock, or make the registry re-record the caller's job (a thin wrapper used by the CLI and the card) so answerPremiseQuestion stays a two-file writer.",
+      "evidence": "premise-question.ts:164-169 (re-record after recordPremiseDecision returns); round-registry.ts:363 registryVouchesPackage.",
+      "confidence": "low"
+    },
+    {
+      "id": "R3-ARCH-003",
+      "severity": "info",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 318,
+      "problem": "The waive card refuses on the string literal id === \"premise-decisions\" while readiness.ts exports only the message (PREMISE_DECISIONS_NOT_WAIVABLE); the item id and the never-waivable rule are not exported as one unit, so waiveReadiness (readiness.ts:468) and the card each own a copy of the rule.",
+      "impact": "A future non-waivable item must be added in both places; the card and the CLI can drift.",
+      "suggested_fix": "Export a NEVER_WAIVABLE map (id to message) from readiness.ts and have both callers read it.",
+      "evidence": "operator-confirm-review.ts:317-318; readiness.ts:216,468.",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
+Summary: all five prior architecture findings (r2 code F-001/F-002/F-003, r2 skills F-001, round-1 skills F-005) are closed at HEAD. The delta introduces no blocker or major; one minor (package-layout predicate duplicated and homed in the answer module) and two info notes (registry re-record outside the lock; waive rule duplicated between card and CLI).

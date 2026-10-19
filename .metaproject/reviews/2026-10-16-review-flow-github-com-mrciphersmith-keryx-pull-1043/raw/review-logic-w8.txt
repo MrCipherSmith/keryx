@@ -1,0 +1,147 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "slice-08 (premise merge, held-finding lookup, dedupe/readiness/verdict wiring, operator-decisions store). The merge itself holds its invariant, but readers disagree on where a premise lives: the decide-premise lookup and the interim verdict read the raw research-evidence/premises.json, while readiness and the flow gate read only findings.json. That lets the operator answer a question whose answer changes nothing, and lets a stale claims file hold a finding in the verdict but not at the gate. Also: a claim naming a duplicate the ingest merge absorbed is rejected as unknown, a carried premise is dropped when its finding is absorbed, readiness ignores dispositions that verdict honours, and the findings cap can drop a finding a premise downgrade made cap-eligible.",
+  "findings": [
+    {
+      "id": "LG8-001",
+      "severity": "major",
+      "file": "src/review/premise-question.ts",
+      "line": null,
+      "quote": "const premise = obj(record[\"premise\"]) ?? (claim !== undefined && isHeldVerdict(claim[\"verdict\"]) ? claim : undefined);",
+      "problem": "findHeldFinding treats any held-verdict claim in research-evidence/premises.json as a hold when the findings.json record has no premise. But ingest writes premises.json \"as received, rejected ones included\" in the same step that writes findings.json, so a record with no premise and a held claim in the file is, in the normal path, a claim the merge REJECTED (challenged-without-evidence, held-without-question, self-judgement, duplicate-claim, below-minor, owner-decision-without-options...). The CLI and the review_decide_premise card accept the question and record the answer. Then nothing applies it: verdict re-runs mergePremises over the file and rejects the claim again, so applyPremiseDecision sees no held premise and returns the record unchanged; readiness and review-gate read findings.json, where the record has no premise. The second path is the reverse: ingest writes premises.json only when `input.premises !== undefined`, so a re-ingest of the same package without --premises leaves the old file. computeVerdict then re-applies it and lists the finding as \"awaiting operator\"; readiness item 11 and the flow gate see an ordinary open finding. A `dismiss` recorded there is applied in the verdict but ignored by the gate, because withPremiseAnswers only adds the answer when `finding.premise` is defined.",
+      "impact": "Silent wrong result. Path 1: the judge returns `challenged` with no intent_signals/practice_sources. Ingest rejects it as challenged-without-evidence. The orchestrator, which reads the judge's reply, asks the operator per Wave D. The card says \"yes: the finding is recorded dismissed-incorrect with your reason as the evidence\" and records the decision, yet the finding stays an open major in the verdict, at readiness and at the gate. Path 2: the verdict and the completion gate disagree on whether the same finding is held.",
+      "suggested_fix": "Make findings.json the single source of a finding's premise for post-ingest readers. Drop the PREMISES_FILE fallback from findHeldFinding (refuse when `record.premise` is absent or not held). In computeVerdict, apply premises.json claims only on the raw-results path (`!useRound`), never on top of an ingested round. Alternatively make ingest delete research-evidence/premises.json when `input.premises` is undefined. If the fallback must stay, run the claim through mergePremises (as verdict does) rather than reading `claim.verdict` raw, and make readiness and review-gate apply the same file.",
+      "evidence": "src/review/managed.ts: premises.json is written from `input.premises` verbatim (\"The claims as received, rejected ones included\") and only `if (input.premises !== undefined)`. src/review/premise-question.ts: the claim fallback checks only `isHeldVerdict(claim[\"verdict\"])`, with no validation. src/review/verdict.ts applyPremiseClaims runs mergePremises (validated) over records without a premise, so a rejected claim stays rejected and applyPremiseDecisions is a no-op for it. src/review/readiness.ts premiseDecisionsCheck and src/flow/review-gate.ts withPremiseAnswers/premiseGateState read only `record.premise` from findings.json. src/commands/operator-confirm-review.ts:599-623 and src/commands/review-operator.ts:135-151 both gate only on findHeldFinding before recordPremiseDecision.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "class_scope": {
+        "sites": [
+          "src/review/premise-question.ts:42",
+          "src/review/premise-question.ts:46",
+          "src/review/verdict.ts:210",
+          "src/review/readiness.ts:194",
+          "src/flow/review-gate.ts:502",
+          "src/review/managed.ts:499"
+        ],
+        "enumeration_method": "keryx ctx rg -n \"PREMISES_FILE|premiseHoldState\\(|awaitingOperator\\(\" src (non-test) plus rg \"premise\" in src/flow/review-gate.ts: two readers of premises.json (premise-question.ts, verdict.ts), three readers of findings.json premise only (readiness.ts, review-gate.ts, and verdict's own classify after re-apply), one writer (managed.ts). The defect is the disagreement between the two reader groups."
+      }
+    },
+    {
+      "id": "LG8-002",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "line": null,
+      "quote": "const matches = findings.filter((finding) => finding.global_id === claim.finding_id || finding.id === claim.finding_id);",
+      "problem": "mergePremises runs after mergeDuplicates, but the judge is dispatched at orchestrator Step 10b, before Step 11 dedupe and before ingest's mechanical merge. Its claims therefore name pre-merge global_ids. A claim naming a finding that the merge absorbed into another matches nothing and is rejected as `unknown-finding` (\"this round reported no such finding\"), even though the absorbed key is listed in the canonical record's `merged_from`. The verifier does not have this gap because it runs before the merge.",
+      "impact": "Two reviewers report one defect. The judge challenges the copy that bestOf does not keep (or the orchestrator passed only that copy). The hold is discarded with a misleading reason, and the canonical finding goes to the fixer unheld: the outcome flow 459 exists to prevent.",
+      "suggested_fix": "When a claim matches no finding directly, resolve it through `merged_from` (a claim naming an absorbed key targets the canonical finding). If two claims then land on one canonical, the existing duplicate-claim rule cancels both. Or reject such a claim with its own reason (`absorbed-duplicate`, naming the canonical key) so the operator sees what happened.",
+      "evidence": "src/review/managed.ts: `const deduped = mergeDuplicates(scopeB.retained);` precedes `const premised = mergePremises([...deduped.findings, ...scoped.external], premiseClaims);`. src/review/dedupe.ts:305-312 records absorbed keys in `merged_from`. review-orchestrator/SKILL.md lists Step 10b (premise) before Step 11 (deduplicate).",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LG8-003",
+      "severity": "minor",
+      "file": "src/review/dedupe.ts",
+      "line": null,
+      "quote": "const canonical = bestOf(downgraded.length > 0 ? downgraded : confirmed.length > 0 ? confirmed : members);",
+      "problem": "mergeable() keeps carried held findings out of the merge, but a carried `upheld` premise is still mergeable and is not preferred as canonical. The merged record is built from the canonical, so when a carried upheld finding is absorbed into a new finding with no premise, its premise is dropped. That breaks the module's \"A carried finding keeps its premise\" promise. The resulting finding then reads as unjudged, and in a delta round the orchestrator is told to judge \"only findings without a carried premise\", so it is judged again.",
+      "impact": "Delta round: a carried finding that round N's judge upheld is re-reported at the same site by another reviewer at a higher severity. The merged record has no premise, and the earlier judgement is lost from findings.json.",
+      "suggested_fix": "Prefer members that carry any premise when choosing the canonical (upheld after downgraded), or copy the premise from the absorbed member onto the merged record when the canonical has none.",
+      "evidence": "src/review/dedupe.ts mergeable(): `!isHeldVerdict(finding.premise?.verdict)` excludes only held verdicts. mergeCluster picks the canonical by downgraded, then confirmed, then severity, and builds `finding` from `canonical`. src/review/managed.ts: \"A carried finding keeps its premise.\"",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LG8-004",
+      "severity": "minor",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "const held = ctx.findings.filter((finding) => premiseHoldState(finding, ctx.premiseDecisions) !== \"none\");",
+      "problem": "Readiness item 11 (and premiseGateState in src/flow/review-gate.ts) treats a held finding as awaiting even when it already carries a terminal disposition recorded by other means, such as `dismissed-out-of-scope` via `keryx review disposition`. computeVerdict classifies dismissed and resolved dispositions BEFORE the hold check. So the same record is \"excluded: dismissed\" in the verdict and \"held finding with no operator decision\" in readiness.",
+      "impact": "A held finding the operator already dismissed through the disposition command blocks readiness and the flow gate until a second, redundant decide-premise answer is recorded. The verdict meanwhile says it is out.",
+      "suggested_fix": "In premiseDecisionsCheck (and premiseGateState), skip findings whose disposition state starts with `dismissed` or is in the resolved set, matching verdict.ts classify order. Or make premiseHoldState itself return `none` for those dispositions so every reader agrees.",
+      "evidence": "src/review/verdict.ts classify: refuted, then `disposition.startsWith(\"dismissed\")`, then RESOLVED_DISPOSITIONS, and only then `premiseHoldState(record) === \"awaiting\"`. src/review/premise.ts premiseHoldState looks only at premise and decisions. src/review/premise.ts applyPremiseDecision deliberately does not overwrite an existing disposition, so such records are expected to exist.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LG8-005",
+      "severity": "minor",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "const findingsCap = applyFindingsCap(premisedInternal, {",
+      "problem": "The premise merge now runs before the per-reviewer findings cap, deliberately (\"so a downgraded severity is the one the cap ... sees\"). The cap exempts blockers only. A blocker the judge downgrades to major therefore loses its exemption and can be truncated out of findings.json when its reviewer reported more than the cap's limit of non-blockers. Held findings also take cap slots and can themselves be truncated. Either way the finding leaves the record, which the premise module's invariant (\"can cost a verdict, never a finding\"; a downgrade may \"never take it out of the fix\") says a premise judgement must not cause.",
+      "impact": "A reviewer reports 1 blocker and 10 majors. The judge downgrades the blocker to major. The cap keeps 10 of 11 majors, so a real defect leaves findings.json because of a downgrade, and appears only in the scope.md cap block.",
+      "suggested_fix": "Exempt findings carrying a premise (downgraded or held) from the cap, or have the cap rank by `premise.original_severity` when present so a downgrade cannot change cap eligibility.",
+      "evidence": "src/review/managed.ts: premisedInternal feeds applyFindingsCap. src/review/caps.ts:37-39,92: \"10, per reviewer, blockers exempt\", exempt = blockers and blocking_merge only. src/review/premise.ts downgrade-below-threshold comment: \"a premise judge may shrink a finding, never take it out of the fix\".",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LG8-006",
+      "severity": "info",
+      "file": "src/review/premise-question.ts",
+      "line": null,
+      "quote": "[str(record[\"global_id\"]), str(record[\"id\"])].includes(str(entry[\"finding_id\"]))",
+      "problem": "When a record lacks `global_id` (a legacy record) and a claim lacks `finding_id`, both sides are `undefined` and `includes` matches. The finding is then treated as held by a nameless claim. Current ingest always mints global_id, so no producer in this repo reaches it today. Removing the fallback per LG8-001 removes this too.",
+      "impact": "None on records the current pipeline writes. A legacy package with a nameless held claim would show a spurious premise question.",
+      "suggested_fix": "Filter undefined keys before the `includes` check, or drop the fallback (LG8-001).",
+      "evidence": "src/review/premise-question.ts claim lookup; `str` returns undefined for missing or empty values.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 4, "info": 1 }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/review-premise` (PR #1043, head c144874f)
+- Slice: slice-08 (src/review/coverage.ts, dedupe.ts, managed.ts, operator-decisions.ts, premise-question.ts, premise.ts, readiness.ts, types.ts, verdict.ts, verification.ts)
+- Scope mode: supplied slice text; context read-only from the worktree
+- Spec compliance gate: ran against flows/459 description (AC1/AC2 machinery present in this slice; no criterion is missing from it)
+
+### Summary
+mergePremises keeps its invariant: it adds nothing, never raises severity, cancels duplicate claims, rejects self-judgement, and stops downgrades at minor. The defects sit where readers meet. The held-finding lookup and the interim verdict read the raw claims file, while readiness and the flow gate read only findings.json. As a result the operator can answer a question whose answer changes nothing, and a stale claims file holds a finding in the verdict but not at the gate (LG8-001). Smaller gaps: claims that name a duplicate the ingest merge absorbed are lost (LG8-002), a carried premise is lost when its finding is absorbed (LG8-003), readiness ignores dispositions that the verdict honours (LG8-004), and the cap can drop a finding that a downgrade made cap-eligible (LG8-005).
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 4  |  info: 1
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+- [LG8-001] major: findHeldFinding and the verdict treat raw premises.json claims as holds; readiness and the gate do not.
+- [LG8-002] minor: a claim naming an absorbed duplicate is rejected as `unknown-finding`; `merged_from` is not consulted.
+- [LG8-003] minor: a carried `upheld` premise is dropped when its finding is absorbed into a canonical with no premise.
+- [LG8-005] minor: a premise downgrade (or a hold) can make a finding cap-eligible and drop it from findings.json.
+
+### Async & Concurrency
+None detected.
+
+### Error Handling
+None detected. parseEmbeddedPremises refuses multiple blocks and invalid JSON, and parsePremiseClaims runs before package allocation.
+
+### Null / Undefined Safety
+- [LG8-006] info: undefined === undefined matches in the claim lookup for legacy records.
+
+### Type Contract Violations
+None detected. OperatorDecisionKind and AnyOperatorDecisionKind are split correctly, and valid/validPremise are mutually exclusive.
+
+### Edge Cases
+- [LG8-004] minor: a held finding with a recorded dismissed disposition still fails readiness item 11 and the gate.
+
+### Suggested Patches
+LG8-001 (minimal option):
+```diff
+-  const premise = obj(record["premise"]) ?? (claim !== undefined && isHeldVerdict(claim["verdict"]) ? claim : undefined);
++  const premise = obj(record["premise"]);
+```
+and in computeVerdict apply `applyPremiseClaims` only when `!useRound`.
+
+Routing audit: graph_used: no (not-relevant: bounded slice review, callers found by targeted search); wiki_used: no (not-relevant: intent from the flow description); ctx_used: yes (keryx ctx rg); raw_rg_used: no (a few raw grep/sed calls for line anchors, marked keryx:raw).

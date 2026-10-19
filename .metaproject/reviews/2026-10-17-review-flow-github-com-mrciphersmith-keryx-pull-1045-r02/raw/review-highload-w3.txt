@@ -1,0 +1,55 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-highload",
+  "slices": ["slice-03"],
+  "summary": "Slice 03 is mostly CLI plumbing; the load-relevant part is the per-dispatch usage record in spawn-subagent-tool.ts. The placeholder it now writes for an empty or timed-out child defeats the usage count and the partial save for the re-dispatch it advises.",
+  "findings": [
+    {
+      "id": "HL-001",
+      "severity": "minor",
+      "reviewer": "review-highload",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "quote": "const target = existing.trim() === \"\" ? abs : `${abs}.partial`;",
+      "problem": "The empty-reply and timeout exits now write a placeholder plus KERYX_USAGE line into save_result_to. saveTimedOutPartial treats any non-blank file as a complete earlier result, so the placeholder blocks later saves: the advised re-dispatch (the output says 're-dispatch it once') that then times out with real partial text writes it to <target>.partial, which no raw reader picks up. Conversely, a re-dispatch that completes goes through saveChildResult, which overwrites unconditionally, so the first (empty) dispatch's recorded tokens are gone.",
+      "impact": "Failure mode at the first retry of any empty child (a rate-limited or flaky provider under a wide wave): the retried dispatch's partial findings or the first dispatch's tokens are lost, so the round's usage total understates spend, which is what flow 460 H adds the record to state. Before this change a timed-out retry saved its partial to the target.",
+      "suggested_fix": "Treat a file that holds only the placeholder (isEmptyOutput) as blank in saveTimedOutPartial, so a partial replaces it. When a write replaces a file holding a usage line, sum the earlier usage into the new KERYX_USAGE line so retried dispatches add up. The stopped-with-no-text exit (status not Completed, no text) saves the placeholder through saveChildResult over a complete earlier result; route it through the same guard.",
+      "evidence": "spawn-subagent-tool.ts: saveTimedOutPartial (existing.trim() === \"\"); the empty exit saves NO_TEXT_PLACEHOLDER via saveTimedOutPartial; the normal exit calls saveChildResult(saveTarget.abs, `${raw}${usageSuffix()}`), which overwrites. Test 'flow 460 E/H' only covers a complete DONE result already there, not an earlier placeholder.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/harness/tool/builtin/spawn-subagent-tool.ts:331", "src/harness/tool/builtin/spawn-subagent-tool.ts:2328", "src/harness/tool/builtin/spawn-subagent-tool.ts:2369"],
+        "enumeration_method": "read every writer of save_result_to in the file: saveChildResult callers (normal exit) and saveTimedOutPartial callers (timeout exit, empty exit)"
+      }
+    },
+    {
+      "id": "HL-002",
+      "severity": "info",
+      "reviewer": "review-highload",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "quote": "process.env[ENV_SUBAGENT_TIMEOUT_MS] = \"250\";",
+      "problem": "The timeout test races a real 250 ms timer against the child's first provider events. If the event loop stalls past 250 ms before the stream yields its text (loaded CI, slate or anchor file I/O before the first request), the deadline fires with no text and the 'half a review' assertion fails. The hanging generators also never settle.",
+      "impact": "Possible intermittent test failure on a loaded runner; no production effect. A longer deadline or an injected clock would settle it.",
+      "suggested_fix": "Use a longer deadline, or inject the clock.",
+      "evidence": "Test 'a child stopped at its deadline saves its partial text' sets a 250 ms deadline and relies on usageStreamProvider yielding before it.",
+      "confidence": "low"
+    },
+    {
+      "id": "HL-003",
+      "severity": "info",
+      "reviewer": "review-highload",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "quote": "childUsage.tokens_in += tokensIn ?? 0;",
+      "problem": "tokens_in sums the provider's input_tokens only. The Anthropic adapter reports cache read and write tokens separately and they are not added, so for cache-heavy children the recorded input is the uncached part only.",
+      "impact": "The round's reported spend can read low by the cached portion on providers that split it; settled by deciding whether the line means billed or total tokens and labelling it.",
+      "suggested_fix": "Either add the cache counts or name the field as uncached input in the usage line and report.",
+      "evidence": "anthropic-provider.ts message_delta builds usage with mergeUsage(inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens); onUsage reads only inputTokens and outputTokens.",
+      "confidence": "low"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 }
+}
+```
+
+## High-Load Review (slice-03)
+
+Slice 03 is CLI plumbing (readiness item count, repeatable --premises, --base on the target, ledger option cleanup, fix/new slice partition) plus the spawn_subagent usage record. No shared mutable state, unbounded queue or pool concern was found in the diff; the ledger drops its hand-built coverage options for the package's own (packageCoverageErrors), which ledgerBlockers resolves from packageDir. The one finding is the placeholder record defeating the retry path (HL-001); HL-002 and HL-003 are observations.

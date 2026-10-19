@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-frontend",
+  "wave": 4,
+  "waves": 9,
+  "slices": [
+    "slice-04"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-04",
+      "path": "/Users/Goodea/goodea/keryx/.claude/worktrees/blissful-poitras-27beb5/.metaproject/reviews/2026-10-16-review-flow-github-com-mrciphersmith-keryx-pull-1043/slices/slice-04.diff",
+      "bytes": 147813
+    }
+  ],
+  "result": "raw/review-frontend-w4.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-frontend/SKILL.md"
+}

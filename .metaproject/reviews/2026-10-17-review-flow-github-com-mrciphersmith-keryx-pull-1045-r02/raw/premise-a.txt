@@ -1,0 +1,346 @@
+STATUS: DONE
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "r2-review-architecture-w3:AR-001",
+      "verdict": "upheld",
+      "reasoning": "No intent signal: the review-side regex (ledger.ts:428) predates the branch and the new 'never compared' comment contradicts it; one shared constant is the sound fix."
+    },
+    {
+      "finding_id": "r2-review-architecture-w3:AR-002",
+      "verdict": "upheld",
+      "reasoning": "The single-file shape is kept for back-compat by this branch's own comment (review.ts:3629), which cannot ratify itself; the casts are real and normalising at the boundary is sound."
+    },
+    {
+      "finding_id": "r2-review-architecture-w3:AR-003",
+      "verdict": "upheld",
+      "reasoning": "No signal that the inline delta cut in the command is deliberate; moving it behind one round-split function matches where the partition already lives."
+    },
+    {
+      "finding_id": "r2-review-architecture-w4:AR-001",
+      "verdict": "upheld",
+      "reasoning": "The lazy import is documented as a cycle break, but only by this branch; a leaf git-base module removes the cycle rather than hiding it. Dynamic imports elsewhere (commands/*) are lazy loading, not review-core precedent."
+    },
+    {
+      "finding_id": "r2-review-architecture-w4:AR-002",
+      "verdict": "upheld",
+      "reasoning": "runSeen's five-subcommand list predates the branch (fdd3baa), but the branch's new nudge text sends the model to `keryx review status`, which that list does not count; one predicate is the consistent fix."
+    },
+    {
+      "finding_id": "r2-review-architecture-w4:AR-003",
+      "verdict": "upheld",
+      "reasoning": "The per-process cache comment ('does not change within a command') understates the shell's lifetime; no signal or practice source makes the cache scope intended for long-lived processes."
+    },
+    {
+      "finding_id": "r2-review-architecture-w4:AR-004",
+      "verdict": "upheld",
+      "reasoning": "No shared manifest-header reader exists; adding a third private cast is the drift the finding names."
+    },
+    {
+      "finding_id": "r2-review-architecture-w5:AR-001",
+      "verdict": "upheld",
+      "reasoning": "dispatchRuns is new in this branch and meant as the shared reader; other readers keeping private parses is inconsistency, not a recorded exemption."
+    },
+    {
+      "finding_id": "r2-review-architecture-w5:AR-002",
+      "verdict": "upheld",
+      "reasoning": "The mark is written by managed.ts:2736 and owned by readiness.ts:137; nothing records why the writer depends on the checker."
+    },
+    {
+      "finding_id": "r2-review-architecture-w5:AR-003",
+      "verdict": "upheld",
+      "reasoning": "readiness.ts:173 re-parses dispatch.runs while :284 in the same file uses dispatchRuns; no reason recorded."
+    },
+    {
+      "finding_id": "r2-review-architecture-w5:AR-004",
+      "verdict": "upheld",
+      "reasoning": "secondLookClaimBacked (round-split.ts:248-257) walks the region without the backslash guard or the removed-line `line - 1` rule that walkRegion/lineInHunk apply; two definitions can disagree."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w1:CC-001",
+      "verdict": "upheld",
+      "reasoning": "saveTimedOutPartial (spawn-subagent-tool.ts:324-334) is documented as timeout-only and is now also the empty-reply writer (:2328); the name misleads."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w1:CC-002",
+      "verdict": "upheld",
+      "reasoning": "Two doc blocks are stacked at locate.ts:62-66 and LocatorRecord has none; plainly a leftover."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w1:CC-003",
+      "verdict": "upheld",
+      "reasoning": "The JSON key round-trip with an `as` tuple cast (coverage.ts:531, :548) is real; a typed key function is the idiomatic fix."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w1:CC-004",
+      "verdict": "upheld",
+      "reasoning": "One constant caps two different maps (completion-gate.ts:171, :180) and pendingCalls has no cap; no signal of intent."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w3:CC-001",
+      "verdict": "upheld",
+      "reasoning": "Same fact as AR-001 (w3): the literal is held in the harness and in ledger.ts:428, and the new comment says it is never compared."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w3:CC-002",
+      "verdict": "upheld",
+      "reasoning": "The casts at review.ts:3635 and :3639 follow from readPremiseFile returning the wide union; narrowing its return type is sound."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w3:CC-003",
+      "verdict": "upheld",
+      "reasoning": "Item numbers are explicit, stable fields (readiness.ts:28-39, 12 appended last), so renumbering is unlikely; the literal 11 still duplicates readiness.ts:38, and naming the item by id is a sound fix."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w3:CC-004",
+      "verdict": "upheld",
+      "reasoning": "Same fact as CC-001 (w1): the empty-reply exit reuses a timeout-named helper."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w3:CC-005",
+      "verdict": "upheld",
+      "reasoning": "The nested ternary at spawn-subagent-tool.ts:2261-2268 now encodes two rules in its first condition; readability minor with no counter-signal."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w4:CC-001",
+      "verdict": "upheld",
+      "reasoning": "managed.ts:1239 says the fallback is never a coverage entry; :1255 makes it one when nothing is named. The comment is wrong."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w4:CC-002",
+      "verdict": "upheld",
+      "reasoning": "Same fact as CC-003 (w1), plus head carried twice into diffOfTarget (coverage.ts:549, :565)."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w4:CC-003",
+      "verdict": "upheld",
+      "reasoning": "The id/global_id predicate is spelled at ledger.ts:607, :611 and the closeWith site; a helper is sound."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w4:CC-004",
+      "verdict": "upheld",
+      "reasoning": "ledger.ts:625-626 tests the same condition twice, and literal undefined is passed at :647 and :655; readability only, no counter-signal."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w4:CC-005",
+      "verdict": "upheld",
+      "reasoning": "display-id.ts exists to state the '#' rule once; premise.ts re-implements it inline."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w4:CC-006",
+      "verdict": "upheld",
+      "reasoning": "premise.ts:185 and :187 cast away the undefined that parsePremiseClaims can return; true today only through the early return."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w4:CC-007",
+      "verdict": "upheld",
+      "reasoning": "createManagedReviewPackage keeps gaining inline gates (managed.ts:279-293); no signal that this is intended."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w4:CC-008",
+      "verdict": "upheld",
+      "reasoning": "unreadableInputClaim widened its parameter from a named type to `object` plus a cast (ledger.ts:42-43); `{ summary?: unknown }` says the same thing without the cast."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w5:CC-001",
+      "verdict": "upheld",
+      "reasoning": "partitionRegionsByFix (round-split.ts:80-129) mixes three steps, and the labelling step has no name; minor readability."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w5:CC-002",
+      "verdict": "upheld",
+      "reasoning": "Same fact as AR-004 (w5), plus lineInHunk takes an inline type instead of RoundHunk."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w5:CC-003",
+      "verdict": "upheld",
+      "reasoning": "The local `record` helper is re-declared across review modules (readiness.ts:90, coverage-complete.ts:49, round-record.ts:84, research.ts:47). Sibling copies are a pattern but not a stated choice, and one helper makes the code more consistent."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w5:CC-004",
+      "verdict": "upheld",
+      "reasoning": "expectedFixRoles' optional text (round-split.ts:232-233) reopens the gap its own doc says it closes, if a caller omits it."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w5:CC-005",
+      "verdict": "upheld",
+      "reasoning": "Same fact as AR-002 (w5): a write-format constant is owned by the reader."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w5:CC-006",
+      "verdict": "upheld",
+      "reasoning": "reviewersCheck (readiness.ts:168-202) mixes I/O, set arithmetic, the gate and message building; minor readability."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w5:CC-007",
+      "verdict": "upheld",
+      "reasoning": "SECURITY_PROBLEM (round-split.ts:23) has terms that other terms already cover; readability only, as the finding says."
+    },
+    {
+      "finding_id": "r2-review-clean-code-w5:CC-008",
+      "verdict": "upheld",
+      "reasoning": "readPremiseClaimsFile now returns a list of claim sets, but its name and doc say one claims object."
+    },
+    {
+      "finding_id": "r2-review-core-boundaries-w1:CB-001",
+      "verdict": "upheld",
+      "reasoning": "Same root as LG-001 (w1) and HL-001 (w3): a placeholder at the target sends a retry's record to the unread .partial file, and the success path overwrites the first attempt's usage, so the flow 460 H spend undercounts."
+    },
+    {
+      "finding_id": "r2-review-core-boundaries-w1:CB-002",
+      "verdict": "upheld",
+      "reasoning": "isSeparator accepts a backslash because the branch meant both separators, but call.arguments is JSON text, where a Windows separator is doubled; the gap is real."
+    },
+    {
+      "finding_id": "r2-review-core-boundaries-w1:CB-003",
+      "verdict": "upheld",
+      "reasoning": "A fresh pointer from another session wins (completion-gate.ts:279-282) before this session's own names are checked. That is the flow 460 C misdirection in a newer form; nothing records it as intended."
+    },
+    {
+      "finding_id": "r2-review-core-boundaries-w1:CB-005",
+      "verdict": "upheld",
+      "reasoning": "Same fact as CC-002 (w1)."
+    },
+    {
+      "finding_id": "r2-review-core-boundaries-w1:CB-006",
+      "verdict": "upheld",
+      "reasoning": "The detector is free-text by design (ledger.ts:25-31), but the false negative for a path before the input name goes against the flow's D outcome; no practice source supports prose detection."
+    },
+    {
+      "finding_id": "r2-review-highload-w1:HL-001",
+      "verdict": "upheld",
+      "reasoning": "The number of commands kept is capped (64) but their size is not; the finding states the cost is small at ordinary sizes. No counter-signal, so it stays minor."
+    },
+    {
+      "finding_id": "r2-review-highload-w1:HL-002",
+      "verdict": "upheld",
+      "reasoning": "The reset on rewrite is documented (completion-gate.ts:121-123), but only by this branch. A compaction drops names the session made, which goes against the outcome C wants."
+    },
+    {
+      "finding_id": "r2-review-highload-w1:HL-004",
+      "verdict": "upheld",
+      "reasoning": "Same fact as CC-002 (w1)."
+    },
+    {
+      "finding_id": "r2-review-highload-w3:HL-001",
+      "verdict": "upheld",
+      "reasoning": "Same root as CB-001 and LG-001 (w1)."
+    },
+    {
+      "finding_id": "r2-review-highload-w4:HL-001",
+      "verdict": "upheld",
+      "reasoning": "Same fact as HL-001 (w1)."
+    },
+    {
+      "finding_id": "r2-review-highload-w4:HL-002",
+      "verdict": "upheld",
+      "reasoning": "defaultGitRunner (prior-round.ts:266-279) has no timeout. processCache stores the pending promise (coverage.ts:489-493), so a hung git call stays cached. gitTopLevel and gitDiffAt both bound theirs at 15 s."
+    },
+    {
+      "finding_id": "r2-review-highload-w5:HL-001",
+      "verdict": "upheld",
+      "reasoning": "Lines times changes per mixed region (round-split.ts:103-104). The reviewer says regions are normally small; it stays a minor tuning finding."
+    },
+    {
+      "finding_id": "r2-review-logic-w1:LG-001",
+      "verdict": "upheld",
+      "reasoning": "saveTimedOutPartial treats a placeholder-only file as a complete result (spawn-subagent-tool.ts:330-331), while every reader treats it as empty (ledger.ts:74, :425-428). The advised retry then loses its record."
+    },
+    {
+      "finding_id": "r2-review-logic-w1:LG-002",
+      "verdict": "upheld",
+      "reasoning": "screenedAs falls back on (reviewer, bare id) across waves (ledger.ts:612-613). The pre-existing canonicalByReviewer sibling shares that identity, and the suggested fix narrows both, so the fix adds consistency."
+    },
+    {
+      "finding_id": "r2-review-logic-w1:LG-003",
+      "verdict": "upheld",
+      "reasoning": "The round-1 narrowing (ledger.ts:25-31) aimed to drop false positives, not real reading failures. `reviewer-finding.schema.json` is the schema name reviewers actually receive and MANDATORY_INPUT does not match it."
+    },
+    {
+      "finding_id": "r2-review-logic-w10:LG-001",
+      "verdict": "upheld",
+      "reasoning": "The 'else its ref' rule (coverage.ts:518-519, :555) is stated only by this branch and mirrors main's gitDiffStats. For a branch target the ref is the branch under review, so the range is empty or wrong and autoDepth reads it as light."
+    },
+    {
+      "finding_id": "r2-review-logic-w10:LG-002",
+      "verdict": "upheld",
+      "reasoning": "closedAt counts any package closed under the root (completion-gate.ts:246, :324-325), including another session's. Project practice is concurrent sessions in one checkout."
+    },
+    {
+      "finding_id": "r2-review-logic-w10:LG-003",
+      "verdict": "upheld",
+      "reasoning": "KERYX_REVIEW_COMMAND matches any tool call whose arguments contain the phrase (completion-gate.ts:106, :160), which contradicts the doc at :190-191."
+    },
+    {
+      "finding_id": "r2-review-logic-w10:LG-004",
+      "verdict": "upheld",
+      "reasoning": "Same fact as LG-002 (w1)."
+    },
+    {
+      "finding_id": "r2-review-logic-w10:LG-005",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "src/commands/review.ts:3622-3623",
+          "says": "doc (flow 459, ee32a9f2, on main): the premises shape is checked when the file is read, so a malformed file refuses the ingest before anything is written"
+        },
+        {
+          "ref": "src/commands/review.ts:3654",
+          "says": "readPremiseFile runs parsePremiseClaims(parsed) on every --premises file before readPremises builds the multi-file array (pre-branch line, ee32a9f2)"
+        },
+        {
+          "ref": "src/review/premise.ts:156-164",
+          "says": "parsePremiseClaims refuses a file with `claims` (extra property) or without `premises` with its own message, so the stated {judge, claims} file never reaches parsePremiseClaimSets as an array entry"
+        }
+      ],
+      "reasoning": "The stated trigger goes through the CLI, and there each file is shape-checked when it is read, before the array exists. So a {judge, claims} file is refused per file with 'carries claims' or 'needs premises', never with the not-an-array message. The fall-through can only happen for an in-process caller passing a hand-built array. What remains true: the per-file message does not name the file.",
+      "question": "Each --premises file is already shape-checked when it is read (review.ts:3654), so the CLI cannot produce the misleading 'not an array' error. Keep parsePremiseClaimSets as is, or still guard it for in-process callers and name the bad entry?",
+      "options": [
+        "dismiss — the CLI checks each file first; the case cannot arise from the CLI",
+        "uphold — guard parsePremiseClaimSets per entry anyway (in-process callers, file named in the error)"
+      ]
+    },
+    {
+      "finding_id": "r2-review-logic-w11:LG-001",
+      "verdict": "upheld",
+      "reasoning": "coverageGated holds every post-460 closed package (readiness.ts:417) to a live re-derivation of the depth (coverage.ts:585-598). A missing head or a config change can flip a closed review to NOT READY. The Context doc's finality promise covers pre-460 packages only, but no intent is recorded for re-checking closed post-460 ones against live git."
+    }
+  ]
+}
+```
+
+## Premise summary (PR #1045 round 2, input a)
+
+57 findings judged (55 minor, 2 major; none below minor; none from review-security-code; none external; none raised by review-premise).
+
+- upheld: 56
+- downgraded: 0
+- challenged: 1
+- owner-decision: 0
+
+### Held
+
+- **r2-review-logic-w10:LG-005** (minor, challenged). Question: Each --premises file is already shape-checked when it is read (review.ts:3654), so the CLI cannot produce the misleading 'not an array' error. Keep parsePremiseClaimSets as is, or still guard it for in-process callers and name the bad entry?
+  Options: dismiss (the CLI checks each file first, so the case cannot arise from the CLI) / uphold (guard parsePremiseClaimSets per entry anyway).
+  Signals: review.ts:3622-3623 and :3654 (flow 459, on main) shape-check every --premises file before the array is built. premise.ts:156-164 refuses a `claims` file or a file without `premises` per file.
+
+### Duplicate groups (same fact, several reviewers)
+
+1. Placeholder literal held in two places, and the comment says it is never compared: r2-review-architecture-w3:AR-001, r2-review-clean-code-w3:CC-001
+2. saveTimedOutPartial named and documented as timeout-only: r2-review-clean-code-w1:CC-001, r2-review-clean-code-w3:CC-004
+3. Placeholder at save_result_to blocks or erases a retry's record, so usage undercounts: r2-review-core-boundaries-w1:CB-001, r2-review-highload-w3:HL-001, r2-review-logic-w1:LG-001
+4. readPremises polymorphic return and casts: r2-review-architecture-w3:AR-002, r2-review-clean-code-w3:CC-002
+5. dispatch.runs re-parsed beside dispatchRuns: r2-review-architecture-w5:AR-001 (broader), r2-review-architecture-w5:AR-003
+6. COVERAGE_MD_MARK owned by the readiness reader: r2-review-architecture-w5:AR-002, r2-review-clean-code-w5:CC-005
+7. secondLookClaimBacked keeps its own changed-line walk: r2-review-architecture-w5:AR-004, r2-review-clean-code-w5:CC-002
+8. packageDiffStats JSON key round-trip with a cast: r2-review-clean-code-w1:CC-003, r2-review-clean-code-w4:CC-002
+9. Stacked or orphaned doc comment at locate.ts:62: r2-review-clean-code-w1:CC-002, r2-review-core-boundaries-w1:CB-005, r2-review-highload-w1:HL-004
+10. Whole command arguments kept and rescanned in namedBySession: r2-review-highload-w1:HL-001, r2-review-highload-w4:HL-001
+11. screenedAs (reviewer, bare id) fallback matches across waves: r2-review-logic-w1:LG-002, r2-review-logic-w10:LG-004
+12. Related, not identical (the unreadable-input detector misses real claims): r2-review-logic-w1:LG-003, r2-review-core-boundaries-w1:CB-006
+
+History read: git log origin/main..HEAD, git blame on ledger.ts:425-430, completion-gate.ts:352 and review.ts:3621-3656, and git show fdd3baa.

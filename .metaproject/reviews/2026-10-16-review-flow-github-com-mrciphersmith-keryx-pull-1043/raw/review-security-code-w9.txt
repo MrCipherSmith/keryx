@@ -1,0 +1,70 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "Slice 09 is test code (dedupe, premise, premise-decision, premise-embedded, readiness, verdict) plus one line in src/trigger/unattended.ts that adds review_decide_premise to OPERATOR_CONFIRM_TOOL_NAMES, so unattended runs never get the premise-answer card. No exploitable vulnerability. One minor hardening gap: a premise-question decision is accepted without any confirmedVia, while gate decisions in the same file need one, and the new tests lock that in. One info on how decisions match findings by display id.",
+  "findings": [
+    {
+      "id": "SEC-001",
+      "severity": "minor",
+      "file": "src/review/readiness.test.ts",
+      "line": null,
+      "quote": "writeJson(\"operator-decisions.json\", { schemaVersion: 1, decisions: [{ kind: \"premise-question\", finding: \"pr7932-r1#f-9\", answer: \"dismiss\", reason: \"platforms do not mirror it\", at: \"2026-10-16T12:00:00Z\", actor: \"owner\" }] });",
+      "problem": "A premise-question decision counts with no confirmation provenance at all. validPremise in src/review/operator-decisions.ts:63-75 treats confirmedVia as optional, while valid() for mutation-waiver/reviewer-override (same file, :77-89) requires it to be one of tui-card|remote-card|terminal. The new tests make this the contract: readiness.test.ts writes a hand-made operator-decisions.json entry with no confirmedVia and expects premise-decisions to pass, and the premise-decision.test.ts answer() fixture (used by every store, readiness and verdict test) has no confirmedVia either.",
+      "impact": "Attack vector: an agent that can write to the review package (the orchestrating session or a worker writing into PKG) appends {kind:'premise-question', finding:<held global_id>, answer:'dismiss', reason, at, actor:'owner'} to operator-decisions.json instead of calling review_decide_premise or the TTY-only `keryx review decide-premise`. Readiness item 11 then passes and computeVerdict records the held blocker/major as dismissed-incorrect, so it never reaches the fixer, and nothing on the record shows that no card or terminal confirmed it. It is minor, not major: confirmedVia is self-asserted, so a forger could write 'terminal' too. File-level forgery is the existing flow 457 trust model, and this diff does not widen it. The cost is that audits and any later provenance check cannot tell a real operator answer from a hand-written one, and a gate decision in the same file would be refused for the same omission.",
+      "suggested_fix": "Make confirmedVia required in validPremise, as valid() does: both writers (the card's apply in operator-confirm-review.ts and the terminal command) already pass one. Add confirmedVia to the answer() fixture in premise-decision.test.ts and to the readiness/verdict test decisions, and add a test showing that a premise-question entry without confirmedVia is ignored by readPremiseDecisions, so readiness stays fail.",
+      "evidence": "src/review/operator-decisions.ts:73 `(d.confirmedVia === undefined || VIAS.includes(...))` versus :85 `VIAS.includes(d.confirmedVia as OperatorDecisionVia)`; slice-09 readiness.test.ts hunk 'passes once the package holds a premise-question decision for the finding'; premise-decision.test.ts answer() fixture lines 132-140 of the slice.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "dedupe_key": "premise-decision-provenance-optional"
+    },
+    {
+      "id": "SEC-002",
+      "severity": "info",
+      "file": "src/review/premise-decision.test.ts",
+      "line": null,
+      "quote": "expect(premiseHoldState(applyPremiseDecision(heldFinding(), answer({ finding: \"LY-003\" })))).toBe(\"dismissed\");",
+      "problem": "The reader side (applyPremiseDecision, premiseHoldState and applyPremiseDecisions in src/review/premise.ts:434,457,476) matches a decision against both a finding's id and its global_id, and the test treats display-id matching as intended. Display ids such as F-001 collide across reviewers, so a decision keyed by a bare display id applies to every held finding that carries that id.",
+      "impact": "Today nothing can reach this. Both writers resolve the reference through findHeldFinding (src/review/premise-question.ts), which refuses an ambiguous id, and record found.key, the global_id when there is one. Only a hand-written or legacy record keyed by display id could dismiss more than the operator meant. To settle it, either restrict reader matching to global_id whenever the finding has one, or record that display-id matching is deliberate.",
+      "suggested_fix": "Optional: when a finding has a global_id, match decisions only on that global_id, and fall back to the display id only for findings that have none.",
+      "evidence": "src/review/premise.ts:434 `keysOf(record).includes(decision.finding)`; src/review/premise-question.ts:10-11 records the decision under global_id else id and refuses ambiguous ids (:26-27).",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "premise-decision-display-id-match"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 }
+}
+```
+
+## Security Review
+
+### Scope
+- PR #1043 at head c144874f, slice-09 (61 KB): src/review/dedupe.test.ts, premise-decision.test.ts, premise-embedded.test.ts, premise.test.ts, readiness.test.ts, verdict.test.ts, and src/trigger/unattended.ts.
+- Read for context: src/review/operator-decisions.ts, src/review/premise.ts (decision apply and hold state), src/commands/operator-confirm-review.ts (the review_decide_premise card), and the TTY guard in src/commands/review-operator.ts.
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1
+- Info: 1
+
+### Findings
+- **[SEC-001] minor**: a premise-question decision is accepted without `confirmedVia`, unlike the gate decisions in the same file, and the new tests lock this in. An agent that writes to the package can append a dismiss entry with no provenance, and readiness and the verdict accept it. It is hardening only, because `confirmedVia` is self-asserted and the trust model of flow 457 already rests on the file. Fix: require `confirmedVia` in `validPremise`, add it to the test fixtures, and add a test that an entry without it is refused.
+- **[SEC-002] info**: the decision readers match on the display id as well as the `global_id`. The writers refuse ambiguous ids and record the `global_id`, so there is no current path; only a hand-written record could over-match.
+
+### Clean Areas
+- Unattended exclusion: `review_decide_premise` is added to `OPERATOR_CONFIRM_TOOL_NAMES`, and `operator-confirm-rosters.test.ts` checks the list against the registry. The terminal command refuses when stdin or stdout is not a TTY.
+- Card: `apply` re-reads the finding and refuses when its severity or verdict changed after the card was shown (a TOCTOU guard). Card text goes through `cardSafe`.
+- Premise claims: the tests cover the rejection of unknown properties (no editing of finding text or disposition), raised severity, self-judgement (including names normalised by case and whitespace and reviewers folded in by dedupe), duplicate claims, and claims that are not objects. A malformed premises file is refused before any package is written. A downgrade stops at minor.
+- Parsing: `parseEmbeddedPremises` refuses two blocks, a block that is not JSON, and a `keryx:findings` block, and there is no eval or dynamic code. `PREMISES_FILE` is a fixed relative path, so nothing user-controlled reaches it (no path traversal).
+- The tests themselves use only temp dirs from `mkdtemp`, no secrets, and no shell execution.
+- Not applicable: injection (SQL, command, SSTI), crypto, CSRF, open redirect, React and NestJS patterns.
+
+### Routing audit
+- graph_used: not-relevant (the slice is mostly tests; I checked the source sites with ctx rg)
+- wiki_used: not-relevant
+- ctx_used: yes (keryx ctx rg)
+- raw_rg_used: no

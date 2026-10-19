@@ -1,0 +1,118 @@
+```json keryx:findings
+{
+  "reviewer": "review-logic",
+  "status": "DONE_WITH_CONCERNS",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "LG-001",
+      "severity": "major",
+      "title": "A re-dispatch to the same save_result_to overwrites the earlier dispatch's KERYX_USAGE line, so the empty dispatch's spend is lost and the total can read as complete",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "quote": "await saveChildResult(saveTarget.abs, `${raw}${usageSuffix()}`)",
+      "problem": "Flow 460 (H) records an empty or timed-out child's usage by writing the placeholder plus a KERYX_USAGE line into save_result_to, because the dispatch was paid for. The empty-reply advice then tells the parent to re-dispatch once. Drivers fix one result path per reviewer x wave (raw/<reviewer>-w<n>.txt), so the re-dispatch saves to the same file. On a completed re-dispatch, saveChildResult overwrites the file, which removes the first dispatch's usage line. On a re-dispatch that times out or ends empty, saveTimedOutPartial sees a non-empty file and writes to `<target>.partial`, which readRaws (review-ledger.ts, `*.txt` only) never reads, so the second dispatch's usage is lost. In both cases the ledger counts one dispatch per raw file. usageTotals then reports `complete: true` / `token spend: X over N dispatch(es)` with no 'at least' qualifier, even though one paid dispatch is missing.",
+      "impact": "The round's stated spend is silently understated on the exact path the PR added the empty-dispatch recording for (empty child, then the re-dispatch the advice prescribes). Acceptance criterion H ('every dispatch's token use lands in the package') does not hold there, and the report presents the figure as complete.",
+      "suggested_fix": "Carry earlier usage forward rather than replacing it. When save_result_to already holds a KERYX_USAGE line, keep it: either append the new dispatch's line (splitUsage would need to sum lines, or the ledger would need to count each line as a dispatch), or write the superseded attempt's usage to a sidecar the ledger reads (for example raw/<name>.usage.jsonl), and fold it into usageTotals as its own dispatch. Add a test that runs an empty dispatch and then a completed one to the same path and asserts two dispatches and the summed tokens.",
+      "evidence": "spawn-subagent-tool.ts:2369 saveChildResult overwrites the target unconditionally; :2328 and :2260 route through saveTimedOutPartial (:329-334), which diverts to `.partial` whenever the file is non-empty; dispatch-usage.ts splitUsage keeps only the last line per file; review-ledger.ts loadRaws reads one usage per raw/*.txt; review-slice.ts writeWaveDrivers gives each reviewer x wave one fixed `result` path (driver review-logic-w8.json: raw/review-logic-w8.txt).",
+      "confidence": "high",
+      "class_scope": {
+        "sites": [
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:2369",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:2328",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:2260"
+        ],
+        "enumeration_method": "grep for saveChildResult( and saveTimedOutPartial( in spawn-subagent-tool.ts: 3 call sites that write save_result_to (completed, empty-reply, timeout). Every one replaces or diverts away from an existing usage line."
+      }
+    },
+    {
+      "id": "LG-002",
+      "severity": "major",
+      "title": "saveTimedOutPartial treats the new empty-dispatch placeholder as a complete result, so a re-dispatch's timed-out output goes to an unread .partial file",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "quote": "const target = existing.trim() === \"\" ? abs : `${abs}.partial`;",
+      "problem": "The guard exists so a complete result from an earlier dispatch is never overwritten by a partial one. Before this PR an empty or text-less timed-out child wrote nothing, so the file was empty or absent. The PR now makes both of those exits write `(subagent produced no text)` plus a usage line into save_result_to. When that file is later read as `existing`, its trimmed content is non-empty, so the next dispatch's timed-out output is diverted to `<target>.partial`. That output may hold a full REVIEW_RESULT block the child emitted before it hung. The guard should ask whether the file holds a result, which is isEmptyOutput, rather than whether it holds any bytes.",
+      "impact": "Trigger: dispatch 1 ends empty or times out with no text (placeholder written), then the re-dispatch writes its REVIEW_RESULT and hits the deadline. Its result lands in a file no reader opens. The raw file still reads as empty, so the ledger reports the reviewer uncovered and the operator pays for a third dispatch or records a Not run, although a result exists.",
+      "suggested_fix": "In saveTimedOutPartial, overwrite when the existing file is empty by the readers' own rule: `const target = isEmptyOutput(existing) ? abs : `${abs}.partial`;` (import isEmptyOutput from review/ledger, or move the placeholder test next to NO_TEXT_PLACEHOLDER). Keep the earlier usage line per LG-001.",
+      "evidence": "spawn-subagent-tool.ts:2260 (timeout, now writes NO_TEXT_PLACEHOLDER when partial is empty) and :2328 (empty reply) both write the placeholder through saveTimedOutPartial; ledger.ts:425-428 isEmptyOutput treats that placeholder as empty, so the file is 'empty' to every reader but 'content' to this guard. The docstring at :325-327 states the intent is to protect 'a complete result'.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/harness/tool/builtin/spawn-subagent-tool.ts:331"],
+        "enumeration_method": "Searched for every 'existing content' guard before writing save_result_to (saveTimedOutPartial is the only one; saveChildResult has none). One member."
+      }
+    },
+    {
+      "id": "LG-003",
+      "severity": "minor",
+      "title": "NO_TEXT_PLACEHOLDER is documented as never compared to decide an outcome, but the ledger decides coverage by comparing a second copy of the same literal",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "quote": "const NO_TEXT_PLACEHOLDER = \"(subagent produced no text)\";",
+      "problem": "The new constant's doc says 'display text only, never compared to decide an outcome'. ledger.ts isEmptyOutput matches the same text with its own regex `/^\\(subagent produced no text\\)$/` to decide whether a saved raw counts as a reply, so the placeholder does decide coverage. The two copies are not linked.",
+      "impact": "If the placeholder wording changes in one place only, an empty child's saved file stops reading as empty. It is then parsed as an unparsed reply, with a diagnosis rather than an empty-dispatch gap. No input reaches this today; the cost is to the next person who edits either copy.",
+      "suggested_fix": "Export the placeholder from one module (for example review/dispatch-usage or ledger) and use it in both spawn-subagent-tool.ts and isEmptyOutput. Correct the comment to say the ledger reads the placeholder as an empty reply.",
+      "evidence": "spawn-subagent-tool.ts:311-312 (new constant and comment); ledger.ts:428 isEmptyOutput regex literal.",
+      "confidence": "high"
+    },
+    {
+      "id": "LG-004",
+      "severity": "minor",
+      "title": "Empty-range refusal still checks only the new-slice cut's omissions, so a delta whose only changes are omitted fix lines is refused as an empty range",
+      "file": "src/commands/review-slice.ts",
+      "quote": "if (slices.length === 0 && diffFile === undefined && built.manifest.omissions.length === 0",
+      "problem": "Since L6, a delta round is cut twice: `built` over the other regions and `fixBuilt` over the fix regions. The merged `omissions` (line 259) includes fixBuilt's omissions, but the empty-range guard still reads `built.manifest.omissions` only. When every change lies in fix hunks and those fix regions are classified as ledgers, both cuts produce zero slices and the refusal fires. Ledgers here are lockfiles, data files, snapshots, generated files or large json, which reach fix hunks through 'a commit naming the finding'. The refusal says 'empty review range … changes nothing', which is not what happened. secondBuilt's omissions were already ignored the same way.",
+      "impact": "In that narrow case, review slice refuses with a misleading message instead of writing a manifest that records the omissions. No common input reaches it.",
+      "suggested_fix": "Use the merged list: `if (slices.length === 0 && diffFile === undefined && omissions.length === 0 && …)`.",
+      "evidence": "review-slice.ts:259 builds merged `omissions`; :270 tests `built.manifest.omissions.length`; slice.ts:445-450 sends ledger-classified files to omissions, not slices.",
+      "confidence": "medium"
+    },
+    {
+      "id": "LG-005",
+      "severity": "minor",
+      "title": "Partitioning before buildSlices applies the large-json byte threshold per half, so one file can be part omitted, part sliced, and omittedBytes keeps only the first half",
+      "file": "src/commands/review-slice.ts",
+      "quote": "const omissions = [...built.manifest.omissions, ...(fixBuilt?.manifest.omissions ?? []), ...(secondBuilt?.manifest.omissions ?? [])].filter(",
+      "problem": "classifyLedger decides `large-json` from a file's diff bytes summed over the regions passed to buildSlices (slice.ts:446-447). L6 now passes a file's fix regions and its other regions to two separate buildSlices calls, so the threshold (100 KB, or 20 KB for fixtures) is judged per part. A json file over the threshold in total can have both parts under it (both sliced, where round 1 would omit it), or one part omitted and one sliced (the same path appears in both omissions and a slice). The path-dedup filter then keeps the first omission's bytes only, so totals.omittedBytes undercounts.",
+      "impact": "Narrow trigger: a large json file that holds both a fix hunk and new changes in a delta round. The result is a manifest that disagrees with round 1's omission rule for the same file, plus a wrong omittedBytes figure. Nothing is lost silently, since the sliced part is still reviewed.",
+      "suggested_fix": "Classify ledgers once over the whole source before partitioning. Run classifyLedger per path over `source.regions`, drop those paths from both partitions, and record each one once with its full byte count. Alternatively, sum bytes across duplicates when merging omissions.",
+      "evidence": "review-slice.ts:251-253 (partition, then two buildSlices calls); slice.ts:232-238 byte thresholds; slice.ts:445-450 per-call classification; review-slice.ts:259 first-wins dedup by path.",
+      "confidence": "medium"
+    },
+    {
+      "id": "LG-006",
+      "severity": "info",
+      "title": "--base is trimmed when recorded on the target but passed untrimmed to findPreviousRound",
+      "file": "src/commands/review.ts",
+      "quote": "const base = optionValue(args, \"--base\")?.trim() || undefined;",
+      "problem": "The new target.base is the trimmed value, and an empty value is dropped. A few lines later, findPreviousRound still receives `optionValue(args, \"--base\")` raw (review.ts:1096), so `--base \" main\"` or `--base \"\"` gives the prior-round search a different base than the one recorded on the target.",
+      "impact": "No observed defect. resolveBase filters empty and '-' refs, and a padded ref is unusual. This would be settled by passing `base` to findPreviousRound.",
+      "suggested_fix": "Pass `{ ...result.manifest.target }` (which already carries the trimmed base) or the `base` local to findPreviousRound.",
+      "evidence": "review.ts:1044 (trimmed) vs review.ts:1096 (raw optionValue).",
+      "confidence": "high"
+    },
+    {
+      "id": "LG-007",
+      "severity": "info",
+      "title": "readPremises casts each file's result to PremiseSource rather than typing readPremiseFile's return",
+      "file": "src/commands/review.ts",
+      "quote": "files.push((await readPremiseFile(source)) as PremiseSource);",
+      "problem": "readPremiseFile is declared to return ManagedReviewInput[\"premises\"], which now includes the list form and undefined, and the multi-file path casts that back to PremiseSource. It always returns one parsed object today, so behaviour is correct. The cast would hide a future change that returns a list or undefined.",
+      "impact": "No runtime defect today.",
+      "suggested_fix": "Declare `readPremiseFile(source: string): Promise<PremiseSource>` and drop the cast.",
+      "evidence": "review.ts:3632-3640 and readPremiseFile's declared return type.",
+      "confidence": "high"
+    }
+  ]
+}
+```
+
+## Logic Review: slice-03 (PR #1045, round 2)
+
+- Scope: slice-03.diff (agent.ts import, operator-confirm-review readiness item count, review-ledger build changes, review-slice L6 fix/new partition, review.ts --base/--premises, SKILL/schema docs, spawn_subagent empty and timeout handling and tests).
+- Spec compliance gate: read against flow 460's description. D/E (an empty child never counts) and H (every dispatch's tokens land in the package) are the criteria this slice touches.
+
+### Stats
+- blocker: 0 | major: 2 | minor: 3 | info: 2
+
+### Summary
+The ledger change is sound. Ledger build now gets coverage through packageCoverageErrors, the same function complete and readiness use, which also restores the prContext option the old call left out. The hashed-display-id refusal, the screened-findings wiring and the L6 partition call site also read correctly. The two majors are both in spawn_subagent's result saving, on the path the PR adds. First, a re-dispatch to the same result file replaces or diverts the earlier dispatch's usage line, so the spend total is understated while still reading as complete (LG-001). Second, the new placeholder file makes the existing-content guard divert a later timed-out result to an unread `.partial` file (LG-002). The minors are a comment that contradicts how the ledger uses the placeholder, an empty-range guard that ignores the fix cut's omissions, and per-partition ledger classification of large json.
+
+Layers: gdgraph not used (the slice is self-contained and callers were confirmed with keryx ctx rg); wiki and memory not relevant; ctx used for searches.
