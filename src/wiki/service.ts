@@ -26,6 +26,7 @@ import {
   checkPageInvariants,
   compareVersions,
   describeViolations,
+  hasUnclosedFrontMatter,
   mergeGeneratedSections,
   newestChangelogVersion,
   pageVersion,
@@ -1715,6 +1716,16 @@ async function validateStructure(
       content = await readFile(page.absolutePath, "utf8");
     } catch {
       continue;
+    }
+
+    if (hasUnclosedFrontMatter(content)) {
+      // Every `---` rule further down would otherwise read as the close, and
+      // `unwrapFencedPage` dropped the prose above it as metadata.
+      issues.push({
+        page: page.relativePath,
+        kind: "metadata",
+        message: "front matter opened with `---` has no closing `---` before the body starts",
+      });
     }
 
     const block = findManagedBlock(content);
