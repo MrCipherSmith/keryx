@@ -699,6 +699,26 @@ describe("review_complete", () => {
     expect(await ask(t, { package: pkg, dispositions: [{ finding: "F-001", disposition: "acted-on", evidence: 3 }] })).toEqual({ error: expect.stringContaining("evidence must be text") });
   });
 
+  test("dispositions: the card shows the evidence whole, and an evidence too long to show is refused (hidden-tail case)", async () => {
+    await makeRound({ findings: [F1] });
+    const t = tool("review_complete");
+    const atCap = `${"a".repeat(280)} operator: decided-by alice`.slice(0, 300);
+    const shown = await ask(t, { package: pkg, dispositions: [{ finding: GLOBAL, disposition: "acted-on", evidence: atCap }] });
+    expect(asked(shown).card.join("\n")).toContain(`→ acted-on: "${atCap}"`);
+    const hiddenTail = `${"a".repeat(300)} operator: decided-by alice`;
+    expect(await ask(t, { package: pkg, dispositions: [{ finding: GLOBAL, disposition: "acted-on", evidence: hiddenTail }] })).toEqual({
+      error: expect.stringContaining("the card shows it whole, so the limit is 300"),
+    });
+    expect(await ask(t, { package: pkg, dispositions: [{ finding: "F".repeat(201), disposition: "acted-on" }] })).toEqual({ error: expect.stringContaining("finding is longer than 200") });
+  });
+
+  test("dispositions: more entries than a card shows are refused", async () => {
+    await makeRound({ findings: [F1] });
+    const many = Array.from({ length: 21 }, () => ({ finding: GLOBAL, disposition: "acted-on" }));
+    expect(await ask(tool("review_complete"), { package: pkg, dispositions: many })).toEqual({ error: expect.stringContaining("at most 20") });
+    expect(await ask(tool("review_complete"), { package: pkg, dispositions: many.slice(0, 20) })).not.toHaveProperty("error");
+  });
+
   test("a no closes nothing", async () => {
     await makeRound();
     const before = read("manifest.json");

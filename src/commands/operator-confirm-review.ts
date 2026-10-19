@@ -652,6 +652,10 @@ const WAIVER_QUOTE_CHARS = 300;
 
 type CompletePrepared = { dir: string; head: string | undefined; digest: string; dispositions: readonly FindingDispositionRecord[] };
 
+const MAX_DISPOSITIONS = 20;
+const MAX_DISPOSITION_FINDING_CHARS = 200;
+const MAX_DISPOSITION_EVIDENCE_CHARS = 300;
+
 const dispositionsSchema = {
   type: "array",
   description:
@@ -661,7 +665,7 @@ const dispositionsSchema = {
     properties: {
       finding: { type: "string", description: "The finding's global id or display id." },
       disposition: { type: "string", enum: [...FINDING_DISPOSITION_STATES] },
-      evidence: { type: "string", description: "Optional: the commit or reasoning behind the disposition." },
+      evidence: { type: "string", description: "Optional: the commit or reasoning behind the disposition. At most 300 characters; the card shows it whole." },
     },
     required: ["finding", "disposition"],
     additionalProperties: false,
@@ -673,6 +677,7 @@ function completionDispositions(input: Record<string, unknown>): FindingDisposit
   const raw = input["dispositions"];
   if (raw === undefined) return [];
   if (!Array.isArray(raw)) return { refusal: "dispositions must be an array of { finding, disposition, evidence? }" };
+  if (raw.length > MAX_DISPOSITIONS) return { refusal: `dispositions holds ${raw.length} entries; a card shows at most ${MAX_DISPOSITIONS}` };
   const records: FindingDispositionRecord[] = [];
   for (const [index, entry] of raw.entries()) {
     const item = (typeof entry === "object" && entry !== null ? entry : {}) as Record<string, unknown>;
@@ -684,13 +689,17 @@ function completionDispositions(input: Record<string, unknown>): FindingDisposit
       return { refusal: `dispositions[${index}]: disposition must be one of ${FINDING_DISPOSITION_STATES.join(", ")}` };
     }
     if (evidence !== undefined && typeof evidence !== "string") return { refusal: `dispositions[${index}]: evidence must be text` };
+    if (finding.length > MAX_DISPOSITION_FINDING_CHARS) return { refusal: `dispositions[${index}]: finding is longer than ${MAX_DISPOSITION_FINDING_CHARS} characters` };
+    if (typeof evidence === "string" && evidence.trim().length > MAX_DISPOSITION_EVIDENCE_CHARS) {
+      return { refusal: `dispositions[${index}]: evidence is ${evidence.trim().length} characters; the card shows it whole, so the limit is ${MAX_DISPOSITION_EVIDENCE_CHARS}` };
+    }
     records.push({ finding, state: state as FindingDispositionState, ...(evidence === undefined || evidence.trim() === "" ? {} : { evidence: evidence.trim() }) });
   }
   return records;
 }
 
 const dispositionLine = (record: FindingDispositionRecord): string =>
-  `disposition: ${cardSafe(record.finding)} → ${record.state}${record.evidence === undefined ? "" : `: "${cardSafe(clip(record.evidence))}"`}`;
+  `disposition: ${cardSafe(record.finding)} → ${record.state}${record.evidence === undefined ? "" : `: "${cardSafe(record.evidence)}"`}`;
 
 type CompletionFacts = { reviewId: string; head: string | undefined; evidence: string; waivers: string[]; status: string };
 
