@@ -342,6 +342,24 @@ describe("AC2: a remote answer is accepted only for this question, once, within 
     expect(gate.applied).toEqual([]);
   });
 
+  test("with no allowed-id list to check (the provider returns undefined) a remote answer is refused and the token is spent", async () => {
+    const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => undefined });
+    const token = await issue(gate);
+    const result = await gate.tool.invoke({ to: 31 }, remote(token));
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("is not on the allowed list — nothing was changed");
+    expect(gate.applied).toEqual([]);
+    expect((await gate.tool.invoke({ to: 31 }, remote(token))).output).toContain("no operator-confirmed card");
+  });
+
+  test("with no allowed-id provider bound at all a remote answer is refused", async () => {
+    const gate = testGate({ ceiling: 25 });
+    const result = await gate.tool.invoke({ to: 31 }, remote(await issue(gate)));
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("is not on the allowed list — nothing was changed");
+    expect(gate.applied).toEqual([]);
+  });
+
   test("another question's token is refused, changes nothing, and is spent", async () => {
     const gate = testGate({ ceiling: 25 }, { allowedUserIds: () => ALLOWED });
     const token = await issue(gate, 31);
