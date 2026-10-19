@@ -12,11 +12,12 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { MAX_OPERATOR_TEXT_LENGTH, loadReport, reportText } from "../decisions/service";
+import { MAX_OPERATOR_TEXT_LENGTH, isHostQuestionEntry, loadReport, openDecision, reportText } from "../decisions/service";
 import { ENV_AUTONOMOUS_ANSWERS_FILE } from "../review/autonomous-answers";
 import { operatorDecisionSubject } from "../review/coverage";
 import { readOperatorDecisions, readPremiseDecisions } from "../review/operator-decisions";
-import { estimatePlan, readPlanConfirmation } from "../review/plan-confirmation";
+import { estimatePlan, readPlanConfirmation, recordPlanConfirmation } from "../review/plan-confirmation";
+import { isHostQuestion } from "../review/types";
 import { heldFinding } from "../review/premise-fixtures";
 import { computeReadiness, renderReadiness } from "../review/readiness";
 import { buildRunProfile, writeRunProfile } from "../review/run-profile";
@@ -493,7 +494,8 @@ describe("HQ-09: the length and shape caps are refused before the first write", 
   });
 
   test("a control character in the ref is refused", async () => {
-    for (const control of ["\n", "\r", "\t", "\u0000", "\u001b", "\u007f", "\u0085"]) {
+    // Both ends of each range are pinned: 0x1f is the last C0 control, 0x7f..0x9f the DEL and C1 block.
+    for (const control of ["\n", "\r", "\t", "\u0000", "\u001b", "\u001f", "\u007f", "\u0085", "\u009f"]) {
       for (const verb of FOUR) await expectRefused(verb, pkgDir(), { "--answered-by": `codex:ask${control}17` }, "control character");
     }
   });
@@ -782,6 +784,9 @@ describe("AC8: the record is visible as a host question, distinct from a card", 
     const text = readFileSync(path.join(dir, "findings.json"), "utf8");
     expect(text).toContain("host-question");
     expect(text).toContain("codex");
+    // The disposition's own evidence line names the source and the ref, not only the premise record beside it.
+    const [record] = JSON.parse(text) as Array<{ disposition?: { evidence?: string } }>;
+    expect(record?.disposition?.evidence).toContain("host-question codex:turn-4");
   });
 
   test("AC8 the /decisions modal data lists the host question with confirmedVia and the source", async () => {
@@ -809,5 +814,166 @@ describe("older records stay readable", () => {
     expect(decision?.confirmedVia).toBe("terminal");
     expect(decision?.hostQuestion).toBeUndefined();
   });
+});
 
+// Review round 1058, follow-up review-testing-practices-w1:fu1: the mutation pass over this feature left these
+// boundaries unpinned. Each test names the mutant it kills (ids in research-evidence/mutants.json).
+describe("mutation follow-up: the answer words", () => {
+  const YES_VERBS = ["confirm-plan", "waive-mutation", "override-reviewers"] as const;
+  const UPHOLD = ["uphold", "upheld", "upholds", "keep", "kept", "оставить", "оставляем", "оставляю", "подтвердить", "подтверждаю", "поддержать"];
+  const DISMISS = ["dismiss", "dismissed", "dismisses", "drop", "dropped", "отклонить", "отклоняю", "отклоняем", "снять", "закрыть"];
+
+  test("N08 an answer text of punctuation only reads as a decline, not as free text", async () => {
+    for (const verb of YES_VERBS) {
+      for (const text of ["...", "?!", " - "]) await expectRefused(verb, pkgDir(), { "--answer-text": text }, /reads as a decline/);
+    }
+  });
+
+  test("N22 every word of each choice set names that choice and no other", async () => {
+    for (const [answer, other, words] of [["uphold", "dismiss", UPHOLD], ["dismiss", "uphold", DISMISS]] as const) {
+      for (const word of words) {
+        const dir = pkgDir();
+        expect(await runOperatorCommand("decide-premise", await argsFor("decide-premise", dir, { "--answer": answer, "--answer-text": `${word} it` }), seams())).toBe(0);
+        expect((await readPremiseDecisions(dir))[0]?.answer).toBe(answer);
+        rmSync(journalFile(), { force: true });
+        await expectRefused("decide-premise", pkgDir(), { "--answer": other, "--answer-text": `${word} it` }, "--answer-text");
+      }
+    }
+  });
+
+  test("N20 a negation in an earlier clause does not negate the choice named after the comma or the full stop", async () => {
+    for (const [answer, text] of [["dismiss", "No, dismiss it"], ["dismiss", "Not sure. Dismiss it"], ["uphold", "No, uphold it"], ["uphold", "Hmm, not now? Uphold."]] as const) {
+      const dir = pkgDir();
+      expect(await runOperatorCommand("decide-premise", await argsFor("decide-premise", dir, { "--answer": answer, "--answer-text": text }), seams())).toBe(0);
+      expect((await readPremiseDecisions(dir))[0]?.answer).toBe(answer);
+    }
+    // The same negation in the same clause still refuses.
+    rmSync(journalFile(), { force: true });
+    await expectRefused("decide-premise", pkgDir(), { "--answer": "dismiss", "--answer-text": "no dismiss" }, "--answer-text");
+    await expectRefused("decide-premise", pkgDir(), { "--answer": "uphold", "--answer-text": "never uphold it" }, "--answer-text");
+  });
+
+  test("N52 a whitespace-only text is refused as blank, for either flag, on every verb", async () => {
+    for (const verb of FOUR) {
+      await expectRefused(verb, pkgDir(), { "--answer-text": "   " }, /--answer-text .* must not be blank/);
+      await expectRefused(verb, pkgDir(), { "--question-text": "   " }, /--question-text .* must not be blank/);
+      await expectRefused(verb, pkgDir(), { "--question-text": "\n\t " }, /must not be blank/);
+    }
+  });
+
+  test("N43 only KERYX_TOOL_CALL=1 marks a nested keryx; other values are not the marker", async () => {
+    for (const value of ["0", "", "true"]) {
+      const dir = pkgDir();
+      expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", dir), seams({ env: { KERYX_TOOL_CALL: value } }))).toBe(0);
+      expect(await readOperatorDecisions(dir)).toHaveLength(1);
+      rmSync(journalFile(), { force: true });
+    }
+  });
+
+  // N46 (requireReason's own trim) is an equivalent mutant: recordOperatorDecision and the premise writer trim the reason again.
+  // This pins the recorded outcome, which is what the operator-facing contract promises.
+  test("N46 the recorded reason is trimmed, on the premise and gate verbs", async () => {
+    const dir = pkgDir();
+    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", dir, { "--reason": "  the suite takes an hour \n" }), seams())).toBe(0);
+    expect((await readOperatorDecisions(dir))[0]?.reason).toBe("the suite takes an hour");
+    const premiseDir = pkgDir();
+    expect(await runOperatorCommand("decide-premise", await argsFor("decide-premise", premiseDir, { "--reason": "  platforms do not mirror  " }), seams())).toBe(0);
+    expect((await readPremiseDecisions(premiseDir))[0]?.reason).toBe("platforms do not mirror");
+  });
+});
+
+describe("mutation follow-up: the question is bound to the current plan", () => {
+  test("N32-N35 a question that shows only some of the plan's three numbers is stale", async () => {
+    const dir = pkgDir();
+    const estimate = await estimatePlan(dir);
+    const numbers = [estimate.dispatches, estimate.minutes.min, estimate.minutes.max];
+    // The fixture must make the three numbers tell apart, or leaving one out would still show it.
+    expect(new Set(numbers).size).toBe(3);
+    for (let omit = 0; omit < numbers.length; omit++) {
+      const shown = numbers.filter((_, index) => index !== omit);
+      await expectRefused("confirm-plan", dir, { "--question-text": `Run the plan: ${shown.join(" and ")}?` }, /plan/i);
+    }
+    await expectRefused("confirm-plan", dir, { "--question-text": `Run the plan: ${numbers[0]} only?` }, /plan/i);
+    expect(await runOperatorCommand("confirm-plan", await argsFor("confirm-plan", dir, { "--question-text": `Run the plan: ${numbers.join(", ")}?` }), seams())).toBe(0);
+  });
+});
+
+describe("mutation follow-up: what counts as the same host question", () => {
+  test("N24 N25 confirm-plan: the same ref from another source, or another ref from the same source, is a new answer", async () => {
+    const dir = pkgDir();
+    const record = async (by: string) => runOperatorCommand("confirm-plan", await argsFor("confirm-plan", dir, { "--answered-by": by }), seams());
+    expect(await record("claude-code:ask-1")).toBe(0);
+    expect(await record("claude-code:ask-2")).toBe(0);
+    expect(await record("codex:ask-2")).toBe(0);
+    expect((await readPlanConfirmation(dir))?.hostQuestion).toMatchObject({ source: "codex", ref: "ask-2" });
+    await expect(record("codex:ask-2")).rejects.toThrow("already recorded");
+  });
+
+  test("N39 one ref may answer a waiver and a reviewer override: the repeat check is per kind", async () => {
+    const dir = pkgDir();
+    expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", dir), seams())).toBe(0);
+    expect(await runOperatorCommand("override-reviewers", await argsFor("override-reviewers", dir), seams())).toBe(0);
+    expect((await readOperatorDecisions(dir)).map((decision) => decision.kind).sort()).toEqual(["mutation-waiver", "reviewer-override"]);
+    await expect(runOperatorCommand("waive-mutation", await argsFor("waive-mutation", dir), seams())).rejects.toThrow("already recorded");
+  });
+
+  test("N40 one ref may answer the premise question of two findings: the repeat check is per finding", async () => {
+    const dir = pkgDir([held, { ...held, id: "LY-005", global_id: "r1#LY-005" }]);
+    expect(await runOperatorCommand("decide-premise", await argsFor("decide-premise", dir), seams())).toBe(0);
+    const second = await argsFor("decide-premise", dir, { "--finding": "LY-005", "--question-text": "Premise question on LY-005. Uphold it or dismiss it?" });
+    expect(await runOperatorCommand("decide-premise", second, seams())).toBe(0);
+    expect((await readPremiseDecisions(dir)).map((decision) => decision.finding).sort()).toEqual(["r1#LY-003", "r1#LY-005"]);
+    await expect(runOperatorCommand("decide-premise", second, seams())).rejects.toThrow("already recorded");
+  });
+});
+
+describe("mutation follow-up: the decisions journal entry", () => {
+  type OpenLine = { kind?: string; question?: string; channel?: string; seq?: number; options?: unknown[] };
+  const openLines = (): OpenLine[] =>
+    readFileSync(journalFile(), "utf8").split("\n").filter((line) => line.trim() !== "").map((line) => JSON.parse(line) as OpenLine).filter((line) => line.kind === "open");
+  const options = [{ id: "yes", label: "Yes" }, { id: "no", label: "No" }];
+  const host = (over: Partial<{ source: string; ref: string; verb: string }> = {}) => ({ source: "codex", ref: "q1", verb: "waive-mutation", answerText: "yes", ...over });
+
+  test("N47 the entry's channel is the source named in --answered-by", async () => {
+    for (const source of ["codex", "helyx-poll"]) {
+      expect(await runOperatorCommand("waive-mutation", await argsFor("waive-mutation", pkgDir(), { "--answered-by": `${source}:q1` }), seams())).toBe(0);
+    }
+    expect(openLines().map((line) => line.channel)).toEqual(["codex", "helyx-poll"]);
+  });
+
+  test("J01-J03 an unanswered host question asked again is one decision; another source, ref or verb is another", async () => {
+    const ask = (over?: Parameters<typeof host>[0]) => openDecision({ cwd: repo, question: "Same question?", options, hostQuestion: host(over), salt: "t" });
+    const first = await ask();
+    expect((await ask()).id).toBe(first.id);
+    const others = [await ask({ source: "claude-code" }), await ask({ ref: "q2" }), await ask({ verb: "confirm-plan" })];
+    expect(new Set([first.id, ...others.map((other) => other.id)]).size).toBe(4);
+  });
+
+  test("J04 a host question does not move the arm sequence of the next ordinary question", async () => {
+    await openDecision({ cwd: repo, question: "Asked by the host?", options, hostQuestion: host(), salt: "t" });
+    await openDecision({ cwd: repo, question: "Asked by keryx?", options, salt: "t" });
+    expect(openLines().find((line) => line.question === "Asked by keryx?")?.seq).toBe(1);
+  });
+});
+
+describe("mutation follow-up: the readers and the writer of a host question", () => {
+  test("T01 isHostQuestion takes null and non-objects as not a host question, without throwing", () => {
+    for (const value of [null, undefined, "codex:1", 7, true]) expect(isHostQuestion(value)).toBe(false);
+    expect(isHostQuestion({ source: "codex", ref: "1", questionText: "q", answerText: "a", time: "2026-10-19T10:00:00.000Z" })).toBe(true);
+  });
+
+  test("D01 D02 isHostQuestionEntry is false for null, undefined and a null hostQuestion", () => {
+    expect(isHostQuestionEntry(null)).toBe(false);
+    expect(isHostQuestionEntry(undefined)).toBe(false);
+    expect(isHostQuestionEntry({})).toBe(false);
+    expect(isHostQuestionEntry({ hostQuestion: null })).toBe(false);
+    expect(isHostQuestionEntry({ hostQuestion: { source: "codex" } })).toBe(true);
+  });
+
+  test("E03 a plan confirmation via host-question needs the question, and nothing is written without it", async () => {
+    const dir = pkgDir();
+    const estimate = await estimatePlan(dir);
+    await expect(recordPlanConfirmation(dir, estimate, { quote: "yes, run it", confirmedVia: "host-question", at: new Date().toISOString() })).rejects.toThrow("needs the question and the answer");
+    expect(existsSync(path.join(dir, "plan-confirmation.json"))).toBe(false);
+  });
 });

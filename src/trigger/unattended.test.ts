@@ -32,6 +32,9 @@ test("flow 467: the floor refuses a keryx review invocation that carries --answe
     "sh -c 'keryx review waive-mutation --package P --answered-by x'",
     "echo ok && /usr/local/bin/keryx review waive-mutation --answered-by x",
     "printf 'keryx review waive-mutation --answered-by x' | sh",
+    // U05: eval is a shell wrapper; U04: wrappers nest.
+    "eval 'keryx review waive-mutation --package P --answered-by x'",
+    `sh -c "sh -c 'keryx review waive-mutation --package P --answered-by x'"`,
   ]) {
     expect(unattendedShellRefusal(command), command).toContain("--answered-by");
   }
@@ -44,6 +47,12 @@ test("flow 467: a mention of a verb and the flag that is not one keryx invocatio
     "keryx review waive-mutation --package P; echo --answered-by",
     "grep -n answered-by src/commands/review-operator.ts",
     "echo keryx review waive-mutation --answered-by x",
+    // U03: quoted text that only reaches a printing command is a mention unless it is piped into a shell.
+    "echo 'keryx review waive-mutation --answered-by x'",
+    "printf 'keryx review waive-mutation --answered-by x'",
+    "echo 'keryx review waive-mutation --answered-by x' | tee out.txt",
+    // U09: cat only prints.
+    "cat keryx review waive-mutation --answered-by x",
     "keryx review estimate --package p --answered-by x",
     "keryx review confirm-plan --package p",
   ]) {
