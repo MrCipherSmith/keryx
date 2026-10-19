@@ -132,6 +132,8 @@ export interface ApprovalAnswer {
   approvalId?: string;
   /** The Telegram user who pressed the button; absent for a deny that was not a press (timeout, dropped stream). */
   fromId?: number;
+  /** Flow 464: the question never reached the topic (no stream, a refused or failed post), so nobody could answer it there. */
+  undelivered?: true;
 }
 
 /**
@@ -436,7 +438,7 @@ export class RemoteClient {
    */
   async askApproval(prompt: string, timeoutMs: number, options: { remember?: string; signal?: AbortSignal } = {}): Promise<ApprovalAnswer> {
     if (!this.connected || options.signal?.aborted === true) {
-      return { decision: "deny" };
+      return { decision: "deny", undelivered: true };
     }
     const body: ApprovalBody = {
       sessionId: this.options.sessionId,
@@ -448,15 +450,15 @@ export class RemoteClient {
     try {
       const response = await this.post("approval", body);
       if (!response.ok) {
-        return { decision: "deny" };
+        return { decision: "deny", undelivered: true };
       }
       const id = ((await response.json()) as Partial<ApprovalResponse> | null)?.approvalId;
       if (typeof id !== "string" || id.length === 0) {
-        return { decision: "deny" };
+        return { decision: "deny", undelivered: true };
       }
       approvalId = id;
     } catch {
-      return { decision: "deny" };
+      return { decision: "deny", undelivered: true };
     }
     const early = this.earlyDecisions.get(approvalId);
     if (early !== undefined) {

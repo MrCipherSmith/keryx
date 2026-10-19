@@ -184,7 +184,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // Flow 376: the Telegram topic for this session. Turning it on is TUI-only (the modal, the
     // sidebar row); the readline agent REPL prints the status as text.
     name: "/remote-control",
-    description: "Drive this session from a Telegram topic: /remote-control [name|off|status]. Off by default",
+    description: "Drive this session from a Telegram topic: /remote-control [name|off|status]. Off by default. Shows the review cards (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete) waiting for a press",
     modes: AGENT_ONLY,
   },
   {
@@ -301,7 +301,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   {
     // Flow 392: the recommendation journal's report, the same lines `keryx decisions report` prints.
     name: "/decisions",
-    description: "Recommendation journal: how often you follow the agent's recommendation, by mode and stage, and the deviations; /decisions arms: how often it was followed in each arm; /decisions reason <why> and /decisions change <option> follow up on the last answer",
+    description: "Recommendation journal: how often you follow the agent's recommendation, by mode and stage, and the deviations; /decisions arms: how often it was followed in each arm; /decisions reason <why> and /decisions change <option> follow up on the last answer; also lists the Telegram review cards waiting or answered (review_confirm_plan, review_decide_premise, review_waive_readiness, review_waive_coverage, review_complete)",
     modes: AGENT_ONLY,
   },
   {

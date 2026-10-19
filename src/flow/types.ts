@@ -184,6 +184,9 @@ export type SignatureConfirmation = {
    * written before it existed still reads.
    */
   boundTo: { kind: "complete"; acChecksum: string; target?: string | undefined };
+  /** Flow 464: for a remote-card token, the Telegram user id that pressed the card and the shell's clock when the press arrived. */
+  pressedBy?: number | undefined;
+  pressedAt?: string | undefined;
 };
 
 /**
@@ -779,7 +782,7 @@ export interface FlowService {
     id: string;
     merged?: boolean | undefined;
     /** Flow 456: set by the shell's yes/no card; recorded in the token store. Absent for the terminal verb. */
-    confirmation?: { confirmedVia: string; quote: string } | undefined;
+    confirmation?: { confirmedVia: string; quote: string; pressedBy?: number | undefined; pressedAt?: string | undefined } | undefined;
     /**
      * Flow 456: the criteria checksum and completion target the operator was SHOWN on the card. Checked
      * under the flow lock; if either changed since, nothing is minted.

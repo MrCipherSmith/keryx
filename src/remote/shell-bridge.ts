@@ -93,6 +93,8 @@ export interface RemoteApprovalAnswer {
   approvalId?: string;
   /** The Telegram user who pressed; absent when nobody did (timeout, no stream). */
   fromId?: number;
+  /** Flow 464: the question never reached the topic. */
+  undelivered?: true;
 }
 
 export interface RemoteBridgeHost extends Partial<Omit<RemoteCommandHost, "isBusy" | "cancelTurn" | "stopTelegramTurn">> {
@@ -203,6 +205,7 @@ export function mapApprovalAnswer(got: unknown, offered: boolean): RemoteApprova
     always: o.decision === "always" && offered,
     ...(approvalId === undefined ? {} : { approvalId }),
     ...(fromId === undefined ? {} : { fromId }),
+    ...(!yes && (o as { undelivered?: unknown }).undelivered === true ? { undelivered: true as const } : {}),
   };
 }
 
@@ -281,6 +284,19 @@ export function operatorCardTooLongForTopic(
 ): boolean {
   if (meta?.alwaysAsk !== true || meta.card === undefined || meta.card.length === 0) return false;
   return redactSensitiveText(describeApprovalForTopic(tool, inputJson, meta)).trim().length > MAX_APPROVAL_PROMPT_CHARS;
+}
+
+/** Flow 464 (AC5): the line an operator card carries when its Telegram mirror was not sent. */
+export const MIRROR_NOT_DELIVERED = "Telegram mirror not delivered";
+
+/**
+ * Why a card cannot be mirrored to the topic right now, or undefined when it can. The card is answered in the shell
+ * either way; this only says that nobody can answer it in Telegram.
+ */
+export function mirrorUndeliveredNote(bridge: { readonly active: boolean; readonly connected: boolean } | undefined): string | undefined {
+  if (bridge === undefined || !bridge.active) return `${MIRROR_NOT_DELIVERED}: remote control is not on in this shell. Answer it here.`;
+  if (!bridge.connected) return `${MIRROR_NOT_DELIVERED}: the remote channel is not connected. Answer it here.`;
+  return undefined;
 }
 
 export class RemoteBridge {
@@ -403,6 +419,11 @@ export class RemoteBridge {
   /** Whether remote control is on (connected or not). */
   get active(): boolean {
     return this.client !== undefined;
+  }
+
+  /** Whether the stream to serve is up right now (flow 464). */
+  get connected(): boolean {
+    return this.client?.connected === true;
   }
 
   /** The running turn came from Telegram. */
@@ -941,7 +962,7 @@ export class RemoteBridge {
     const client = this.client;
     if (client === undefined || !client.connected) {
       this.push("approval", "denied: not connected");
-      return { decision: "deny", always: false };
+      return { decision: "deny", always: false, undelivered: true };
     }
     this.push("approval", "asked in the topic");
     let answer: RemoteApprovalAnswer;

@@ -751,14 +751,21 @@ export function sessionStartedAt(history: ReadonlyArray<{ ts?: string | undefine
   return Date.now();
 }
 
-function nextStep(open: OpenManagedReview): string {
+/** How the agent closes the package: the card when this session has the tool, the command otherwise (a session with no card tool). */
+function closeStep(card: boolean): string {
+  return card
+    ? "call the `review_complete` card (the operator answers it; you never run `keryx review complete` yourself)"
+    : "run `keryx review complete`";
+}
+
+function nextStep(open: OpenManagedReview, card: boolean): string {
   if (open.packageDir === "") {
-    return "Next: to continue a review opened in an earlier session, name its package (`keryx review status <review-id-or-path>`); otherwise `keryx review start --pr <n> --report <path>` opens the package; then dispatch the reviewers per slice, save each result, `keryx review ledger build <input-dir> --package <review-dir>`, `keryx review ingest ... --research <review-dir>/research.json`, then `keryx review complete`.";
+    return `Next: to continue a review opened in an earlier session, name its package (\`keryx review status <review-id-or-path>\`); otherwise \`keryx review start --pr <n> --report <path>\` opens the package; then dispatch the reviewers per slice, save each result, \`keryx review ledger build <input-dir> --package <review-dir>\`, \`keryx review ingest ... --research <review-dir>/research.json\`, then ${closeStep(card)}.`;
   }
   if (open.blockers.some((b) => /research|dispatch/.test(b))) {
-    return "Next: dispatch the reviewers per slice, build the research ledger with `keryx review ledger build <input-dir> --package <review-dir>` (it names every gap), `keryx review ingest ... --research <review-dir>/research.json`, then `keryx review complete`.";
+    return `Next: dispatch the reviewers per slice, build the research ledger with \`keryx review ledger build <input-dir> --package <review-dir>\` (it names every gap), \`keryx review ingest ... --research <review-dir>/research.json\`, then ${closeStep(card)}.`;
   }
-  return "Next: write or ingest the missing artifacts (`keryx review ingest`), then `keryx review complete`.";
+  return `Next: write or ingest the missing artifacts (\`keryx review ingest\`), then ${closeStep(card)}.`;
 }
 
 export type ReviewGateInput = {
@@ -767,6 +774,8 @@ export type ReviewGateInput = {
   continues: number;
   stalls: number;
   lastSignature: string | undefined;
+  /** Whether this session has the `review_complete` card tool; false (a readline session) keeps the command wording. Default true. */
+  cardAvailable?: boolean | undefined;
 };
 
 export type ReviewGateDecision =
@@ -784,8 +793,8 @@ function nudgeLine(blocker: string): string {
   return flat.length > MAX_NUDGE_BLOCKER_CHARS ? `${flat.slice(0, MAX_NUDGE_BLOCKER_CHARS)}…` : flat;
 }
 
-export function describeBlockers(open: OpenManagedReview): string {
-  if (open.blockers.length === 0) return "- none listed; run `keryx review complete` to close the package";
+export function describeBlockers(open: OpenManagedReview, card = true): string {
+  if (open.blockers.length === 0) return `- none listed; ${card ? "call the `review_complete` card" : "run `keryx review complete`"} to close the package`;
   const shown = open.blockers.slice(0, MAX_NUDGE_BLOCKERS).map((b) => `- ${nudgeLine(b)}`);
   const more = open.blockers.length - shown.length;
   return [...shown, ...(more > 0 ? [`- … and ${more} more (\`keryx review complete\` lists them all)`] : [])].join("\n");
@@ -794,6 +803,7 @@ export function describeBlockers(open: OpenManagedReview): string {
 export function decideReviewGate(input: ReviewGateInput): ReviewGateDecision {
   const { open } = input;
   if (open === null || !input.runSeen) return { action: "accept" };
+  const card = input.cardAvailable !== false;
   const stalls = input.lastSignature === open.signature ? input.stalls + 1 : 0;
   if (input.continues >= MAX_REVIEW_GATE_CONTINUES || stalls >= MAX_REVIEW_GATE_STALLS) {
     return {
@@ -801,7 +811,7 @@ export function decideReviewGate(input: ReviewGateInput): ReviewGateDecision {
       report:
         `Review ${open.reviewId} is not complete after ${input.continues} continue(s)` +
         `${stalls >= MAX_REVIEW_GATE_STALLS ? " and no new artifact in the last " + stalls : ""}. ` +
-        `\`keryx review complete\` still refuses on:\n${describeBlockers(open)}`,
+        `${card ? "The review_complete card" : "`keryx review complete`"} would still be refused on:\n${describeBlockers(open, card)}`,
     };
   }
   return {
@@ -809,13 +819,13 @@ export function decideReviewGate(input: ReviewGateInput): ReviewGateDecision {
     stalls,
     signature: open.signature,
     message:
-      `The managed review ${open.reviewId} is not finished: it is finished when \`keryx review complete\` accepts the package, not when you stop writing. ` +
-      `It still refuses on:\n${describeBlockers(open)}\n` +
-      `${nextStep(open)}\n` +
+      `The managed review ${open.reviewId} is not finished: it is finished when the package is closed (${card ? "the operator answers the `review_complete` card and its gates pass" : "`keryx review complete` accepts it"}), not when you stop writing. ` +
+      `It still refuses on:\n${describeBlockers(open, card)}\n` +
+      `${nextStep(open, card)}\n` +
       "Do the next missing step now. Step 1 (Build Review Context Pack) has no CLI command; it is a prose step, so mark it done and move on. " +
       "A command that is refused is not a blocker: run `keryx review --help` for the accepted usage and retry with the right flags. " +
       "A plan item you marked blocked for such a reason is not blocked: mark it in_progress. " +
       "A tool loop guard or an empty child result is not a reason to ask the operator to resend the request or to continue: change the arguments, retry the failed pass on a smaller slice, and keep going. " +
-      "Stop only after `review complete` succeeds, or report the one real blocker with its evidence.",
+      `Stop only after ${card ? "the `review_complete` card has" : "`keryx review complete` has"} closed the package, or report the one real blocker with its evidence.`,
   };
 }

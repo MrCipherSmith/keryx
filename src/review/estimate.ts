@@ -195,6 +195,9 @@ export type PlanConfirmation = {
   quote: string;
   confirmedVia: PlanConfirmedVia;
   at: string;
+  /** Flow 464: who pressed the remote card and when; set only with `confirmedVia: "remote-card"`. */
+  pressedBy?: number | undefined;
+  pressedAt?: string | undefined;
 };
 
 function isPlanConfirmation(value: unknown): value is PlanConfirmation {

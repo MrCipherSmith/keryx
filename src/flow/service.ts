@@ -1675,7 +1675,12 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
             // PR #661): a later `flow implemented --pr <other>` cannot reuse it.
             target: completionTarget({ merged: merged === true, prUrl: flow.pr.url }),
             ...(confirmation !== undefined
-              ? { confirmedVia: confirmation.confirmedVia, confirmationQuote: confirmation.quote }
+              ? {
+                  confirmedVia: confirmation.confirmedVia,
+                  confirmationQuote: confirmation.quote,
+                  ...(confirmation.pressedBy !== undefined ? { pressedBy: confirmation.pressedBy } : {}),
+                  ...(confirmation.pressedAt !== undefined ? { pressedAt: confirmation.pressedAt } : {}),
+                }
               : {}),
           },
           { now: deps.now },

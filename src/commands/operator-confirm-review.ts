@@ -15,44 +15,68 @@
 //   review_comments_reply      keryx review comments reply --final                     -> commentsReplyPass
 //   review_confirm_plan        keryx review confirm-plan --package                     -> recordPlanConfirmation
 //
+// Flow 464 adds review_complete (keryx review complete <package> [--head]): one card with the reviewed head, the report's
+// evidence level and every waiver the package carries; a yes closes the round through the CLI's own gates.
+//
 // Flow 459 adds one more: review_decide_premise (keryx review decide-premise --package --finding --answer --reason ->
 // recordPremiseDecision), the operator's answer to a finding the premise judge held.
 //
-// The waiver tools record the waiver only. Closing the review is still `keryx review complete`, which finds the waiver in
-// the package and passes the gate; the CLI flags record the waiver and close in one run.
+// The waiver tools record the waiver only. Closing the review is the review_complete card, which finds the waiver in
+// the package and passes the gate; at a terminal the CLI flags record the waiver and close in one run.
 //
 // Every card is built from the package on disk, never from the model's input alone, and `apply` refuses when the package
 // moved between the card and the yes.
 
-import { existsSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { cardSafe } from "../lib/card-safe";
+import { cardSafe, HIDDEN_IN_CARD, hiddenInCard } from "../lib/card-safe";
+import { cardPressFields, FINDING_DISPOSITION_STATES, type FindingDispositionState } from "../review/types";
 import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/service";
 import { placeReviewPath } from "../lib/review-path-flags";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
 import { readChunkPlan } from "../review/chunks";
 import { answerChunkEstimate, chunkModeOf, estimateChunkRun, recordChunkEstimate } from "../review/chunks-estimate";
-import { computeCoverage, recordCoverageWaiver } from "../review/coverage-complete";
-import { resolveReviewPackagePath } from "../review/managed";
+import { completeReviewGated } from "../review/complete-gated";
+import { computeCoverage, readCoverageWaiver, recordCoverageWaiver } from "../review/coverage-complete";
+import { evidenceLevelLine } from "../review/evidence-level";
+import { writeFileAtomic } from "../lib/fs";
+import { checkDispositions, resolveReviewPackagePath, type FindingDispositionRecord } from "../review/managed";
 import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
-import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, READINESS_ITEMS, readinessItemId, waiveReadiness, type ReadinessOptions } from "../review/readiness";
+import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, READINESS_ITEMS, readinessItemId, readinessLine, waiveReadiness, type ReadinessOptions } from "../review/readiness";
 import type { PrLookup } from "../review/complete-head-gate";
 import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmSpec } from "./operator-confirm-tools";
 import { operatorDecisionSubject, reviewersLeftOut } from "../review/coverage";
-import { recordOperatorDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
+import { readOperatorDecisions, recordOperatorDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
 import { answerPremiseQuestion, findHeldFinding } from "../review/premise-question";
 import { estimatePlan, planKeyOf, planOverThreshold, recordPlanConfirmation } from "../review/plan-confirmation";
+import type { CommentsReplyRun } from "./review";
 
 /** What the specs read outside the package: the PR tracker. Tests replace these; the defaults are the CLI's. */
 export interface ReviewConfirmSeams {
   prLookup?: PrLookup;
   prFiles?: (ref: string) => Promise<string[] | null>;
   postReview?: (ref: string, event: ReviewEvent, body: string) => Promise<PostResult>;
+  replyPass?: (args: string[], dryRun: boolean) => Promise<CommentsReplyRun>;
 }
 
-const LISTED_FILES = 15;
-const BODY_PREVIEW_LINES = 8;
-const BODY_PREVIEW_CHARS = 140;
+async function defaultReplyPass(args: string[], dryRun: boolean): Promise<CommentsReplyRun> {
+  const { commentsReplyPass } = await import("./review");
+  return commentsReplyPass(args, dryRun);
+}
+
+/**
+ * A body that is posted as written, shown whole line by line. One predicate (`hiddenInCard`) decides, the same one that
+ * guards reasons, dispositions and quotes; a tab is the single tolerated rewrite (it shows as a space). Only trailing
+ * EMPTY lines are dropped, so a trailing invisible character is tested, not trimmed away.
+ */
+function shownBody(text: string): { lines: string[] } | { refusal: string } {
+  const lines = text.split(/\r?\n/).map((line) => line.replace(/\t/g, " "));
+  while (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+  const bad = lines.findIndex((line) => hiddenInCard(line));
+  if (bad !== -1) return { refusal: `holds control, escape, bidi or zero-width characters on line ${bad + 1} that the card would hide or rewrite; it is not shown, so it is not asked` };
+  return { lines: lines.map((line) => `  ${line}`) };
+}
 
 async function trackerPrLookup(ref: string): Promise<Awaited<ReturnType<PrLookup>>> {
   if (!(await githubAdapter.detect())) return null;
@@ -79,8 +103,7 @@ const label = (dir: string, projectRoot: string): string => path.relative(projec
 const failed = (error: unknown): { refusal: string } => ({ refusal: error instanceof Error ? error.message : String(error) });
 
 function listFiles(files: readonly string[]): string[] {
-  const shown = files.slice(0, LISTED_FILES).map((file) => `  ${file}`);
-  return files.length > LISTED_FILES ? [...shown, `  … and ${files.length - LISTED_FILES} more`] : shown;
+  return files.map((file) => `  ${file}`);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -146,7 +169,7 @@ function chunksAnswerSpec(): OperatorConfirmSpec<ChunksPrepared> {
       }
       // The CLI records the estimate before it answers (`chunks estimate`), so a first answer finds a record to extend.
       await recordChunkEstimate(prepared.dir, estimate, chunkModeOf(prepared.dir));
-      const record = await answerChunkEstimate(prepared.dir, prepared.answer, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia);
+      const record = await answerChunkEstimate(prepared.dir, prepared.answer, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia, cardPressFields(confirmation));
       return { output: `chunk run answered ${record.answer?.value ?? prepared.answer} by the operator (${confirmation.confirmedVia}, ${confirmation.at}); ${estimate.chunks} pass(es) against a ceiling of ${estimate.maxPasses}` };
     },
   };
@@ -164,7 +187,7 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
     name: "review_publish",
     description:
       "Post a finished review to its pull request on GitHub. Pass the review package, optionally the event (COMMENT, REQUEST_CHANGES, APPROVE; default COMMENT) and partial=true to post a review whose readiness checklist still has failing items (the page then says what is missing). " +
-      "Same effect as `keryx review publish`; the operator sees the target, the verdict and the start of the body first.",
+      "Same effect as `keryx review publish`; the operator sees the target, the verdict and the whole body first (a body with hidden or control characters is refused; a card over 3000 characters is answered in the shell, not in the Telegram topic).",
     inputSchema: {
       type: "object",
       properties: {
@@ -194,8 +217,9 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
             return false;
           },
         });
-        const bodyLines = result.body.trimEnd().split(/\r?\n/);
-        const preview = bodyLines.slice(0, BODY_PREVIEW_LINES).map((line) => `  ${cardSafe(line.length > BODY_PREVIEW_CHARS ? `${line.slice(0, BODY_PREVIEW_CHARS)}…` : line)}`);
+        const shownReview = shownBody(result.body);
+        if ("refusal" in shownReview) return { refusal: `The review body ${shownReview.refusal}` };
+        const bodyLines = shownReview.lines;
         const failing = result.readiness.items.filter((item) => item.status === "fail").map((item) => item.id);
         const name = label(dir, ctx.projectRoot);
         return {
@@ -204,8 +228,8 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
             `target: ${cardSafe(target)}`,
             `verdict: ${result.event}`,
             result.partial ? `partial: yes — readiness is failing: ${cardSafe(failing.join(", "))}` : "partial: no — the readiness checklist passes",
-            `body: ${result.body.length} characters, ${bodyLines.length} lines; the first ${Math.min(BODY_PREVIEW_LINES, bodyLines.length)}:`,
-            ...preview,
+            `body: ${result.body.length} characters, ${bodyLines.length} lines, shown whole:`,
+            ...bodyLines,
             "yes: the review is posted to GitHub and cannot be taken back from here",
           ],
           subject: `${cardSafe(target)} (package ${name})`,
@@ -225,6 +249,7 @@ function publishSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<PublishPrep
         post: post(),
         now: () => new Date(confirmation.at),
         confirmedVia: confirmation.confirmedVia,
+        ...cardPressFields(confirmation),
         // Only the body, the target and the verdict the operator saw are posted. The event is fixed from `prepared`
         // above; the target is re-read from the manifest, which a background job may have retargeted.
         confirm: async (body, targetRef) => {
@@ -250,7 +275,7 @@ function waiveCoverageSpec(): OperatorConfirmSpec<CoveragePrepared> {
     name: "review_waive_coverage",
     description:
       "Accept that the in-scope files no review slice or chunk covered stay unreviewed, so `keryx review complete` passes its coverage gate. Pass the review package. " +
-      "Same effect as `keryx review complete --waive-coverage`: records the waiver (the operator's yes, the time, the files); run `keryx review complete` afterwards to close the review.",
+      "Same effect as `keryx review complete --waive-coverage`: records the waiver (the operator's yes, the time, the files); call review_complete afterwards to close the review.",
     inputSchema: { type: "object", properties: { package: packageSchema }, required: ["package"], additionalProperties: false },
     async buildCard(input, ctx): Promise<OperatorCardResult<CoveragePrepared>> {
       const ref = packageRef(input);
@@ -282,9 +307,9 @@ function waiveCoverageSpec(): OperatorConfirmSpec<CoveragePrepared> {
       if (now.length !== prepared.files.length || now.some((file, index) => file !== prepared.files[index])) {
         return { output: "The uncovered files changed after the card was shown; nothing was recorded. Ask again.", isError: true };
       }
-      const waiver = await recordCoverageWaiver(prepared.dir, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia);
+      const waiver = await recordCoverageWaiver(prepared.dir, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia, cardPressFields(confirmation));
       if (waiver === undefined) return { output: "No coverage waiver was recorded: the package holds no dispatch record or nothing is uncovered.", isError: true };
-      return { output: `coverage waived by the operator (${waiver.confirmedVia ?? "unknown"}, ${waiver.time}): ${waiver.files.length} file(s) not reviewed. Run \`keryx review complete\` to close the review.` };
+      return { output: `coverage waived by the operator (${waiver.confirmedVia ?? "unknown"}, ${waiver.time}): ${waiver.files.length} file(s) not reviewed. Call review_complete to close the review.` };
     },
   };
 }
@@ -300,7 +325,7 @@ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<Read
     name: "review_waive_readiness",
     description:
       "Accept one failing item of the review readiness checklist as it is, so the review can complete or be published as a partial review. Pass the review package and the item (its number or id). " +
-      "Same effect as `keryx review complete --waive <item>`: records the waiver (the operator's yes, the time) in the manifest and the report header; run `keryx review complete` afterwards to close the review.",
+      "Same effect as `keryx review complete --waive <item>`: records the waiver (the operator's yes, the time) in the manifest and the report header; call review_complete afterwards to close the review.",
     inputSchema: {
       type: "object",
       properties: { package: packageSchema, item: { type: "string", description: `The readiness item: its number (1-${READINESS_ITEMS.length}) or id, e.g. head, pr-files or quotes-located. Item ${READINESS_ITEMS.find((entry) => entry.id === "premise-decisions")?.number ?? "premise-decisions"} (premise-decisions) is never waived: each held finding is answered with review_decide_premise.` } },
@@ -345,8 +370,8 @@ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<Read
       if (current === undefined || current.status !== "fail" || current.evidence !== prepared.evidence) {
         return { output: "The readiness item changed after the card was shown; nothing was recorded. Ask again.", isError: true };
       }
-      const added = await waiveReadiness(prepared.dir, [prepared.item], confirmation.quote, { ...readiness(), now: new Date(confirmation.at), confirmedVia: confirmation.confirmedVia });
-      return { output: `readiness item waived by the operator (${confirmation.confirmedVia}, ${confirmation.at}): ${added.map((waiver) => waiver.item).join(", ")}. Run \`keryx review complete\` to close the review.` };
+      const added = await waiveReadiness(prepared.dir, [prepared.item], confirmation.quote, { ...readiness(), now: new Date(confirmation.at), confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation) });
+      return { output: `readiness item waived by the operator (${confirmation.confirmedVia}, ${confirmation.at}): ${added.map((waiver) => waiver.item).join(", ")}. Call review_complete to close the review.` };
     },
   };
 }
@@ -356,9 +381,12 @@ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<Read
 
 type DecisionPrepared = { dir: string; reason: string; detail: string; subject: OperatorDecisionSubject };
 
-const reasonOf = (input: Record<string, unknown>): string | undefined => {
+/** The reason is stored as the evidence of the decision, so it is refused when the card would show it differently. */
+const reasonOf = (input: Record<string, unknown>): { reason: string } | { refusal: string } => {
   const value = input["reason"];
-  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+  const text = typeof value === "string" ? value.trim() : "";
+  if (text === "") return { refusal: "reason is required" };
+  return hiddenInCard(text) ? { refusal: `reason ${HIDDEN_IN_CARD}` } : { reason: text };
 };
 
 function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionPrepared> {
@@ -382,9 +410,10 @@ function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionP
     },
     async buildCard(input, ctx): Promise<OperatorCardResult<DecisionPrepared>> {
       const ref = packageRef(input);
-      const reason = reasonOf(input);
+      const given = reasonOf(input);
       if (ref === undefined) return { refusal: "package is required" };
-      if (reason === undefined) return { refusal: "reason is required" };
+      if ("refusal" in given) return given;
+      const { reason } = given;
       try {
         const dir = await resolvePackage(ref, ctx.projectRoot);
         const name = label(dir, ctx.projectRoot);
@@ -395,7 +424,7 @@ function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionP
           return {
             title: `Waive the mutation pass for ${name}: ${pending} proposed mutant(s) stay unrun?`,
             lines: [
-              `unrun mutants: ${pending} (research-evidence/mutants.json): ${cardSafe(subject.items.slice(0, LISTED_FILES).join(", "))}${pending > LISTED_FILES ? ` … and ${pending - LISTED_FILES} more` : ""}`,
+              `unrun mutants: ${pending} (research-evidence/mutants.json): ${cardSafe(subject.items.join(", "))}`,
               `head: ${cardSafe(subject.head ?? "not recorded")}`,
               `reason: ${cardSafe(reason)}`,
               "yes: the review records `Not run: mutation pass` with your words for these mutants at this head; a new head or a new mutant asks again",
@@ -414,7 +443,7 @@ function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionP
             `required (mode all): ${required.length} reviewer(s)`,
             `head: ${cardSafe(subject.head ?? "not recorded")}`,
             selected === undefined ? "selected: not named" : `selected: ${cardSafe(selected.join(", "))}`,
-            `not run: ${cardSafe(missing.slice(0, LISTED_FILES).join(", ") || "none")}${missing.length > LISTED_FILES ? ` … and ${missing.length - LISTED_FILES} more` : ""}`,
+            `not run: ${cardSafe(missing.join(", ") || "none")}`,
             `reason: ${cardSafe(reason)}`,
             "yes: the gate accepts leaving out exactly these reviewers at this head; dropping another one or a new head asks again",
           ],
@@ -432,7 +461,7 @@ function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionP
       if (JSON.stringify(again) !== JSON.stringify(prepared.subject)) {
         return { output: "The head, the unrun mutants or the reviewer set changed after the card was shown; nothing was recorded. Ask again.", isError: true };
       }
-      await recordOperatorDecision(prepared.dir, { kind, quote: confirmation.quote, reason: prepared.reason, confirmedVia: confirmation.confirmedVia, at: confirmation.at, subject: prepared.subject });
+      await recordOperatorDecision(prepared.dir, { kind, quote: confirmation.quote, reason: prepared.reason, confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation), at: confirmation.at, subject: prepared.subject });
       return { output: `${mutation ? "mutation pass waived" : "reviewer-set override recorded"} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json` };
     },
   };
@@ -442,8 +471,6 @@ function decisionSpec(kind: OperatorDecisionKind): OperatorConfirmSpec<DecisionP
 // 7. review_comments_reply (flow 457)
 
 type ReplyPrepared = { argv: string[]; requests: string };
-
-const REPLY_PREVIEW = 6;
 
 function replyArgv(input: Record<string, unknown>): string[] | { refusal: string } {
   const repo = input["repo"];
@@ -461,12 +488,13 @@ function replyArgv(input: Record<string, unknown>): string[] | { refusal: string
   return argv;
 }
 
-function replySpec(): OperatorConfirmSpec<ReplyPrepared> {
+function replySpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<ReplyPrepared> {
+  const pass = seams.replyPass ?? defaultReplyPass;
   return {
     name: "review_comments_reply",
     description:
       "Post the final review-comment replies on a pull request (`keryx review comments reply --final`). Pass the repo, the PR number, its head sha, the outcomes file and the review package or result. " +
-      "The operator sees every reply before anything is posted.",
+      "The operator sees every reply whole before anything is posted (a reply with hidden or control characters is refused; a card over 3000 characters is answered in the shell, not in the Telegram topic).",
     inputSchema: {
       type: "object",
       properties: {
@@ -486,14 +514,18 @@ function replySpec(): OperatorConfirmSpec<ReplyPrepared> {
       const argv = replyArgv(input);
       if (!Array.isArray(argv)) return argv;
       try {
-        const { commentsReplyPass } = await import("./review");
-        const dry = await commentsReplyPass([...argv], true);
+        const dry = await pass([...argv], true);
         const requests = dry.result.requests;
         if (requests.length === 0) return { refusal: "The reply pass has nothing to post." };
-        const bodies = requests.slice(0, REPLY_PREVIEW).map((request) => `  ${cardSafe(((request.body as { body?: string }).body ?? "").slice(0, BODY_PREVIEW_CHARS))}`);
+        const bodies: string[] = [];
+        for (const [index, request] of requests.entries()) {
+          const shown = shownBody((request.body as { body?: string }).body ?? "");
+          if ("refusal" in shown) return { refusal: `Reply ${index + 1} ${shown.refusal}` };
+          bodies.push(`reply ${index + 1}:`, ...shown.lines);
+        }
         return {
           title: `Post ${requests.length} reply(ies) on ${cardSafe(dry.repo)}#${dry.number}?`,
-          lines: [`replies: ${requests.length}; the first ${Math.min(REPLY_PREVIEW, requests.length)}:`, ...bodies, "yes: the replies are posted on the pull request and cannot be taken back from here"],
+          lines: [`replies: ${requests.length}, each shown whole:`, ...bodies,"yes: the replies are posted on the pull request and cannot be taken back from here"],
           subject: `${cardSafe(dry.repo)}#${dry.number}`,
           prepared: { argv, requests: JSON.stringify(requests) },
         };
@@ -503,10 +535,9 @@ function replySpec(): OperatorConfirmSpec<ReplyPrepared> {
     },
     async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
       if (prepared === undefined) return { output: "review_comments_reply: nothing prepared for this card", isError: true };
-      const { commentsReplyPass } = await import("./review");
-      const again = await commentsReplyPass([...prepared.argv], true);
+      const again = await pass([...prepared.argv], true);
       if (JSON.stringify(again.result.requests) !== prepared.requests) return { output: "The replies changed after the card was shown; nothing was posted. Ask again.", isError: true };
-      const posted = await commentsReplyPass([...prepared.argv], false);
+      const posted = await pass([...prepared.argv], false);
       return { output: `posted ${posted.result.posted.length} reply(ies) (${confirmation.confirmedVia}, ${confirmation.at}); skipped ${posted.result.skipped.length}` };
     },
   };
@@ -540,7 +571,7 @@ function confirmPlanSpec(): OperatorConfirmSpec<PlanPrepared> {
             `dispatches: ${estimate.dispatches} (${estimate.roles} roles, ${estimate.slices} slices, ${estimate.sequentialBatches} batch(es) one after another)`,
             `expected duration: ${estimate.minutes.min}-${estimate.minutes.max} min`,
             `threshold: ${estimate.thresholds.maxDispatches} dispatches or ${estimate.thresholds.maxMinutes} min (${estimate.overReasons.join("; ")})`,
-            ...estimate.perRole.slice(0, LISTED_FILES).map((role) => `  ${cardSafe(role.role)}: ${role.slices} slice(s), ${role.waves} wave(s)`),
+            ...estimate.perRole.map((role) => `  ${cardSafe(role.role)}: ${role.slices} slice(s), ${role.waves} wave(s)`),
             "yes: this plan may run; a re-cut plan asks again",
           ],
           subject: `package ${name}`,
@@ -554,7 +585,7 @@ function confirmPlanSpec(): OperatorConfirmSpec<PlanPrepared> {
       if (prepared === undefined) return { output: "review_confirm_plan: nothing prepared for this card", isError: true };
       const estimate = await estimatePlan(prepared.dir);
       if (planKeyOf(estimate) !== prepared.planKey) return { output: "The plan changed after the card was shown; nothing was recorded. Ask again.", isError: true };
-      const record = await recordPlanConfirmation(prepared.dir, estimate, { quote: confirmation.quote, confirmedVia: confirmation.confirmedVia, at: confirmation.at });
+      const record = await recordPlanConfirmation(prepared.dir, estimate, { quote: confirmation.quote, confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation), at: confirmation.at });
       return { output: `plan confirmed by the operator (${record.confirmedVia}, ${record.at}): ${record.dispatches} dispatch(es), ${record.minutes[0]}-${record.minutes[1]} min` };
     },
   };
@@ -585,13 +616,14 @@ function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
     },
     async buildCard(input, ctx): Promise<OperatorCardResult<PremisePrepared>> {
       const ref = packageRef(input);
-      const reason = reasonOf(input);
+      const given = reasonOf(input);
       const finding = typeof input["finding"] === "string" ? input["finding"].trim() : "";
       const answer = input["answer"];
       if (ref === undefined) return { refusal: "package is required" };
       if (finding === "") return { refusal: "finding is required" };
       if (answer !== "uphold" && answer !== "dismiss") return { refusal: 'answer must be "uphold" or "dismiss"' };
-      if (reason === undefined) return { refusal: "reason is required" };
+      if ("refusal" in given) return given;
+      const { reason } = given;
       try {
         const dir = await resolvePackage(ref, ctx.projectRoot);
         const held = await findHeldFinding(dir, finding);
@@ -627,11 +659,239 @@ function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
       const warnings: string[] = [];
       await answerPremiseQuestion(
         prepared.dir,
-        { finding: again.finding, answer: prepared.answer, reason: prepared.reason, quote: confirmation.quote, at: confirmation.at, confirmedVia: confirmation.confirmedVia },
+        { finding: again.finding, answer: prepared.answer, reason: prepared.reason, quote: confirmation.quote, at: confirmation.at, confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation) },
         { cwd: ctx.projectRoot, warn: (line) => warnings.push(`warning: ${line}`) },
       );
       return { output: [`premise question on ${prepared.finding} answered ${prepared.answer} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json and findings.json`, ...warnings].join("\n") };
     },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 10. review_complete (flow 464)
+
+const COMPLETION_FILE = "completion-confirmation.json";
+const MAX_DISPOSITION_FINDING_CHARS = 200;
+const MAX_DISPOSITION_EVIDENCE_CHARS = 300;
+
+type CompletePrepared = { dir: string; head: string | undefined; digest: string; dispositions: readonly FindingDispositionRecord[] };
+
+const dispositionsSchema = {
+  type: "array",
+  description:
+    "Optional. How each earlier finding was handled in this fix round, recorded when the round closes (the same as `review complete --finding … --disposition … --evidence …`). The operator sees every entry on the card, whole, so a long list makes a long card (a card over the Telegram limit is answered in the shell). A finding the package does not hold, and any state but `unknown` without evidence, refuse the card.",
+  items: {
+    type: "object",
+    properties: {
+      finding: { type: "string", maxLength: MAX_DISPOSITION_FINDING_CHARS, description: "The finding's global id or display id; it must be a finding this package holds." },
+      disposition: { type: "string", enum: [...FINDING_DISPOSITION_STATES] },
+      evidence: {
+        type: "string",
+        maxLength: MAX_DISPOSITION_EVIDENCE_CHARS,
+        description: `The commit or reasoning behind the disposition; required for every state except \`unknown\`. At most ${MAX_DISPOSITION_EVIDENCE_CHARS} characters of plain single-line text; the card shows it whole.`,
+      },
+    },
+    required: ["finding", "disposition"],
+    additionalProperties: false,
+  },
+} as const;
+
+/** The `dispositions` input, checked entry by entry; the first bad entry refuses the card. */
+function completionDispositions(input: Record<string, unknown>): FindingDispositionRecord[] | { refusal: string } {
+  const raw = input["dispositions"];
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) return { refusal: "dispositions must be an array of { finding, disposition, evidence? }" };
+  const records: FindingDispositionRecord[] = [];
+  for (const [index, entry] of raw.entries()) {
+    const item = (typeof entry === "object" && entry !== null ? entry : {}) as Record<string, unknown>;
+    const finding = typeof item["finding"] === "string" ? item["finding"].trim() : "";
+    const state = item["disposition"];
+    const evidence = item["evidence"];
+    if (finding === "") return { refusal: `dispositions[${index}]: finding is required` };
+    if (typeof state !== "string" || !(FINDING_DISPOSITION_STATES as readonly string[]).includes(state)) {
+      return { refusal: `dispositions[${index}]: disposition must be one of ${FINDING_DISPOSITION_STATES.join(", ")}` };
+    }
+    if (evidence !== undefined && typeof evidence !== "string") return { refusal: `dispositions[${index}]: evidence must be text` };
+    const text = evidence?.trim();
+    if (finding.length > MAX_DISPOSITION_FINDING_CHARS) return { refusal: `dispositions[${index}]: finding is longer than ${MAX_DISPOSITION_FINDING_CHARS} characters` };
+    if (text !== undefined && text.length > MAX_DISPOSITION_EVIDENCE_CHARS) {
+      return { refusal: `dispositions[${index}]: evidence is ${text.length} characters; the card shows it whole, so the limit is ${MAX_DISPOSITION_EVIDENCE_CHARS}` };
+    }
+    for (const [field, value] of [["finding", finding], ["evidence", text ?? ""]] as const) {
+      if (hiddenInCard(value)) return { refusal: `dispositions[${index}]: ${field} ${HIDDEN_IN_CARD}` };
+    }
+    records.push({ finding, state: state as FindingDispositionState, ...(text === undefined || text === "" ? {} : { evidence: text }) });
+  }
+  return records;
+}
+
+const dispositionLine = (record: FindingDispositionRecord): string =>
+  `disposition: ${cardSafe(record.finding)} → ${record.state}${record.evidence === undefined ? "" : `: "${cardSafe(record.evidence)}"`}`;
+
+type CompletionFacts = { reviewId: string; head: string | undefined; evidence: string; waivers: string[]; status: string };
+
+/** What the card shows, read from the package. The same read is repeated in `apply` to see that nothing moved. */
+async function completionFacts(dir: string): Promise<CompletionFacts> {
+  const manifest = JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8")) as {
+    reviewId?: string;
+    status?: string;
+    target?: { kind?: string; head?: unknown };
+    readiness_waivers?: Array<{ item: string; operator_quote: string }>;
+  };
+  const recorded = typeof manifest.target?.head === "string" && manifest.target.head !== "" ? manifest.target.head : undefined;
+  const report = readFileSync(path.join(dir, "report.md"), "utf8");
+  const evidenceLine = evidenceLevelLine(report);
+  const waivers = (manifest.readiness_waivers ?? []).map((waiver) => `waiver: readiness item ${cardSafe(waiver.item)}: "${quoteWhole(waiver.operator_quote)}"`);
+  let coverage: ReturnType<typeof readCoverageWaiver>;
+  try {
+    coverage = readCoverageWaiver((JSON.parse(readFileSync(path.join(dir, "research.json"), "utf8")) as { dispatch?: unknown }).dispatch);
+  } catch (error) {
+    // A package with no research.json carries no coverage waiver; one that cannot be read is not "none".
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      waivers.push(`waiver: coverage, could not read research.json (${cardSafe(error instanceof Error ? error.message : String(error))}); the research gate will refuse`);
+    }
+    coverage = undefined;
+  }
+  if (coverage !== undefined) waivers.push(`waiver: coverage, ${coverage.files.length} file(s) not reviewed: "${quoteWhole(coverage.operatorQuote)}"`);
+  for (const decision of await readOperatorDecisions(dir)) {
+    const items = decision.subject?.items ?? [];
+    const what = decision.kind === "mutation-waiver" ? "mutation pass not run" : "reviewer override, left out";
+    waivers.push(`waiver: ${what}${items.length === 0 ? "" : ` ${cardSafe(items.join(", "))}`}: "${quoteWhole(decision.quote)}" (${decision.confirmedVia})`);
+  }
+  return {
+    reviewId: manifest.reviewId ?? path.basename(dir),
+    head: recorded === undefined ? undefined : cardSafe(recorded),
+    evidence: evidenceLine === undefined ? "evidence level: the report has no `Evidence level:` line; the gate will refuse" : cardSafe(evidenceLine),
+    waivers,
+    status: manifest.status ?? "",
+  };
+}
+
+/** A stored waiver quote shown whole; when the card has to rewrite or hide something in it, the card says so. */
+function quoteWhole(text: string): string {
+  return hiddenInCard(text) ? `${cardSafe(text)} [the stored quote holds characters this card hides or rewrites]` : text;
+}
+
+const factsDigest = (facts: CompletionFacts): string => createHash("sha256").update(JSON.stringify(facts)).digest("hex");
+
+function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePrepared> {
+  return {
+    name: "review_complete",
+    description:
+      "Close a review round: the operator sees the reviewed head SHA, the report's evidence level and every waiver the package carries (readiness, coverage, mutation, reviewer override), and says yes before the round is closed. " +
+      "Pass the review package; the round closes against the head the package recorded. Same gates and same effect as `keryx review complete` at a terminal; " +
+      "record the waivers first with review_waive_readiness or review_waive_coverage. A fix round passes `dispositions` (finding, disposition, evidence) for the earlier findings; the card lists each one. A refused gate closes nothing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        package: packageSchema,
+        dispositions: dispositionsSchema,
+      },
+      required: ["package"],
+      additionalProperties: false,
+    },
+    async buildCard(input, ctx): Promise<OperatorCardResult<CompletePrepared>> {
+      const ref = packageRef(input);
+      if (ref === undefined) return { refusal: "package is required" };
+      const dispositions = completionDispositions(input);
+      if ("refusal" in dispositions) return dispositions;
+      try {
+        const dir = await resolvePackage(ref, ctx.projectRoot);
+        const facts = await completionFacts(dir);
+        if (facts.status === "closed") return { refusal: `${facts.reviewId} is already complete` };
+        if (dispositions.length > 0) await checkDispositions(dir, dispositions);
+        const name = label(dir, ctx.projectRoot);
+        const at = facts.head === undefined ? "" : ` at ${facts.head.slice(0, 12)}`;
+        return {
+          title: `Complete review ${cardSafe(facts.reviewId)}${at}?`,
+          lines: [
+            facts.head === undefined
+              ? "reviewed head: not recorded (the package does not carry a commit)"
+              : `reviewed head: ${facts.head}`,
+            facts.evidence,
+            ...(facts.waivers.length === 0 ? ["waivers: none"] : facts.waivers),
+            ...dispositions.map(dispositionLine),
+            "yes: the head, evidence-level, research and readiness gates run now; a refusal closes nothing",
+          ],
+          subject: `package ${name}${facts.head === undefined ? "" : `, head ${facts.head.slice(0, 12)}`}`,
+          prepared: { dir, head: facts.head, digest: factsDigest(facts), dispositions },
+        };
+      } catch (error) {
+        return failed(error);
+      }
+    },
+    async apply(_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+      if (prepared === undefined) return { output: "review_complete: nothing prepared for this card", isError: true };
+      let facts: CompletionFacts;
+      try {
+        facts = await completionFacts(prepared.dir);
+      } catch (error) {
+        return { output: `review_complete refused: ${errorText(error)} — nothing was recorded`, isError: true };
+      }
+      if (factsDigest(facts) !== prepared.digest) {
+        return { output: "The head, the evidence level or the waivers changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+      }
+      const run = await runCompletionGates(ctx.projectRoot, prepared, confirmation.at, seams);
+      if (!run.closed) return { output: `review_complete refused: ${errorText(run.gateError)} — nothing was recorded`, isError: true };
+      const recordError = await writeCompletionRecord(prepared.dir, {
+        quote: confirmation.quote,
+        confirmedVia: confirmation.confirmedVia,
+        ...cardPressFields(confirmation),
+        at: confirmation.at,
+        head: prepared.head,
+        evidence: facts.evidence,
+        waivers: facts.waivers,
+        dispositions: prepared.dispositions,
+      });
+      return completionOutput(`review ${facts.reviewId} complete${prepared.head === undefined ? "" : ` at ${prepared.head.slice(0, 12)}`} (${confirmation.confirmedVia}, ${confirmation.at})`, run, recordError);
+    },
+  };
+}
+
+const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+type CompletionRun = { done: Awaited<ReturnType<typeof completeReviewGated>> | undefined; gateError: unknown; closed: boolean };
+
+/** Runs the gates and the close. The engine closes the manifest before its own bookkeeping, so a throw is not proof that nothing closed. */
+async function runCompletionGates(projectRoot: string, prepared: CompletePrepared, at: string, seams: ReviewConfirmSeams): Promise<CompletionRun> {
+  let done: CompletionRun["done"];
+  let gateError: unknown;
+  try {
+    done = await completeReviewGated(projectRoot, prepared.dir, {
+      dispositions: prepared.dispositions,
+      prLookup: seams.prLookup ?? trackerPrLookup,
+      prFiles: seams.prFiles ?? githubPrFiles,
+      now: new Date(at),
+    });
+  } catch (error) {
+    gateError = error;
+  }
+  const closed = done !== undefined || (await completionFacts(prepared.dir).catch(() => undefined))?.status === "closed";
+  return { done, gateError, closed };
+}
+
+/** The error when the record could not be written; undefined when it was. */
+async function writeCompletionRecord(dir: string, record: Record<string, unknown>): Promise<unknown> {
+  try {
+    await writeFileAtomic(path.join(dir, COMPLETION_FILE), `${JSON.stringify(record, null, 2)}\n`);
+    return undefined;
+  } catch (error) {
+    return error;
+  }
+}
+
+function completionOutput(closedLine: string, run: CompletionRun, recordError: unknown): OperatorApplyResult {
+  const problems: string[] = [];
+  if (recordError !== undefined) problems.push(`the round is closed but the confirmation record could not be written: ${errorText(recordError)}`);
+  if (run.gateError !== undefined) problems.push(`the round is closed but its bookkeeping stopped: ${errorText(run.gateError)}`);
+  return {
+    output: [
+      closedLine,
+      ...problems,
+      ...(run.done?.readiness === undefined ? [] : [readinessLine(run.done.readiness)]),
+      ...(run.done?.warnings ?? []).map((warning) => `warning: ${warning}`),
+    ].join("\n"),
+    ...(problems.length === 0 ? {} : { isError: true }),
   };
 }
 
@@ -644,9 +904,10 @@ export function buildReviewConfirmSpecs(seams: ReviewConfirmSeams = {}): readonl
     waiveReadinessSpec(seams),
     decisionSpec("mutation-waiver"),
     decisionSpec("reviewer-override"),
-    replySpec(),
+    replySpec(seams),
     confirmPlanSpec(),
     decidePremiseSpec(),
+    completeSpec(seams),
   ] as readonly OperatorConfirmSpec[];
 }
 

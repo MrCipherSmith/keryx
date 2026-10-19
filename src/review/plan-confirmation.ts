@@ -19,6 +19,7 @@ import {
   type RoundEstimate,
 } from "./estimate";
 import type { OperatorDecisionVia } from "./operator-decisions";
+import { cardPressFields, type CardPress } from "./types";
 
 export { PLAN_CONFIRMATION_FILE };
 
@@ -29,7 +30,7 @@ export type PlanConfirmation = {
   quote: string;
   confirmedVia: OperatorDecisionVia;
   at: string;
-};
+} & CardPress;
 
 /** The default threshold, as estimate.ts holds it (routing.config.json may change it per project). */
 export const DEFAULT_PLAN_THRESHOLD = { dispatches: DEFAULT_MAX_DISPATCHES, minutes: DEFAULT_MAX_MINUTES } as const;
@@ -63,7 +64,7 @@ export async function planConfirmed(packageDir: string, estimate: PlanNumbers): 
 export async function recordPlanConfirmation(
   packageDir: string,
   estimate: PlanNumbers,
-  confirmation: { quote: string; confirmedVia: OperatorDecisionVia; at: string },
+  confirmation: { quote: string; confirmedVia: OperatorDecisionVia; at: string } & CardPress,
 ): Promise<PlanConfirmation> {
   if (confirmation.quote.trim() === "") throw new Error("a plan confirmation needs the operator's own words");
   const record: PlanConfirmation = {
@@ -72,6 +73,7 @@ export async function recordPlanConfirmation(
     minutes: [estimate.minutes.min, estimate.minutes.max],
     quote: confirmation.quote.trim(),
     confirmedVia: confirmation.confirmedVia,
+    ...cardPressFields(confirmation),
     at: confirmation.at,
   };
   await writeFileAtomic(path.join(packageDir, PLAN_CONFIRMATION_FILE), `${JSON.stringify(record, null, 2)}\n`);

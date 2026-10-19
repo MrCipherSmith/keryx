@@ -1923,6 +1923,27 @@ async function recordDispositionsLocked(
 ): Promise<void> {
   const findingsPath = path.join(packageDir, "findings.json");
   const findings = JSON.parse(await readFile(findingsPath, "utf8")) as StructuredReviewFinding[];
+  const pending = await resolveDispositions(findings, records);
+  for (const { finding, disposition } of pending) {
+    finding.disposition = disposition;
+  }
+  await writeFileAtomic(findingsPath, `${JSON.stringify(findings, null, 2)}\n`);
+}
+
+/**
+ * The checks `recordDispositions` makes, without writing: an unknown or ambiguous finding, a state that needs evidence
+ * and has none, a reversal of a recorded verdict. It throws the engine's own message, so a card can refuse for the same
+ * reason the close would, before the operator is asked.
+ */
+export async function checkDispositions(packageDir: string, records: readonly FindingDispositionRecord[]): Promise<void> {
+  const findings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8")) as StructuredReviewFinding[];
+  await resolveDispositions(findings, records);
+}
+
+async function resolveDispositions(
+  findings: StructuredReviewFinding[],
+  records: readonly FindingDispositionRecord[],
+): Promise<Array<{ finding: StructuredReviewFinding; disposition: ReviewFindingDisposition }>> {
   const schema = await loadSchema("review-finding");
   const dispositionSchema = schema.properties?.["disposition"];
   if (!dispositionSchema) {
@@ -1994,11 +2015,7 @@ async function recordDispositionsLocked(
     }
     pending.push({ finding, disposition });
   }
-
-  for (const { finding, disposition } of pending) {
-    finding.disposition = disposition;
-  }
-  await writeFileAtomic(findingsPath, `${JSON.stringify(findings, null, 2)}\n`);
+  return pending;
 }
 
 // ---------------------------------------------------------------------------

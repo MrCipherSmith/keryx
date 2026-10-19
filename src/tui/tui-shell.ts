@@ -87,9 +87,8 @@ import {
 } from "../commands/remote-policy-command";
 import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
-import { describeApprovalForTopic, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+import { describeApprovalForTopic, mirrorUndeliveredNote, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
-import { type DockRace, raceApproval } from "./approval-mirror";
 import { BUSY_REASON } from "../remote/command-gateway";
 import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
 import type { CommandOutcome } from "../remote/command-router";
@@ -123,6 +122,8 @@ import { describeDetachedRuns } from "./trigger-run-now";
 import { mountApprovalsSidebar, routeApprovalsCommand, type ApprovalsSidebar } from "./approvals-sidebar";
 import { intakeConfiguredSync, mountIntakeSidebar, routeIntakeCommand, type IntakeSidebar } from "./intake-surface";
 import { mountDecisionsSidebar, routeDecisionsCommand, type DecisionsSidebar } from "./decisions-surface";
+import type { DockRace } from "./approval-mirror";
+import { OperatorConfirmationLog, askUnmirroredCard, confirmationLines as operatorConfirmationLines, raceMirroredCard, remoteApproval } from "./operator-confirmations";
 import { mountResearchSyncPanel, type ResearchSyncPanelHandle } from "./research-sync-panel";
 import { mountExternalDiffSidebar, routeExternalDiffCommand, type ExternalDiffSidebar } from "./external-diff-sidebar";
 import { mountAutoReviewSidebar, routeAutoReviewCommand, type AutoReviewSidebar } from "./autoreview-surface";
@@ -1604,6 +1605,11 @@ export function shouldAutoApproveReadOnlySpawn(mode: string, hookAsk: boolean | 
  */
 export function isUserPromptApprovalCard(tool: string): boolean {
   return tool === "user_prompt";
+}
+
+/** Flow 464: the card with the mirror note above its last line (the subject), which the dialog shows as its subtitle. */
+export function withMirrorNote(card: readonly string[], note: string): readonly string[] {
+  return card.length === 0 ? [note] : [...card.slice(0, -1), note, card[card.length - 1] as string];
 }
 
 /** The wording of the operator-confirmation dialog: the yes/no choice and the transcript line for each answer. */
@@ -3925,6 +3931,9 @@ export async function launchTuiAgentShell(opts: {
   // topic) on every exit path.
   let remoteBridge: RemoteBridge | undefined;
   let liveRemotePanel: RemotePanelHandle | undefined;
+  // Flow 464 (AC6): the operator cards this shell mirrored to the topic, for the sidebar, the status tab and /decisions.
+  const operatorCards = new OperatorConfirmationLog();
+  const operatorCardLines = (): string[] => operatorConfirmationLines(operatorCards.entries(), Date.now());
   // Flow 377: the Telegram connection of this machine (`/channels`), shared by every shell.
   let liveChannelsPanel: ChannelsPanelHandle | undefined;
   const channelsClient = new ChannelsClient();
@@ -4567,6 +4576,7 @@ export async function launchTuiAgentShell(opts: {
     liveRemotePanel = mountRemotePanel(otui, r, sidebar, {
       width: SIDEBAR_TEXT_WIDTH,
       getStatus: remoteStatus,
+      getWaitingCards: () => operatorCards.waiting().length,
       onOpen: () => showRemoteControl(),
       onOpenPermissions: () => showPermissions(),
       getPosture: () => {
@@ -4614,6 +4624,7 @@ export async function launchTuiAgentShell(opts: {
       notice: (text) => io.onSystem?.(`◇ ${text}\n`),
       lastDecisionId: lastAskUserDecisionId,
       session: askUserSessionId(),
+      confirmationLines: operatorCardLines,
     });
     liveDecisions = decisionsPanel;
     // Flow 404 (AC9): when the Part 1 materials were last synced; a row only in a checkout that has the catalog.
@@ -6069,7 +6080,7 @@ export async function launchTuiAgentShell(opts: {
       );
       if (decision !== "allow") return false;
       // Flow 456: answered in the topic — an operator-confirmed card records `confirmedVia: "remote-card"`.
-      return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint, via: "remote" } : true;
+      return meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, answer.fromId) : true;
     };
     // Flow 419 (AC1, AC2): an approval the shell raises for a turn typed here is also posted to the topic
     // the moment the dock opens (a call that is auto-approved never gets there). The first answer wins: a
@@ -6080,6 +6091,13 @@ export async function launchTuiAgentShell(opts: {
       (inner: LocalApproval): NonNullable<TuiAgentIo["requestApproval"]> =>
       async (tool, inputJson, meta) => {
         const bridge = remoteBridge;
+        // Flow 464 (AC5): an operator card the topic cannot get says so on the card, and is answered here as before.
+        const isCard = meta?.alwaysAsk === true && meta.card !== undefined && meta.card.length > 0 && !isUserPromptApprovalCard(tool);
+        const unmirrored = isCard ? mirrorUndeliveredNote(bridge) : undefined;
+        if (unmirrored !== undefined && meta?.card !== undefined) {
+          const card = withMirrorNote(meta.card, unmirrored);
+          return askUnmirroredCard(operatorCards, meta.card[0] ?? tool, foregroundOperation.signal, () => inner(tool, inputJson, { ...meta, card }));
+        }
         if (bridge === undefined || !bridge.active) {
           return inner(tool, inputJson, meta);
         }
@@ -6088,8 +6106,11 @@ export async function launchTuiAgentShell(opts: {
           return inner(tool, inputJson, meta);
         }
         const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
-        const outcome = await raceApproval({
+        const outcome = await raceMirroredCard({
+          log: operatorCards,
+          question: isCard && meta?.card !== undefined ? (meta.card[0] ?? tool) : undefined,
           turnSignal: foregroundOperation.signal,
+          onUndelivered: () => io.onSystem?.("◇ Telegram mirror not delivered: the topic did not take the card. Answer it here.\n"),
           dock: (race) => inner(tool, inputJson, meta, race),
           // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.
           topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
@@ -6101,7 +6122,7 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.(allowed ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied in Telegram.\n`);
         if (!allowed) return false;
         // Flow 456: the topic answered first — an operator-confirmed card records `confirmedVia: "remote-card"`.
-        return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint, via: "remote" } : true;
+        return meta?.fingerprint !== undefined ? remoteApproval(meta.fingerprint, outcome.answer.fromId) : true;
       };
     io.requestApproval = trackApproval(mirrorApprovalToTopic(requestApprovalLocally));
 
@@ -7302,9 +7323,14 @@ export async function launchTuiAgentShell(opts: {
     // Flow 397 review L-1: an open /remote-control modal repaints when the bridge reports a change
     // (an approval confirmed or aged out), not only on the next keypress.
     const remoteModalListeners = new Set<() => void>();
+    operatorCards.subscribe(() => {
+      liveRemotePanel?.refresh();
+      remoteModalListeners.forEach((listener) => listener());
+    });
     const showRemoteControl = (): void => {
       openRemoteControl(otui, chrome, {
         getStatus: remoteStatus,
+        getConfirmationLines: operatorCardLines,
         subscribeChange: (listener) => {
           remoteModalListeners.add(listener);
           return () => {

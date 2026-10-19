@@ -600,7 +600,7 @@ keryx review ingest --report round7.md --ref round7 \
 `` ```json keryx:premises `` block. A `challenged` or `owner-decision` finding is
 **held**: it is not an open blocker or major, it is not handed to a fixer, the
 verdict lists it as "awaiting operator", and readiness and the flow review gate
-fail until you answer. You decide it, at a terminal:
+fail until you answer. You decide it with the `review_decide_premise` card. In keryx shell the agent calls the card and you answer it in the shell or, with remote control on, in the Telegram topic (an allowed Telegram user only, for that card, once, within one hour; the record keeps `confirmedVia: remote-card` with `pressedBy` and `pressedAt`). If the topic cannot be reached the card says the Telegram mirror was not delivered and you answer it in the shell. Outside keryx shell, at a terminal:
 
 ```bash
 keryx review decide-premise --package .metaproject/reviews/round7 \
@@ -609,9 +609,8 @@ keryx review decide-premise --package .metaproject/reviews/round7 \
 
 `--answer uphold` returns the finding to kept at its original severity;
 `--answer dismiss` records it `dismissed-incorrect` with your reason as the
-evidence. In keryx shell the agent asks you the same question as a
-`review_decide_premise` card. An agent's shell cannot answer for you: the command
-is refused without a terminal.
+evidence. An agent's shell cannot answer for you: the command
+is refused without a terminal, so the agent never sends you there from keryx shell; it calls the card.
 
 ## Ingest a report someone already wrote
 
@@ -732,8 +731,7 @@ the chunk plan next to it, so the waves are one command away. An unattended run
 (`keryx review run --autonomous`) runs every wave without asking, up to the
 25-pass ceiling; an interactive run asks you once before the waves start.
 
-Only you can waive an item, in a terminal, with your own words recorded beside
-the time:
+Only you can waive an item, with your own words recorded beside the time. In keryx shell the agent calls the card and you answer it in the shell or, with remote control on, in the Telegram topic (an allowed Telegram user only, for that card, once, within one hour; the record keeps `confirmedVia: remote-card` with `pressedBy` and `pressedAt`). If the topic cannot be reached the card says the Telegram mirror was not delivered and you answer it in the shell. The terminal form is the fallback:
 
 ```bash
 keryx review complete <ref> --waive blast-radius "the cut files are generated code"
@@ -777,7 +775,7 @@ never written to. The tenth readiness item, `memory-outside-stage`, reads that l
 with another query, without `--status accepted`, any other memory command, or a
 stage call stamped before the round started, fails the item; the same query
 repeated does not. It blocks `review complete` and `review publish` like the
-other nine, and only you lift it, in a terminal:
+other nine, and only you lift it, through the `review_waive_readiness` card (see above) or, as the fallback, in a terminal:
 
 ```bash
 keryx review complete <ref> --waive memory-outside-stage "<your own words>"

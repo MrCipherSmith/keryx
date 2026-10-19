@@ -299,6 +299,9 @@ export type ApprovalResponse =
        * operator-confirmed tool writes (`confirmedVia`); it never changes whether the call runs.
        */
       via?: "remote";
+      /** Flow 464: the Telegram user id that pressed the button and the ISO time on this shell's clock when the press arrived, not Telegram's time (remote answers only). */
+      pressedBy?: number;
+      pressedAt?: string;
     };
 
 /**
@@ -3495,6 +3498,7 @@ async function runAgentTurnCore(
       continues: reviewGateContinues,
       stalls: reviewGateStalls,
       lastSignature: lastReviewGateSignature,
+      cardAvailable: deps.tools.some((tool) => tool.definition.name === "review_complete"),
     });
     if (gate.action === "continue") {
       reviewGateContinues += 1;
@@ -5810,6 +5814,8 @@ async function executeCallUnbounded(
   let confirmationToken: string | undefined;
   // Flow 456: where the operator answered an operator-confirmed card (`InteractiveToolContext.confirmationVia`).
   let confirmationVia: "local" | "remote" | undefined;
+  let confirmationPressedBy: number | undefined;
+  let confirmationPressedAt: string | undefined;
   if (tool.confirmation !== undefined && risk !== "write") {
     // Flow 295: the operator confirmation lives in the write branch only; any
     // other risk would skip it, so such a tool is refused rather than run.
@@ -6112,7 +6118,12 @@ async function executeCallUnbounded(
           isError: true,
         };
       }
-      if (card !== undefined) confirmationVia = typeof response === "object" && response.via === "remote" ? "remote" : "local";
+      if (card !== undefined) {
+        const remote = typeof response === "object" && response.via === "remote" ? response : undefined;
+        confirmationVia = remote !== undefined ? "remote" : "local";
+        confirmationPressedBy = remote?.pressedBy;
+        confirmationPressedAt = remote?.pressedAt;
+      }
       // Fix round 4, F-001: an interactive operator's approval of a
       // `keryx.impact-evidence` `ask` IS the acknowledgement W8 strict mode
       // waits for — without recording it here, every later edit of the same
@@ -6178,6 +6189,8 @@ async function executeCallUnbounded(
     ...(signal !== undefined ? { signal } : {}),
     ...(confirmationToken !== undefined ? { confirmationToken } : {}),
     ...(confirmationToken !== undefined && confirmationVia !== undefined ? { confirmationVia } : {}),
+    ...(confirmationToken !== undefined && confirmationVia === "remote" && confirmationPressedBy !== undefined ? { confirmationPressedBy } : {}),
+    ...(confirmationToken !== undefined && confirmationVia === "remote" && confirmationPressedAt !== undefined ? { confirmationPressedAt } : {}),
     ...(untrustedContentSeen ? { untrustedContentSeen: true } : {}),
   });
   if (review !== undefined && call.name === "shell_exec" && typeof input.command === "string") {

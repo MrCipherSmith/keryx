@@ -184,7 +184,7 @@ person answers over `GET /v1/approvals` and `POST /v1/approvals/{id}`, or locall
 with `keryx approvals` (see [Answer a remote approval](guides/answer-remote-approvals.md)).
 Unanswered approvals deny at expiry. But the stock listener registers no tools, so
 it raises no approvals today; they become reachable when a tool registry is
-injected into the turn. A Telegram or web card for these approvals, session-wide
+injected into the turn. A Telegram or web card for these approvals (the review acts `review_confirm_plan`, `review_decide_premise`, `review_waive_readiness`, `review_waive_coverage` and `review_complete` already have one in a shell driven from a topic: a Telegram press proves an allowed account pressed this card, not that no one else holds the bot token or can write the stores as the same OS user; see decision TM-04), session-wide
 grants from a remote answer, and approvals for unattended trigger runs are not
 built. (A `keryx shell` session driven from a Telegram topic with `/remote-control`
 has its own Allow/Always/Deny buttons in the topic; that path has been exercised only

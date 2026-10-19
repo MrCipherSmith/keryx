@@ -335,6 +335,18 @@ describe("external_apply", () => {
     expect(card.card.at(-1)).toBe(`subject: external/${run.runId} @ sha256:${run.hash}`);
   });
 
+  test("the card lists every changed file and every flagged path, with no 'and N more' tail", async () => {
+    const files = Array.from({ length: 40 }, (_, index) => ({ path: `src/file-${String(index).padStart(2, "0")}.ts`, status: "modified" as const }));
+    const flaggedPaths = Array.from({ length: 25 }, (_, index) => `.github/workflows/w-${String(index).padStart(2, "0")}.yml`);
+    const run = seed(makePatch(), { files, flaggedPaths });
+    const card = await asked(tool(), { run_id: run.runId, allow_flagged: true });
+    const text = card.card.join("\n");
+    expect(text).toContain("changed files: 40");
+    for (const file of files) expect(text).toContain(file.path);
+    for (const flagged of flaggedPaths) expect(text).toContain(`! ${flagged}`);
+    expect(text).not.toMatch(/\.\.\. and \d+ more/);
+  });
+
   test("yes lands the branch as the CLI does and records the confirmation; the checkout is untouched", async () => {
     const run = seed(makePatch());
     writeFileSync(path.join(repo, "a.txt"), "local edit\n");

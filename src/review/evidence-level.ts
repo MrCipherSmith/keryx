@@ -53,3 +53,8 @@ export function parseEvidenceLevel(report: string): EvidenceLevelParse {
   }
   return { ok: false, reason: "the evidence level must start with `static only` or `ran`" };
 }
+
+/** The report's own `Evidence level:` line, trimmed, or undefined when it has none. */
+export function evidenceLevelLine(report: string): string | undefined {
+  return withoutFences(report).find((line) => LINE.test(line))?.trim();
+}

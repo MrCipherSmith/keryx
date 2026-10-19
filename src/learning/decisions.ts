@@ -29,6 +29,9 @@ export interface Decision {
 export interface DecisionConfirmation {
   confirmedVia: string;
   quote: string;
+  /** Flow 464: who pressed the remote card and when; set only with `confirmedVia: "remote-card"`. */
+  pressedBy?: number;
+  pressedAt?: string;
 }
 
 export interface AppendDecisionInput {

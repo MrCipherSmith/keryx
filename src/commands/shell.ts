@@ -126,6 +126,7 @@ import { loadReviewDepth } from "../tui/review-panel";
 import { isReviewLayersCommand, isReviewParityCommand, isReviewReadinessCommand, isReviewsCommand, renderReviewLayersText, renderReviewParityText, renderReviewReadinessText, renderReviewsText } from "../tui/reviews-inspector";
 import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
 import { ChannelsClient } from "../remote/channels-client";
+import { loadRemoteConfig } from "../remote/config";
 import { isChannelsCommand, loadChannelsSnapshot, readlineChannelsText } from "../tui/channels-surface";
 import { isIntakeCommand, readlineIntakeText } from "../tui/intake-surface";
 import {
@@ -4217,7 +4218,14 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             // Flow 295 (AC7): the TUI's approver renders schedule_create's card.
             schedules: { projectRoot: cwd, defaults: () => ({ provider: sel.provider, model: sel.model }) },
             // Flow 456 (AC1): operator decisions as yes/no cards instead of a terminal.
-            operatorConfirm: { projectRoot: cwd },
+            operatorConfirm: {
+              projectRoot: cwd,
+              // Flow 464: the second check of a remote answer, read fresh so a config edit applies without a restart.
+              allowedUserIds: () => {
+                const loaded = loadRemoteConfig();
+                return loaded.ok ? loaded.value.allowedUserIds : undefined;
+              },
+            },
           }),
           // The EXISTING runtime, never a new one. `/mcp` is a read-only
           // view; opening it must not be the thing that spawns every
