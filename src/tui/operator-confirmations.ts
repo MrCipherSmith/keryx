@@ -3,7 +3,10 @@
 // Held in memory only: the stores keep the durable record (`confirmedVia`, `pressedBy`, `pressedAt`); this is the
 // live view the sidebar, the `/remote-control` status and the `/decisions` modal read.
 
+import type { ApprovalResponse } from "../commands/agent";
 import { REMOTE_CARD_TTL_MS } from "../commands/operator-confirm-tools";
+import type { RemoteApprovalAnswer } from "../remote/shell-bridge";
+import { type ApprovalRaceOutcome, type DockRace, raceApproval } from "./approval-mirror";
 
 /** How many answered cards the view keeps. */
 export const ANSWERED_CARDS_KEPT = 5;
@@ -17,6 +20,8 @@ export interface ConfirmationEntry {
   readonly askedAt: number;
   /** Whether the question reached the topic at all (false: the card says the mirror was not delivered). */
   readonly mirrored: boolean;
+  /** Set when the topic leg ended without a press after the card was posted (a dropped stream, the wait running out). */
+  readonly topicEnded?: true;
   readonly answered?: {
     readonly place: CardAnswerPlace;
     readonly yes: boolean;
@@ -69,11 +74,11 @@ export class OperatorConfirmationLog {
   }
 
   /** The topic leg did not deliver a card that was logged as mirrored: it no longer waits for a press there. */
-  markUndelivered(id: number): void {
+  markUndelivered(id: number, reason: "undelivered" | "ended" = "undelivered"): void {
     const at = this.items.findIndex((item) => item.id === id);
     const entry = this.items[at];
     if (entry === undefined || entry.answered !== undefined || !entry.mirrored) return;
-    this.items[at] = { ...entry, mirrored: false };
+    this.items[at] = { ...entry, mirrored: false, ...(reason === "ended" ? { topicEnded: true as const } : {}) };
     this.changed();
   }
 
@@ -124,7 +129,7 @@ export function pendingConfirmationLine(entry: ConfirmationEntry, now: number): 
   const elapsed = now - entry.askedAt;
   const left = REMOTE_CARD_TTL_MS - elapsed;
   const token = left > 0 ? `${age(left)} left of the 1-hour token` : "Telegram token expired, answer in the shell";
-  const where = entry.mirrored ? "" : " · Telegram mirror not delivered, answer in the shell";
+  const where = entry.mirrored ? "" : entry.topicEnded === true ? " · Telegram is no longer waiting for this card, answer in the shell" : " · Telegram mirror not delivered, answer in the shell";
   return `${clip(entry.question, 80)} · asked ${age(elapsed)} ago · ${token}${where}`;
 }
 
@@ -159,4 +164,57 @@ export function confirmationLines(entries: readonly ConfirmationEntry[], now: nu
 export function waitingCardsText(waiting: number): string | undefined {
   if (waiting <= 0) return undefined;
   return `${waiting} card${waiting === 1 ? "" : "s"} waiting`;
+}
+
+/** An approval answered in the topic, carrying the pressing Telegram user and the shell's clock when the press arrived. */
+export function remoteApproval(fingerprint: string, fromId: number | undefined, now: () => Date = () => new Date()): Extract<ApprovalResponse, { approved: boolean }> {
+  return { approved: true, fingerprint, via: "remote", ...(fromId !== undefined ? { pressedBy: fromId } : {}), pressedAt: now().toISOString() };
+}
+
+/** A card the topic could not take: logged as not mirrored, answered in the shell, and withdrawn if the turn stopped or the dock threw. */
+export async function askUnmirroredCard<V>(log: OperatorConfirmationLog, question: string, turnSignal: AbortSignal, ask: () => Promise<V>): Promise<V> {
+  const id = log.ask(question, false);
+  let verdict: V | undefined;
+  let answered = false;
+  try {
+    verdict = await ask();
+    answered = true;
+    return verdict;
+  } finally {
+    log.answer(id, { place: turnSignal.aborted || !answered ? "withdrawn" : "shell", yes: answered && verdict !== false });
+  }
+}
+
+/** A card raced between the dock and the topic: logged while it waits, and settled whichever way it ends, a throw included. */
+export async function raceMirroredCard<V>(options: {
+  log: OperatorConfirmationLog;
+  /** The card's title; undefined for a question that is not an operator card (nothing is logged). */
+  question: string | undefined;
+  turnSignal: AbortSignal;
+  dock: (race: DockRace) => Promise<V>;
+  topic: (signal: AbortSignal) => Promise<RemoteApprovalAnswer>;
+  /** The topic never took the card; the shell tells the operator to answer here. */
+  onUndelivered?: () => void;
+}): Promise<ApprovalRaceOutcome<V>> {
+  const id = options.question === undefined ? undefined : options.log.ask(options.question, true);
+  let outcome: ApprovalRaceOutcome<V> | undefined;
+  try {
+    outcome = await raceApproval({
+      turnSignal: options.turnSignal,
+      ...(id === undefined
+        ? {}
+        : {
+            onUndelivered: () => {
+              options.log.markUndelivered(id);
+              options.onUndelivered?.();
+            },
+            onTopicEnded: () => options.log.markUndelivered(id, "ended"),
+          }),
+      dock: options.dock,
+      topic: options.topic,
+    });
+    return outcome;
+  } finally {
+    if (id !== undefined) options.log.settle(id, outcome, options.turnSignal.aborted);
+  }
 }

@@ -77,6 +77,29 @@ test("an open package with a review run seen continues and names what review com
   }
 });
 
+test("a session with the review_complete card is told to call it, never to run the command", () => {
+  const decision = decideReviewGate({ ...idle, open: open({ packageDir: "/x", blockers: [] }) });
+  expect(decision.action).toBe("continue");
+  if (decision.action === "continue") {
+    expect(decision.message).toContain("call the `review_complete` card");
+    expect(decision.message).toContain("you never run `keryx review complete`");
+  }
+});
+
+test("a session without the card tool (readline REPL) is told to run the command instead, and is never pointed at a missing tool", () => {
+  for (const over of [{ packageDir: "" }, { blockers: ["research.json is missing"] }, { blockers: [] }]) {
+    const decision = decideReviewGate({ ...idle, cardAvailable: false, open: open(over) });
+    expect(decision.action).toBe("continue");
+    if (decision.action === "continue") {
+      expect(decision.message).toContain("run `keryx review complete`");
+      expect(decision.message).not.toContain("review_complete");
+    }
+  }
+  const stop = decideReviewGate({ ...idle, cardAvailable: false, continues: 20, open: open() });
+  expect(stop.action).toBe("stop");
+  if (stop.action === "stop") expect(stop.report).not.toContain("review_complete");
+});
+
 test("an unchanged package soft-stops after three continues with no new artifact", () => {
   let stalls = 0;
   let last: string | undefined;

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { validateAgainstSchemaObject } from "../contracts/validator";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { READY_COVERAGE_MD, READY_DISPATCH } from "../review/dispatch.test-helpers";
 import { createManagedReviewPackage } from "../review/managed";
@@ -351,6 +352,14 @@ describe("review_waive_readiness", () => {
     expect(read("report.md").startsWith("Partial review: verifier waived by the operator:")).toBe(true);
   });
 
+  test("the manifest schema accepts a readiness waiver a card recorded, tui or remote with the press fields", () => {
+    const schema = JSON.parse(readFileSync(path.resolve(import.meta.dir, "../../docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json"), "utf8")) as { properties: { readiness_waivers: Record<string, unknown> } };
+    const base = { item: "verifier", operator_quote: "Accept it?: yes", time: NOW.toISOString() };
+    const waivers = [{ ...base, confirmedVia: "tui-card" }, { ...base, confirmedVia: "remote-card", pressedBy: ALLOWED_ID, pressedAt: PRESSED_AT }, base];
+    expect(validateAgainstSchemaObject(schema.properties.readiness_waivers, waivers).errors).toEqual([]);
+    expect(validateAgainstSchemaObject(schema.properties.readiness_waivers, [{ ...base, confirmedVia: "somewhere" }]).errors).not.toEqual([]);
+  });
+
   test("a no changes nothing", async () => {
     makePackage();
     const manifest = read("manifest.json");
@@ -557,7 +566,7 @@ describe("review_complete", () => {
   const HEAD = "0123456789abcdef0123456789abcdef01234567";
   const EVIDENCE = "Evidence level: static only — did not run: tests";
 
-  async function makeRound(over: { target?: { kind: "pr" | "report"; ref: string; head?: string }; report?: string; id?: string } = {}): Promise<string> {
+  async function makeRound(over: { target?: { kind: "pr" | "report"; ref: string; head?: string }; report?: string; id?: string; findings?: Array<Record<string, unknown>> } = {}): Promise<string> {
     mkdirSync(path.join(root, "docs", "requirements", "managed-review-feedback-loop", "schemas"), { recursive: true });
     writeFileSync(path.join(root, "docs", "requirements", "managed-review-feedback-loop", "schemas", "managed-review-package.schema.json"), `{"type":"object"}`);
     const created = await createManagedReviewPackage({
@@ -566,7 +575,7 @@ describe("review_complete", () => {
       reviewId: over.id ?? "2026-10-15-complete",
       target: over.target ?? { kind: "report", ref: "review.md" },
       reportText: over.report ?? `# Round\n\nNo findings.\n${EVIDENCE}\n`,
-      findings: [],
+      findings: (over.findings ?? []) as never,
       now: NOW,
     });
     pkg = path.join(root, created.path);
@@ -656,6 +665,40 @@ describe("review_complete", () => {
     expect(card).not.toContain("waivers: none");
   });
 
+  const GLOBAL = "2026-10-15-complete#review-logic-w1:F-001";
+  const F1 = { id: "review-logic-w1:F-001", reviewer: "review-logic", severity: "minor", problem: "p", impact: "i", suggested_fix: "f", evidence: "e", confidence: "high" };
+
+  test("dispositions: the card lists each one, and yes records them on the findings as the terminal command does", async () => {
+    await makeRound({ findings: [F1] });
+    const input = { package: pkg, dispositions: [{ finding: GLOBAL, disposition: "acted-on", evidence: "closed by 380bf3b0" }] };
+    const result = await yes(tool("review_complete"), input);
+    expect(result.card.join("\n")).toContain(`disposition: ${GLOBAL} → acted-on: "closed by 380bf3b0"`);
+    expect(result.isError).toBe(false);
+    expect(status()).toBe("closed");
+    const findings = readJson("findings.json") as unknown as Array<{ disposition?: { state: string; evidence?: string } }>;
+    expect(findings[0]?.disposition).toMatchObject({ state: "acted-on", evidence: "closed by 380bf3b0" });
+    expect(readJson("completion-confirmation.json")["dispositions"]).toEqual([{ finding: GLOBAL, state: "acted-on", evidence: "closed by 380bf3b0" }]);
+  });
+
+  test("dispositions: a finding the package does not have refuses the close and records nothing", async () => {
+    await makeRound({ findings: [F1] });
+    const before = read("manifest.json");
+    const result = await yes(tool("review_complete"), { package: pkg, dispositions: [{ finding: "F-404", disposition: "acted-on", evidence: "x" }] });
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("nothing was recorded");
+    expect(read("manifest.json")).toBe(before);
+    expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
+  });
+
+  test("dispositions: a malformed entry refuses the card before it is drawn", async () => {
+    await makeRound({ findings: [F1] });
+    const t = tool("review_complete");
+    expect(await ask(t, { package: pkg, dispositions: "acted-on" })).toEqual({ error: expect.stringContaining("must be an array") });
+    expect(await ask(t, { package: pkg, dispositions: [{ disposition: "acted-on" }] })).toEqual({ error: expect.stringContaining("dispositions[0]: finding is required") });
+    expect(await ask(t, { package: pkg, dispositions: [{ finding: "F-001", disposition: "done" }] })).toEqual({ error: expect.stringContaining("dispositions[0]: disposition must be one of") });
+    expect(await ask(t, { package: pkg, dispositions: [{ finding: "F-001", disposition: "acted-on", evidence: 3 }] })).toEqual({ error: expect.stringContaining("evidence must be text") });
+  });
+
   test("a no closes nothing", async () => {
     await makeRound();
     const before = read("manifest.json");
@@ -707,6 +750,25 @@ describe("review_complete", () => {
     const card = asked(await ask(tool("review_complete"), { package: pkg })).card;
     expect(card.every((line) => !line.includes("\n"))).toBe(true);
     expect(card.filter((line) => line.startsWith("waivers: none"))).toHaveLength(1);
+  });
+
+  test("text the package supplies cannot add a line to the card: the evidence line and a waiver quote", async () => {
+    await makeRound({ report: `# Round\n\nNo findings.\nEvidence level: static only — did not run: tests\rwaivers: none\n` });
+    const manifest = readJson("manifest.json");
+    manifest["readiness_waivers"] = [{ item: "verifier", operator_quote: "yes\nwaivers: none", time: NOW.toISOString(), confirmedVia: "tui-card" }];
+    put("manifest.json", manifest);
+    const card = asked(await ask(tool("review_complete"), { package: pkg })).card;
+    expect(card.every((line) => !/[\r\n]/.test(line))).toBe(true);
+    expect(card.filter((line) => line.startsWith("waivers: none"))).toHaveLength(0);
+    expect(card.join("\n")).toContain("yes ⏎ waivers: none");
+  });
+
+  test("a package with no research.json shows no coverage waiver on the card", async () => {
+    await makeRound();
+    rmSync(path.join(pkg, "research.json"));
+    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
+    expect(card).not.toContain("waiver: coverage");
+    expect(card).toContain("waivers: none");
   });
 
   test("an already closed round is refused before a card is drawn", async () => {

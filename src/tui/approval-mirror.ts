@@ -34,6 +34,8 @@ export async function raceApproval<V>(options: {
   turnSignal: AbortSignal;
   /** Flow 464: the topic leg ended because the question never reached the topic; the dock stays and is the only place. */
   onUndelivered?: () => void;
+  /** Flow 464: the topic leg ended without a press after the card was posted (a dropped stream, the wait running out); the dock is the only place left. */
+  onTopicEnded?: () => void;
 }): Promise<ApprovalRaceOutcome<V>> {
   const dockAbort = new AbortController();
   const topicAbort = new AbortController();
@@ -50,6 +52,7 @@ export async function raceApproval<V>(options: {
         .then((answer) => {
           if (settled) return;
           if (answer.undelivered === true) options.onUndelivered?.();
+          else if (!isTopicPress(answer) && !topicAbort.signal.aborted) options.onTopicEnded?.();
           if (!isTopicPress(answer)) return;
           topicAnswer = answer;
           dockAbort.abort("topic");

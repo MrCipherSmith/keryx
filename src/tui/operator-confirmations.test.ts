@@ -64,6 +64,16 @@ test("a card logged as mirrored that the topic never took is marked undelivered 
   expect(log.entries()[0]!.answered?.place).toBe("shell");
 });
 
+test("a card the topic leg gave up on after posting stops waiting there, with its own wording", () => {
+  const log = logAt({ now: T0 });
+  const id = log.ask("Confirm the plan?", true);
+  log.markUndelivered(id, "ended");
+  expect(log.waiting()).toHaveLength(0);
+  const line = pendingConfirmationLine(log.entries()[0]!, T0);
+  expect(line).toContain("Telegram is no longer waiting for this card, answer in the shell");
+  expect(line).not.toContain("not delivered");
+});
+
 test("a card whose mirror was not delivered says it must be answered in the shell", () => {
   const log = logAt({ now: T0 });
   log.ask("Confirm the plan?", false);

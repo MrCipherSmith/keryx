@@ -198,7 +198,10 @@
         "properties": {
           "item": { "type": "string" },
           "operator_quote": { "type": "string", "minLength": 1 },
-          "time": { "type": "string" }
+          "time": { "type": "string" },
+          "confirmedVia": { "type": "string", "enum": ["tui-card", "remote-card"] },
+          "pressedBy": { "type": "integer" },
+          "pressedAt": { "type": "string", "minLength": 1 }
         }
       }
     },

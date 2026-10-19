@@ -3498,6 +3498,7 @@ async function runAgentTurnCore(
       continues: reviewGateContinues,
       stalls: reviewGateStalls,
       lastSignature: lastReviewGateSignature,
+      cardAvailable: deps.tools.some((tool) => tool.definition.name === "review_complete"),
     });
     if (gate.action === "continue") {
       reviewGateContinues += 1;

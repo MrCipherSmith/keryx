@@ -129,4 +129,56 @@ describe("raceApproval: a topic leg that never delivered", () => {
     });
     expect(told).toBe(0);
   });
+
+  test("a delivered question whose topic leg ended without a press fires onTopicEnded, not onUndelivered", async () => {
+    const calls: string[] = [];
+    await raceApproval({
+      turnSignal: new AbortController().signal,
+      onUndelivered: () => calls.push("undelivered"),
+      onTopicEnded: () => calls.push("ended"),
+      dock: async (race) => {
+        race.opened();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return "dock";
+      },
+      topic: async () => ({ decision: "deny", always: false }),
+    });
+    expect(calls).toEqual(["ended"]);
+  });
+
+  test("a press, or an undelivered card, never fires onTopicEnded", async () => {
+    for (const answer of [{ decision: "allow", always: false }, { decision: "deny", always: false, fromId: 7 }, undelivered] as RemoteApprovalAnswer[]) {
+      let ended = 0;
+      await raceApproval({
+        turnSignal: new AbortController().signal,
+        onTopicEnded: () => {
+          ended += 1;
+        },
+        dock: async (race) => {
+          race.opened();
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          return "dock";
+        },
+        topic: async () => answer,
+      });
+      expect(ended).toBe(0);
+    }
+  });
+
+  test("the dock answering first aborts the topic leg and that abort is not reported as an ended leg", async () => {
+    let ended = 0;
+    await raceApproval({
+      turnSignal: new AbortController().signal,
+      onTopicEnded: () => {
+        ended += 1;
+      },
+      dock: async (race) => {
+        race.opened();
+        return "dock";
+      },
+      topic: (signal) => new Promise<RemoteApprovalAnswer>((resolve) => signal.addEventListener("abort", () => resolve({ decision: "deny", always: false }))),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(ended).toBe(0);
+  });
 });

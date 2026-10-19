@@ -31,7 +31,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { cardSafe } from "../lib/card-safe";
-import { cardPressFields } from "../review/types";
+import { cardPressFields, FINDING_DISPOSITION_STATES, type FindingDispositionState } from "../review/types";
 import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/service";
 import { placeReviewPath } from "../lib/review-path-flags";
 import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
@@ -41,7 +41,7 @@ import { completeReviewGated } from "../review/complete-gated";
 import { computeCoverage, readCoverageWaiver, recordCoverageWaiver } from "../review/coverage-complete";
 import { evidenceLevelLine } from "../review/evidence-level";
 import { writeFileAtomic } from "../lib/fs";
-import { resolveReviewPackagePath } from "../review/managed";
+import { resolveReviewPackagePath, type FindingDispositionRecord } from "../review/managed";
 import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
 import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, READINESS_ITEMS, readinessItemId, readinessLine, waiveReadiness, type ReadinessOptions } from "../review/readiness";
 import type { PrLookup } from "../review/complete-head-gate";
@@ -650,7 +650,47 @@ function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
 const COMPLETION_FILE = "completion-confirmation.json";
 const WAIVER_QUOTE_CHARS = 300;
 
-type CompletePrepared = { dir: string; head: string | undefined; digest: string };
+type CompletePrepared = { dir: string; head: string | undefined; digest: string; dispositions: readonly FindingDispositionRecord[] };
+
+const dispositionsSchema = {
+  type: "array",
+  description:
+    "Optional. How each earlier finding was handled in this fix round, recorded when the round closes (the same as `review complete --finding … --disposition … --evidence …`). The operator sees every entry on the card.",
+  items: {
+    type: "object",
+    properties: {
+      finding: { type: "string", description: "The finding's global id or display id." },
+      disposition: { type: "string", enum: [...FINDING_DISPOSITION_STATES] },
+      evidence: { type: "string", description: "Optional: the commit or reasoning behind the disposition." },
+    },
+    required: ["finding", "disposition"],
+    additionalProperties: false,
+  },
+} as const;
+
+/** The `dispositions` input, checked entry by entry; the first bad entry refuses the card. */
+function completionDispositions(input: Record<string, unknown>): FindingDispositionRecord[] | { refusal: string } {
+  const raw = input["dispositions"];
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) return { refusal: "dispositions must be an array of { finding, disposition, evidence? }" };
+  const records: FindingDispositionRecord[] = [];
+  for (const [index, entry] of raw.entries()) {
+    const item = (typeof entry === "object" && entry !== null ? entry : {}) as Record<string, unknown>;
+    const finding = typeof item["finding"] === "string" ? item["finding"].trim() : "";
+    const state = item["disposition"];
+    const evidence = item["evidence"];
+    if (finding === "") return { refusal: `dispositions[${index}]: finding is required` };
+    if (typeof state !== "string" || !(FINDING_DISPOSITION_STATES as readonly string[]).includes(state)) {
+      return { refusal: `dispositions[${index}]: disposition must be one of ${FINDING_DISPOSITION_STATES.join(", ")}` };
+    }
+    if (evidence !== undefined && typeof evidence !== "string") return { refusal: `dispositions[${index}]: evidence must be text` };
+    records.push({ finding, state: state as FindingDispositionState, ...(evidence === undefined || evidence.trim() === "" ? {} : { evidence: evidence.trim() }) });
+  }
+  return records;
+}
+
+const dispositionLine = (record: FindingDispositionRecord): string =>
+  `disposition: ${cardSafe(record.finding)} → ${record.state}${record.evidence === undefined ? "" : `: "${cardSafe(clip(record.evidence))}"`}`;
 
 type CompletionFacts = { reviewId: string; head: string | undefined; evidence: string; waivers: string[]; status: string };
 
@@ -703,11 +743,12 @@ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePr
     description:
       "Close a review round: the operator sees the reviewed head SHA, the report's evidence level and every waiver the package carries (readiness, coverage, mutation, reviewer override), and says yes before the round is closed. " +
       "Pass the review package; the round closes against the head the package recorded. Same gates and same effect as `keryx review complete` at a terminal; " +
-      "record the waivers first with review_waive_readiness or review_waive_coverage. A refused gate closes nothing.",
+      "record the waivers first with review_waive_readiness or review_waive_coverage. A fix round passes `dispositions` (finding, disposition, evidence) for the earlier findings; the card lists each one. A refused gate closes nothing.",
     inputSchema: {
       type: "object",
       properties: {
         package: packageSchema,
+        dispositions: dispositionsSchema,
       },
       required: ["package"],
       additionalProperties: false,
@@ -715,6 +756,8 @@ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePr
     async buildCard(input, ctx): Promise<OperatorCardResult<CompletePrepared>> {
       const ref = packageRef(input);
       if (ref === undefined) return { refusal: "package is required" };
+      const dispositions = completionDispositions(input);
+      if ("refusal" in dispositions) return dispositions;
       try {
         const dir = await resolvePackage(ref, ctx.projectRoot);
         const facts = await completionFacts(dir);
@@ -729,10 +772,11 @@ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePr
               : `reviewed head: ${facts.head}`,
             facts.evidence,
             ...(facts.waivers.length === 0 ? ["waivers: none"] : facts.waivers),
+            ...dispositions.map(dispositionLine),
             "yes: the head, evidence-level, research and readiness gates run now; a refusal closes nothing",
           ],
           subject: `package ${name}${facts.head === undefined ? "" : `, head ${facts.head.slice(0, 12)}`}`,
-          prepared: { dir, head: facts.head, digest: factsDigest(facts) },
+          prepared: { dir, head: facts.head, digest: factsDigest(facts), dispositions },
         };
       } catch (error) {
         return failed(error);
@@ -740,33 +784,18 @@ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePr
     },
     async apply(_input, ctx, confirmation, prepared): Promise<OperatorApplyResult> {
       if (prepared === undefined) return { output: "review_complete: nothing prepared for this card", isError: true };
-      const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));
       let facts: CompletionFacts;
       try {
         facts = await completionFacts(prepared.dir);
       } catch (error) {
-        return { output: `review_complete refused: ${reason(error)} — nothing was recorded`, isError: true };
+        return { output: `review_complete refused: ${errorText(error)} — nothing was recorded`, isError: true };
       }
       if (factsDigest(facts) !== prepared.digest) {
         return { output: "The head, the evidence level or the waivers changed after the card was shown; nothing was recorded. Ask again.", isError: true };
       }
-      let done: Awaited<ReturnType<typeof completeReviewGated>> | undefined;
-      let gateError: unknown;
-      try {
-        done = await completeReviewGated(ctx.projectRoot, prepared.dir, {
-          prLookup: seams.prLookup ?? trackerPrLookup,
-          prFiles: seams.prFiles ?? githubPrFiles,
-          now: new Date(confirmation.at),
-        });
-      } catch (error) {
-        gateError = error;
-      }
-      // The engine closes the manifest before its own bookkeeping, so a throw is not proof that nothing closed.
-      const closed = done !== undefined || (await completionFacts(prepared.dir).catch(() => undefined))?.status === "closed";
-      if (!closed) {
-        return { output: `review_complete refused: ${reason(gateError)} — nothing was recorded`, isError: true };
-      }
-      const record = {
+      const run = await runCompletionGates(ctx.projectRoot, prepared, confirmation.at, seams);
+      if (!run.closed) return { output: `review_complete refused: ${errorText(run.gateError)} — nothing was recorded`, isError: true };
+      const recordError = await writeCompletionRecord(prepared.dir, {
         quote: confirmation.quote,
         confirmedVia: confirmation.confirmedVia,
         ...cardPressFields(confirmation),
@@ -774,27 +803,57 @@ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePr
         head: prepared.head,
         evidence: facts.evidence,
         waivers: facts.waivers,
-      };
-      let recordError: unknown;
-      try {
-        await writeFileAtomic(path.join(prepared.dir, COMPLETION_FILE), `${JSON.stringify(record, null, 2)}\n`);
-      } catch (error) {
-        recordError = error;
-      }
-      const closedLine = `review ${facts.reviewId} complete${prepared.head === undefined ? "" : ` at ${prepared.head.slice(0, 12)}`} (${confirmation.confirmedVia}, ${confirmation.at})`;
-      const problems: string[] = [];
-      if (recordError !== undefined) problems.push(`the round is closed but the confirmation record could not be written: ${reason(recordError)}`);
-      if (gateError !== undefined) problems.push(`the round is closed but its bookkeeping stopped: ${reason(gateError)}`);
-      return {
-        output: [
-          closedLine,
-          ...problems,
-          ...(done?.readiness === undefined ? [] : [readinessLine(done.readiness)]),
-          ...(done?.warnings ?? []).map((warning) => `warning: ${warning}`),
-        ].join("\n"),
-        ...(problems.length === 0 ? {} : { isError: true }),
-      };
+        dispositions: prepared.dispositions,
+      });
+      return completionOutput(`review ${facts.reviewId} complete${prepared.head === undefined ? "" : ` at ${prepared.head.slice(0, 12)}`} (${confirmation.confirmedVia}, ${confirmation.at})`, run, recordError);
     },
+  };
+}
+
+const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+type CompletionRun = { done: Awaited<ReturnType<typeof completeReviewGated>> | undefined; gateError: unknown; closed: boolean };
+
+/** Runs the gates and the close. The engine closes the manifest before its own bookkeeping, so a throw is not proof that nothing closed. */
+async function runCompletionGates(projectRoot: string, prepared: CompletePrepared, at: string, seams: ReviewConfirmSeams): Promise<CompletionRun> {
+  let done: CompletionRun["done"];
+  let gateError: unknown;
+  try {
+    done = await completeReviewGated(projectRoot, prepared.dir, {
+      dispositions: prepared.dispositions,
+      prLookup: seams.prLookup ?? trackerPrLookup,
+      prFiles: seams.prFiles ?? githubPrFiles,
+      now: new Date(at),
+    });
+  } catch (error) {
+    gateError = error;
+  }
+  const closed = done !== undefined || (await completionFacts(prepared.dir).catch(() => undefined))?.status === "closed";
+  return { done, gateError, closed };
+}
+
+/** The error when the record could not be written; undefined when it was. */
+async function writeCompletionRecord(dir: string, record: Record<string, unknown>): Promise<unknown> {
+  try {
+    await writeFileAtomic(path.join(dir, COMPLETION_FILE), `${JSON.stringify(record, null, 2)}\n`);
+    return undefined;
+  } catch (error) {
+    return error;
+  }
+}
+
+function completionOutput(closedLine: string, run: CompletionRun, recordError: unknown): OperatorApplyResult {
+  const problems: string[] = [];
+  if (recordError !== undefined) problems.push(`the round is closed but the confirmation record could not be written: ${errorText(recordError)}`);
+  if (run.gateError !== undefined) problems.push(`the round is closed but its bookkeeping stopped: ${errorText(run.gateError)}`);
+  return {
+    output: [
+      closedLine,
+      ...problems,
+      ...(run.done?.readiness === undefined ? [] : [readinessLine(run.done.readiness)]),
+      ...(run.done?.warnings ?? []).map((warning) => `warning: ${warning}`),
+    ].join("\n"),
+    ...(problems.length === 0 ? {} : { isError: true }),
   };
 }
 

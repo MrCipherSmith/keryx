@@ -43,7 +43,7 @@ import { resetOperatorDenials } from "../review/review-system";
 // is defensive: it returns `false` (caller falls back to the readline shell)
 // whenever there is no TTY, the package is absent, or the renderer fails to init.
 import { describeAutomaticReviewMode } from "../commands/automatic-review";
-import type { AgentDeps, AgentIO, ApprovalResponse } from "../commands/agent";
+import type { AgentDeps, AgentIO } from "../commands/agent";
 import {
   describeReasoningEffortSource,
   describeRoundLimit,
@@ -89,7 +89,6 @@ import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
 import { describeApprovalForTopic, mirrorUndeliveredNote, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
-import { type ApprovalRaceOutcome, type DockRace, raceApproval } from "./approval-mirror";
 import { BUSY_REASON } from "../remote/command-gateway";
 import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
 import type { CommandOutcome } from "../remote/command-router";
@@ -123,7 +122,8 @@ import { describeDetachedRuns } from "./trigger-run-now";
 import { mountApprovalsSidebar, routeApprovalsCommand, type ApprovalsSidebar } from "./approvals-sidebar";
 import { intakeConfiguredSync, mountIntakeSidebar, routeIntakeCommand, type IntakeSidebar } from "./intake-surface";
 import { mountDecisionsSidebar, routeDecisionsCommand, type DecisionsSidebar } from "./decisions-surface";
-import { OperatorConfirmationLog, confirmationLines as operatorConfirmationLines } from "./operator-confirmations";
+import type { DockRace } from "./approval-mirror";
+import { OperatorConfirmationLog, askUnmirroredCard, confirmationLines as operatorConfirmationLines, raceMirroredCard, remoteApproval } from "./operator-confirmations";
 import { mountResearchSyncPanel, type ResearchSyncPanelHandle } from "./research-sync-panel";
 import { mountExternalDiffSidebar, routeExternalDiffCommand, type ExternalDiffSidebar } from "./external-diff-sidebar";
 import { mountAutoReviewSidebar, routeAutoReviewCommand, type AutoReviewSidebar } from "./autoreview-surface";
@@ -567,11 +567,6 @@ export const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([
   // that ever change.
   "bus_send",
 ]);
-
-/** Flow 464: an approval answered in the topic, carrying the pressing Telegram user and the shell's clock when the press arrived. */
-function remoteApproval(fingerprint: string, fromId: number | undefined): Extract<ApprovalResponse, { approved: boolean }> {
-  return { approved: true, fingerprint, via: "remote", ...(fromId !== undefined ? { pressedBy: fromId } : {}), pressedAt: new Date().toISOString() };
-}
 
 /**
  * Flow 173 F-003 (P2 conversion, flow 277): the side-worker tools filter's
@@ -6100,14 +6095,8 @@ export async function launchTuiAgentShell(opts: {
         const isCard = meta?.alwaysAsk === true && meta.card !== undefined && meta.card.length > 0 && !isUserPromptApprovalCard(tool);
         const unmirrored = isCard ? mirrorUndeliveredNote(bridge) : undefined;
         if (unmirrored !== undefined && meta?.card !== undefined) {
-          const unmirroredId = operatorCards.ask(meta.card[0] ?? tool, false);
-          let verdict: Awaited<ReturnType<LocalApproval>> | undefined;
-          try {
-            verdict = await inner(tool, inputJson, { ...meta, card: withMirrorNote(meta.card, unmirrored) });
-            return verdict;
-          } finally {
-            operatorCards.answer(unmirroredId, { place: foregroundOperation.signal.aborted || verdict === undefined ? "withdrawn" : "shell", yes: verdict !== undefined && verdict !== false });
-          }
+          const card = withMirrorNote(meta.card, unmirrored);
+          return askUnmirroredCard(operatorCards, meta.card[0] ?? tool, foregroundOperation.signal, () => inner(tool, inputJson, { ...meta, card }));
         }
         if (bridge === undefined || !bridge.active) {
           return inner(tool, inputJson, meta);
@@ -6117,26 +6106,15 @@ export async function launchTuiAgentShell(opts: {
           return inner(tool, inputJson, meta);
         }
         const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
-        const cardId = isCard && meta?.card !== undefined ? operatorCards.ask(meta.card[0] ?? tool, true) : undefined;
-        let outcome: ApprovalRaceOutcome<Awaited<ReturnType<LocalApproval>>> | undefined;
-        try {
-          outcome = await raceApproval({
-            turnSignal: foregroundOperation.signal,
-            ...(isCard
-              ? {
-                  onUndelivered: () => {
-                    if (cardId !== undefined) operatorCards.markUndelivered(cardId);
-                    io.onSystem?.("◇ Telegram mirror not delivered: the topic did not take the card. Answer it here.\n");
-                  },
-                }
-              : {}),
-            dock: (race) => inner(tool, inputJson, meta, race),
-            // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.
-            topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
-          });
-        } finally {
-          if (cardId !== undefined) operatorCards.settle(cardId, outcome, foregroundOperation.signal.aborted);
-        }
+        const outcome = await raceMirroredCard({
+          log: operatorCards,
+          question: isCard && meta?.card !== undefined ? (meta.card[0] ?? tool) : undefined,
+          turnSignal: foregroundOperation.signal,
+          onUndelivered: () => io.onSystem?.("◇ Telegram mirror not delivered: the topic did not take the card. Answer it here.\n"),
+          dock: (race) => inner(tool, inputJson, meta, race),
+          // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.
+          topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
+        });
         if (outcome.from === "dock") return outcome.result;
         const allowed = outcome.answer.decision === "allow";
         input.focus();
