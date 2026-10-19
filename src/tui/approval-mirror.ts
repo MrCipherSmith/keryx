@@ -32,6 +32,8 @@ export async function raceApproval<V>(options: {
   topic: (signal: AbortSignal) => Promise<RemoteApprovalAnswer>;
   /** The turn stopped: both places are closed, the topic one as cancelled. */
   turnSignal: AbortSignal;
+  /** Flow 464: the topic leg ended because the question never reached the topic; the dock stays and is the only place. */
+  onUndelivered?: () => void;
 }): Promise<ApprovalRaceOutcome<V>> {
   const dockAbort = new AbortController();
   const topicAbort = new AbortController();
@@ -46,7 +48,9 @@ export async function raceApproval<V>(options: {
       void options
         .topic(topicAbort.signal)
         .then((answer) => {
-          if (settled || !isTopicPress(answer)) return;
+          if (settled) return;
+          if (answer.undelivered === true) options.onUndelivered?.();
+          if (!isTopicPress(answer)) return;
           topicAnswer = answer;
           dockAbort.abort("topic");
         })

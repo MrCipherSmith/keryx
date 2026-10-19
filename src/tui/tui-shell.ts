@@ -87,7 +87,7 @@ import {
 } from "../commands/remote-policy-command";
 import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { approvalCauseLine, causeOfMeta, type ApprovalCause } from "../commands/approval-cause";
-import { describeApprovalForTopic, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+import { describeApprovalForTopic, mirrorUndeliveredNote, operatorCardTooLongForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { MAX_APPROVAL_TIMEOUT_MS } from "../remote/protocol";
 import { type DockRace, raceApproval } from "./approval-mirror";
 import { BUSY_REASON } from "../remote/command-gateway";
@@ -1609,6 +1609,11 @@ export function shouldAutoApproveReadOnlySpawn(mode: string, hookAsk: boolean | 
  */
 export function isUserPromptApprovalCard(tool: string): boolean {
   return tool === "user_prompt";
+}
+
+/** Flow 464: the card with the mirror note above its last line (the subject), which the dialog shows as its subtitle. */
+export function withMirrorNote(card: readonly string[], note: string): readonly string[] {
+  return card.length === 0 ? [note] : [...card.slice(0, -1), note, card[card.length - 1] as string];
 }
 
 /** The wording of the operator-confirmation dialog: the yes/no choice and the transcript line for each answer. */
@@ -6085,6 +6090,12 @@ export async function launchTuiAgentShell(opts: {
       (inner: LocalApproval): NonNullable<TuiAgentIo["requestApproval"]> =>
       async (tool, inputJson, meta) => {
         const bridge = remoteBridge;
+        // Flow 464 (AC5): an operator card the topic cannot get says so on the card, and is answered here as before.
+        const isCard = meta?.alwaysAsk === true && meta.card !== undefined && meta.card.length > 0 && !isUserPromptApprovalCard(tool);
+        const unmirrored = isCard ? mirrorUndeliveredNote(bridge) : undefined;
+        if (unmirrored !== undefined && meta?.card !== undefined) {
+          return inner(tool, inputJson, { ...meta, card: withMirrorNote(meta.card, unmirrored) });
+        }
         if (bridge === undefined || !bridge.active) {
           return inner(tool, inputJson, meta);
         }
@@ -6095,6 +6106,7 @@ export async function launchTuiAgentShell(opts: {
         const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
         const outcome = await raceApproval({
           turnSignal: foregroundOperation.signal,
+          ...(isCard ? { onUndelivered: () => io.onSystem?.("◇ Telegram mirror not delivered: the topic did not take the card. Answer it here.\n") } : {}),
           dock: (race) => inner(tool, inputJson, meta, race),
           // The dock waits as long as the operator takes, so the topic leg gets the longest wait serve allows.
           topic: (signal) => bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), { signal, timeoutMs: MAX_APPROVAL_TIMEOUT_MS }),
