@@ -343,6 +343,8 @@ describe("review_waive_readiness", () => {
     expect(text).toContain("repair would be:");
     expect(result.card.at(-1)).toBe("subject: package .metaproject/reviews/pr7932-r1, item verifier");
     expect(result.isError).toBe(false);
+    expect(result.output).toContain("Call review_complete to close the review.");
+    expect(result.output).not.toContain("keryx review complete");
     expect(readJson("manifest.json").readiness_waivers).toEqual([
       { item: "verifier", operator_quote: "Accept failing readiness item 4 (verifier) of .metaproject/reviews/pr7932-r1 as it is?: yes", time: NOW.toISOString(), confirmedVia: "tui-card" },
     ]);

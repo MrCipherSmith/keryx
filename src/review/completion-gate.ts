@@ -785,7 +785,7 @@ function nudgeLine(blocker: string): string {
 }
 
 export function describeBlockers(open: OpenManagedReview): string {
-  if (open.blockers.length === 0) return "- none listed; run `keryx review complete` to close the package";
+  if (open.blockers.length === 0) return "- none listed; call the `review_complete` card to close the package";
   const shown = open.blockers.slice(0, MAX_NUDGE_BLOCKERS).map((b) => `- ${nudgeLine(b)}`);
   const more = open.blockers.length - shown.length;
   return [...shown, ...(more > 0 ? [`- … and ${more} more (\`keryx review complete\` lists them all)`] : [])].join("\n");

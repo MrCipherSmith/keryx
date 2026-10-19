@@ -21,8 +21,8 @@
 // Flow 459 adds one more: review_decide_premise (keryx review decide-premise --package --finding --answer --reason ->
 // recordPremiseDecision), the operator's answer to a finding the premise judge held.
 //
-// The waiver tools record the waiver only. Closing the review is still `keryx review complete`, which finds the waiver in
-// the package and passes the gate; the CLI flags record the waiver and close in one run.
+// The waiver tools record the waiver only. Closing the review is the review_complete card, which finds the waiver in
+// the package and passes the gate; at a terminal the CLI flags record the waiver and close in one run.
 //
 // Every card is built from the package on disk, never from the model's input alone, and `apply` refuses when the package
 // moved between the card and the yes.
@@ -259,7 +259,7 @@ function waiveCoverageSpec(): OperatorConfirmSpec<CoveragePrepared> {
     name: "review_waive_coverage",
     description:
       "Accept that the in-scope files no review slice or chunk covered stay unreviewed, so `keryx review complete` passes its coverage gate. Pass the review package. " +
-      "Same effect as `keryx review complete --waive-coverage`: records the waiver (the operator's yes, the time, the files); run `keryx review complete` afterwards to close the review.",
+      "Same effect as `keryx review complete --waive-coverage`: records the waiver (the operator's yes, the time, the files); call review_complete afterwards to close the review.",
     inputSchema: { type: "object", properties: { package: packageSchema }, required: ["package"], additionalProperties: false },
     async buildCard(input, ctx): Promise<OperatorCardResult<CoveragePrepared>> {
       const ref = packageRef(input);
@@ -293,7 +293,7 @@ function waiveCoverageSpec(): OperatorConfirmSpec<CoveragePrepared> {
       }
       const waiver = await recordCoverageWaiver(prepared.dir, confirmation.quote, new Date(confirmation.at), confirmation.confirmedVia, cardPressFields(confirmation));
       if (waiver === undefined) return { output: "No coverage waiver was recorded: the package holds no dispatch record or nothing is uncovered.", isError: true };
-      return { output: `coverage waived by the operator (${waiver.confirmedVia ?? "unknown"}, ${waiver.time}): ${waiver.files.length} file(s) not reviewed. Run \`keryx review complete\` to close the review.` };
+      return { output: `coverage waived by the operator (${waiver.confirmedVia ?? "unknown"}, ${waiver.time}): ${waiver.files.length} file(s) not reviewed. Call review_complete to close the review.` };
     },
   };
 }
@@ -309,7 +309,7 @@ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<Read
     name: "review_waive_readiness",
     description:
       "Accept one failing item of the review readiness checklist as it is, so the review can complete or be published as a partial review. Pass the review package and the item (its number or id). " +
-      "Same effect as `keryx review complete --waive <item>`: records the waiver (the operator's yes, the time) in the manifest and the report header; run `keryx review complete` afterwards to close the review.",
+      "Same effect as `keryx review complete --waive <item>`: records the waiver (the operator's yes, the time) in the manifest and the report header; call review_complete afterwards to close the review.",
     inputSchema: {
       type: "object",
       properties: { package: packageSchema, item: { type: "string", description: `The readiness item: its number (1-${READINESS_ITEMS.length}) or id, e.g. head, pr-files or quotes-located. Item ${READINESS_ITEMS.find((entry) => entry.id === "premise-decisions")?.number ?? "premise-decisions"} (premise-decisions) is never waived: each held finding is answered with review_decide_premise.` } },
@@ -355,7 +355,7 @@ function waiveReadinessSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<Read
         return { output: "The readiness item changed after the card was shown; nothing was recorded. Ask again.", isError: true };
       }
       const added = await waiveReadiness(prepared.dir, [prepared.item], confirmation.quote, { ...readiness(), now: new Date(confirmation.at), confirmedVia: confirmation.confirmedVia, ...cardPressFields(confirmation) });
-      return { output: `readiness item waived by the operator (${confirmation.confirmedVia}, ${confirmation.at}): ${added.map((waiver) => waiver.item).join(", ")}. Run \`keryx review complete\` to close the review.` };
+      return { output: `readiness item waived by the operator (${confirmation.confirmedVia}, ${confirmation.at}): ${added.map((waiver) => waiver.item).join(", ")}. Call review_complete to close the review.` };
     },
   };
 }
