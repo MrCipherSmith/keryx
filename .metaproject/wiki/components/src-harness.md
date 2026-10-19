@@ -5,23 +5,23 @@ Type: component
 Status: accepted
 VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
 VerifiedScope: sha256:addfd1ceb6a0fe385058f24b228b593d8ea5499f3ed59168f1e16c8aeea60da5
-Summary: `src/harness` provides a framework for spawning and managing test harness subprocesses. Exposes 8 public symbols. Depends on `src/harness/external`, `src/harness/child`, `src/harness/session`, `src/harness/provider`, `src/harness/run`, `src/harness/tool`.
+Summary: `src/harness` provides the shared types and factories for running agent harness runs and spawning external child agents. Exposes 8 public symbols. Depends on `src/harness/external`, `src/commands`, `src/lib`, `src/harness/child`, `src/lib/oauth`, `src/harness/routing`.
 ---
 
 # Module src/harness
 
 ## Summary
 
-`src/harness` provides a framework for spawning and managing test harness subprocesses. It exposes interfaces for configuration, resource budgets, network policy, and RPC communication between the host and harness processes. The module is a foundational dependency for `src/commands`, `src/tui`, `src/lib`, and the harness sub-modules (`replay`, `resume`).
+`src/harness` provides the shared types and factories for running agent harness runs and spawning external child agents. It exposes interfaces for configuration, resource budgets, network policy, and RPC communication between the host and harness processes. The module is a foundational dependency for `src/commands`, `src/tui`, `src/lib`, and the harness sub-modules (`run`, `resume`).
 
 ## Overview
 
-`src/harness` defines the core interfaces and factories for running external processes under test. Rather than executing tests in-process, the harness model isolates test execution into a child process, communicating via RPC. This pattern provides:
+`src/harness` defines the core interfaces and factories for running harness runs and external child agents. The harness can isolate work into a child process, and runs can be driven over a JSONL/RPC transport. This provides:
 
-- **Isolation**: Test failures cannot crash or corrupt the host process.
-- **Resource control**: Configurable budgets for time, memory, and other resources.
-- **Policy enforcement**: Network access and other system-level policies can be applied to the child process.
-- **Replay/resume support**: A separate harness process can be paused, persisted, and resumed.
+- **Isolation**: A child's failure does not crash the host process.
+- **Resource control**: Configurable limits and per-run budgets (time, tool calls, retries, tokens).
+- **Policy enforcement**: A network policy and a run policy can be applied.
+- **Replay/resume support**: Handled by the `replay` and `resume` sub-modules.
 
 The module does not contain the runner logic itself; that lives in `src/harness/run`. This module provides the shared types, configuration schema, and RPC primitives.
 
@@ -29,97 +29,68 @@ The module does not contain the runner logic itself; that lives in `src/harness/
 
 ### HarnessConfig
 
-Top-level configuration for a harness invocation. Controls how the child process is spawned and what capabilities it receives.
+Top-level configuration (defined in `config.ts`): `enabled`, `defaultRole`, optional `defaultProvider`/`defaultModel`, `policyProfile`, optional storage roots, `limits` and optional `network`.
 
 ### HarnessLimits
 
-Defines resource limits for a harness run, such as maximum execution time, memory ceiling, or disk usage bounds.
+Defines resource limits for a harness run, namely `maxRunSeconds`, `maxConcurrentChildren`, `maxToolOutputBytes`, `maxRetries` and optional token ceilings.
 
 ### HarnessNetworkPolicy
 
-Specifies which network operations the harness subprocess may perform. Used to restrict outbound connections, DNS resolution, or socket creation during test execution.
+An `enabled` flag plus an `allowedHosts` list restricting which hosts the harness may reach.
 
 ### HarnessRole
 
-Enumerates the operational mode of the harness (e.g., `runner`, `replay`, `resume`). The role determines which subsystems are initialized in the child process.
+The role of a run (defined in `types.ts`): one of `plan`, `build`, `review`, `verify`, `research`, `orchestrator`.
 
 ### HarnessTransport
 
-Identifies the IPC mechanism used for RPC communication between host and harness (e.g., `stdio`, `unix-socket`).
+Identifies the IPC mechanism used for RPC communication between host and harness (one of `cli`, `rpc`, `json`, `test`).
 
 ### HarnessBudget
 
-Tracks and enforces consumption of allocated resources across a harness lifecycle. May be reset or queried mid-execution.
+Per-run budget: `maxSeconds`, `maxToolCalls`, `maxRetries` and optional prompt/completion token ceilings.
 
 ### HarnessScope
 
-Defines the visible namespace available to the harness process — which modules, files, or environment variables are accessible.
+Optional scope selector for a run: `paths`, `base`, `head`, `query`.
 
 ### HarnessRunInput
 
-The input payload passed to the harness when initiating a run — typically includes the test target, configuration overrides, and any context needed by the child process.
+The input payload for a run: `schemaVersion`, `request`, `projectRoot`, `role`, `policy`, `budget`, plus optional flow/session/provider/model/scope/transport fields and a local-only `credentialRef`.
 
 ## Architecture
 
 ```
 Host process
-├── src/harness/config.ts     # Loads and validates HarnessConfig
-├── src/harness/types.ts      # Shared type definitions
-├── src/harness/run-external-factory.ts  # Spawns harness subprocesses
-└── src/harness/rpc.ts        # RPC client for host→harness communication
-
-Harness subprocess (child)
-├── Receives HarnessRunInput
-├── Initializes based on HarnessRole
-├── Enforces HarnessLimits and HarnessNetworkPolicy
-├── Reports progress via HarnessTransport
-└── Exits with structured result
+├── src/harness/config.ts     # HarnessConfig, HarnessLimits, HarnessNetworkPolicy types
+├── src/harness/types.ts      # HarnessRunInput, HarnessRole, HarnessTransport, HarnessBudget, HarnessScope
+├── src/harness/run-external-factory.ts  # Builds the runExternal hook for external child agents
+└── src/harness/rpc.ts        # JSONL/RPC framing and runViaRpc
 ```
 
 ## How it works
 
-**Configuration loading** (`config.ts`)  
-`config.ts` provides functions to build a `HarnessConfig` from environment variables, CLI flags, or programmatic input. It is imported by 17 other modules, making it the primary configuration entry point for any harness-based operation.
+**Configuration types** (`config.ts`)  
+`config.ts` defines the `HarnessConfig`, `HarnessLimits` and `HarnessNetworkPolicy` types only; it contains no loading logic and imports nothing.
 
-**Type definitions** (`types.ts`)  
-All core interfaces (`HarnessLimits`, `HarnessNetworkPolicy`, `HarnessConfig`, `HarnessRole`, `HarnessTransport`, `HarnessBudget`, `HarnessScope`, `HarnessRunInput`) are exported from `types.ts`. No other module re-exports these types; consumers import directly from `src/harness/types`.
+**Run-input types** (`types.ts`)  
+`types.ts` defines `HarnessRole`, `HarnessTransport`, `HarnessBudget`, `HarnessScope` and `HarnessRunInput`. Consumers import directly from `src/harness/types` or `src/harness/config`.
 
-**Subprocess spawning** (`run-external-factory.ts`)  
-This factory creates the child process using the configuration provided. It is imported by 4 modules and depends on 11 modules, reflecting its role as the integration hub that wires together session management, tool execution, provider resolution, and external process handling. Tests in `run-external-factory.test.ts` validate the spawning behavior.
+**External child spawning** (`run-external-factory.ts`)  
+`createRunExternal` (and `createLazyRunExternal`) build the `runExternal` hook that `spawn_subagent` accepts. It returns no hook when the external-agents capability is unavailable. It wires together the capability gate, the spawn port, the git worktree port and `runExternalChild`. Tests live in `run-external-factory.test.ts`.
 
 **RPC communication** (`rpc.ts`)  
-`rpc.ts` implements the host-side RPC client. It is imported by 2 modules and depends on 3 modules. Tests in `rpc.test.ts` (imported by 0 production modules) verify RPC serialization, timeouts, and error propagation.
+`rpc.ts` frames an `RpcEnvelope` as one JSONL line (`encodeRpc`, `decodeRpc`) and `runViaRpc` runs a request through that framing via `runOffline`. Tests in `rpc.test.ts` verify the JSONL round-trip and CLI/RPC semantic parity.
 
 ## Dependencies
 
-`src/harness` is composed of several sub-modules:
+Why the main dependencies exist (the full list is in the Reference section):
 
-| Sub-module | Import count | Role |
-|------------|--------------|------|
-| `src/harness/external` | 11 | Manages external process lifecycle |
-| `src/harness/child` | 4 | Low-level child process utilities |
-| `src/harness/session` | 3 | Tracks harness session state |
-| `src/harness/provider` | 3 | Provides runtime capabilities to harness |
-| `src/harness/run` | 3 | Runner logic (also depends back on this module) |
-| `src/harness/tool` | 3 | Tool invocation within harness context |
-
-## Dependents
-
-Other modules consume `src/harness` to spawn and control harness processes:
-
-| Consumer | Import count |
-|----------|--------------|
-| `src/harness/run` | 11 |
-| `src/commands` | 7 |
-| `src/harness/replay` | 4 |
-| `src/harness/resume` | 4 |
-| `src/lib` | 4 |
-| `src/tui` | 2 |
-
-## Graph signals
-
-- Files in module: 13
-- Cross-module imports: 40
+- `src/harness/external` and `src/harness/child` - external child runtime, spawn port and git worktree port used by `run-external-factory.ts`.
+- `src/harness/tool` - `spawn_subagent` tool types the `runExternal` hook is derived from.
+- `src/harness/run` - `rpc.ts` delegates to `runOffline`; `src/harness/run` also depends back on this module.
+- `src/harness/routing` - provider table types used by `provider-catalog.ts`.
 
 ---
 
@@ -194,7 +165,7 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ## Changelog
 
-- 1.0.4 - Reference and Related Wiki added from the code graph (the page predated them).
+- 1.0.4 - Reference and Related Wiki added from the code graph (the page predated them). Hand-written data sections reconciled with the Reference block.
 - 1.0.3 - Unwrapped the page from a ```markdown fence an earlier enrich wrote it into (flow 367); the duplicate front matter inside it removed, its enriched Summary kept. No prose changed.
 - 1.0.2 - Reconciled prose with actual code graph; documented HarnessConfig, types, run-external-factory, and RPC architecture.
 - 1.0.1 - Reference refreshed from the code graph (5886c474).

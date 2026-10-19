@@ -12,7 +12,7 @@ VerifiedScope: sha256:68f4e5bc6e40f1e215f733e3d25215468a17112a72f7b97201135d8bb8
 
 ## Summary
 
-`src/flow/tracker` groups 2 file(s). Exposes 1 public symbol(s): `githubAdapter`. The module owns integration between keryx flow management and external issue trackers, bridging a flow's linked issue URL to a concrete tracker platform.
+`src/flow/tracker` groups 2 file(s). Exposes 3 public symbol(s): `githubAdapter`, `githubPrFiles`, `githubPostReview`. The module owns integration between keryx flow management and external issue trackers, bridging a flow's linked issue URL to a concrete tracker platform.
 
 ## Overview
 
@@ -47,7 +47,7 @@ A zero exit code from both confirms the adapter is usable. Any failure returns `
 
 ### Subprocess helper
 
-The internal `gh(args)` function wraps `Bun.spawn` and collects stdout + exit code into a plain object. All five adapter methods share this helper, making it the single point where process spawning happens.
+The internal `gh(args)` function wraps `Bun.spawn` and collects stdout + exit code into a plain object. Four of the five adapter methods (all but `parseRef`) share this helper; `githubPostReview` spawns `gh` itself because it feeds the review body on stdin.
 
 ## Key concepts
 
@@ -55,27 +55,32 @@ The internal `gh(args)` function wraps `Bun.spawn` and collects stdout + exit co
 
 **TrackerRef** — a resolved reference to a specific issue: `{ repo: string; number: number }`. Produced by `parseRef` from a raw URL string and consumed by `fetchIssue` and `comment`. Separating parsing from network calls makes the reference reusable without repeated URL parsing.
 
-**githubAdapter** — the sole concrete `TrackerAdapter` in this module. Identified via `id: "github"`, it is the exported public symbol of the module. Implementation is entirely driven by the `gh` CLI, delegating authentication, pagination, and API versioning to the external tool.
+**githubAdapter** — the sole concrete `TrackerAdapter` in this module. Identified via `id: "github"`, it is the module's adapter export (the module also exports the standalone helpers `githubPrFiles` and `githubPostReview`). Implementation is entirely driven by the `gh` CLI, delegating authentication, pagination, and API versioning to the external tool.
 
-**gh subprocess helper** — the internal `gh(args)` function wraps `Bun.spawn` and collects stdout + exit code into a plain object. All five adapter methods share this helper, making it the single point where process spawning happens.
+**gh subprocess helper** — the internal `gh(args)` function wraps `Bun.spawn` and collects stdout + exit code into a plain object. Four of the five adapter methods (all but `parseRef`) share this helper; `githubPostReview` spawns `gh` itself because it feeds the review body on stdin.
 
 ## Public API
 
 ### `githubAdapter`
 
-The sole exported symbol. Implements `TrackerAdapter` with `id: "github"`.
+Implements `TrackerAdapter` with `id: "github"`.
 
 #### Methods
 
 | Method | Description |
 |--------|-------------|
 | `detect()` | Returns `true` if `gh` CLI is installed and authenticated |
-| `parseRef(url: string)` | Extracts `{ repo, number }` from a GitHub issue/PR URL |
+| `parseRef(url: string)` | Extracts `{ repo, number }` from a GitHub issue URL; PR URLs return `null` |
 | `fetchIssue(ref: TrackerRef)` | Fetches issue title and body via `gh issue view` |
-| `prStatus(url: string)` | Returns PR existence, draft state, and CI status |
-| `comment(ref: TrackerRef, body: string)` | Posts a comment to the issue/PR |
+| `prStatus(url: string)` | Returns PR existence, draft state, CI status, head SHA, base branch name and PR state |
+| `comment(ref: TrackerRef, body: string)` | Posts a comment to the issue via `gh issue comment` |
 
-All methods return `null` or `false` on any error. No exceptions are thrown.
+Methods return `null` or `false` on any error (`prStatus` returns `exists: false` with null fields instead). No exceptions are thrown.
+
+#### Other exports
+
+- `githubPrFiles(url)` - the PR's file list from GitHub, or `null` when `gh` cannot say
+- `githubPostReview(url, event, body)` - posts a PR review through `gh pr review`, returning `{ ok, detail }`
 
 ## Main flows
 
@@ -102,9 +107,9 @@ When a keryx command in `src/commands` starts a flow that references an issue UR
 During flow completion:
 
 1. `prStatus(url)` is called with a pull-request URL
-2. Adapter runs `gh pr view <url> --json isDraft,state` to confirm PR exists and read draft flag
+2. Adapter runs `gh pr view <url> --json isDraft,state,headRefOid,baseRefName` to confirm PR exists and read draft flag, head commit, base branch and state
 3. Runs `gh pr checks <url>` as a separate subprocess — zero exit = all CI checks green
-4. Returns composed result `{ exists, isDraft, checksGreen }`
+4. Returns composed result `{ exists, isDraft, checksGreen, headSha, baseRefName, state }`
 5. Gate layer in `src/commands` receives the result; no retry or polling logic inside adapter
 
 ## Error handling
@@ -117,7 +122,7 @@ The adapter employs defensive error handling:
 
 ## Testing
 
-`src/flow/tracker/github.test.ts` contains unit tests for the adapter. Tests mock `Bun.spawn` calls to verify correct argument construction and response parsing without requiring a real `gh` CLI or GitHub API access.
+`src/flow/tracker/github.test.ts` contains unit tests for the adapter. Tests cover `parseRef` only: extracting the repo and issue number from issue URLs and rejecting PR and non-GitHub URLs. They need no `gh` CLI or GitHub API access.
 
 ---
 
@@ -164,7 +169,7 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 1.0.3 - Reference refreshed from the code graph. Source graph was stale; VerifiedAt was not advanced.
+- 1.0.3 - Reference refreshed from the code graph. Source graph was stale; VerifiedAt was not advanced. Hand-written data sections reconciled with the Reference block.
 - 1.0.2 - Reference refreshed from the code graph (1675e433).
 - 1.0.1 - Reference refreshed from the code graph (5886c474beb774901805417efb1cc4d1a03935df)
 - 1.0.0 - Prose sections enriched by agent (gdwiki enrich workflow) on 2026-07-10. Status set to accepted.

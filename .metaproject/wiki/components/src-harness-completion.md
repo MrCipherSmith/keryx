@@ -3,7 +3,7 @@ Title: Module src/harness/completion
 Version: 1.0.1
 Type: component
 Status: accepted
-Summary: "`src/harness/completion` groups 3 file(s). Depends on `src/contracts`. Exposes 6 public symbol(s)."
+Summary: "`src/harness/completion` groups 3 file(s). Exposes 6 public symbol(s)."
 ---
 
 # Module src/harness/completion
@@ -14,7 +14,7 @@ Summary: "`src/harness/completion` groups 3 file(s). Depends on `src/contracts`.
 
 The companion `metrics.ts` file checks metric reliability with `assessMetricsReliability` and `reduceReliability`. It is a pure helper and is not wired into the pass/fail decision of `evaluateCompletion`.
 
-Callers in `flow`, `child` and `run` use this module so that completion gates are applied consistently, rather than embedding completion logic in execution code.
+Callers in `flow` and `run` (and tests in `child`) use this module so that completion gates are applied consistently, rather than embedding completion logic in execution code.
 
 ## How it works
 
@@ -36,7 +36,7 @@ A final message alone never passes. Determinism comes from the injected deps: `d
 - `CompletionGateResult`: the evidence artifact, with `schemaVersion`, `gateId`, `runId`, `status`, `checks`, `evaluatedAt`, `evidenceRefs` and `unresolvedBlockerIds`.
 - `CompletionDeps`: the injected `clock` and `idSeq` sources.
 
-## Public API
+## Public API notes
 
 ### Interfaces
 
@@ -56,7 +56,7 @@ A final message alone never passes. Determinism comes from the injected deps: `d
 
 ## Main flows
 
-1. A caller in `flow`, `child` or `run` builds a `CompletionInput` from its gate states, the required and present evidence refs, the undisposed blockers and whether the final message was emitted.
+1. A caller in `flow` or `run` builds a `CompletionInput` from its gate states, the required and present evidence refs, the undisposed blockers and whether the final message was emitted.
 2. It supplies `CompletionDeps` with a clock and an id sequence.
 3. `evaluateCompletion` runs the per-gate, evidence, blocker and final-message checks and returns a `CompletionGateResult`.
 4. Task Manager consumes the result as evidence. Managed-flow completion is unchanged.
@@ -67,21 +67,9 @@ A second flow covers metric reliability. `assessMetricsReliability` flags any me
 
 | File | Purpose |
 |------|---------|
-| `src/harness/completion/gate.ts` | Core gate implementation and interfaces. Imported by 7 modules. |
+| `src/harness/completion/gate.ts` | Core gate implementation and interfaces. |
 | `src/harness/completion/gate.test.ts` | Unit tests for gate behavior and evaluation. |
 | `src/harness/completion/metrics.ts` | Pure metric reliability helpers, `assessMetricsReliability` and `reduceReliability`. Not wired into `evaluateCompletion`'s pass/fail decision. |
-
-## Dependencies
-
-- **Depends on:** `src/contracts` (1 import)
-
-## Consumers
-
-The module is consumed by:
-
-- `src/harness/flow` — 4 imports
-- `src/harness/child` — 1 import
-- `src/harness/run` — 1 import
 
 ## Related Pages
 
@@ -139,5 +127,5 @@ new links only to pages you have verified.
 
 ## Changelog
 
-- 1.0.1 - Reference and Related Wiki added from the code graph (the page predated them).
+- 1.0.1 - Reference and Related Wiki added from the code graph (the page predated them). Hand-written data sections reconciled with the Reference block.
 - 1.0.0 — Prose enriched from Key files by the gdwiki skill.

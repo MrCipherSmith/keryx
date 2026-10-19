@@ -3,7 +3,7 @@ Title: Module src/harness/context
 Version: 1.0.1
 Type: component
 Status: accepted
-Summary: "`src/harness/context` groups 2 file(s). Depends on `src/contracts`. Exposes 12 public symbol(s)."
+Summary: "`src/harness/context` groups 2 file(s). Exposes 12 public symbol(s)."
 ---
 
 # Module src/harness/context
@@ -58,16 +58,7 @@ The file imports only `node:crypto`. Keeping time behind `deps.clock` and avoidi
 ### Verify the output against the contract
 
 1. `manifest.test.ts` builds manifests from fixtures and checks them with `validateAgainstSchema` from `src/contracts/validator`. This is the only place the module touches `src/contracts` at runtime. The production file has no such import.
-2. Other code in `src/` refers to `ContextManifestSource` and `mapSource` only in comments and tests, such as `src/harness/policy/types.ts` and `src/harness/budget/reconcile.test.ts`. The consumer relationship with `src/harness/budget` is described in the Dependents section below; in the source read for this page it appears to rely on those types rather than on imports from this file.
-
-## Dependencies
-
-- **Depends on:** `src/contracts` (1 import)
-
-## Dependents
-
-- `src/harness/budget` — 2 imports
-- `src/harness` — 1 import
+2. Other code in `src/` refers to `ContextManifestSource` and `mapSource` only in comments and tests, such as `src/harness/policy/types.ts` and `src/harness/policy/engine.test.ts`. Consumers of this module are listed in the Reference section below.
 
 ## Public API
 
@@ -157,5 +148,5 @@ new links only to pages you have verified.
 
 ## Changelog
 
-- 1.0.1 - Reference and Related Wiki added from the code graph (the page predated them).
+- 1.0.1 - Reference and Related Wiki added from the code graph (the page predated them). Hand-written data sections reconciled with the Reference block.
 - 1.0.0 — Prose enriched from Key files by the gdwiki skill.

@@ -3,7 +3,7 @@ Title: Module src/mcp-servers
 Version: 1.0.1
 Type: component
 Status: accepted
-Summary: "Discovers, parses, validates, catalogs, and runs MCP server definitions. Groups 53 files, exposes 20 public symbols, and depends on `src/mcp-client`, `src/lib`, and `fixtures/mcp-servers`."
+Summary: "Discovers, parses, validates, catalogs, and runs MCP server definitions. Groups 56 files, exposes 20 public symbols, and depends on `src/lib`, `src/mcp-client`, `src/security`, and `src/harness/tool/builtin`."
 ---
 
 # Module src/mcp-servers
@@ -73,67 +73,6 @@ Supporting modules that the layers above import: `trust.ts` (the approval store 
 1. `connectServer(name)` refuses an unapproved project server, treats an already connected one as success, and persists `enabled: true` through `store.ts`. It then closes any existing connection, dials once, and updates the state and catalog.
 2. `disconnectServer(name)` persists `enabled: false`, closes the connection, and removes that server's catalog entries. It refuses while the server is still connecting.
 3. `close()` aborts pending dials, waits up to `CLOSE_GRACE_MS`, closes the connections, and waits up to `KILL_GRACE_MS` for aborted child processes to exit. A dial that lands after that is closed when it arrives.
-
-## Dependencies
-
-### External dependencies
-
-| Module | Import count | Purpose |
-|--------|--------------|---------|
-| `src/mcp-client` | 16 | Lower-level MCP interaction |
-| `src/lib` | 8 | Shared utilities |
-| `fixtures/mcp-servers` | 4 | Test or sample data |
-| `src/harness/external` | 2 | Test harness support |
-| `src/commands` | 1 | Command integration |
-| `src/contracts` | 1 | Contract types |
-
-### Consumers
-
-| Module | Import count |
-|--------|--------------|
-| `src/commands` | 26 |
-| `src/tui` | 11 |
-
-## File inventory
-
-| File | Imports | Exports | Purpose |
-|------|---------|---------|---------|
-| `src/mcp-servers/config.ts` | 2 | 32 | Configuration loading and parsing |
-| `src/mcp-servers/runtime.ts` | 11 | 12 | Server lifecycle management |
-| `src/mcp-servers/credentials.ts` | 3 | 15 | Credential handling |
-| `src/mcp-servers/manager.ts` | 3 | 13 | Server state management |
-| `src/mcp-servers/catalog.ts` | 1 | 12 | Server catalog operations |
-| `src/mcp-servers/doctor.ts` | 8 | 11 | Diagnostics and troubleshooting |
-
-## Public API
-
-### Types
-
-- `McpServerEntry`
-- `McpServerSource`
-- `ResolvedMcpServer`
-- `McpConfigProblem`
-- `ResolvedMcpConfig`
-- `McpDisableOverlay`
-- `McpRuntimeOptions`
-- `ServerActionResult`
-- `McpRuntime`
-
-### Constants
-
-- `MAX_SERVER_NAME_LENGTH`
-- `SCHEMA_VERSION`
-- `MAX_TIMEOUT_SEC`
-- `CLOSE_GRACE_MS`
-- `KILL_GRACE_MS`
-
-### Functions
-
-- `parseJsonTolerant`
-- `expandVars`
-- `parseConfigFile`
-- `projectConfigFiles`
-- `loadMcpServers`
 
 ## Related pages
 
@@ -224,6 +163,6 @@ new links only to pages you have verified.
 
 ## Changelog
 
-- 1.0.1 - Reference and Related Wiki added from the code graph (the page predated them).
+- 1.0.1 - Reference and Related Wiki added from the code graph (the page predated them). Hand-written data sections reconciled with the Reference block.
 - 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - **0.1.0** — Initial draft by `keryx wiki collect` (2026-09-16)
