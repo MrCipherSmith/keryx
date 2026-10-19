@@ -1,12 +1,15 @@
----
-id: regex-guards-lose-to-spellings
-kind: lesson
-status: active
-created: 2026-08-02
-tags: [testing, source-guards, ast, false-green, review]
----
-
 # A source guard loses one spelling per round — and matching the AST only slows it down
+
+Version: 1.0.0
+Type: lesson
+Status: accepted
+Confidence: high
+
+## Summary
+
+Every source guard that matched source text was defeated, widened and defeated again, one spelling per round, and an AST rewrite only slowed that down because structure has spellings too. Look for a real oracle first (the bundler's production graph); without one, call the guard a heuristic, keep its known gaps as executable tests, and never claim closure.
+
+## Details
 
 > **Corrected after round four.** The first version of this lesson ended with
 > "match the tree" and the claim that **text has spellings and structure does
@@ -111,3 +114,11 @@ switched off by whoever trips on it, and then it protects nothing.
 
 Related: [[code-blanks-string-literals]],
 [[a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker]].
+
+## Tags
+
+testing, source-guards, ast, false-green, review
+
+## Changelog
+
+- 1.0.0 - Moved from YAML front matter (created 2026-08-02, status active) to the standard entry layout and given a Summary; the body is unchanged.
