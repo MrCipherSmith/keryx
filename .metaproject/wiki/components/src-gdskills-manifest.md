@@ -1,28 +1,45 @@
 # Module src/gdskills/manifest
 
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 
 ## Summary
 
-`src/gdskills/manifest` groups 12 file(s). Depends on `src/lib`, `src/integrations`, `docs/requirements/keryx-agent-platform-expansion/schemas`.
+`src/gdskills/manifest` is the manifest-driven install path for bundled skills and rules: it validates the bundled install manifest, plans which files to write for a harness target, applies that plan with drift-safe writes, and records per-target install state.
 
 ## Overview
 
-_Draft - enrich with the gdwiki skill. In 2-4 sentences: what this module owns and its purpose in the app._
+This module owns the install manifest model for bundled skills and rules. It loads `src/gdskills/bundled/install-manifest.json`, validates it against the agent-platform install-manifest schema, and turns a profile plus `--with`/`--without` flags and optional stack detection into a deterministic install plan. It then writes the planned files and keeps a per-target record of what it wrote in `.metaproject/data/skills/install-state/<target>.json`. According to the code graph, `src/commands` consumes it.
 
 ## How it works
 
-_Draft - the internal architecture in prose: the layers and key abstractions and how they relate. Read the Key files under Reference below._
+The module has three layers, one per stage of an install, plus a state file.
+
+`manifest.ts` holds the types (`InstallManifest`, `ManifestProfile`, `ManifestComponent`, `ManifestModule`, `HarnessId`), schema validation (`parseInstallManifest`, `loadBundledManifest`), and path resolution. `defaultBundledSourceRoot` handles both the source tree and the flat packaged `dist/cli.js` layout, so the manifest is found in either.
+
+`plan.ts` is selection and lookup, and it does not write anything. `planInstall` checks the target against `SUPPORTED_TARGETS` (`claude` and `keryx-shell`), then calls `selectModules` to resolve profile to components to modules, including the dependency closure and `--with`/`--without`. Each selected module's glob paths are mapped to destinations by `destinationFor`, a per-target table. Problems are collected into `InstallPlan.errors` rather than thrown, and `ok` is false when any exist. `destinationRootsForTarget` exposes the same roots to other code, so the orphan scan cannot drift from what install writes.
+
+`apply.ts` executes a plan. `applyInstall` refuses a plan with errors or an unreadable prior state. It checks every recorded path with `resolveContainedPath` before using it. An existing file that is unrecorded or whose hash has drifted is skipped unless `force` is set. Writes go through `writeContained`, and `writeSkillsInstallState` then records the result.
+
+`state.ts` owns the install-state file. `readSkillsInstallState` returns only schema-valid state. `skillsInstallStateIsUnreadable` tells a corrupt file apart from one that does not exist yet. `resolveContainedPath` rejects absolute paths, `..` segments, backslashes, paths outside the destination roots, and any path that goes through a symlink. `writeSkillsInstallState` upserts module records and removes the file when none are left.
+
+`index.ts` is a barrel that re-exports all of these, plus the `doctor` and `uninstall` modules.
 
 ## Key concepts
 
-_Draft - the domain vocabulary and core objects this module introduces, and how they relate._
+- **Profile** (`ManifestProfile`): a named selection of `modules` and `components`, such as `full` or a per-stack profile. A profile with `stackDetectionAware` gates its components by detection markers.
+- **Component** (`ManifestComponent`): a family-tagged group of modules, with optional `detectionMarkers`. Components are how stack packs get pulled in.
+- **Module** (`ManifestModule`): a unit of content with a `kind`, `paths`, `targets`, `dependencies`, `defaultInstall`, `cost` and `stability`. Only `rule` and `skill` modules have an install destination in v1. A `hook-runtime` module always fails a plan.
+- **defaultInstall**: profile-listed modules always install. A component-sourced module installs only when `defaultInstall` is true, when it was named by `--with`, or when another selected module depends on it.
+- **Harness target** (`HarnessId`): the harness a plan is for. `HARNESS_IDS` is the runtime mirror of the schema enum, and the plan accepts only `SUPPORTED_TARGETS`.
+- **Install state** (`InstallState`, `InstalledModuleRecord`): the per-target record of `installedModules`, with `writtenPaths`, a sha256 per path, and the profile. It is the basis for drift detection and for what doctor and uninstall may touch.
 
 ## Main flows
 
-_Draft - trace 1-3 concrete flows (e.g. a request from API to store to UI) through the Key files below._
+1. **Plan.** `loadBundledManifest()` returns the validated manifest. `planInstall({ manifest, profileId, with, without, target, stack, repoRoot })` checks the target, then runs `selectModules`. Each `--with` and `--without` id must change the resulting plan, or the plan fails. Glob paths are resolved, each source goes through `destinationFor`, and each file is hashed. A collision check rejects two sources that write the same destination. The result is an `InstallPlan`.
+2. **Apply.** `applyInstall(plan, destRoot, { sourceRoot })` first refuses a plan with errors, a corrupt prior state, or a recorded path that fails `resolveContainedPath`. For each planned file it skips an existing file that is unrecorded or drifted, unless `force` is set. Otherwise it writes the file and hashes it. It then calls `writeSkillsInstallState` with the module records.
+3. **State read.** `readSkillsInstallState` and `skillsInstallStateIsUnreadable` read `<target>.json` through the schema check. A missing file means nothing is recorded yet, which is normal. A corrupt file is reported as a problem. Apply, and the doctor and uninstall code the state comments name, rely on this distinction.
 
 ---
 
@@ -79,4 +96,5 @@ new links only to pages you have verified.
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-10-19T10:13:19.815Z. Prose sections are drafts for the gdwiki enrich workflow.

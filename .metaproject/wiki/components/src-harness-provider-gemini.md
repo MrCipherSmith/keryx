@@ -1,8 +1,8 @@
 ---
 Title: Module src/harness/provider/gemini
-Version: 0.1.1
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 Summary: "`src/harness/provider/gemini` groups 2 file(s). Depends on `src/harness/provider`, `src/harness/mutation`, `src/harness/provider/anthropic`. Exposes 5 public symbol(s)."
 ---
 
@@ -10,17 +10,13 @@ Summary: "`src/harness/provider/gemini` groups 2 file(s). Depends on `src/harnes
 
 ## Summary
 
-Provides the Gemini-facing integration surface for the harness provider layer. Groups 2 files, depends on `src/harness/provider`, `src/harness/mutation`, and `src/harness/provider/anthropic`, and exposes 5 public symbols.
+`src/harness/provider/gemini` is the Google Gemini adapter for the harness provider layer. Its `GeminiProvider` class implements `ProviderPort` as a thin `fetch` and SSE client over Google's legacy `generateContent` / `streamGenerateContent` REST endpoint, and it exposes the Gemini capability, dependency and descriptor types alongside it.
 
 ## Overview
 
-`src/harness/provider/gemini` owns the Gemini-facing integration surface for the harness provider layer. It exposes the public contracts and implementation needed for other modules to recognize, construct, and interact with a Gemini provider.
+`src/harness/provider/gemini` owns the translation between the harness's neutral provider contract and Google's Gemini API. `GeminiProvider` (in `gemini-provider.ts`) implements `ProviderPort`: `describe()` and `descriptorDocument()` advertise its capabilities and a pinned default model, and `stream()` performs one credential-guarded request and normalizes the server-sent events into `NormalizedEvent`s. The module takes no vendor SDK. It takes an injected `fetch`, requires an explicit network grant (`GeminiCapabilityGrant`) before it sends anything, and advertises that it stores nothing.
 
-The module sits between provider-generic harness behavior and Gemini-specific provider details. It depends on:
-
-- `src/harness/provider` for the broader provider contract
-- `src/harness/mutation` for mutation-related concepts
-- `src/harness/provider/anthropic` for coordination with the adjacent Anthropic provider implementation
+The module sits between the generic provider layer and Gemini's wire format. It follows the same template as the Anthropic provider, reuses `AnthropicSSEParser` from `src/harness/provider/anthropic` because Gemini's `alt=sse` framing matches it, and uses `isPrivateEgressHost` from `src/harness/mutation/guard` as its SSRF guard. Shared helpers for tool-call linking, retry-after handling and transport-failure detection come from `src/harness/provider`.
 
 ## Public API
 
@@ -36,36 +32,44 @@ The public API is intentionally narrow. Callers interact with this module throug
 
 ## How it works
 
-### Provider contract surface
+### Request shaping
 
-`GeminiProviderDeps`, `GeminiModelDescriptor`, `GeminiProviderDescriptorDocument`, and `GeminiCapabilityGrant` define the shapes expected by the harness when working with Gemini providers.
+`stream()` posts to `{baseUrl}/v1beta/models/{model}:streamGenerateContent?alt=sse` with the API key in the `x-goog-api-key` header. `toGeminiContents` converts the normalized messages into Gemini's `contents[]`. Gemini has no system role and no tool role, so the system prompt becomes a top-level `systemInstruction`, a tool result becomes a `role: "user"` part carrying a `functionResponse`, and assistant tool calls become `functionCall` parts on a `role: "model"` turn. Tool calls are serialized only when `linkToolCalls` pairs them with their results. A half-pair degrades to plain text.
 
-### Concrete provider implementation
+Reasoning is configured by `buildThinkingConfig`. When `options.reasoning` requests an effort, `generationConfig.thinkingConfig` gets `includeThoughts: true` and a depth setting chosen by model id. `gemini-3*` models get `thinkingLevel` (low or high, with medium mapped to high). Every other id gets a `thinkingBudget` of 1024, 8192 or 24576 tokens. `clampGeminiEffort` first folds the effort string into low, medium or high. When no effort is requested, `thinkingConfig` is left out entirely.
 
-`GeminiProvider` is the class intended to be consumed by `src/harness/provider` or related integration points.
+### Response normalization
 
-### Mutation-aware behavior
+The body is read incrementally from `response.body.getReader()`, so events reach the caller as chunks arrive. `AnthropicSSEParser` splits the stream into records, and each record is one complete `GenerateContentResponse` JSON object. Each part maps as follows:
 
-The dependency on `src/harness/mutation` indicates that mutation-related interactions are routed through shared harness mutation abstractions rather than provider-local logic.
+- Text with `thought: true` becomes `reasoning_delta`. Other text becomes `text_delta`.
+- A `functionCall` becomes `tool_call_start` followed at once by `tool_call_end` carrying the full arguments. The adapter does not enable incremental argument streaming, so no deltas appear in between. A call without an `id` gets a `name#index` identifier so that repeated calls to the same tool stay distinct.
+- A `thoughtSignature` on any part becomes a `reasoning_replay` event holding a `GeminiThoughtSignatureReplayData` item. This happens whether or not reasoning was requested.
 
-### Sibling provider relationship
+Usage counters are folded across chunks into a single `usage_update`. Cached-content and thought token counts go into `unknownExtensions` under `gemini.*` keys. The stream stops at the first chunk that carries a `finishReason`, then emits `model_end`.
 
-The dependency on `src/harness/provider/anthropic` shows that the Gemini provider is treated as part of the same provider family as Anthropic, sharing integration patterns or descriptors with it.
+### Failure handling
+
+Failures surface as typed `provider_error` events. `classifyGeminiError` maps the HTTP status and the RPC `status` enum onto the neutral error kinds (`authentication`, `rate_limit`, `unavailable`, `invalid_request`, and so on). An in-band `error` envelope inside a 200 stream goes through the same classifier. An abort yields one terminal `cancelled` error. A stream that ends with no `finishReason`, arrives empty, or is torn yields `malformed` with `incompleteStream` set. Every message passes through `redact`, which replaces the API key with `[redacted]`.
+
+Two deadlines, `firstByteTimeoutMs` and `idleTimeoutMs` (120 seconds by default), are each raced against a read via `raceReadAgainstDeadline`. A timeout cancels the reader and yields one retryable `unavailable` error.
+
+## Key concepts
+
+- **Capability grant** (`GeminiCapabilityGrant`): the explicit permission to reach the network. It carries `network: true`, the `apiKey` and an optional `baseUrl`. Without a valid grant, `stream()` fails closed and never calls `fetch`.
+- **Provider deps** (`GeminiProviderDeps`): the injected `fetch`, the optional grant, an optional `clock` used for retry-after handling, and the two stream deadlines. The global `fetch` is never used.
+- **Descriptor document** (`GeminiProviderDescriptorDocument`): the durable description of the provider. It has a provider revision (`gemini-2026-08-20`), the pinned models, a capability set, and a `remoteState` block with storage, retention and continuation all set to `false`.
+- **Model descriptor** (`GeminiModelDescriptor`): a `modelId` and `revision` pair. The one default model is `gemini-2.5-flash`.
+- **Thought signature replay** (`GeminiThoughtSignatureReplayData`): an opaque `thoughtSignature` captured from a response part. Its `target` is `functionCall` or `text`, and a function-call index and/or call id point it back at the part it came from, so the next request can reattach it verbatim.
+- **Normalized events**: the neutral vocabulary every provider emits, including `text_delta`, `reasoning_delta`, `tool_call_start`, `tool_call_end`, `reasoning_replay`, `usage_update`, `model_end` and `provider_error`.
 
 ## Main flows
 
-1. **Provider integration**
-   - `src/harness/provider` imports from this module.
-   - The provider layer accesses the public Gemini provider types and `GeminiProvider` through this module's interface.
+1. **A turn with tool calls.** The caller passes a `NormalizedRequest`. `toGeminiContents` serializes it, and `stream()` posts it and reads the SSE. Each `functionCall` part becomes a start and end event pair. The caller's tool result returns on the next request as a `functionResponse` part, and any signature captured on the previous response is reattached to its matching `functionCall` part.
+2. **A reasoning-enabled turn.** When `options.reasoning` requests an effort, `buildThinkingConfig` adds `thinkingConfig` to the request. Thought parts come back as `reasoning_delta`. The stream stops at `finishReason` and emits `usage_update` followed by `model_end`.
+3. **The failure and guard path.** A missing grant, a private or loopback host, a non-2xx response, a stalled stream past its deadline, or an abort each end `stream()` with a single typed `provider_error` or `cancelled` event. The API key is redacted from any message before it leaves the module.
 
-2. **Model and capability description**
-   - Model metadata is expressed through `GeminiModelDescriptor`.
-   - Provider-level descriptor information is represented by `GeminiProviderDescriptorDocument`.
-   - Allowed or relevant capabilities are represented by `GeminiCapabilityGrant`.
-
-3. **Mutation-aware provider behavior**
-   - The module depends on `src/harness/mutation`, which routes mutation-related behavior through shared harness mutation concepts.
-   - Provider capability grants can express what mutation-related capabilities a Gemini provider is allowed to participate in.
+---
 
 ## Key files
 
@@ -138,5 +142,6 @@ new links only to pages you have verified.
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 0.1.1 - Generated sections regenerated by `keryx wiki collect --force`; prose untouched.
 - 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.

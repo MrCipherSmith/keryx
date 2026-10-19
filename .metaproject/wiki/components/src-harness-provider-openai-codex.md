@@ -1,28 +1,39 @@
 # Module src/harness/provider/openai-codex
 
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 
 ## Summary
 
-`src/harness/provider/openai-codex` groups 2 file(s). Depends on `src/harness/provider/openai`, `src/harness/provider`. Exposes 3 public symbol(s).
+`src/harness/provider/openai-codex` is the ChatGPT-subscription provider: it wraps the shared OpenAI Responses provider with a per-turn OAuth credential lifecycle. It depends on `src/harness/provider/openai` and `src/harness/provider`, and exposes 3 public symbols.
 
 ## Overview
 
-_Draft - enrich with the gdwiki skill. In 2-4 sentences: what this module owns and its purpose in the app._
+The `openai-codex` module owns the path that lets Keryx run models through a user's ChatGPT subscription instead of a Platform API key. It does not implement request serialization or stream parsing itself; it delegates those to the shared `OpenAiProvider` and adds the credential handling that is specific to the subscription backend. Its job is to make sure every model turn runs with a currently valid grant and that auth failures surface as actionable login guidance.
 
 ## How it works
 
-_Draft - the internal architecture in prose: the layers and key abstractions and how they relate. Read the Key files under Reference below._
+`OpenAiCodexProvider` implements `ProviderPort` and is constructed from `OpenAiCodexProviderDeps`, which carries an injected `fetch` and an optional `authorize` callback typed as `OpenAiCodexAuthorize`. The callback is the only route to the credential: it returns an access token and account id, and it is invoked again for every turn rather than cached on the provider. `describe()` delegates to a throwaway `OpenAiProvider` so the descriptor stays identical to the Platform provider's.
+
+`stream()` is a thin lifecycle layer. Before calling the shared provider it checks cancellation, then checks that `authorize` exists. Each turn builds a fresh `OpenAiProvider` with the grant's access token as the network API key and the account id in `codex`, so the shared code sends the subscription headers. Errors from the auth boundary are never relayed verbatim: a thrown `authorize` becomes a generic authentication failure that points to `keryx auth login openai-codex`.
+
+The retry policy is the core design decision. The loop runs at most twice. If the shared provider reports an authentication error on the first attempt and nothing has been emitted yet, the module discards that attempt and re-runs `authorize` with `forceRefresh`. Once any event has reached the caller, an auth error is passed through with the login hint instead, because replaying a turn after text or tool calls have left the module could duplicate side effects.
 
 ## Key concepts
 
-_Draft - the domain vocabulary and core objects this module introduces, and how they relate._
+- **Grant**: the `{ access, accountId }` pair returned by `OpenAiCodexAuthorize`. An empty value on either field is treated as no credential.
+- **Authorize callback**: the injected seam that resolves a grant, with an optional abort signal and a `forceRefresh` flag. The module does not know where grants are stored; the wiring supplies that.
+- **Auth failure vs. cancellation**: both are reported as `provider_error` events. Cancellation uses the `cancelled` kind; credential problems use the `authentication` kind with `retryable: false`.
+- **Login hint**: the fixed message `Run \`keryx auth login openai-codex\`.` appended to every user-facing authorization failure.
 
 ## Main flows
 
-_Draft - trace 1-3 concrete flows (e.g. a request from API to store to UI) through the Key files below._
+1. **Normal turn.** `stream()` calls `authorize(signal, false)`, builds an `OpenAiProvider` with the grant, and forwards each event from its `stream()` unchanged. The shared provider sends the request to the subscription Responses endpoint with the bearer token and `chatgpt-account-id` header. The provider test exercises this path end to end with synthetic SSE fixtures, including a tool-call round trip.
+2. **Expired token, recovered on retry.** The shared provider yields an `authentication` error before emitting anything. The module breaks out of the inner loop, sets `attempt` to 1, calls `authorize(signal, true)` to force a refresh, and runs the turn again. The caller sees only the successful stream.
+3. **Rejected after retry, or rejected mid-stream.** If the second attempt fails, or the error arrives after events were emitted, the module yields the `authentication` event with its message replaced by `ChatGPT subscription authorization was rejected.` plus the login hint, then returns without further attempts.
+
+The `authorize`-missing and empty-grant cases short-circuit with the unavailable-authorization message, and no network call is made.
 
 ---
 
@@ -72,4 +83,5 @@ new links only to pages you have verified.
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-10-19T10:13:19.815Z. Prose sections are drafts for the gdwiki enrich workflow.

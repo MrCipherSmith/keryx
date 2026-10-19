@@ -1,28 +1,37 @@
 # Module src/learning/signals
 
-Version: 0.1.0
+Version: 1.0.0
 Type: component
-Status: draft
+Status: accepted
 
 ## Summary
 
-`src/learning/signals` groups 12 file(s). Depends on `src/learning`, `src/review`, `src/gdskills`. Exposes 6 public symbol(s).
+Deterministic extraction signals that turn observation-window events and durable Metaproject artifacts into candidate learned-pattern drafts. Each signal is a `SignalRunner`; shared draft types and text-bounding helpers sit alongside them. `src/learning/signals` groups 12 file(s). Depends on `src/learning`, `src/review`, `src/gdskills`. Exposes 6 public symbol(s).
 
 ## Overview
 
-_Draft - enrich with the gdwiki skill. In 2-4 sentences: what this module owns and its purpose in the app._
+This module owns the deterministic signals that propose new learned patterns from the project's history. Each signal reads either the observation window (the recent tool and turn events) or a durable artifact already written by another part of Metaproject, such as PR comment records or health run history, and returns zero or more `SignalDraft`s. It never re-runs checks or fetches from GitHub; turning a draft into a stored record is left to `extract.ts`, which is outside this module.
 
 ## How it works
 
-_Draft - the internal architecture in prose: the layers and key abstractions and how they relate. Read the Key files under Reference below._
+The contract lives in `types.ts`: `ObservationLine` pairs a parsed observation event with a project-relative `sourceRef`, `SignalDraft` is the candidate (domain, trigger, action, evidence, extractor), and `SignalRunner` pairs a name and domain with a `run(root, window, options)` function. Each concrete signal exports one `SignalRunner` constant, so the caller can run them uniformly.
+
+The signals split into two groups by data source. `failing-to-passing-test.ts` and `repeated-correction.ts` are pure over the window and read no files. `reviewer-comment.ts` and `health-regression.ts` read durable records under `.metaproject/` and borrow logic from sibling modules rather than duplicating it: the reviewer signal reuses `loadReviewLearningConfig` and `selectLearnableComments` from `src/review`, and the health signal reuses `parseHealthFindings` from `src/gdskills/learn`. `text.ts` holds the shared helpers. `clampLearningText` keeps trigger and action strings within the 8 to 400 character schema bounds, and `basenameFromInputPreview` extracts a file basename so no full path reaches a stored field.
 
 ## Key concepts
 
-_Draft - the domain vocabulary and core objects this module introduces, and how they relate._
+- **ObservationLine**: one observation-log event plus its `sourceRef`, which points at a line in the day's `observations/<date>.jsonl` file. Evidence provenance depends on it.
+- **SignalDraft**: a proposed candidate before extraction assigns an id, seed confidence and identity. Its `domain` is one of the learning domains (`testing`, `workflow`, `tooling`, `review-conventions`). `reviewerProfile` is set only for review conventions from an author who is also in the config's `reviewerProfiles`.
+- **Evidence and weight**: every draft carries at least one evidence item marked `reinforcement`. The failing-to-passing signal weights its item 1.5, as a hard binary observation. The others use 1.
+- **SignalRunner**: a named, domain-tagged runner. `extractorKind` defaults to `deterministic`; the `model-backed` value is reserved for a capability-gated extractor the types anticipate.
 
 ## Main flows
 
-_Draft - trace 1-3 concrete flows (e.g. a request from API to store to UI) through the Key files below._
+**Failing-to-passing test pair** (`failingToPassingTestSignal`). The signal walks the window looking for `tool-complete` and `tool-failed` events whose `inputPreview` matches a test command. `normalizeTestCommand` strips a leading `cd ... &&` and env assignments to get a stable name. An event counts as a failure if it is `tool-failed`, or if `isFailureOutcome` matches the output. That check first rejects "0 failures" lines. A failure marks the name as pending. A later pass for the same name yields one draft, with evidence pointing at the pass line.
+
+**Review comments by configured reviewers** (`reviewerCommentSignal`). The signal returns nothing if `loadReviewLearningConfig` finds no config. Otherwise it reads each `.metaproject/reviews/pr-comments/*.json` file and, for each configured author, takes the comments that `selectLearnableComments` keeps. Each comment is split into sentences with `splitSentences`. `generalizeLesson` strips every configured login, so a co-reviewer named in a comment does not leak into the stored lesson. Each surviving lesson becomes one draft, with evidence `<file>#comment-<id>`. The reviewer id is derived only for profiled authors.
+
+**Repeated health findings** (`healthRegressionSignal`). The signal needs at least two history files under `.metaproject/data/health/history/`. It parses each with `parseHealthFindings` and groups findings by `scope.skill` plus `message`. A group that appears in two or more distinct files yields one draft in the `tooling` domain. Its evidence has one item per occurrence, so later repeats reinforce the same record rather than creating a new one. The action is the first `suggestedAction` in the group, or a generic fallback.
 
 ---
 
@@ -81,4 +90,5 @@ new links only to pages you have verified.
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-10-19T10:13:19.815Z. Prose sections are drafts for the gdwiki enrich workflow.

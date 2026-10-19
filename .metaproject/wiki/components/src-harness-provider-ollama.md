@@ -1,90 +1,65 @@
 ---
 Title: Module src/harness/provider/ollama
-Version: 0.1.1
-Type: component
-Status: draft
-Summary: "`src/harness/provider/ollama` groups 2 file(s). Depends on `src/harness/provider`, `src/contracts`, `src/harness/provider/compat`. Exposes 5 public symbol(s)."
----
-```markdown
----
-Title: Module src/harness/provider/ollama
-Version: 0.1.0
+Version: 1.0.0
 Type: component
 Status: accepted
-Summary: "`src/harness/provider/ollama` groups 2 file(s). Depends on `src/harness/provider`, `src/contracts`, `src/harness/provider/compat`. Exposes 5 public symbol(s)."
+Summary: "`src/harness/provider/ollama` is the Ollama provider adapter: a thin `OllamaProvider` that pins Ollama's identity (local base URL, provider id, default model) over the shared OpenAI-compatible engine in `src/harness/provider/compat`. Exposes 5 public symbol(s)."
 ---
 # Module src/harness/provider/ollama
 
 ## Overview
 
-This module provides the Ollama-specific provider integration for the harness layer. It exposes `OllamaProvider` and supporting data shapes, enabling harness code to treat Ollama as a supported provider source.
+`src/harness/provider/ollama` makes a local or gateway-hosted Ollama server usable as a harness provider. Its only real code is `ollama-provider.ts`, which defines `OllamaProvider` as a thin wrapper: it supplies Ollama's identity and re-exports the public types that callers import. The wire logic (streaming, SSE parsing, tool-call accumulation, egress guard) lives in the shared `OpenAiCompatEngine` in `src/harness/provider/compat`.
 
 **Dependencies:**
-- `src/harness/provider` — provider-layer abstractions
-- `src/contracts` — shared harness contracts or interfaces
-- `src/harness/provider/compat` — compatibility handling between provider expectations and Ollama-specific shapes
+- `src/harness/provider` — provider-layer abstractions (`ProviderPort`, normalized request and event types)
+- `src/contracts` — shared harness contracts, including the schema validator used by the descriptor tests
+- `src/harness/provider/compat` — the OpenAI-compatible engine that does the actual work
 
 **Consumers:**
 - `src/harness/provider` — uses the module for provider discovery and metadata resolution
 - `src/harness/mutation` — uses provider-related metadata and capability grants
 
-## Public API
+## How it works
 
-| Symbol | Description |
-|--------|-------------|
-| `OllamaProvider` | Main provider class for Ollama runtime integration within the harness |
-| `OllamaProviderDeps` | Dependency shape for constructing `OllamaProvider` |
-| `OllamaModelDescriptor` | Descriptor object for an Ollama model |
-| `OllamaProviderDescriptorDocument` | Document-like shape for provider descriptors and metadata |
-| `OllamaCapabilityGrant` | Capability grant object representing permission scope |
+`OllamaProvider` implements `ProviderPort`. Its constructor builds an `OpenAiCompatEngine` with fixed Ollama values: default base URL `http://localhost:11434`, provider revision `ollama-2024-10-22`, provider id `"ollama"`, label `"Ollama"`, and default model `llama3.1:latest`. The three port methods (`describe`, `descriptorDocument`, `stream`) are one-line delegations to that engine.
 
-## How It Works
+The file header describes the security posture: egress is denied fail-closed for private, loopback, link-local and metadata hosts unless the destination is loopback and the grant explicitly sets `allowLoopback`. The file says this lives in the extracted engine, so this module does not enforce it itself. `fetch` is always injected through `deps.fetch`, and nothing is persisted.
 
-`OllamaProvider` bridges Ollama-specific behavior to the harness provider contract. The supporting symbols provide metadata used to describe and control access to Ollama provider capabilities:
+The supporting types are aliases of the compat types. They describe three things the harness reasons about:
 
-- **Descriptors** (`OllamaModelDescriptor`, `OllamaProviderDescriptorDocument`) enable the harness to reason about model capabilities and availability
-- **Capability grants** (`OllamaCapabilityGrant`) represent permissions or scopes relevant to provider operations
-- **Compatibility bridge** via `src/harness/provider/compat` normalizes Ollama provider behavior to the broader harness surface
+- **Descriptors** (`OllamaModelDescriptor`, `OllamaProviderDescriptorDocument`) describe models and the provider document, which is schema-checked with storage, retention and continuation pinned to `false`.
+- **Capability grants** (`OllamaCapabilityGrant`) carry the network opt-in, base URL, `allowLoopback`, an optional `apiKey` and optional extra headers.
+- **Dependencies** (`OllamaProviderDeps`) carry the injected `fetch` and the grant.
 
-## Key Flows
+## Key concepts
 
-### Provider Integration
+- **OllamaProvider** — the `ProviderPort` implementation for Ollama. Holds a private `OpenAiCompatEngine`.
+- **OpenAiCompatEngine** (in `src/harness/provider/compat`) — the shared engine that performs the request and normalization. Ollama's behavior is configured entirely through its constructor options.
+- **OllamaProviderDeps** — injected `fetch` (mandatory, never the global one) plus the capability `grant`.
+- **OllamaCapabilityGrant** — the explicit permission to reach the network. A keyless grant (local Ollama) sends no `Authorization` header. A grant with `apiKey` sends `Authorization: Bearer <key>`, and extra grant headers are forwarded alongside it.
+- **Normalized events** — `stream()` yields `model_start`, `text_delta`, `reasoning_delta`, `tool_call_start`, `tool_call_delta`, `tool_call_end`, `usage_update` and `model_end`, or ends with a `provider_error`.
+- **Error kinds** — failures map onto the harness taxonomy (`invalid_request`, `unavailable`, `malformed`, `cancelled`), each with a retryable flag.
 
-1. `src/harness/provider` imports from this module
-2. Provider layer accesses `OllamaProvider` and public types through the module surface
-3. Consumers treat Ollama as a supported provider without depending on Ollama-specific implementation details
+## Main flows
 
-### Provider Construction
+### Streaming a request
 
-1. Caller provides dependency and descriptor shapes (`OllamaProviderDeps`, etc.)
-2. `OllamaProvider` is instantiated with dependencies resolved from `src/contracts` and `src/harness/provider/compat`
-3. Provider conforms to shared harness behavior and compatibility expectations
+1. The caller invokes `OllamaProvider.stream(request, opts)`, which delegates to the engine.
+2. The engine sends `POST {baseUrl}/v1/chat/completions` with `stream: true`, the model id, the messages and, when present, the tools and `max_tokens`. The test suite pins this shape.
+3. Each SSE chunk is normalized in order. Non-empty `delta.content` becomes `text_delta`, and `delta.reasoning` or `delta.reasoning_content` becomes `reasoning_delta`, which comes before the answer text. Tool-call argument fragments are accumulated by index or id, and `tool_call_end` is emitted once with the full JSON input string.
+4. The trailing usage chunk becomes `usage_update`, and the stream closes with `model_end`. Every event carries the caller's `attemptId` and a monotonic `sequence` starting at 0.
 
-### Mutation Metadata Flow
+### Failure mapping
 
-1. `src/harness/mutation` depends on this module
-2. Mutation workflows use model descriptors and capability grants for operations interacting with provider-backed behavior
-3. Ollama-specific metadata remains encapsulated while mutation consumers use only the public surface
+1. HTTP 404 (model not found) becomes a terminal `provider_error` with kind `invalid_request`, not retryable.
+2. HTTP 500 or a thrown fetch (for example connection refused) becomes `unavailable`, retryable. Fetch is attempted once.
+3. A torn or malformed SSE body becomes `malformed`, not retryable. Events already emitted are kept, and no `model_end` is sent.
+4. An aborted `opts.signal`, including one aborted before the stream starts, becomes `cancelled`, not retryable.
 
-## Files
+### Message shaping for tool results
 
-| File | Purpose |
-|------|---------|
-| `src/harness/provider/ollama/ollama-provider.ts` | Implementation — 4 imports, 2 exports |
-| `src/harness/provider/ollama/ollama-provider.test.ts` | Tests — 4 imports, 0 re-exports |
-
-## Related
-
-- [Module src/harness/provider](src-harness-provider.md)
-- [Module src/contracts](src-contracts.md)
-- [Module src/harness/provider/compat](src-harness-provider-compat.md)
-- [Module src/harness/mutation](src-harness-mutation.md)
-- [Wiki Index](../index.md)
-
-## Changelog
-
-- 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z
-```
+Before sending, the engine rewrites the conversation for OpenAI-compatible servers. A tool result that is linked to an assistant tool call is sent as a `role: "tool"` message with `tool_call_id`. An orphaned tool result, such as one whose pair was cut by compaction, is re-framed as a user message prefixed with `Tool result:`. An assistant turn that has no text and an unanswered tool call is dropped. These rules are pinned by the test suite.
 
 ## Reference (from code graph)
 
@@ -134,4 +109,6 @@ new links only to pages you have verified.
 
 ## Changelog
 
+- 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - 0.1.1 - Generated sections regenerated by `keryx wiki collect --force`; prose untouched.
+- 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z
