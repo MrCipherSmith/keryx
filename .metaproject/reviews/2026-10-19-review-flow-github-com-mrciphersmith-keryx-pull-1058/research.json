@@ -1,0 +1,1295 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": false,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (The rewrite replaced the terminal-only wording for the four acts at the sites it touched, but left i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-05",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-05"
+    },
+    {
+      "id": "review-architecture-w1:F-002",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-002 (The schema declares `hostQuestion` as optional and describes it as \"Set with confirmedVia host-quest) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-06",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-06"
+    },
+    {
+      "id": "review-architecture-w1:F-003",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-003 (The same paragraph says a card is first choice 'wherever one exists' and 'In keryx shell call the ca) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-07",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-07"
+    },
+    {
+      "id": "review-architecture-w1:F-004",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-004 (The unchanged closing sentence of the Operator decisions bullet says the agent never writes an opera) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-14",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-14"
+    },
+    {
+      "id": "review-architecture-w1:F-005",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-005 (The full flag grammar and the five-value source list are restated in at least seven places: review-o) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-06",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-06"
+    },
+    {
+      "id": "review-architecture-w1:F-006",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-006 (The tracked graph artifacts were rebuilt in this worktree and committed. The diff changes 'Skipped g) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-15",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-15"
+    },
+    {
+      "id": "review-architecture-w2:A2-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding A2-001 (On confirm-plan, waive-mutation and override-reviewers the only check on --answer-text is refuseDecl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-01",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-01"
+    },
+    {
+      "id": "review-architecture-w2:A2-002",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding A2-002 (The keryx decisions entry is opened with option ids and labels from the static HOST_OPTIONS table (f) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-10",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-10"
+    },
+    {
+      "id": "review-architecture-w3:A3-001",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding A3-001 (The diff models a host question as an OpenRecord with an optional hostQuestion field, and a host rec) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-04",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-04"
+    },
+    {
+      "id": "review-architecture-w3:A3-002",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding A3-002 (The same shape check exists twice with the same job: a local isHostQuestion in estimate.ts (plan-con) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-12",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-12"
+    },
+    {
+      "id": "review-architecture-w3:A3-003",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding A3-003 (A new code site of the known stale-terminal-wording class, in the same function (premiseDecisionsChe) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-05",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-05"
+    },
+    {
+      "id": "review-architecture-w3:A3-004",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding A3-004 (decisionCount now returns report.total + (report.hostQuestions?.length ?? 0), so the number includes) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-04",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-04"
+    },
+    {
+      "id": "review-architecture-w4:A4-001",
+      "source": "raw/review-architecture-w4.txt",
+      "question": "Is review-architecture finding A4-001 (The set of verbs that accept --answered-by already has one owner: OPERATOR_COMMANDS in src/commands/) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-03",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-03"
+    },
+    {
+      "id": "review-clean-code-w1:F-001",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-001 (Stale instructions the diff did not touch. The change rewrote Wave D in review-orchestrator to say ') real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-05",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-05"
+    },
+    {
+      "id": "review-clean-code-w1:F-002",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-002 (The new Wave D text contradicts the command it gives. The same paragraph tells the agent to run `ker) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-11",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-11"
+    },
+    {
+      "id": "review-clean-code-w1:F-003",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-003 (Three schema descriptions do not match the new contract. (1) 'Set with confirmedVia host-question on) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-06",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-06"
+    },
+    {
+      "id": "review-clean-code-w1:F-004",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-004 (The host-question recording command is restated at eight sites, each with a different elision, so a ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-06",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-06"
+    },
+    {
+      "id": "review-clean-code-w1:F-005",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-005 (The row is labelled 'Operator decision' in general, and the new cells say that on Claude Code and Co) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-05",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-05"
+    },
+    {
+      "id": "review-clean-code-w1:F-006",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-006 (The file's own rule says criteria use the exact format `- ACn: <criterion>`. AC12 is written `AC12 () real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-16",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-16"
+    },
+    {
+      "id": "review-clean-code-w1:F-007",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-007 (The committed gdgraph summary was rebuilt in this worktree and its 'Skipped Directories' list lost `) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-15",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-15"
+    },
+    {
+      "id": "review-clean-code-w2:CC2-001",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC2-001 (For confirm-plan, waive-mutation and override-reviewers the only check on --answer-text is refuseDec) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-01",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-01"
+    },
+    {
+      "id": "review-clean-code-w2:CC2-002",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC2-002 (Clean Code B1/B3. recordHostQuestion runs about 95 lines and mixes four levels: refusal gates, --ans) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-12",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-12"
+    },
+    {
+      "id": "review-clean-code-w2:CC2-003",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC2-003 (Clean Code E1/E2. The list of allowed sources is typed out in four help strings (waive-mutation line) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-06",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-06"
+    },
+    {
+      "id": "review-clean-code-w2:CC2-004",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC2-004 (Clean Code E1. The same 170-character expression that strips the three host-question flags from an a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-13",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-13"
+    },
+    {
+      "id": "review-clean-code-w2:CC2-005",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC2-005 (Clean Code C1a (documentation describes a rule the code does not implement). Two parts. (1) For waiv) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-11",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-11"
+    },
+    {
+      "id": "review-clean-code-w3:CC3-001",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC3-001 (Clean Code C1a (stale comment) and a naming/behaviour split. The JSDoc above decisionCount still say) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-04",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-04"
+    },
+    {
+      "id": "review-clean-code-w3:CC3-002",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC3-002 (Clean Code E1 (DRY, 3+ sites). The same conditional spread that carries an optional hostQuestion int) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-12",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-12"
+    },
+    {
+      "id": "review-clean-code-w3:CC3-003",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC3-003 (Clean Code E1 and an uneven contract. The check 'all five fields are non-blank strings' is written t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-12",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-12"
+    },
+    {
+      "id": "review-clean-code-w3:CC3-004",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC3-004 (Clean Code G2 and a type that does not match use. hostQuestionRow is only called on opens already fi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-12",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-12"
+    },
+    {
+      "id": "review-clean-code-w3:CC3-005",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC3-005 (Clean Code N1/N4 (one word, two meanings). In the journal an OpenRecord has source 'host-question' () real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-12",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-12"
+    },
+    {
+      "id": "review-clean-code-w3:CC3-006",
+      "source": "raw/review-clean-code-w3.txt",
+      "question": "Is review-clean-code finding CC3-006 (renderReport appends the host-question lines in three separate return branches (nothing live, only l) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-12",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-12"
+    },
+    {
+      "id": "review-clean-code-w4:CC4-001",
+      "source": "raw/review-clean-code-w4.txt",
+      "question": "Is review-clean-code finding CC4-001 (Clean Code E1/E2: the set of verbs that take --answered-by and the flag name are retyped here as reg) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-03",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-03"
+    },
+    {
+      "id": "review-clean-code-w4:CC4-002",
+      "source": "raw/review-clean-code-w4.txt",
+      "question": "Is review-clean-code finding CC4-002 (Clean Code C1/naming: recordsHostQuestion tests the whole command text for a verb word and the flag ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-03",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-03"
+    },
+    {
+      "id": "review-core-boundaries-w1:CB-001",
+      "source": "raw/review-core-boundaries-w1.txt",
+      "question": "Is review-core-boundaries finding CB-001 (The shared contract says hostQuestion is set with confirmedVia host-question only, but states it onl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-06",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-06"
+    },
+    {
+      "id": "review-core-boundaries-w1:CB-002",
+      "source": "raw/review-core-boundaries-w1.txt",
+      "question": "Is review-core-boundaries finding CB-002 (The set of host-question sources is declared in the schema enum above, in HOST_QUESTION_SOURCES at s) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-06",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-06"
+    },
+    {
+      "id": "review-core-boundaries-w1:CB-003",
+      "source": "raw/review-core-boundaries-w1.txt",
+      "question": "Is review-core-boundaries finding CB-003 (The unchanged description of operator.quote still names only the terminal and the card, though with ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-06",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-06"
+    },
+    {
+      "id": "review-highload-w2:HL-W2-001",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding HL-W2-001 (recordHostQuestion (src/commands/review-operator.ts, the try block after `const line = await recorde) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-10",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-10"
+    },
+    {
+      "id": "review-highload-w2:HL-W2-002",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding HL-W2-002 (requireText rejects only blank text. The values are stored verbatim in the review package: plan-conf) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-09",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-09"
+    },
+    {
+      "id": "review-highload-w2:HL-W2-003",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding HL-W2-003 (The host-question path has no idempotency key. --answered-by <source>:<ref> names the question, but ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-10",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-10"
+    },
+    {
+      "id": "review-highload-w2:HL-W2-004",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding HL-W2-004 (Outside this reviewer's scope (a logic point, for review-logic); noted because it sits in the functi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-10",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-10"
+    },
+    {
+      "id": "review-highload-w3:H3-001",
+      "source": "raw/review-highload-w3.txt",
+      "question": "Is review-highload finding H3-001 (The slice makes the report keep host-question opens out of the arm and match numbers (and out of the) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-04",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-04"
+    },
+    {
+      "id": "review-highload-w4:H4-001",
+      "source": "raw/review-highload-w4.txt",
+      "question": "Is review-highload finding H4-001 (The check runs over the whole command text, not over a parsed `keryx review <verb>` invocation: it n) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-03",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-03"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (The skill tells the agent to put the question 'as you would put it on a card' and never says that fo) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-08",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-08"
+    },
+    {
+      "id": "review-logic-w1:F-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-002 (Outside slice-01 but it decides whether the skill's 'a decline is not a decision' holds. refuseDecli) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-01",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-01"
+    },
+    {
+      "id": "review-logic-w1:F-003",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-003 (The description says hostQuestion is set with confirmedVia host-question only, but the schema has no) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-06",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-06"
+    },
+    {
+      "id": "review-logic-w1:F-004",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-004 (The same paragraph lists `ask_user` (keryx shell's tool) as a host question tool and `keryx-shell` a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-07",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-07"
+    },
+    {
+      "id": "review-logic-w1:F-005",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-005 (The Hosts table sends Codex to 'its question tool, else the question in your reply'. A question put ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-07",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-07"
+    },
+    {
+      "id": "review-logic-w1:F-006",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-006 (acceptance-criteria.md lists AC1-AC12, but the flow froze 11: flow.json `acKinds` ends at AC11. AC12) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-16",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-16"
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-001 (confirm-plan, waive-mutation and override-reviewers record ANY --answer-text whose first word is not) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-01",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-01"
+    },
+    {
+      "id": "review-logic-w2:F-002",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-002 (On decide-premise both uphold and dismiss are decisions, but refuseDecline runs before refuseOtherCh) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-01",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-01"
+    },
+    {
+      "id": "review-logic-w2:F-003",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-003 (The vocabulary the agent is told to ask with, the vocabulary `--answer` accepts and the options the ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-11",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-11"
+    },
+    {
+      "id": "review-logic-w2:F-004",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-004 (The help text added in review-operator.ts does not call the card the stronger path. Each help block ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-11",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-11"
+    },
+    {
+      "id": "review-logic-w2:F-005",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-005 (The decisions-journal entry is opened without `flow` or `flowSource`, unlike the other callers that ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-10",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-10"
+    },
+    {
+      "id": "review-logic-w3:L3-1",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding L3-1 (buildExportWithSummary iterates every open. This diff makes the journal hold a second kind of open () real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-04",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-04"
+    },
+    {
+      "id": "review-logic-w3:L3-2",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding L3-2 (hostQuestionRow takes the choice from the LATEST answer record of the open (`choice: latest?.choice ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-04",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-04"
+    },
+    {
+      "id": "review-logic-w3:L3-3",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding L3-3 (decisionCount now returns `report.total + (report.hostQuestions?.length ?? 0)` (line 70) while the d) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-04",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-04"
+    },
+    {
+      "id": "review-logic-w3:L3-4",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding L3-4 (The <ref> is an agent-supplied free string (parseAnsweredBy keeps everything after the first colon, ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-02",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-02"
+    },
+    {
+      "id": "review-logic-w4:L4-1",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding L4-1 (recordsHostQuestion tests the four verb names and the --answered-by flag separately over the whole c) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-03",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-03"
+    },
+    {
+      "id": "review-performance-w2:PERF-W2-001",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding PERF-W2-001 (The test body calls complete() five times (three flags, then --waive and --waive-coverage), and comp) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-13",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-13"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-001",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-001 (pr-context.md says `review complete` ... \"unattended runs and a nested keryx still refuse\" the flag,) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-11",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-11"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-002",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-002 (The PR body says the four verbs 'accept `--answered-by ...` without a TTY'. This sentence, left uned) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-11",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-11"
+    },
+    {
+      "id": "review-pr-contract-w2:PC2-001",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC2-001 (AC8 says `confirmedVia` and the source 'show in the review report and in the /decisions modal'; TM-0) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-11",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-11"
+    },
+    {
+      "id": "review-pr-contract-w2:PC2-002",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC2-002 (The PR body says: 'A shell floor in `src/trigger/unattended.ts` refuses the flag in agent shells.' T) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-03",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-03"
+    },
+    {
+      "id": "review-pr-contract-w3:PC3-001",
+      "source": "raw/review-pr-contract-w3.txt",
+      "question": "Is review-pr-contract finding PC3-001 (AC10 asks that the docs site match the change, and the PR body says 'guides updated'. This guide is ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-11",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-11"
+    },
+    {
+      "id": "review-pr-contract-w4:PC4-001",
+      "source": "raw/review-pr-contract-w4.txt",
+      "question": "Is review-pr-contract finding PC4-001 (The AC5 test for the shell floor states a contract the code in this slice does not keep, in both dir) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-03",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-03"
+    },
+    {
+      "id": "review-regression-w1:RG-001",
+      "source": "raw/review-regression-w1.txt",
+      "question": "Is review-regression finding RG-001 (The change rewrote review-orchestrator Wave D and Operator decisions, review-premise and job-orchest) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-05",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-05"
+    },
+    {
+      "id": "review-regression-w2:RG2-001",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is review-regression finding RG2-001 (Existing invariant (security review M4, comment in the TTY path of review-operator.ts: \"the record b) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-02",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-02"
+    },
+    {
+      "id": "review-regression-w3:R3-001",
+      "source": "raw/review-regression-w3.txt",
+      "question": "Is review-regression finding R3-001 (decisionCount feeds the TUI decisions sidebar (src/tui/decisions-surface.ts:559, refresh at 629-663)) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-04",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-04"
+    },
+    {
+      "id": "review-regression-w4:R4-001",
+      "source": "raw/review-regression-w4.txt",
+      "question": "Is review-regression finding R4-001 (recordsHostQuestion is a whole-text co-occurrence test: the line is refused when a verb name and the) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-03",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-03"
+    },
+    {
+      "id": "review-security-code-w1:SEC-001",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding SEC-001 (The skill requires `--reason \"<why>\"` on decide-premise, waive-mutation and override-reviewers (the ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-11",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-11"
+    },
+    {
+      "id": "review-security-code-w1:SEC-002",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding SEC-002 (The command template puts verbatim question text (derived from reviewed code and premise-judge outpu) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-09",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-09"
+    },
+    {
+      "id": "review-security-code-w1:SEC-003",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding SEC-003 (The skill lists keryx shell's `ask_user` as a host question tool and `keryx-shell` as a --answered-b) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-07",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-07"
+    },
+    {
+      "id": "review-security-code-w1:SEC-004",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding SEC-004 (The description says hostQuestion is set with confirmedVia host-question only, but the schema allows) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-06",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-06"
+    },
+    {
+      "id": "review-security-code-w2:S2-SEC-001",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding S2-SEC-001 (Only decide-premise requires the operator's words to name a choice (refuseOtherChoice). For confirm-) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-01",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-01"
+    },
+    {
+      "id": "review-security-code-w3:S3-001",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding S3-001 (The ref half of --answered-by is only trimmed and checked non-empty in parseAnsweredBy (review-opera) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-09",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-09"
+    },
+    {
+      "id": "review-security-code-w3:S3-002",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding S3-002 (The package keeps hostQuestion.questionText and answerText exactly as given on the command line: val) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-09",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-09"
+    },
+    {
+      "id": "review-security-code-w3:S3-003",
+      "source": "raw/review-security-code-w3.txt",
+      "question": "Is review-security-code finding S3-003 (findOpenTwin (journal.ts, before this line) matches an open record by question hash within the sessi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-10",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-10"
+    },
+    {
+      "id": "review-security-code-w4:S4-001",
+      "source": "raw/review-security-code-w4.txt",
+      "question": "Is review-security-code finding S4-001 (recordsHostQuestion tests the verb and the flag on text with only quotes and backslashes deleted. It) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-03",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-03"
+    },
+    {
+      "id": "review-style-w1:F-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-001 (The Wave D instruction tells the agent to run `decide-premise ... --reason \"<why>\"` and in the same ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-11",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-11"
+    },
+    {
+      "id": "review-style-w1:F-002",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-002 (The \"Operator decisions\" bullet in Hosts is now one list item of roughly 450 words that holds three ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-14",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-14"
+    },
+    {
+      "id": "review-style-w1:F-003",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-003 (The same flag set (`--answered-by <source>:<ref> --answer-text --question-text`) is written out in a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-06",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-06"
+    },
+    {
+      "id": "review-style-w1:F-004",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-004 (The edit pushes two wrapped lines of the paragraph to well over the surrounding ~90-column wrap, and) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-14",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-14"
+    },
+    {
+      "id": "review-style-w1:F-005",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-005 (The table row reads as a sequence with no wait: \"the question in your reply, then the verb\". The ver) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-05",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-05"
+    },
+    {
+      "id": "review-style-w1:F-006",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-006 (Regenerated gdgraph artifacts (provenance, module-map, summary) are committed with this change. The ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-15",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-15"
+    },
+    {
+      "id": "review-style-w2:STY-W2-001",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding STY-W2-001 (The docs describe a refusal the code does not perform. For confirm-plan, waive-mutation and override) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-01",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-01"
+    },
+    {
+      "id": "review-style-w2:STY-W2-002",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding STY-W2-002 (One 95-line function with about 15 decision points handles all four verbs, and re-implements pieces ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-12",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-12"
+    },
+    {
+      "id": "review-style-w2:STY-W2-003",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding STY-W2-003 (Narrowing is done with `as` casts instead of by the type system: `premiseAnswer as \"uphold\" | \"dismi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-12",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-12"
+    },
+    {
+      "id": "review-style-w2:STY-W2-004",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding STY-W2-004 (The same 150-character filter that strips the three host-question flags and their values is pasted t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-13",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-13"
+    },
+    {
+      "id": "review-style-w2:STY-W2-005",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding STY-W2-005 (The test asserts that a copy of a four-element constant has four elements. It cannot fail unless FOU) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-13",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-13"
+    },
+    {
+      "id": "review-style-w2:STY-W2-006",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding STY-W2-006 (Two readability points on the word lists. (1) NEGATIONS holds `don`, `t` and `nt` with no comment: t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-12",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-12"
+    },
+    {
+      "id": "review-style-w2:STY-W2-007",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding STY-W2-007 (Repeated literals that already have a single source. The sources list is typed by hand in four help ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-06",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-06"
+    },
+    {
+      "id": "review-style-w3:ST3-001",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding ST3-001 (The diff adds a third writer (an agent records the answer to the host's own question, confirmedVia h) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-12",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-12"
+    },
+    {
+      "id": "review-style-w3:ST3-002",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding ST3-002 (The same completeness check for a HostQuestion is written twice: `isHostQuestion` here (lines 206-21) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-12",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-12"
+    },
+    {
+      "id": "review-style-w3:ST3-003",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding ST3-003 (Strings an agent is told to act on still name only the card and the terminal as the ways to record t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-05",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-05"
+    },
+    {
+      "id": "review-style-w3:ST3-004",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding ST3-004 (Two types with near-identical names and overlapping fields describe one idea in two modules: `HostQu) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-12",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-12"
+    },
+    {
+      "id": "review-style-w3:ST3-005",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding ST3-005 (The new empty-journal branch of `renderReport` repeats the tail of the branch after it (`if (configL) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-12",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-12"
+    },
+    {
+      "id": "review-style-w3:ST3-006",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding ST3-006 (The type list in this export is alphabetical (AnnotatedRow, ArmRow, BackfilledReport, ...) and `Host) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-12",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-12"
+    },
+    {
+      "id": "review-style-w4:ST4-001",
+      "source": "raw/review-style-w4.txt",
+      "question": "Is review-style finding ST4-001 (The four verbs that take --answered-by are written out here as a regex literal, and again in the OPE) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-03",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-03"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (On confirm-plan, waive-mutation and override-reviewers the only check on --answer-text is refuseDecl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-01",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-01"
+    },
+    {
+      "id": "review-testing-practices-w1:F-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-002 (Coverage gap behind F-001: no test gives confirm-plan, waive-mutation or override-reviewers an answe) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-01",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-01"
+    },
+    {
+      "id": "review-testing-practices-w1:F-003",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-003 (This assertion cannot fail. The flag check that rejects a flag prints `Unknown option(s) for \\`keryx) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-13",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-13"
+    },
+    {
+      "id": "review-testing-practices-w1:F-004",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-004 (The try/catch that keeps the review record when the decisions journal cannot be written has no test.) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-13",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-13"
+    },
+    {
+      "id": "review-testing-practices-w1:F-005",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-005 (The stale-plan gate requires all three numbers to appear in --question-text, but both stale fixtures) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-08",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-08"
+    },
+    {
+      "id": "review-testing-practices-w1:F-006",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-006 (Two AC2 tests promise more than they assert. 'waive-mutation records the waiver as the terminal path) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-13",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-13"
+    },
+    {
+      "id": "review-testing-practices-w1:F-007",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-007 (This one test passes no `env` seam, so `recordHostQuestion` reads `seams.env ?? process.env`. Under ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-13",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-13"
+    },
+    {
+      "id": "review-testing-practices-w1:F-008",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-008 (Most members of the word sets are unpinned. LEAD_DECLINE: only n, no, nope, нет are exercised as the) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-01",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-01"
+    },
+    {
+      "id": "review-testing-practices-w1:F-009",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-009 (The changed branch that adds the host-question source and ref to the waiver line on the review_compl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-13",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-13"
+    },
+    {
+      "id": "review-testing-practices-w1:F-010",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-010 (Reader-side validation of a stored hostQuestion (outside this slice's diff, read for context): isPla) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-13",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-13"
+    },
+    {
+      "id": "review-testing-practices-w1:F-011",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-011 (Two heuristic edges of the decide-premise consistency guard, neither pinned. (a) Negation is checked) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "merged into canonical finding HQ-01",
+      "reason": "consolidated by the orchestrator: same defect, class or fix as the canonical finding",
+      "finding": "HQ-01"
+    },
+    {
+      "id": "review-testing-practices-w1:fu1",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Run mutants M1-M24 (0 executed by this reviewer): the ones most likely to survive are M1, M3, M4, M5, M6, M10, M11, M12, M13, M16, M17, M18, M22; M2, M7, M14, M15, M19, M20, M21, M23 and M24 are expec",
+      "status": "unresolved"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-core-boundaries",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:29ab53cd0609",
+        "rawEvidence": "raw/review-architecture-w4.txt#sha256:29ab53cd0609",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:74bc1b057d1c",
+        "rawEvidence": "raw/review-clean-code-w4.txt#sha256:74bc1b057d1c",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-core-boundaries",
+        "executionId": "review-core-boundaries:234f03d7b8a1",
+        "rawEvidence": "raw/review-core-boundaries-w1.txt#sha256:234f03d7b8a1",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-core-boundaries/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:1db3051ee377",
+        "rawEvidence": "raw/review-highload-w4.txt#sha256:1db3051ee377",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:aafefb5ea044",
+        "rawEvidence": "raw/review-logic-w4.txt#sha256:aafefb5ea044",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:03890e49c0af",
+        "rawEvidence": "raw/review-performance-w4.txt#sha256:03890e49c0af",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:b2399af113e7",
+        "rawEvidence": "raw/review-pr-contract-w4.txt#sha256:b2399af113e7",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:bfb33c63368c",
+        "rawEvidence": "raw/review-regression-w4.txt#sha256:bfb33c63368c",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:a32662160c81",
+        "rawEvidence": "raw/review-security-code-w4.txt#sha256:a32662160c81",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:b8f9065284f9",
+        "rawEvidence": "raw/review-style-w4.txt#sha256:b8f9065284f9",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:1188b349675a",
+        "rawEvidence": "raw/review-testing-practices-w1.txt#sha256:1188b349675a",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 38,
+    "known": 0,
+    "unknown": 38,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}

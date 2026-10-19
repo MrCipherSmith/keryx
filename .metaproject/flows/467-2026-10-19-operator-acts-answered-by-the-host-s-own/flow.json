@@ -9,17 +9,58 @@
   "id": "467",
   "slug": "operator-acts-answered-by-the-host-s-own",
   "title": "Operator acts answered by the host's own question",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-19T19:21:21.871Z",
-  "updatedAt": "2026-10-19T20:52:57.012Z",
+  "updatedAt": "2026-10-19T22:51:46.732Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:39cb551785f9c5785d8431a2ecd503cc7c75e2ba29511c48b83ee21ef21a6f7f",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-19T22:51:35.804Z",
+      "note": "Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058."
+    },
+    "AC2": {
+      "at": "2026-10-19T22:51:36.369Z",
+      "note": "Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058."
+    },
+    "AC3": {
+      "at": "2026-10-19T22:51:36.932Z",
+      "note": "Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058."
+    },
+    "AC4": {
+      "at": "2026-10-19T22:51:37.519Z",
+      "note": "Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058."
+    },
+    "AC5": {
+      "at": "2026-10-19T22:51:38.100Z",
+      "note": "Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058."
+    },
+    "AC6": {
+      "at": "2026-10-19T22:51:38.655Z",
+      "note": "Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058."
+    },
+    "AC7": {
+      "at": "2026-10-19T22:51:39.232Z",
+      "note": "Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058."
+    },
+    "AC8": {
+      "at": "2026-10-19T22:51:39.815Z",
+      "note": "Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058."
+    },
+    "AC9": {
+      "at": "2026-10-19T22:51:40.394Z",
+      "note": "Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058."
+    },
+    "AC10": {
+      "at": "2026-10-19T22:51:40.964Z",
+      "note": "Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1058"
   },
   "baseBranch": "main",
   "owner": {
@@ -184,7 +225,7 @@
       "id": "T10",
       "title": "Review through the project review orchestrator and open the PR",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9"
       ],
@@ -194,7 +235,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Review round on PR 1058 run through the review orchestrator; confirmed findings fixed, operator decisions HQ-02/04/07 recorded (poll 230)"
     }
   ],
   "history": [
@@ -325,6 +368,66 @@
       "at": "2026-10-19T20:52:57.012Z",
       "event": "ac-updated",
       "detail": "remove the duplicate malformed AC12 line left after the AC12 rewrite (HQ-16)"
+    },
+    {
+      "at": "2026-10-19T22:51:35.804Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T22:51:36.369Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T22:51:36.932Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T22:51:37.519Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T22:51:38.100Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T22:51:38.655Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T22:51:39.232Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T22:51:39.815Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T22:51:40.394Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T22:51:40.964Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-19T22:51:41.521Z",
+      "event": "task-done",
+      "detail": "T10: Review through the project review orchestrator and open the PR"
+    },
+    {
+      "at": "2026-10-19T22:51:46.732Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1058 (warning: PR is not a draft)"
     }
   ],
   "origin": {
@@ -380,5 +483,117 @@
     "AC12": {
       "kind": "judged"
     }
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-19T22:51:35.804Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:39cb551785f9c5785d8431a2ecd503cc7c75e2ba29511c48b83ee21ef21a6f7f"
+    },
+    {
+      "at": "2026-10-19T22:51:36.369Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:39cb551785f9c5785d8431a2ecd503cc7c75e2ba29511c48b83ee21ef21a6f7f"
+    },
+    {
+      "at": "2026-10-19T22:51:36.932Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:39cb551785f9c5785d8431a2ecd503cc7c75e2ba29511c48b83ee21ef21a6f7f"
+    },
+    {
+      "at": "2026-10-19T22:51:37.519Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:39cb551785f9c5785d8431a2ecd503cc7c75e2ba29511c48b83ee21ef21a6f7f"
+    },
+    {
+      "at": "2026-10-19T22:51:38.100Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:39cb551785f9c5785d8431a2ecd503cc7c75e2ba29511c48b83ee21ef21a6f7f"
+    },
+    {
+      "at": "2026-10-19T22:51:38.655Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:39cb551785f9c5785d8431a2ecd503cc7c75e2ba29511c48b83ee21ef21a6f7f"
+    },
+    {
+      "at": "2026-10-19T22:51:39.232Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:39cb551785f9c5785d8431a2ecd503cc7c75e2ba29511c48b83ee21ef21a6f7f"
+    },
+    {
+      "at": "2026-10-19T22:51:39.815Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:39cb551785f9c5785d8431a2ecd503cc7c75e2ba29511c48b83ee21ef21a6f7f"
+    },
+    {
+      "at": "2026-10-19T22:51:40.394Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:39cb551785f9c5785d8431a2ecd503cc7c75e2ba29511c48b83ee21ef21a6f7f"
+    },
+    {
+      "at": "2026-10-19T22:51:40.964Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:39cb551785f9c5785d8431a2ecd503cc7c75e2ba29511c48b83ee21ef21a6f7f"
+    }
+  ]
 }
