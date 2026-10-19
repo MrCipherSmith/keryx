@@ -618,6 +618,42 @@ describe("review_complete", () => {
     expect(card).not.toContain("waivers: none");
   });
 
+  test("the card lists the mutation waiver and the reviewer override from operator-decisions.json, with item and quote", async () => {
+    await makeRound();
+    put("operator-decisions.json", {
+      schemaVersion: 1,
+      decisions: [
+        { kind: "mutation-waiver", quote: "Waive the mutation pass?: yes", reason: "no time", confirmedVia: "tui-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["m1", "m2"] } },
+        { kind: "reviewer-override", quote: "Run a smaller reviewer set?: yes", reason: "small diff", confirmedVia: "remote-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["review-security-code"] } },
+      ],
+    });
+    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
+    expect(card).toContain('waiver: mutation pass not run m1, m2: "Waive the mutation pass?: yes" (tui-card)');
+    expect(card).toContain('waiver: reviewer override, left out review-security-code: "Run a smaller reviewer set?: yes" (remote-card)');
+    expect(card).not.toContain("waivers: none");
+  });
+
+  test("an operator decision added between the card and the yes records nothing", async () => {
+    await makeRound();
+    const t = tool("review_complete");
+    const card = asked(await ask(t, { package: pkg }));
+    put("operator-decisions.json", {
+      schemaVersion: 1,
+      decisions: [{ kind: "mutation-waiver", quote: "sneaked in", reason: "x", confirmedVia: "tui-card", at: NOW.toISOString(), subject: { head: HEAD, items: ["m1"] } }],
+    });
+    const result = await t.invoke({ package: pkg }, { confirmationToken: card.token } as never);
+    expect(result.isError).toBe(true);
+    expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
+  });
+
+  test("a research.json that cannot be read is shown as such, not as 'waivers: none'", async () => {
+    await makeRound();
+    writeFileSync(path.join(pkg, "research.json"), "{ not json");
+    const card = asked(await ask(tool("review_complete"), { package: pkg })).card.join("\n");
+    expect(card).toContain("waiver: coverage, could not read research.json");
+    expect(card).not.toContain("waivers: none");
+  });
+
   test("a no closes nothing", async () => {
     await makeRound();
     const before = read("manifest.json");

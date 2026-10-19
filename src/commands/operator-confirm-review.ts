@@ -47,7 +47,7 @@ import { computeReadiness, PREMISE_DECISIONS_NOT_WAIVABLE, READINESS_ITEMS, read
 import type { PrLookup } from "../review/complete-head-gate";
 import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmSpec } from "./operator-confirm-tools";
 import { operatorDecisionSubject, reviewersLeftOut } from "../review/coverage";
-import { recordOperatorDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
+import { readOperatorDecisions, recordOperatorDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
 import { answerPremiseQuestion, findHeldFinding } from "../review/premise-question";
 import { estimatePlan, planKeyOf, planOverThreshold, recordPlanConfirmation } from "../review/plan-confirmation";
 
@@ -655,7 +655,7 @@ type CompletePrepared = { dir: string; head: string | undefined; digest: string 
 type CompletionFacts = { reviewId: string; head: string | undefined; evidence: string; waivers: string[]; status: string };
 
 /** What the card shows, read from the package. The same read is repeated in `apply` to see that nothing moved. */
-function completionFacts(dir: string): CompletionFacts {
+async function completionFacts(dir: string): Promise<CompletionFacts> {
   const manifest = JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8")) as {
     reviewId?: string;
     status?: string;
@@ -669,10 +669,19 @@ function completionFacts(dir: string): CompletionFacts {
   let coverage: ReturnType<typeof readCoverageWaiver>;
   try {
     coverage = readCoverageWaiver((JSON.parse(readFileSync(path.join(dir, "research.json"), "utf8")) as { dispatch?: unknown }).dispatch);
-  } catch {
+  } catch (error) {
+    // A package with no research.json carries no coverage waiver; one that cannot be read is not "none".
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      waivers.push(`waiver: coverage, could not read research.json (${cardSafe(error instanceof Error ? error.message : String(error))}); the research gate will refuse`);
+    }
     coverage = undefined;
   }
   if (coverage !== undefined) waivers.push(`waiver: coverage, ${coverage.files.length} file(s) not reviewed: "${cardSafe(clip(coverage.operatorQuote))}"`);
+  for (const decision of await readOperatorDecisions(dir)) {
+    const items = decision.subject?.items ?? [];
+    const what = decision.kind === "mutation-waiver" ? "mutation pass not run" : "reviewer override, left out";
+    waivers.push(`waiver: ${what}${items.length === 0 ? "" : ` ${cardSafe(items.join(", "))}`}: "${cardSafe(clip(decision.quote))}" (${decision.confirmedVia})`);
+  }
   return {
     reviewId: manifest.reviewId ?? path.basename(dir),
     head: recorded,
@@ -692,7 +701,7 @@ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePr
   return {
     name: "review_complete",
     description:
-      "Close a review round: the operator sees the reviewed head SHA, the report's evidence level and every waiver the package carries, and says yes before the round is closed. " +
+      "Close a review round: the operator sees the reviewed head SHA, the report's evidence level and every waiver the package carries (readiness, coverage, mutation, reviewer override), and says yes before the round is closed. " +
       "Pass the review package; the round closes against the head the package recorded. Same gates and same effect as `keryx review complete` at a terminal; " +
       "record the waivers first with review_waive_readiness or review_waive_coverage. A refused gate closes nothing.",
     inputSchema: {
@@ -708,7 +717,7 @@ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePr
       if (ref === undefined) return { refusal: "package is required" };
       try {
         const dir = await resolvePackage(ref, ctx.projectRoot);
-        const facts = completionFacts(dir);
+        const facts = await completionFacts(dir);
         if (facts.status === "closed") return { refusal: `${facts.reviewId} is already complete` };
         const name = label(dir, ctx.projectRoot);
         const at = facts.head === undefined ? "" : ` at ${facts.head.slice(0, 12)}`;
@@ -733,7 +742,7 @@ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePr
       if (prepared === undefined) return { output: "review_complete: nothing prepared for this card", isError: true };
       let facts: CompletionFacts;
       try {
-        facts = completionFacts(prepared.dir);
+        facts = await completionFacts(prepared.dir);
       } catch (error) {
         return { output: `review_complete refused: ${error instanceof Error ? error.message : String(error)} — nothing was recorded`, isError: true };
       }
@@ -752,7 +761,7 @@ function completeSpec(seams: ReviewConfirmSeams): OperatorConfirmSpec<CompletePr
         gateError = error;
       }
       // The engine closes the manifest before its own bookkeeping, so a throw is not proof that nothing closed.
-      const closed = done !== undefined || completionFacts(prepared.dir).status === "closed";
+      const closed = done !== undefined || (await completionFacts(prepared.dir).catch(() => undefined))?.status === "closed";
       if (!closed) {
         return { output: `review_complete refused: ${gateError instanceof Error ? gateError.message : String(gateError)} — nothing was recorded`, isError: true };
       }
