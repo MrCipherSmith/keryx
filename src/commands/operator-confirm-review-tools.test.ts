@@ -33,8 +33,8 @@ const post = async (ref: string, event: ReviewEvent, body: string): Promise<Post
   return { ok: true, detail: "ok" };
 };
 
-function tool(name: string): InteractiveTool {
-  const spec = buildReviewConfirmSpecs({ prLookup: async () => null, prFiles: async () => null, postReview: post }).find((entry) => entry.name === name);
+function tool(name: string, seams: Partial<Parameters<typeof buildReviewConfirmSpecs>[0]> = {}): InteractiveTool {
+  const spec = buildReviewConfirmSpecs({ prLookup: async () => null, prFiles: async () => null, postReview: post, ...seams }).find((entry) => entry.name === name);
   if (spec === undefined) throw new Error(`no spec ${name}`);
   return operatorConfirmTool(spec, { projectRoot: root, now: () => NOW, env: {}, allowedUserIds: () => [ALLOWED_ID] });
 }
@@ -653,11 +653,70 @@ describe("review_complete", () => {
     expect(status()).not.toBe("closed");
   });
 
-  test("an already closed round and a head on a non-PR package are refused before a card is drawn", async () => {
+  test("the model cannot supply a head: the schema has none, and the gate runs against the recorded head", async () => {
+    await makeRound();
+    const t = tool("review_complete");
+    expect(JSON.stringify(t.definition.inputSchema)).not.toContain('"head"');
+    const card = asked(await ask(t, { package: pkg, head: "deadbeefdead" }));
+    expect(card.card.join("\n")).toContain(`reviewed head: ${HEAD}`);
+  });
+
+  test("an already closed round is refused before a card is drawn", async () => {
     await makeRound();
     await yes(tool("review_complete"), { package: pkg });
     expect(await ask(tool("review_complete"), { package: pkg })).toEqual({ error: expect.stringContaining("already complete") });
-    await makeRound({ id: "2026-10-15-report", target: { kind: "report", ref: "review.md" } });
-    expect(await ask(tool("review_complete"), { package: pkg, head: HEAD.slice(0, 10) })).toEqual({ error: expect.stringContaining("pull request package") });
+  });
+
+  test("a round closed by the gate whose confirmation record cannot be written is reported as closed, not as 'nothing recorded'", async () => {
+    await makeRound();
+    mkdirSync(path.join(pkg, "completion-confirmation.json"));
+    const result = await yes(tool("review_complete"), { package: pkg });
+    expect(status()).toBe("closed");
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("the round is closed but the confirmation record could not be written");
+    expect(result.output).not.toContain("nothing was recorded");
+  });
+
+  // Flow 464 (PR 1052 C-08): the gates `keryx review complete` meets are the same ones the card meets, and a refusal records nothing.
+  describe("the card meets the same gates as the terminal command", () => {
+    const refuses = async (t: InteractiveTool, text: string): Promise<void> => {
+      const before = read("manifest.json");
+      const result = await yes(t, { package: pkg });
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain(text);
+      expect(result.output).toContain("nothing was recorded");
+      expect(read("manifest.json")).toBe(before);
+      expect(status()).not.toBe("closed");
+      expect(existsSync(path.join(pkg, "completion-confirmation.json"))).toBe(false);
+    };
+
+    test("a merged pull request is refused", async () => {
+      await makeRound();
+      await refuses(tool("review_complete", { prLookup: async () => ({ exists: true, state: "MERGED", headSha: HEAD }) }), "merged");
+    });
+
+    test("a head that moved is refused", async () => {
+      await makeRound();
+      await refuses(tool("review_complete", { prLookup: async () => ({ exists: true, state: "OPEN", headSha: "f".repeat(40) }) }), "fffffff");
+    });
+
+    test("a held finding the operator has not answered is refused (the premise rule, never waived through this card)", async () => {
+      await makeRound();
+      put("findings.json", [heldFinding({ global_id: "pr7932-r1#LY-003" })]);
+      await refuses(tool("review_complete"), "premise-decisions");
+    });
+
+    test("a package stamped with the operator gate and no run-profile.json is refused", async () => {
+      await makeRound();
+      put("manifest.json", { ...readJson("manifest.json"), operatorGate: 1 });
+      await refuses(tool("review_complete"), "run-profile.json");
+    });
+
+    test("a slice the manifest routes narrower than its content needs is refused", async () => {
+      await makeRound();
+      put("slices/manifest.json", { slices: [{ id: "s1", path: "s1.diff", roles: [], depth: "light" }] });
+      put("slices/s1.diff", "diff --git a/src/a.ts b/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n+import { spawn } from \"node:child_process\";\n+spawn(process.argv[2]);\n");
+      await refuses(tool("review_complete"), "slices/manifest.json");
+    });
   });
 });
