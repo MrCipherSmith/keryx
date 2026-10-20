@@ -14,7 +14,7 @@
 // package at module top level. The optional-dependency guard in
 // `src/capability/no-optional-imports` is a regex over file TEXT, so the
 // forbidden import form must not be spelled out in a comment here either.
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { commandsForMode } from "../commands/agent-commands";
 import {
@@ -593,7 +593,8 @@ otuiTest("AC2: showToast and the busy status are live at mount, not placeholder 
 
   const frame = h.captureCharFrame();
   expect(frame).toContain("Copied to clipboard"); // the toast was NOT swallowed
-  expect(nonEmptyLines(frame)[nonEmptyLines(frame).length - 1]).toContain("thinking"); // nor the phase
+  // flow 468 AC20: the phase lives on the single busy line above the composer, not in the footer row.
+  expect(frame).toContain("thinking"); // the phase was NOT swallowed
   h.destroy();
 });
 
@@ -796,7 +797,7 @@ otuiTest("AC4: showToast renders and auto-clears", async () => {
   h.destroy();
 });
 
-otuiTest("AC4: setBusyPhase is reflected in the footer, and stopBusy restores the idle hint", async () => {
+otuiTest("flow 468 AC20: AC4: setBusyPhase is reflected in the footer, and stopBusy restores the idle hint", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 20 });
   const footerRow = (): string => {
@@ -809,25 +810,30 @@ otuiTest("AC4: setBusyPhase is reflected in the footer, and stopBusy restores th
 
   h.chrome.startBusy("waiting for model");
   await h.flush();
-  // Asserted on the FOOTER row specifically (it carries the status label), not
-  // on the frame at large — `startBusy` also writes an in-transcript status line.
-  expect(footerRow()).toContain("waiting for model");
+  // flow 468 AC20: the phase is painted ONCE, on the busy line above the
+  // composer; the footer row keeps the status label and swaps the idle hint
+  // for the busy key hints.
+  expect(h.captureCharFrame()).toContain("waiting for model");
+  expect(footerRow()).not.toContain("waiting for model");
   expect(footerRow()).toContain(STATUS);
-  expect(footerRow()).not.toContain(FOOTER_HINT);
+  expect(footerRow()).toContain("Esc interrupt");
 
   h.chrome.setBusyPhase("running read_file");
   await h.flush();
-  expect(footerRow()).toContain("running read_file");
-  expect(footerRow()).not.toContain("waiting for model");
+  expect(h.captureCharFrame()).toContain("running read_file");
+  expect(h.captureCharFrame()).not.toContain("waiting for model");
+  expect(footerRow()).not.toContain("running read_file");
 
   h.chrome.setBusyPhase("thinking");
   await h.flush();
-  expect(footerRow()).toContain("thinking");
+  expect(h.captureCharFrame()).toContain("thinking");
+  expect(footerRow()).not.toContain("thinking");
 
   h.chrome.stopBusy();
   await h.flush();
   expect(footerRow()).toContain(FOOTER_HINT);
-  expect(footerRow()).not.toContain("thinking");
+  expect(footerRow()).not.toContain("Esc interrupt");
+  expect(h.captureCharFrame()).not.toContain("thinking");
 
   // Idle `setBusyPhase` does not paint a phase over the idle hint.
   h.chrome.setBusyPhase("waiting for model");
@@ -862,7 +868,7 @@ otuiTest("setStatus survives stopBusy: footer-right keeps the new provider/model
   h.destroy();
 });
 
-otuiTest("AC4b: the in-transcript busy line is re-pinned to the end when content is added after it", async () => {
+otuiTest("flow 468 AC20: AC4b: the in-transcript busy line is re-pinned to the end when content is added after it", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 30 });
   h.chrome.startBusy("waiting for model");
@@ -882,13 +888,13 @@ otuiTest("AC4b: the in-transcript busy line is re-pinned to the end when content
   const busyIdx = lines.indexOf(inTranscript());
   expect(blockIdx).toBeGreaterThanOrEqual(0);
   expect(busyIdx).toBeGreaterThan(blockIdx); // status stayed BELOW the new block
-  // Footer still shows phase + timer + status on its row.
-  expect(lines[lines.length - 1]).toContain("waiting for model");
+  // flow 468 AC20: the footer row no longer repeats the phase + timer; it keeps the status.
+  expect(lines[lines.length - 1]).not.toContain("waiting for model");
   expect(lines[lines.length - 1]).toContain(STATUS);
   h.destroy();
 });
 
-otuiTest("AC4c: the footer right slot shows the permission mode while busy", async () => {
+otuiTest("flow 468 AC20: AC4c: the footer right slot shows the permission mode while busy", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, {
     width: 90,
@@ -902,7 +908,7 @@ otuiTest("AC4c: the footer right slot shows the permission mode while busy", asy
   expect(footerRow()).not.toContain("auto"); // idle: status label only
   h.chrome.startBusy("waiting for model");
   await h.flush();
-  expect(footerRow()).toContain("waiting for model");
+  expect(footerRow()).not.toContain("waiting for model"); // flow 468 AC20: busy line is not repeated here
   expect(footerRow()).toContain("mode auto");
   h.chrome.stopBusy();
   await h.flush();
@@ -1531,4 +1537,277 @@ test("createShellRenderer with onCtrlC turns exit-on-Ctrl+C off and routes only 
   (f.seen.config?.onDestroy as () => void)();
   f.press({ name: "c", ctrl: true });
   expect(presses).toBe(1);
+});
+
+
+// ---------------------------------------------------------------------------
+// flow 468 (phase C, items 9) -- one busy line above the composer, a useful
+// busy footer, and ONE compact duration formatter.
+//
+// API pinned for the implementer (T26):
+//   - `src/tui/duration-format.ts` exports `formatDuration(ms: number): string`:
+//     <60s "58.3s", <1h "12:04.5", >=1h "1:02:15.4"; tenths are ROUNDED first
+//     (59_950ms -> "1:00.0", never "60.0s"); non-finite or negative -> "—".
+//   - `chrome.setBusyFooter(info | undefined)` where
+//       info = { tokensIn?, tokensOut?, costUsd?, contextPct?, queued?, backgroundJobs?, subagents? }
+//     (all optional; costUsd only when the price is known; counts hidden at 0).
+//     It repaints the busy footer immediately; it is ignored when idle.
+//   - busy footer-left text, parts joined by " · ", dropped whole, last first:
+//       1 "Esc interrupt · Enter queue · / commands"
+//       2 "↑<in> ↓<out>" plus " $<cost>" when costUsd is given (K-suffix for >= 1000)
+//       3 "ctx <pct>%"
+//       4 "queue <n>", "jobs <n>", "agents <n>" (each only when non-zero)
+//     footer-right keeps "mode <permission>" (else the status label).
+// ---------------------------------------------------------------------------
+
+type BusyFooterInfo = {
+  tokensIn?: number;
+  tokensOut?: number;
+  costUsd?: number;
+  contextPct?: number;
+  queued?: number;
+  backgroundJobs?: number;
+  subagents?: number;
+};
+
+function setBusyFooter(chrome: ShellChrome, info: BusyFooterInfo | undefined): void {
+  (chrome as unknown as { setBusyFooter: (i: BusyFooterInfo | undefined) => void }).setBusyFooter(info);
+}
+
+const SPINNER_GLYPHS = /[\u280b\u2819\u2839\u2838\u283c\u2834\u2826\u2827\u2807\u280f]/g;
+
+test("flow 468 AC21: formatDuration prints <1m as 58.3s, <1h as 12:04.5, >=1h as 1:02:15.4", async () => {
+  const { formatDuration } = await import("./duration-format");
+  expect(formatDuration(0)).toBe("0.0s");
+  expect(formatDuration(999)).toBe("1.0s");
+  expect(formatDuration(5_000)).toBe("5.0s");
+  expect(formatDuration(58_300)).toBe("58.3s");
+  expect(formatDuration(59_949)).toBe("59.9s");
+  expect(formatDuration(724_500)).toBe("12:04.5");
+  expect(formatDuration(3_735_400)).toBe("1:02:15.4");
+});
+
+test("flow 468 AC21: formatDuration rolls over at the unit boundaries instead of printing 60.0s", async () => {
+  const { formatDuration } = await import("./duration-format");
+  expect(formatDuration(59_950)).toBe("1:00.0"); // rounds up across the minute
+  expect(formatDuration(60_000)).toBe("1:00.0");
+  expect(formatDuration(61_000)).toBe("1:01.0");
+  expect(formatDuration(3_599_900)).toBe("59:59.9");
+  expect(formatDuration(3_599_950)).toBe("1:00:00.0"); // rounds up across the hour
+  expect(formatDuration(3_600_000)).toBe("1:00:00.0");
+  expect(formatDuration(36_000_000)).toBe("10:00:00.0");
+});
+
+test("flow 468 AC21: formatDuration never prints raw seconds past a minute", async () => {
+  const { formatDuration } = await import("./duration-format");
+  for (const ms of [60_000, 600_000, 3_599_000, 3_600_000, 7_265_000, 86_400_000]) {
+    expect(formatDuration(ms)).not.toMatch(/^[6-9]\d\.\ds$|^\d{3,}\.\ds$/);
+  }
+  expect(formatDuration(3_600_000)).not.toBe("3600.0s");
+  expect(formatDuration(Number.NaN)).toBe("\u2014");
+  expect(formatDuration(-1)).toBe("\u2014");
+});
+
+otuiTest("flow 468 AC21: the busy timer prints 58.3s, 12:04.5 and 1:02:15.4, never 3735.4s", async () => {
+  const otui = requireOtui();
+  let now = 1_000_000;
+  const clock = spyOn(Date, "now").mockImplementation(() => now);
+  const h = await mountChrome(otui, { width: 90, height: 24 });
+  try {
+    h.chrome.startBusy("waiting for model");
+    for (const [elapsed, shown] of [
+      [58_300, "58.3s"],
+      [724_500, "12:04.5"],
+      [3_735_400, "1:02:15.4"],
+    ] as const) {
+      now = 1_000_000 + elapsed;
+      h.chrome.setBusyPhase("thinking"); // repaints the busy line at the mocked clock
+      await h.flush();
+      const frame = h.captureCharFrame();
+      expect(`${shown}: ${frame.includes(`\u00b7 ${shown}`)}`).toBe(`${shown}: true`);
+      expect(frame).not.toMatch(/\d{4,}\.\ds/);
+    }
+  } finally {
+    clock.mockRestore();
+    h.destroy();
+  }
+});
+
+otuiTest("flow 468 AC20: while busy the phase and timer appear once, above the composer, and not in the footer", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 120, height: 24, chrome: { permissionMode: () => "auto" } });
+  try {
+    h.chrome.startBusy("waiting for model");
+    await h.flush();
+    const frame = h.captureCharFrame();
+    const lines = nonEmptyLines(frame);
+    expect(frame.split("waiting for model").length - 1).toBe(1);
+    expect((frame.match(SPINNER_GLYPHS) ?? []).length).toBe(1);
+    const busyIdx = lines.findIndex((l) => l.includes("waiting for model"));
+    expect(busyIdx).toBeGreaterThanOrEqual(0);
+    expect(busyIdx).toBeLessThan(lines.length - 4); // above the composer's top border
+    expect(lines[lines.length - 4]?.startsWith(" \u256d")).toBe(true);
+    const footer = lines[lines.length - 1] ?? "";
+    expect(footer).not.toContain("waiting for model");
+    expect(footer).not.toMatch(/\d+\.\ds|\d+:\d\d\.\d/); // no timer in the footer
+    expect(footer).not.toMatch(SPINNER_GLYPHS);
+    expect(footer).toContain("mode auto"); // the right slot keeps the permission mode
+  } finally {
+    h.destroy();
+  }
+});
+
+otuiTest("flow 468 AC20: the busy footer shows the key hints Esc interrupt, Enter queue and / commands", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 160, height: 24 });
+  try {
+    h.chrome.startBusy("waiting for model");
+    await h.flush();
+    const footer = nonEmptyLines(h.captureCharFrame()).at(-1) ?? "";
+    expect(footer).toContain("Esc interrupt");
+    expect(footer).toContain("Enter queue");
+    expect(footer).toContain("/ commands");
+  } finally {
+    h.destroy();
+  }
+});
+
+otuiTest("flow 468 AC20: the busy footer shows the turn's tokens in and out, with the cost only when the price is known", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 200, height: 24 });
+  try {
+    h.chrome.startBusy("waiting for model");
+    setBusyFooter(h.chrome, { tokensIn: 850, tokensOut: 420, costUsd: 0.5 });
+    await h.flush();
+    let footer = nonEmptyLines(h.captureCharFrame()).at(-1) ?? "";
+    expect(footer).toContain("\u2191850");
+    expect(footer).toContain("\u2193420");
+    // Two decimals, as the operator chose («Как предложено», preview "$0.50").
+    expect(footer).toContain("$0.50");
+
+    setBusyFooter(h.chrome, { tokensIn: 1_200, tokensOut: 420 }); // price unknown
+    await h.flush();
+    footer = nonEmptyLines(h.captureCharFrame()).at(-1) ?? "";
+    expect(footer).toContain("\u21911.2K");
+    expect(footer).toContain("\u2193420");
+    expect(footer).not.toContain("$");
+  } finally {
+    h.destroy();
+  }
+});
+
+otuiTest("flow 468 AC20: the busy footer shows context fill, and queue, job and subagent counts only when non-zero", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 220, height: 24 });
+  try {
+    h.chrome.startBusy("waiting for model");
+    setBusyFooter(h.chrome, { contextPct: 42, queued: 2, backgroundJobs: 1, subagents: 3 });
+    await h.flush();
+    let footer = nonEmptyLines(h.captureCharFrame()).at(-1) ?? "";
+    expect(footer).toContain("ctx 42%");
+    expect(footer).toContain("queue 2");
+    expect(footer).toContain("jobs 1");
+    expect(footer).toContain("agents 3");
+
+    setBusyFooter(h.chrome, { contextPct: 42, queued: 0, backgroundJobs: 0, subagents: 0 });
+    await h.flush();
+    footer = nonEmptyLines(h.captureCharFrame()).at(-1) ?? "";
+    expect(footer).toContain("ctx 42%");
+    expect(footer).not.toContain("queue");
+    expect(footer).not.toContain("jobs");
+    expect(footer).not.toContain("agents");
+  } finally {
+    h.destroy();
+  }
+});
+
+otuiTest("flow 468 AC20: an empty busy footer part shows nothing: no placeholders, no stray separators", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 160, height: 24 });
+  try {
+    h.chrome.startBusy("waiting for model");
+    setBusyFooter(h.chrome, {});
+    await h.flush();
+    const footer = nonEmptyLines(h.captureCharFrame()).at(-1) ?? "";
+    expect(footer).toContain("Esc interrupt");
+    for (const absent of ["\u2191", "\u2193", "$", "ctx", "queue ", "jobs", "agents", "undefined", "NaN", "null", "0%"]) {
+      expect(`${absent}: ${footer.includes(absent)}`).toBe(`${absent}: false`);
+    }
+    expect(footer).not.toMatch(/\u00b7\s*\u00b7/); // no "· ·" from an empty part
+  } finally {
+    h.destroy();
+  }
+});
+
+otuiTest("flow 468 AC20: the busy footer is fitted to its width by priority and the key hints stay", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 220, height: 24, chrome: { permissionMode: () => "auto" } });
+  try {
+    h.chrome.startBusy("waiting for model");
+    setBusyFooter(h.chrome, {
+      tokensIn: 850,
+      tokensOut: 420,
+      costUsd: 0.5,
+      contextPct: 42,
+      queued: 2,
+      backgroundJobs: 1,
+      subagents: 3,
+    });
+    // Priority order, highest first: hints, tokens, context fill, counts.
+    const parts = ["Esc interrupt", "\u2191850", "ctx 42%", "queue 2"] as const;
+    const present = (footer: string): boolean[] => parts.map((p) => footer.includes(p));
+    let widest: boolean[] = [];
+    let sawDrop = false;
+    for (const width of [220, 150, 120, 100, 90, 80, 70, 60]) {
+      h.resize(width, 24);
+      await h.flush();
+      const footer = nonEmptyLines(h.captureCharFrame()).at(-1) ?? "";
+      const p = present(footer);
+      if (width === 220) widest = p;
+      // Never wider than the terminal.
+      expect(`${width}: ${footer.length <= width}`).toBe(`${width}: true`);
+      // The key hints stay at every width.
+      expect(`${width}: ${p[0]}`).toBe(`${width}: true`);
+      // Lower priority parts drop first: once a part is missing, so is every later one.
+      for (let i = 1; i < p.length; i++) {
+        if (!p[i]) {
+          expect(`${width}: ${p.slice(i).some(Boolean)}`).toBe(`${width}: false`);
+          sawDrop = true;
+          break;
+        }
+      }
+      // The permission mode in the right slot survives the fitting.
+      expect(`${width}: ${footer.includes("mode auto")}`).toBe(`${width}: true`);
+    }
+    expect(widest).toEqual([true, true, true, true]); // everything fits on a wide terminal
+    expect(sawDrop).toBe(true); // and something really is dropped on a narrow one
+  } finally {
+    h.destroy();
+  }
+});
+
+otuiTest("flow 468 AC20: stopBusy restores the idle footer (hint and status) and the busy parts do not leak into it", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 160, height: 24 });
+  try {
+    h.chrome.startBusy("waiting for model");
+    setBusyFooter(h.chrome, { tokensIn: 850, tokensOut: 420, contextPct: 42, queued: 2 });
+    await h.flush();
+    h.chrome.stopBusy();
+    await h.flush();
+    const footer = nonEmptyLines(h.captureCharFrame()).at(-1) ?? "";
+    expect(footer).toContain(FOOTER_HINT);
+    expect(footer).toContain(STATUS);
+    for (const gone of ["Esc interrupt", "Enter queue", "\u2191850", "ctx 42%", "queue 2"]) {
+      expect(`${gone}: ${footer.includes(gone)}`).toBe(`${gone}: false`);
+    }
+    // Idle ignores a late setBusyFooter.
+    setBusyFooter(h.chrome, { tokensIn: 1, tokensOut: 2 });
+    await h.flush();
+    const after = nonEmptyLines(h.captureCharFrame()).at(-1) ?? "";
+    expect(after).toContain(FOOTER_HINT);
+    expect(after).not.toContain("\u21911");
+  } finally {
+    h.destroy();
+  }
 });

@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "for": "test",
+  "files": [
+    "src/tui/background-job-inspector.ts",
+    "src/tui/background-job-session.ts",
+    "src/tui/shell-chrome.ts",
+    "src/tui/subagent-session.ts",
+    "src/tui/tui-shell.ts"
+  ],
+  "entries": [
+    {
+      "kind": "rule",
+      "source": "bundled",
+      "path": ".metaproject/rules/core/tdd-workflow.mdc",
+      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
+      "bytes": 3891,
+      "reason": "bundled-default",
+      "tier": "must_read"
+    }
+  ],
+  "budget": {
+    "limitBytes": 131072,
+    "usedBytes": 0,
+    "exceeded": false,
+    "limitSource": "default"
+  },
+  "warnings": []
+}

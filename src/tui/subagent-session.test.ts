@@ -5,6 +5,7 @@ import {
   MAX_SUBAGENT_EVENT_CHARS,
   MAX_SUBAGENT_EVENTS,
   SubagentSessionStore,
+  formatElapsed,
   formatSubagentList,
   formatSubagentMeta,
   formatSubagentRow,
@@ -117,7 +118,7 @@ test("AC3: formatSubagentWork includes task and ordered tool/text/reasoning even
   expect(text.indexOf("Need the login path")).toBeLessThan(text.indexOf("Found 2 issues"));
 });
 
-test("formatSubagentMeta lists id, model, status, and elapsed", () => {
+test("flow 468 AC21: formatSubagentMeta lists id, model, status, and elapsed in the compact format", () => {
   const text = formatSubagentMeta(
     session({
       id: "sub:1",
@@ -132,7 +133,7 @@ test("formatSubagentMeta lists id, model, status, and elapsed", () => {
   expect(text).toContain("sub:1");
   expect(text).toContain("ollama/fake");
   expect(text).toContain("done");
-  expect(text).toContain("12s");
+  expect(text).toContain("12.0s"); // flow 468 AC21: one compact duration format
   expect(text).toContain("Review auth");
 });
 
@@ -231,4 +232,31 @@ test("the mark is sticky: the terminal upsert never makes an external child look
   store.apply({ kind: "upsert", id: "sub:1", label: "probe", status: "done", detail: "Completed" });
   expect(store.get("sub:1")?.runtime).toBe("external");
   expect(store.get("sub:1")?.agentId).toBe("codex-cli");
+});
+
+test("flow 468 AC21: formatElapsed prints the compact duration, 58.3s / 12:04.5 / 1:02:15.4", () => {
+  expect(formatElapsed(58_300)).toBe("58.3s");
+  expect(formatElapsed(724_500)).toBe("12:04.5");
+  expect(formatElapsed(3_735_400)).toBe("1:02:15.4");
+  expect(formatElapsed(3_600_000)).toBe("1:00:00.0");
+  expect(formatElapsed(3_600_000)).not.toMatch(/\d{4,}\.\ds/);
+  expect(formatElapsed(-1)).toBe("\u2014"); // unchanged guard for an unusable value
+});
+
+test("flow 468 AC21: formatElapsed is the shared formatter, not a second implementation", async () => {
+  const { formatDuration } = await import("./duration-format");
+  for (const ms of [0, 999, 58_300, 59_950, 724_500, 3_599_950, 3_735_400, 90_000_000]) {
+    expect(formatElapsed(ms)).toBe(formatDuration(ms));
+  }
+});
+
+test("flow 468 AC21: the subagent Meta Elapsed row for a run over an hour is 1:02:15.4, never raw seconds or 1h 2m", () => {
+  const text = formatSubagentMeta(
+    session({ id: "sub:1", label: "long", status: "done", startedAt: 1_000, endedAt: 1_000 + 3_735_400 }),
+  );
+  expect(text).toMatch(/Elapsed\s+1:02:15\.4/);
+  expect(text).not.toMatch(/\d{4,}\.\ds/);
+  expect(text).not.toMatch(/\d+h \d+m/);
+  const running = formatSubagentMeta(session({ id: "sub:2", label: "live", startedAt: 1_000 }), 1_000 + 58_300);
+  expect(running).toMatch(/Elapsed\s+58\.3s/);
 });

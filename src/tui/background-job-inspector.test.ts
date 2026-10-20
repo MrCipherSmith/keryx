@@ -61,7 +61,7 @@ import {
   presentJobInspector,
   type OpenModalFn,
 } from "./background-job-inspector";
-import { BackgroundJobStore } from "./background-job-session";
+import { BackgroundJobStore, formatJobMeta } from "./background-job-session";
 
 function fakeRegistry(overrides: Partial<JobRegistry> = {}): JobRegistry {
   return {
@@ -373,4 +373,42 @@ test("background-job-inspector.ts routes through the shared openModal host, no p
   expect(local).toMatch(/openModal[\s\S]*from\s*["']\.\/modal-host["']/);
   expect(local).toMatch(/onMouseDown/);
   expect(local).not.toMatch(/overlayBox/);
+});
+
+test("flow 468 AC21: a finished job's Meta tab shows its Duration as 1:02:15.4, never raw seconds", () => {
+  const store = new BackgroundJobStore();
+  store.apply({ type: "start", jobId: "job-1", pid: 1001, command: "npm run dev", startedAt: "2026-08-19T10:00:00.000Z" });
+  store.apply({ type: "phase", jobId: "job-1", phase: "background" });
+  store.apply({ type: "exit", jobId: "job-1", status: "completed", exitCode: 0, endedAt: "2026-08-19T11:02:15.400Z" });
+  const nodes: { id: string; content: string }[] = [];
+  class FakeText {
+    id: string;
+    content: string;
+    constructor(_r: unknown, opts: { id: string; content: string }) {
+      this.id = opts.id;
+      this.content = opts.content;
+      nodes.push(this);
+    }
+  }
+  const openModal: OpenModalFn = (_otui, _chrome, input) => {
+    input.renderTab("meta", { add: () => {} });
+    return { close: () => {}, setTab: () => {}, activeTab: () => "meta" };
+  };
+  presentJobInspector(openModal, { TextRenderable: FakeText }, { renderer: {} }, { store, id: "job-1", registry: fakeRegistry() });
+  const meta = nodes.find((n) => n.id === "job-inspector-meta")?.content ?? "";
+  expect(meta).toMatch(/Duration\s+1:02:15\.4/);
+  expect(meta).not.toMatch(/\d{4,}\.\ds/);
+});
+
+test("flow 468 AC21: a running job's Duration is measured to `now` in the compact format", () => {
+  const store = new BackgroundJobStore();
+  const startedAt = "2026-08-19T10:00:00.000Z";
+  store.apply({ type: "start", jobId: "job-1", pid: 1001, command: "npm run dev", startedAt });
+  store.apply({ type: "phase", jobId: "job-1", phase: "background" });
+  const entry = store.get("job-1")!;
+  const t0 = Date.parse(startedAt);
+  expect(formatJobMeta(entry, t0 + 58_300)).toMatch(/Duration\s+58\.3s/);
+  expect(formatJobMeta(entry, t0 + 724_500)).toMatch(/Duration\s+12:04\.5/);
+  expect(formatJobMeta(entry, t0 + 3_600_000)).toMatch(/Duration\s+1:00:00\.0/);
+  expect(formatJobMeta(entry, t0 + 3_600_000)).not.toContain("3600.0s");
 });

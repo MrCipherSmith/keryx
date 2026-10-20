@@ -1,0 +1,87 @@
+{
+  "task_id": "T25",
+  "status": "DONE",
+  "files_created": [],
+  "files_modified": [
+    "src/tui/shell-chrome.test.ts",
+    "src/tui/subagent-session.test.ts",
+    "src/tui/background-job-inspector.test.ts"
+  ],
+  "test_case_specs": {
+    "framework": "bun:test",
+    "test_files": [
+      {
+        "path": "src/tui/shell-chrome.test.ts",
+        "target_module": "src/tui/shell-chrome.ts, src/tui/duration-format.ts (new)",
+        "test_count": 14,
+        "tests": [
+          { "id": "test-1", "description": "flow 468 AC21: formatDuration prints <1m as 58.3s, <1h as 12:04.5, >=1h as 1:02:15.4", "criterion": "AC21", "type": "happy_path", "status": "written", "red_reason": "Cannot find module ./duration-format (dynamic import inside the test)" },
+          { "id": "test-2", "description": "flow 468 AC21: formatDuration rolls over at unit boundaries (59_950 -> 1:00.0, 59:59.9, 3_599_950 -> 1:00:00.0, exactly 1h)", "criterion": "AC21", "type": "edge_case", "status": "written", "red_reason": "module missing" },
+          { "id": "test-3", "description": "flow 468 AC21: formatDuration never prints raw seconds past a minute; NaN/negative -> em dash", "criterion": "AC21", "type": "edge_case", "status": "written", "red_reason": "module missing" },
+          { "id": "test-4", "description": "flow 468 AC21: the busy timer prints 58.3s, 12:04.5, 1:02:15.4, never 3735.4s (Date.now mocked)", "criterion": "AC21", "type": "happy_path", "status": "written", "red_reason": "busy line prints 58.3s but 724.5s / 3735.4s for the longer ones" },
+          { "id": "test-5", "description": "flow 468 AC20: phase and timer appear once, above the composer, not in the footer; right slot keeps mode auto", "criterion": "AC20", "type": "happy_path", "status": "written", "red_reason": "phase appears twice (footer repeats it)" },
+          { "id": "test-6", "description": "flow 468 AC20: busy footer shows Esc interrupt, Enter queue, / commands", "criterion": "AC20", "type": "happy_path", "status": "written", "red_reason": "footer-left shows the busy line instead" },
+          { "id": "test-7", "description": "flow 468 AC20: tokens in/out and cost (cost only when known)", "criterion": "AC20", "type": "happy_path", "status": "written", "red_reason": "chrome.setBusyFooter is not a function" },
+          { "id": "test-8", "description": "flow 468 AC20: context fill and queue/jobs/agents counts only when non-zero", "criterion": "AC20", "type": "edge_case", "status": "written", "red_reason": "setBusyFooter missing" },
+          { "id": "test-9", "description": "flow 468 AC20: empty parts show nothing (no placeholders, no stray separators)", "criterion": "AC20", "type": "edge_case", "status": "written", "red_reason": "setBusyFooter missing" },
+          { "id": "test-10", "description": "flow 468 AC20: fitted to width by priority at 220..60 columns, hints and mode stay, lower priority drops first", "criterion": "AC20", "type": "edge_case", "status": "written", "red_reason": "setBusyFooter missing" },
+          { "id": "test-11", "description": "flow 468 AC20: stopBusy restores the idle footer; late setBusyFooter ignored when idle", "criterion": "AC20", "type": "edge_case", "status": "written", "red_reason": "setBusyFooter missing" },
+          { "id": "test-12", "description": "pre-existing AC4, AC4b, AC4c rewritten for the new behaviour and renamed with the 'flow 468 AC20:' prefix", "criterion": "AC20", "type": "happy_path", "status": "written", "red_reason": "footer still repeats the busy line" }
+        ]
+      },
+      {
+        "path": "src/tui/subagent-session.test.ts",
+        "target_module": "src/tui/subagent-session.ts (formatElapsed), src/tui/duration-format.ts",
+        "test_count": 4,
+        "tests": [
+          { "id": "test-15", "description": "flow 468 AC21: formatElapsed prints the compact duration; negative stays an em dash", "criterion": "AC21", "type": "happy_path", "status": "written", "red_reason": "returns 1m 0s style" },
+          { "id": "test-16", "description": "flow 468 AC21: formatElapsed equals formatDuration over 8 values", "criterion": "AC21", "type": "edge_case", "status": "written", "red_reason": "module missing" },
+          { "id": "test-17", "description": "flow 468 AC21: subagent Meta Elapsed row over an hour is 1:02:15.4 (running: 58.3s)", "criterion": "AC21", "type": "happy_path", "status": "written", "red_reason": "prints 1h 2m" },
+          { "id": "test-18", "description": "pre-existing formatSubagentMeta test now expects 12.0s, renamed with the 'flow 468 AC21:' prefix", "criterion": "AC21", "type": "happy_path", "status": "written", "red_reason": "prints 12s" }
+        ]
+      },
+      {
+        "path": "src/tui/background-job-inspector.test.ts",
+        "target_module": "src/tui/background-job-session.ts (formatJobMeta), src/tui/background-job-inspector.ts",
+        "test_count": 2,
+        "tests": [
+          { "id": "test-19", "description": "flow 468 AC21: a finished job's Meta tab has a Duration row 1:02:15.4", "criterion": "AC21", "type": "happy_path", "status": "written", "red_reason": "no Duration row exists today" },
+          { "id": "test-20", "description": "flow 468 AC21: a running job's Duration is measured to `now` (58.3s, 12:04.5, 1:00:00.0)", "criterion": "AC21", "type": "edge_case", "status": "written", "red_reason": "no Duration row exists today" }
+        ]
+      }
+    ],
+    "run_command": "bun test --timeout 30000 src/tui/shell-chrome.test.ts src/tui/subagent-session.test.ts src/tui/background-job-inspector.test.ts -t \"flow 468 AC2\"",
+    "expected_result": "20 failing (RED), 0 passing selected; the 69 other pre-existing tests in the three files still pass",
+    "notes": "Three pre-existing shell-chrome tests (AC4, AC4b, AC4c) and AC2 (one assertion) asserted the old behaviour that AC20 removes (phase repeated in the footer row, idle hint replaced by the busy line); they were rewritten on purpose. The subagent meta test changed 12s to 12.0s on purpose (AC21)."
+  },
+  "api": {
+    "formatter": "src/tui/duration-format.ts exports formatDuration(ms: number): string. Round to tenths first (Math.round(ms/100)), then split: <60s '58.3s' (always one decimal, 's' suffix), <1h 'M:SS.t' ('12:04.5', minutes without leading zero), >=1h 'H:MM:SS.t'. 59_950 -> '1:00.0'; 3_599_950 -> '1:00:00.0'; NaN/negative -> em dash. subagent-session.formatElapsed must return exactly formatDuration(ms) (tested for equality).",
+    "chrome": "ShellChrome gains setBusyFooter(info | undefined) with info = { tokensIn?, tokensOut?, costUsd?, contextPct?, queued?, backgroundJobs?, subagents? }. It repaints at once, is ignored when idle, and is cleared by stopBusy. costUsd is passed only when the price is known.",
+    "busy_painting": "paintBusyStatus writes the spinner/phase/timer only to liveStatus (the in-transcript line, placed above the composer). footer-left shows, joined by ' · ' and dropped whole from the end: (1) 'Esc interrupt · Enter queue · / commands', (2) '↑<in> ↓<out>' + ' $<cost>' when costUsd is given (K suffix at >= 1000, e.g. '↑1.2K'; cost like '$0.5'), (3) 'ctx <pct>%', (4) 'queue <n>', 'jobs <n>', 'agents <n>' only when non-zero. footer-right keeps 'mode <permission>' else status. Footer never exceeds the terminal width; 'Esc interrupt' and the right slot survive at every width from 220 down to 60.",
+    "background_jobs": "formatJobMeta (background-job-session.ts, used by the inspector Meta tab) gains a 'Duration' row: endedAt - startedAt when ended, else now - startedAt, via formatDuration. startedAt/endedAt are ISO strings.",
+    "worked_for": "tui-shell.ts 'worked for' (two sites near 9870 and 10097) is not asserted: it is reachable only through the launcher, which cannot run headless. The implementer must route both through formatDuration; consider a small exported helper if a test is wanted. Same for the tui-shell busy-phase state around 4277-4290: keep it from painting its own timer."
+  },
+  "project_context_applied": [
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3", "how": "followed" }
+  ],
+  "assumptions": [
+    "The footer row is the last rendered row and the sidebar sits to its right (the row ends with the sidebar border), so width fitting is measured on that row.",
+    "Date.now is the clock the busy timer reads (busyStartedAt = Date.now()); the tests mock it with spyOn.",
+    "Negative or non-finite durations print an em dash (kept from the old formatElapsed).",
+    "Background jobs currently print no duration at all; AC21 'background jobs' is read as: show one, in the compact format."
+  ],
+  "behavior_changes": [
+    { "description": "Busy footer wording and separators: 'Esc interrupt · Enter queue · / commands', '↑850 ↓420 $0.5', 'ctx 42%', 'queue 2', 'jobs 1', 'agents 3'", "needs_operator": true },
+    { "description": "Background job Meta tab gains a 'Duration' row (a new visible line)", "needs_operator": true },
+    { "description": "Subagent Elapsed changes from '1m 5s' / '1h 2m' to '1:05.0' / '1:02:15.4'; sub-second values now print '0.0s' / '1.0s' instead of '<1s'", "needs_operator": false },
+    { "description": "Busy timer for under a minute keeps the trailing 's' ('· 58.3s'); from a minute it has none ('· 12:04.5')", "needs_operator": false }
+  ],
+  "status_report": {
+    "status": "DONE",
+    "tests_written": 20,
+    "test_files_committed": [],
+    "all_criteria_covered": true,
+    "red_verified": true,
+    "concerns": "Worked-for in tui-shell.ts is not covered by a test (launcher cannot run headless). Not committed."
+  }
+}
