@@ -1,0 +1,92 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "469",
+  "dispatch_id": "469-T6",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent docs-only T6 complete. No blocker/major found in reviewed docpack; one minor draft-AC ambiguity. Not runtime acceptance or authorization to freeze/start.",
+  "acceptance": [
+    {
+      "criterion": "Operator decisions and publication cut-off consistently specified",
+      "status": "met",
+      "evidence": "Compared operator-decisions.md with specification, lifecycle, four schemas and examples: explicit refusals, null unmeasurable arms/delta, snapshot identity, reservations and dedup-before-drift finalization specified."
+    },
+    {
+      "criterion": "Schemas/examples agree; inspect checker rather than trust PASS",
+      "status": "met",
+      "evidence": "Independent offline run PASS: 746 checks, 18 schema-positive cases, 56 negatives, 10 refs, 15 files. Checker inspected; schema-shape checks are not runtime proof."
+    },
+    {
+      "criterion": "Draft ACs cover source contract; flag gaps",
+      "status": "partial",
+      "evidence": "AC1-AC24 are planned obligations, not existing passing tests. T6-F-001 flags failed-run audit retention wording."
+    },
+    {
+      "criterion": "Explicit changed files; no runtime/source/flow-state writes",
+      "status": "met",
+      "evidence": "Only this result artifact written. No commit/push, freeze, installs, provider calls or probe runtime execution."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/469-2026-10-20-keryx-learn-probe-paired-pattern-measure/docpack-review-result.json",
+      "kind": "review",
+      "exists": true
+    },
+    {
+      "path": "docs/requirements/keryx-learn-probe/examples/validate.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Inspected and independently executed offline checker"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/469-2026-10-20-keryx-learn-probe-paired-pattern-measure/docpack-review-result.json",
+      "change": "Added bounded independent review only"
+    }
+  ],
+  "findings": [
+    {
+      "id": "T6-F-001",
+      "global_id": "469-T6#T6-F-001",
+      "reviewer": "agent-2/code-verifier",
+      "severity": "minor",
+      "problem": "Draft AC11 says 'retains only real completed runs/transcripts, including partial failures'. Completed can be read as excluding failed/interrupted-arm audit data, contrary to the source contract.",
+      "impact": "A test/implementation could discard actual failed-arm diagnostics while claiming AC11 compliance. This is wording ambiguity, not a demonstrated runtime defect.",
+      "suggested_fix": "Say 'retains actual runs/transcripts including failed/interrupted-arm audit data; only durably completed seeds are reusable'. Preserve empty runs for pre-run no-task/underpowered/gold-leak.",
+      "evidence": "acceptance-criteria.md AC11 quoted above; operator-decisions.md requires actual runs/transcripts on partial failure; specification.md:222 explicitly preserves actual partial-failure runs, :338 classifies failed/unrecoverable running seeds as run-failed. Lifecycle distinguishes audit retention from completed-seed reuse.",
+      "confidence": "medium",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "project_context_applied": [],
+    "context_resolution": "Root index read; skills_resolve_context review for examples/validate.ts returned no must_read/on_demand entries.",
+    "independent_check": {
+      "command": "bun docs/requirements/keryx-learn-probe/examples/validate.ts",
+      "status": "PASS",
+      "checks": 746,
+      "schema_positive_cases": 18,
+      "negative_cases": 56,
+      "schema_refs_resolved": 10,
+      "files": 15,
+      "branch": "docs/keryx-learn-probe-docpack",
+      "head_at_execution": "fa71f1604dcdf45be71fcc75a5240111b9618bd5"
+    },
+    "blockers": 0,
+    "majors": 0,
+    "minors": 1,
+    "runtime_tests": "not run: prohibited before explicit freeze/start",
+    "limitations": [
+      "Project validator implements a Draft-2020-12 subset, not full external metaschema conformance; positive/negative samples do not prove all inputs.",
+      "Synthetic schema checks do not establish runtime arithmetic, verdict precedence, crash recovery, lock ordering, confidence dedup, spend accounting or live measurements.",
+      "Late-drift check only compares JSON serialization of a synthetic envelope, not persistence or on-disk comparison immutability. Duplicate-ID assertion checks Set detection, not runtime loader refusal.",
+      "Path samples do not prove symlink containment or gold base-ref existence/removal. Cleanup/signals, identical arms, stdout isolation, terminal confirmation and dry-run zero writes remain runtime test obligations.",
+      "Global docs index/roadmap follow-ups are outside ownership; global index completeness is not certified.",
+      "No new unresolved owner policy decision discovered. Existing operator decisions not reopened. Orchestrator owns minor AC clarification; freeze/runtime dispatch remain gated."
+    ]
+  },
+  "timestamp_utc": "2026-10-20T20:21:42.078Z"
+}
