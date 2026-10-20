@@ -4176,9 +4176,13 @@ export async function launchTuiAgentShell(opts: {
     // input (same non-blocking shape as `resolveFirstRunHelp` further down).
     // `.catch` turns a genuinely unexpected throw into an empty catalog
     // rather than an unhandled rejection outliving this function.
+    // Flow 468: a saved provider+model (or `--provider/--model`) hands startup an
+    // EMPTY `detected`; `redetect` is the live detection `/model` already uses,
+    // so the catalog is never derived from that empty list.
     const providerCatalogReady: Promise<ProviderCatalog> = loadOrRefreshProviderCatalogFromDetected(opts.detected, {
       fetch: globalThis.fetch,
       env: envWithSavedApiKeys(process.env),
+      ...(opts.redetect !== undefined ? { redetect: opts.redetect } : {}),
     }).catch((error: unknown) => {
       debugEvent("provider-catalog.refresh-failed", { error: error instanceof Error ? error.message : String(error) });
       return { fetchedAt: new Date().toISOString(), providers: {} } satisfies ProviderCatalog;
@@ -7447,6 +7451,8 @@ export async function launchTuiAgentShell(opts: {
         // `derived` layer (`deriveDefaultTable`, PRD §6.3 — derives from the
         // SESSION's current provider only).
         session: { providerId: currentSel.provider, modelId: currentSel.model },
+        // Flow 468: an empty catalog cache falls back to the live detection `/model` uses.
+        ...(opts.redetect !== undefined ? { redetect: opts.redetect } : {}),
         renderer: r,
         ...inspectorKeys,
       });
@@ -9979,7 +9985,7 @@ export async function launchTuiAgentShell(opts: {
               jevEnabled: routingEnabled,
               cwd: opts.session?.cwd ?? process.cwd(),
               detected: opts.detected ?? [],
-              providers: loadRoutingProviders,
+              providers: () => loadRoutingProviders(opts.redetect),
               sessionProvider: currentSel.provider,
               sessionModel: currentSel.model,
             });

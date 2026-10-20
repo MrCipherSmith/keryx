@@ -72,6 +72,8 @@ export interface ProviderCatalogDeps {
   readonly baseUrl?: string;
   /** Test seam: overrides {@link CATALOG_FETCH_TIMEOUT_MS} so a timeout path can be exercised without a real 8s wait. Production never sets this. */
   readonly timeoutMs?: number;
+  /** Live provider detection used when a caller hands over an EMPTY `detected` list (flow 468: a saved provider+model skips startup detection). Mirrors `tui-shell.ts`'s `opts.redetect`, the path `/model` uses. */
+  readonly redetect?: () => Promise<readonly DetectedProvider[]>;
 }
 
 async function buildCatalogEntry(
@@ -212,7 +214,9 @@ export async function refreshProviderCatalogFromDetected(
 ): Promise<ProviderCatalog> {
   const now = deps.now ?? Date.now;
   const fetchedAt = new Date(now()).toISOString();
-  const entries = await Promise.all(detected.map((d) => buildCatalogEntry(d, deps, fetchedAt)));
+  // An empty `detected` is "startup skipped detection", not "nothing is connected": never derive a catalog from it.
+  const list = detected.length === 0 && deps.redetect !== undefined ? await deps.redetect() : detected;
+  const entries = await Promise.all(list.map((d) => buildCatalogEntry(d, deps, fetchedAt)));
   const providers: Record<string, ProviderCatalogEntry> = {};
   for (const entry of entries) {
     if (entry !== undefined) providers[entry.name] = entry;
@@ -231,13 +235,22 @@ export async function loadOrRefreshProviderCatalog(
 ): Promise<ProviderCatalog> {
   if (opts.force !== true) {
     const cached = loadProviderCatalogCache(deps.dir);
-    if (isCatalogFresh(cached, deps.now ?? Date.now, opts.ttlMs)) {
+    if (isServableCatalog(cached, deps.now ?? Date.now, opts.ttlMs)) {
       return cached as ProviderCatalog;
     }
   }
   const fresh = await refreshProviderCatalog(deps);
-  await saveProviderCatalogCache(fresh, deps.dir);
+  if (hasProviders(fresh)) await saveProviderCatalogCache(fresh, deps.dir);
   return fresh;
+}
+
+function hasProviders(catalog: ProviderCatalog | undefined): boolean {
+  return catalog !== undefined && Object.keys(catalog.providers).length > 0;
+}
+
+/** Fresh by age AND non-empty: a zero-provider catalog is never served as fresh (flow 468). `isCatalogFresh` stays age-only. */
+function isServableCatalog(catalog: ProviderCatalog | undefined, now: () => number, ttlMs?: number): boolean {
+  return hasProviders(catalog) && isCatalogFresh(catalog, now, ttlMs);
 }
 
 /** Same as {@link loadOrRefreshProviderCatalog}, given an already-detected provider list — see {@link refreshProviderCatalogFromDetected}. */
@@ -248,12 +261,12 @@ export async function loadOrRefreshProviderCatalogFromDetected(
 ): Promise<ProviderCatalog> {
   if (opts.force !== true) {
     const cached = loadProviderCatalogCache(deps.dir);
-    if (isCatalogFresh(cached, deps.now ?? Date.now, opts.ttlMs)) {
+    if (isServableCatalog(cached, deps.now ?? Date.now, opts.ttlMs)) {
       return cached as ProviderCatalog;
     }
   }
   const fresh = await refreshProviderCatalogFromDetected(detected, deps);
-  await saveProviderCatalogCache(fresh, deps.dir);
+  if (hasProviders(fresh)) await saveProviderCatalogCache(fresh, deps.dir);
   return fresh;
 }
 
@@ -265,7 +278,7 @@ export async function loadOrRefreshProviderCatalogFromDetected(
  * endpoint, and an `auth-failed` provider excluded outright rather than
  * shown with models that are not actually available.
  */
-export function catalogToFlatPickerProviders(catalog: ProviderCatalog): FlatPickerProvider[] {
+export function catalogToFlatPickerProviders(catalog: ProviderCatalog, opts: { withAuthFailed?: boolean } = {}): FlatPickerProvider[] {
   const out: FlatPickerProvider[] = [];
   for (const entry of Object.values(catalog.providers)) {
     if (entry.status === "ok") {
@@ -273,6 +286,8 @@ export function catalogToFlatPickerProviders(catalog: ProviderCatalog): FlatPick
       continue;
     }
     if (entry.status === "auth-failed") {
+      // `/routing`'s Model tab opts in (flow 468) so the provider is SHOWN as auth-failed rather than silently absent; it is never selectable.
+      if (opts.withAuthFailed === true) out.push({ name: entry.name, models: [], authFailed: true });
       continue;
     }
     // unreachable | timeout | not-supported

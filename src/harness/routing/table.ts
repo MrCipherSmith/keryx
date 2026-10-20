@@ -213,10 +213,19 @@ export function resolveCategory(
   return resolveCategoryDetailed(category, layers, connected, available).assignment;
 }
 
+/** The provider/model the running session uses (flow 468) — always connected and always pickable. */
+export interface SessionModelRef {
+  readonly providerId: string;
+  readonly modelId: string;
+}
+
 /** Build a `ConnectedPredicate` from a plain provider list (`configuredProviders()`, `detectProviders()`, or an injected `getDetectedProviders()`) — the shared, non-network-probing shape every call site uses. */
-export function connectedPredicateFrom(providers: readonly FlatPickerProvider[]): ConnectedPredicate {
-  const byName = new Map(providers.map((p) => [p.name, p] as const));
+export function connectedPredicateFrom(providers: readonly FlatPickerProvider[], session?: SessionModelRef): ConnectedPredicate {
+  // An auth-failed provider is listed for display only; it is not connected.
+  const byName = new Map(providers.filter((p) => p.authFailed !== true).map((p) => [p.name, p] as const));
   return (providerId, modelId) => {
+    // Flow 468: the provider/model the session is running on is connected by definition, even when the list handed in lacks it (empty or stale catalog).
+    if (session !== undefined && providerId === session.providerId && (modelId === undefined || modelId === session.modelId)) return true;
     const provider = byName.get(providerId);
     if (provider === undefined) return false;
     if (modelId === undefined) return true;
@@ -240,9 +249,32 @@ export function describeUnavailableNotice(rejected: CategoryAssignment, resolved
   return `${describeAssignment(rejected)} — unavailable, falling back to ${describeAssignment(resolved)}`;
 }
 
-/** Picks the right notice for a `ResolvedCategory.rejected` entry (flow 305's "not connected" vs flow 327's "unavailable", `ResolvedCategory`'s own doc). */
-export function describeRejectionNotice(rejected: { readonly assignment: CategoryAssignment; readonly reason?: "unavailable" }, resolved: CategoryAssignment): string {
-  return rejected.reason === "unavailable" ? describeUnavailableNotice(rejected.assignment, resolved) : describeFallbackNotice(rejected.assignment, resolved);
+/**
+ * Picks the right notice for a `ResolvedCategory.rejected` entry (flow 305's "not connected" vs flow 327's "unavailable", `ResolvedCategory`'s own doc).
+ * `providers` (flow 468, optional) is the list the "not connected" verdict was made against; given it, the notice says WHY:
+ * "provider list unavailable", "provider not connected" or "model not in <provider>'s list". Omitted, the wording is unchanged.
+ */
+export function describeRejectionNotice(
+  rejected: { readonly assignment: CategoryAssignment; readonly reason?: "unavailable" },
+  resolved: CategoryAssignment,
+  providers?: readonly FlatPickerProvider[],
+): string {
+  if (rejected.reason === "unavailable") return describeUnavailableNotice(rejected.assignment, resolved);
+  if (providers === undefined) return describeFallbackNotice(rejected.assignment, resolved);
+  return `${describeAssignment(rejected.assignment)} - ${describeNotConnectedReason(rejected.assignment, providers)}, falling back to ${describeAssignment(resolved)}`;
+}
+
+/** Why an assignment counted as not connected against `providers` (flow 468) — an empty list is "unavailable", never "not connected". */
+export function describeNotConnectedReason(assignment: CategoryAssignment, providers: readonly FlatPickerProvider[]): string {
+  if (assignment.kind === "session-default") return "not connected";
+  const live = providers.filter((p) => p.authFailed !== true);
+  if (live.length === 0) return "provider list unavailable";
+  const provider = live.find((p) => p.name === assignment.providerId);
+  if (provider === undefined) return "provider not connected";
+  if (assignment.kind === "model" && (provider.models ?? []).length > 0 && !(provider.models ?? []).includes(assignment.modelId)) {
+    return `model not in ${assignment.providerId}'s list`;
+  }
+  return "not connected";
 }
 
 /** Human-readable form of an assignment, shared by the CLI and the TUI. */
@@ -318,6 +350,8 @@ export interface FlatPickerProvider {
    * either way, so filtering by a bare model id still works.
    */
   readonly offline?: boolean;
+  /** Flow 468 — the provider is in the catalog but its credential was rejected (`auth-failed`). It carries no models; the Model tab shows it with a `/connect` hint instead of omitting it. */
+  readonly authFailed?: boolean;
 }
 
 /**
@@ -326,11 +360,23 @@ export interface FlatPickerProvider {
  * "provider default" row per connected provider and one "session default" row
  * that clears the category back to unset.
  */
-export function flatModelOptions(providers: readonly FlatPickerProvider[]): FlatModelOption[] {
+export function flatModelOptions(providers: readonly FlatPickerProvider[], session?: SessionModelRef): FlatModelOption[] {
   const options: FlatModelOption[] = [
     { assignment: SESSION_DEFAULT_ASSIGNMENT, label: "session default", search: "session default" },
   ];
+  const sessionSuffix = " (current session)";
+  const isSessionModel = (providerId: string, modelId: string): boolean => session !== undefined && providerId === session.providerId && modelId === session.modelId;
+  // Flow 468: the session's own model is always a row, labelled, even when the catalog lacks it (listed once, in place, when it has it).
+  if (session !== undefined && !providers.some((p) => p.name === session.providerId && (p.models ?? []).includes(session.modelId))) {
+    options.push({
+      assignment: { kind: "model", providerId: session.providerId, modelId: session.modelId },
+      label: `${session.providerId}/${session.modelId}${sessionSuffix}`,
+      search: `${session.providerId}/${session.modelId}`.toLowerCase(),
+    });
+  }
   for (const provider of providers) {
+    // An auth-failed provider is not selectable (the Model tab reports it separately).
+    if (provider.authFailed === true) continue;
     options.push({
       assignment: { kind: "provider-default", providerId: provider.name },
       label: `${provider.name} (provider default)`,
@@ -340,7 +386,7 @@ export function flatModelOptions(providers: readonly FlatPickerProvider[]): Flat
     for (const modelId of provider.models ?? []) {
       options.push({
         assignment: { kind: "model", providerId: provider.name, modelId },
-        label: `${provider.name}/${modelId}${offlineSuffix}`,
+        label: `${provider.name}/${modelId}${offlineSuffix}${isSessionModel(provider.name, modelId) ? sessionSuffix : ""}`,
         search: `${provider.name}/${modelId}`.toLowerCase(),
       });
     }

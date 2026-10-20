@@ -1529,6 +1529,16 @@ same cache instead of a stale, hardcoded model list. The cache lives at
 and never carries a credential — only `name`/`status`/`models`/`balance`/
 `fetchedAt`.
 
+A catalog with zero providers is never served as fresh and never saved as
+fresh: when `keryx shell` starts with a saved provider and model (so startup
+detected nothing), the refresh runs a live detection first, and `/routing`
+does the same when the cache is empty. `/routing` shows why a list is short:
+"no providers connected" with a `/connect` hint, "model list unavailable" with
+the reason (it never stays on "Reading routing table…"), `auth failed` or
+`0 models` per provider, and the session's own model as `(current session)`. A
+category that falls back says why: "provider list unavailable", "provider not
+connected" or "model not in <provider>'s list".
+
 ### Cross-family review
 
 Reviewing with a different model family than authored the code is worth ~8–10
