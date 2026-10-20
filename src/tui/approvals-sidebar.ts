@@ -63,6 +63,8 @@ export interface ApprovalsSidebarOptions {
 
 export interface ApprovalsSidebar {
   projection(): ApprovalsPanelProjection;
+  /** Approvals waiting for an answer, as of the last poll. */
+  pending(): number;
   paintCount(): number;
   show(): ApprovalsModalHandle | undefined;
   /** Routes `/approvals`; false for any other line. */
@@ -123,6 +125,7 @@ export function mountApprovalsSidebar(options: ApprovalsSidebarOptions): Approva
   let paints = 0;
   let disposed = false;
   let known: Set<string> | undefined;
+  let pendingCount = 0;
 
   const paint = (force = false): void => {
     if (disposed) return;
@@ -169,6 +172,7 @@ export function mountApprovalsSidebar(options: ApprovalsSidebarOptions): Approva
       views = [];
     }
     const { pending } = splitApprovals(views, now());
+    pendingCount = pending.length;
     projected = projectApprovalsPanel(pending.length, options.width);
     paint();
     if (known === undefined) {
@@ -189,6 +193,7 @@ export function mountApprovalsSidebar(options: ApprovalsSidebarOptions): Approva
 
   return {
     projection: () => projected,
+    pending: () => pendingCount,
     paintCount: () => paints,
     show,
     handleCommand(line) {

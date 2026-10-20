@@ -162,6 +162,16 @@
   - header buttons: «нужно что бы я мог мышкой кликнуть на них и они были раздельные что бы попасть. кстати все 3 показывать не надо, достаточно 2 в которое можно переключить». AC14 is rewritten to match: two buttons for the modes the sidebar is not set to, each its own mouse target at least three cells wide, with a gap between them. T15 is re-dispatched for this fix before its boundary commit;
   - rail until T16: «♦ и кнопка «развернуть» (Recommended)»;
   - modal over a wide sidebar: «Поверх сайдбара (Recommended)».
+- T15 committed at de93e7707. Draft PR 3 opened: https://github.com/MrCipherSmith/keryx/pull/1070. Its first CI run failed in exactly the 22 tests that wait for T16 (sidebar-cards plus the AC16 card visibility). The other 2646 tests in the terminal matrix passed.
+- PR #1069, from a separate session, bumped the hono override to ^4.13.11 and merged. It fixes `dependency-audit` on main.
+- T16 reported DONE_WITH_CONCERNS: seven cards with detail modals, rail glyphs and attention badges. The main session reran 14 phase C files (377 pass) and `tsc` (clean). The T22 pty smoke was run locally on darwin with `KERYX_ALLOW_REAL_SUBPROCESS=1`: 5 pass, including the 80×24 AC16 test.
+- Operator answers to the T16 behavior changes (question tool), all as implemented:
+  - icons ◉ ▣ ▸ ◈ ◧ ◇ ◎ with badges ↑ ! and counts: «Как сделано (Recommended)»;
+  - a title plus up to three value rows: «До 4 строк (Recommended)». At 80×24 Remote is below the fold, while a laptop screen fits all seven;
+  - click card → modal tab → Enter instead of the former direct row clicks: «Так оставить (Recommended)».
+- T16 follow-ups, not done here:
+  - the former sections still mount, hidden, and a 400 ms tick reads their painted text into the card snapshot. A headless data API per section would remove the hidden renderables and their polling;
+  - the boot splash and the subagent/job inspector width defaults still assume 34/30 columns.
 - Left as noticed, not changed:
   - `reasoning-display` prints whole seconds ("thought for 12s"), pinned by existing tests;
   - relative ages and stat latencies keep their own units;
@@ -177,3 +187,4 @@
 - 2026-10-20T18:49:59.964Z - task-attempt: T15: started (attempt 1) — 468-T15 task-implementer dispatch (sonnet), phase C sidebar geometry/header/persistence/modal sizing
 - 2026-10-20T19:37:03.908Z - ac-updated: AC14: "Three icon buttons next to "keryx vX.Y.Z", in a header pinned above the scroll area that keeps the id `sb-title`, switch between default (today's 34 columns), wide (twice that, capped at half the terminal) and rail (a thin strip with one icon and badge per card). The active button is highlighted. A keyboard shortcut cycles the modes and does nothing while a modal owns the keyboard. Each icon has a single-cell display width and an ASCII fallback. [verify: exec `bun test src/tui/shell-chrome.test.ts src/tui/sidebar-geometry.test.ts -t AC14`]" -> "Two icon buttons next to "keryx vX.Y.Z", in a header pinned above the scroll area that keeps the id `sb-title`, switch to the two modes the sidebar is not set to, among default (today's 34 columns), wide (twice that, capped at half the terminal) and rail (a thin strip with one icon and badge per card). Each button is its own mouse target, at least three cells wide, with a visible gap between the two, so a click lands on the intended one; after a switch the pair shows the two other modes. A keyboard shortcut cycles the modes and does nothing while a modal owns the keyboard. Each icon has a single-cell display width and an ASCII fallback. [verify: exec `bun test src/tui/shell-chrome.test.ts src/tui/sidebar-geometry.test.ts -t AC14`]" (operator 2026-10-20 (question tool, T15 behavior change): «нужно что бы я мог мышкой кликнуть на них и они были раздельные что бы попасть. кстати все 3 показывать не надо, достаточно 2 в которое можно переключить»)
 - 2026-10-20T19:44:15.328Z - task-done: T15: C sidebar: geometry store, pinned header with three mode buttons and shortcut, persistence, width plumbing, modal sizing
+- 2026-10-20T19:44:28.053Z - task-attempt: T16: started (attempt 1) — 468-T16 task-implementer dispatch (sonnet), phase C seven cards

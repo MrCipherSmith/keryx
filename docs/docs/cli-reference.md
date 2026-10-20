@@ -804,6 +804,27 @@ Refusals print their code and exit non-zero (except where noted):
 
 ### Interactive behavior
 
+- **The sidebar** is seven cards, always in the same order: **Session** (model,
+  mode, usage, context, balance), **Workspace** (directory, branch, PR, SAC
+  workspace), **Work** (status, plan, subagents, background jobs), **Reviews**
+  (catch-up, findings, autonomous review, external diffs), **Ops** (governance,
+  triggers, schedules, intake, decisions, research sync), **Policy** (route,
+  guards, rewind, project rules, external providers, tools) and **Remote**
+  (remote control, Telegram, approvals, hold). Each card is three to four lines
+  and shows only the headline of its sections. Click a card to open its detail
+  modal: one tab per section with the whole value, and `Enter` on a tab that has
+  an inspector (Route opens `/routing`, Model opens `/model`, Findings opens
+  `/reviews`, and so on) runs that command. `←/→` switch tabs, `Esc` closes.
+  A pending remote approval, a hold, an available version update and a review
+  that is not ready raise their card (Remote, Remote, Session, Reviews) to the
+  attention colour and put a badge on its title line, in every mode, without
+  opening anything. The pinned header at the top holds the version and two
+  buttons for the sidebar modes the sidebar is not set to: **default**, **wide**
+  (twice as wide, never more than half the terminal, and only on terminals of at
+  least 100 columns; narrower terminals show default and return to wide when
+  there is room) and **rail** (one glyph and badge per card). `Ctrl+L` cycles
+  the modes. The choice is saved in `tui.json` under `sidebar`. A wide sidebar
+  never squeezes a modal: modals stay at least 72 columns wide.
 - `/help` lists every slash command available in the current mode
   (`agent` vs `chat`). The registry is `AGENT_SLASH_COMMANDS`.
 - `/status` (chat and agent) opens a read-only inspector. The TUI modal
@@ -828,7 +849,7 @@ Refusals print their code and exit non-zero (except where noted):
   run` appear there too. They are marked `acp:<agent>` in the row's description,
   and typing `acp` in the filter finds them. `keryx shell -c` never continues
   one: it continues the newest session of the shell's own kind.
-- **Governance** (TUI sidebar, always present, below Jobs). The row shows one of
+- **Governance** (TUI sidebar, Ops card, Governance tab; always present). The row shows one of
   five states:
   - `no report — click to run`: there is no stored report.
   - `unreadable — click for reason`: a stored report exists but is malformed or
@@ -874,7 +895,7 @@ Refusals print their code and exit non-zero (except where noted):
   the reason and offers `r` to rebuild it. A report
   written by another process after a failed run replaces the `failed` state.
   Both artifacts are replaced atomically, `latest.json` last.
-- **Triggers** (TUI sidebar, below Governance). The section is hidden when
+- **Triggers** (TUI sidebar, Ops card, Triggers tab). The section is hidden when
   `.metaproject/triggers.json` does not exist, and shows one error row when the
   file, or the ledger, cannot be read. Row ages are repainted at least once a
   minute. It shows:

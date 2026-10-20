@@ -774,6 +774,8 @@ export async function createShellChrome(
   });
   sidebar.add(sidebarTopScroll);
   const sidebarTop = sidebarTopScroll.content;
+  /** The pinned update notice; rail mode has three cells, so the Session card's badge stands for it there. */
+  let versionNoticeNode: Text | undefined;
   if (opts.versionCheck !== undefined) {
     // Reserve the notice's position before callers append model/context/worker
     // panels. Late settlement then changes content in place instead of appending
@@ -783,6 +785,8 @@ export async function createShellChrome(
       content: "",
     });
     sidebarTop.add(versionNotice);
+    versionNoticeNode = versionNotice;
+    versionNotice.visible = geometry?.state().mode !== "rail";
     void opts.versionCheck.then(
       (result) => {
         const advisory = formatSidebarVersionUpdateAdvisory(result);
@@ -1621,6 +1625,7 @@ export async function createShellChrome(
       sidebar.paddingLeft = rail ? SIDEBAR_RAIL_PADDING_LEFT : SIDEBAR_PADDING_LEFT;
       sidebar.paddingRight = rail ? 0 : SIDEBAR_PADDING_RIGHT;
       paintSidebarHeader();
+      if (versionNoticeNode !== undefined) versionNoticeNode.visible = !rail;
       onFooterResized(); // the busy footer's budget depends on the sidebar width
     });
     r.on(otui.CliRenderEvents.RESIZE, onGeometryResize);

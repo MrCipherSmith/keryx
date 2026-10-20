@@ -11,7 +11,7 @@
   "title": "Shell TUI: runnable /setup plan, compact card sidebar with three widths, working /routing model picker",
   "status": "in-progress",
   "createdAt": "2026-10-20T07:58:41.266Z",
-  "updatedAt": "2026-10-20T19:44:15.328Z",
+  "updatedAt": "2026-10-20T19:44:28.053Z",
   "source": {
     "type": "description",
     "ref": null
@@ -343,8 +343,14 @@
         "T15"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T19:44:28.052Z",
+            "outcome": "started",
+            "detail": "468-T16 task-implementer dispatch (sonnet), phase C seven cards"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -900,6 +906,11 @@
       "at": "2026-10-20T19:44:15.328Z",
       "event": "task-done",
       "detail": "T15: C sidebar: geometry store, pinned header with three mode buttons and shortcut, persistence, width plumbing, modal sizing"
+    },
+    {
+      "at": "2026-10-20T19:44:28.053Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 468-T16 task-implementer dispatch (sonnet), phase C seven cards"
     }
   ],
   "acKinds": {

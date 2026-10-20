@@ -415,7 +415,8 @@ import { ASK_USER_CANCEL, type AskUserAnswer } from "../harness/tool/builtin/ask
 import { showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
 import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, type ShellChrome } from "./shell-chrome";
-import { createSidebarGeometry, sidebarTextWidth, type SidebarGeometry } from "./sidebar-geometry";
+import { createSidebarGeometry, type SidebarGeometry } from "./sidebar-geometry";
+import { collectRenderableText, mountSidebarCards, openSidebarCard, type SidebarSnapshot } from "./sidebar-cards";
 import {
   buildSideWorkerPrompt,
   buildSideWorkerSystemInstruction,
@@ -4365,19 +4366,20 @@ export async function launchTuiAgentShell(opts: {
     // Sidebar panels (model, context, tools, workers) go in `sidebarTop`, NOT
     // `sidebar`: the chrome pins the toast to the bottom with a flexGrow spacer,
     // so anything added to `sidebar` itself would land beside the toast.
-    // The title row moved into the chrome's pinned header (`sb-title` keeps its id there). The
-    // sections below mount into one wrapper so rail mode, which has room for nothing but an
-    // icon per card, can hide them all at once until the cards replace them.
+    // The title row moved into the chrome's pinned header (`sb-title` keeps its id there). Flow 468
+    // phase C: the sidebar shows seven cards (`mountSidebarCards`, below), not the ~30 sections. The
+    // sections below still mount and keep running — they own the polling, the state and the click
+    // inspectors — but into one wrapper that is never drawn; each card's detail tab shows what its
+    // former sections painted (`sidebarSnapshot`).
     const sidebarLegacy = new otui.BoxRenderable(r, { id: "sb-legacy", flexDirection: "column", flexShrink: 0 });
+    sidebarLegacy.visible = false;
     chrome.sidebarTop.add(sidebarLegacy);
     const sidebar = sidebarLegacy;
-    // Width plumbing: every text budget below reads the CURRENT sidebar text width at paint time
-    // (a getter on the options object, not a number frozen at mount), so wide mode does not leave
-    // text truncated at 30 columns. Rail keeps the default budget: its panels are hidden.
-    const sbTextWidth = (): number => {
-      const state = sidebarGeometry.state();
-      return state.mode === "rail" ? SIDEBAR_TEXT_WIDTH : sidebarTextWidth(state.width);
-    };
+    // Width plumbing: the sections paint for the DETAIL modal, not for a 30-column strip, so every
+    // text budget below is the modal's inner width (a getter on the options object, read at paint
+    // time). A card truncates its own summary to the sidebar it is in; the tab wraps the whole value.
+    const SIDEBAR_DETAIL_WIDTH = 100;
+    const sbTextWidth = (): number => SIDEBAR_DETAIL_WIDTH;
     sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${dimChunk(otui, "Model")}`, marginTop: 1 }));
     const sbModelV = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${dimChunk(otui, `${sel.provider}/${sel.model}`)}` });
     sidebar.add(sbModelV);
@@ -4427,7 +4429,7 @@ export async function launchTuiAgentShell(opts: {
     });
     // The directory the agent's tools act on — directly under Model, matching the
     // readline header's `provider/model … · <cwd>` order (gap G-2).
-    const cwdPanel = mountCwdPanel(otui, r, sidebar, opts.session?.cwd ?? process.cwd(), undefined, sbTextWidth);
+    mountCwdPanel(otui, r, sidebar, opts.session?.cwd ?? process.cwd(), undefined, sbTextWidth);
     // SAC workspace (SLATE-16 resolve-or-create): absent until the session's
     // first action-intent turn binds one, so this row starts empty and is
     // refreshed — not mounted once like Directory/Branch/PR above, which are
@@ -4445,10 +4447,8 @@ export async function launchTuiAgentShell(opts: {
     });
     sidebar.add(sbWorkspace);
     let currentSlates: SlateInspectorItem[] = [];
-    let currentWorkspace: WorkspaceInfo | undefined;
     /** Rebuild the Workspace panel: no bound workspace ⇒ no rows at all. */
     const paintWorkspaceSidebar = (workspace: WorkspaceInfo | undefined, slates: readonly SlateInspectorItem[]): void => {
-      currentWorkspace = workspace;
       clearTranscriptChildren(sbWorkspace);
       if (workspace === undefined) {
         return;
@@ -4826,44 +4826,94 @@ export async function launchTuiAgentShell(opts: {
     fleet.subscribe(paintFleet);
     sessions.subscribe(paintSubagents);
     jobs.subscribe(paintJobs);
-    // Flow 468 phase C (AC14, AC16): a sidebar mode or width change re-fits every text budget.
-    // Each panel reads `sbTextWidth()` at paint time, AFTER any await in its own refresh, so an
-    // in-flight refresh that lands after the switch paints at the new width and cannot leave
-    // stale-width text behind; this pass repaints what is already on screen. Rail hides the
-    // sections (they have no room) and skips the work.
-    const refitSidebar = (): void => {
-      cwdPanel.refit();
-      paintWorkspaceSidebar(currentWorkspace, currentSlates);
-      paintSubagents();
-      paintJobs();
-      const panels: readonly unknown[] = [
-        liveSchedules,
-        liveAutoReview,
-        liveReviewsPanel,
-        liveRemotePanel,
-        liveChannelsPanel,
-        liveApprovals,
-        liveIntake,
-        liveDecisions,
-        liveResearchSync,
-        liveExternalDiff,
-      ];
-      for (const panel of panels) {
-        const handle = panel as { repaint?: () => unknown; refresh?: () => unknown } | undefined;
-        try {
-          const run = handle?.repaint ?? handle?.refresh;
-          const result = run?.call(handle);
-          if (result instanceof Promise) result.catch(() => undefined);
-        } catch {
-          // A panel that cannot repaint keeps its last text; the next poll fixes it.
-        }
-      }
+    // Flow 468 phase C (AC12, AC13, AC17): the seven cards. Each former section is read from the node
+    // it painted (`SIDEBAR_SECTION_SOURCES`); the attention signals come from their own sources. A
+    // 400 ms tick compares the snapshot and repaints the cards only when it changed, so a section
+    // that repaints itself (a poll, a click, a store event) reaches its card without every panel
+    // having to know the cards exist.
+    const SIDEBAR_SECTION_SOURCES: Readonly<Record<string, string>> = {
+      model: "sb-model-v",
+      mode: "sb-mode-v",
+      usage: "sb-usage-v",
+      context: "sb-ctx-v",
+      balance: "sb-balance",
+      directory: "sb-cwd-v",
+      branch: "sb-branch-v",
+      pr: "sb-pr-v",
+      workspace: "sb-workspace",
+      status: "sb-status-v",
+      plan: "sb-plan",
+      subagents: "sb-subagents",
+      jobs: "sb-jobs",
+      catchup: "sb-review",
+      findings: "sb-reviews",
+      autoreview: "sb-autoreview",
+      "external-diff": "sb-external-diff",
+      governance: "sb-governance",
+      triggers: "sb-triggers",
+      schedules: "sb-schedules",
+      intake: "sb-intake",
+      decisions: "sb-decisions",
+      "research-sync": "sb-research-sync",
+      route: "sb-route",
+      guard: "sb-guard",
+      "edit-guard": "sb-edit-guard",
+      rewind: "sb-rewind",
+      "project-ctx": "sb-project-ctx",
+      external: "sb-external",
+      tools: "sb-tools-v",
+      remote: "sb-remote",
+      telegram: "sb-channels",
+      approvals: "sb-approvals",
     };
-    offSidebarGeometry = sidebarGeometry.subscribe((state) => {
-      sidebarLegacy.visible = state.mode !== "rail";
-      if (state.mode !== "rail") refitSidebar();
+    let updateAvailableVersion: string | undefined;
+    void opts.versionCheck?.then(
+      (result) => {
+        if (result.status === "update-available") updateAvailableVersion = result.latestVersion;
+      },
+      () => {
+        // An unavailable check shows no update; it is never an error in the sidebar.
+      },
+    );
+    const sidebarSnapshot = (): SidebarSnapshot => {
+      const sections: Record<string, string> = {};
+      for (const [section, sourceId] of Object.entries(SIDEBAR_SECTION_SOURCES)) {
+        const text = collectRenderableText(sidebarLegacy.findDescendantById(sourceId));
+        if (text !== "") sections[section] = text;
+      }
+      const hold = leaseView()?.banner();
+      return {
+        sections,
+        approvalsPending: liveApprovals?.pending() ?? 0,
+        ...(hold !== undefined ? { hold } : {}),
+        ...(updateAvailableVersion !== undefined ? { updateAvailable: updateAvailableVersion } : {}),
+        reviewsNotReady: liveReviewsPanel?.notReadyCount() ?? 0,
+      };
+    };
+    let cardSnapshot: SidebarSnapshot = sidebarSnapshot();
+    let cardSnapshotKey = JSON.stringify(cardSnapshot);
+    const sidebarCards = mountSidebarCards(otui, r, chrome.sidebarTop, {
+      geometry: sidebarGeometry,
+      snapshot: () => cardSnapshot,
+      onOpenCard: (cardId) => {
+        // A fresh read, not the last tick's: the modal shows the value as of the click.
+        openSidebarCard(otui, chrome, cardId, { snapshot: sidebarSnapshot, runCommand: (command) => runLine(command) });
+      },
     });
-    sidebarLegacy.visible = sidebarGeometry.state().mode !== "rail";
+    const tickSidebarCards = (): void => {
+      const next = sidebarSnapshot();
+      const key = JSON.stringify(next);
+      if (key === cardSnapshotKey) return;
+      cardSnapshot = next;
+      cardSnapshotKey = key;
+      sidebarCards.refresh();
+    };
+    const sidebarCardsTimer = setInterval(tickSidebarCards, 400);
+    (sidebarCardsTimer as { unref?: () => void }).unref?.();
+    offSidebarGeometry = () => {
+      clearInterval(sidebarCardsTimer);
+      sidebarCards.destroy();
+    };
     // MAE spawn_subagent → inspectable session list only (never dual-write to fleet).
     setSubagentFleetListener((ev) => {
       sessions.apply(ev);
