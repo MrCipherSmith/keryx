@@ -94,7 +94,8 @@ Fix the source of truth, then make every failure visible.
    - The body is the modal's own ScrollBox: no 24-row cap, it uses `renderTab`'s `ctx.width`, and the keys hint is no longer duplicated.
    - Layout is a row: plan and prompt on the left; on the right a button column with `[Run]`, `[Copy prompt]` and `[Optional: off/on]`, built with `smallActionButton`.
    - Keys: `c` copies, `r` runs, `o` toggles optional. No bare `x`.
-6. **Run.**
+6. **Run — superseded 2026-10-20.** The operator changed the mechanism after implementation found external runs are read-only (`OPERATOR_SANDBOX`, D-04): «Шаги без модели (Recommended)». keryx runs the confirmed steps itself as background jobs, in order, in the project root. It stops at the first failed required step or at an update divergence, skips placeholder steps, and reports each step and the stop reason in the transcript. AC10/AC11 were rewritten. The original plan follows for the record:
+6a. **Run (original).**
    - `confirmOperatorCard` names the scenario, the steps to run (required, plus optional if on) and the agent. When several external agents are configured, the card offers each as an option.
    - On yes: `external.delegate({agentId, task: prompt})` in the project root. It runs in the fleet and the Workers panel, the composer stays free, and the report is printed to the transcript.
    - No external agent configured or allowed: the card says so and offers the main agent turn (`runLine(prompt)`) instead.

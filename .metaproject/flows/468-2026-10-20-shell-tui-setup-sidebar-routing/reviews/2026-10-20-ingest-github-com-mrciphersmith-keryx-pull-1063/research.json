@@ -1,0 +1,615 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (The rule 'the session's own provider/model is connected' is an optional trailing parameter of `conne) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "keryx ctx rg 'connectedPredicateFrom(' over src: routing-classifier-source.ts:143,178 and review.ts:1545 take no session pair, as before this PR; the PR adds the pair to routing.ts:130, routing-inspector.ts:312 and spawn-subagent-tool.ts:1492",
+      "reason": "pre-existing: the classifier and review routing never took a session pair; flow 411 tests pin an empty list as no routing; disclosed in the PR body and the flow 468 journal as a later-flow candidate"
+    },
+    {
+      "id": "review-architecture-w1:F-002",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-002 (An empty `detected` array now means 'startup skipped detection, please detect' whenever `deps.redete) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-01",
+      "reason": "duplicate of the same defect, merged into C-01",
+      "finding": "C-01"
+    },
+    {
+      "id": "review-architecture-w1:F-003",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-003 (Because a zero-provider catalog is now never saved, the cache stays empty for as long as nothing is ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-05",
+      "reason": "canonical finding C-05",
+      "finding": "C-05"
+    },
+    {
+      "id": "review-architecture-w1:F-004",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-004 (The PR commits a regenerated testing context (`context.md`, `recommendations.md`, and `context.json`) real, and where is it reported?",
+      "status": "refuted",
+      "evidence": "`git diff main...9d4e72c4a770 -- .metaproject/data` is empty: the PR head changes no testing context; the slicer read the working copy (orchestrator check, 2026-10-20)",
+      "reason": "the PR does not commit the regenerated testing context"
+    },
+    {
+      "id": "review-architecture-w1:F-005",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-005 (Question, not a defect: the session shortcut runs before the auth-failed filter, so a session provid) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-08",
+      "reason": "duplicate of the same defect, merged into C-08",
+      "finding": "C-08"
+    },
+    {
+      "id": "review-architecture-w1:fu1",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is the parent follow-up from review-architecture done or ruled out, and where is that recorded? Run `keryx gdgraph affected src/harness/routing/table.ts --data-dir <package>/layers/graph` and confirm the complete list of `connectedPredicateFrom` callers (F-001 enumeration was made without a repo",
+      "status": "refuted",
+      "evidence": "keryx ctx rg 'connectedPredicateFrom(' src --glob '!*.test.ts': exactly 6 call sites in 5 files (routing-classifier-source.ts x2, routing.ts, routing-inspector.ts, review.ts, spawn-subagent-tool.ts)",
+      "reason": "follow-up executed; the caller list matches F-001's and adds no finding"
+    },
+    {
+      "id": "review-architecture-w2:F-006",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-006 (Whether an assignment is 'not connected' is decided by the predicate that `connectedPredicateFrom` r) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-03",
+      "reason": "canonical finding C-03",
+      "finding": "C-03"
+    },
+    {
+      "id": "review-architecture-w2:F-007",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-007 (Question, adds evidence to F-005 (session shortcut versus auth-failed). The rule 'the session pair i) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-08",
+      "reason": "duplicate of the same defect, merged into C-08",
+      "finding": "C-08"
+    },
+    {
+      "id": "review-clean-code-w1:F-001",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-001 (Flow 468 reuses the labels AC1 and AC2 for its new tests in a file where flow 309's tests already us) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-10",
+      "reason": "canonical finding C-10",
+      "finding": "C-10"
+    },
+    {
+      "id": "review-clean-code-w1:F-002",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-002 (slice-01 includes a regenerated .metaproject/data/testing/context.md and recommendations.md that ind) real, and where is it reported?",
+      "status": "refuted",
+      "evidence": "`git diff main...9d4e72c4a770 -- .metaproject/data` is empty: the PR head changes no testing context; the slicer read the working copy (orchestrator check, 2026-10-20)",
+      "reason": "the PR does not carry .metaproject/data/testing files"
+    },
+    {
+      "id": "review-clean-code-w2:F-003",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-003 (Stale doc comment (Clean Code C1a). The docblock of catalogToFlatPickerProviders still says an auth-) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-02",
+      "reason": "canonical finding C-02",
+      "finding": "C-02"
+    },
+    {
+      "id": "review-clean-code-w2:F-004",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-004 (DRY, three repetitions (Clean Code E1, law 3). FlatPickerProvider now carries a display-only authFai) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-03",
+      "reason": "duplicate of the same defect, merged into C-03",
+      "finding": "C-03"
+    },
+    {
+      "id": "review-clean-code-w2:F-005",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-005 (Intent hidden behind a sentinel (Clean Code A1, B2). To get 'serve a fresh non-empty cache, else det) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-01",
+      "reason": "canonical finding C-01",
+      "finding": "C-01"
+    },
+    {
+      "id": "review-clean-code-w2:F-006",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding F-006 (Function size and mixed abstraction (Clean Code B1). flatModelOptions now runs about 35 lines and in) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-04",
+      "reason": "canonical finding C-04",
+      "finding": "C-04"
+    },
+    {
+      "id": "review-highload-w1:F-001",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-001 (A catalog with zero providers is now never saved, and the loaders have no in-flight deduplication. W) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-05",
+      "reason": "duplicate of the same defect, merged into C-05",
+      "finding": "C-05"
+    },
+    {
+      "id": "review-highload-w1:F-002",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-002 (updateProviderCatalogEntry, used by `providers test` and the `[Test]` button, builds a one-provider ) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "provider-catalog-cache.ts updateProviderCatalogEntry is unchanged by this PR (no hunk in slice-01 or slice-02)",
+      "reason": "pre-existing behaviour outside the diff"
+    },
+    {
+      "id": "review-logic-w1:F-001",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-001 (A refresh that yields zero providers is not saved (`if (hasProviders(fresh)) await saveProviderCatal) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-06",
+      "reason": "canonical finding C-06",
+      "finding": "C-06"
+    },
+    {
+      "id": "review-logic-w1:F-002",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-002 (`describeNotConnectedReason` treats 'no non-auth-failed provider in the list' as 'provider list unav) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-07",
+      "reason": "canonical finding C-07",
+      "finding": "C-07"
+    },
+    {
+      "id": "review-logic-w1:F-003",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-003 (`loadRoutingProviders` now always returns `withAuthFailed: true` entries (`{name, models: [], authFa) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-08",
+      "reason": "canonical finding C-08",
+      "finding": "C-08"
+    },
+    {
+      "id": "review-logic-w1:F-004",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-004 (Observation, no defect proven: with zero connected providers the catalog is never cached, so every `) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-05",
+      "reason": "duplicate of the same defect, merged into C-05",
+      "finding": "C-05"
+    },
+    {
+      "id": "review-logic-w1:F-005",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding F-005 (Pre-existing, outside this diff: `updateProviderCatalogEntry` (the `providers test` / `[Test]` path)) real, and where is it reported?",
+      "status": "out-of-scope",
+      "evidence": "provider-catalog-cache.ts:207 is unchanged by this PR",
+      "reason": "pre-existing behaviour outside the diff, same as review-highload-w1:F-002"
+    },
+    {
+      "id": "review-logic-w2:F-101",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-101 (`catalogToFlatPickerProviders` now surfaces `auth-failed` entries (with `withAuthFailed`), but an `u) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-09",
+      "reason": "canonical finding C-09",
+      "finding": "C-09"
+    },
+    {
+      "id": "review-logic-w2:F-102",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-102 (Observation, not proven: the picker's list height subtracts `notes.length`, one row per note, but ea) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-19",
+      "reason": "canonical finding C-19",
+      "finding": "C-19"
+    },
+    {
+      "id": "review-logic-w2:F-103",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-103 (Further evidence for wave-1 F-004 and F-003, no new defect. The per-turn classifier at tui-shell.ts ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-05",
+      "reason": "duplicate of the same defect, merged into C-05",
+      "finding": "C-05"
+    },
+    {
+      "id": "review-performance-w1:F-001",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding F-001 (The docs and the T6 result (results/T6.json, behavior_changes) say /routing and the per-turn classif) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-05",
+      "reason": "duplicate of the same defect, merged into C-05",
+      "finding": "C-05"
+    },
+    {
+      "id": "review-performance-w2:F-001",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding F-001 (Confirms wave-1 F-001, narrowed. runRoutingClassifierForTurn (routing-classifier-source.ts) awaits l) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-05",
+      "reason": "duplicate of the same defect, merged into C-05",
+      "finding": "C-05"
+    },
+    {
+      "id": "review-regression-w2:fu1",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is the parent follow-up from review-regression done or ruled out, and where is that recorded? Confirm no direct reader of loadProviderCatalogCache (outside loadOrRefresh*) serves the cache without a freshness check after the last provider is disconnected; I could not grep for readers in this r",
+      "status": "refuted",
+      "evidence": "keryx ctx rg 'loadProviderCatalogCache(' src --glob '!*.test.ts': besides loadOrRefresh* and the cache module itself, only tui-shell.ts:2955 reads it, to decorate /model rows whose list comes from the live probe",
+      "reason": "follow-up executed; no reader serves a stale catalog as the provider list"
+    },
+    {
+      "id": "review-security-code-w1:SEC-001",
+      "source": "raw/review-security-code-w1.txt",
+      "question": "Is review-security-code finding SEC-001 (The provider-loader failure reason (error.message) is placed verbatim into the Model tab status row ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-18",
+      "reason": "canonical finding C-18",
+      "finding": "C-18"
+    },
+    {
+      "id": "review-style-w1:F-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-001 (The new import of ../commands/shell sits before the existing ../commands/select import, so the proje) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-20",
+      "reason": "canonical finding C-20",
+      "finding": "C-20"
+    },
+    {
+      "id": "review-style-w2:F-001",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-001 (The new test block header is written in the red-first voice ('Assumed seams', 'FlatPickerProvider.au) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-21",
+      "reason": "canonical finding C-21",
+      "finding": "C-21"
+    },
+    {
+      "id": "review-style-w2:F-002",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-002 (The new tests are named `AC3:` and `AC4:` with no flow prefix. The file's own header says `Flow 305 ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-10",
+      "reason": "duplicate of the same defect, merged into C-10",
+      "finding": "C-10"
+    },
+    {
+      "id": "review-style-w2:F-003",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-003 (The flow 468 comment was inserted between the existing comment block and the declaration it describe) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-22",
+      "reason": "canonical finding C-22",
+      "finding": "C-22"
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (The `detected.length === 0` half of the redetect gate is unpinned. Every test that passes `redetect`) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "mutation M-1 survived (research-evidence/mutation-1.md); the reviewer's rule raises an unpinned gate to minor once a survivor is observed",
+      "reason": "canonical finding C-12",
+      "finding": "C-12"
+    },
+    {
+      "id": "review-testing-practices-w1:F-002",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-002 (The session-pair branches in table.ts are pinned only at their two extremes. table.test.ts AC3 drive) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "mutations M-2 and M-3 survived (research-evidence/mutation-1.md)",
+      "reason": "canonical finding C-13",
+      "finding": "C-13"
+    },
+    {
+      "id": "review-testing-practices-w1:F-003",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-003 (The PR body says the source-text assertion in provider-catalog-startup.test.ts is now a behavioural ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-23",
+      "reason": "canonical finding C-23",
+      "finding": "C-23"
+    },
+    {
+      "id": "review-testing-practices-w1:fu1",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? run mutant_candidates M-1 to M-6 (write to mutants.json unchanged); if M-1, M-2 or M-3 stay green, F-001 and F-002 move from `info` to `minor` with the observed result.",
+      "status": "narrowed",
+      "evidence": "research-evidence/mutation-1.md",
+      "reason": "mutants M-1..M-6 run",
+      "remains": "M-1, M-2, M-3 survived -> C-12, C-13; M-4 invalid (anchor occurs twice: both save sites); M-5, M-6 killed"
+    },
+    {
+      "id": "review-testing-practices-w2:F-004",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-004 (The AC4 hang test decides on a fixed `await new Promise((resolve) => setTimeout(resolve, 500))` foll) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "verifier downgraded major -> minor: the fixed sleep is real, the flake did not reproduce (30/30 pass under concurrent load, research-evidence/verify-review-testing-practices-w2_F-004-1.txt; raw/review-verifier.txt)",
+      "reason": "canonical finding C-11",
+      "finding": "C-11"
+    },
+    {
+      "id": "review-testing-practices-w2:F-005",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-005 (The outer catch in `reload()`, `loadError`, and the 'routing table unavailable: <reason>' list state) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "mutation M-7 survived (research-evidence/mutation-1.md)",
+      "reason": "canonical finding C-14",
+      "finding": "C-14"
+    },
+    {
+      "id": "review-testing-practices-w2:F-006",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-006 (The Model-tab note tests assert presence only. The states test checks that a 'beta … auth failed' li) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "mutations M-8, M-9 and M-10 survived (research-evidence/mutation-1.md)",
+      "reason": "canonical finding C-15",
+      "finding": "C-15"
+    },
+    {
+      "id": "review-testing-practices-w2:F-007",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-007 (The hang test pins only that 'Reading routing table…' is gone. The AC the PR states is 'model list u) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "consolidated into C-17",
+      "reason": "canonical finding C-17",
+      "finding": "C-17"
+    },
+    {
+      "id": "review-testing-practices-w2:F-008",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-008 (Every added AC3/AC4 test injects `providers:`; none goes through the default loader. So `loadRouting) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "mutations M-11 and M-12 survived (research-evidence/mutation-1.md)",
+      "reason": "canonical finding C-16",
+      "finding": "C-16"
+    },
+    {
+      "id": "review-testing-practices-w2:fu1",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? run mutant_candidates M-7 to M-15 (write to mutants.json unchanged); if M-7 to M-12 stay green, F-005, F-006 and F-008 move from `info` to `minor` with the observed result.",
+      "status": "narrowed",
+      "evidence": "research-evidence/mutation-1.md",
+      "reason": "mutants M-7..M-15 run",
+      "remains": "M-7..M-12 survived -> C-14, C-15, C-16; M-13, M-14, M-15 killed"
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:decbf277c47f",
+        "rawEvidence": "raw/review-architecture-w2.txt#sha256:decbf277c47f",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:c25857eb00d0",
+        "rawEvidence": "raw/review-clean-code-w2.txt#sha256:c25857eb00d0",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:05f3709e2409",
+        "rawEvidence": "raw/review-highload-w2.txt#sha256:05f3709e2409",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:d91b5c1664fc",
+        "rawEvidence": "raw/review-logic-w2.txt#sha256:d91b5c1664fc",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:71d544a8ec20",
+        "rawEvidence": "raw/review-performance-w2.txt#sha256:71d544a8ec20",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:1b5af603ee6b",
+        "rawEvidence": "raw/review-regression-w2.txt#sha256:1b5af603ee6b",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:4e8983efea9e",
+        "rawEvidence": "raw/review-security-code-w2.txt#sha256:4e8983efea9e",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:a1f05cba7eed",
+        "rawEvidence": "raw/review-style-w2.txt#sha256:a1f05cba7eed",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:a0a93aae45c9",
+        "rawEvidence": "raw/review-testing-practices-w2.txt#sha256:a0a93aae45c9",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 18,
+    "known": 0,
+    "unknown": 18,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  },
+  "setAside": [
+    "raw/review-verifier.txt"
+  ]
+}

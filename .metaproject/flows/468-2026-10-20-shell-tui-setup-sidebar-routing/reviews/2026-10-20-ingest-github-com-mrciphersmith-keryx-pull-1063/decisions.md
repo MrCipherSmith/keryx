@@ -1,0 +1,25 @@
+# Decisions
+
+- C-01: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-02: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-03: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-04: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-05: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-06: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-07: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-08: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-09: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-10: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-11: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-12: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-13: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-14: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-15: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-16: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-17: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-18: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-19: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-20: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-21: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-22: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-23: create follow-up task or learning proposal (valid_followup, post_flow_feedback).

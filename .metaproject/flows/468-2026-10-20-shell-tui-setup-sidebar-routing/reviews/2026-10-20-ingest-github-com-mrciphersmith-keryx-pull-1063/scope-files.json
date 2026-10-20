@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "files": [
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/acceptance-criteria.md",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/context.md",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/description.md",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/flow.json",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/journal.md",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/plan.md",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/resolved/T5.test.json",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/resolved/T6.implement.json",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/results/T5.json",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/results/T6.json",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/tasks.md",
+    "docs/docs/cli-reference.md",
+    "src/commands/routing.ts",
+    "src/harness/provider-catalog.test.ts",
+    "src/harness/provider-catalog.ts",
+    "src/harness/routing/table.test.ts",
+    "src/harness/routing/table.ts",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "src/tui/provider-catalog-startup.test.ts",
+    "src/tui/routing-inspector.test.ts",
+    "src/tui/routing-inspector.ts",
+    "src/tui/tui-shell.ts"
+  ],
+  "changedLines": 2108
+}

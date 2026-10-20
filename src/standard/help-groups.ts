@@ -135,7 +135,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/setup",
     group: "Start here",
-    summary: "Same preparation guide, inside the session — prints steps, runs nothing.",
+    summary: "Same preparation guide, inside the session — copy the agent prompt, or let keryx run the steps as background jobs after you confirm.",
   },
 
   // ---- Connect a model provider -------------------------------------------

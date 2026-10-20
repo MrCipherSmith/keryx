@@ -1,0 +1,2593 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/acceptance-criteria.md",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/context.md",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/description.md",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/flow.json",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/journal.md",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/plan.md",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/resolved/T5.test.json",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/resolved/T6.implement.json",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/results/T5.json",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/results/T6.json",
+    ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/tasks.md",
+    "docs/docs/cli-reference.md",
+    "src/commands/routing.ts",
+    "src/harness/provider-catalog.test.ts",
+    "src/harness/provider-catalog.ts",
+    "src/harness/routing/table.test.ts",
+    "src/harness/routing/table.ts",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "src/tui/provider-catalog-startup.test.ts",
+    "src/tui/routing-inspector.test.ts",
+    "src/tui/routing-inspector.ts",
+    "src/tui/tui-shell.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/review.ts",
+      "hop": 1,
+      "fanIn": 51,
+      "via": "src/harness/routing/table.ts",
+      "path": [
+        "src/commands/review.ts",
+        "src/harness/routing/table.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/providers.ts",
+      "hop": 1,
+      "fanIn": 42,
+      "via": "src/harness/provider-catalog.ts",
+      "path": [
+        "src/commands/providers.ts",
+        "src/harness/provider-catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 1,
+      "fanIn": 23,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "src/commands/shell.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/commands/routing.ts",
+      "path": [
+        "src/cli-registry.ts",
+        "src/commands/routing.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/routing-classifier-source.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/harness/routing/table.ts",
+      "path": [
+        "src/tui/routing-classifier-source.ts",
+        "src/harness/routing/table.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/routing/classifier-model.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/routing/table.ts",
+      "path": [
+        "src/harness/routing/classifier-model.ts",
+        "src/harness/routing/table.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "fixtures/routing-shell-pty.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "path": [
+        "fixtures/routing-shell-pty.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "scripts/stress/keryx-shell-stress.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "path": [
+        "scripts/stress/keryx-shell-stress.ts",
+        "src/harness/tool/builtin/spawn-subagent-tool.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "src/commands/routing.ts",
+      "path": [
+        "src/cli.ts",
+        "src/cli-registry.ts",
+        "src/commands/routing.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/operator-confirm-review.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/harness/routing/table.ts",
+      "path": [
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/review.ts",
+        "src/harness/routing/table.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/help.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/routing.ts",
+      "path": [
+        "src/commands/help.ts",
+        "src/cli-registry.ts",
+        "src/commands/routing.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/agents/compile.spawn-subagent.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 1, from src/harness/tool/builtin/spawn-subagent-tool.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-orchestrator-log.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 1, from src/harness/tool/builtin/spawn-subagent-tool.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/operator-confirm-rosters.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 1, from src/harness/tool/builtin/spawn-subagent-tool.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/providers.subscription.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {refreshProviderCatalogFromDetected} of src/harness/provider-catalog.ts (hop 1, from src/harness/provider-catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/routing.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/routing.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {routingCommand} of src/commands/routing.ts (hop 1, from src/commands/routing.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {launchTuiAgentShell} of src/tui/tui-shell.ts (hop 1, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/gdskills/model-denylist.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {connectedPredicateFrom} of src/harness/routing/table.ts (hop 1, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/review-remediation-architecture.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 1, from src/harness/tool/builtin/spawn-subagent-tool.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-child-slate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 1, from src/harness/tool/builtin/spawn-subagent-tool.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-codex-tiers.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 1, from src/harness/tool/builtin/spawn-subagent-tool.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-cwd.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 1, from src/harness/tool/builtin/spawn-subagent-tool.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-external-seam.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 1, from src/harness/tool/builtin/spawn-subagent-tool.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-isolation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 1, from src/harness/tool/builtin/spawn-subagent-tool.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-lifecycle.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 1, from src/harness/tool/builtin/spawn-subagent-tool.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-model-tier.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 1, from src/harness/tool/builtin/spawn-subagent-tool.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-native-budget.e2e.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 1, from src/harness/tool/builtin/spawn-subagent-tool.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.hooks.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 1, from src/harness/tool/builtin/spawn-subagent-tool.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.reasoning-guard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 1, from src/harness/tool/builtin/spawn-subagent-tool.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {createSpawnSubagentTool} of src/harness/tool/builtin/spawn-subagent-tool.ts (hop 1, from src/harness/tool/builtin/spawn-subagent-tool.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/routing-classifier-source.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions} of src/harness/routing/table.ts (hop 1, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/import-only.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/providers.cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {providersCommand} of src/commands/providers.ts (hop 2, from src/harness/provider-catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/providers.disconnect.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {providersCommand} of src/commands/providers.ts (hop 2, from src/harness/provider-catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/providers.model-profiles.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {providersCommand} of src/commands/providers.ts (hop 2, from src/harness/provider-catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/providers.status.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {providersCommand} of src/commands/providers.ts (hop 2, from src/harness/provider-catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-ac-check-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-ci-triage-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-comments-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-conform-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-floor-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-comments-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-contract-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-docs-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-profile-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-risk-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-rules-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-scenarios-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-select-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-jev-triage-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-layers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-learn-reviewer-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-parity-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-plan.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-premises-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-required-package.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-slice.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review-tty-refusal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {ShellCommandRuntime, shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 2, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/flow/renumber-reviews.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/flow/review-gate.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/harness/routing/classifier-model.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {selectClassifierModel} of src/harness/routing/classifier-model.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/active-review.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/clean-context.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/cost-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {providersCommand} of src/commands/providers.ts (hop 2, from src/harness/provider-catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/estimate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/jev-risk.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of src/commands/providers.ts (hop 2, from src/harness/provider-catalog.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/loop-real-path.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/pr-comments.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/prior-round.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/review-next.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/review-notes.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/review/second-look.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/review-readiness.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {reviewCommand} of src/commands/review.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/routing-classifier-policy.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runRoutingClassifierForTurn} of src/tui/routing-classifier-source.ts (hop 2, from src/harness/routing/table.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/project-skill-routing.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/routing.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/routing.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/routing-baseline.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/routing.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/routing.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/routing-corpus.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/routing.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/routing.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/routing-entrypoint-lifecycle.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/routing.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/routing.ts: run it, it is not read"
+    },
+    {
+      "file": "src/harness/provider-catalog-cache.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/harness/provider-catalog.ts: run it, it is not read"
+    },
+    {
+      "file": "src/harness/routing/derive-default-table.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.test.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/harness/routing/table.test.ts: run it, it is not read"
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/tui/tui-shell.ts: run it, it is not read"
+    },
+    {
+      "file": "src/harness/routing/model-profile.ts",
+      "hop": 1,
+      "fanIn": 19,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {AvailablePredicate} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/harness/routing/config.ts",
+      "hop": 1,
+      "fanIn": 16,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CategoryAssignment, ROUTING_CATEGORIES, RoutingCategory, RoutingTable, isRoutingCategory} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/harness/routing/trust.ts",
+      "hop": 1,
+      "fanIn": 10,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CategoryAssignment, RoutingTable} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/harness/routing/task-cost.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ROUTING_CATEGORIES, RoutingCategory} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/harness/run-external-factory.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SpawnSubagentToolDeps, StructuredSubagentResult, SubagentMode} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/harness/decision/classifier.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {RoutingCategory} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/lib/model-choice.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CategoryAssignment, RoutingCategory, RoutingTable} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/harness/decision/classify-turn.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {RoutingCategory} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/harness/routing/derive-default-table.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CategoryAssignment, ROUTING_CATEGORIES, RoutingCategory, RoutingTable} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/harness/decision/jev-classifier.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {RoutingCategory} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/tui/external-bridge.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {StructuredSubagentResult} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/tui/external-operator.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {StructuredSubagentResult} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/harness/decision/deterministic-shortcuts.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {RoutingCategory} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/harness/decision/main-model-classifier.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {RoutingCategory} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/harness/routing/child-model-request.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CategoryAssignment} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {TuiSelection, estimateContextTokens, fmtTokens, modelPickerNotice, modelsForPicker, onKeypress, pickModelInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "scripts/routing-classifier-live-check-holdout.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ROUTING_CATEGORIES, RoutingCategory} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "scripts/routing-classifier-live-check.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ROUTING_CATEGORIES, RoutingCategory} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {operatorCardDialog} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/harness/routing/trust.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {RoutingTable} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-backstop.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SUBAGENT_CHILD_RESERVATION_MS, SUBAGENT_HARD_CAP_GRACE_MS, invokeWithBackstop, resolveSubagentHardCapMs} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/lib/external-providers.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ConnectedPredicate, RoutingTable, resolveCategoryDetailed} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/remote/mirror-undelivered.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {withMirrorNote} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/review/harness-robustness.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {recordSaveNote, saveDispatchRecord} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/standard/command-registry.routing-categories.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ROUTING_CATEGORIES} from src/harness/routing/table.ts; changed: {FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions}"
+    },
+    {
+      "file": "src/tui/boot-animation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {onKeypress} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/connect-provider-buttons.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/custom-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {validateOptionalWizardNumber} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/external-antigravity-surfaces.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {StructuredSubagentResult} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/tui/external-operator.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {StructuredSubagentResult} from src/harness/tool/builtin/spawn-subagent-tool.ts; changed: {createSpawnSubagentTool}"
+    },
+    {
+      "file": "src/tui/model-picker-notice.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {modelPickerNotice, pickModelInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/model-session-picker-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {pickModelInTui, pickSessionInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/picker-theme.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/provider-endpoint-retry.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {endpointMayBeAtFault, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {createTuiAgentIo} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/session-picker-acp.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {sessionPickerOptions} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/subscription-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/tui-session-lease.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {freshSlateSessionRef, sessionPickerOptions, startupSessionChoices} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/tui/wizard-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {searchProviderWizardInTui, selectProviderModelInTui} from src/tui/tui-shell.ts; changed: {launchTuiAgentShell}"
+    },
+    {
+      "file": "src/harness/provider/single-turn.ts",
+      "hop": 2,
+      "fanIn": 32,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {OPENAI_COMPAT_PROVIDERS, providerByName} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/select.ts",
+      "hop": 2,
+      "fanIn": 19,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {allOpenAiCompatProviders, fetchOpenAiCompatModels, isProviderPlatformSupported, providerByName, resolveModelsForPicker, resolveProviderBaseUrl} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/harness/provider/make-provider.ts",
+      "hop": 2,
+      "fanIn": 16,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {providerByName, resolveCompatReasoningPreset, resolveProviderBaseUrl} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/trigger-dispatch.ts",
+      "hop": 2,
+      "fanIn": 15,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {providerByName} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/harness.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {OPENAI_COMPAT_PROVIDERS} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/subscription-models.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ModelsResolveResult, OpenAiCompatProvider} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/harness/child/model.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {OPENAI_COMPAT_PROVIDERS, providerByName} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/agents-external.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/commands/routing.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {VERSION} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, ctx, dash, dashboard, doctor, external, gdgraph, modules, orient, permissions, printCommandHelp, projects, providers, routing, serve, setup, skills, status, sync, update, wiki}"
+    },
+    {
+      "file": "src/commands/model-limits.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {DEFAULT_MODELS_PATH, ProviderBalance, balanceCapableProvider, fetchProviderBalance, providerApiKey, providerByName, resolveProviderBaseUrl} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/review-arbiter-config.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {providerByName} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/doctor.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {configuredProviders} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/harness/process/shell-spawn.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {OPENAI_COMPAT_PROVIDERS} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/harness/provider-catalog-cache.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ModelsResolveResult, ProviderBalance} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/harness/routing/provider-default.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {providerByName} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/model-eval-judge.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {providerByName} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/model-eval-runner.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {providerByName} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/lib/narrate.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {providerByName} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/tui/balance-panel.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ProviderBalance, balanceCapableProvider, fetchProviderBalance, providerApiKey, resolveProviderBaseUrl} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/acp.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {resolveModelsForPicker, resolveProviderModelParamsByName} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/acp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {resolveTuiStartup} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {busLeasesFromClient} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/approvals.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/routing.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {groupUsage} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, ctx, dash, dashboard, doctor, external, gdgraph, modules, orient, permissions, printCommandHelp, projects, providers, routing, serve, setup, skills, status, sync, update, wiki}"
+    },
+    {
+      "file": "src/commands/harness-namespace-pin.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {OPENAI_COMPAT_PROVIDERS} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/help-grouped.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellDeps, ShellIO, readlineAgentHelpText, runShell} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/permissions-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/routing.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {groupUsage} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, ctx, dash, dashboard, doctor, external, gdgraph, modules, orient, permissions, printCommandHelp, projects, providers, routing, serve, setup, skills, status, sync, update, wiki}"
+    },
+    {
+      "file": "src/commands/providers.balance.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {balanceCapableProvider, fetchProviderBalance, providerApiKey} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/providers.custom.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {allOpenAiCompatProviders, customCompatProviders} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/providers.models-failure.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ModelsFailure, OpenAiCompatProvider, fetchOpenAiCompatModelsDetailed, modelsErrorDetail, modelsFailureLine, resolveModelsForPicker} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/providers.reasoning-preset.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {resolveCompatReasoningPreset} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/providers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {OPENAI_COMPAT_PROVIDERS, fetchOpenAiCompatModels, fetchOpenAiCompatModelsDetailed, isProviderPlatformSupported, providerBaseUrlEnvKey, providerByName, resolveModelsForPicker, resolveProviderBaseUrl, resolveProviderModelParams, resolveProviderModelParamsByName} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/commands/review-help.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {COMMENTS_COLLECT_FLAGS, COMMENTS_REPLY_FLAGS, CREATE_FLAGS, DEFAULT_GRAPH_TIMEOUT_SECONDS, VERDICT_FLAGS, printReviewHelpFor} from src/commands/review.ts; changed: {reviewCommand}"
+    },
+    {
+      "file": "src/commands/review-plan.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {printReviewHelpFor} from src/commands/review.ts; changed: {reviewCommand}"
+    },
+    {
+      "file": "src/commands/review-pr-base.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {prBaseRef} from src/commands/review.ts; changed: {reviewCommand}"
+    },
+    {
+      "file": "src/commands/review-slice-paths.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/routing/table.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ESTIMATE_FLAGS, REQUIRED_FLAGS, VERDICT_FLAGS} from src/commands/review.ts; changed: {reviewCommand}"
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellIO} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-agent-repl.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {busLeasesFromClient, readlineAgentHelpText, runAgentRepl} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-chat-preservation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runShell} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-preservation-signal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SignalShutdownParts, makeSignalShutdown} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellDeps, ShellIO, readlineAgentHelpText, runAgentRepl, runShell} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-starting-line.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {chooseShellSurface, parseShellCliFlags} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/shell-subscription-selection.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runShell} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/commands/skills-references.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/routing.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {knownSubcommandsFor} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, ctx, dash, dashboard, doctor, external, gdgraph, modules, orient, permissions, printCommandHelp, projects, providers, routing, serve, setup, skills, status, sync, update, wiki}"
+    },
+    {
+      "file": "src/commands/skills-remove.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/routing.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {knownSubcommandsFor} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, ctx, dash, dashboard, doctor, external, gdgraph, modules, orient, permissions, printCommandHelp, projects, providers, routing, serve, setup, skills, status, sync, update, wiki}"
+    },
+    {
+      "file": "src/harness/child/model.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {OPENAI_COMPAT_PROVIDERS} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/harness/provider/make-provider-disconnect.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {disconnectProvider} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/harness/provider/make-provider-label.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {providerByName} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/harness/provider/make-provider.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {providerByName} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/lib/oauth/openai-subscription.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {classifyProviderConnection, disconnectProvider} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/lib/provider-config.cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {configuredProviders, renderCrossFamilyDecision} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/review/review-system.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {parseShellCliFlags} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    },
+    {
+      "file": "src/tui/balance-panel.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider-catalog.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ProviderBalance} from src/commands/providers.ts; changed: {providersCommand}"
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellDeps, ShellIO, runShell} from src/commands/shell.ts; changed: {ShellCommandRuntime, shellCommand}"
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/description.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/resolved/T5.test.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/resolved/T6.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/results/T5.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/results/T6.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/468-2026-10-20-shell-tui-setup-sidebar-routing/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 22,
+    "changedFilesResolved": 10,
+    "changedFilesUnresolved": 12,
+    "candidates": 95,
+    "retained": 11,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "droppedUnrelatedSymbol": 91,
+    "droppedHubDamped": 0,
+    "droppedTextHub": 0,
+    "droppedTestConsumer": 84,
+    "textLinksAdded": 0,
+    "relatedTestsAdded": 7,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 8,
+      "2": 3
+    }
+  },
+  "graph": {
+    "nodes": 3269,
+    "edges": 11729
+  },
+  "reach": {
+    "mode": "symbol",
+    "seeds": [
+      {
+        "file": "src/commands/routing.ts",
+        "names": [
+          "routingCommand"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: routingCommand"
+      },
+      {
+        "file": "src/harness/provider-catalog.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/harness/provider-catalog.ts",
+        "names": [
+          "ProviderCatalogDeps",
+          "catalogToFlatPickerProviders",
+          "loadOrRefreshProviderCatalog",
+          "loadOrRefreshProviderCatalogFromDetected",
+          "refreshProviderCatalog",
+          "refreshProviderCatalogFromDetected"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: ProviderCatalogDeps, catalogToFlatPickerProviders, loadOrRefreshProviderCatalog, loadOrRefreshProviderCatalogFromDetected, refreshProviderCatalog, refreshProviderCatalogFromDetected"
+      },
+      {
+        "file": "src/harness/routing/table.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/harness/routing/table.ts",
+        "names": [
+          "FlatPickerProvider",
+          "SessionModelRef",
+          "connectedPredicateFrom",
+          "describeNotConnectedReason",
+          "describeRejectionNotice",
+          "flatModelOptions"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: FlatPickerProvider, SessionModelRef, connectedPredicateFrom, describeNotConnectedReason, describeRejectionNotice, flatModelOptions"
+      },
+      {
+        "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+        "names": [
+          "createSpawnSubagentTool"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: createSpawnSubagentTool"
+      },
+      {
+        "file": "src/tui/provider-catalog-startup.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/tui/routing-inspector.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/tui/routing-inspector.ts",
+        "names": [
+          "ROUTING_PROVIDERS_TIMEOUT_MS",
+          "RoutingModalOptions",
+          "formatRoutingListLines",
+          "loadRoutingProviders",
+          "modelTabNotes",
+          "openRouting"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: ROUTING_PROVIDERS_TIMEOUT_MS, RoutingModalOptions, formatRoutingListLines, loadRoutingProviders, modelTabNotes, openRouting"
+      },
+      {
+        "file": "src/tui/tui-shell.ts",
+        "names": [
+          "launchTuiAgentShell"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: launchTuiAgentShell"
+      }
+    ],
+    "barrels": [],
+    "textKeys": 0,
+    "textHubs": [],
+    "textSkipped": 0
+  },
+  "testsToRun": [
+    {
+      "file": "src/agents/compile.spawn-subagent.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts"
+    },
+    {
+      "file": "src/cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/agent-orchestrator-log.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts"
+    },
+    {
+      "file": "src/commands/import-only.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/operator-confirm-rosters.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts"
+    },
+    {
+      "file": "src/commands/project-skill-routing.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/routing.ts"
+    },
+    {
+      "file": "src/commands/providers.cross-family.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "providersCommand"
+      ],
+      "via": "src/harness/provider-catalog.ts"
+    },
+    {
+      "file": "src/commands/providers.disconnect.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "providersCommand"
+      ],
+      "via": "src/harness/provider-catalog.ts"
+    },
+    {
+      "file": "src/commands/providers.model-profiles.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "providersCommand"
+      ],
+      "via": "src/harness/provider-catalog.ts"
+    },
+    {
+      "file": "src/commands/providers.status.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "providersCommand"
+      ],
+      "via": "src/harness/provider-catalog.ts"
+    },
+    {
+      "file": "src/commands/providers.subscription.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "refreshProviderCatalogFromDetected"
+      ],
+      "via": "src/harness/provider-catalog.ts"
+    },
+    {
+      "file": "src/commands/review-ac-check-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-ci-triage-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-comments-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-conform-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-floor-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-jev-comments-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-jev-contract-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-jev-docs-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-jev-profile-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-jev-risk-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-jev-rules-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-jev-scenarios-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-jev-select-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-jev-triage-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-layers.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-learn-reviewer-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-parity-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-plan.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-premises-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-required-package.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-slice.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review-tty-refusal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/commands/routing-baseline.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/routing.ts"
+    },
+    {
+      "file": "src/commands/routing-corpus.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/routing.ts"
+    },
+    {
+      "file": "src/commands/routing-entrypoint-lifecycle.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/routing.ts"
+    },
+    {
+      "file": "src/commands/routing.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "routingCommand"
+      ],
+      "via": "src/commands/routing.ts"
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "ShellCommandRuntime",
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "launchTuiAgentShell"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/flow/renumber-reviews.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/flow/review-gate.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/gdskills/model-denylist.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "connectedPredicateFrom"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/harness/provider-catalog-cache.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/harness/provider-catalog.ts"
+    },
+    {
+      "file": "src/harness/routing/classifier-model.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "selectClassifierModel"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/harness/routing/derive-default-table.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/harness/routing/table.test.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/review-remediation-architecture.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-child-slate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-codex-tiers.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-cwd.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-external-seam.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-isolation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-lifecycle.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-model-tier.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-native-budget.e2e.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.hooks.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.reasoning-guard.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts"
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "createSpawnSubagentTool"
+      ],
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts"
+    },
+    {
+      "file": "src/review/active-review.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/review/clean-context.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/review/cost-cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/review/cross-family.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "providersCommand"
+      ],
+      "via": "src/harness/provider-catalog.ts"
+    },
+    {
+      "file": "src/review/estimate.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/review/jev-risk.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "src/harness/provider-catalog.ts"
+    },
+    {
+      "file": "src/review/loop-real-path.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/review/pr-comments.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/review/prior-round.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/review/publish.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/review/review-next.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/review/review-notes.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/review/round-split.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/review/second-look.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/tui/review-readiness.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "reviewCommand"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/tui/routing-classifier-policy.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runRoutingClassifierForTurn"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/tui/routing-classifier-source.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "FlatPickerProvider",
+        "SessionModelRef",
+        "connectedPredicateFrom",
+        "describeNotConnectedReason",
+        "describeRejectionNotice",
+        "flatModelOptions"
+      ],
+      "via": "src/harness/routing/table.ts"
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/tui/tui-shell.ts"
+    }
+  ],
+  "testCommand": "bun test"
+}

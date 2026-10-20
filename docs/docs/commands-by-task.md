@@ -19,7 +19,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 |---|---|
 | `/help` | Show available commands, grouped by task. |
 | `/doctor` | Same one-page health check, inside the session. |
-| `/setup` | Same preparation guide, inside the session — prints steps, runs nothing. |
+| `/setup` | Same preparation guide, inside the session — copy the agent prompt, or let keryx run the steps as background jobs after you confirm. |
 
 ## Connect a model provider
 
