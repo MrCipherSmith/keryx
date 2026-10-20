@@ -1,0 +1,47 @@
+# Acceptance Criteria
+
+Rules:
+
+- Criteria lines use the exact format `- ACn: <criterion>`.
+- Every criterion ends with [verify: exec `<command>`],
+  [verify: invariant `<command>`], [verify: judged] or
+  [verify: none — <reason>].
+- After `flow freeze` this file is checksum-protected: any edit outside
+  `keryx flow ac update` fails every gate and status transition.
+- Completion requires every ACn to be confirmed via
+  `keryx flow ac confirm <id> <ACn>`.
+
+Scope (operator, 2026-10-20): three PRs in sequence — A `/routing`, B `/setup`, C sidebar. Verification is manual testing by the operator (the `judged` criteria, which the agent does not confirm); the `exec` criteria are the regression guards that let the manual checks find working code.
+
+## Criteria
+
+### A — `/routing`
+
+- AC1: A shell that starts with a saved provider and model (or `--provider/--model`), so startup `detected` is empty, still refreshes the provider catalog from a real detection. The saved catalog holds every provider that has a stored grant or key. Reproduction: today it saves `{providers: {}}`. [verify: exec `bun test src/harness/provider-catalog.test.ts src/tui/provider-catalog-startup.test.ts -t AC1`]
+- AC2: Failure scenario: a catalog with zero providers is never served as fresh from the cache and is never saved as fresh. A fresh-but-empty cache file on disk triggers a refresh. [verify: exec `bun test src/harness/provider-catalog.test.ts src/harness/provider-catalog-cache.test.ts -t AC2` · sensitive: failure-scenario]
+- AC3: The `/routing` Model tab lists every connected provider with its models. The provider and model the session runs on are always listed and labelled `(current session)`, even when the catalog lacks them, and routing resolution treats that provider as connected. Enter saves the pick to the user layer, and the Categories tab shows it. [verify: exec `bun test src/tui/routing-inspector.test.ts src/harness/routing/table.test.ts -t AC3`]
+- AC4: Failure scenario: each failure shows its own visible text, never a silent list that holds only "session default": no provider connected (with a `/connect` hint); catalog unavailable or timed out (with its reason, offline list tagged); a provider whose auth failed, or one with 0 models. A category whose assignment falls back says why: "provider list unavailable", "provider not connected" or "model not in <provider>'s list". If loading the providers rejects or hangs, the modal leaves "Reading routing table…" within the timeout. [verify: exec `bun test src/tui/routing-inspector.test.ts -t AC4` · sensitive: failure-scenario]
+- AC5: (operator-only) On the branch build in a throwaway project, the operator opens `/routing`, sees openai-codex and the other connected providers with their models, picks a model for `coding`, and sees the category show it after reopening. The agent does not confirm this criterion. [verify: judged]
+
+### B — `/setup`
+
+- AC6: `/setup` with no argument opens the tab that fits the project: Init when there is no `.metaproject/index.md`, Refresh for a complete workspace, Repair for a partial one. An explicit `/setup <scenario>` still wins. [verify: exec `bun test src/commands/setup-guide.test.ts src/tui/setup-modal.test.ts -t AC6`]
+- AC7: Every tab lists every step as exactly one `keryx …` command, with a `[required]`/`[optional]` mark and a reason, matching the step lists in `plan.md` (each command and flag exists per its `--help`). `keryx setup <scenario>` prints the same marks and reasons. [verify: exec `bun test src/commands/setup-guide.test.ts -t AC7`]
+- AC8: Under the plan, the modal shows an agent prompt generated from that tab's steps. It holds the project root and an instruction to read `.metaproject/index.md` first; the REQUIRED and OPTIONAL lists; the stop rules (stop at the first failed required step, stop and ask on an update divergence); and the prohibitions (no deletion, no extra `--force`, no commit or push). The Copy button and `c` copy it through OSC 52 and show "Copied to clipboard". The Optional toggle (`o`) adds or removes the optional steps in both the list and the prompt. [verify: exec `bun test src/commands/setup-guide.test.ts src/tui/setup-modal.test.ts -t AC8`]
+- AC9: The modal is readable and complete: titles bold, commands in the accent colour, required and optional visibly distinct, and no `dimChunk` over the whole body; the body scrolls to its last line at any terminal height (no fixed 24-row window) and uses the modal's width; the keys hint appears once. [verify: exec `bun test src/tui/setup-modal.test.ts -t AC9`]
+- AC10: Run (button on the right, or `r`) opens a confirmation card naming the scenario, the steps that will run and the agent. On yes, the external agent starts with the generated prompt in the project root, appears in the fleet, and the composer stays usable; its report lands in the transcript. On no, nothing starts. With no external agent configured or allowed, the card says so and offers the session's main agent instead; the run never falls back silently. [verify: exec `bun test src/tui/setup-modal.test.ts src/commands/shell.test.ts -t AC10`]
+- AC11: (operator-only) On the branch build in a throwaway project that already has a `.metaproject/`, the operator opens `/setup`, lands on Refresh, reads the plan without squinting, copies the prompt, presses Run, and the external agent completes the required steps. The agent does not confirm this criterion. [verify: judged]
+
+### C — sidebar
+
+- AC12: The sidebar shows seven cards in this order: Session, Workspace, Work, Reviews, Ops, Policy, Remote. At default width each card is 3 to 5 lines. Every value that a former section showed is reachable from its card's detail modal, so nothing is lost; this is checked per former section. [verify: exec `bun test src/tui/sidebar-cards.test.ts -t AC12`]
+- AC13: Clicking a card opens its detail modal, with one tab per former section, reusing the existing inspectors. The Policy card's Route tab reaches `/routing`. In wide mode on a 100-column terminal the modal is at least 72 columns wide, not squeezed to the transcript column. [verify: exec `bun test src/tui/sidebar-cards.test.ts src/tui/modal-host.test.ts -t AC13`]
+- AC14: Three icon buttons next to "keryx vX.Y.Z", in a header pinned above the scroll area that keeps the id `sb-title`, switch between default (today's 34 columns), wide (twice that, capped at half the terminal) and rail (a thin strip with one icon and badge per card). The active button is highlighted. A keyboard shortcut cycles the modes and does nothing while a modal owns the keyboard. Each icon has a single-cell display width and an ASCII fallback. [verify: exec `bun test src/tui/shell-chrome.test.ts src/tui/sidebar-geometry.test.ts -t AC14`]
+- AC15: Failure scenario: the chosen mode survives a restart through `~/.keryx/tui.json`. `/theme` no longer erases it, and a mode change no longer erases the theme. An unknown or corrupt value starts in default mode without an error. [verify: exec `bun test src/tui/sidebar-geometry.test.ts src/tui/theme.test.ts -t AC15` · sensitive: failure-scenario]
+- AC16: Resizing the terminal re-clamps the width. Wide mode below the width threshold shows default and returns to wide when there is room again. At 80×24 in default mode the Session card, the Work card and the toast stay visible. [verify: exec `bun test src/tui/sidebar-geometry.test.ts src/commands/shell-pty-launch.smoke.test.ts -t AC16`]
+- AC17: A theme switch recolours the pinned header, every card and the rail glyphs. A pending approval, a hold, an available version update and a not-ready review each raise their card's severity and show a badge, in all three modes, without opening anything. [verify: exec `bun test src/tui/sidebar-cards.test.ts src/tui/shell-chrome.test.ts -t AC17`]
+- AC18: (operator-only) On a laptop screen with the branch build, the operator sees the default mode without scrolling in a typical session, switches to wide and rail with the header buttons, opens a few cards' modals, and finds them good-looking and complete. The agent does not confirm this criterion. [verify: judged]
+
+### Final
+
+- AC19: (operator-only) After the PR C release, in vantage-frontend with keryx installed from npm (`keryx --version` shows the release), the operator runs `/setup` → Refresh → Run, uses the three sidebar modes, and picks a model in `/routing` that a following `coding` subagent then uses. The agent does not confirm this criterion. [verify: judged]

@@ -1,0 +1,530 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "468",
+  "slug": "shell-tui-setup-sidebar-routing",
+  "title": "Shell TUI: runnable /setup plan, compact card sidebar with three widths, working /routing model picker",
+  "status": "in-progress",
+  "createdAt": "2026-10-20T07:58:41.266Z",
+  "updatedAt": "2026-10-20T08:16:59.602Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:543e91026951ef4bdb99a54a0be3c6905e2684f1b4154492383099c0a1ad2ab6",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "origin": {
+    "kind": "human-request",
+    "quote": "Я прикрепил скриншоты с багами в keryx shell tui. Создай flow , изучи проблемы, подготовь план. Проверка - ручное тестирование, эффект - удобное обновление metaproject в проекте, удобый сайдбар, а так же роутинг должен работать.",
+    "source": "claude-code desktop chat, 2026-10-20, message with 5 screenshots"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the per-phase implement tasks (routing, setup, sidebar) added after the investigation"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the per-phase test tasks written red-first for each PR"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the per-phase review-and-merge tasks, one per PR"
+    },
+    {
+      "id": "T5",
+      "title": "A routing: red tests for the empty startup catalog, cache hygiene and every /routing visible state",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "A routing: startup detection, zero-provider cache rule, current-session row, visible fallback reasons, docs",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "A routing: operator manual check on the branch build in a throwaway project (pick persists globally)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "A routing: PR 1 review rounds, merge into main, release",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "B setup: red tests for step model, detection, generated prompt, readable scrolling modal, copy and Run",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "B setup: step model with required/optional, full step lists, scenario detection, generated agent prompt, CLI output",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "B setup: modal layout, contrast, scroll, Copy/Optional/Run buttons, Run through external agent with main-agent fallback, docs",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "B setup: operator manual check in a throwaway project (Refresh tab, copy prompt, Run to completion)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "B setup: PR 2 review rounds, merge into main, release",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "C sidebar: red tests for card projection, mode geometry, tui.json merge, header buttons, wide-mode modal width",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "C sidebar: geometry store, pinned header with three mode buttons and shortcut, persistence, width plumbing, modal sizing",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T16",
+      "title": "C sidebar: seven cards with detail modals, attention badges, rail glyphs, theme repaint, docs",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T15"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T17",
+      "title": "C sidebar: run the 80x24 pty smoke locally and the operator manual check of all three modes on a laptop screen",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T16"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T18",
+      "title": "C sidebar: PR 3 review rounds, merge into main, release",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T17"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T19",
+      "title": "Final: operator check in vantage-frontend on the released npm keryx (setup Refresh run, sidebar modes, routing pick)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T18"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-20T07:58:41.266Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-20T08:12:40.566Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-20T08:12:41.323Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-20T08:12:42.135Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-20T08:12:42.946Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-20T08:12:46.279Z",
+      "event": "task-added",
+      "detail": "T5: A routing: red tests for the empty startup catalog, cache hygiene and every /routing visible state"
+    },
+    {
+      "at": "2026-10-20T08:12:49.686Z",
+      "event": "task-added",
+      "detail": "T6: A routing: startup detection, zero-provider cache rule, current-session row, visible fallback reasons, docs"
+    },
+    {
+      "at": "2026-10-20T08:12:53.085Z",
+      "event": "task-added",
+      "detail": "T7: A routing: operator manual check on the branch build in a throwaway project (pick persists globally)"
+    },
+    {
+      "at": "2026-10-20T08:12:56.545Z",
+      "event": "task-added",
+      "detail": "T8: A routing: PR 1 review rounds, merge into main, release"
+    },
+    {
+      "at": "2026-10-20T08:13:00.195Z",
+      "event": "task-added",
+      "detail": "T9: B setup: red tests for step model, detection, generated prompt, readable scrolling modal, copy and Run"
+    },
+    {
+      "at": "2026-10-20T08:13:03.553Z",
+      "event": "task-added",
+      "detail": "T10: B setup: step model with required/optional, full step lists, scenario detection, generated agent prompt, CLI output"
+    },
+    {
+      "at": "2026-10-20T08:13:07.206Z",
+      "event": "task-added",
+      "detail": "T11: B setup: modal layout, contrast, scroll, Copy/Optional/Run buttons, Run through external agent with main-agent fallback, docs"
+    },
+    {
+      "at": "2026-10-20T08:13:10.666Z",
+      "event": "task-added",
+      "detail": "T12: B setup: operator manual check in a throwaway project (Refresh tab, copy prompt, Run to completion)"
+    },
+    {
+      "at": "2026-10-20T08:13:13.903Z",
+      "event": "task-added",
+      "detail": "T13: B setup: PR 2 review rounds, merge into main, release"
+    },
+    {
+      "at": "2026-10-20T08:13:17.857Z",
+      "event": "task-added",
+      "detail": "T14: C sidebar: red tests for card projection, mode geometry, tui.json merge, header buttons, wide-mode modal width"
+    },
+    {
+      "at": "2026-10-20T08:13:21.348Z",
+      "event": "task-added",
+      "detail": "T15: C sidebar: geometry store, pinned header with three mode buttons and shortcut, persistence, width plumbing, modal sizing"
+    },
+    {
+      "at": "2026-10-20T08:13:24.770Z",
+      "event": "task-added",
+      "detail": "T16: C sidebar: seven cards with detail modals, attention badges, rail glyphs, theme repaint, docs"
+    },
+    {
+      "at": "2026-10-20T08:13:28.788Z",
+      "event": "task-added",
+      "detail": "T17: C sidebar: run the 80x24 pty smoke locally and the operator manual check of all three modes on a laptop screen"
+    },
+    {
+      "at": "2026-10-20T08:13:32.157Z",
+      "event": "task-added",
+      "detail": "T18: C sidebar: PR 3 review rounds, merge into main, release"
+    },
+    {
+      "at": "2026-10-20T08:13:35.604Z",
+      "event": "task-added",
+      "detail": "T19: Final: operator check in vantage-frontend on the released npm keryx (setup Refresh run, sidebar modes, routing pick)"
+    },
+    {
+      "at": "2026-10-20T08:16:54.973Z",
+      "event": "frozen",
+      "detail": "19 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-20T08:16:59.602Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/harness/provider-catalog.test.ts src/tui/provider-catalog-startup.test.ts -t AC1"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/harness/provider-catalog.test.ts src/harness/provider-catalog-cache.test.ts -t AC2",
+      "sensitivity": "failure-scenario"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/tui/routing-inspector.test.ts src/harness/routing/table.test.ts -t AC3"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/tui/routing-inspector.test.ts -t AC4",
+      "sensitivity": "failure-scenario"
+    },
+    "AC5": {
+      "kind": "judged"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/commands/setup-guide.test.ts src/tui/setup-modal.test.ts -t AC6"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/commands/setup-guide.test.ts -t AC7"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/commands/setup-guide.test.ts src/tui/setup-modal.test.ts -t AC8"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/tui/setup-modal.test.ts -t AC9"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/tui/setup-modal.test.ts src/commands/shell.test.ts -t AC10"
+    },
+    "AC11": {
+      "kind": "judged"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "bun test src/tui/sidebar-cards.test.ts -t AC12"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "bun test src/tui/sidebar-cards.test.ts src/tui/modal-host.test.ts -t AC13"
+    },
+    "AC14": {
+      "kind": "exec",
+      "check": "bun test src/tui/shell-chrome.test.ts src/tui/sidebar-geometry.test.ts -t AC14"
+    },
+    "AC15": {
+      "kind": "exec",
+      "check": "bun test src/tui/sidebar-geometry.test.ts src/tui/theme.test.ts -t AC15",
+      "sensitivity": "failure-scenario"
+    },
+    "AC16": {
+      "kind": "exec",
+      "check": "bun test src/tui/sidebar-geometry.test.ts src/commands/shell-pty-launch.smoke.test.ts -t AC16"
+    },
+    "AC17": {
+      "kind": "exec",
+      "check": "bun test src/tui/sidebar-cards.test.ts src/tui/shell-chrome.test.ts -t AC17"
+    },
+    "AC18": {
+      "kind": "judged"
+    },
+    "AC19": {
+      "kind": "judged"
+    }
+  }
+}
