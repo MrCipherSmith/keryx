@@ -42,3 +42,4 @@
 - 2026-10-19T22:51:40.964Z - ac-confirmed: AC10: Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-19T22:51:41.521Z - task-done: T10: Review through the project review orchestrator and open the PR
 - 2026-10-19T22:51:46.732Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1058 (warning: PR is not a draft)
+- 2026-10-20T04:00:19.607Z - ac-confirmed: AC11: C-05, C-10 (package 1052), E-42 (r04) and C-25 (re-asked, poll 231) recorded through decide-premise with --answered-by helyx-poll; operator words verbatim, confirmedVia host-question (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])

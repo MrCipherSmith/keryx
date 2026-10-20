@@ -11,7 +11,7 @@
   "title": "Operator acts answered by the host's own question",
   "status": "implemented",
   "createdAt": "2026-10-19T19:21:21.871Z",
-  "updatedAt": "2026-10-19T22:51:46.732Z",
+  "updatedAt": "2026-10-20T04:00:19.607Z",
   "source": {
     "type": "description",
     "ref": null
@@ -57,6 +57,10 @@
     "AC10": {
       "at": "2026-10-19T22:51:40.964Z",
       "note": "Covered by src/commands/review-host-question.test.ts (73 tests, mutation pass 70/72 killed, 2 equivalent), src/trigger, src/decisions, gdskills and docs tests green locally; review round P (PR 1058) fixed HQ-01..HQ-16; CI on PR 1058."
+    },
+    "AC11": {
+      "at": "2026-10-20T04:00:19.606Z",
+      "note": "C-05, C-10 (package 1052), E-42 (r04) and C-25 (re-asked, poll 231) recorded through decide-premise with --answered-by helyx-poll; operator words verbatim, confirmedVia host-question"
     }
   },
   "pr": {
@@ -428,6 +432,11 @@
       "at": "2026-10-19T22:51:46.732Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1058 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-20T04:00:19.607Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: C-05, C-10 (package 1052), E-42 (r04) and C-25 (re-asked, poll 231) recorded through decide-premise with --answered-by helyx-poll; operator words verbatim, confirmedVia host-question (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     }
   ],
   "origin": {
@@ -593,6 +602,17 @@
         "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
       },
       "criterion": "AC10",
+      "acChecksum": "sha256:39cb551785f9c5785d8431a2ecd503cc7c75e2ba29511c48b83ee21ef21a6f7f"
+    },
+    {
+      "at": "2026-10-20T04:00:19.606Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
       "acChecksum": "sha256:39cb551785f9c5785d8431a2ecd503cc7c75e2ba29511c48b83ee21ef21a6f7f"
     }
   ]

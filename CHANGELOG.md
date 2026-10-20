@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.3.125] - 2026-10-20
+
+### Operator acts answered through the host's own question
+
+- **Added:** `--answered-by <source>:<ref> --answer-text "<verbatim>" --question-text "<as asked>"` on `review decide-premise`, `confirm-plan`, `waive-mutation` and `override-reviewers` records the operator's answer to a plain question asked through the host (Claude Code, Codex, a Telegram poll) without a TTY. The record carries `confirmedVia: "host-question"` with both texts; keryx does not verify the answer. `review complete` stays with the operator (terminal or card).
+- **Added:** the verb refuses words that name the other choice or none, a decline or negation, a question that does not name its finding, unrun mutants or left-out reviewers, a repeated host question, an unattended run and `KERYX_TOOL_CALL=1`. The unattended shell floor treats these flags as host-question verbs.
+- **Changed:** host-question entries are a separate labelled kind in `keryx decisions` (`N decisions + M via host`), not counted as live decisions and not exported as rows.
+- **Docs:** TM-04, `cli-reference.md`, the review guides and the review-orchestrator, flow-orchestrator and job-orchestrator skills describe the verb and its limits.
+
 ## [0.3.124] - 2026-10-19
 
 ### Review confirmations answered in Telegram
