@@ -130,4 +130,25 @@
 - T11 is being reworked to the model-free step runner.
 - T11 reworked and verified by the main session: 272 tests pass across the nine phase B files, `tsc` and eslint clean on the touched files. Result: `results/T10-T11.json`.
 - Operator answers to the two T11 behavior changes (question tool): per-step idle timeout «30 минут (Recommended)», the longest the job registry allows; Run wording (card, transcript lines, toasts, divergence reason) «Принять как есть (Recommended)».
+- PR 2 opened: https://github.com/MrCipherSmith/keryx/pull/1068 (branch `feat/flow-468-b-setup`). It merges once CI is green; there is no release.
+
+### Phase C started, stacked on phase B (2026-10-20)
+
+- Branch `feat/flow-468-c-sidebar` is cut from `feat/flow-468-b-setup` (279843d61), not from main, so T14 and T25 run while PR 1068's CI runs. PRs merge with merge commits, so once #1068 lands the branch sits on main with no rewrite. T14 and T25 nominally depend on T13 (the PR 2 merge). The stacking is the reason they start before it.
+- T25 done: 20 red tests (AC20, AC21), red for the right reasons; the 69 tests that were already in those three files still pass. The main session validated the result contract after renaming the test ids to the `test-N` pattern. Operator answers (question tool):
+  - busy footer «Как предложено (Recommended)»: `Esc interrupt · Enter queue · / commands · ↑1.2K ↓420 $0.50 · ctx 42% · jobs 1`, cost with two decimals; the test now pins `$0.50`;
+  - a Duration row in the Background Jobs Meta tab «Добавить (Recommended)».
+- T14 done (DONE_WITH_CONCERNS): 43 new sidebar tests plus additions to `modal-host.test.ts`, `theme.test.ts` and the pty smoke. The flow 468 KNOWN_MISSING entry is removed from `verify-exec-files.test.ts`. 36 tests pass and 47 are red across the five unit files, each for its expected reason: a missing module, a 32-col modal, or `persistThemeId` overwriting. The main session added the schema ids to the result. Operator answers (question tool), each the implemented choice:
+  - shortcut «Ctrl+L (Recommended)»;
+  - wide threshold «100 колонок (Recommended)»;
+  - the Tools row on the Policy card «Policy (Recommended)»;
+  - an update raises Session and a not-ready review raises Reviews «Session и Reviews (Recommended)».
+- Concerns carried to T15/T16:
+  - the chrome-level tests are red only on the missing module, so their harness assumptions (span offsets, `pressKey("l", {ctrl:true})`, `h.resize`, button-position clicks) are unproven until T15;
+  - `shell-pty-launch.smoke.test.ts` still asserts the old labels Context/Tools/Status/Ready in two existing tests (`TUI_ONLY_LABELS`, the flow 300 80×24 test), which T16 must update;
+  - the 80×24 smoke relies on the first Ctrl+C raising the exit toast.
+- T14 (sidebar red tests) and T25 (busy footer and duration formatter red tests) are dispatched in parallel. Their test files do not overlap: T25 owns `shell-chrome.test.ts`, `subagent-session.test.ts` and `background-job-inspector.test.ts`. T14 puts its AC14 and AC17 tests in the new `sidebar-geometry.test.ts` and `sidebar-cards.test.ts`.
 - 2026-10-20T17:33:26.068Z - task-done: T11: B setup: modal layout, contrast, scroll, Copy/Optional/Run buttons, Run through external agent with main-agent fallback, docs
+- 2026-10-20T17:37:10.616Z - task-attempt: T14: started (attempt 1) — 468-T14 tests-creator dispatch (sonnet), phase C sidebar, stacked on feat/flow-468-b-setup while PR 1068 CI runs
+- 2026-10-20T17:37:11.435Z - task-attempt: T25: started (attempt 1) — 468-T25 tests-creator dispatch (sonnet), phase C chrome, stacked on feat/flow-468-b-setup while PR 1068 CI runs
+- 2026-10-20T17:51:11.552Z - task-done: T25: C chrome: red tests for the busy footer (one waiting line, useful footer bar) and the one compact duration formatter

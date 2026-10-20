@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
@@ -163,6 +163,57 @@ test("persist and load round-trip through tui.json", async () => {
     expect(loadPersistedThemeId(dir)).toBe("tokyonight");
     persistThemeId("auto", dir);
     expect(loadPersistedThemeId(dir)).toBe("auto");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// Flow 468 AC15 (phase C): tui.json holds the theme AND the sidebar mode. The file is read-merge-
+// written, so a /theme no longer erases the sidebar mode (and, in sidebar-geometry.test.ts, a mode
+// change no longer erases the theme). These tests write the file by hand so they do not depend on
+// the new sidebar module; every path is a temp dir.
+test("flow 468 AC15: persisting a theme keeps the saved sidebar mode and every other key in tui.json", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "keryx-theme-merge-"));
+  try {
+    await writeFile(
+      join(dir, "tui.json"),
+      JSON.stringify({ theme: "groknight", sidebar: "rail", future: { a: 1 } }),
+      "utf8",
+    );
+    persistThemeId("tokyonight", dir);
+    const saved = JSON.parse(await readFile(join(dir, "tui.json"), "utf8")) as Record<string, unknown>;
+    expect(saved).toEqual({ theme: "tokyonight", sidebar: "rail", future: { a: 1 } });
+    expect(loadPersistedThemeId(dir)).toBe("tokyonight");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("flow 468 AC15: persisting a theme over a missing or corrupt tui.json still writes a valid file with the theme", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "keryx-theme-merge-"));
+  try {
+    persistThemeId("auto", dir);
+    expect(JSON.parse(await readFile(join(dir, "tui.json"), "utf8"))).toEqual({ theme: "auto" });
+    for (const corrupt of ["{not json", "[]", "null", ""]) {
+      await writeFile(join(dir, "tui.json"), corrupt, "utf8");
+      expect(() => persistThemeId("tokyonight", dir), corrupt).not.toThrow();
+      const saved = JSON.parse(await readFile(join(dir, "tui.json"), "utf8")) as Record<string, unknown>;
+      expect(saved.theme, corrupt).toBe("tokyonight");
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("flow 468 AC15: a saved sidebar mode does not disturb loading the theme", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "keryx-theme-merge-"));
+  try {
+    await writeFile(join(dir, "tui.json"), JSON.stringify({ sidebar: "wide" }), "utf8");
+    expect(loadPersistedThemeId(dir)).toBe(DEFAULT_THEME_ID);
+    persistThemeId("tokyonight", dir);
+    expect(loadPersistedThemeId(dir)).toBe("tokyonight");
+    const saved = JSON.parse(await readFile(join(dir, "tui.json"), "utf8")) as Record<string, unknown>;
+    expect(saved.sidebar).toBe("wide");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

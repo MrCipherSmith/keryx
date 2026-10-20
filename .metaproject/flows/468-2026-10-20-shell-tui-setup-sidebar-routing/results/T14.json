@@ -1,0 +1,285 @@
+{
+  "task_id": "T14",
+  "dispatch_id": "468-T14",
+  "status": "DONE_WITH_CONCERNS",
+  "files_created": [
+    "src/tui/sidebar-geometry.test.ts",
+    "src/tui/sidebar-cards.test.ts"
+  ],
+  "files_modified": [
+    "src/tui/modal-host.test.ts",
+    "src/tui/theme.test.ts",
+    "src/commands/shell-pty-launch.smoke.test.ts",
+    "src/flow/verify-exec-files.test.ts"
+  ],
+  "test_case_specs": {
+    "framework": "bun:test",
+    "test_files": [
+      {
+        "path": "src/tui/sidebar-geometry.test.ts",
+        "target_module": "src/tui/sidebar-geometry.ts, src/tui/shell-chrome.ts (sidebar option)",
+        "test_count": 22,
+        "tests": [
+          {
+            "id": "test-1",
+            "type": "happy_path",
+            "status": "written",
+            "criterion": "AC14",
+            "description": "modes: default 34, wide 68 capped at half the terminal, rail 5; sidebarTextWidth; cycle order; subscribe/unsubscribe; single-cell icons + distinct ASCII fallbacks",
+            "red_reason": "Cannot find module ./sidebar-geometry"
+          },
+          {
+            "id": "test-2",
+            "type": "happy_path",
+            "status": "written",
+            "criterion": "AC14",
+            "description": "chrome: pinned header above sb-top keeping sb-title with keryx vX + three icon buttons; header stays when content scrolls; active button highlighted and follows the mode; click switches mode, resizes sidebar, persists; Ctrl+L cycles; ignored under modal/dock/overlay; asciiIcons",
+            "red_reason": "Cannot find module ./sidebar-geometry (then: chrome ignores the sidebar option)"
+          },
+          {
+            "id": "test-3",
+            "type": "edge_case",
+            "status": "written",
+            "criterion": "AC15",
+            "description": "mode survives restart; preferred (not effective) mode saved; mode write keeps theme and unknown keys; unknown/corrupt values (10 shapes) and missing file give default without throwing; write over corrupt file",
+            "red_reason": "Cannot find module ./sidebar-geometry"
+          },
+          {
+            "id": "test-4",
+            "type": "happy_path",
+            "status": "written",
+            "criterion": "AC16",
+            "description": "resize re-clamps and notifies once; wide below SIDEBAR_WIDE_MIN_COLUMNS shows default, keeps preference, returns; rail unaffected; real chrome resize via h.resize; headless 80x24 Session + Work + toast",
+            "red_reason": "Cannot find module ./sidebar-geometry"
+          }
+        ]
+      },
+      {
+        "path": "src/tui/sidebar-cards.test.ts",
+        "target_module": "src/tui/sidebar-cards.ts",
+        "test_count": 21,
+        "tests": [
+          {
+            "id": "test-5",
+            "type": "edge_case",
+            "status": "written",
+            "criterion": "AC12",
+            "description": "seven cards in order; 3..5 lines pre-fit at 30 (empty and overflowing snapshot); wide keeps 3..5 and shows what default truncates; headline values; rail row <= 3 cells; icons single-cell + ASCII fallback; every former section maps to exactly one tab (unmapped fails); each section's full value reachable from its tab at two widths; attention signals reachable; mounted host keeps one slot per card (same renderable) across modes",
+            "red_reason": "Cannot find module ./sidebar-cards"
+          },
+          {
+            "id": "test-6",
+            "type": "happy_path",
+            "status": "written",
+            "criterion": "AC13",
+            "description": "Route tab command is /routing, Model tab /model; click on each card calls onOpenCard (default and rail); modal has one tab per former section and honours initialTab; Route tab shows /routing and Enter runs it; whole value readable in modal",
+            "red_reason": "Cannot find module ./sidebar-cards"
+          },
+          {
+            "id": "test-7",
+            "type": "happy_path",
+            "status": "written",
+            "criterion": "AC17",
+            "description": "baseline normal/no badge; approval, hold, update, not-ready review each raise their own card only and show a badge in default, wide and rail; approvals count is the badge; badge + attention colour painted in all three modes; theme switch leaves no old-palette colour in header, cards or rail glyphs (3 modes)",
+            "red_reason": "Cannot find module ./sidebar-cards / ./sidebar-geometry"
+          }
+        ]
+      },
+      {
+        "path": "src/tui/modal-host.test.ts",
+        "target_module": "src/tui/modal-host.ts",
+        "test_count": 2,
+        "tests": [
+          {
+            "id": "test-8",
+            "type": "happy_path",
+            "status": "written",
+            "criterion": "AC13",
+            "description": "wide (68) sidebar on a 100-col terminal: modal panel >= 72 cols, inside the terminal, close hint not clipped",
+            "red_reason": "panel width 32 (squeezed to main)"
+          },
+          {
+            "id": "test-9",
+            "type": "happy_path",
+            "status": "written",
+            "criterion": "AC13",
+            "description": "sidebar widened after the host already exists: next modal still gets 72 cols",
+            "red_reason": "panel width 32"
+          }
+        ]
+      },
+      {
+        "path": "src/tui/theme.test.ts",
+        "target_module": "src/tui/theme.ts",
+        "test_count": 3,
+        "tests": [
+          {
+            "id": "test-10",
+            "type": "edge_case",
+            "status": "written",
+            "criterion": "AC15",
+            "description": "persistThemeId keeps sidebar and unknown keys",
+            "red_reason": "persistThemeId overwrites the file with {theme}"
+          },
+          {
+            "id": "test-11",
+            "type": "edge_case",
+            "status": "written",
+            "criterion": "AC15",
+            "description": "a saved sidebar key does not disturb loading and is kept by persistThemeId",
+            "red_reason": "sidebar key erased"
+          },
+          {
+            "id": "test-12",
+            "type": "edge_case",
+            "status": "written",
+            "criterion": "AC15",
+            "description": "persistThemeId over a missing/corrupt file writes valid JSON with the theme",
+            "red_reason": "GUARD, green today by design (pins the fallback the merge must keep)"
+          }
+        ]
+      },
+      {
+        "path": "src/commands/shell-pty-launch.smoke.test.ts",
+        "target_module": "src/tui/tui-shell.ts (cards wired into the sidebar)",
+        "test_count": 1,
+        "tests": [
+          {
+            "id": "test-13",
+            "type": "happy_path",
+            "status": "written",
+            "criterion": "AC16",
+            "description": "real pty 80x24, default mode: Session card, Work card (whole words) and the Ctrl+C toast stay visible",
+            "red_reason": "no 'Session' title in the sidebar (verified red on a real pty with KERYX_ALLOW_REAL_SUBPROCESS=1)"
+          }
+        ]
+      }
+    ],
+    "run_command": "bun test --timeout 30000 src/tui/sidebar-geometry.test.ts src/tui/sidebar-cards.test.ts src/tui/modal-host.test.ts src/tui/theme.test.ts src/flow/verify-exec-files.test.ts -t 'flow 468'",
+    "expected_result": "46 new tests in the unit files + 1 pty test: all RED except one theme guard; pre-existing tests in modal-host, theme and verify-exec-files unchanged and green",
+    "notes": "New files load the modules by runtime import() through a variable specifier, so tsc stays quiet and each test fails on its own. All tui.json access uses a temp dir (persist/load take a dir argument; createSidebarGeometry takes configDir); nothing touches the real ~/.keryx. Tests are not committed; the orchestrator commits."
+  },
+  "api": {
+    "sidebar-geometry.ts": {
+      "exports": [
+        "type SidebarMode = 'default' | 'wide' | 'rail'",
+        "SIDEBAR_MODES = ['default','wide','rail'] (cycle order)",
+        "SIDEBAR_WIDE_WIDTH = 68, SIDEBAR_RAIL_WIDTH = 5, SIDEBAR_WIDE_MIN_COLUMNS = 100",
+        "createSidebarGeometry({ columns, configDir?, mode? }) -> { state(), setMode(m), cycle() -> new preferred mode, resize(columns), subscribe(l) -> unsubscribe }",
+        "loadPersistedSidebarMode(dir?) / persistSidebarMode(mode, dir?)",
+        "sidebarModeIcon(mode, ascii?) -> single-cell string",
+        "sidebarTextWidth(width) = width - 4"
+      ],
+      "semantics": "state() = { mode (effective), preferred (stored), width }. Width: default 34 (SIDEBAR_WIDTH); wide min(68, floor(columns/2)) when columns >= 100, else effective default with preferred kept; rail 5. Subscribers fire only when mode or width changes. setMode/cycle persist the PREFERRED mode to <configDir>/tui.json key `sidebar`; resize never writes. With no `mode` option the constructor loads the persisted one. Load: any unknown/corrupt/missing value gives default, never throws. Persist: read-merge-write, keeps theme and unknown keys, tolerates a corrupt file.",
+      "theme.ts": "persistThemeId must also become read-merge-write (keep sidebar and unknown keys; corrupt or non-object file -> start from {})."
+    },
+    "shell-chrome.ts": "ShellChromeOptions.sidebar?: { geometry, version?, asciiIcons? }. When present: pinned header Box `sb-header` between the sidebar's top edge and `sb-top`, holding Text `sb-title` ('keryx v<version>') and three buttons `sb-mode-default|wide|rail` (onMouseDown -> geometry.setMode; active one accented, inactive ones identical to each other). Rail: header collapses to a glyph (id sb-title kept) plus the `sb-mode-default` expand button. sidebar.width follows geometry.state().width; renderer resize calls geometry.resize(renderer.width); Ctrl+L calls geometry.cycle() unless overlayActive() (which includes modal sources, the dock, queue-nav) and does not reach the composer; applyTheme recolours the header.",
+    "sidebar-cards.ts": {
+      "exports": [
+        "SIDEBAR_CARD_IDS = ['session','workspace','work','reviews','ops','policy','remote']",
+        "SIDEBAR_SECTION_IDS (all 34 former sections), SIDEBAR_SECTION_CARD: Record<sectionId, cardId>",
+        "buildSidebarCards(snapshot) -> card[7]",
+        "mountSidebarCards(otui, renderer, parent, { geometry, snapshot: () => snapshot, onOpenCard(cardId), asciiIcons? }) -> { refresh(), destroy() }",
+        "openSidebarCard(otui, chrome, cardId, { snapshot, initialTab?, runCommand?(command) }) -> ModalHandle | undefined"
+      ],
+      "snapshot": "{ sections?: Record<sectionId,string>, approvalsPending?: number, hold?: string, updateAvailable?: string, reviewsNotReady?: number }",
+      "card": "{ id, order, icon, asciiIcon, title, severity: 'normal'|'attention'|'error', badge?, tabs, lines(textWidth, mode), rail() -> { glyph, badge? } }. lines for default/wide: 3..5 lines each <= textWidth, lines[0] starts with the icon and holds the title and the badge; rail: exactly one line <= 3 cells starting with the glyph.",
+      "tab": "{ id (= section id), label, command?: string, lines(width) -> full wrapped value }. Route tab command '/routing', Model tab '/model'.",
+      "badges": "approvals -> pending count (Remote); reviews not ready -> count (Reviews); hold -> Remote; update -> Session; hold/update badge glyph is the implementer's choice but <= 2 cells.",
+      "sections": {
+        "session": [
+          "model",
+          "mode",
+          "usage",
+          "context",
+          "balance"
+        ],
+        "workspace": [
+          "directory",
+          "branch",
+          "pr",
+          "workspace"
+        ],
+        "work": [
+          "status",
+          "plan",
+          "subagents",
+          "jobs"
+        ],
+        "reviews": [
+          "catchup",
+          "findings",
+          "autoreview",
+          "external-diff"
+        ],
+        "ops": [
+          "governance",
+          "triggers",
+          "schedules",
+          "intake",
+          "decisions",
+          "research-sync"
+        ],
+        "policy": [
+          "route",
+          "guard",
+          "edit-guard",
+          "rewind",
+          "project-ctx",
+          "external",
+          "tools"
+        ],
+        "remote": [
+          "remote",
+          "telegram",
+          "approvals",
+          "hold"
+        ]
+      },
+      "slots": "one Box `sb-card-<id>` per card, in order, never removed or re-created (same renderable across mode switches); click on the slot calls onOpenCard(id) in default, wide and rail."
+    },
+    "modal-host.ts": "With the sidebar widened, the panel must be >= MODAL_PANEL_MIN_WIDTH (72), inside the terminal, and not clipped; works when the sidebar is widened after the host was first created. Default-mode behaviour (panel clamped to main, flow 269 AC2) is unchanged."
+  },
+  "project_context_applied": [
+    {
+      "path": ".metaproject/rules/core/tdd-workflow.mdc",
+      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
+      "how": "followed"
+    }
+  ],
+  "assumptions": [
+    "Wide threshold SIDEBAR_WIDE_MIN_COLUMNS is 100 (wide shows 50 columns at 100); the plan only says 'below the threshold' without a number.",
+    "Shortcut Ctrl+L: Ctrl+O (block nav), Ctrl+Q (queue nav) and Ctrl+C are taken, Ctrl+B/F/A/E/W/K/U/D are textarea bindings; Ctrl+L is free in the shell and in OpenTUI's textarea keymap.",
+    "The 'tools' row (Tools: N available) is not in the plan's table; it is placed under Policy.",
+    "Version update raises the Session card; hold and approvals raise Remote; a not-ready review raises Reviews (the plan names the signals, not the cards for update and review).",
+    "Rail width 5 leaves a 3-cell row for glyph + badge; the implementer may reduce padding in rail mode.",
+    "Card detail modal reuses existing inspectors through tab.command (runCommand) rather than re-mounting them inside the tab body; pinned by the Route to /routing test only.",
+    "The 80x24 smoke relies on the harness's first Ctrl+C raising the 'Press Ctrl+C again to exit' toast."
+  ],
+  "behavior_changes": [
+    {
+      "description": "Keyboard shortcut that cycles sidebar modes is Ctrl+L",
+      "needs_operator": true
+    },
+    {
+      "description": "Mode icon glyphs and card icon glyphs are the implementer's choice (single cell + ASCII fallback); operator should look at them after the release",
+      "needs_operator": true
+    },
+    {
+      "description": "Tools row placed on the Policy card; version-update on Session; wide threshold 100 columns",
+      "needs_operator": true
+    },
+    {
+      "description": "Existing flow 300 AC10 test and the first smoke test assert the old labels Context/Tools/Status/Ready in the sidebar; they stop matching once the cards replace the sections, so T16 must update them (TUI_ONLY_LABELS in shell-pty-launch.smoke.test.ts, and the 80x24 flow 300 test)",
+      "needs_operator": false
+    }
+  ],
+  "status_report": {
+    "status": "DONE_WITH_CONCERNS",
+    "tests_written": 49,
+    "test_files_committed": [],
+    "all_criteria_covered": true,
+    "red_verified": true,
+    "concerns": "The chrome-level tests (header, shortcut, mounted cards, theme recolour) are verified red only for the missing module; their assertions were not run against an implementation, so a mistaken harness assumption (span x offsets via span.width, mockInput.pressKey with ctrl, h.resize) can only show up during T15/T16. The pre-existing pty labels (Context/Tools/Status/Ready) conflict with the new design and need updating by T16. One theme test is a guard that is green today."
+  }
+}

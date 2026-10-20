@@ -358,6 +358,27 @@ describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
     );
 
     test(
+      "flow 468 AC16: on 80x24 in the default sidebar mode the Session card, the Work card and the toast stay visible",
+      async () => {
+        // HOME is a temp dir (see runPtyShell), so there is no tui.json: the mode is the default one.
+        // The toast is the "press Ctrl+C again" hint the harness's first Ctrl+C raises; it is
+        // pinned to the bottom of the sidebar and must not be pushed off by the seven cards.
+        const run = await runPtyShell({
+          args: ["shell", "--provider", "fake", "--model", "fake-echo"],
+          readyMarker: ALT_ENTER,
+          size: { rows: 24, cols: 80 },
+        });
+        expect({ killed: run.killed, ready: run.ready }).toEqual({ killed: false, ready: true });
+        // Whole-word titles: "Workspace" must not satisfy "Work".
+        expect(run.text).toMatch(/(^|[^A-Za-z])Session(?![A-Za-z])/);
+        expect(run.text).toMatch(/(^|[^A-Za-z])Work(?![A-Za-z])/);
+        expect(run.text).toContain("Press Ctrl+C again to exit");
+        expect(run.childExit).toBe(0);
+      },
+      TEST_TIMEOUT_MS,
+    );
+
+    test(
       "the same harness on the same kind of pty sees no TUI at all when it is off",
       async () => {
         // The discriminator. Without it, everything above could be passing on

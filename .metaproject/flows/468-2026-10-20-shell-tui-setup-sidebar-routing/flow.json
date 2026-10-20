@@ -11,7 +11,7 @@
   "title": "Shell TUI: runnable /setup plan, compact card sidebar with three widths, working /routing model picker",
   "status": "in-progress",
   "createdAt": "2026-10-20T07:58:41.266Z",
-  "updatedAt": "2026-10-20T17:33:26.068Z",
+  "updatedAt": "2026-10-20T17:51:11.552Z",
   "source": {
     "type": "description",
     "ref": null
@@ -293,8 +293,14 @@
         "T13"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T17:37:10.616Z",
+            "outcome": "started",
+            "detail": "468-T14 tests-creator dispatch (sonnet), phase C sidebar, stacked on feat/flow-468-b-setup while PR 1068 CI runs"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -474,17 +480,25 @@
       "id": "T25",
       "title": "C chrome: red tests for the busy footer (one waiting line, useful footer bar) and the one compact duration formatter",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T13"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T17:37:11.435Z",
+            "outcome": "started",
+            "detail": "468-T25 tests-creator dispatch (sonnet), phase C chrome, stacked on feat/flow-468-b-setup while PR 1068 CI runs"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "20 red tests for AC20/AC21, red for the right reasons; operator chose the proposed footer wording and a Duration row"
     },
     {
       "id": "T26",
@@ -816,6 +830,21 @@
       "at": "2026-10-20T17:33:26.068Z",
       "event": "task-done",
       "detail": "T11: B setup: modal layout, contrast, scroll, Copy/Optional/Run buttons, Run through external agent with main-agent fallback, docs"
+    },
+    {
+      "at": "2026-10-20T17:37:10.616Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 468-T14 tests-creator dispatch (sonnet), phase C sidebar, stacked on feat/flow-468-b-setup while PR 1068 CI runs"
+    },
+    {
+      "at": "2026-10-20T17:37:11.435Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — 468-T25 tests-creator dispatch (sonnet), phase C chrome, stacked on feat/flow-468-b-setup while PR 1068 CI runs"
+    },
+    {
+      "at": "2026-10-20T17:51:11.552Z",
+      "event": "task-done",
+      "detail": "T25: C chrome: red tests for the busy footer (one waiting line, useful footer bar) and the one compact duration formatter"
     }
   ],
   "acKinds": {
