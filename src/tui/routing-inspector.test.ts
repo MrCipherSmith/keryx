@@ -454,3 +454,252 @@ otuiTest("flow 305 item 6: the flat picker over ~300 models filters correctly an
     chrome.destroy();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Flow 468 (Phase A) — the session's own model is always pickable, and every
+// failure shows its own text instead of a silent "session default"-only list.
+//
+// Assumed seams (the smallest the plan names):
+//  - `FlatPickerProvider.authFailed?: true` marks a provider whose auth failed;
+//    `models: []` is the "0 models" case.
+//  - `RoutingModalOptions.timeoutMs` bounds how long `reload()` waits for the
+//    provider loader before showing it as unavailable.
+//  - `options.session` (already there) is the session's own provider/model.
+// ---------------------------------------------------------------------------
+
+type ProviderFixture = FlatPickerProvider & { readonly authFailed?: true };
+
+const SESSION_MODEL = { providerId: "openai-codex", modelId: "gpt-test" } as const;
+
+/** The whole rendered screen as text — what the operator sees, not a handle accessor. */
+function frameOf(chrome: { captureCharFrame(): string }): string {
+  return chrome.captureCharFrame();
+}
+
+async function openModelTab(
+  otui: NonNullable<typeof OTUI>,
+  chrome: Awaited<ReturnType<typeof mountChrome>>,
+  options: Partial<Parameters<typeof openRouting>[2]> & { cwd: string },
+) {
+  const handle = openRouting(otui.core, chrome.chrome, { onKeypress: wideKeypressSource(chrome.renderer), ...options });
+  await handle!.ready.catch(() => undefined);
+  await settle(chrome);
+  chrome.mockInput.pressEnter(); // the selected category's picker = the Model tab
+  await settle(chrome, 5);
+  return handle!;
+}
+
+otuiTest(
+  "AC3: the session's own provider/model is listed `(current session)` although the provider loader returns none; Enter writes the user-layer pick and the Categories tab shows it",
+  async () => {
+    const otui = requireOtui();
+    const chrome = await mountChrome(otui, { width: 160, height: 50 });
+    const cwd = await tempDir("keryx-routing-session-");
+    const userConfigDir = await tempDir("keryx-routing-session-user-");
+
+    try {
+      const handle = await openModelTab(otui, chrome, { cwd, userConfigDir, providers: async () => [], session: SESSION_MODEL });
+      expect(handle.activeTab()).toBe("picker");
+
+      const labels = handle.pickerOptions().map((o) => o.label);
+      expect(labels.some((l) => l.includes("openai-codex/gpt-test") && l.includes("(current session)"))).toBe(true);
+
+      await chrome.mockInput.pressKeys([..."gpt-test"]);
+      await settle(chrome);
+      chrome.mockInput.pressEnter();
+      await handle.settled();
+      await settle(chrome);
+
+      const written = await loadRoutingConfig("user", { cwd, userConfigDir });
+      expect(written.table.default).toEqual({ kind: "model", providerId: "openai-codex", modelId: "gpt-test" });
+      expect(handle.activeTab()).toBe("list");
+      // The Categories tab shows the pick, resolved (not rejected as "not connected").
+      const line = handle.visibleLines().find((l) => l.includes("default") && l.includes("[user]"));
+      expect(line).toContain("openai-codex/gpt-test");
+      expect(line).not.toContain("falling back");
+    } finally {
+      chrome.destroy();
+    }
+  },
+);
+
+otuiTest("AC4: no provider connected — the Model tab says so and points at /connect", async () => {
+  const otui = requireOtui();
+  const chrome = await mountChrome(otui, { width: 160, height: 50 });
+  const cwd = await tempDir("keryx-routing-none-");
+  const userConfigDir = await tempDir("keryx-routing-none-user-");
+
+  try {
+    await openModelTab(otui, chrome, { cwd, userConfigDir, providers: async () => [] });
+    const frame = frameOf(chrome);
+    expect(frame).toContain("no providers connected");
+    expect(frame).toContain("/connect");
+  } finally {
+    chrome.destroy();
+  }
+});
+
+otuiTest("AC4: the catalog is unavailable — the Model tab shows the reason it gave", async () => {
+  const otui = requireOtui();
+  const chrome = await mountChrome(otui, { width: 160, height: 50 });
+  const cwd = await tempDir("keryx-routing-down-");
+  const userConfigDir = await tempDir("keryx-routing-down-user-");
+
+  try {
+    await openModelTab(otui, chrome, {
+      cwd,
+      userConfigDir,
+      providers: async () => {
+        throw new Error("catalog host refused the connection");
+      },
+    });
+    const frame = frameOf(chrome);
+    expect(frame).toContain("unavailable");
+    expect(frame).toContain("catalog host refused the connection");
+  } finally {
+    chrome.destroy();
+  }
+});
+
+otuiTest("AC4: a provider whose auth failed, and one with 0 models, are each shown on the Model tab — not omitted", async () => {
+  const otui = requireOtui();
+  const chrome = await mountChrome(otui, { width: 160, height: 50 });
+  const cwd = await tempDir("keryx-routing-states-");
+  const userConfigDir = await tempDir("keryx-routing-states-user-");
+  const providers: readonly ProviderFixture[] = [
+    { name: "alpha", models: ["a1"] },
+    { name: "beta", models: [], authFailed: true },
+    { name: "gamma", models: [] },
+  ];
+
+  try {
+    await openModelTab(otui, chrome, { cwd, userConfigDir, providers: async () => providers });
+    const lines = frameOf(chrome).split("\n");
+    expect(lines.some((l) => l.includes("beta") && l.includes("auth failed"))).toBe(true);
+    expect(lines.some((l) => l.includes("gamma") && l.includes("0 models"))).toBe(true);
+  } finally {
+    chrome.destroy();
+  }
+});
+
+otuiTest("AC4: an assigned model missing from its provider's list says `model not in <provider>'s list`", async () => {
+  const otui = requireOtui();
+  const chrome = await mountChrome(otui, { width: 160, height: 50 });
+  const cwd = await tempDir("keryx-routing-missing-");
+  const userConfigDir = await tempDir("keryx-routing-missing-user-");
+  await saveRoutingConfig("user", { cwd, userConfigDir }, { coding: { kind: "model", providerId: "alpha", modelId: "gone-model" } });
+
+  try {
+    const handle = openRouting(otui.core, chrome.chrome, {
+      cwd,
+      userConfigDir,
+      onKeypress: wideKeypressSource(chrome.renderer),
+      providers: async () => [{ name: "alpha", models: ["a1"] }],
+    });
+    await handle!.ready;
+    await settle(chrome);
+    const line = handle!.visibleLines().find((l) => l.includes("coding"));
+    expect(line).toContain("model not in alpha's list");
+  } finally {
+    chrome.destroy();
+  }
+});
+
+otuiTest("AC4: an assignment to a provider absent from a non-empty list says `provider not connected`", async () => {
+  const otui = requireOtui();
+  const chrome = await mountChrome(otui, { width: 160, height: 50 });
+  const cwd = await tempDir("keryx-routing-absent-");
+  const userConfigDir = await tempDir("keryx-routing-absent-user-");
+  await saveRoutingConfig("user", { cwd, userConfigDir }, { coding: { kind: "model", providerId: "beta", modelId: "b1" } });
+
+  try {
+    const handle = openRouting(otui.core, chrome.chrome, {
+      cwd,
+      userConfigDir,
+      onKeypress: wideKeypressSource(chrome.renderer),
+      providers: async () => [{ name: "alpha", models: ["a1"] }],
+    });
+    await handle!.ready;
+    await settle(chrome);
+    const line = handle!.visibleLines().find((l) => l.includes("coding"));
+    expect(line).toContain("provider not connected");
+  } finally {
+    chrome.destroy();
+  }
+});
+
+otuiTest("AC4: an EMPTY provider list says `provider list unavailable` for an assignment — distinct from `provider not connected`", async () => {
+  const otui = requireOtui();
+  const chrome = await mountChrome(otui, { width: 160, height: 50 });
+  const cwd = await tempDir("keryx-routing-empty-");
+  const userConfigDir = await tempDir("keryx-routing-empty-user-");
+  await saveRoutingConfig("user", { cwd, userConfigDir }, { coding: { kind: "model", providerId: "alpha", modelId: "a1" } });
+
+  try {
+    const handle = openRouting(otui.core, chrome.chrome, {
+      cwd,
+      userConfigDir,
+      onKeypress: wideKeypressSource(chrome.renderer),
+      providers: async () => [],
+    });
+    await handle!.ready;
+    await settle(chrome);
+    const line = handle!.visibleLines().find((l) => l.includes("coding"));
+    expect(line).toContain("provider list unavailable");
+    expect(line).not.toContain("provider not connected");
+  } finally {
+    chrome.destroy();
+  }
+});
+
+otuiTest("AC4: a REJECTING provider loader leaves `Reading routing table…`, and its assignments say `provider list unavailable`", async () => {
+  const otui = requireOtui();
+  const chrome = await mountChrome(otui, { width: 160, height: 50 });
+  const cwd = await tempDir("keryx-routing-reject-");
+  const userConfigDir = await tempDir("keryx-routing-reject-user-");
+  await saveRoutingConfig("user", { cwd, userConfigDir }, { coding: { kind: "model", providerId: "alpha", modelId: "a1" } });
+
+  try {
+    const handle = openRouting(otui.core, chrome.chrome, {
+      cwd,
+      userConfigDir,
+      onKeypress: wideKeypressSource(chrome.renderer),
+      providers: async () => {
+        throw new Error("loader blew up");
+      },
+    });
+    await handle!.ready.catch(() => undefined);
+    await settle(chrome);
+
+    expect(handle!.visibleLines().join("\n")).not.toContain("Reading routing table…");
+    expect(frameOf(chrome)).not.toContain("Reading routing table…");
+    expect(handle!.visibleLines().find((l) => l.includes("coding"))).toContain("provider list unavailable");
+  } finally {
+    chrome.destroy();
+  }
+});
+
+otuiTest("AC4: a provider loader that NEVER resolves leaves `Reading routing table…` within the timeout", async () => {
+  const otui = requireOtui();
+  const chrome = await mountChrome(otui, { width: 160, height: 50 });
+  const cwd = await tempDir("keryx-routing-hang-");
+  const userConfigDir = await tempDir("keryx-routing-hang-user-");
+
+  try {
+    const handle = openRouting(otui.core, chrome.chrome, {
+      cwd,
+      userConfigDir,
+      onKeypress: wideKeypressSource(chrome.renderer),
+      providers: () => new Promise<never>(() => {}),
+      timeoutMs: 30, // test seam: production uses its own bound
+    });
+    // Generous wall-clock margin over the 30ms bound; the modal must have given up by then.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await settle(chrome);
+
+    expect(handle!.visibleLines().join("\n")).not.toContain("Reading routing table…");
+    expect(frameOf(chrome)).not.toContain("Reading routing table…");
+  } finally {
+    chrome.destroy();
+  }
+});

@@ -5,13 +5,21 @@
 // guessed). Every fetch here is injected — no real network.
 
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { resolveTuiStartup } from "../commands/shell";
 import { detectProviders } from "../commands/select";
-import { loadProviderCatalogCache, saveProviderCatalogCache } from "./provider-catalog-cache";
-import { catalogToFlatPickerProviders, loadOrRefreshProviderCatalog, refreshProviderCatalog } from "./provider-catalog";
+import { keryxConfigDir } from "../lib/config-dir";
+import { envWithSavedApiKeys, saveApiKey, saveShellConfig } from "../lib/shell-config";
+import { isCatalogFresh, loadProviderCatalogCache, saveProviderCatalogCache } from "./provider-catalog-cache";
+import {
+  catalogToFlatPickerProviders,
+  loadOrRefreshProviderCatalog,
+  loadOrRefreshProviderCatalogFromDetected,
+  refreshProviderCatalog,
+} from "./provider-catalog";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -322,4 +330,108 @@ test("loadOrRefreshProviderCatalog: --refresh (force: true) bypasses a fresh cac
 
   const catalog = await loadOrRefreshProviderCatalog({ fetch: fetchFn, env: { DEEPSEEK_API_KEY: "sk-test" }, dir, platform: "linux" }, { force: true });
   expect(catalog.providers.deepseek?.models).toEqual(["fresh-model"]);
+});
+
+// --- flow 468 AC1: the startup catalog never derives from an empty `detected` ---
+
+/** A fetch that answers the models endpoint of deepseek and groq and refuses the ollama probe and balance lookups. */
+function twoProviderFetch(calledUrls: string[] = []): typeof fetch {
+  return (async (url: string) => {
+    calledUrls.push(url);
+    if (ollamaRefused(url) || url.includes("/user/balance")) return { ok: false } as Response;
+    if (url.includes("deepseek")) return { ok: true, json: async () => ({ data: [{ id: "deepseek-chat" }] }) } as Response;
+    if (url.includes("groq")) return { ok: true, json: async () => ({ data: [{ id: "llama-fake" }] }) } as Response;
+    throw new Error(`unexpected fetch: ${url}`);
+  }) as unknown as typeof fetch;
+}
+
+test("AC1: a shell that starts with a saved provider+model (startup detected is empty) still saves a catalog holding every provider with a stored key", async () => {
+  const dir = tempDir();
+  saveShellConfig({ provider: "deepseek", model: "deepseek-chat" }, dir);
+  saveApiKey("DEEPSEEK_API_KEY", "sk-fake-deepseek", dir);
+  saveApiKey("GROQ_API_KEY", "sk-fake-groq", dir);
+  const fetchFn = twoProviderFetch();
+
+  // `resolveTuiStartup` applies the saved keys to `process.env`; undo exactly what it applied.
+  const startup = await resolveTuiStartup({
+    detect: async () => {
+      throw new Error("a saved provider+model must skip detection");
+    },
+    configDir: dir,
+  });
+  try {
+    // The reproduction: the saved selection makes startup hand over NO detection.
+    expect(startup.detected).toEqual([]);
+
+    const env = envWithSavedApiKeys({}, dir);
+    // Test seam `redetect` (mirrors `tui-shell.ts`'s `opts.redetect`): the live detection the startup refresh falls back to when `detected` is empty.
+    const redetect = () => detectProviders({ fetch: fetchFn, env, configDir: dir, platform: "linux" });
+    const catalog = await loadOrRefreshProviderCatalogFromDetected(startup.detected, { fetch: fetchFn, env, dir, platform: "linux", redetect });
+
+    expect(Object.keys(catalog.providers).sort()).toEqual(["deepseek", "groq"]);
+    expect(catalog.providers.deepseek?.models).toEqual(["deepseek-chat"]);
+    // And what the next reader (`/routing`) loads from disk is that same non-empty catalog, not `{providers: {}}`.
+    expect(Object.keys(loadProviderCatalogCache(dir)?.providers ?? {}).sort()).toEqual(["deepseek", "groq"]);
+  } finally {
+    for (const key of startup.appliedKeys) delete process.env[key];
+  }
+});
+
+// --- flow 468 AC2: an empty catalog is never served or saved as fresh -------
+
+function writeCacheFile(dir: string, body: unknown): void {
+  // Written by hand, not through `saveProviderCatalogCache`: this is the poisoned file an older build left on disk.
+  const configDir = keryxConfigDir(dir);
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(path.join(configDir, "provider-catalog.json"), `${JSON.stringify(body)}\n`, "utf8");
+}
+
+test("AC2: a fresh-by-age cache file with zero providers is not served — loadOrRefreshProviderCatalog refreshes instead", async () => {
+  const dir = tempDir();
+  writeCacheFile(dir, { fetchedAt: new Date().toISOString(), providers: {} });
+  const calledUrls: string[] = [];
+
+  const catalog = await loadOrRefreshProviderCatalog({
+    fetch: twoProviderFetch(calledUrls),
+    env: { DEEPSEEK_API_KEY: "sk-fake-deepseek" },
+    dir,
+    platform: "linux",
+  });
+
+  expect(calledUrls.length).toBeGreaterThan(0);
+  expect(catalog.providers.deepseek?.status).toBe("ok");
+});
+
+test("AC2: a fresh-by-age cache file with zero providers is not served — loadOrRefreshProviderCatalogFromDetected refreshes instead", async () => {
+  const dir = tempDir();
+  writeCacheFile(dir, { fetchedAt: new Date().toISOString(), providers: {} });
+  const calledUrls: string[] = [];
+  const fetchFn = twoProviderFetch(calledUrls);
+  const env = { GROQ_API_KEY: "sk-fake-groq" };
+  const detected = await detectProviders({ fetch: fetchFn, env, configDir: dir, platform: "linux" });
+
+  const catalog = await loadOrRefreshProviderCatalogFromDetected(detected, { fetch: fetchFn, env, dir, platform: "linux" });
+
+  expect(catalog.providers.groq?.status).toBe("ok");
+});
+
+test("AC2: a refresh that yields zero providers is not saved as fresh (loadOrRefreshProviderCatalog)", async () => {
+  const dir = tempDir();
+
+  const catalog = await loadOrRefreshProviderCatalog({ fetch: twoProviderFetch(), env: {}, dir, platform: "linux" });
+
+  expect(Object.keys(catalog.providers)).toEqual([]);
+  // Absent or stale are both fine; what must not exist is an empty cache that a reader treats as fresh for the next TTL.
+  expect(isCatalogFresh(loadProviderCatalogCache(dir))).toBe(false);
+});
+
+test("AC2: a refresh that yields zero providers is not saved as fresh (loadOrRefreshProviderCatalogFromDetected)", async () => {
+  const dir = tempDir();
+  const fetchFn = twoProviderFetch();
+  const detected = await detectProviders({ fetch: fetchFn, env: {}, configDir: dir, platform: "linux" });
+
+  const catalog = await loadOrRefreshProviderCatalogFromDetected(detected, { fetch: fetchFn, env: {}, dir, platform: "linux" });
+
+  expect(Object.keys(catalog.providers)).toEqual([]);
+  expect(isCatalogFresh(loadProviderCatalogCache(dir))).toBe(false);
 });

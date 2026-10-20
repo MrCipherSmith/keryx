@@ -204,3 +204,45 @@ test("describeFallbackNotice: AC10's exact wording", () => {
     ),
   ).toBe("anthropic/claude-x - not connected, falling back to session default");
 });
+
+// --- flow 468 AC3: the session's own provider/model is always connected and pickable ---
+// Assumed seam: an optional trailing `session: {providerId, modelId}` on `connectedPredicateFrom` and `flatModelOptions`.
+
+const SESSION = { providerId: "openai-codex", modelId: "gpt-test" } as const;
+
+test("AC3: connectedPredicateFrom counts the session's provider (and model) as connected even when the list lacks it", () => {
+  const connected = connectedPredicateFrom([{ name: "deepseek", models: ["deepseek-chat"] }], SESSION);
+  expect(connected("openai-codex", "gpt-test")).toBe(true);
+  expect(connected("openai-codex")).toBe(true);
+  // Only the session's own provider is added, not everything.
+  expect(connected("anthropic", "claude-x")).toBe(false);
+  expect(connected("deepseek", "deepseek-chat")).toBe(true);
+});
+
+test("AC3: resolution keeps an assignment to the session's model when the provider list is empty", () => {
+  const user = { coding: { kind: "model" as const, providerId: "openai-codex", modelId: "gpt-test" } };
+  const connected = connectedPredicateFrom([], SESSION);
+  const result = resolveCategoryDetailed("coding", { user }, connected);
+  expect(result.assignment).toEqual({ kind: "model", providerId: "openai-codex", modelId: "gpt-test" });
+  expect(result.source).toBe("user");
+  expect(result.rejected).toBeUndefined();
+});
+
+test("AC3: flatModelOptions lists the session's provider/model labelled `(current session)` even when the catalog lacks it", () => {
+  const options = flatModelOptions([{ name: "deepseek", models: ["deepseek-chat"] }], SESSION);
+  const row = options.find((o) => o.label.includes("openai-codex/gpt-test"));
+  expect(row).toBeDefined();
+  expect(row?.label).toContain("(current session)");
+  expect(row?.assignment).toEqual({ kind: "model", providerId: "openai-codex", modelId: "gpt-test" });
+  // The ordinary rows are untouched.
+  expect(options.map((o) => o.label)).toContain("deepseek/deepseek-chat");
+  expect(options[0]?.label).toBe("session default");
+});
+
+test("AC3: flatModelOptions does not list the session's model twice when the catalog already has it", () => {
+  const options = flatModelOptions([{ name: "openai-codex", models: ["gpt-test", "gpt-other"] }], SESSION);
+  const rows = options.filter((o) => o.assignment.kind === "model" && o.assignment.providerId === "openai-codex" && o.assignment.modelId === "gpt-test");
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.label).toContain("(current session)");
+  expect(options.map((o) => o.label)).toContain("openai-codex/gpt-other");
+});
