@@ -11,7 +11,7 @@
   "title": "Shell TUI: runnable /setup plan, compact card sidebar with three widths, working /routing model picker",
   "status": "in-progress",
   "createdAt": "2026-10-20T07:58:41.266Z",
-  "updatedAt": "2026-10-20T19:44:28.053Z",
+  "updatedAt": "2026-10-20T20:45:28.371Z",
   "source": {
     "type": "description",
     "ref": null
@@ -338,7 +338,7 @@
       "id": "T16",
       "title": "C sidebar: seven cards with detail modals, attention badges, rail glyphs, theme repaint, docs",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T15"
       ],
@@ -354,7 +354,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "seven cards, detail modals, badges, rail glyphs, theme repaint, docs; 377 tests + pty smoke pass; operator accepted icons, 4-line cards, click->modal->Enter"
     },
     {
       "id": "T17",
@@ -442,7 +444,7 @@
       "id": "T22",
       "title": "C sidebar: run the 80x24 pty smoke locally before merge",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T16",
         "T26"
@@ -453,7 +455,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "80x24 pty smoke run locally on darwin with KERYX_ALLOW_REAL_SUBPROCESS=1 after T16 and T26: 5 pass, including flow 468 AC16 (Session card, Work card, toast visible)"
     },
     {
       "id": "T23",
@@ -911,6 +915,16 @@
       "at": "2026-10-20T19:44:28.053Z",
       "event": "task-attempt",
       "detail": "T16: started (attempt 1) — 468-T16 task-implementer dispatch (sonnet), phase C seven cards"
+    },
+    {
+      "at": "2026-10-20T20:45:23.628Z",
+      "event": "task-done",
+      "detail": "T16: C sidebar: seven cards with detail modals, attention badges, rail glyphs, theme repaint, docs"
+    },
+    {
+      "at": "2026-10-20T20:45:28.371Z",
+      "event": "task-done",
+      "detail": "T22: C sidebar: run the 80x24 pty smoke locally before merge"
     }
   ],
   "acKinds": {
