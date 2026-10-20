@@ -11,12 +11,12 @@
   "title": "Shell TUI: runnable /setup plan, compact card sidebar with three widths, working /routing model picker",
   "status": "in-progress",
   "createdAt": "2026-10-20T07:58:41.266Z",
-  "updatedAt": "2026-10-20T08:16:59.602Z",
+  "updatedAt": "2026-10-20T08:47:38.762Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:543e91026951ef4bdb99a54a0be3c6905e2684f1b4154492383099c0a1ad2ab6",
+  "acChecksum": "sha256:8efe0fc522c830287221a3a2485eca96e3a988a6324425ba1f6e9a4d6587734f",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -105,37 +105,51 @@
       "id": "T5",
       "title": "A routing: red tests for the empty startup catalog, cache hygiene and every /routing visible state",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T08:17:24.983Z",
+            "outcome": "started",
+            "detail": "468-T5 tests-creator dispatch (sonnet)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "A routing: startup detection, zero-provider cache rule, current-session row, visible fallback reasons, docs",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T08:27:13.753Z",
+            "outcome": "started",
+            "detail": "468-T6 task-implementer dispatch (sonnet)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "A routing: operator manual check on the branch build in a throwaway project (pick persists globally)",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
@@ -145,7 +159,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "operator 2026-10-20: no manual check on a branch build; replaced by T20, the check after the PR 1 release"
     },
     {
       "id": "T8",
@@ -153,7 +169,7 @@
       "kind": "review",
       "status": "todo",
       "dependsOn": [
-        "T7"
+        "T6"
       ],
       "attempts": {
         "count": 0,
@@ -215,7 +231,7 @@
       "id": "T12",
       "title": "B setup: operator manual check in a throwaway project (Refresh tab, copy prompt, Run to completion)",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T11"
       ],
@@ -225,7 +241,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "operator 2026-10-20: no manual check on a branch build; replaced by T21, the check after the PR 2 release"
     },
     {
       "id": "T13",
@@ -233,7 +251,7 @@
       "kind": "review",
       "status": "todo",
       "dependsOn": [
-        "T12"
+        "T11"
       ],
       "attempts": {
         "count": 0,
@@ -295,6 +313,88 @@
       "id": "T17",
       "title": "C sidebar: run the 80x24 pty smoke locally and the operator manual check of all three modes on a laptop screen",
       "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T16"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "split: the pty smoke moved to T22 (pre-merge), the operator check to T23 (after the PR 3 release)"
+    },
+    {
+      "id": "T18",
+      "title": "C sidebar: PR 3 review rounds, merge into main, release",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T22"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T19",
+      "title": "Final: operator check in vantage-frontend on the released npm keryx (setup Refresh run, sidebar modes, routing pick)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T23"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T20",
+      "title": "A routing: operator check after the PR 1 release, keryx installed from npm",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T21",
+      "title": "B setup: operator check after the PR 2 release, keryx installed from npm",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T22",
+      "title": "C sidebar: run the 80x24 pty smoke locally before merge",
+      "kind": "verify",
       "status": "todo",
       "dependsOn": [
         "T16"
@@ -308,24 +408,8 @@
       "budget": {}
     },
     {
-      "id": "T18",
-      "title": "C sidebar: PR 3 review rounds, merge into main, release",
-      "kind": "review",
-      "status": "todo",
-      "dependsOn": [
-        "T17"
-      ],
-      "attempts": {
-        "count": 0,
-        "log": []
-      },
-      "acRefs": [],
-      "evidenceRefs": [],
-      "budget": {}
-    },
-    {
-      "id": "T19",
-      "title": "Final: operator check in vantage-frontend on the released npm keryx (setup Refresh run, sidebar modes, routing pick)",
+      "id": "T23",
+      "title": "C sidebar: operator check after the PR 3 release on a laptop screen, keryx installed from npm",
       "kind": "verify",
       "status": "todo",
       "dependsOn": [
@@ -448,6 +532,96 @@
     {
       "at": "2026-10-20T08:16:59.602Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-20T08:17:24.983Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 468-T5 tests-creator dispatch (sonnet)"
+    },
+    {
+      "at": "2026-10-20T08:27:09.507Z",
+      "event": "task-done",
+      "detail": "T5: A routing: red tests for the empty startup catalog, cache hygiene and every /routing visible state"
+    },
+    {
+      "at": "2026-10-20T08:27:13.753Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 468-T6 task-implementer dispatch (sonnet)"
+    },
+    {
+      "at": "2026-10-20T08:37:49.287Z",
+      "event": "task-done",
+      "detail": "T6: A routing: startup detection, zero-provider cache rule, current-session row, visible fallback reasons, docs"
+    },
+    {
+      "at": "2026-10-20T08:47:13.037Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"(operator-only) On the branch build in a throwaway project, the operator opens `/routing`, sees openai-codex and the other connected providers with their models, picks a model for `coding`, and sees the category show it after reopening. The agent does not confirm this criterion. [verify: judged]\" -> \"(operator-only) After PR 1 is released and keryx is installed from npm (`keryx --version` shows that release), the operator opens `/routing` in a real project, sees openai-codex and the other connected providers with their models, picks a model for `coding`, and sees the category show it after reopening. The agent does not confirm this criterion. [verify: judged]\" (operator 2026-10-20: manual checks happen only after release and npm install, not on a branch build)"
+    },
+    {
+      "at": "2026-10-20T08:47:17.293Z",
+      "event": "ac-updated",
+      "detail": "AC11: \"(operator-only) On the branch build in a throwaway project that already has a `.metaproject/`, the operator opens `/setup`, lands on Refresh, reads the plan without squinting, copies the prompt, presses Run, and the external agent completes the required steps. The agent does not confirm this criterion. [verify: judged]\" -> \"(operator-only) After PR 2 is released and keryx is installed from npm, in a project that already has a `.metaproject/`, the operator opens `/setup`, lands on Refresh, reads the plan without squinting, copies the prompt, presses Run, and the external agent completes the required steps. The agent does not confirm this criterion. [verify: judged]\" (operator 2026-10-20: manual checks happen only after release and npm install, not on a branch build)"
+    },
+    {
+      "at": "2026-10-20T08:47:21.387Z",
+      "event": "ac-updated",
+      "detail": "AC18: \"(operator-only) On a laptop screen with the branch build, the operator sees the default mode without scrolling in a typical session, switches to wide and rail with the header buttons, opens a few cards' modals, and finds them good-looking and complete. The agent does not confirm this criterion. [verify: judged]\" -> \"(operator-only) After PR 3 is released and keryx is installed from npm, on a laptop screen, the operator sees the default mode without scrolling in a typical session, switches to wide and rail with the header buttons, opens a few cards' modals, and finds them good-looking and complete. The agent does not confirm this criterion. [verify: judged]\" (operator 2026-10-20: manual checks happen only after release and npm install, not on a branch build)"
+    },
+    {
+      "at": "2026-10-20T08:47:25.090Z",
+      "event": "task-added",
+      "detail": "T20: A routing: operator check after the PR 1 release, keryx installed from npm"
+    },
+    {
+      "at": "2026-10-20T08:47:25.837Z",
+      "event": "task-added",
+      "detail": "T21: B setup: operator check after the PR 2 release, keryx installed from npm"
+    },
+    {
+      "at": "2026-10-20T08:47:26.843Z",
+      "event": "task-added",
+      "detail": "T22: C sidebar: run the 80x24 pty smoke locally before merge"
+    },
+    {
+      "at": "2026-10-20T08:47:27.604Z",
+      "event": "task-added",
+      "detail": "T23: C sidebar: operator check after the PR 3 release on a laptop screen, keryx installed from npm"
+    },
+    {
+      "at": "2026-10-20T08:47:31.094Z",
+      "event": "task-depends-set",
+      "detail": "T8: dependsOn T6 (was T7) — operator 2026-10-20: no manual check on the branch build; PR 1 review follows the implementation directly"
+    },
+    {
+      "at": "2026-10-20T08:47:31.970Z",
+      "event": "task-depends-set",
+      "detail": "T13: dependsOn T11 (was T12) — operator 2026-10-20: no manual check on the branch build; PR 2 review follows the implementation directly"
+    },
+    {
+      "at": "2026-10-20T08:47:32.840Z",
+      "event": "task-depends-set",
+      "detail": "T18: dependsOn T22 (was T17) — the 80x24 pty smoke (T22) stays a pre-merge gate; the operator's manual check moved after the release (T23)"
+    },
+    {
+      "at": "2026-10-20T08:47:33.590Z",
+      "event": "task-depends-set",
+      "detail": "T19: dependsOn T23 (was T18) — the final vantage-frontend check follows the post-release sidebar check"
+    },
+    {
+      "at": "2026-10-20T08:47:37.064Z",
+      "event": "task-done",
+      "detail": "T7: A routing: operator manual check on the branch build in a throwaway project (pick persists globally)"
+    },
+    {
+      "at": "2026-10-20T08:47:37.863Z",
+      "event": "task-done",
+      "detail": "T12: B setup: operator manual check in a throwaway project (Refresh tab, copy prompt, Run to completion)"
+    },
+    {
+      "at": "2026-10-20T08:47:38.762Z",
+      "event": "task-done",
+      "detail": "T17: C sidebar: run the 80x24 pty smoke locally and the operator manual check of all three modes on a laptop screen"
     }
   ],
   "acKinds": {

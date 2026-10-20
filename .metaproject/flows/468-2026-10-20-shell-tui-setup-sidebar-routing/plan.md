@@ -5,7 +5,7 @@ Status: ready for freeze. Operator decisions (2026-10-20, Claude Code question t
 - The `/setup` Run button uses an **external agent**: Claude Code or Codex CLI, through the `/delegate` path. It falls back to the session's main agent when no external agent is configured.
 - The sidebar becomes **seven themed cards**: Session, Workspace, Work, Reviews, Ops, Policy, Remote.
 - **Three PRs in sequence**, one flow: A routing → B setup → C sidebar. The flow closes with PR C.
-- **Manual checks on the branch first**, in a throwaway project, then **after release in vantage-frontend** before the flow closes.
+- ~~Manual checks on the branch first~~ — superseded the same day: **the operator checks each phase only after its release and an npm install** (no branch-build checks). Each phase's check is a verify task after its merge (T20, T21, T23); the 80×24 pty smoke stays a pre-merge agent check (T22).
 
 Evidence for every claim below is in `context.md`.
 
@@ -140,8 +140,7 @@ Fix the source of truth, then make every failure visible.
 - Each phase is its own branch from `main`, with its own PR and review rounds. Each is merged into `main`, and every merge releases.
 - The flow folder is committed with PR A and updated in B and C.
 - `flow implemented` uses PR C. PRs A and B are recorded in `journal.md`.
-- Manual checks run on the branch build in a throwaway project before each merge. They use `bun <repo>/src/cli.ts shell` in a scratch dir under `.claude/worktrees/`, never against this repo's own `.metaproject/`.
-- The final check runs after the PR C release in vantage-frontend: `npm i -g @mrciphersmith/keryx@<ver>`, `keryx --version`, then `keryx update` in the project.
+- Manual checks run only after each phase's release: `npm i -g @mrciphersmith/keryx@<ver>`, `keryx --version`, then `keryx update` in the project (vantage-frontend). A problem found there is a fix PR and another release. Pre-merge confidence comes from the `exec` criteria, the review rounds and, for PR C, the locally run 80×24 pty smoke.
 
 ## State × event matrices
 
