@@ -1,75 +1,76 @@
 # Learn Probe Artifact Lifecycle
-Version: 0.1.1
+Version: 0.2.0
 
-## Artifacts
+## Storage and ownership
 
-| Artifact | Path | Written by | Contains |
-|---|---|---|---|
-| Plan | `probes/<pattern-id>/<probe-id>/plan.json` | probe, before the first arm | task, arms, seeds, model, provider, commit, estimate |
-| Comparison | `probes/<pattern-id>/<probe-id>/comparison.json` | probe, after scoring | per-arm rates and intervals, delta, verdict, reason |
-| Transcripts | `probes/<pattern-id>/<probe-id>/runs/<arm>/<seed>.ndjson` | the turn loop, one per arm per seed | the model's own events for that run |
-| Evidence item | inside `candidates/<id>.json` | probe, on `improved`/`regressed` only | `sourceType: "probe"`, `sourceRef` to the comparison |
+All paths below are under `.metaproject/data/learning/probes/<pattern-id>/<probe-id>/`.
+Runtime is not implemented. These are planned artifacts, not records already produced.
 
-`plan.json` and `comparison.json` are the audit record. Transcripts are the raw
-material and the only large artifacts.
+| Artifact | Owner | Lifecycle |
+|---|---|---|
+| plan.json | probe planner | immutable snapshot/environment/request, once before seeds |
+| checkpoint.json | probe orchestrator | atomic mutable seed/spend/finalization state |
+| comparison.json | probe scorer/publication | immutable measurement, never rewritten |
+| runs/base/<seed>.ndjson, runs/probe/<seed>.ndjson | arm runner | raw transcripts, retention applies |
+| evidence in candidate record | existing learning store | dedup by probe sourceRef under scope lock |
 
-## Creation
+Schemas, exact hash encoding, containment and lock ordering are normative in
+[specification](specification.md), §§3 and 6.5–6.6. Plan/checkpoint/comparison
+are retained for the life of the pattern, including rejected/expired patterns.
+Only finalized transcript directories count toward retainRunsPerPattern (default
+20). The planned third prune pass removes oldest runs/ only; it preserves audit
+JSON, skips locked/unfinalized probes and leaves today's two passes unchanged.
+The probes data root is gitignored by a planned init guard, not checked in as data.
 
-A probe id is derived from seven inputs — `(patternId, taskId, model, provider,
-commit, taskSetDigest, runs)` — so any change that would change the measurement
-lands in a different directory. A second run with the same identity resumes an
-incomplete directory and reuses completed seeds, but only when its recorded
-`environment` (which carries `baseRef`) and `runs` request match the invocation;
-otherwise it is refused with `probe-environment-mismatch` and nothing on disk
-changes. A directory that already holds a
-completed `comparison.json` is never overwritten: the re-run is refused with
-`probe-already-completed` (exit 2) and the file stays byte-identical. A different
-result at the same identity is a bug to investigate, not a refresh to store.
+## Identity and resume
 
-## Retention
+Eight identity inputs include trigger/action digest as well as pattern ID;
+retain full SHA-256 to detect collisions at the 12-hex directory name. A different
+measurement gets a different identity. Same identity resumes only matching
+immutable environment/request/snapshot and plan-linked checkpoint. Mismatch is
+probe-environment-mismatch exit 2/no writes, never a silent restart.
 
-- Comparison and plan files: kept for the life of the pattern, including after
-  the pattern becomes `rejected`, `expired` or `superseded`. They are the
-  evidence that the decision was made with a measurement, and deleting them would
-  erase the audit trail W3's `decisions.jsonl` refers to.
-- Transcripts: the newest `retainRunsPerPattern` probe directories per pattern
-  keep their `runs/` trees (default 20); older probe directories keep plan and
-  comparison and lose `runs/`. The cap is per pattern, not global, so one noisy
-  pattern cannot evict another's evidence.
-- Deletion is **planned, not implemented**: today's `src/learning/prune.ts`
-  deletes observation files older than 30 days and expires candidates, and knows
-  nothing about probes. This package adds a third pass — `retainRunsPerPattern`
-  — owned by `src/learning/probe.ts` and invoked from `keryx learn prune`. Until
-  that pass lands, nothing deletes probe transcripts, and the `retainRunsPerPattern`
-  key has no effect. AC17 is the test for the pass.
+Published comparison alone is NOT completion. Recover pending finalization
+without models or rescoring; only checkpoint phase finalized means completed.
+Finalized rerun (including skipped evidence) refuses already-completed exit 2,
+zero writes. Comparison remains byte-identical across every recovery.
+When text/status changes after publication, locate pending original plan as
+specified in §3; do not strand it behind new-run eligibility checks.
 
-## Deletion
+## Persistence and crash matrix
 
-- The planned prune pass deletes `runs/` beyond the retention cap.
-- Deleting a learned pattern deletes its whole `probes/<pattern-id>/` directory.
-  This is the one case where comparison files go: without the record, the
-  evidence item that pointed at them no longer exists either.
-- Worktrees are deleted by the runner, not by retention: end of probe, failure,
-  or interrupt (SIGINT/SIGTERM handler removes both). A leftover worktree is a
-  bug; the runner's test asserts none remains after each fixture case.
+| Crash boundary | Recovery |
+|---|---|
+| After plan/before checkpoint | reconstruct empty checkpoint from intact immutable plan |
+| After running reservation/before confirmed completion | retain charge conservatively; mark failed; no blind replay |
+| After completed seed checkpoint | reuse complete transcript/result/spend, never parse a torn tail as success |
+| During scoring/before comparison | score durable checkpoints, matching environment only |
+| After comparison/before evidence | finalization only, no model call and no comparison rewrite |
+| After evidence/before marker | receipt dedup recovers applied; confidence not applied twice |
+| After finalized marker | rerun exit 2 unchanged, including a finalized skip |
 
-## Crash behavior
+Before any paid call persist running state/reservation; cumulative usage survives
+restart. Unknown interrupted usage consumes its reservation. Atomic checkpoint
+completion is the seed reuse boundary. Persistence failures remain observable
+operational errors, not fabricated completion. Concurrent invocations use probe
+then scope lock; record append uses the existing locked updatePattern primitive.
 
-- Crash before any arm started: `plan.json` exists, no comparison. A resume
-  reprints the plan and starts over.
-- Crash after one arm, before scoring: partial transcripts remain; a resume
-  reuses completed seeds and runs only the missing ones. The comparison records
-  `resumed: true`.
-- Crash during scoring: no comparison is written; the next run scores from the
-  transcripts on disk rather than re-running the model, provided the environment
-  record matches.
+## Drift cut-off
 
-## Gitignore
+Immediately before atomic publication, scope-locked text/status mismatch yields
+unmeasurable/environment-drift with null arms/delta, retaining actual runs.
+After publication, comparison is immutable. Locked finalization first checks for
+an already-applied receipt; otherwise text/status drift skips evidence without
+changing confidence. Checkpoint records evidence=skipped/reason=environment-drift;
+CLI reports separate finalization outcome, exit 3 on the invocation recording it.
+A prior committed receipt remains applied, never undone by later drift.
 
-`.metaproject/data/learning/probes/` joins the existing managed ignore entries
-for `observations/` and `candidates/`. The guard test asserts `git check-ignore`
-matches a probes path after `keryx init`, mirroring the W3-AC9 test shape.
+## Cleanup and safety
 
-Probe artifacts are local by design: the comparison records a model, a provider
-and a commit, and sharing it across machines would invite reading someone else's
-numbers as evidence about your own repository.
+Both arms use disposable owned worktrees at the same resolved commit. Verify all
+gold paths exist in base, remove/verify in both before any seed. Graceful failures
+and SIGINT/SIGTERM remove worktrees and persist run-failed when possible. SIGKILL
+and power loss cannot run cleanup; recovery reconciles stale owned worktrees
+before creating others. Never delete unrelated worktrees. Plan/checkpoint and
+transcripts can contain project text; no publication/upload/scheduling is implied.
+Deletion beyond transcript retention is a separate explicit operator action.

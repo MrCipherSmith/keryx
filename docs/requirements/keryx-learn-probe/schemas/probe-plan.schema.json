@@ -1,0 +1,157 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "probeId",
+    "identityDigest",
+    "patternId",
+    "patternDigest",
+    "taskId",
+    "createdAt",
+    "snapshot",
+    "environment",
+    "request",
+    "estimateUsd"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "probeId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{12}$"
+    },
+    "identityDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "patternId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "patternDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "trigger",
+        "action"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "candidate",
+            "accepted"
+          ]
+        },
+        "trigger": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 400
+        },
+        "action": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 400
+        }
+      }
+    },
+    "environment": {
+      "$ref": "#/$defs/environment"
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runs",
+        "maxUsd"
+      ],
+      "properties": {
+        "runs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "estimateUsd": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx://schemas/learn-probe/plan.schema.json",
+  "title": "Learn Probe Immutable Plan",
+  "description": "Schema version 1. maxUsd null only for dry-run; persisted plans require a finite positive budget. Digest derivation/linkage are semantic checks.",
+  "$defs": {
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "provider",
+        "commit",
+        "baseRef",
+        "taskSetDigest",
+        "baselineDigest"
+      ],
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "baseRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "taskSetDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "baselineDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    }
+  }
+}

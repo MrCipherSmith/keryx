@@ -1,5 +1,5 @@
 # Keryx Learn Probe
-Version: 0.1.1
+Version: 0.2.0
 
 ## Purpose and status
 
@@ -26,6 +26,14 @@ below is planned. Observed effects are not yet measured.
 - [Artifact lifecycle](artifact-lifecycle.md)
 - [Probe task set schema](schemas/probe-task-set.schema.json)
 - [Probe comparison schema](schemas/probe-comparison.schema.json)
+- [Immutable plan schema](schemas/probe-plan.schema.json)
+- [Mutable checkpoint schema](schemas/probe-checkpoint.schema.json)
+- [Examples and local validation](examples/README.md)
+- [Example task set](examples/task-set.json)
+- [Example artifact bundle](examples/artifact-bundle.json)
+- [Local schema/example checker](examples/validate.ts)
+- [Historical review and current dispositions](review-2026-10-20.md)
+- [Docpack update result](docpack-update-result.json)
 
 ## Scope
 
@@ -68,3 +76,11 @@ Non-goals:
   separate from the live producer.
 - `.metaproject/rules/core/skill-lifecycle.mdc` — the rule that mutation never
   lives in a hook; probe is agent-loop work and does not touch that boundary.
+
+## Preparation status
+
+Flow 469 corrections specify immutable plans, durable checkpoints and recoverable
+finalization. Comparison publication is the drift cut-off; later drift skips
+uncommitted evidence and is reported separately. These are planned contracts,
+not implementation claims. Independent review and explicit owner freeze remain
+required. Outcome measurements are post-runtime-release, never live CI gates.

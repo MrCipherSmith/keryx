@@ -1,5 +1,5 @@
 # Learn Probe PRD
-Version: 0.1.1
+Version: 0.2.0
 
 ## Problem
 
@@ -71,17 +71,21 @@ from a closed list — `no-task`, `gold-leak`, `run-failed`, `underpowered`,
 `budget-exceeded`, `environment-drift` — and is never silently folded into
 another verdict. Refusals before any work starts (no terminal, no budget, an
 estimate over the configured ceiling, an ineligible record, an already-completed
-probe, a mismatched resume) are not verdicts and write no artifact; the
+probe, a mismatched resume, invalid arguments or task set) are not verdicts and write no artifact; the
 specification's §5 and §7 are the single vocabulary for both.
 
 Verification: exec `bun test src/learning/probe-score.test.ts`
 
 ### R5 — Evidence reuses the existing confidence model
-`improved` appends one `reinforcement` evidence item, `regressed` one
+With a matching snapshot at finalization, `improved` appends one `reinforcement` evidence item, `regressed` one
 `contradiction`, both with `sourceType: "probe"` and a `sourceRef` pointing at the
 comparison artifact. Confidence is recomputed by `applyEvidence` from
 `src/learning/confidence.ts` with no new formula, no new constant, and no
-probe-specific rate.
+probe-specific rate. Finalization deduplicates sourceRef under the record lock
+using current confidence. Publication is the drift cut-off: earlier text/status
+drift is unmeasurable/environment-drift; later drift skips uncommitted evidence
+without rewriting comparison. CLI reports measurement and evidence outcome
+separately (exit 3 for the invocation recording a skip).
 
 Verification: judged
 
@@ -101,14 +105,15 @@ record it was given; it never writes `.metaproject/project-skills/`,
 Verification: invariant `bun test src/learning/probe.test.ts`
 
 ### R8 — Spending requires a named budget and a terminal
-A real (non-`--dry-run`) probe refuses to start without `--max-usd <n>`, and
+A real (non-`--dry-run`) probe refuses to start without finite positive `--max-usd <n>`, and
 refuses outside an interactive terminal. There is no `--yes`, `--force`, or non-interactive bypass,
 matching the discipline `accept` and `promote` already enforce.
 
 Verification: exec `bun test src/commands/learn-probe.test.ts`
 
 ### R9 — The answer key is absent from the arm at the named paths
-Before an arm starts, every path the task set names in `goldArtifacts` is removed
+Before any seed, every named gold path must exist in the resolved base commit.
+Both arms use the identical read-only context-on baseline/toolset. Every path the task set names in `goldArtifacts` is removed
 from that arm's worktree, and the removal is verified with the existing
 `checkGoldLeakage`. A task whose gold artifact cannot be removed or verified is
 `unmeasurable` with reason `gold-leak`. The claim is limited to what the arm can
@@ -119,8 +124,11 @@ Verification: exec `bun test src/harness/probe/runner.test.ts`
 
 ### R10 — Worktrees are disposable, results are not
 Both worktrees are removed when the probe ends, including on failure and
-interrupt. The comparison artifact and per-seed transcripts remain under the
-probes root.
+graceful interrupt. Uncatchable death cannot execute cleanup; resume reconciles
+owned stale worktrees before further runs. Comparison and transcripts remain under the
+probes root. Immutable plan/text snapshot and durable seed/spend checkpoints
+allow resume without resetting cost or duplicating completed calls. Recoverable
+finalization appends at most one evidence item despite process death.
 
 Verification: judged
 
@@ -128,7 +136,8 @@ Verification: judged
 
 ### Release criteria
 
-- The five Markdown documents and the two schemas exist; every Markdown document
+- The README-indexed Markdown documents and four schemas (task-set, comparison,
+  immutable plan, mutable checkpoint) exist; every Markdown document
   carries `Version`.
 - `keryx learn probe --help` documents the flags in the specification and exits
   zero.
@@ -143,6 +152,9 @@ Verification: judged
   block, asserted by a guard test.
 
 ### Outcome criteria
+
+These are post-runtime-release observations, NOT release or CI gates. Publishing
+this spec alone starts no adoption clock.
 
 - **Adoption**: at least one accepted pattern in this repository carries a
   `sourceType: "probe"` evidence item within 60 days of release. Observed by
@@ -181,9 +193,18 @@ Verification: judged
 
 ## Recommendation
 
-Build R1–R10 as one module with the zone split in the specification, on top of
+Build R1–R10 as one feature across core, client and adapter zones in the specification, on top of
 the existing ablation machinery rather than beside it. Ship it behind no flag:
 the command is inert until a human runs it, and the cost gate is explicit. Do not
 extend it to user-scope records, scheduling, or LLM judging until at least ten
 probes have been recorded and the metrics review in
 [metrics-and-validation.md](metrics-and-validation.md) has been read.
+
+## Preparation constraints and open verification
+
+Keep apply.ts Partial evidence map/domain fallback and proposal sourceType/sections
+unchanged (regression AC12). Router-only probe dispatch is permitted; decision
+modules have no probe dependency. Invalid arguments/task sets are named exit-2
+zero-write refusals; missing ID in valid task set is no-task. The specification
+is the authoritative error/output vocabulary. No unresolved product decision
+remains after operator cut-off clarification; runtime guarantees remain unverified.

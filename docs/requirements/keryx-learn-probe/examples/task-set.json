@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "tasks": [
+    {
+      "id": "wilson-interval",
+      "kind": "deterministic",
+      "prompt": "In this repository, identify the exported function computing a Wilson interval. Answer file and symbol on the final line.",
+      "expect": {
+        "file": "src/metrics/benchmark.ts",
+        "symbol": "wilsonInterval"
+      },
+      "goldArtifacts": [
+        "scripts/benchmark/ablation-tasks.ts"
+      ]
+    }
+  ]
+}

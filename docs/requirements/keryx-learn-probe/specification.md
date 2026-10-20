@@ -1,83 +1,97 @@
 # Learn Probe Specification
-Version: 0.1.1
+Version: 0.2.0
 
-## 1. Identity
+## 1. Identity and status
 
 | Field | Value |
 |---|---|
 | Package | `keryx-learn-probe` |
 | Command | `keryx learn probe <id>` |
-| Parent surface | `keryx learn` (W3 self-learning loop, `src/learning/`) |
-| Status | spec ready; runtime not implemented |
-| Language | TypeScript, Bun runtime, same as the rest of `src/` |
+| Parent | `keryx learn`, W3 self-learning, `src/learning/` |
+| Status | spec ready; runtime not implemented; not frozen |
+| Runtime | TypeScript/Bun (planned) |
 
-Probe is a **measurement**, not a mutation. It reads one learned pattern, runs a
-task twice, writes one comparison artifact, and may append one evidence item to
-that pattern. It never changes `status` and never writes an instruction
-(PRD R7).
+Probe measures one task with and without a pattern. It may append evidence and
+change confidence, but never changes status or writes an instruction. All new
+paths, flags, schemas and lifecycle behavior here are planned, not runtime claims.
 
-## 2. Module placement
+## 2. Module placement and dependency boundary
 
-The import-zone table (`src/lib/import-zones.ts`) decides the placement: a core
-segment may never import `src/harness` (client) or `src/commands` (adapter), and
-the probe needs both the learning store (core) and the turn loop (client).
-
-| Path | Zone | Owns |
+| Planned path | Zone | Responsibility |
 |---|---|---|
-| `src/learning/probe.ts` | core | plan construction from a record + task set, evidence mapping, record update, transcript retention (`retainRunsPerPattern`, called from `keryx learn prune`) |
-| `src/learning/probe-score.ts` | core | pure statistics and verdict resolution over raw per-seed samples |
-| `src/harness/probe/runner.ts` | client | worktree lifecycle, gold-artifact removal, one arm's agent turn |
-| `src/commands/learn-probe.ts` | adapter | CLI flags, terminal and budget gate, orchestration, output |
+| `src/learning/probe.ts` | core | plan, checkpoints, evidence reconciliation, retention |
+| `src/learning/probe-score.ts` | core | pure counts/statistics/verdict |
+| `src/harness/probe/runner.ts` | client | worktrees, gold preparation, arm turns |
+| `src/commands/learn-probe.ts` | adapter | flags, consent/budget, orchestration, output |
 
-`src/commands/learn.ts` gains one `probe` subcommand that delegates to
-`src/commands/learn-probe.ts`; no probe logic lives in the existing file.
+`src/commands/learn.ts` delegates ONLY the probe subcommand to the new adapter
+(lazy dispatch). Accept/apply/promote/graduate modules acquire no probe import,
+condition or behavior. Their suites must pass with the probe adapter unavailable.
+The existing `src/lib/import-zones.ts` classifies top-level segments; nested
+paths inherit core/client/adapter zones, requiring no new top-level zone entry.
+Core never imports client/adapter; client may import core, adapter may import both.
+No probe path imports an instruction/agent/rule/memory writer.
 
-The zone table needs no new entry: `ZONE_TABLE` (`src/lib/import-zones.ts`)
-classifies top-level segments under `src/` only, so `src/harness/probe/` inherits
-`harness` = client and `src/commands/learn-probe.ts` inherits `commands` =
-adapter by nesting. `src/lib/import-policy.ts` already enforces that direction —
-the new client code may import core, the new adapter code may import both — and
-`unclassifiedSegments()` stays empty because no new top-level segment appears.
+## 3. Storage, identity and locking
 
-## 3. Storage structure
-
-```
+```text
 .metaproject/data/learning/
-  candidates/<id>.json                        existing (unchanged)
-  observations/<date>.jsonl                   existing (unchanged)
-  probes/
-    tasks.json                                optional default task set
-    <pattern-id>/
-      <probe-id>/
-        plan.json                             what was about to run
-        comparison.json                       the scored result (data contract 6.2)
-        runs/
-          base/<seed>.ndjson                  one transcript per seed
-          probe/<seed>.ndjson
+  candidates/<id>.json               existing record store
+  observations/<date>.jsonl          existing observations
+  probes/tasks.json                 optional default task set
+  probes/<pattern-id>/<probe-id>/
+    plan.json                       immutable intent and text/status snapshot
+    checkpoint.json                 mutable durable seed/spend/finalization state
+    comparison.json                 immutable published measurement
+    runs/base/<seed>.ndjson
+    runs/probe/<seed>.ndjson
 ```
 
-`probe-id` is
-`sha256(patternId + "\0" + taskId + "\0" + model + "\0" + provider + "\0" + commit + "\0" + taskSetDigest + "\0" + runs)`
-truncated to 12 hex characters. Every input that changes the measurement is part
-of the identity, so a re-run with a different model, provider, commit, task set
-or seed count lands in a different directory instead of silently resuming
-someone else's numbers. A re-run with the identical identity resumes the
-existing directory; if its `comparison.json` is already complete, the command
-refuses with `probe-already-completed` (exit 2) and writes nothing.
+Use `learningDataDir()` and `assertInsideLearningRoot()` in `src/learning/paths.ts`.
+All writes are contained and atomic. `keryx init` must ignore the probes data root
+in its managed gitignore block (new guard test; not a current capability).
 
-The same rule applies to a partially completed directory: the recorded
-`environment` and `runs` request are compared with the new ones before any arm
-starts, and a mismatch is refused rather than merged.
+`patternDigest` = full lowercase SHA-256 of UTF-8 `JSON.stringify([trigger, action])`
+without Unicode normalization. `taskSetDigest` hashes exact task-set file bytes.
+The full `identityDigest` is SHA-256 of these eight UTF-8 strings joined by NUL:
+`patternId, patternDigest, taskId, model, provider, commit, taskSetDigest, runs`.
+`runs` is its base-10 integer spelling; NUL is prohibited in all string inputs.
+`commit` is the full resolved object id, not a moving ref. `probeId` is the first
+12 lowercase hex characters. Keep the full hash and compare it before reuse:
+48-bit directory names have a birthday bound near 2^24 probes, not uniqueness.
+A short-path collision is probe-environment-mismatch, never an overwrite.
 
-Root resolution reuses `learningDataDir()` (`src/learning/paths.ts`) — the probes
-root is a sibling of `observations/` and `candidates/`, not a new top-level
-store. Every write goes through `assertInsideLearningRoot()`.
+Plan pins the original eligible status, trigger/action and digest. A changed text
+creates a new identity rather than reusing stale seeds. Within an existing
+identity, compare immutable environment, snapshot, request (including budget),
+full hash and plan linkage before any write/model call. Mismatch or corrupt state
+is probe-environment-mismatch, exit 2 unchanged. Baseline changes refuse resume,
+even though the directory hash does not include baselineDigest. Environment
+contains model/provider, resolved commit, baseRef, taskSetDigest, baselineDigest.
+The latter hashes UTF-8 JSON serialization of an array containing the exact
+baseline prompt, ordered tool definitions/retrieval configuration and scorer
+version, so changed tools/scoring cannot silently reuse results.
+
+A per-probe exclusion lock serializes all invocations, including resume/scoring.
+Use lock order probe then existing scope/store lock, never reacquire a
+non-reentrant scope lock through updatePattern. The immediate pre-publication
+snapshot check and atomic comparison publication share a scope-lock critical
+section with record writers. A new contained lock-aware integration is needed;
+today's updatePattern alone does not transact across record and comparison files.
+Retention skips locked or unfinalized probes.
+
+For recovery of an existing published comparison, do not create a fresh identity
+or reject merely because current record status changed: locate its pending plan
+by matching the original invocation environment/request, then finalize it with
+that immutable snapshot. If multiple pending plans match after a text change,
+refuse probe-environment-mismatch rather than choosing one. Without a published
+comparison, changed snapshot refuses resume; a genuinely new measurement uses
+its own identity. Finalized identities always refuse already-completed, including
+skipped evidence. Recovery does not rewrite plan or comparison.
 
 ## 4. Configuration
 
-Probe needs no config file to exist. Three optional keys extend
-`.metaproject/learning.config.json` (`src/learning/config.ts`). Example of a
-fully populated block:
+Optional extension of `.metaproject/learning.config.json`:
 
 ```json
 {
@@ -91,300 +105,314 @@ fully populated block:
 }
 ```
 
-Defaults when the file or the `probe` block is absent:
+Defaults: defaultTaskSet as above, retainRunsPerPattern 20, maxUsdPerProbe unset.
+The config ceiling never supplies the required explicit CLI budget. If estimate
+exceeds configured maxUsdPerProbe, refuse probe-over-budget before writes.
+Malformed probe blocks are ignored as a whole; validating new keys is new work,
+not an assertion that today's loader already accepts them. Config ceilings, if
+present, must be finite positive; retention must be a nonnegative integer.
+Absent/unreadable/unparseable/schema-invalid task-set files and duplicate task
+IDs are probe-bad-task-set. A missing ID in a valid set is instead no-task.
 
-| Key | Default |
-|---|---|
-| `defaultTaskSet` | `.metaproject/data/learning/probes/tasks.json` |
-| `retainRunsPerPattern` | `20` |
-| `maxUsdPerProbe` | **unset** — no ceiling is assumed |
+Pricing comes from `loadModelProfiles()[profileKey(provider, model)]` in
+`src/harness/routing/model-profile.ts`: priceInputPerMillion/priceOutputPerMillion
+have numeric value or the explicit string unknown. Estimate
+`2 * runs * (estimatedInput * priceIn + estimatedOutput * priceOut) / 1e6`,
+using observed per-turn median input/output usage when available; otherwise
+unknown/null. See metrics-and-validation.md, Cost accounting. The adapter
+supplies pricing to core (no core-to-harness/TUI import). `estimateTaskCostUsd`
+in tui-shell.ts is an actual usage/cache-accounting reference, not a dependency.
 
-An unset `maxUsdPerProbe` is what makes `--max-usd` mandatory rather than
-defaulted: this package does not choose a spend ceiling for the operator
-silently.
-- `maxUsdPerProbe` set: a run whose estimate exceeds it is refused with reason
-  `probe-over-budget` before any worktree is created.
-- A malformed block is ignored as a whole, exactly as `loadLearningConfig` treats
-  malformed capabilities today.
+## 5. CLI and output contract
 
-## 5. CLI surface
-
-```
+```text
 keryx learn probe <id> --task <task-id> [options]
-
-  --task <task-id>       required; looked up in the task set (absent -> unmeasurable / no-task, see below)
-  --task-set <path>      task set JSON; default from config or built-in path
-  --runs <n>             seeds per arm; default 3, minimum 1
-  --model <id>           model for both arms; default: the current session model
-  --provider <name>      provider for both arms; default: the configured provider
-  --max-usd <n>          required for a real run; ceiling for the whole probe
-  --dry-run              print plan and estimate; writes nothing, runs nothing
-  --json                 machine-readable output
-
-keryx learn probe <id> --dry-run        # allowed without a TTY
-keryx learn probe <id> ...              # requires a real interactive terminal
+  --task <task-id>       required; valid ID not found -> unmeasurable/no-task
+  --task-set <path>      default from config or probes/tasks.json
+  --runs <n>             integer >=1, default 3 seeds per arm
+  --model <id>           same model for both arms; current session default
+  --provider <name>      same provider for both arms; configured default
+  --max-usd <n>          finite positive whole-probe budget, required for real run
+  --dry-run              TTY-free; plan/estimate only, zero writes/model calls
+  --json                 one machine-readable JSON value on stdout
 ```
 
-Behavior:
+Real runs require a real interactive terminal and typing the pattern ID after
+reading the plan (task, arms, seeds, model, provider, estimate, ceiling). No yes,
+force, agent-native tool or noninteractive bypass. Dry-run is the sole TTY-free
+path and may show maxUsd null when unspecified; a supplied invalid budget is
+still refused. Real finalization recovery also requires terminal approval/budget,
+but never spends again. New runs require a project candidate/accepted record;
+user scope is refused. Recovery eligibility is governed by §6.6, not a new-run
+gate that would strand a rejected record's published comparison.
 
-- `<id>` must resolve to a `status: candidate` or `status: accepted` record in
-  project scope. A `rejected`, `expired` or `superseded` record is refused with
-  reason `probe-ineligible-status`; a user-scope record is refused with
-  `probe-user-scope-unsupported` in v1.
-- A real run prints the plan (task, arms, seeds, model, estimate) and requires
-  typing the pattern's `id` to confirm, the same confirmation shape
-  `learn promote` and `learn graduate apply` use.
-- `--max-usd` missing on a real run: refused, reason `probe-no-budget`.
-- No TTY on a real run: refused, reason `probe-no-tty`. No flag bypasses it.
-- An existing, complete `comparison.json` for this probe id: refused, reason
-  `probe-already-completed` (already-complete runs are never overwritten).
-- An interrupted directory whose recorded `environment` or `runs` request differs
-  from this invocation: refused, reason `probe-environment-mismatch`. A resumed
-  probe never mixes two environments into one comparison.
-- A `--task` id absent from the task set is **not** a refusal: the probe writes a
-  comparison with `verdict: "unmeasurable"`, `reason: "no-task"`, null arms,
-  empty `runs`, and exits `3`. A stale task set is visible in the artifact
-  instead of failing silently.
-- **Budget overrun.** Spend is summed from the turn loop's per-call usage after
-  each seed. Crossing `--max-usd` mid-probe stops the remaining seeds, writes the
-  comparison with `verdict: "unmeasurable"` and `reason: "budget-exceeded"`, and
-  exits `3`. An overrun never becomes `indistinguishable`: a truncated run
-  answered a different question than the one it planned to ask.
-- Refusals (`probe-no-tty`, `probe-no-budget`, `probe-over-budget`,
-  `probe-ineligible-status`, `probe-user-scope-unsupported`,
-  `probe-already-completed`, `probe-environment-mismatch`) exit `2` and write
-  nothing — not even the probes directory.
-- Exit codes: `0` for a written comparison (`improved`, `regressed`,
-  `indistinguishable`); `3` for `unmeasurable` (comparison still written); `2`
-  for a refusal that wrote nothing.
-- `--json` emits the comparison object on stdout and nothing else.
+Before writes validate arguments, budget, task set, status/scope, existing state,
+TTY and configured estimate ceiling. Refusals exit 2, write nothing (including no
+new directory), and use exactly these names:
+
+| Refusal | Condition |
+|---|---|
+| probe-invalid-arguments | missing task flag/ID, invalid ID, noninteger or <1 runs, invalid other values |
+| probe-no-budget | real budget absent, or supplied zero/negative/NaN/infinite budget |
+| probe-bad-task-set | missing/unreadable/invalid file, unsafe paths, duplicate task IDs |
+| probe-no-tty | real invocation lacks interactive terminal |
+| probe-over-budget | estimate exceeds configured ceiling |
+| probe-ineligible-status | new run record rejected/expired/superseded |
+| probe-user-scope-unsupported | user-scope probing in v1 |
+| probe-environment-mismatch | incompatible/corrupt resume state or hash collision |
+| probe-already-completed | requested identity has finalized checkpoint |
+
+Missing task ID *in a valid task set* writes no-task comparison, not a refusal.
+Spend is cumulative across invocations, with durable reservations before calls.
+Crossing ceiling stops remaining seeds and produces budget-exceeded, never an
+inconclusive measured verdict. Unknown pricing is not permission for unbounded
+calls: use a conservative reservation or stop, never bypass the ceiling.
+
+Exit 0: finalized improved/regressed/indistinguishable. Exit 3: unmeasurable OR
+the invocation recording post-publication skipped/environment-drift. Exit 2:
+refusal/no writes. Operational persistence errors exit 1 and leave recoverable
+state; do not pretend they are successful finalization. Graceful interrupt writes
+run-failed when possible and cleans worktrees; power loss recovery is §6.5.
+
+With --json, stdout contains exactly one of these envelopes, no human text:
+
+```text
+{ "schemaVersion": 1, "comparison": <comparison>, "finalization": <checkpoint.finalization> }
+{ "schemaVersion": 1, "dryRun": true, "plan": <plan> }
+{ "schemaVersion": 1, "refusal": "<named reason>" }
+```
+
+Operational errors are diagnosed on stderr (no success envelope). Human plan,
+confirmation and diagnostic paths go to stderr/TTY. Without --json, show BOTH
+measurement verdict and evidence outcome, so immutable improved plus skipped is
+not misrepresented as new confidence. The envelope is an output shape, not a
+fifth persistent schema; validate its nested documents and exact keys in tests.
 
 ## 6. Data contracts
 
-### 6.1 Task set — [schemas/probe-task-set.schema.json](schemas/probe-task-set.schema.json)
+### 6.1 Task set
 
-```json
-{
-  "schemaVersion": 1,
-  "tasks": [
-    {
-      "id": "wilson-interval",
-      "kind": "deterministic",
-      "prompt": "In this repository, which exported function computes ...",
-      "expect": { "file": "src/metrics/benchmark.ts", "symbol": "wilsonInterval" },
-      "goldArtifacts": ["scripts/benchmark/ablation-tasks.ts"]
-    }
-  ]
-}
-```
+[schema](schemas/probe-task-set.schema.json), [example](examples/task-set.json).
+Each unique task has id, deterministic/stochastic kind, prompt, expect file/symbol,
+and goldArtifacts. Scoring compares normalized final answer file/symbol as the
+ablation scorer does; no LLM judge. Relative paths must be nonempty, within the
+repository, without absolute paths, backslashes or `..` segments. Semantic
+validation rejects duplicate IDs and validates path containment before writes.
 
-- `kind`: `deterministic` (one seed suffices) or `stochastic` (three seeds
-  minimum, PRD R3).
-- `expect`: the objectively checkable answer. The scorer compares the model's
-  final answer line against `file` and `symbol` with the same normalization the
-  ablation tasks use. There is no LLM judge.
-- `goldArtifacts`: repository-relative paths that contain the answer key and must
-  be removed from every arm's worktree before the agent starts (PRD R9).
-- A task whose `goldArtifacts` entry does not exist in the base ref, or survives
-  removal, yields `unmeasurable` / `gold-leak` (exit 3) with a comparison that
-  records the reason and carries no arms — an unverified key is not a passing
-  run.
-- Both arms run the **read-only** tool set `scripts/benchmark/run-ablation.ts`
-  already uses (filesystem reads plus the metaproject retrieval tools). No write
-  tool is offered, so a probe cannot mutate its worktree, and the claim in PRD R9
-  is limited to what that tool set can reach: the named paths are absent before
-  the turn starts.
+Before ANY seed, verify every gold artifact exists in the resolved base commit,
+then remove from BOTH worktrees and verify removal with checkGoldLeakage.
+A missing base path or surviving removal is unmeasurable/gold-leak, null arms,
+null delta and runs=[] (AC8, §7). Explicit base-ref existence checking is new work:
+checkGoldLeakage alone is insufficient. Diagnose missing-in-base versus
+survived-removal and paths on stderr, NOT a fictional reachablePaths property.
+Both arms use read-only context-on tooling: filesystem reads plus search_code,
+graph_affected, memory_search, following buildTools(root, "context-on") in
+scripts/benchmark/run-ablation.ts. No write tool can restore a removed path.
+No runtime import of producer-side scripts/benchmark/ablation-tasks.ts; a task
+export converter is optional future script work.
 
-The spec does not import `scripts/benchmark/ablation-tasks.ts` at runtime: that
-file is a producer-side constant, and coupling a shipped command to a script
-would invert the zone direction. A converter that exports its tasks into this
-JSON shape is a separate, optional script.
+### 6.2 Comparison
 
-### 6.2 Comparison — [schemas/probe-comparison.schema.json](schemas/probe-comparison.schema.json)
+[schema](schemas/probe-comparison.schema.json). schemaVersion 1;
+probeId, full identityDigest, patternDigest, patternId, taskId, createdAt, resumed,
+environment, arms, delta, verdict, optional reason and actual runs.
+Measured arms carry seeds/successes/rate/Wilson CI and optional usage totals;
+delta carries rate/Newcombe CI and optional usage deltas. Every unmeasurable has
+arms={base:null,probe:null}, delta=null; pre-run no-task/underpowered/gold-leak
+have runs=[]. Partial failures retain actual runs/transcripts, never partial
+rates. Runs name arm/seed, answered/success booleans and safe relative transcript
+path. Semantic checks enforce unique arm/seed pairs, seed bounds, success implies
+answered, complete paired counts for measured verdicts and aggregate consistency.
 
-Holds: `probeId`, `patternId`, `taskId`, `createdAt`, `resumed`,
-`environment` (`model`, `provider`, `commit`, `baseRef`, `taskSetDigest`),
-`arms.base` and `arms.probe` (each `seeds`, `successes`, `rate`, `ci`, and
-`tokens`/`toolCalls` when the provider reported them), `delta`
-(`rate`, `ci`, and the token/tool-call deltas), `verdict`, `reason`, and `runs[]`
-(one entry per seed with its transcript path).
+### 6.3 Evidence extension and unchanged apply
 
-For `unmeasurable`, `arms.base` and `arms.probe` are `null` and `runs` may be
-empty: the artifact records that the question was not answerable, and the schema
-does not force a fabricated zero-success rate or a transcript that never
-happened.
-
-`environment` is written before the first arm starts and re-read before scoring.
-A mismatch between the two arms' recorded environment is `unmeasurable` with
-reason `environment-drift`.
-
-### 6.3 Evidence extension
-
-Four places enumerate evidence source types and they must move together: the
-type union `EvidenceSourceType` (`src/learning/types.ts`), the runtime validator
-whitelist `EVIDENCE_SOURCE_TYPES` (`src/learning/schema.ts`, which is what
-`validateLearnedPattern` actually checks before a write), the shipped schema
-`src/learning/learned-pattern.schema.json`, and the documented schema
+Four enforcement sites gain sourceType probe together: src/learning/types.ts
+EvidenceSourceType, src/learning/schema.ts EVIDENCE_SOURCE_TYPES, shipped
+src/learning/learned-pattern.schema.json and documented
 `docs/requirements/keryx-agent-platform-expansion/schemas/learned-pattern.schema.json`.
-All four gain one value: `"probe"`. Adding it to the type alone would compile and
-then fail at write time, so AC6 asserts the written record still passes `validateLearnedPattern` after the
-append.
+Type-only addition would fail runtime validation. No change to confidence constants.
 
-An appended item is exactly:
+src/learning/apply.ts is NOT a fifth enforcement site: EVIDENCE_TO_SOURCE_TYPE is
+Partial; sourceTypeFor skips unmapped evidence then uses existing domain fallback.
+Keep that map, fallback and gdskills LearningSourceType/proposal vocabulary
+unchanged. Appending probe evidence must not change proposal sourceType or sections.
 
-```json
-{
-  "kind": "reinforcement",
-  "sourceType": "probe",
-  "sourceRef": ".metaproject/data/learning/probes/<pattern-id>/<probe-id>/comparison.json",
-  "observedAt": "2026-10-20T00:00:00.000Z",
-  "weight": 1.0
-}
-```
-
-Weight mapping, all inside the existing `MAX_EVIDENCE_WEIGHT = 1.5`:
-
-| Verdict | `kind` | `weight` | Evidence written |
+| Verdict, matching snapshot at finalization | kind | weight | append |
 |---|---|---|---|
-| `improved` | `reinforcement` | `1.0` | yes |
-| `regressed` | `contradiction` | `1.5` | yes |
-| `indistinguishable` | — | — | no |
-| `unmeasurable` | — | — | no |
+| improved | reinforcement | 1.0 | once |
+| regressed | contradiction | 1.5 | once |
+| indistinguishable/unmeasurable | none | none | none |
 
-A regression outweighs an improvement because a single reproduced failure is
-harder evidence than a single reproduced success — the same asymmetry the
-confidence model already encodes with `CONTRADICT_RATE > REINFORCE_RATE`.
+sourceRef is the repository-relative path to this immutable comparison;
+observedAt equals comparison.createdAt, sourceType is probe. Dedup key is
+(sourceType, sourceRef). Compute confidence from CURRENT locked record with
+applyEvidence; MAX_EVIDENCE_WEIGHT=1.5 and existing asymmetry are unchanged.
 
-### 6.4 How the pattern reaches the arm
+### 6.4 Pattern injection
 
-The pattern is injected as one instruction block appended to the system
-instruction for every turn of the `probe` arm:
+Both arms share the exact context-on baseline prompt, harness envelope, ordered
+tool definitions/retrieval configuration and scorer pinned by baselineDigest.
+Append to probe system instructions only:
 
-```
+```text
 <learned-pattern id="<pattern-id>">
-When <trigger>, <action>.
+When <snapshot.trigger>, <snapshot.action>.
 </learned-pattern>
 ```
 
-The `base` arm receives the same system instruction with an empty block, so the
-two arms differ by that text and nothing else. No file in either worktree is
-modified — the pattern is not written into `AGENTS.md`, a rule, or a skill, which
-keeps the repository byte-identical across arms and keeps the probe from
-practising the very write it is meant to justify.
+Base uses an empty block. Assert the sole prompt diff is this block, not a
+context-off versus context-on difference. Validate snapshot text (8–400 chars)
+before worktrees. Never write AGENTS.md, skills or rules. Worktrees start from
+the same resolved commit and apply identical gold removal.
 
-`trigger` and `action` are validated at record creation (8–400 characters,
-`learned-pattern.schema.json`), so an empty block cannot reach the runner; a
-record that somehow lacks them is refused before any worktree starts.
+### 6.5 Immutable plan and mutable checkpoint
 
-## 7. Scoring
+[plan schema](schemas/probe-plan.schema.json),
+[checkpoint schema](schemas/probe-checkpoint.schema.json),
+[bundle example](examples/artifact-bundle.json),
+[local checks](examples/README.md).
 
-One arm's outcome for one seed is a boolean: the final answer line names the
-expected file and symbol. Per-arm success rate is `successes / seeds`; the
-per-arm interval is the existing `wilsonInterval` from `src/metrics/benchmark.ts`.
+Plan includes IDs/hashes, original eligible status/text snapshot, environment,
+request runs/maxUsd and nullable estimateUsd, createdAt. Null maxUsd is allowed
+only for printed dry-run plans; a persisted real plan always has positive budget.
+Persist it once before seeds. Checkpoint pins SHA-256 of exact plan bytes, phase,
+spendUsd/reservedUsd, seed entries and nullable finalization. Each seed also pins
+planDigest, arm/index, transcript, state, answered/success and chargedUsd.
+Before a model call atomically persist running plus a finite reservation bounded
+by remaining ceiling; usage and completion/failure are durably checkpointed.
+spendUsd includes settled/conservatively charged calls; reservedUsd covers
+outstanding calls, never resets on resume. Actual provider overrun still stops
+remaining seeds; a reservation is not a promise of zero possible overrun.
 
-The design is paired by construction — the same task, environment and seed index
-in both arms — but the scored quantity is the difference of two independent
-proportions, because the two arms are separate runs rather than one run compared
-with itself. The interval is therefore a Newcombe hybrid-score interval (95%),
-which is conservative for a paired design: it cannot manufacture significance
-the data does not support. `src/learning/probe-score.ts` owns this function and
-is pure: counts in, numbers out, no IO.
+Reuse only completed entries with matching planDigest and complete transcripts;
+never infer success/completion from torn NDJSON. Interrupted running entries have
+unknown completion: charge their persisted reservation conservatively, mark
+failed and finalize run-failed (budget-exceeded takes precedence if exceeded).
+Do not blindly replay an in-flight paid call. Crash before checkpoint creation
+can reconstruct empty state from an intact plan. Graceful SIGINT/SIGTERM tries
+cleanup plus run-failed; SIGKILL/power loss cannot execute handlers, so recovery
+reconciles owned stale worktrees before any new ones. Signal/resume plumbing is
+new work, not a capability inherited automatically from the ablation script.
 
-Verdict resolution, in order:
+### 6.6 Recoverable exactly-once finalization and drift cut-off
 
-1. The task id is absent from the task set → `unmeasurable` / `no-task`.
-2. Fewer seeds than the task's `kind` requires → `unmeasurable` / `underpowered`.
-3. Any arm's environment record missing or mismatched → `unmeasurable` /
-   `environment-drift`.
-4. Any seed's turn failed to produce an answer line at all → `unmeasurable` /
-   `run-failed` (a crashed arm is not a zero).
-5. Spend crossed the ceiling → `unmeasurable` / `budget-exceeded`.
-6. Delta interval entirely above zero → `improved`.
-7. Delta interval entirely below zero → `regressed`.
-8. Otherwise → `indistinguishable`.
+1. Under probe lock score durable checkpoints. Immediately before publication,
+   under scope lock reread record and compare status/text to immutable snapshot.
+   Drift => unmeasurable/environment-drift, null arms/delta, actual runs, no
+   evidence. Atomically publish comparison while the same scope lock is held.
+   Publication is the cut-off: never rewrite comparison afterward.
+2. Set checkpoint phase finalizing. If comparison exists after a crash, resume
+   from its exact bytes (even if checkpoint phase is stale): no model calls,
+   no rescoring, no comparison rewrite. Validate plan/comparison linkage first.
+3. For improved/regressed, locked updatePattern FIRST checks existing evidence
+   sourceType=probe/sourceRef=this comparison. A matching receipt means record
+   commit already succeeded: recover applied without applying confidence twice,
+   even if a later writer changed text/status. Never roll back historical evidence.
+4. Without receipt, compare CURRENT text/status to snapshot under the lock. If
+   drifted AFTER publication: leave record/confidence unchanged and checkpoint
+   finalization={evidence:skipped,reason:environment-drift}. Keep measured verdict
+   byte-identical; CLI reports separate finalization outcome and exits 3 for the
+   invocation recording skip. Otherwise append once, compute confidence/level
+   from locked current record and preserve concurrent unrelated evidence.
+5. Indistinguishable/unmeasurable use finalization={evidence:not-needed}, no
+   record write. Persist finalization marker with phase finalized only after
+   required record commit succeeds. Failure is pending recovery, never success.
+   Crash after comparison/before record resumes step 3; after record/before
+   marker dedup recovers applied. Two invocations serialize to at most one append.
+   Crash after marker => already-completed exit 2, no writes, including skipped.
 
-The six `unmeasurable` reasons defined in §6.1 and this section are the complete
-vocabulary; the schema enforces it as an enum, so a seventh spelling cannot
-appear without a schema change. The seven refusals in §5 are not verdicts and
-never reach an artifact.
+## 7. Statistics and verdict precedence
 
-Token and tool-call deltas are recorded and reported, never used to decide the
-verdict: a pattern that achieves the same outcome with fewer tokens is not
-`improved` by this contract, and saying so is a deliberate limitation rather than
-an oversight.
+Per seed success means expected file AND symbol in the normalized final answer.
+Per-arm successes/seeds and 95% Wilson interval reuse wilsonInterval from
+src/metrics/benchmark.ts. Use Newcombe hybrid-score interval for difference of
+independent proportions; conservative for paired-by-seed construction. Pure
+probe-score counts-in/numbers-out; tokens/tools reported, never verdict criteria.
+
+Order (the six unmeasurable reasons are a closed enum):
+1. Valid task-set lacks task ID -> no-task, no seeds.
+2. Fewer than 3 seeds for stochastic or 1 for deterministic -> underpowered.
+3. Missing gold in base commit or removal failure -> gold-leak, before all seeds.
+4. Missing/mismatched arm environment or pre-publication text/status drift -> environment-drift.
+5. Spend exceeded ceiling -> budget-exceeded (including truncated remaining seeds).
+6. Any failed/unrecoverable running seed or no answer -> run-failed; one failed
+   seed suffices, even if others succeeded. Preserve actual runs, null rates.
+7. Delta CI entirely >0 -> improved; entirely <0 -> regressed; else indistinguishable.
 
 ## 8. Integration points
 
-| Point | Use |
+| Existing surface | Planned use/new obligation |
 |---|---|
-| `src/learning/store.ts` | `readPattern`, `updatePattern` under the existing file lock; no new store |
-| `src/learning/confidence.ts` | `applyEvidence` for the confidence update; no new constants |
-| `src/learning/scan.ts` | the record's text is already scanned at creation; the probe writes no new free text into the record |
-| `src/metrics/benchmark.ts` | `wilsonInterval`; `validatePairedBenchmark` if the comparison is ever exported as a manifest |
-| `src/metrics/ablation-runner.ts` | reference for arm scoring shape; not imported — probe scores two arms of the same task, not two variants of a context policy |
-| `src/harness/child/git-worktree-port.ts` | create/remove one worktree per arm |
-| `src/commands/agent.ts` (`runAgentTurn`) | run one arm headlessly, exactly as `scripts/benchmark/run-ablation.ts` does |
-| `src/metrics/leakage.ts` | `checkGoldLeakage` after removal, before the turn |
-| `src/learning/prune.ts` | new third pass calling `retainRunsPerPattern` from `probe.ts`; today's two passes are unchanged |
-| `src/commands/learn.ts` | dispatch only |
+| learning/store.ts | readPattern, locked snapshot publication integration, updatePattern dedup; no nested lock |
+| learning/confidence.ts | applyEvidence unchanged, locked current confidence |
+| learning/scan.ts | record text already scanned at creation; probe adds no free text to record |
+| metrics/benchmark.ts | wilsonInterval; validatePairedBenchmark only if later exported |
+| metrics/ablation-runner.ts | reference scoring shape, NOT imported variant-comparison producer |
+| harness/child/git-worktree-port.ts | create/remove isolated worktrees |
+| commands/agent.ts runAgentTurn | headless arm execution; new signal/checkpoint integration |
+| metrics/leakage.ts | removal verification PLUS explicit new base-commit existence check |
+| learning/prune.ts | new transcript pass, existing two passes unchanged |
+| commands/learn.ts | probe-only lazy dispatch, decision behavior unchanged |
 
-## 9. Acceptance criteria
+## 9. Acceptance criteria (planned fixture tests, not live-model gates)
 
-- **AC1** `keryx learn probe --help` exits zero and lists every flag in §5.
-- **AC2** `--dry-run` without a TTY prints the plan (task, arms, seeds, model,
-  estimate) and writes nothing: no probes directory, no worktree, no evidence.
-- **AC3** A real run without `--max-usd` is refused with reason
-  `probe-no-budget`, exit `2`, and writes nothing. A run whose estimate exceeds
-  the configured `maxUsdPerProbe` is refused with `probe-over-budget`, exit `2`,
-  and writes nothing — distinct from AC15's mid-run `budget-exceeded`.
-- **AC4** A real run outside a TTY is refused with reason `probe-no-tty`, exit
-  `2`, and writes nothing.
-- **AC5** A completed probe writes `comparison.json` and `plan.json` under
-  `probes/<pattern-id>/<probe-id>/`, both schema-valid, and leaves both worktrees
-  removed.
-- **AC6** `improved` appends exactly one `reinforcement` item with
-  `sourceType: "probe"` and weight `1.0`; the record's confidence equals
-  `applyEvidence(old, "reinforcement", 1.0)`; and the stored record still passes
-  `validateLearnedPattern` (`src/learning/schema.ts`) after the append.
-- **AC7** `regressed` appends exactly one `contradiction` item with weight `1.5`;
-  `indistinguishable` and `unmeasurable` append none and leave confidence
-  byte-identical.
-- **AC8** A task set whose `goldArtifacts` path is present in the worktree after
-  removal yields `unmeasurable` / `gold-leak`, exit `3`, no evidence, and a
-  schema-valid comparison with `arms.base` and `arms.probe` both `null` and an
-  empty `runs`.
-- **AC9** The record's `status` and `updatedAt`-independent fields are unchanged
-  by a probe; only `evidence`, `confidence`, `confidenceLevel` and `updatedAt`
-  may differ.
-- **AC10** An interrupted probe whose recorded `environment` and `runs` request
-  match the invocation resumes from its existing directory and reuses completed
-  seeds; one whose recorded values differ is refused with
-  `probe-environment-mismatch`, exit `2`, and writes nothing (AC18). A completed
-  `comparison.json` is never overwritten under any verdict, and a re-run of a
-  completed probe id is refused with `probe-already-completed`, exit `2`, leaving
-  the file byte-identical.
-- **AC11** No probe code path imports a writer under
-  `.metaproject/project-skills/`, `.metaproject/rules/`, or
-  `.metaproject/agents/`; the guard test asserts the import graph.
-- **AC12** (R1) The import graph of `src/commands/learn.ts` and the four
-  decision commands' modules contains no edge into `learn-probe.ts`, and each
-  passes its existing test suite with probe absent from the build.
-- **AC13** (R2) Both arms' recorded `environment` is identical, the two
-  worktrees are byte-identical, and the only difference between the arms' system
-  instructions is the `<learned-pattern>` block; the diff is asserted in the
-  runner test.
-- **AC14** (R3) A `stochastic` task run with `--runs 2` yields `unmeasurable` /
-  `underpowered`, never `indistinguishable`; a `deterministic` task run with
-  `--runs 1` is allowed.
-- **AC15** (R4) A table-driven test feeds counts for each of the four verdicts
-  and asserts exactly one verdict per input, including all six `unmeasurable`
-  reasons.
-- **AC16** (R10) A runner test that throws mid-arm, and a runner test that
-  receives SIGINT, both leave zero worktrees behind and still write the
-  comparison with `run-failed`.
-- **AC17** Retention: with `retainRunsPerPattern: 2` and three completed probe
-  directories for one pattern, the transcript pass deletes only the oldest
-  directory's `runs/` and leaves every `plan.json` and `comparison.json` intact.
-- **AC18** An interrupted directory whose recorded `environment` or `runs`
-  request differs from the invocation is refused with
-  `probe-environment-mismatch`, exit `2`, and its files are unchanged.
+- **AC1** Help lists every §5 flag, exit 0.
+- **AC2** TTY-free dry-run prints plan/estimate, zero writes/worktrees/model calls.
+- **AC3** Absent real budget and supplied zero/negative/NaN/infinite budget refuse
+  probe-no-budget; estimate above configured ceiling refuses probe-over-budget;
+  all exit 2/no writes, distinct from mid-run budget-exceeded.
+- **AC4** Real invocation without terminal refuses probe-no-tty exit 2/no writes.
+- **AC5** Completed run writes schema-valid plan/checkpoint/comparison at §3 paths;
+  worktrees removed. Persisted plan has positive budget.
+- **AC6** Improved with matching snapshot appends one reinforcement/probe/1.0;
+  confidence=applyEvidence(lockedCurrent,reinforcement,1.0), record validator passes.
+- **AC7** Regressed with matching snapshot appends one contradiction/1.5;
+  indistinguishable/unmeasurable append none and leave confidence untouched.
+- **AC8** Missing base gold OR surviving removal in either arm -> gold-leak exit 3,
+  null arms/delta, runs=[], no evidence. Path diagnostics only on stderr.
+- **AC9** Probe never changes status, trigger/action or other record fields except
+  evidence/confidence/confidenceLevel/updatedAt; unrelated concurrent writes survive.
+- **AC10** Matching checkpoint reuses completed seeds. Pending comparison resumes
+  finalization only; published comparison remains byte-identical under every verdict.
+  Finalized rerun refuses already-completed exit 2/no writes, including skips.
+- **AC11** Import graph has no path to instruction/rule/agent/memory writers.
+- **AC12** Router-only probe dispatch permitted; accept/apply/promote/graduate have
+  no probe dependency and suites pass without probe adapter. Apply Partial map/
+  domain fallback unchanged; probe evidence never changes proposal sourceType/sections.
+- **AC13** Identical pinned context-on environment/worktrees/tools/baseline;
+  sole system-instruction difference is snapshot pattern block.
+- **AC14** Stochastic runs=2 -> underpowered, never indistinguishable;
+  deterministic runs=1 allowed.
+- **AC15** Table fixtures cover all four verdicts, six reasons and §7 precedence,
+  including simultaneous budget exhaustion and remaining-seed failure.
+- **AC16** Thrown turn and graceful SIGINT leave zero owned worktrees and run-failed
+  comparison when persistence succeeds; uncatchable death reconciles on resume.
+- **AC17** Retention cap=2/three finalized probes deletes oldest runs only;
+  plan/checkpoint/comparison stay. Locked/unfinalized probes are never pruned.
+- **AC18** Resume environment/request/snapshot/digest mismatch or corrupt state ->
+  probe-environment-mismatch exit 2/no writes, no mixed seeds or silent restart.
+- **AC19** Missing/invalid task-set -> probe-bad-task-set; bad runs/missing task flag/
+  invalid arguments -> probe-invalid-arguments; exit 2/no writes. Missing task ID
+  inside valid set produces no-task instead.
+- **AC20** Changed trigger/action changes identity; full-hash short-path collisions
+  refuse. Snapshot/environment/baseline/plan/checkpoint links are checked.
+- **AC21** Crash injection at every plan/checkpoint/comparison/record/marker write
+  and concurrent invocations prove one append/confidence application; record
+  receipt dedup occurs before post-publication drift checks. No comparison rewrite.
+- **AC22** Before-publication drift -> unmeasurable/environment-drift; after it,
+  skip uncommitted evidence, confidence unchanged, record skipped/environment-drift,
+  report separate finalization exit 3; finalized skip rerun exit 2/no writes.
+- **AC23** All unmeasurable have null arms/delta; partial runs retained. Durable
+  spend/reservations survive resume, completed calls reused, unknown running calls
+  not replayed. No retention of unfinished probes is lost.
+- **AC24** Capture normal/dry-run/refusal/recovery/skip streams: --json stdout is
+  exactly one §5 envelope; confirmation/plan/diagnostics never contaminate it.
+
+## 10. Preparation assumptions and open verification
+
+Operator cut-off decision resolved the immutable-comparison/drift conflict.
+No unresolved product choice is delegated to implementation here. Lock-aware
+publication, usage reservations, signal/resume and four-type enforcement edits
+are NEW implementation work. Refresh graph impact and health before runtime
+acceptance: baseline graph reports moved repo/new paths; health last ran
+2026-09-09. Documentation validation does not prove those runtime guarantees.
