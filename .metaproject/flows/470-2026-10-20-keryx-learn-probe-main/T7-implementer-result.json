@@ -1,0 +1,21 @@
+{
+  "task_id": "task-7",
+  "task_name": "Flow470 T7 pure scoring and verdict precedence",
+  "task_type": "store_logic",
+  "status": "success",
+  "description": "Pure scorer with Wilson/Newcombe, exact frozen section 7 precedence, nullable unmeasurable aggregates and telemetry-only usage.",
+  "files_modified": [],
+  "files_created": [
+    "src/learning/probe-score.ts",
+    "src/learning/probe-score.test.ts"
+  ],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "pass: health --changed --source eslint,typescript, zero findings",
+  "type_check_result": "pass: TypeScript 5.9.3 via health; zero findings after one fix",
+  "test_result": "pass: 92 scorer tests; strict changed suite 118 passed, 0 failed",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "missing: learning pure scoring has no matching project skill; unrelated route hits not followed",
+  "notes": "{\"project_context_applied\": [{\"path\": \".metaproject/rules/core/tdd-workflow.mdc\", \"sha256\": \"3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3\", \"how\": \"followed\"}, {\"path\": \".metaproject/rules/core/error-handling.mdc\", \"sha256\": \"78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c\", \"how\": \"followed\"}, {\"path\": \".metaproject/rules/core/solid-principles.mdc\", \"sha256\": \"ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b\", \"how\": \"followed\"}, {\"path\": \".metaproject/rules/core/code-style-patterns.mdc\", \"sha256\": \"669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e\", \"how\": \"followed\"}, {\"path\": \".metaproject/rules/core/mobx-store-template.mdc\", \"sha256\": \"3cd27263b0aae1161b592801739df60b6112e8ba4f2b06d1ae17cef685c783cc\", \"how\": \"read\"}, {\"path\": \".metaproject/rules/core/git-concurrency.mdc\", \"sha256\": \"4a353db8f8fe2d32be10de0f55c7d6c4f1beeb0b9c456df061bb7814b99d296d\", \"how\": \"followed\"}], \"tdd\": {\"RED\": \"bun test src/learning/probe-score.test.ts => exit 1, 0 pass, 1 fail, 1 error: Cannot find module ./probe-score (before source existed).\", \"GREEN\": \"bun test src/learning/probe-score.test.ts => 92 pass, 0 fail, 440 assertions initially; final strict run after typing-only fixes => 118 pass, 0 fail across scorer (92) and existing protocol (26) tests.\", \"tests_written\": 92, \"tests_passing\": 92, \"tests_failing\": 0, \"coverage_notes\": \"Frozen AC10: four verdicts, six reasons, all 64 competing-reason combinations, strict CI sign and zero boundaries, deterministic/stochastic minima, Wilson reuse, independent Python Newcombe oracle, telemetry independence and purity.\"}, \"schema_caveat\": \"Installed task-implementer-output schema lacks project_context_applied although SKILL requires it; preserved here in notes as JSON and in subagent-result metrics, not as an invalid top-level key. No schema edits.\", \"verification\": \"Health first failed on three test-only TypeScript issues; fixed assertion typing and indexed boolean default once, then health PASS with zero findings. Optional oxlint, tests, dependencyAudit, sonarqube health sources skipped; tests verified separately.\", \"scope\": \"No stage/commit/push, provider calls, frozen criteria or flow state edits. Commands generated standard health/testing context and artifacts. T8+ not started.\", \"skill_routing\": \"Route returned unrelated gdgraph/module and commands/init skills; no relevant learning/scoring project skill was applied.\"}"
+}

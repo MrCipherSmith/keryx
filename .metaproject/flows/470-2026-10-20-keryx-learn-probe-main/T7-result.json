@@ -1,0 +1,117 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "flow470-T7-agent1",
+  "dispatch_id": "flow470-T7",
+  "status": "DONE",
+  "summary": "T7 pure scoring implemented with observed test-first RED and passing GREEN, lint and strict types. Awaiting orchestrator acceptance; flow state unchanged.",
+  "acceptance": [
+    {
+      "criterion": "Frozen AC10: four verdicts and six reasons, exact precedence",
+      "status": "met",
+      "evidence": "92 scorer tests include every one of 64 competing-reason sets."
+    },
+    {
+      "criterion": "Wilson/Newcombe and seed boundaries",
+      "status": "met",
+      "evidence": "Existing wilsonInterval reused; independent Python numeric oracle; zero/all-success, strict CI sign, deterministic 1 and stochastic 3 boundaries."
+    },
+    {
+      "criterion": "Pure counts-in/numbers-out; telemetry never decides verdict",
+      "status": "met",
+      "evidence": "No persistence/provider/evidence dependencies; purity and telemetry fixtures pass."
+    },
+    {
+      "criterion": "TDD RED/GREEN and lint/types",
+      "status": "met",
+      "evidence": "RED missing source observed; final health PASS 0 findings and changed tests PASS 118/0."
+    },
+    {
+      "criterion": "Bounded file ownership and two result artifacts",
+      "status": "met",
+      "evidence": "Only two target runtime files created; no git mutations/state edits/live providers. Reports validate with installed contracts."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "src/learning/probe-score.ts",
+      "kind": "custom",
+      "exists": true,
+      "hash": "600823b3c7e17522e8d655f8223e0279e0d61e501de9365bc30fdfc0fb4382ab"
+    },
+    {
+      "path": "src/learning/probe-score.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "hash": "9e1745620749eee720e649604d6d4be07c9714dc9fc0fcc40cadbe38d864a2bd"
+    },
+    {
+      "path": ".metaproject/flows/470-2026-10-20-keryx-learn-probe-main/T7-implementer-result.json",
+      "kind": "implementation-report",
+      "exists": true
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/learning/probe-score.ts",
+      "change": "created"
+    },
+    {
+      "path": "src/learning/probe-score.test.ts",
+      "change": "created"
+    },
+    {
+      "path": ".metaproject/flows/470-2026-10-20-keryx-learn-probe-main/T7-result.json",
+      "change": "created result artifact"
+    },
+    {
+      "path": ".metaproject/flows/470-2026-10-20-keryx-learn-probe-main/T7-implementer-result.json",
+      "change": "created result artifact"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "tests_written": 92,
+    "tests_passing": 92,
+    "tests_failing": 0,
+    "strict_changed_tests_passing": 118,
+    "project_context_applied": [
+      {
+        "path": ".metaproject/rules/core/tdd-workflow.mdc",
+        "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
+        "how": "followed"
+      },
+      {
+        "path": ".metaproject/rules/core/error-handling.mdc",
+        "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
+        "how": "followed"
+      },
+      {
+        "path": ".metaproject/rules/core/solid-principles.mdc",
+        "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
+        "how": "followed"
+      },
+      {
+        "path": ".metaproject/rules/core/code-style-patterns.mdc",
+        "sha256": "669e9c94af9ec97a109a92659fa5197aee688792972d95ec1fae8a3beb89de2e",
+        "how": "followed"
+      },
+      {
+        "path": ".metaproject/rules/core/mobx-store-template.mdc",
+        "sha256": "3cd27263b0aae1161b592801739df60b6112e8ba4f2b06d1ae17cef685c783cc",
+        "how": "read"
+      },
+      {
+        "path": ".metaproject/rules/core/git-concurrency.mdc",
+        "sha256": "4a353db8f8fe2d32be10de0f55c7d6c4f1beeb0b9c456df061bb7814b99d296d",
+        "how": "followed"
+      }
+    ],
+    "red_command_result": "bun test src/learning/probe-score.test.ts => exit 1, 0 pass, 1 fail, 1 error: Cannot find module ./probe-score (before source existed).",
+    "green_command_result": "bun test src/learning/probe-score.test.ts => 92 pass, 0 fail, 440 assertions initially; final strict run after typing-only fixes => 118 pass, 0 fail across scorer (92) and existing protocol (26) tests.",
+    "verification_scope": "changed files; not full integration quality gate",
+    "schema_caveat": "Installed task-implementer-output schema lacks project_context_applied although SKILL requires it; preserved here in notes as JSON and in subagent-result metrics, not as an invalid top-level key. No schema edits."
+  },
+  "timestamp_utc": "2026-10-20T22:25:49.176970+00:00"
+}
