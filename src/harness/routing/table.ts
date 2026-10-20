@@ -219,24 +219,47 @@ export interface SessionModelRef {
   readonly modelId: string;
 }
 
+/** Why a provider/model counts as connected or not against a provider list (flow 468) — the one decision the predicate, the reason text and the picker rows all read, so they cannot drift. */
+export type ConnectVerdict = "connected" | "provider-absent" | "provider-auth-failed" | "provider-unlisted" | "model-denied" | "model-absent";
+
+/** `modelId` omitted asks about the provider alone. A row that only reports a status (auth-failed, list unavailable) is never connected. */
+function providerVerdict(provider: FlatPickerProvider, modelId?: string): ConnectVerdict {
+  if (provider.authFailed === true) return "provider-auth-failed";
+  if (provider.listUnavailable !== undefined) return "provider-unlisted";
+  if (modelId === undefined) return "connected";
+  if (isDeniedModel(modelId)) return "model-denied";
+  const models = provider.models;
+  // No reported model list at all -> cannot refute a specific model id;
+  // treat the PROVIDER's connectedness as the whole answer rather than
+  // falsely rejecting a model this list simply never enumerated.
+  if (models === undefined || models.length === 0) return "connected";
+  return models.includes(modelId) ? "connected" : "model-absent";
+}
+
+/** {@link ConnectVerdict} of `providerId`/`modelId` against `providers`; the session shortcut lives in {@link connectedPredicateFrom}, which wraps this. */
+export function connectVerdict(providers: readonly FlatPickerProvider[], providerId: string, modelId?: string): ConnectVerdict {
+  const provider = providers.find((p) => p.name === providerId);
+  return provider === undefined ? "provider-absent" : providerVerdict(provider, modelId);
+}
+
 /** Build a `ConnectedPredicate` from a plain provider list (`configuredProviders()`, `detectProviders()`, or an injected `getDetectedProviders()`) — the shared, non-network-probing shape every call site uses. */
 export function connectedPredicateFrom(providers: readonly FlatPickerProvider[], session?: SessionModelRef): ConnectedPredicate {
-  // An auth-failed provider is listed for display only; it is not connected.
-  const byName = new Map(providers.filter((p) => p.authFailed !== true).map((p) => [p.name, p] as const));
   return (providerId, modelId) => {
     // Flow 468: the provider/model the session is running on is connected by definition, even when the list handed in lacks it (empty or stale catalog).
     if (session !== undefined && providerId === session.providerId && (modelId === undefined || modelId === session.modelId)) return true;
-    const provider = byName.get(providerId);
-    if (provider === undefined) return false;
-    if (modelId === undefined) return true;
-    if (isDeniedModel(modelId)) return false;
-    const models = provider.models;
-    // No reported model list at all -> cannot refute a specific model id;
-    // treat the PROVIDER's connectedness as the whole answer rather than
-    // falsely rejecting a model this list simply never enumerated.
-    if (models === undefined || models.length === 0) return true;
-    return models.includes(modelId);
+    return connectVerdict(providers, providerId, modelId) === "connected";
   };
+}
+
+/**
+ * The model ids the `derived` layer is built from (flow 468): the session
+ * provider's own list, or just the session model when that provider is absent
+ * or only listed as a status row (auth-failed, list unavailable) — the session
+ * runs on it regardless, so it must still derive from something.
+ */
+export function sessionDerivationModels(providers: readonly FlatPickerProvider[], session: SessionModelRef): readonly string[] {
+  const provider = providers.find((p) => p.name === session.providerId && providerVerdict(p) === "connected");
+  return provider?.models ?? [session.modelId];
 }
 
 /** AC10's exact notice text: `"<provider>/<model> - not connected, falling back to <resolved>"`. */
@@ -249,32 +272,49 @@ export function describeUnavailableNotice(rejected: CategoryAssignment, resolved
   return `${describeAssignment(rejected)} — unavailable, falling back to ${describeAssignment(resolved)}`;
 }
 
+/** The provider list a "not connected" verdict was made against (flow 468), and whether loading it failed. */
+export interface ProviderListState {
+  readonly providers: readonly FlatPickerProvider[];
+  /** The load failed or timed out, so `providers` says nothing about what is connected. */
+  readonly unavailable?: boolean;
+}
+
 /**
  * Picks the right notice for a `ResolvedCategory.rejected` entry (flow 305's "not connected" vs flow 327's "unavailable", `ResolvedCategory`'s own doc).
- * `providers` (flow 468, optional) is the list the "not connected" verdict was made against; given it, the notice says WHY:
- * "provider list unavailable", "provider not connected" or "model not in <provider>'s list". Omitted, the wording is unchanged.
+ * `list` (flow 468, optional) is the provider list the "not connected" verdict was made against; given it, the notice says WHY, in the Model tab's words
+ * (see {@link describeNotConnectedReason}). Omitted, the wording is unchanged.
  */
 export function describeRejectionNotice(
   rejected: { readonly assignment: CategoryAssignment; readonly reason?: "unavailable" },
   resolved: CategoryAssignment,
-  providers?: readonly FlatPickerProvider[],
+  list?: ProviderListState,
 ): string {
   if (rejected.reason === "unavailable") return describeUnavailableNotice(rejected.assignment, resolved);
-  if (providers === undefined) return describeFallbackNotice(rejected.assignment, resolved);
-  return `${describeAssignment(rejected.assignment)} - ${describeNotConnectedReason(rejected.assignment, providers)}, falling back to ${describeAssignment(resolved)}`;
+  if (list === undefined) return describeFallbackNotice(rejected.assignment, resolved);
+  return `${describeAssignment(rejected.assignment)} - ${describeNotConnectedReason(rejected.assignment, list)}, falling back to ${describeAssignment(resolved)}`;
 }
 
-/** Why an assignment counted as not connected against `providers` (flow 468) — an empty list is "unavailable", never "not connected". */
-export function describeNotConnectedReason(assignment: CategoryAssignment, providers: readonly FlatPickerProvider[]): string {
+/**
+ * Why an assignment counted as not connected against `list` (flow 468): the Model tab's words, from the same {@link connectVerdict} the predicate used.
+ * "provider list unavailable" only when the load failed; "no providers connected" when it loaded and is empty.
+ */
+export function describeNotConnectedReason(assignment: CategoryAssignment, list: ProviderListState): string {
   if (assignment.kind === "session-default") return "not connected";
-  const live = providers.filter((p) => p.authFailed !== true);
-  if (live.length === 0) return "provider list unavailable";
-  const provider = live.find((p) => p.name === assignment.providerId);
-  if (provider === undefined) return "provider not connected";
-  if (assignment.kind === "model" && (provider.models ?? []).length > 0 && !(provider.models ?? []).includes(assignment.modelId)) {
-    return `model not in ${assignment.providerId}'s list`;
+  if (list.unavailable === true) return "provider list unavailable";
+  if (list.providers.length === 0) return "no providers connected";
+  switch (connectVerdict(list.providers, assignment.providerId, assignment.kind === "model" ? assignment.modelId : undefined)) {
+    case "provider-absent":
+      return "provider not connected";
+    case "provider-unlisted":
+      return `model list unavailable (${list.providers.find((p) => p.name === assignment.providerId)?.listUnavailable ?? "no list"})`;
+    case "provider-auth-failed":
+      return "provider auth failed";
+    case "model-absent":
+      return `model not in ${assignment.providerId}'s list`;
+    case "model-denied":
+    case "connected":
+      return "not connected";
   }
-  return "not connected";
 }
 
 /** Human-readable form of an assignment, shared by the CLI and the TUI. */
@@ -352,44 +392,59 @@ export interface FlatPickerProvider {
   readonly offline?: boolean;
   /** Flow 468 — the provider is in the catalog but its credential was rejected (`auth-failed`). It carries no models; the Model tab shows it with a `/connect` hint instead of omitting it. */
   readonly authFailed?: boolean;
+  /** Flow 468 — the provider is connected but has no model list to show: its live fetch failed (or it has no live endpoint) and there is no curated fallback. The value is the reason ("unreachable", "timed out", "no live listing"); the Model tab shows it instead of omitting the provider, and it is never selectable. */
+  readonly listUnavailable?: string;
 }
 
 /**
  * Flatten every connected provider's models into ONE list (PRD §7,
  * §Non-goals: never a two-step provider-then-model flow), plus one
  * "provider default" row per connected provider and one "session default" row
- * that clears the category back to unset.
+ * that clears the category back to unset. What is "connected" is
+ * {@link providerVerdict}'s call, the same one resolution makes.
  */
 export function flatModelOptions(providers: readonly FlatPickerProvider[], session?: SessionModelRef): FlatModelOption[] {
   const options: FlatModelOption[] = [
     { assignment: SESSION_DEFAULT_ASSIGNMENT, label: "session default", search: "session default" },
   ];
-  const sessionSuffix = " (current session)";
-  const isSessionModel = (providerId: string, modelId: string): boolean => session !== undefined && providerId === session.providerId && modelId === session.modelId;
+  for (const provider of providers) options.push(...providerOptions(provider, session));
   // Flow 468: the session's own model is always a row, labelled, even when the catalog lacks it (listed once, in place, when it has it).
-  if (session !== undefined && !providers.some((p) => p.name === session.providerId && (p.models ?? []).includes(session.modelId))) {
-    options.push({
-      assignment: { kind: "model", providerId: session.providerId, modelId: session.modelId },
-      label: `${session.providerId}/${session.modelId}${sessionSuffix}`,
-      search: `${session.providerId}/${session.modelId}`.toLowerCase(),
-    });
+  if (session !== undefined && !options.some((o) => isSessionAssignment(o.assignment, session))) {
+    options.splice(1, 0, sessionModelOption(session));
   }
-  for (const provider of providers) {
-    // An auth-failed provider is not selectable (the Model tab reports it separately).
-    if (provider.authFailed === true) continue;
-    options.push({
+  return options;
+}
+
+const SESSION_SUFFIX = " (current session)";
+
+function isSessionAssignment(assignment: CategoryAssignment, session: SessionModelRef): boolean {
+  return assignment.kind === "model" && assignment.providerId === session.providerId && assignment.modelId === session.modelId;
+}
+
+function sessionModelOption(session: SessionModelRef): FlatModelOption {
+  return {
+    assignment: { kind: "model", providerId: session.providerId, modelId: session.modelId },
+    label: `${session.providerId}/${session.modelId}${SESSION_SUFFIX}`,
+    search: `${session.providerId}/${session.modelId}`.toLowerCase(),
+  };
+}
+
+/** One provider's picker rows: its "provider default" row, then a row per model it can actually serve. Nothing for a provider that only reports a status. */
+function providerOptions(provider: FlatPickerProvider, session?: SessionModelRef): FlatModelOption[] {
+  if (providerVerdict(provider) !== "connected") return [];
+  const options: FlatModelOption[] = [
+    {
       assignment: { kind: "provider-default", providerId: provider.name },
       label: `${provider.name} (provider default)`,
       search: `${provider.name} provider default`.toLowerCase(),
-    });
-    const offlineSuffix = provider.offline === true ? " (offline list)" : "";
-    for (const modelId of provider.models ?? []) {
-      options.push({
-        assignment: { kind: "model", providerId: provider.name, modelId },
-        label: `${provider.name}/${modelId}${offlineSuffix}${isSessionModel(provider.name, modelId) ? sessionSuffix : ""}`,
-        search: `${provider.name}/${modelId}`.toLowerCase(),
-      });
-    }
+    },
+  ];
+  const offlineSuffix = provider.offline === true ? " (offline list)" : "";
+  for (const modelId of provider.models ?? []) {
+    if (providerVerdict(provider, modelId) !== "connected") continue;
+    const assignment: CategoryAssignment = { kind: "model", providerId: provider.name, modelId };
+    const sessionSuffix = session !== undefined && isSessionAssignment(assignment, session) ? SESSION_SUFFIX : "";
+    options.push({ assignment, label: `${provider.name}/${modelId}${offlineSuffix}${sessionSuffix}`, search: `${provider.name}/${modelId}`.toLowerCase() });
   }
   return options;
 }

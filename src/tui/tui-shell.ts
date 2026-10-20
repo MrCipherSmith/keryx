@@ -4176,12 +4176,12 @@ export async function launchTuiAgentShell(opts: {
     // input (same non-blocking shape as `resolveFirstRunHelp` further down).
     // `.catch` turns a genuinely unexpected throw into an empty catalog
     // rather than an unhandled rejection outliving this function.
-    // Flow 468: a saved provider+model (or `--provider/--model`) hands startup an
-    // EMPTY `detected`; `redetect` is the live detection `/model` already uses,
-    // so the catalog is never derived from that empty list.
     const providerCatalogReady: Promise<ProviderCatalog> = loadOrRefreshProviderCatalogFromDetected(opts.detected, {
       fetch: globalThis.fetch,
       env: envWithSavedApiKeys(process.env),
+      // Flow 468: a saved provider+model (or `--provider/--model`) hands startup an
+      // EMPTY `detected`; `redetect` is the live detection `/model` already uses,
+      // so the catalog is never derived from that empty list.
       ...(opts.redetect !== undefined ? { redetect: opts.redetect } : {}),
     }).catch((error: unknown) => {
       debugEvent("provider-catalog.refresh-failed", { error: error instanceof Error ? error.message : String(error) });

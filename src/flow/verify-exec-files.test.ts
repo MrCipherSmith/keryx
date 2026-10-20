@@ -19,6 +19,12 @@ const KNOWN_MISSING: Record<string, readonly string[]> = {
     "src/product/board-model.test.ts",
     "src/product/board-dashboard.test.ts",
   ],
+  // Flow 468 freezes AC12-AC17 (sidebar) across three PRs; PR 3 (Phase C) creates these two files and MUST remove this entry.
+  // The test below forces that removal: it fails once the files exist.
+  "468-2026-10-20-shell-tui-setup-sidebar-routing": [
+    "src/tui/sidebar-cards.test.ts",
+    "src/tui/sidebar-geometry.test.ts",
+  ],
 };
 
 function namedTestFiles(command: string): string[] {

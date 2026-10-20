@@ -36,6 +36,7 @@ import {
 } from "../commands/providers";
 import {
   classifyModelsStatus,
+  clearProviderCatalogCache,
   isCatalogFresh,
   loadProviderCatalogCache,
   saveProviderCatalogCache,
@@ -205,7 +206,10 @@ export async function refreshProviderCatalog(deps: ProviderCatalogDeps): Promise
  *     `opts.detected`), so routing the catalog refresh through it keeps this
  *     module's SOLE network surface test-injectable there too, rather than
  *     opening a second, independent path to `globalThis.fetch` a test cannot
- *     see or bound.
+ *     see or bound. The exception is a startup that SKIPPED detection (a saved
+ *     provider+model): it hands over `[]`, and `deps.redetect` then runs the
+ *     one live detection (see {@link detectedOrRedetected}); a non-empty
+ *     list is never re-detected.
  *   - Any caller that already has a `detected` list for another reason.
  */
 export async function refreshProviderCatalogFromDetected(
@@ -214,14 +218,47 @@ export async function refreshProviderCatalogFromDetected(
 ): Promise<ProviderCatalog> {
   const now = deps.now ?? Date.now;
   const fetchedAt = new Date(now()).toISOString();
-  // An empty `detected` is "startup skipped detection", not "nothing is connected": never derive a catalog from it.
-  const list = detected.length === 0 && deps.redetect !== undefined ? await deps.redetect() : detected;
+  const list = await detectedOrRedetected(detected, deps);
   const entries = await Promise.all(list.map((d) => buildCatalogEntry(d, deps, fetchedAt)));
   const providers: Record<string, ProviderCatalogEntry> = {};
   for (const entry of entries) {
     if (entry !== undefined) providers[entry.name] = entry;
   }
   return { fetchedAt, providers };
+}
+
+/**
+ * An empty `detected` is "startup skipped detection" (flow 468: a saved
+ * provider+model), not "nothing is connected": with `deps.redetect` the live
+ * detection replaces it, otherwise it is used as given. A non-empty list is
+ * always used as is.
+ */
+async function detectedOrRedetected(detected: readonly DetectedProvider[], deps: ProviderCatalogDeps): Promise<readonly DetectedProvider[]> {
+  return detected.length === 0 && deps.redetect !== undefined ? deps.redetect() : detected;
+}
+
+/**
+ * The cache-or-refresh policy shared by every `loadOrRefresh*` entry point:
+ * serve a fresh non-empty cache unless `force`, otherwise run `refresh` and
+ * save a non-empty result. A refresh that found nothing is never saved, and
+ * it also drops an older non-empty file, so the next reader detects again
+ * instead of being served a catalog the operator has since emptied (flow 468).
+ */
+async function loadOrRefreshWith(
+  deps: ProviderCatalogDeps,
+  opts: { force?: boolean; ttlMs?: number },
+  refresh: () => Promise<ProviderCatalog>,
+): Promise<ProviderCatalog> {
+  if (opts.force !== true) {
+    const cached = loadProviderCatalogCache(deps.dir);
+    if (isServableCatalog(cached, deps.now ?? Date.now, opts.ttlMs)) {
+      return cached as ProviderCatalog;
+    }
+  }
+  const fresh = await refresh();
+  if (hasProviders(fresh)) await saveProviderCatalogCache(fresh, deps.dir);
+  else await clearProviderCatalogCache(deps.dir);
+  return fresh;
 }
 
 /**
@@ -233,15 +270,7 @@ export async function loadOrRefreshProviderCatalog(
   deps: ProviderCatalogDeps,
   opts: { force?: boolean; ttlMs?: number } = {},
 ): Promise<ProviderCatalog> {
-  if (opts.force !== true) {
-    const cached = loadProviderCatalogCache(deps.dir);
-    if (isServableCatalog(cached, deps.now ?? Date.now, opts.ttlMs)) {
-      return cached as ProviderCatalog;
-    }
-  }
-  const fresh = await refreshProviderCatalog(deps);
-  if (hasProviders(fresh)) await saveProviderCatalogCache(fresh, deps.dir);
-  return fresh;
+  return loadOrRefreshWith(deps, opts, () => refreshProviderCatalog(deps));
 }
 
 function hasProviders(catalog: ProviderCatalog | undefined): boolean {
@@ -259,15 +288,22 @@ export async function loadOrRefreshProviderCatalogFromDetected(
   deps: ProviderCatalogDeps,
   opts: { force?: boolean; ttlMs?: number } = {},
 ): Promise<ProviderCatalog> {
-  if (opts.force !== true) {
-    const cached = loadProviderCatalogCache(deps.dir);
-    if (isServableCatalog(cached, deps.now ?? Date.now, opts.ttlMs)) {
-      return cached as ProviderCatalog;
-    }
-  }
-  const fresh = await refreshProviderCatalogFromDetected(detected, deps);
-  if (hasProviders(fresh)) await saveProviderCatalogCache(fresh, deps.dir);
-  return fresh;
+  return loadOrRefreshWith(deps, opts, () => refreshProviderCatalogFromDetected(detected, deps));
+}
+
+/**
+ * Cache-or-refresh for a caller with no detection of its own (`/routing`'s
+ * loader, flow 468): a fresh non-empty cache is served; otherwise `redetect`
+ * (the live detection `/model` uses) supplies the providers, once. Its result
+ * is final, so the refresh runs without `redetect` and an empty detection is
+ * not detected a second time.
+ */
+export async function loadOrRefreshProviderCatalogLive(
+  deps: ProviderCatalogDeps & { readonly redetect: () => Promise<readonly DetectedProvider[]> },
+  opts: { force?: boolean; ttlMs?: number } = {},
+): Promise<ProviderCatalog> {
+  const { redetect, ...rest } = deps;
+  return loadOrRefreshWith(rest, opts, async () => refreshProviderCatalogFromDetected(await redetect(), rest));
 }
 
 /**
@@ -275,10 +311,15 @@ export async function loadOrRefreshProviderCatalogFromDetected(
  * providers, live model ids when the fetch succeeded, the curated list
  * clearly marked `offline: true` (rendered "(offline list)" by
  * `flatModelOptions`) when the fetch failed or the provider has no live
- * endpoint, and an `auth-failed` provider excluded outright rather than
- * shown with models that are not actually available.
+ * endpoint. A provider with no list to show is excluded by default (an
+ * `auth-failed` one rather than shown with models that are not actually
+ * available). With `withStatusRows` (flow 468, `/routing`'s Model tab) it is
+ * returned instead as a display-only row with no models: `authFailed: true`
+ * for an `auth-failed` provider, `listUnavailable: <reason>` for an
+ * unreachable, timed-out or unsupported one with no curated fallback list.
+ * Such a row is never selectable.
  */
-export function catalogToFlatPickerProviders(catalog: ProviderCatalog, opts: { withAuthFailed?: boolean } = {}): FlatPickerProvider[] {
+export function catalogToFlatPickerProviders(catalog: ProviderCatalog, opts: { withStatusRows?: boolean } = {}): FlatPickerProvider[] {
   const out: FlatPickerProvider[] = [];
   for (const entry of Object.values(catalog.providers)) {
     if (entry.status === "ok") {
@@ -286,13 +327,14 @@ export function catalogToFlatPickerProviders(catalog: ProviderCatalog, opts: { w
       continue;
     }
     if (entry.status === "auth-failed") {
-      // `/routing`'s Model tab opts in (flow 468) so the provider is SHOWN as auth-failed rather than silently absent; it is never selectable.
-      if (opts.withAuthFailed === true) out.push({ name: entry.name, models: [], authFailed: true });
+      if (opts.withStatusRows === true) out.push({ name: entry.name, models: [], authFailed: true });
       continue;
     }
     // unreachable | timeout | not-supported
     if (entry.fallbackModels.length > 0) {
       out.push({ name: entry.name, models: entry.fallbackModels, offline: true });
+    } else if (opts.withStatusRows === true) {
+      out.push({ name: entry.name, models: [], listUnavailable: describeCatalogStatus(entry.status) });
     }
   }
   return out;

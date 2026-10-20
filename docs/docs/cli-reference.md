@@ -1530,14 +1530,23 @@ and never carries a credential — only `name`/`status`/`models`/`balance`/
 `fetchedAt`.
 
 A catalog with zero providers is never served as fresh and never saved as
-fresh: when `keryx shell` starts with a saved provider and model (so startup
-detected nothing), the refresh runs a live detection first, and `/routing`
-does the same when the cache is empty. `/routing` shows why a list is short:
-"no providers connected" with a `/connect` hint, "model list unavailable" with
-the reason (it never stays on "Reading routing table…"), `auth failed` or
-`0 models` per provider, and the session's own model as `(current session)`. A
-category that falls back says why: "provider list unavailable", "provider not
-connected" or "model not in <provider>'s list".
+fresh, and a refresh that finds zero providers deletes the cache file, so an
+older non-empty file is not served after the last provider is disconnected
+(this includes `keryx providers status --refresh`). When `keryx shell` starts
+with a saved provider and model (so startup detected nothing), the refresh runs
+a live detection first, and `/routing` does the same when the cache is empty.
+
+`/routing` shows why a list is short. Above the picker, the Model tab has one
+status row per problem: "no providers connected" with a `/connect` hint, "model
+list unavailable (<reason>)" when the whole load failed or timed out (it never
+stays on "Reading routing table…"), and per provider `auth failed`, `0 models`,
+or "model list unavailable (<reason>)" for an unreachable, timed-out or
+unsupported provider with no offline list. Those providers are shown but cannot
+be picked. The session's own model is always listed as `(current session)`. A
+category that falls back names one of six reasons, in the same words: "no
+providers connected", "provider list unavailable", "provider not connected",
+"provider auth failed", "model list unavailable (<reason>)" or "model not in
+<provider>'s list".
 
 ### Cross-family review
 

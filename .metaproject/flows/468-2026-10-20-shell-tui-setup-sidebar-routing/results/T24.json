@@ -1,0 +1,100 @@
+{
+  "task_id": "task-24",
+  "task_name": "Phase A /routing: fix round for review round 1 of PR 1063",
+  "task_type": "fix",
+  "status": "success",
+  "description": "Fixed the upheld findings C-01 to C-04 and C-06 to C-16 (plus info C-17, C-20, C-21, C-22) and the two red CI tests. A named live-detection entry point replaces the empty-list sentinel in /routing's loader; one shared connect verdict now feeds the predicate, the reason text and the picker rows; category fallback reasons use the Model tab's five words and the loader state; the session provider listed only as auth-failed still derives from the session model; unreachable, timed-out or unsupported providers with no list are shown on the Model tab and are not selectable; an empty refresh drops the older cache file; every flow 468 test is titled 'flow 468 AC<n>:'; the surviving mutants M-1 to M-3 and M-7 to M-12 are now killed. Follow-up: sixth reason \"model list unavailable (<reason>)\" per operator; docs/docs/cli-reference.md Live provider catalog section updated.",
+  "files_modified": [
+    "src/flow/verify-exec-files.test.ts",
+    "src/harness/provider-catalog-cache.ts",
+    "src/harness/provider-catalog.test.ts",
+    "src/harness/provider-catalog.ts",
+    "src/harness/routing/table.test.ts",
+    "src/harness/routing/table.ts",
+    "src/tui/routing-classifier-shell-wiring.test.ts",
+    "src/tui/routing-classifier-source.test.ts",
+    "src/tui/routing-classifier-source.ts",
+    "src/tui/routing-inspector.test.ts",
+    "src/tui/routing-inspector.ts",
+    "src/tui/tui-shell.ts",
+    "docs/docs/cli-reference.md"
+  ],
+  "files_created": [],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not run (tsc only, per dispatch)",
+  "type_check_result": "pass",
+  "test_result": "260+ passed, 0 failed (table, routing-inspector, routing-classifier-source, commands/routing, spawn-subagent-tool, provider-catalog, cli-reference-coverage and the docs tests); earlier 254 across 11 files also passed. All 15 mutants killed.",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "none",
+  "project_context_applied": [
+    {
+      "path": ".metaproject/rules/core/tdd-workflow.mdc",
+      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/core/error-handling.mdc",
+      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/core/solid-principles.mdc",
+      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
+      "how": "followed"
+    }
+  ],
+  "noticed_not_touched": [
+    {
+      "what": "routing-classifier-source.ts still resolves with connectedPredicateFrom(providers) and no session argument (T6 left it for the same reason). With C-08 an auth-failed session provider derives a session-model assignment that the predicate then rejects, so the per-turn route falls back to the session model with a reason naming it. Harmless, but the session shortcut is not applied there.",
+      "where": "src/tui/routing-classifier-source.ts:143,179"
+    },
+    {
+      "what": "keryx routing list (commands/routing.ts) and applyReviewRoutingCategory (commands/review.ts) still print the generic 'not connected' wording because they pass no provider list to describeRejectionNotice.",
+      "where": "src/commands/routing.ts:168"
+    }
+  ],
+  "assumptions": [
+    "A denied model id (isDeniedModel) is no longer offered as a picker row: the shared verdict says it is not connected, and an offered row that resolution would reject is the drift C-03 describes.",
+    "An unreachable, timed-out or unsupported provider with no list is not connected for resolution (a category assigned to it falls back), the same as when it was dropped from the list before."
+  ],
+  "behavior_changes": [
+    {
+      "description": "ANSWERED by the operator (question tool, 2026-10-20): «model list unavailable (Recommended)». A category assigned to a provider the Model tab shows as \"<provider>: model list unavailable (<reason>)\" now falls back saying \"model list unavailable (<reason>)\", the sixth reason; it no longer reuses \"provider not connected\".",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": [
+        "'provider model list unavailable' as a sixth reason",
+        "'provider unreachable' carrying the status word (unreachable, timed out, no live listing)"
+      ]
+    },
+    {
+      "description": "A denied model (the gdskills model denylist) is no longer listed in the Model tab picker, and a category assigned to one falls back with the generic 'not connected' (no dedicated reason word).",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": [
+        "Keep listing denied models in the picker (the old behaviour) and let resolution reject them"
+      ]
+    },
+    {
+      "description": "A refresh that finds zero providers now deletes the on-disk provider catalog cache instead of leaving the previous non-empty file to be served until its TTL ends. `keryx providers status --refresh` after removing the last provider therefore clears the file.",
+      "user_visible": false,
+      "needs_operator": false,
+      "alternatives": [
+        "Write the empty result for force:true only",
+        "Write the file with fetchedAt 0"
+      ]
+    },
+    {
+      "description": "The 'empty list is a request to detect live' rule stays for the shell's startup (tui-shell passes the empty detected list) but is now a named helper, detectedOrRedetected. /routing's loader no longer uses it: it calls the new loadOrRefreshProviderCatalogLive, which detects once and never re-detects an empty result.",
+      "user_visible": false,
+      "needs_operator": false,
+      "alternatives": [
+        "Add a redetect-as-source option to loadOrRefreshProviderCatalog itself"
+      ]
+    }
+  ],
+  "not_touched": [],
+  "notes": "suggested_fix diverged: C-01 — added loadOrRefreshProviderCatalogLive (named intent) instead of making loadOrRefreshProviderCatalog take redetect, so the startup path and the /routing path keep distinct entry points; the startup sentinel stays but is a named, documented helper. suggested_fix diverged: C-03 — one ConnectVerdict (connectVerdict/providerVerdict in table.ts) feeds connectedPredicateFrom, describeNotConnectedReason and flatModelOptions; the session shortcut stays in connectedPredicateFrom, so a rejected assignment never needed it in the reason. suggested_fix diverged: C-08 — a shared sessionDerivationModels(providers, session) used by both /routing and the per-turn classifier, falling back to [session.modelId] for any status-only row. suggested_fix diverged: C-09 — the status-row opt-in was renamed withAuthFailed -> withStatusRows (it now also returns listUnavailable rows) and FlatPickerProvider gained listUnavailable. C-05 dismissed by the operator: no negative cache added. C-12 to C-16 were reproduced as surviving mutants (mutation-1.md); all 15 mutants I re-ran after the fix (M-1, M-2 x2 variants, M-3, M-7 to M-12, C-06, C-07, C-08, C-11 and the opt-in) are KILLED. RoutingModalOptions gained a `catalog` test seam (dir, fetch, env) so the default loader path is testable without touching the real config dir. bun test exit code was 0 here."
+}

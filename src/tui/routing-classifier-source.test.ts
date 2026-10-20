@@ -100,6 +100,26 @@ test("runRoutingClassifierForTurn: an unconfigured operator (no project/user rou
   expect(tag).toBe("[quick -> anthropic/claude-haiku-4-5] (deterministic 100%)");
 });
 
+test("flow 468 AC4: a session provider the catalog lists only as auth-failed still derives from the session model, not from nothing", async () => {
+  const cwd = tmpDir();
+  const result = await runRoutingClassifierForTurn("hi", {
+    enabled: true,
+    jevEnabled: false,
+    cwd,
+    detected: [],
+    // `/routing`'s loader returns an auth-failed provider as `{models: [], authFailed: true}`.
+    providers: async () => [{ name: "anthropic", models: [], authFailed: true }],
+    sessionProvider: "anthropic",
+    sessionModel: "claude-opus-4-8",
+    env: { ANTHROPIC_API_KEY: "test-only" },
+    userConfigDir: cwd,
+  });
+  expect(result?.category).toBe("quick");
+  // Derived from [session model]: the layer exists, and is then rejected because the provider's auth failed. From zero models it would derive nothing and report no rejection at all.
+  expect(result?.fallbackReason).toContain("anthropic/claude-opus-4-8");
+  expect(result?.routed).toBeUndefined();
+});
+
 test("runRoutingClassifierForTurn: Jev enabled and credentialed drives the resolution", async () => {
   const cwd = tmpDir();
   await saveRoutingConfig("user", { cwd, userConfigDir: cwd }, { coding: { kind: "model", providerId: "anthropic", modelId: "claude-code" } });

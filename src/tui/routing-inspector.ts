@@ -35,11 +35,13 @@ import {
   flatModelOptions,
   resolveCategoryDetailed,
   ROUTING_CATEGORIES,
+  sessionDerivationModels,
   type AvailablePredicate,
   type CategoryAssignment,
   type ConnectedPredicate,
   type FlatModelOption,
   type FlatPickerProvider,
+  type ProviderListState,
   type RoutingCategory,
   type RoutingSource,
   type RoutingTable,
@@ -56,6 +58,7 @@ import {
 } from "../harness/routing/model-profile";
 import { readTaskCostStore, taskCostLookupFrom, type TaskCostLookup } from "../harness/routing/task-cost";
 import type { DetectedProvider } from "../commands/select";
+import type { ProviderCatalogDeps } from "../harness/provider-catalog";
 import { mountFilterList, type KeypressEvent } from "./filter-list";
 import { modalBodyRows, openModal, resolveModalPanelSize, type ModalHandle } from "./modal-host";
 import { onThemeChange } from "./theme";
@@ -136,11 +139,11 @@ export function formatRoutingListLines(
   selected: number,
   sessionProviderId?: string,
   taskCostFor: TaskCostLookup = () => undefined,
-  providers?: readonly FlatPickerProvider[],
+  providerList?: ProviderListState,
 ): string[] {
   return rows.map((row, index) => {
     const mark = index === selected ? ">" : " ";
-    const suffix = row.rejected !== undefined ? `  (${describeRejectionNotice(row.rejected, row.assignment, providers)})` : "";
+    const suffix = row.rejected !== undefined ? `  (${describeRejectionNotice(row.rejected, row.assignment, providerList)})` : "";
     const costSuffix = describeTaskCostSuffix(row, taskCostFor);
     return `${mark} ${row.category.padEnd(12)} ${describeCategoryResolution(row, sessionProviderId)}  [${row.source}]${suffix}${costSuffix}`;
   });
@@ -159,6 +162,8 @@ export interface RoutingModalOptions {
   providers?: () => Promise<readonly FlatPickerProvider[]>;
   /** Live provider detection (`tui-shell.ts`'s `opts.redetect`, the path `/model` uses) the default loader falls back to when the catalog cache is empty (flow 468). Ignored when `providers` is given. */
   redetect?: () => Promise<readonly DetectedProvider[]>;
+  /** Catalog dependencies (config dir, fetch, env) for the default loader. Test seam only; production uses the real ones. Ignored when `providers` is given. */
+  catalog?: Partial<Pick<ProviderCatalogDeps, "dir" | "fetch" | "env">>;
   /** How long `reload()` waits for the provider loader before showing the model list as unavailable (flow 468). Default {@link ROUTING_PROVIDERS_TIMEOUT_MS}; a test seam. */
   timeoutMs?: number;
   /**
@@ -207,7 +212,7 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
     cwd: options.cwd,
     ...(options.userConfigDir !== undefined ? { userConfigDir: options.userConfigDir } : {}),
   };
-  const loadProviders = options.providers ?? (() => loadRoutingProviders(options.redetect));
+  const loadProviders = options.providers ?? (() => loadRoutingProviders(options.redetect, options.catalog));
   const providersTimeoutMs = options.timeoutMs ?? ROUTING_PROVIDERS_TIMEOUT_MS;
   const loadProfiles = options.loadProfiles ?? ((dir) => loadModelProfiles(dir));
   const rendererHint = options.renderer ?? (chrome as { renderer?: { width?: number; height?: number } } | undefined)?.renderer;
@@ -247,7 +252,7 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
   const listLines = (): string[] =>
     rows.length === 0
       ? [loadError === undefined ? "Reading routing table…" : `routing table unavailable: ${loadError}`]
-      : formatRoutingListLines(rows, selected, options.session?.providerId, taskCostFor, providers);
+      : formatRoutingListLines(rows, selected, options.session?.providerId, taskCostFor, { providers, unavailable: providersError !== undefined });
 
   const paintList = (): void => {
     // Guarded on `currentTab`, not `host.handle?.activeTab()` (which is
@@ -317,9 +322,7 @@ export function openRouting(otui: unknown, chrome: unknown, options: RoutingModa
     taskCostFor = taskCostLookupFrom(readTaskCostStore(location.userConfigDir));
     let derived: RoutingTable = {};
     if (options.session !== undefined) {
-      const sessionProvider = providers.find((p) => p.name === options.session!.providerId);
-      const models = sessionProvider?.models ?? [options.session.modelId];
-      derived = deriveDefaultTable(options.session.providerId, models, profiles, options.session.modelId, taskCostFor);
+      derived = deriveDefaultTable(options.session.providerId, sessionDerivationModels(providers, options.session), profiles, options.session.modelId, taskCostFor);
     }
     rows = routingCategoryRows(project, user, connected, derived, available);
     selected = Math.min(selected, Math.max(0, rows.length - 1));
@@ -491,6 +494,7 @@ export function modelTabNotes(providers: readonly FlatPickerProvider[], provider
   }
   for (const provider of providers) {
     if (provider.authFailed === true) notes.push(`${provider.name}: auth failed — /connect to re-enter the key`);
+    else if (provider.listUnavailable !== undefined) notes.push(`${provider.name}: model list unavailable (${provider.listUnavailable})`);
     else if ((provider.models ?? []).length === 0) notes.push(`${provider.name}: 0 models`);
   }
   return notes;
@@ -532,14 +536,14 @@ export function describePickerRowProfile(opt: FlatModelOption, profiles: Readonl
  * handed straight to the picker — curated model ids, and every OpenAI-compat
  * provider offered whether or not it had a credential.
  */
-export async function loadRoutingProviders(redetect?: () => Promise<readonly DetectedProvider[]>): Promise<readonly FlatPickerProvider[]> {
-  const { loadOrRefreshProviderCatalog, loadOrRefreshProviderCatalogFromDetected, catalogToFlatPickerProviders } = await import("../harness/provider-catalog");
+export async function loadRoutingProviders(
+  redetect?: () => Promise<readonly DetectedProvider[]>,
+  overrides: Partial<Pick<ProviderCatalogDeps, "dir" | "fetch" | "env">> = {},
+): Promise<readonly FlatPickerProvider[]> {
+  const { loadOrRefreshProviderCatalog, loadOrRefreshProviderCatalogLive, catalogToFlatPickerProviders } = await import("../harness/provider-catalog");
   const { envWithSavedApiKeys } = await import("../lib/shell-config");
-  const deps = { fetch, env: envWithSavedApiKeys() };
+  const deps = { fetch, env: envWithSavedApiKeys(undefined, overrides.dir), ...overrides };
   // Flow 468: an empty or stale cache falls back to the live detection `/model` uses when the shell hands it over; a non-empty fresh cache is still served as is.
-  const catalog =
-    redetect !== undefined
-      ? await loadOrRefreshProviderCatalogFromDetected([], { ...deps, redetect })
-      : await loadOrRefreshProviderCatalog(deps);
-  return catalogToFlatPickerProviders(catalog, { withAuthFailed: true });
+  const catalog = redetect !== undefined ? await loadOrRefreshProviderCatalogLive({ ...deps, redetect }) : await loadOrRefreshProviderCatalog(deps);
+  return catalogToFlatPickerProviders(catalog, { withStatusRows: true });
 }
