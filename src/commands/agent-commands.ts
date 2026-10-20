@@ -149,7 +149,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   {
     name: "/setup",
-    description: "Metaproject preparation guide — /setup [init|refresh|repair] (prints steps, runs nothing)",
+    description: "Metaproject preparation guide — /setup [init|refresh|repair] (copy the agent prompt, or run it through an external agent after you confirm)",
     modes: BOTH,
   },
   {

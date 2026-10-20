@@ -135,7 +135,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/setup",
     group: "Start here",
-    summary: "Same preparation guide, inside the session — prints steps, runs nothing.",
+    summary: "Same preparation guide, inside the session — copy the agent prompt, or run it through an external agent after you confirm.",
   },
 
   // ---- Connect a model provider -------------------------------------------
