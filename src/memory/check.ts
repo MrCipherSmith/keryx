@@ -36,11 +36,18 @@ export async function checkMemory(
     }
   }
 
-  // Pairwise dedup warnings.
+  // Pairwise dedup warnings. Two review notes are never compared with each
+  // other: each records one finding, named by its finding id, under a title and
+  // Summary the review writer fills from one template ("Review finding <id> was
+  // dismissed as incorrect"), so any two of them clear the title threshold.
+  // Measured on this repository: 520 of 526 issues were such pairs, every one a
+  // different finding.
   for (let i = 0; i < entries.length; i += 1) {
     const entry = entries[i];
     if (!entry) continue;
-    const dupes = findDuplicates(candidateOf(entry), entries.slice(i + 1), config);
+    const later = entries.slice(i + 1);
+    const comparable = entry.type === "review-note" ? later.filter((other) => other.type !== "review-note") : later;
+    const dupes = findDuplicates(candidateOf(entry), comparable, config);
     for (const dupe of dupes) {
       issues.push({ path: entry.relativePath, kind: "dedup", message: `near-duplicate of ${dupe.path}` });
     }

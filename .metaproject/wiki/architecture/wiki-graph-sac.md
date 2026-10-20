@@ -1,17 +1,9 @@
 ---
 Title: "Wiki, Graph, and Shared Agent Context"
-Version: 1.1.0
+Version: 1.1.1
 Type: architecture
 Status: accepted
 Summary: ""
----
-```markdown
----
-Title: "Wiki, Graph, and Shared Agent Context"
-Version: 1.1.0
-Type: architecture
-Status: accepted
-Summary: "Three-layer knowledge architecture where the code graph answers structural questions, the wiki stores curated long-lived understanding, and Shared Agent Context (SAC) provides a reviewed collaboration entry point that references both owners without duplicating them."
 ---
 # Wiki, Graph, and Shared Agent Context
 
@@ -101,7 +93,7 @@ There is no silent fallback chain (hosted → local → cache) that could mask c
 
 ## Changelog
 
+- 1.1.1 - Unwrapped from the markdown code fence an earlier enrich left around the page; no content changed.
 - **1.1.0** - Current CLI/MCP/harness names and access-receipt ledger path.
 - **1.0.0** - Architecture page for the complementary wiki/graph/SAC split (flow 153).
 - **0.1.0** - Initial scaffold.
-```

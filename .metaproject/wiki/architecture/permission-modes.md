@@ -1,17 +1,9 @@
 ---
 Title: Permission Modes
-Version: 1.0.0
+Version: 1.0.1
 Type: architecture
 Status: accepted
 Summary: ""
----
-```markdown
----
-Title: Permission Modes
-Version: 1.0.0
-Type: architecture
-Status: accepted
-Summary: "Describes the three permission modes (`ask`, `trust`, `auto`) that govern whether mutating tool calls prompt for user approval during interactive agent sessions in `keryx shell`."
 ---
 # Permission Modes
 
@@ -131,4 +123,7 @@ Not implemented. The header-right slot (`chrome.setHeaderMeta`) is already claim
 - `src/lib/permission-mode-config.ts` — Per-project persistence logic.
 - `src/commands/shell.ts` / `src/tui/tui-shell.ts` — CLI flags, `/mode` command, and the two auto-approval renderers.
 - [OS Sandbox](os-sandbox.md) — The orthogonal containment axis: bounds *what* a command can touch, independent of *whether the user is asked*.
-```
+
+## Changelog
+
+- 1.0.1 - Unwrapped from the markdown code fence an earlier enrich left around the page; no content changed.

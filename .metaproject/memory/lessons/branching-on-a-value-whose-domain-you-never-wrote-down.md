@@ -1,12 +1,15 @@
----
-id: branching-on-a-value-whose-domain-you-never-wrote-down
-kind: lesson
-status: active
-created: 2026-08-03
-tags: [review, fix-rounds, types, exhaustiveness, root-cause]
----
-
 # Every blocker in six review rounds came from branching on a value whose domain was never written down
+
+Version: 1.0.0
+Type: lesson
+Status: accepted
+Confidence: high
+
+## Summary
+
+Six review rounds on one branch produced twelve blockers, and they were one mistake: branching on a value whose full domain was never written down. Before writing a branch, write that domain where a compiler or reader can check it, preferably as a discriminated union with a total `switch`, and say so when it cannot be enumerated.
+
+## Details
 
 Six review rounds on one branch produced twelve blockers. When they are laid side
 by side, they are not twelve mistakes. They are **one** mistake, made six times
@@ -76,3 +79,11 @@ Related: [[regex-guards-lose-to-spellings]] is the same failure over an open
 domain — text — where no enumeration is possible and the honest move is to stop
 claiming one. [[a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker]]
 records the pattern before its cause was identified.
+
+## Tags
+
+review, fix-rounds, types, exhaustiveness, root-cause
+
+## Changelog
+
+- 1.0.0 - Moved from YAML front matter (created 2026-08-03, status active) to the standard entry layout and given a Summary; the body is unchanged.

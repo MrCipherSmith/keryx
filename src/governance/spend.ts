@@ -117,8 +117,19 @@ function closingRecordFlows(records: readonly TriggerRunRecord[]): (record: Trig
     record.dispatch?.flow ?? (record.resolves !== undefined ? reservationFlow.get(record.resolves) : undefined);
 }
 
-/** Pure half of `readProjectTriggerSpend` — split out so `collectProjectGovernance` reads the ledger once and shares it with the per-flow dispatch view below (AC5: still read-only, just one read). */
-export function summarizeProjectTriggerSpend(read: TriggerRunsRead): ProjectTriggerSpend {
+/**
+ * Pure half of `readProjectTriggerSpend` — split out so `collectProjectGovernance` reads the ledger once and shares it with the per-flow dispatch view below (AC5: still read-only, just one read).
+ *
+ * `window` (`--since`/`--until`) bounds which runs are summed, by each record's
+ * own `at`: a closing record counts when its `at` is inside, an open
+ * reservation when the hold's `at` is. Whether a reservation is still open is
+ * decided over the WHOLE ledger first, so a hold closed after `until` is not
+ * reported as open inside the window.
+ */
+export function summarizeProjectTriggerSpend(
+  read: TriggerRunsRead,
+  window: { readonly since?: string | undefined; readonly until?: string | undefined } = {},
+): ProjectTriggerSpend {
   if (read.state === "absent") {
     return { state: "absent" };
   }
@@ -141,10 +152,13 @@ export function summarizeProjectTriggerSpend(read: TriggerRunsRead): ProjectTrig
   // not yet resolved) is an OPEN RESERVATION: counted in `runsTotal` and named
   // as such, exactly as the flow view names it — never "not recorded", never
   // spent.
-  const open = openReservations(read.records);
+  // The same string comparison `filterFlows` applies to a flow's `updatedAt`.
+  const inWindow = (at: string): boolean =>
+    (window.since === undefined || at >= window.since) && (window.until === undefined || at <= window.until);
+  const open = openReservations(read.records).filter((reservation) => inWindow(reservation.at));
   const flowOf = closingRecordFlows(read.records);
   for (const record of read.records) {
-    if (record.outcome === "reserved") continue;
+    if (record.outcome === "reserved" || !inWindow(record.at)) continue;
     closedRuns += 1;
     if (record.cost.recorded) {
       spentUsd += record.cost.usd;

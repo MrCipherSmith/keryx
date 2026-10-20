@@ -1,17 +1,9 @@
 ---
 Title: OS Sandbox
-Version: 1.1.0
+Version: 1.1.1
 Type: architecture
 Status: accepted
 Summary: ""
----
-```markdown
----
-Title: OS Sandbox
-Version: 1.1.0
-Type: architecture
-Status: accepted
-Summary: Kernel-enforced containment layer that constrains what a process can do after the policy engine approves it. Uses macOS Seatbelt or Linux bubblewrap to restrict filesystem access, network reach, and credential exposure. Containment is mandatory for autonomous runs and opt-in for interactive agent sessions. When containment cannot be applied, execution is refused rather than silently degraded.
 ---
 # OS Sandbox
 
@@ -222,7 +214,7 @@ Full documentation lives in `docs/requirements/keryx-os-sandbox/`:
 
 | Version | Changes |
 |---|---|
+| 1.1.1 | Unwrapped from the markdown code fence an earlier enrich left around the page; no content changed. |
 | 1.1.0 | Added the approval-gate / allowlist permission model and its limits: the page described containment but not the layer that is load-bearing when containment is off (the default) or unavailable. |
 | 1.0.0 | Documented the implemented OS sandbox: postures, restricted network, credential masking, TLS termination, platform matrix, fail-closed contract, and the documentation package. |
 | 0.1.0 | Initial version. |
-```

@@ -1,12 +1,15 @@
----
-id: code-blanks-string-literals
-kind: constraint
-status: active
-created: 2026-08-02
-tags: [testing, source-guards, config-dir-scan, false-green]
----
-
 # `code()` blanks string literals, so a guard that matches one can never fire
+
+Version: 1.0.0
+Type: constraint
+Status: accepted
+Confidence: high
+
+## Summary
+
+`code(raw)` in `src/lib/config-dir.scan.ts` blanks every string literal before a guard matches. A guard built on it that looks for text which can only appear inside a string matches zero, always, and its self-check passes because the negative cases match zero too. When the subject can only be written inside a string, strip comments locally instead and make the pattern specific enough that prose cannot satisfy it.
+
+## Details
 
 `src/lib/config-dir.scan.ts` exports `code(raw)`, which strips comments **and
 blanks every string literal** before a guard matches against it. That is correct
@@ -105,3 +108,11 @@ TREE". Two things were wrong with that:
 
 Where a real closure exists it is `src/lib/production-graph.test.ts`, which asks
 the bundler what the release actually ships.
+
+## Tags
+
+testing, source-guards, config-dir-scan, false-green
+
+## Changelog
+
+- 1.0.0 - Moved from YAML front matter (created 2026-08-02, status active) to the standard entry layout and given a Summary; the body is unchanged.

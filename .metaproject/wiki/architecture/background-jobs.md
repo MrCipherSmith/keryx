@@ -1,19 +1,10 @@
 ---
 Title: "Supervised Shell Tasks (formerly Background Shell Jobs)"
-Version: 2.0.0
+Version: 2.0.1
 Type: architecture
 Status: accepted
 Summary: ""
 ---
-```markdown
----
-Title: "Supervised Shell Tasks (formerly Background Shell Jobs)"
-Version: 2.0.0
-Type: architecture
-Status: accepted
-Summary: "Every `shell_exec` call is a supervised task that returns within a bounded yield. Commands finishing inside the yield behave synchronously; commands still running are transparently demoted to background tasks. The agent is notified of task completion exactly once, without polling. Full process-group ownership, sandbox parity with synchronous execution, and operator visibility via a TUI sidebar."
----
-
 # Supervised Shell Tasks (formerly Background Shell Jobs)
 
 This document describes the supervised shell task architecture, which transforms every `shell_exec` call into a managed background task without requiring explicit opt-in from the model.
@@ -236,4 +227,7 @@ Surveyed before designing this: other agent CLIs, plus non-AI job control (`tmux
 - `src/tui/background-job-inspector.ts` — the TUI sidebar panel and inspector modal
 - [Permission Modes](permission-modes.md) — the approval gate this flow reuses unchanged
 - [OS Sandbox](os-sandbox.md) — the containment layer the background path shares with the synchronous path
-```
+
+## Changelog
+
+- 2.0.1 - Unwrapped from the markdown code fence an earlier enrich left around the page; no content changed.

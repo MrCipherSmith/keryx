@@ -1,8 +1,9 @@
 ---
 Title: Module src/lib/oauth
-Version: 1.0.0
+Version: 1.0.1
 Type: component
 Status: accepted
+VerifiedScope: sha256:8789e876176447e987d1b2ac2f81ed67bca8868ccacb165edb09b8af9bc2e722
 Summary: "OAuth support layer for device-code login (xAI Grok, GitHub Copilot, ChatGPT/Codex), grant storage in auth.json, token refresh, and environment injection of saved access tokens."
 ---
 
@@ -36,13 +37,13 @@ In the middle, `grants.ts` is the storage and model layer. It reads and writes t
 
 At the top, `login.ts` is the orchestrator. `loginDeviceCode` checks the catalog, chooses the Codex path (`loginCodex`) or the RFC 8628 path (`loginRfc8628`), passes the challenge to the caller's `onChallenge` callback, and then saves the grant. It also holds the refresh entry points, `refreshProviderGrant` and `refreshSavedGrants`, and `logoutProvider`.
 
-`open-url.ts` sits outside this chain. `login.ts` does not import it. The callers (`src/commands/auth.ts`, `src/tui/tui-shell.ts`, `src/commands/select.ts`) call `openVerificationUrl` when they receive a challenge.
+`open-url.ts` sits outside this chain. `login.ts` does not import it. The callers (`src/commands/auth.ts`, `src/tui/tui-shell.ts`, `src/commands/select.ts`, `src/commands/mcp-servers.ts`) call `openVerificationUrl` when they receive a challenge.
 
 ## Main flows
 
 ### Start a device-code login and save the grant
 
-1. A command or TUI action (`src/commands/auth.ts`, `src/tui/tui-shell.ts`) calls `loginDeviceCode` with a `DeviceLoginInput`.
+1. A command or TUI action (`src/commands/auth.ts`, `src/commands/select.ts`, `src/tui/tui-shell.ts`) calls `loginDeviceCode` with a `DeviceLoginInput`.
 2. `loginDeviceCode` looks up the provider with `authCatalogEntry`. If the provider does not list `device-code`, it returns a refusal or an unsupported error. For `openai-codex` it runs `loginCodex`. For other providers it runs `loginRfc8628`, which requests a device code, calls `onChallenge` with a `LoginChallenge`, and polls for the token. For `github-copilot` the GitHub token is then exchanged with `exchangeGithubTokenForCopilot`, and the returned API base URL is stored with `saveProviderBaseUrl`.
 3. The caller shows the challenge to the user and opens `verificationUriComplete` through `openVerificationUrl`, while the poll continues.
 4. On success, `grantFromTokens("device-code", …)` builds the grant and `saveOAuthGrant` writes it. For Codex, the module reads the grant back and fails with "Could not save ChatGPT login securely" if the stored access token does not match.
@@ -62,70 +63,75 @@ At the top, `login.ts` is the orchestrator. `loginDeviceCode` checks the catalog
 2. A token is written only to its mapped variable, and only when that variable is unset or empty. `applyOAuthAccessToEnv` returns the keys it applied and records them with `noteSavedCredentialEnv`.
 3. ChatGPT tokens are never copied onto `OPENAI_API_KEY`, because they are not platform API keys. Status and list surfaces (`oauthGrantStatus`, `listOAuthGrantProviders`) report metadata only and never return token values.
 
-## Public API
-
-### Device login
-
-- `LoginChallenge` — Interface with challenge details for the user
-- `DeviceLoginInput` — Interface with input parameters for login
-- `DeviceLoginResult` — Result of a completed device login
-- `loginDeviceCode` — Initiates the device-code login flow
-
-### Grant lifecycle
-
-- `OAuthGrant` — Interface representing a stored OAuth credential
-- `OAuthGrantMethod` — Enum or type for grant acquisition methods
-- `loadOAuthGrant` — Load a saved grant for a provider
-- `saveOAuthGrant` — Persist a grant after login or refresh
-- `deleteOAuthGrant` — Remove a saved grant
-- `listOAuthGrantProviders` — Enumerate providers with stored grants
-- `oauthGrantStatus` — Get the current status of a grant
-- `logoutProvider` — Revoke a grant and clean up stored credentials
-
-### Token refresh and access
-
-- `oauthAccessToken` — Extract a usable access token from a grant
-- `grantNeedsRefresh` — Check if a grant's token is expired or invalid
-- `refreshProviderGrant` — Refresh credentials for a specific provider
-- `refreshSavedGrants` — Refresh all stored provider grants
-
-### Environment helpers
-
-- `envWithOAuthAccess` — Build an environment object with OAuth access
-- `applyOAuthAccessToEnv` — Add OAuth access to an existing environment
-- `grantFromTokens` — Construct a grant from raw OAuth tokens
-
 ## Dependencies
 
-| Module | Imports | Role |
-|--------|---------|------|
-| `src/lib` | 7 | Shared library primitives |
-| `src/commands` | 10 | CLI login and credential workflows |
-| `src/tui` | 4 | Interactive login and credential display |
-| `src/harness/provider` | 1 | Authenticated provider access |
+| Module | Role |
+|--------|------|
+| `src/lib` | Shared library primitives (for example `src/lib/shell-config`, where grants are stored) |
+| `src/commands` | CLI login and credential workflows |
+| `src/tui` | Interactive login and credential display |
+| `src/harness/provider` | Authenticated provider access |
 
 ---
 
-## Reference
+<!-- keryx:reference:begin v=1 hash=a70ed0e8d07778b893498c6774e6d023124207090380f6cc1ecd0238f86e7ca5 -->
+## Reference (from code graph)
 
-### Key file stats
+Extracted deterministically by `keryx wiki collect`; regenerated by
+`--force`. The prose sections above are the agent/human-owned part.
 
-| File | Imported by | Imports |
-|------|-------------|---------|
-| `src/lib/oauth/grants.ts` | 9 | 1 |
-| `src/lib/oauth/catalog.ts` | 7 | 1 |
-| `src/lib/oauth/device-code.ts` | 6 | 0 |
-| `src/lib/oauth/login.ts` | 5 | 6 |
-| `src/lib/oauth/open-url.ts` | 5 | 0 |
-| `src/lib/oauth/login.test.ts` | 0 | 5 |
+### Public API
+
+- `OAuthGrantMethod`
+- `OAuthGrant`
+- `loadOAuthGrant`
+- `saveOAuthGrant`
+- `deleteOAuthGrant`
+- `listOAuthGrantProviders`
+- `oauthGrantStatus`
+- `oauthAccessToken`
+- `grantNeedsRefresh`
+- `oauthEnvKeyFor`
+- `envWithOAuthAccess`
+- `applyOAuthAccessToEnv`
+- `grantFromTokens`
+- `LoginChallenge`
+- `DeviceLoginInput`
+- `DeviceLoginResult`
+- `loginDeviceCode`
+- `refreshProviderGrant`
+- `refreshSavedGrants`
+- `logoutProvider`
+
+### Key files
+
+- `src/lib/oauth/grants.ts` - imported by 25, imports 2
+- `src/lib/oauth/login.ts` - imported by 11, imports 7
+- `src/lib/oauth/openai-subscription.ts` - imported by 4, imports 6
+- `src/lib/oauth/catalog.ts` - imported by 8, imports 1
+- `src/lib/oauth/device-code.ts` - imported by 7, imports 0
+- `src/lib/oauth/open-url.ts` - imported by 6, imports 0
+
+### Depends on
+
+- `src/lib` - 5 import(s)
+
+### Depended on by
+
+- `src/commands` - 18 import(s)
+- `src/tui` - 4 import(s)
+- `src/harness/provider` - 3 import(s)
+- `src/harness` - 1 import(s)
+
+### Dependency basis
+
+- Production imports only: 18 import(s) from test file(s) (e.g. `src/commands/auth.test.ts`) excluded from the two sections above in both directions.
 
 ### Graph signals
 
-- Files: 15
-- Cross-module imports: 7
-- Public symbols: 19
-
----
+- Files: 21
+- Cross-module imports: 5
+<!-- keryx:reference:end -->
 
 ## Related pages
 
@@ -138,5 +144,6 @@ At the top, `login.ts` is the orchestrator. `loginDeviceCode` checks the catalog
 
 ## Changelog
 
+- 1.0.1 - Reference refreshed from the code graph. Source graph was stale; VerifiedAt was not advanced. Hand-written data sections reconciled with the Reference block.
 - 1.0.0 — Prose enriched from Key files by the gdwiki skill.
 - **0.1.0** — Initial prose draft generated by `keryx wiki collect` (2026-09-16)

@@ -2,11 +2,11 @@
 
 ## Stats
 
-- Source files indexed: 3253
+- Source files indexed: 3254
 - Imported asset files indexed: 14
-- Total nodes: 3267
-- Edges: 11703
-- Import edges: 11550
+- Total nodes: 3268
+- Edges: 11705
+- Import edges: 11552
 - Asset edges: 31
 - Unresolved imports: 122
 - Import resolution: 99%
@@ -32,7 +32,7 @@
 | learning | 57 |
 | mcp-servers | 56 |
 | gdgraph | 55 |
-| memory | 49 |
+| memory | 50 |
 | session | 46 |
 | acp | 42 |
 | metrics | 39 |

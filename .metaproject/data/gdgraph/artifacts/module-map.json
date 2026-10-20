@@ -2060,6 +2060,7 @@
     "src/mcp/wiki-ask.test.ts"
   ],
   "memory": [
+    "src/memory/check.test.ts",
     "src/memory/check.ts",
     "src/memory/config.ts",
     "src/memory/cross-layer.test.ts",

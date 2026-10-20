@@ -132,7 +132,7 @@ export async function collectProjectGovernance(
   // report.
   const ledger = await readTriggerRuns(root);
   const flows = filterFlows(await collectFlowGovernance(root, ledger), filters);
-  const triggerSpend = summarizeProjectTriggerSpend(ledger);
+  const triggerSpend = summarizeProjectTriggerSpend(ledger, { since: filters.since, until: filters.until });
   return {
     root,
     displayName,

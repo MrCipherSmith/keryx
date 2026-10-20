@@ -665,6 +665,50 @@ test("AC7: --since/--until narrow by each flow's own updatedAt", async () => {
   expect(report.projects[0]?.flows.map((f) => f.id)).toEqual(["114"]);
 });
 
+test("AC7: --since/--until bound project trigger spend by each run's own `at`", async () => {
+  const run = async (at: string, usd: number, extra: Record<string, unknown> = {}) =>
+    appendTriggerRunRecord(ROOT, {
+      at,
+      trigger: "t1",
+      firedBy: { kind: "event", name: "push" } as never,
+      action: { kind: "reconcile" } as never,
+      outcome: "ok",
+      detail: "ok",
+      cost: { recorded: true, usd },
+      ...extra,
+    });
+  await run("2026-01-01T00:00:00.000Z", 1);
+  await run("2026-02-01T00:00:00.000Z", 2);
+  await run("2026-03-01T00:00:00.000Z", 4);
+  // A hold opened inside the window but closed after it is not open in the window.
+  await appendTriggerRunRecord(ROOT, {
+    at: "2026-02-02T00:00:00.000Z",
+    trigger: "t1",
+    firedBy: { kind: "event", name: "push" } as never,
+    action: { kind: "reconcile" } as never,
+    outcome: "reserved",
+    detail: "reserved $8",
+    cost: { recorded: false, reason: "a reservation" },
+    reservation: { runId: "late-close", usd: 8 },
+  });
+  await run("2026-03-02T00:00:00.000Z", 16, { dispatch: { runId: "late-close" } });
+
+  const report = await buildGovernanceReport({
+    cwd: ROOT,
+    filters: { since: "2026-01-15T00:00:00.000Z", until: "2026-02-15T00:00:00.000Z" },
+    allProjects: false,
+    now: () => new Date(),
+  });
+  expect(report.projects[0]?.triggerSpend).toMatchObject({
+    state: "present",
+    spentUsd: 2,
+    runsWithCostRecorded: 1,
+    runsTotal: 1,
+    openReservations: 0,
+    openReservedUsd: 0,
+  });
+});
+
 // --- AC8: --all-projects -------------------------------------------------------
 
 test("AC8: --all-projects covers the current project plus every registered project; a missing one is listed skipped, never failing the whole report", async () => {

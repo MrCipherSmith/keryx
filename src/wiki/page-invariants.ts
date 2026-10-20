@@ -485,6 +485,11 @@ function leadingYamlBlock(markdown: string): string | null {
   if (!markdown.startsWith("---\n")) return null;
   const close = markdown.indexOf("\n---", 3);
   if (close < 0) return null;
+  // A front matter with no closing line must not borrow the next `---`, which
+  // is then a horizontal rule further down: everything above it would be
+  // treated as metadata and dropped. A heading or a fence means the body has
+  // already started (`components/src-memory.md` lost its prose this way).
+  if (/\n(?:#|```)/.test(markdown.slice(3, close))) return null;
   const lineEnd = markdown.indexOf("\n", close + 4);
   return markdown.slice(0, lineEnd < 0 ? markdown.length : lineEnd + 1);
 }
