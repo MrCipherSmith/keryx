@@ -50,6 +50,8 @@ import { currentDebugRun, debugEvent } from "./debug-log";
 import { attachRendererGuards } from "./renderer-debug";
 import { isCtrlC } from "./ctrl-c-policy";
 import { SIDEBAR_WIDTH } from "./sidebar-metrics";
+import { BUSY_FOOTER_MIN_HINT, formatBusyFooter, type BusyFooterInfo } from "./busy-footer";
+import { formatDuration } from "./duration-format";
 import { TRANSCRIPT_HISTORY_LIMIT, transcriptNodeProtected, forgetTranscriptNode } from "./transcript-history";
 
 /** The `@opentui/core` module shape, referenced structurally (type-only). */
@@ -476,6 +478,12 @@ export interface ShellChrome {
   stopBusy(): void;
   /** Update the spinner phase; a no-op paint while idle. */
   setBusyPhase(phase: string): void;
+  /**
+   * Feed the busy footer (tokens, cost, context fill, queue / job / subagent
+   * counts). Repaints at once; ignored while idle and cleared by `stopBusy`.
+   * Pass `undefined` to drop the figures and keep only the key hints.
+   */
+  setBusyFooter(info: BusyFooterInfo | undefined): void;
   isBusy(): boolean;
   /** Repaint the footer status (after something changed the override). */
   repaintStatus(): void;
@@ -1200,7 +1208,30 @@ export async function createShellChrome(
   // then snapped back to the launch-time `opts.status`.
   let status = opts.status;
 
+  let busyFooterInfo: BusyFooterInfo | undefined;
+
+  /** Columns the footer's left text may use: the row less its padding and the right slot. */
+  const footerLeftBudget = (rightText: string): number => {
+    // The footer's laid-out width lags a resize by a frame, so also bound it by the
+    // terminal width less the sidebar and the workspace gutters, and take the smaller.
+    const laidOut = typeof footer.width === "number" && footer.width > 0 ? footer.width : Number.POSITIVE_INFINITY;
+    const termWidth = typeof r.width === "number" && r.width > 0 ? r.width : Number.POSITIVE_INFINITY;
+    const rowWidth = Math.min(laidOut, termWidth - SIDEBAR_WIDTH - 2 * WORKSPACE_GUTTER_X);
+    if (!Number.isFinite(rowWidth)) return Number.POSITIVE_INFINITY;
+    const room = rowWidth - 2 - rightText.length;
+    // The gap before the right slot is the first thing to go: on a very narrow
+    // terminal "Esc interrupt" outranks the breathing space.
+    return Math.max(1, room - 1 >= BUSY_FOOTER_MIN_HINT.length ? room - 1 : room);
+  };
+
   const paintBusyStatus = (): void => {
+    // The busy line (spinner, phase, timer) is painted ONCE, in the transcript
+    // above the composer; the footer never repeats it (flow 468 AC20).
+    if (busy && liveStatus !== undefined) {
+      const frame = SPINNER[spinIdx % SPINNER.length] ?? "\u280b";
+      const line = `${frame} ${busyPhase} \u00b7 ${formatDuration(Date.now() - busyStartedAt)}`;
+      liveStatus.content = otui.t`${dimChunk(otui, line)}`;
+    }
     // The override owns the footer even mid-turn: the spinner interval would
     // otherwise repaint over it every 120ms.
     const override = footerOverride?.();
@@ -1213,20 +1244,20 @@ export async function createShellChrome(
       footerRight.content = otui.t`${dimChunk(otui, status)}`;
       return;
     }
-    const frame = SPINNER[spinIdx % SPINNER.length] ?? "⠋";
-    const secs = ((Date.now() - busyStartedAt) / 1000).toFixed(1);
-    const line = `${frame} ${busyPhase} · ${secs}s`;
-    footerLeft.content = otui.t`${roleChunk(otui, "attention", line)}`;
     // The footer's right slot carries the permission mode while a turn runs
     // (provider/model stays in the header title); idle restores the status.
     const perm = opts.permissionMode?.();
-    footerRight.content = otui.t`${dimChunk(otui, 
-      perm !== undefined && perm.length > 0 ? `mode ${perm}` : status,
-    )}`;
-    if (liveStatus !== undefined) {
-      liveStatus.content = otui.t`${dimChunk(otui, line)}`;
-    }
+    const right = perm !== undefined && perm.length > 0 ? `mode ${perm}` : status;
+    footerRight.content = otui.t`${dimChunk(otui, right)}`;
+    footerLeft.content = otui.t`${dimChunk(otui, formatBusyFooter(busyFooterInfo, footerLeftBudget(right)))}`;
   };
+
+  // The footer's width is known only after layout; refit the busy parts when it moves.
+  const onFooterResized = (): void => {
+    if (busy) paintBusyStatus();
+  };
+  footer.on(otui.LayoutEvents.RESIZED, onFooterResized);
+  r.on(otui.CliRenderEvents.RESIZE, onFooterResized);
 
   const clearBusyTimer = (): void => {
     if (busyTimer !== undefined) {
@@ -1240,14 +1271,21 @@ export async function createShellChrome(
     paintBusyStatus();
   };
 
+  const setBusyFooter = (info: BusyFooterInfo | undefined): void => {
+    if (!busy) return;
+    busyFooterInfo = info;
+    paintBusyStatus();
+  };
+
   const startBusy = (phase = "waiting for model"): void => {
     busy = true;
+    busyFooterInfo = undefined;
     busyPhase = phase;
     busyStartedAt = Date.now();
     spinIdx = 0;
     liveStatus = new otui.TextRenderable(r, {
       id: `ls${uid++}`,
-      content: otui.t`${dimChunk(otui, `⠋ ${phase} · 0.0s`)}`,
+      content: otui.t`${dimChunk(otui, `⠋ ${phase} · ${formatDuration(0)}`)}`,
       marginTop: 1,
     });
     transcript.add(liveStatus);
@@ -1261,6 +1299,7 @@ export async function createShellChrome(
 
   const stopBusy = (): void => {
     busy = false;
+    busyFooterInfo = undefined;
     clearBusyTimer();
     // Remove the in-transcript spinner line; the caller's "worked for Ns"
     // replaces it.
@@ -1590,6 +1629,7 @@ export async function createShellChrome(
     startBusy,
     stopBusy,
     setBusyPhase,
+    setBusyFooter,
     isBusy: () => busy,
     repaintStatus: paintBusyStatus,
     setFooterOverride: (paint) => {
@@ -1631,6 +1671,8 @@ export async function createShellChrome(
       unsubscribeSuggestionKeys();
       try {
         textarea.off(otui.LayoutEvents.RESIZED, onComposerResized);
+        footer.off(otui.LayoutEvents.RESIZED, onFooterResized);
+        r.off(otui.CliRenderEvents.RESIZE, onFooterResized);
       } catch {
         // best-effort teardown
       }

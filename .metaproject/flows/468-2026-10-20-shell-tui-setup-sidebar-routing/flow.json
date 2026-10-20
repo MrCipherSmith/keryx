@@ -11,7 +11,7 @@
   "title": "Shell TUI: runnable /setup plan, compact card sidebar with three widths, working /routing model picker",
   "status": "in-progress",
   "createdAt": "2026-10-20T07:58:41.266Z",
-  "updatedAt": "2026-10-20T17:58:01.261Z",
+  "updatedAt": "2026-10-20T18:47:26.088Z",
   "source": {
     "type": "description",
     "ref": null
@@ -272,7 +272,7 @@
       "id": "T13",
       "title": "B setup: PR 2 review rounds, merge into main, release",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T11"
       ],
@@ -282,7 +282,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR 1068 merged on green required checks (f6c66ac28); dependency-audit red only from the unrelated hono advisory; no release per operator cadence"
     },
     {
       "id": "T14",
@@ -511,8 +513,14 @@
         "T25"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T18:00:40.221Z",
+            "outcome": "started",
+            "detail": "468-T26 task-implementer dispatch (sonnet), phase C chrome"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -852,6 +860,16 @@
       "at": "2026-10-20T17:58:01.261Z",
       "event": "task-done",
       "detail": "T14: C sidebar: red tests for card projection, mode geometry, tui.json merge, header buttons, wide-mode modal width"
+    },
+    {
+      "at": "2026-10-20T18:00:40.221Z",
+      "event": "task-attempt",
+      "detail": "T26: started (attempt 1) — 468-T26 task-implementer dispatch (sonnet), phase C chrome"
+    },
+    {
+      "at": "2026-10-20T18:47:26.088Z",
+      "event": "task-done",
+      "detail": "T13: B setup: PR 2 review rounds, merge into main, release"
     }
   ],
   "acKinds": {

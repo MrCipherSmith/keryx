@@ -1,0 +1,52 @@
+{
+  "task_id": "task-26",
+  "task_name": "C chrome: busy line once above the composer, useful footer bar, one duration formatter everywhere in the TUI",
+  "task_type": "mixed",
+  "status": "partial",
+  "description": "Added src/tui/duration-format.ts (formatDuration) and src/tui/busy-footer.ts (pure busy footer text with priority fitting); shell-chrome paints the spinner/phase/timer only on the in-transcript liveStatus, the busy footer-left shows the hints + figures, and gains setBusyFooter; subagent formatElapsed and the background job Meta tab (new Duration row) use formatDuration; tui-shell feeds setBusyFooter from real turn data and routes both 'worked for' sites through formatDuration.",
+  "files_modified": [
+    "src/tui/shell-chrome.ts",
+    "src/tui/subagent-session.ts",
+    "src/tui/background-job-session.ts",
+    "src/tui/tui-shell.ts"
+  ],
+  "files_created": [
+    "src/tui/duration-format.ts",
+    "src/tui/busy-footer.ts"
+  ],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "pass (npx eslint on the six changed source files)",
+  "type_check_result": "pass (bun run typecheck)",
+  "test_result": "317 passed, 2 failed across shell-chrome, subagent-session, background-job-inspector, background-job-session, tui-shell, ops-sidebar, chat-shell, side-worker and shell-source-audits. The 2 failures are red tests that contradict the frozen footer wording (see notes): 'flow 468 AC20: the busy footer shows context fill, and queue, job and subagent counts only when non-zero' and 'flow 468 AC20: an empty busy footer part shows nothing: no placeholders, no stray separators'. All 11 other flow 468 AC20 tests and all AC21 tests pass.",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "partial: AC21 met. AC20 implemented in full, but 2 of its 10 red tests cannot pass because they assert the absence of the substring 'queue' / 'queue ' while the frozen hint 'Enter queue' (asserted by another AC20 test at the same width and the same empty info) contains it.",
+  "skill_drift": "none",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c", "how": "followed" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b", "how": "followed" }
+  ],
+  "noticed_not_touched": [
+    { "what": "Red tests contradict each other: 'flow 468 AC20: the busy footer shows the key hints...' requires the footer to contain 'Enter queue' (160 cols), while 'an empty busy footer part shows nothing' (160 cols, setBusyFooter({})) requires it NOT to contain 'queue ' and 'the busy footer shows context fill...' requires it NOT to contain 'queue'. Fix is in the tests: assert the absence of 'queue 0' / ' queue N' (e.g. /(^|\\s)queue \\d/) instead of the bare word.", "where": "src/tui/shell-chrome.test.ts:1716 and :1733" },
+    { "what": "reasoning-display prints 'thought for 12s' in whole seconds (pinned by reasoning-display.test.ts and tui-shell.test.ts); a reasoning span over an hour would print '3600s', outside the AC21 format. Left alone because routing it changes pinned wording.", "where": "src/tui/reasoning-display.ts:39 formatReasoningDurationSeconds" },
+    { "what": "Relative ages and stat latencies keep their own units ('5m ago', median '3m', '1200ms'): formatAge, triggers-panel age, operator-confirmations, decisions-surface duration(), games/stats formatMs. Not elapsed-run displays; left alone.", "where": "src/tui/remote-control-surface.ts:102, src/tui/triggers-panel.ts:54, src/tui/operator-confirmations.ts:110, src/tui/decisions-surface.ts:289, src/tui/games/stats.ts:71" },
+    { "what": "A running background job's Duration in the inspector Meta tab is measured at paint time and is not refreshed by a timer (the tab repaints on store events only).", "where": "src/tui/background-job-inspector.ts:217" }
+  ],
+  "assumptions": [
+    "Context fill is contextTotal / window, where contextTotal is the same running in+out total the sidebar Context section shows (or the history estimate before the provider reports usage) and window is agentContextWindow(deps); no ctx part is shown when the window is unknown.",
+    "Running job count = background jobs with status running; subagent count = subagent sessions with status running; queue = turnLoop.queue.length.",
+    "Cost is estimated with the stored model profile (same estimateTaskCostUsd as the task-cost record); no profile price means no cost part.",
+    "Token part is omitted while both of this turn's counts are 0 (turn start) so the footer does not show '↑0 ↓0'.",
+    "On very narrow terminals the hints shorten (full -> 'Esc interrupt · Enter queue' -> 'Esc interrupt'), and the one-column gap before the right slot is dropped before 'Esc interrupt' is clipped (needed for the 60-column AC20 test)."
+  ],
+  "behavior_changes": [
+    { "description": "Busy footer hints shorten on narrow terminals: 'Esc interrupt · Enter queue · / commands' -> 'Esc interrupt · Enter queue' -> 'Esc interrupt' (the task said hints are always kept; the shortening ladder and the dropped one-column gap before the right slot at ~60 columns are my choice).", "user_visible": true, "needs_operator": true, "alternatives": ["clip the full hint string at the width", "hide the right-hand 'mode' slot on narrow terminals"] },
+    { "description": "The busy line (spinner, phase, timer) now also keeps updating while a footer override (block-nav) is active; before, the override froze the in-transcript line.", "user_visible": true, "needs_operator": false, "alternatives": ["keep freezing it while the override owns the footer"] },
+    { "description": "The busy footer shows a tokens part only when this turn has reported tokens, and a cost part appears with it once the model is priced; ctx part appears only when the model's context window is known.", "user_visible": true, "needs_operator": false }
+  ],
+  "not_touched": [
+    { "path": "src/tui/background-job-inspector.ts", "reason": "formatJobMeta lives in background-job-session.ts; the inspector only calls it, so the Duration row needed no change there." }
+  ],
+  "notes": "Status partial because two AC20 red tests are unsatisfiable together with the frozen wording; per instructions they were not edited. Routing audit: graph_used no (small known file set), wiki_used not-relevant, ctx_used yes, raw_rg_used no. A Bash hook blocked a first attempt that contained 'sed'; no effect on the work. Auto-commit is off: nothing committed. flow.json untouched."
+}

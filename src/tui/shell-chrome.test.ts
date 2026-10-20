@@ -1713,7 +1713,8 @@ otuiTest("flow 468 AC20: the busy footer shows context fill, and queue, job and 
     await h.flush();
     footer = nonEmptyLines(h.captureCharFrame()).at(-1) ?? "";
     expect(footer).toContain("ctx 42%");
-    expect(footer).not.toContain("queue");
+    // "Enter queue" is part of the key hints, so look for a count, not the word.
+    expect(footer).not.toMatch(/(^|\s)queue \d/);
     expect(footer).not.toContain("jobs");
     expect(footer).not.toContain("agents");
   } finally {
@@ -1730,9 +1731,11 @@ otuiTest("flow 468 AC20: an empty busy footer part shows nothing: no placeholder
     await h.flush();
     const footer = nonEmptyLines(h.captureCharFrame()).at(-1) ?? "";
     expect(footer).toContain("Esc interrupt");
-    for (const absent of ["\u2191", "\u2193", "$", "ctx", "queue ", "jobs", "agents", "undefined", "NaN", "null", "0%"]) {
+    for (const absent of ["\u2191", "\u2193", "$", "ctx", "jobs", "agents", "undefined", "NaN", "null", "0%"]) {
       expect(`${absent}: ${footer.includes(absent)}`).toBe(`${absent}: false`);
     }
+    // "Enter queue" is part of the key hints; an empty queue part would be a "queue <n>" count.
+    expect(footer).not.toMatch(/(^|\s)queue \d/);
     expect(footer).not.toMatch(/\u00b7\s*\u00b7/); // no "· ·" from an empty part
   } finally {
     h.destroy();

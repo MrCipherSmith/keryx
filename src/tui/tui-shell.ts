@@ -45,6 +45,7 @@ import { resetOperatorDenials } from "../review/review-system";
 import { describeAutomaticReviewMode } from "../commands/automatic-review";
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import {
+  agentContextWindow,
   describeReasoningEffortSource,
   describeRoundLimit,
   isReasoningEffortLevel,
@@ -130,6 +131,7 @@ import { mountAutoReviewSidebar, routeAutoReviewCommand, type AutoReviewSidebar 
 import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
 import { CTRL_C_EXIT_HINT, createCtrlCPolicy } from "./ctrl-c-policy";
 import { classifyBusyDispatch } from "./busy-dispatch";
+import { formatDuration } from "./duration-format";
 import { debugEvent } from "./debug-log";
 import {
   createSplashLifecycle,
@@ -1507,6 +1509,37 @@ function estimateTaskCostUsd(
     (cacheRead / 1_000_000) * priceIn * cacheReadMultiplier +
     (cacheWrite / 1_000_000) * priceIn * cacheWriteMultiplier;
   return inputCost + (outputTokens / 1_000_000) * priceOut;
+}
+
+/**
+ * Flow 468 (AC20) — the running cost of a turn for the busy footer: the same
+ * estimate `recordTurnTaskCostBestEffort` records, from the operator's stored
+ * model-profile pricing. `undefined` when the price is not known (so the footer
+ * shows no cost rather than a guess) or the profile store cannot be read.
+ */
+export function estimateTurnCostUsd(input: {
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly cacheReadTokens?: number;
+  readonly cacheWriteTokens?: number;
+  readonly userConfigDir?: string;
+}): number | undefined {
+  try {
+    const profile = loadModelProfiles(input.userConfigDir)[profileKey(input.providerId, input.modelId)];
+    return estimateTaskCostUsd(
+      profile,
+      input.providerId,
+      input.inputTokens,
+      input.outputTokens,
+      input.cacheReadTokens,
+      input.cacheWriteTokens,
+    );
+  } catch {
+    // An unreadable profile store means "price unknown", never an error in the turn.
+    return undefined;
+  }
 }
 
 /**
@@ -4282,10 +4315,37 @@ export async function launchTuiAgentShell(opts: {
       debugEvent("busy.phase", { phase });
       chrome.setBusyPhase(phase);
     };
+    // Flow 468 (AC20): the busy footer's figures. The chrome owns how they are
+    // laid out; the shell owns where they come from — this turn's tokens (and
+    // their cost when the model's price is known), the context total the sidebar
+    // Context section shows, and the queue / job / subagent counts. Every source
+    // below calls `pushBusyFooter` when it changes; the chrome ignores the call
+    // while idle, and the `isBusy` guard keeps it from reading a source (the turn
+    // queue, the session stores) that setup has not built yet.
+    const turnFooter = { tokensIn: 0, tokensOut: 0, costUsd: undefined as number | undefined };
+    let contextTotal = 0;
+    const pushBusyFooter = (): void => {
+      if (!chrome.isBusy()) return;
+      const window = agentContextWindow(deps);
+      const total = hasExactUsage ? contextTotal : estimateContextTokens(history);
+      chrome.setBusyFooter({
+        tokensIn: turnFooter.tokensIn,
+        tokensOut: turnFooter.tokensOut,
+        ...(turnFooter.costUsd !== undefined ? { costUsd: turnFooter.costUsd } : {}),
+        ...(window !== undefined && window > 0 ? { contextPct: Math.min(100, (total / window) * 100) } : {}),
+        queued: turnLoop.queue.length,
+        backgroundJobs: jobs.list().filter((job) => job.status === "running").length,
+        subagents: sessions.list().filter((session) => session.status === "running").length,
+      });
+    };
     const startBusy = (phase = "waiting for model"): void => {
       busyPhase = phase;
       busyStartedAt = Date.now();
+      turnFooter.tokensIn = 0;
+      turnFooter.tokensOut = 0;
+      turnFooter.costUsd = undefined;
       chrome.startBusy(phase);
+      pushBusyFooter();
     };
     const stopBusy = (): void => {
       chrome.stopBusy();
@@ -4670,6 +4730,7 @@ export async function launchTuiAgentShell(opts: {
       if (hint?.kind === "log") {
         return;
       }
+      pushBusyFooter();
       paintSubagentSidebar(otui, r, sbSubagents, sessions.list(), {
         width: SIDEBAR_TEXT_WIDTH,
         onOpen: (id) => {
@@ -4694,6 +4755,7 @@ export async function launchTuiAgentShell(opts: {
       if (hint?.kind === "output") {
         return;
       }
+      pushBusyFooter();
       paintBackgroundJobSidebar(otui, r, sbJobs, jobs.list(), {
         width: SIDEBAR_TEXT_WIDTH,
         onOpen: (id) => {
@@ -4963,6 +5025,8 @@ export async function launchTuiAgentShell(opts: {
     const usage = attachUsageIo(io, {
       setHeaderMeta: (text) => chrome.setHeaderMeta(text),
       setContextTotal: (total) => {
+        contextTotal = total;
+        pushBusyFooter();
         sbContext.content = otui.t`${dimChunk(otui, `${total.toLocaleString()} tokens`)}`;
       },
       onExactUsage: () => {
@@ -8250,6 +8314,7 @@ export async function launchTuiAgentShell(opts: {
         chrome.queueDock.add(mainQueueHelp);
       }
       chrome.queueDock.visible = turnLoop.queue.length > 0;
+      pushBusyFooter();
       applyQueueNavHighlight();
       // Fleet/status counter.
       if (turnLoop.queue.length > 0) {
@@ -9867,11 +9932,11 @@ export async function launchTuiAgentShell(opts: {
               {
                 stopBusy,
                 complete: () => {
-                  const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+                  const worked = formatDuration(Date.now() - startedAt);
                   transcript.add(
                     new otui.TextRenderable(r, {
                       id: `w${uid++}`,
-                      content: otui.t`${dimChunk(otui, `worked for ${secs}s`)}`,
+                      content: otui.t`${dimChunk(otui, `worked for ${worked}`)}`,
                       marginTop: 1,
                     }),
                   );
@@ -9935,7 +10000,20 @@ export async function launchTuiAgentShell(opts: {
         turnOutputTokens += usage.outputTokens ?? 0;
         turnCacheReadTokens += usage.cacheReadTokens ?? 0;
         turnCacheWriteTokens += usage.cacheWriteTokens ?? 0;
+        // Flow 468 (AC20): the busy footer shows THIS turn's tokens, and the
+        // cost only when the stored model profile prices the model.
+        turnFooter.tokensIn = turnInputTokens;
+        turnFooter.tokensOut = turnOutputTokens;
+        turnFooter.costUsd = estimateTurnCostUsd({
+          providerId: deps.providerId,
+          modelId: deps.modelId,
+          inputTokens: turnInputTokens,
+          outputTokens: turnOutputTokens,
+          cacheReadTokens: turnCacheReadTokens,
+          cacheWriteTokens: turnCacheWriteTokens,
+        });
         prevOnUsageForCost?.(usage);
+        pushBusyFooter();
       };
       // --- Claude-style "next step" suggestion (placeholder + Tab accept) ---
       // After a settled main turn with an empty queue, ask the model for ONE
@@ -10094,7 +10172,7 @@ export async function launchTuiAgentShell(opts: {
         void remoteQueue.turnSettled({ failed: turnFailed, aborted: turnSignal.aborted });
         if (foregroundOperation.isDisposed) return;
         refreshRewindSidebar();
-        const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+        const worked = formatDuration(Date.now() - startedAt);
         stopBusy();
         // SLATE-16 binds a workspace mid-turn, on the action-intent turn's
         // FIRST action — the sidebar can only reflect that once the turn
@@ -10163,7 +10241,7 @@ export async function launchTuiAgentShell(opts: {
           // best-effort persist
         }
         transcript.add(
-          new otui.TextRenderable(r, { id: `w${uid++}`, content: otui.t`${dimChunk(otui, `worked for ${secs}s`)}`, marginTop: 1 }),
+          new otui.TextRenderable(r, { id: `w${uid++}`, content: otui.t`${dimChunk(otui, `worked for ${worked}`)}`, marginTop: 1 }),
         );
         // No exact provider usage → show an estimated context size (never stuck at 0).
         if (!hasExactUsage) {

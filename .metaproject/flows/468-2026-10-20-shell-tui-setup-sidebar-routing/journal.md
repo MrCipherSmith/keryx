@@ -147,9 +147,24 @@
   - the chrome-level tests are red only on the missing module, so their harness assumptions (span offsets, `pressKey("l", {ctrl:true})`, `h.resize`, button-position clicks) are unproven until T15;
   - `shell-pty-launch.smoke.test.ts` still asserts the old labels Context/Tools/Status/Ready in two existing tests (`TUI_ONLY_LABELS`, the flow 300 80×24 test), which T16 must update;
   - the 80×24 smoke relies on the first Ctrl+C raising the exit toast.
-- T14 (sidebar red tests) and T25 (busy footer and duration formatter red tests) are dispatched in parallel. Their test files do not overlap: T25 owns `shell-chrome.test.ts`, `subagent-session.test.ts` and `background-job-inspector.test.ts`. T14 puts its AC14 and AC17 tests in the new `sidebar-geometry.test.ts` and `sidebar-cards.test.ts`.
+- T14 (sidebar red tests) and T25 (busy footer and duration formatter red tests) are dispatched in parallel.
+
+### PR 2 merged; T26 done (2026-10-20)
+
+- PR 1068 failed CI once. `shell-source-audits.test.ts` did not know the new `/setup` wiring audit in `commands/shell.test.ts`. 9aff5acbd records it in `docs/requirements/keryx-shell-split/source-text-audit-inventory.md`.
+- After that every required check (typecheck-and-tests, standard-pr, metrics-contract) passed. `dependency-audit` is not required and stayed red, for an unrelated reason: a new hono serveStatic advisory, and the PR touches no dependencies. A separate session was proposed for the override bump.
+- PR 1068 merged at f6c66ac28 with no release, per the operator's cadence. T13 done.
+- T26 came back BLOCKED. Two T25 tests asserted the bare word `queue` was absent, which contradicts the frozen hint "Enter queue". The main session corrected both to assert no `queue <n>` count, as the AC means. Everything else in T26 was done.
+- After the correction, 274 tests pass across shell-chrome, subagent-session, background-job-inspector, tui-shell and shell-source-audits, and `tsc` is clean.
+- Operator answer on the narrow-footer behavior change: «Укорачивать подсказки (Recommended)». The hints shorten to "Esc interrupt · Enter queue", then "Esc interrupt", and "mode <permission>" stays.
+- Left as noticed, not changed:
+  - `reasoning-display` prints whole seconds ("thought for 12s"), pinned by existing tests;
+  - relative ages and stat latencies keep their own units;
+  - a running job's Duration in the inspector refreshes on store events, not on a timer. Their test files do not overlap: T25 owns `shell-chrome.test.ts`, `subagent-session.test.ts` and `background-job-inspector.test.ts`. T14 puts its AC14 and AC17 tests in the new `sidebar-geometry.test.ts` and `sidebar-cards.test.ts`.
 - 2026-10-20T17:33:26.068Z - task-done: T11: B setup: modal layout, contrast, scroll, Copy/Optional/Run buttons, Run through external agent with main-agent fallback, docs
 - 2026-10-20T17:37:10.616Z - task-attempt: T14: started (attempt 1) — 468-T14 tests-creator dispatch (sonnet), phase C sidebar, stacked on feat/flow-468-b-setup while PR 1068 CI runs
 - 2026-10-20T17:37:11.435Z - task-attempt: T25: started (attempt 1) — 468-T25 tests-creator dispatch (sonnet), phase C chrome, stacked on feat/flow-468-b-setup while PR 1068 CI runs
 - 2026-10-20T17:51:11.552Z - task-done: T25: C chrome: red tests for the busy footer (one waiting line, useful footer bar) and the one compact duration formatter
 - 2026-10-20T17:58:01.261Z - task-done: T14: C sidebar: red tests for card projection, mode geometry, tui.json merge, header buttons, wide-mode modal width
+- 2026-10-20T18:00:40.221Z - task-attempt: T26: started (attempt 1) — 468-T26 task-implementer dispatch (sonnet), phase C chrome
+- 2026-10-20T18:47:26.088Z - task-done: T13: B setup: PR 2 review rounds, merge into main, release
