@@ -11,7 +11,7 @@
   "title": "Shell TUI: runnable /setup plan, compact card sidebar with three widths, working /routing model picker",
   "status": "in-progress",
   "createdAt": "2026-10-20T07:58:41.266Z",
-  "updatedAt": "2026-10-20T18:47:26.088Z",
+  "updatedAt": "2026-10-20T18:49:37.417Z",
   "source": {
     "type": "description",
     "ref": null
@@ -508,7 +508,7 @@
       "id": "T26",
       "title": "C chrome: busy line once above the composer, footer shows key hints, turn tokens/cost, context fill, queue/background; one duration formatter everywhere in the TUI",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T25"
       ],
@@ -524,7 +524,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "busy footer and one duration formatter; two T25 tests corrected to assert no 'queue <n>' count; operator accepted hint shortening on narrow terminals"
     }
   ],
   "history": [
@@ -870,6 +872,11 @@
       "at": "2026-10-20T18:47:26.088Z",
       "event": "task-done",
       "detail": "T13: B setup: PR 2 review rounds, merge into main, release"
+    },
+    {
+      "at": "2026-10-20T18:49:37.417Z",
+      "event": "task-done",
+      "detail": "T26: C chrome: busy line once above the composer, footer shows key hints, turn tokens/cost, context fill, queue/background; one duration formatter everywhere in the TUI"
     }
   ],
   "acKinds": {

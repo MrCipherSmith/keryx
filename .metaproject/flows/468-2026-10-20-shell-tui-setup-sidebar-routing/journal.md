@@ -168,3 +168,4 @@
 - 2026-10-20T17:58:01.261Z - task-done: T14: C sidebar: red tests for card projection, mode geometry, tui.json merge, header buttons, wide-mode modal width
 - 2026-10-20T18:00:40.221Z - task-attempt: T26: started (attempt 1) — 468-T26 task-implementer dispatch (sonnet), phase C chrome
 - 2026-10-20T18:47:26.088Z - task-done: T13: B setup: PR 2 review rounds, merge into main, release
+- 2026-10-20T18:49:37.417Z - task-done: T26: C chrome: busy line once above the composer, footer shows key hints, turn tokens/cost, context fill, queue/background; one duration formatter everywhere in the TUI
