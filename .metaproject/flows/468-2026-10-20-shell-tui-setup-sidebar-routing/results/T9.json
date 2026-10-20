@@ -1,0 +1,81 @@
+{
+  "test_case_specs": {
+    "framework": "bun:test",
+    "test_files": [
+      {
+        "path": "src/commands/setup-guide.test.ts",
+        "target_module": "src/commands/setup-guide.ts",
+        "test_count": 13,
+        "tests": [
+          { "id": "test-1", "description": "flow 468 AC6: no .metaproject/index.md (empty dir, bare .metaproject, manifest+modules without index) means init", "criterion": "AC6", "type": "happy_path", "status": "written", "red_reason": "detectSetupScenario is not exported", "assumed_seam": "detectSetupScenario(root) returns the id, sync or async" },
+          { "id": "test-2", "description": "flow 468 AC6: index + metaproject.json + modules/ means refresh", "criterion": "AC6", "type": "happy_path", "status": "written", "red_reason": "detectSetupScenario is not exported", "assumed_seam": "manifest = .metaproject/metaproject.json, module dirs = .metaproject/modules/*" },
+          { "id": "test-3", "description": "flow 468 AC6: index only, index+manifest without modules, index+modules without manifest all mean repair", "criterion": "AC6", "type": "edge_case", "status": "written", "red_reason": "detectSetupScenario is not exported", "assumed_seam": "same" },
+          { "id": "test-4", "description": "flow 468 AC7: every step in every scenario is one keryx command (no && || ; |), has a boolean required and a non-empty why, keeps note, no duplicate cli", "criterion": "AC7", "type": "happy_path", "status": "written", "red_reason": "step.required is undefined (boolean expected)", "assumed_seam": "SetupStep { cli, required, why, note }" },
+          { "id": "test-5", "description": "flow 468 AC7: Init required steps (init --yes, gdgraph build, standard validate, security policy validate, in order) and the optional set", "criterion": "AC7", "type": "happy_path", "status": "written", "red_reason": "no step carries required:true", "assumed_seam": "optional integrate step starts with 'keryx integrate'" },
+          { "id": "test-6", "description": "flow 468 AC7: Refresh required steps in order, optional update --preview before the update, memory check, health run, update --hooks, runtime update", "criterion": "AC7", "type": "happy_path", "status": "written", "red_reason": "no step carries required:true", "assumed_seam": "none" },
+          { "id": "test-7", "description": "flow 468 AC7: Repair required steps in order incl. each gate as its own step, optional doctor, modules enable, security hooks install, sync install-hooks; diagnosis before change", "criterion": "AC7", "type": "happy_path", "status": "written", "red_reason": "no step carries required:true", "assumed_seam": "none" },
+          { "id": "test-8", "description": "flow 468 AC7: renderSetupScenario and `keryx setup refresh` print [required]/[optional], every reason, the prompt (.metaproject/index.md), and keep the CLI-only closing line", "criterion": "AC7", "type": "happy_path", "status": "written", "red_reason": "output has no [required] mark", "assumed_seam": "renderSetupScenario prints the generated prompt" },
+          { "id": "test-9", "description": "flow 468 AC8: prompt holds the root, 'read .metaproject/index.md first', REQUIRED and `cli — why` lines in scenario order", "criterion": "AC8", "type": "happy_path", "status": "written", "red_reason": "buildSetupAgentPrompt is not exported", "assumed_seam": "buildSetupAgentPrompt(scenarioObject, {projectRoot, includeOptional}) returns a string; list line format '<cli> — <why>'; headings REQUIRED / OPTIONAL" },
+          { "id": "test-10", "description": "flow 468 AC8: OPTIONAL list only when includeOptional; required stay in both", "criterion": "AC8", "type": "edge_case", "status": "written", "red_reason": "buildSetupAgentPrompt is not exported", "assumed_seam": "same" },
+          { "id": "test-11", "description": "flow 468 AC8: stop rules (first failed required step; stop and ask on update divergence)", "criterion": "AC8", "type": "error_path", "status": "written", "red_reason": "buildSetupAgentPrompt is not exported", "assumed_seam": "same" },
+          { "id": "test-12", "description": "flow 468 AC8: prohibitions (no deletion of .metaproject, no extra --force, no commit or push, no wiki prose enrichment)", "criterion": "AC8", "type": "error_path", "status": "written", "red_reason": "buildSetupAgentPrompt is not exported", "assumed_seam": "same" },
+          { "id": "test-13", "description": "flow 468 AC8: prompt is generated from steps and root only (a different root changes nothing else)", "criterion": "AC8", "type": "edge_case", "status": "written", "red_reason": "buildSetupAgentPrompt is not exported", "assumed_seam": "same" }
+        ]
+      },
+      {
+        "path": "src/tui/setup-modal.test.ts",
+        "target_module": "src/tui/setup-modal.ts",
+        "test_count": 22,
+        "tests": [
+          { "id": "test-14", "description": "flow 468 AC6: no argument, no .metaproject/index.md opens Init (guard, green today)", "criterion": "AC6", "type": "happy_path", "status": "written", "red_reason": "passes today by design (default tab is already init)", "assumed_seam": "SetupModalOptions.projectRoot" },
+          { "id": "test-15", "description": "flow 468 AC6: no argument, complete workspace opens Refresh", "criterion": "AC6", "type": "happy_path", "status": "written", "red_reason": "activeTab is init, expected refresh", "assumed_seam": "SetupModalOptions.projectRoot; modal calls detectSetupScenario" },
+          { "id": "test-16", "description": "flow 468 AC6: no argument, partial workspace opens Repair", "criterion": "AC6", "type": "happy_path", "status": "written", "red_reason": "activeTab is init, expected repair", "assumed_seam": "same" },
+          { "id": "test-17", "description": "flow 468 AC6: an explicit initialScenario wins over the detected tab (guard, green today)", "criterion": "AC6", "type": "edge_case", "status": "written", "red_reason": "passes today by design", "assumed_seam": "same" },
+          { "id": "test-18", "description": "flow 468 AC8: the generated prompt is shown under the plan (root, read-index line, REQUIRED below the last plan command)", "criterion": "AC8", "type": "happy_path", "status": "written", "red_reason": "frame lacks the project root", "assumed_seam": "none" },
+          { "id": "test-19", "description": "flow 468 AC8: c copies the prompt via copyText and toasts 'Copied to clipboard'", "criterion": "AC8", "type": "happy_path", "status": "written", "red_reason": "copyText called 0 times", "assumed_seam": "copyText(text), showToast(message)" },
+          { "id": "test-20", "description": "flow 468 AC8: the [Copy prompt] button copies the same prompt", "criterion": "AC8", "type": "happy_path", "status": "written", "red_reason": "frame lacks [Copy prompt]", "assumed_seam": "button label '[Copy prompt]'" },
+          { "id": "test-21", "description": "flow 468 AC8: o toggles optional steps in the list, the button label and the copied prompt, and back", "criterion": "AC8", "type": "edge_case", "status": "written", "red_reason": "frame lacks 'Optional: off'", "assumed_seam": "button label '[Optional: off]' / '[Optional: on]'" },
+          { "id": "test-22", "description": "flow 468 AC8: the [Optional: off] button toggles like o", "criterion": "AC8", "type": "edge_case", "status": "written", "red_reason": "no [Optional: off] on screen", "assumed_seam": "same" },
+          { "id": "test-23", "description": "flow 468 AC9 (rewrites the old scroll test): at a 16-row terminal the last prompt line is reached by scrolling and ↑ returns to the identical top frame", "criterion": "AC9", "type": "edge_case", "status": "written", "red_reason": "buildSetupAgentPrompt is not exported (last line comes from the prompt)", "assumed_seam": "scroll via the modal's own ScrollBox, read from the rendered frame" },
+          { "id": "test-24", "description": "flow 468 AC9: the title is bold and the command is accent-coloured and not DIM; no DIM span holds a command", "criterion": "AC9", "type": "happy_path", "status": "written", "red_reason": "title span has no BOLD attribute (it is DIM only)", "assumed_seam": "captureSpans attributes/fg" },
+          { "id": "test-25", "description": "flow 468 AC9: [required] is the ok colour, [optional] the muted colour", "criterion": "AC9", "type": "happy_path", "status": "written", "red_reason": "no [required] span on screen", "assumed_seam": "roles ok / muted per plan.md" },
+          { "id": "test-26", "description": "flow 468 AC9: a 70-row terminal shows plan and whole prompt (more than 24 body rows)", "criterion": "AC9", "type": "edge_case", "status": "written", "red_reason": "buildSetupAgentPrompt is not exported", "assumed_seam": "none" },
+          { "id": "test-27", "description": "flow 468 AC9: the keys hint appears exactly once", "criterion": "AC9", "type": "edge_case", "status": "written", "red_reason": "hint appears 2 times (body and footer)", "assumed_seam": "hint identified by '←/→ tabs'" },
+          { "id": "test-28", "description": "flow 468 AC9: no body line is wider than the box it is laid out in, at 120 and 200 columns (width follows renderTab ctx.width)", "criterion": "AC9", "type": "edge_case", "status": "written", "red_reason": "lines of 82-102 chars in a 78-wide box", "assumed_seam": "body text is pre-wrapped; walks modal-body-scroll descendants" },
+          { "id": "test-29", "description": "flow 468 AC10: r opens the confirm card naming the scenario, the steps that will run and the agent", "criterion": "AC10", "type": "happy_path", "status": "written", "red_reason": "confirm called 0 times", "assumed_seam": "confirm(card: string[]) => Promise<boolean>; externalAgents [{id,name}]" },
+          { "id": "test-30", "description": "flow 468 AC10: yes delegates {agentId, task: prompt, cwd: root}, runLine not called, modal stays usable while the run never settles", "criterion": "AC10", "type": "happy_path", "status": "written", "red_reason": "delegate called 0 times", "assumed_seam": "delegate({agentId, task, cwd}) => Promise" },
+          { "id": "test-31", "description": "flow 468 AC10: the [Run] button works like r", "criterion": "AC10", "type": "happy_path", "status": "written", "red_reason": "frame lacks [Run]", "assumed_seam": "button label '[Run]'" },
+          { "id": "test-32", "description": "flow 468 AC10: with Optional on, the card and the delegated prompt include the optional steps", "criterion": "AC10", "type": "edge_case", "status": "written", "red_reason": "confirm called 0 times", "assumed_seam": "none" },
+          { "id": "test-33", "description": "flow 468 AC10: no starts nothing", "criterion": "AC10", "type": "error_path", "status": "written", "red_reason": "confirm called 0 times (no card shown)", "assumed_seam": "none" },
+          { "id": "test-34", "description": "flow 468 AC10: with no external agent the card says so and offers the main agent; yes runs runLine(prompt), never delegate; confirm precedes runLine", "criterion": "AC10", "type": "error_path", "status": "written", "red_reason": "confirm called 0 times", "assumed_seam": "runLine(prompt)" },
+          { "id": "test-35", "description": "flow 468 AC10: with no external agent, no to the main agent starts nothing", "criterion": "AC10", "type": "error_path", "status": "written", "red_reason": "confirm called 0 times", "assumed_seam": "none" }
+        ]
+      },
+      {
+        "path": "src/commands/shell.test.ts",
+        "target_module": "src/tui/tui-shell.ts",
+        "test_count": 4,
+        "tests": [
+          { "id": "test-36", "description": "flow 468 AC10: openSetup passes projectRoot to openSetupModal", "criterion": "AC10", "type": "happy_path", "status": "written", "red_reason": "call has no projectRoot", "assumed_seam": "source-text audit of the openSetupModal(otui, chrome, {...}) call; launcher cannot run headless" },
+          { "id": "test-37", "description": "flow 468 AC10: Copy wiring (copyText, copyToClipboardOSC52, showToast)", "criterion": "AC10", "type": "happy_path", "status": "written", "red_reason": "call has no copyText", "assumed_seam": "same" },
+          { "id": "test-38", "description": "flow 468 AC10: Run wiring (externalAgents, confirmOperatorCard, delegate via external.delegate)", "criterion": "AC10", "type": "happy_path", "status": "written", "red_reason": "call has no externalAgents", "assumed_seam": "same" },
+          { "id": "test-39", "description": "flow 468 AC10: fallback wiring (runLine)", "criterion": "AC10", "type": "happy_path", "status": "written", "red_reason": "call has no runLine", "assumed_seam": "same" }
+        ]
+      }
+    ],
+    "run_command": "bun test src/commands/setup-guide.test.ts src/tui/setup-modal.test.ts src/commands/shell.test.ts --timeout 30000 -t 'flow 468 AC'",
+    "expected_result": "39 new tests: 37 failing (RED), 2 AC6 guards green by design; one pre-existing test changed on purpose and red until implemented",
+    "notes": "Assumed seams (all new, all injected): detectSetupScenario(root); buildSetupAgentPrompt(scenarioObject, {projectRoot, includeOptional}) with list lines '<cli> — <why>' and headings REQUIRED/OPTIONAL; SetupStep {cli, required, why, note}; renderSetupScenario prints [required]/[optional], reasons and the prompt; SetupModalOptions {projectRoot, copyText, showToast, externalAgents:[{id,name}], confirm(card:string[])=>Promise<boolean>, delegate({agentId,task,cwd}), runLine(prompt)}; button labels [Run], [Copy prompt], [Optional: off|on]; keys c/r/o. Only the first configured external agent is exercised; a multi-agent choice is not pinned. Pre-existing tests changed: setup-guide.test.ts 'refresh and repair preserve accepted content and start from a read' (first REQUIRED refresh step is `keryx update --skip-runtime --yes`; an optional update --preview now comes first); setup-modal.test.ts 'opens on the first scenario...' (reads the frame instead of visibleLines/SETUP_MODAL_KEYS, the hint now appears once) and the scroll test (frame-based, last line is the prompt's, renamed flow 468 AC9). The modal tests read the rendered frame and captureSpans, so visibleLines()/SETUP_MODAL_KEYS are no longer imported. The width test assumes pre-wrapped body text. The AC10 shell wiring is a source-text audit because tui-shell's launcher needs a real renderer, session and provider. Tests not committed; the orchestrator commits."
+  },
+  "project_context_applied": [
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3", "how": "followed" }
+  ],
+  "status_report": {
+    "status": "DONE",
+    "tests_written": 39,
+    "test_files_committed": [],
+    "all_criteria_covered": true,
+    "red_verified": true,
+    "concerns": "New tests reach unexported APIs through a namespace import and pass unknown options through a spread, so tsc stays quiet but they are red until phase B lands. Two AC6 guards (init default, explicit scenario wins) are green today by design."
+  }
+}

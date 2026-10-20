@@ -1673,3 +1673,49 @@ describe("--deny-tools", () => {
 // (See the comment block above: all five describes formerly here now live in
 // `shell-agent-repl.test.ts`, or — for held-turn wiring — in the pre-existing
 // `shell-pause.process.test.ts`.)
+
+// --- flow 468 AC10: /setup Run, Copy and tab detection wiring in the TUI shell ----
+//
+// SOURCE-TEXT AUDIT, on purpose and only here. `openSetup` lives inside
+// `runTuiShell`'s closure in `src/tui/tui-shell.ts`; the launcher needs a real
+// renderer, a session, a provider and an external-agent registry, so it cannot
+// run headless. The modal itself is covered behaviourally, through injected
+// seams, in `src/tui/setup-modal.test.ts` (AC6/AC8/AC9/AC10); this block pins
+// only that the shell hands the modal the real ones:
+//   projectRoot     the session cwd (tab detection and the delegated run's cwd)
+//   copyText        OSC 52 (`copyToClipboardOSC52`)
+//   showToast       `chrome.showToast`
+//   externalAgents  the configured external agents
+//   confirm         `confirmOperatorCard` (the operator confirm card)
+//   delegate        `external.delegate` (the `/delegate` path)
+//   runLine         the main agent turn (the visible fallback)
+describe("flow 468 AC10 — the TUI shell wires /setup's Run, Copy and detection seams (source-text audit; the launcher cannot run headless)", () => {
+  const tuiShellSource = readFileSync(path.join(import.meta.dir, "..", "tui", "tui-shell.ts"), "utf8");
+  const openSetupStart = tuiShellSource.indexOf("const openSetup = ");
+  // The call's argument object, from `openSetupModal(` to a generous bound past it.
+  const callStart = tuiShellSource.indexOf("openSetupModal(otui, chrome, {", openSetupStart);
+  const openSetupCall = callStart < 0 ? "" : tuiShellSource.slice(callStart, callStart + 3500);
+
+  test("flow 468 AC10: openSetup hands the modal the project root, so the tab follows the project", () => {
+    expect(openSetupStart).toBeGreaterThan(-1);
+    expect(callStart).toBeGreaterThan(-1);
+    expect(openSetupCall).toMatch(/projectRoot\b/);
+  });
+
+  test("flow 468 AC10: Copy goes through OSC 52 and the toast", () => {
+    expect(openSetupCall).toMatch(/copyText\b/);
+    expect(openSetupCall).toContain("copyToClipboardOSC52");
+    expect(openSetupCall).toMatch(/showToast\b/);
+  });
+
+  test("flow 468 AC10: Run confirms through the operator card and delegates through the external agent path", () => {
+    expect(openSetupCall).toMatch(/externalAgents\b/);
+    expect(openSetupCall).toContain("confirmOperatorCard");
+    expect(openSetupCall).toMatch(/delegate\b/);
+    expect(openSetupCall).toContain("external.delegate");
+  });
+
+  test("flow 468 AC10: the fallback is the session's main agent turn", () => {
+    expect(openSetupCall).toMatch(/runLine\b/);
+  });
+});
