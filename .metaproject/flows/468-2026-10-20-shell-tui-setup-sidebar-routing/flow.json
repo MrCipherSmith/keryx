@@ -11,7 +11,7 @@
   "title": "Shell TUI: runnable /setup plan, compact card sidebar with three widths, working /routing model picker",
   "status": "in-progress",
   "createdAt": "2026-10-20T07:58:41.266Z",
-  "updatedAt": "2026-10-20T10:58:35.446Z",
+  "updatedAt": "2026-10-20T12:01:56.837Z",
   "source": {
     "type": "description",
     "ref": null
@@ -167,7 +167,7 @@
       "id": "T8",
       "title": "A routing: PR 1 review rounds, merge into main, release",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
@@ -177,7 +177,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -748,6 +749,11 @@
       "at": "2026-10-20T10:58:35.446Z",
       "event": "task-done",
       "detail": "T24: A routing: PR 1063 round-1 fixes (upheld C-01..C-04, C-06..C-16; red CI wiring and verify-exec tests)"
+    },
+    {
+      "at": "2026-10-20T12:01:56.837Z",
+      "event": "task-done",
+      "detail": "T8: A routing: PR 1 review rounds, merge into main, release"
     }
   ],
   "acKinds": {

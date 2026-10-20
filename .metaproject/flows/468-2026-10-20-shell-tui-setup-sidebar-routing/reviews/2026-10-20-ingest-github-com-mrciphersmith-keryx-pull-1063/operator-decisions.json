@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "decisions": [
+    {
+      "kind": "premise-question",
+      "finding": "2026-10-20-ingest-github-com-mrciphersmith-keryx-pull-1063#C-07",
+      "answer": "uphold",
+      "reason": "operator wants category reasons in the Model tab's words; AC4 rewritten through flow ac update",
+      "quote": "uphold — как во вкладке Model (Recommended)",
+      "at": "2026-10-20T11:48:34.211Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "owner-decision",
+        "problemSha256": "a7cb7507e59499fab2259b6868e44babdcefc86ab9de08dacef171607cc1b408"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "askuserquestion-2026-10-20-premise-1",
+        "questionText": "C-07: при успешной загрузке с нулём провайдеров вкладка Model пишет «no providers connected», а категория — «provider list unavailable»; назначение на провайдера с ошибкой авторизации — «provider not connected». AC4 перечисляет ровно три причины для категорий. Оставить три или добавить «no providers connected» и «provider auth failed»?",
+        "answerText": "uphold — как во вкладке Model (Recommended)",
+        "time": "2026-10-20T11:48:34.211Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-10-20-ingest-github-com-mrciphersmith-keryx-pull-1063#C-11",
+      "answer": "uphold",
+      "reason": "operator: await handle.ready plus a bound well under 12 s plus one positive assertion about the timeout text",
+      "quote": "uphold — переписать (Recommended)",
+      "at": "2026-10-20T11:48:36.054Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "2f28e29a4b51db226e600e2e9da10a8e8ef2c72c0566a066665580488f1ab118"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "askuserquestion-2026-10-20-premise-1",
+        "questionText": "C-11: тест «загрузчик никогда не отвечает» ждёт 500 мс — фактически это дедлайн «в пределах таймаута» из AC4. Замена на один `await handle.ready` пропустила бы и 12-секундное зависание. Оставить ожидание или переписать тест?",
+        "answerText": "uphold — переписать (Recommended)",
+        "time": "2026-10-20T11:48:36.054Z"
+      }
+    },
+    {
+      "kind": "premise-question",
+      "finding": "2026-10-20-ingest-github-com-mrciphersmith-keryx-pull-1063#C-05",
+      "answer": "dismiss",
+      "reason": "operator keeps per-turn re-detection in the nothing-connected state: a cheap local probe; AC2 and the T6 decision stand (re-asked: the first wording was ambiguous for keryx)",
+      "quote": "dismiss (Recommended)",
+      "at": "2026-10-20T11:49:51.718Z",
+      "actor": "operator",
+      "confirmedVia": "host-question",
+      "subject": {
+        "severity": "minor",
+        "verdict": "challenged",
+        "problemSha256": "465b4e0e899a12236b431a7b878b556ea7a22d189f177c54f8bc79bdd5a334cc"
+      },
+      "hostQuestion": {
+        "source": "claude-code",
+        "ref": "askuserquestion-2026-10-20-premise-2",
+        "questionText": "C-05 (переспрашиваю: прошлая формулировка была двусмысленной для keryx). Находка говорит: при нуле провайдеров каждый маршрутизируемый ход заново запускает определение провайдеров (локальный запрос к ollama), и предлагает короткую отрицательную отметку в памяти. Отклонить находку (ничего не менять) или принять (добавить отметку)?",
+        "answerText": "dismiss (Recommended)",
+        "time": "2026-10-20T11:49:51.718Z"
+      }
+    }
+  ]
+}
