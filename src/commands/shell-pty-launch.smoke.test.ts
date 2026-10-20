@@ -58,7 +58,12 @@ const MOUSE_SGR_ON = "\u001b[?1006h";
 /** Printed by the readline shell's header — the fallback path's own readiness. */
 const READLINE_READY = "/exit to quit";
 /** Chrome the TUI draws and the readline shell never does. */
-const TUI_ONLY_LABELS = ["Model", "Context", "Tools", "Status", "Ready"] as const;
+// Flow 468: the sidebar is seven cards, not labelled sections. TUI_ONLY_LABELS are words the readline
+// shell never prints (the "sees no TUI" discriminator below asserts their absence); the card titles
+// Session and Work are not among them because the readline header prints "Session <id>".
+const TUI_ONLY_LABELS = ["Workspace", "Ready"] as const;
+/** The cards that stay on screen at 80x24 (Session, Workspace, Work) and the Work card's status word. */
+const SIDEBAR_CARD_LABELS = [...TUI_ONLY_LABELS, "Session", "Work"] as const;
 const BOX_DRAWING = /[─│┌┐└┘├┤┬┴┼╭╮╯╰]/;
 
 /**
@@ -306,7 +311,7 @@ describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
         //    prove, and what O-6 is actually about: the sidebar's labels are
         //    each written as one text run, so they survive whatever window size
         //    the pty ended up with.
-        for (const label of TUI_ONLY_LABELS) {
+        for (const label of SIDEBAR_CARD_LABELS) {
           expect(run.text).toContain(label);
         }
         expect(run.text).toContain("keryx");
@@ -320,7 +325,7 @@ describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
     );
 
     test(
-      "flow 300 (AC10): on 80x24, with a governance report and three triggers, the sidebar still shows Model/Context/Tools/Status/Ready",
+      "flow 300 (AC10): on 80x24, with a governance report and three triggers, the sidebar still shows the Session, Workspace and Work cards and the Ready status",
       async () => {
         const run = await runPtyShell({
           args: ["shell", "--provider", "fake", "--model", "fake-echo"],
@@ -349,9 +354,30 @@ describe.skipIf(!REAL_SUBPROCESS_FLAG || !PTY_AVAILABLE)(
           },
         });
         expect({ killed: run.killed, ready: run.ready }).toEqual({ killed: false, ready: true });
-        for (const label of TUI_ONLY_LABELS) {
+        for (const label of SIDEBAR_CARD_LABELS) {
           expect(run.text).toContain(label);
         }
+        expect(run.childExit).toBe(0);
+      },
+      TEST_TIMEOUT_MS,
+    );
+
+    test(
+      "flow 468 AC16: on 80x24 in the default sidebar mode the Session card, the Work card and the toast stay visible",
+      async () => {
+        // HOME is a temp dir (see runPtyShell), so there is no tui.json: the mode is the default one.
+        // The toast is the "press Ctrl+C again" hint the harness's first Ctrl+C raises; it is
+        // pinned to the bottom of the sidebar and must not be pushed off by the seven cards.
+        const run = await runPtyShell({
+          args: ["shell", "--provider", "fake", "--model", "fake-echo"],
+          readyMarker: ALT_ENTER,
+          size: { rows: 24, cols: 80 },
+        });
+        expect({ killed: run.killed, ready: run.ready }).toEqual({ killed: false, ready: true });
+        // Whole-word titles: "Workspace" must not satisfy "Work".
+        expect(run.text).toMatch(/(^|[^A-Za-z])Session(?![A-Za-z])/);
+        expect(run.text).toMatch(/(^|[^A-Za-z])Work(?![A-Za-z])/);
+        expect(run.text).toContain("Press Ctrl+C again to exit");
         expect(run.childExit).toBe(0);
       },
       TEST_TIMEOUT_MS,

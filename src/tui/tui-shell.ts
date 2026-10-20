@@ -45,6 +45,7 @@ import { resetOperatorDenials } from "../review/review-system";
 import { describeAutomaticReviewMode } from "../commands/automatic-review";
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import {
+  agentContextWindow,
   describeReasoningEffortSource,
   describeRoundLimit,
   isReasoningEffortLevel,
@@ -130,6 +131,7 @@ import { mountAutoReviewSidebar, routeAutoReviewCommand, type AutoReviewSidebar 
 import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
 import { CTRL_C_EXIT_HINT, createCtrlCPolicy } from "./ctrl-c-policy";
 import { classifyBusyDispatch } from "./busy-dispatch";
+import { formatDuration } from "./duration-format";
 import { debugEvent } from "./debug-log";
 import {
   createSplashLifecycle,
@@ -412,7 +414,9 @@ import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { ASK_USER_CANCEL, type AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
 import { showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
-import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, SIDEBAR_WIDTH, type ShellChrome } from "./shell-chrome";
+import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, type ShellChrome } from "./shell-chrome";
+import { createSidebarGeometry, type SidebarGeometry } from "./sidebar-geometry";
+import { collectRenderableText, mountSidebarCards, openSidebarCard, type SidebarSnapshot } from "./sidebar-cards";
 import {
   buildSideWorkerPrompt,
   buildSideWorkerSystemInstruction,
@@ -1336,34 +1340,37 @@ export function mountCwdPanel(
   sidebarTop: Box,
   cwd: string,
   metadata: SidebarRepoMetadata = resolveSidebarMetadata(cwd),
-): void {
+  textWidth: () => number = () => SIDEBAR_TEXT_WIDTH,
+): { refit(): void } {
+  const rows: { node: InstanceType<OpenTui["TextRenderable"]>; value: string }[] = [];
+  const paintValue = (row: { node: InstanceType<OpenTui["TextRenderable"]>; value: string }): void => {
+    row.node.content = otui.t`${dimChunk(otui, shortenCwd(row.value, textWidth()))}`;
+  };
+  const addValue = (id: string, value: string): void => {
+    const node = new otui.TextRenderable(r, { id, content: "" });
+    const row = { node, value };
+    rows.push(row);
+    paintValue(row);
+    sidebarTop.add(node);
+  };
   sidebarTop.add(new otui.TextRenderable(r, { id: "sb-cwd-k", content: otui.t`${dimChunk(otui, "Directory")}`, marginTop: 1 }));
-  sidebarTop.add(
-    new otui.TextRenderable(r, {
-      id: "sb-cwd-v",
-      content: otui.t`${dimChunk(otui, shortenCwd(cwd, SIDEBAR_TEXT_WIDTH))}`,
-    }),
-  );
+  addValue("sb-cwd-v", cwd);
 
   if (metadata.branch !== undefined) {
     sidebarTop.add(new otui.TextRenderable(r, { id: "sb-branch-k", content: otui.t`${dimChunk(otui, "Branch")}`, marginTop: 1 }));
-    sidebarTop.add(
-      new otui.TextRenderable(r, {
-        id: "sb-branch-v",
-        content: otui.t`${dimChunk(otui, shortenCwd(metadata.branch, SIDEBAR_TEXT_WIDTH))}`,
-      }),
-    );
+    addValue("sb-branch-v", metadata.branch);
   }
 
   if (metadata.prUrl !== undefined) {
     sidebarTop.add(new otui.TextRenderable(r, { id: "sb-pr-k", content: otui.t`${dimChunk(otui, "PR")}`, marginTop: 1 }));
-    sidebarTop.add(
-      new otui.TextRenderable(r, {
-        id: "sb-pr-v",
-        content: otui.t`${dimChunk(otui, shortenCwd(metadata.prUrl, SIDEBAR_TEXT_WIDTH))}`,
-      }),
-    );
+    addValue("sb-pr-v", metadata.prUrl);
   }
+  // The sidebar width changed (flow 468): fit the values to the new budget.
+  return {
+    refit: () => {
+      for (const row of rows) paintValue(row);
+    },
+  };
 }
 
 /** Cumulative-counter sinks the shell owns; `attachUsageIo` drives them. */
@@ -1507,6 +1514,37 @@ function estimateTaskCostUsd(
     (cacheRead / 1_000_000) * priceIn * cacheReadMultiplier +
     (cacheWrite / 1_000_000) * priceIn * cacheWriteMultiplier;
   return inputCost + (outputTokens / 1_000_000) * priceOut;
+}
+
+/**
+ * Flow 468 (AC20) — the running cost of a turn for the busy footer: the same
+ * estimate `recordTurnTaskCostBestEffort` records, from the operator's stored
+ * model-profile pricing. `undefined` when the price is not known (so the footer
+ * shows no cost rather than a guess) or the profile store cannot be read.
+ */
+export function estimateTurnCostUsd(input: {
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly cacheReadTokens?: number;
+  readonly cacheWriteTokens?: number;
+  readonly userConfigDir?: string;
+}): number | undefined {
+  try {
+    const profile = loadModelProfiles(input.userConfigDir)[profileKey(input.providerId, input.modelId)];
+    return estimateTaskCostUsd(
+      profile,
+      input.providerId,
+      input.inputTokens,
+      input.outputTokens,
+      input.cacheReadTokens,
+      input.cacheWriteTokens,
+    );
+  } catch {
+    // An unreadable profile store means "price unknown", never an error in the turn.
+    return undefined;
+  }
 }
 
 /**
@@ -3918,6 +3956,7 @@ export async function launchTuiAgentShell(opts: {
   let liveDeps: AgentDeps | undefined;
   let liveJobs: BackgroundJobStore | undefined;
   let disposeExecutionPlanPanel: (() => void) | undefined;
+  let offSidebarGeometry: (() => void) | undefined;
   // Flow 300: same nullable-ref idiom — the Governance/Triggers sections own a
   // poller and possibly a running `keryx trigger run` child to stop on exit.
   let liveOps: OpsSidebar | undefined;
@@ -4041,6 +4080,7 @@ export async function launchTuiAgentShell(opts: {
     const r = (renderer = await createShellRenderer(otui, {
     onCtrlC: () => (ctrlCPress ?? (() => renderer?.destroy()))(),
     onDestroy: () => {
+        offSidebarGeometry?.();
         disposeExecutionPlanPanel?.();
         liveSchedules?.dispose();
         liveAutoReview?.dispose();
@@ -4171,6 +4211,7 @@ export async function launchTuiAgentShell(opts: {
     // for the rest of this very long function) and assigned inside it.
     let deps: AgentDeps;
     let chrome: ShellChrome;
+    let sidebarGeometry: SidebarGeometry;
     // Flow 309 (AC2): the live provider catalog refresh — starts during THIS
     // startup loading phase (the spinner names it below) and is never
     // `await`ed inline, so a hung provider cannot delay the composer taking
@@ -4222,8 +4263,12 @@ export async function launchTuiAgentShell(opts: {
       // choice dock, `/`-menu, composer, footer/spinner, toast, overlay guard
       // and copy-on-select. Everything below is agent-specific and mounts ON it.
       startupTrace.mark("session-start-dispatch");
+      // Flow 468 phase C: the sidebar mode (default | wide | rail) is restored from tui.json and
+      // owned by one store; the chrome pins the header with its three buttons and follows it.
+      sidebarGeometry = createSidebarGeometry({ columns: r.width > 0 ? r.width : 80 });
       chrome = await createShellChrome(otui, r, {
         title: `keryx · agent · ${sel.provider}/${sel.model}`,
+        sidebar: { geometry: sidebarGeometry, version: packageJson.version },
         status: `${sel.provider}/${sel.model}`,
         footerHint: FOOTER_IDLE,
         placeholder: "type a task or / for commands · Enter send · Shift+Enter newline",
@@ -4282,10 +4327,37 @@ export async function launchTuiAgentShell(opts: {
       debugEvent("busy.phase", { phase });
       chrome.setBusyPhase(phase);
     };
+    // Flow 468 (AC20): the busy footer's figures. The chrome owns how they are
+    // laid out; the shell owns where they come from — this turn's tokens (and
+    // their cost when the model's price is known), the context total the sidebar
+    // Context section shows, and the queue / job / subagent counts. Every source
+    // below calls `pushBusyFooter` when it changes; the chrome ignores the call
+    // while idle, and the `isBusy` guard keeps it from reading a source (the turn
+    // queue, the session stores) that setup has not built yet.
+    const turnFooter = { tokensIn: 0, tokensOut: 0, costUsd: undefined as number | undefined };
+    let contextTotal = 0;
+    const pushBusyFooter = (): void => {
+      if (!chrome.isBusy()) return;
+      const window = agentContextWindow(deps);
+      const total = hasExactUsage ? contextTotal : estimateContextTokens(history);
+      chrome.setBusyFooter({
+        tokensIn: turnFooter.tokensIn,
+        tokensOut: turnFooter.tokensOut,
+        ...(turnFooter.costUsd !== undefined ? { costUsd: turnFooter.costUsd } : {}),
+        ...(window !== undefined && window > 0 ? { contextPct: Math.min(100, (total / window) * 100) } : {}),
+        queued: turnLoop.queue.length,
+        backgroundJobs: jobs.list().filter((job) => job.status === "running").length,
+        subagents: sessions.list().filter((session) => session.status === "running").length,
+      });
+    };
     const startBusy = (phase = "waiting for model"): void => {
       busyPhase = phase;
       busyStartedAt = Date.now();
+      turnFooter.tokensIn = 0;
+      turnFooter.tokensOut = 0;
+      turnFooter.costUsd = undefined;
       chrome.startBusy(phase);
+      pushBusyFooter();
     };
     const stopBusy = (): void => {
       chrome.stopBusy();
@@ -4294,8 +4366,20 @@ export async function launchTuiAgentShell(opts: {
     // Sidebar panels (model, context, tools, workers) go in `sidebarTop`, NOT
     // `sidebar`: the chrome pins the toast to the bottom with a flexGrow spacer,
     // so anything added to `sidebar` itself would land beside the toast.
-    const sidebar = chrome.sidebarTop;
-    mountTitlePanel(otui, r, sidebar);
+    // The title row moved into the chrome's pinned header (`sb-title` keeps its id there). Flow 468
+    // phase C: the sidebar shows seven cards (`mountSidebarCards`, below), not the ~30 sections. The
+    // sections below still mount and keep running — they own the polling, the state and the click
+    // inspectors — but into one wrapper that is never drawn; each card's detail tab shows what its
+    // former sections painted (`sidebarSnapshot`).
+    const sidebarLegacy = new otui.BoxRenderable(r, { id: "sb-legacy", flexDirection: "column", flexShrink: 0 });
+    sidebarLegacy.visible = false;
+    chrome.sidebarTop.add(sidebarLegacy);
+    const sidebar = sidebarLegacy;
+    // Width plumbing: the sections paint for the DETAIL modal, not for a 30-column strip, so every
+    // text budget below is the modal's inner width (a getter on the options object, read at paint
+    // time). A card truncates its own summary to the sidebar it is in; the tab wraps the whole value.
+    const SIDEBAR_DETAIL_WIDTH = 100;
+    const sbTextWidth = (): number => SIDEBAR_DETAIL_WIDTH;
     sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${dimChunk(otui, "Model")}`, marginTop: 1 }));
     const sbModelV = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${dimChunk(otui, `${sel.provider}/${sel.model}`)}` });
     sidebar.add(sbModelV);
@@ -4345,7 +4429,7 @@ export async function launchTuiAgentShell(opts: {
     });
     // The directory the agent's tools act on — directly under Model, matching the
     // readline header's `provider/model … · <cwd>` order (gap G-2).
-    mountCwdPanel(otui, r, sidebar, opts.session?.cwd ?? process.cwd());
+    mountCwdPanel(otui, r, sidebar, opts.session?.cwd ?? process.cwd(), undefined, sbTextWidth);
     // SAC workspace (SLATE-16 resolve-or-create): absent until the session's
     // first action-intent turn binds one, so this row starts empty and is
     // refreshed — not mounted once like Directory/Branch/PR above, which are
@@ -4373,7 +4457,7 @@ export async function launchTuiAgentShell(opts: {
       sbWorkspace.add(
         new otui.TextRenderable(r, {
           id: "sb-workspace-v",
-          content: otui.t`${dimChunk(otui, `${shortenCwd(workspace.title, SIDEBAR_TEXT_WIDTH)} · ${workspace.status} · ${slates.length} slate${slates.length === 1 ? "" : "s"}`)}`,
+          content: otui.t`${dimChunk(otui, `${shortenCwd(workspace.title, sbTextWidth())} · ${workspace.status} · ${slates.length} slate${slates.length === 1 ? "" : "s"}`)}`,
           onMouseDown: () => {
             showWorkspace();
           },
@@ -4505,7 +4589,9 @@ export async function launchTuiAgentShell(opts: {
     sidebar.add(sbPlan);
     const executionPlanPanel = mountExecutionPlanPanel(otui, r, sbPlan, {
       getSessionDir: () => liveSlateSession()?.dir,
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       maxRows: 7,
       // Clicking the Plan section opens the full plan in the shared modal host,
       // the same way the Workspace/Review/Tools rows and every subagent or job
@@ -4539,7 +4625,9 @@ export async function launchTuiAgentShell(opts: {
       chrome,
       parent: sidebar,
       cwd: opts.session?.cwd ?? process.cwd(),
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
       notice: (text) => io.onSystem?.(text),
     });
@@ -4551,7 +4639,9 @@ export async function launchTuiAgentShell(opts: {
       chrome,
       parent: sidebar,
       cwd: opts.session?.cwd ?? process.cwd(),
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       ops,
       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
       notice: (text) => io.onSystem?.(text),
@@ -4564,7 +4654,9 @@ export async function launchTuiAgentShell(opts: {
       renderer: r,
       parent: sidebar,
       cwd: opts.session?.cwd ?? process.cwd(),
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       notice: (text) => io.onSystem?.(text),
     });
     liveAutoReview = autoReview;
@@ -4572,14 +4664,18 @@ export async function launchTuiAgentShell(opts: {
     // count; a click opens the same modal the slash command does.
     const reviewsPanel = mountReviewsPanel(otui, r, sidebar, {
       cwd: opts.session?.cwd ?? process.cwd(),
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       onOpen: () => showReviews(),
     });
     liveReviewsPanel = reviewsPanel;
     // Flow 376 (AC12): `Remote: off | <topic> | offline`; a click opens the `/remote-control` modal.
     const remoteStatus = (): RemoteStatus => remoteBridge?.status() ?? { state: "off", events: [] };
     liveRemotePanel = mountRemotePanel(otui, r, sidebar, {
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       getStatus: remoteStatus,
       getWaitingCards: () => operatorCards.waiting().length,
       onOpen: () => showRemoteControl(),
@@ -4591,7 +4687,9 @@ export async function launchTuiAgentShell(opts: {
     });
     // Flow 377: `Telegram: off | pairing | connected | serve down`; a click opens `/channels`.
     liveChannelsPanel = mountChannelsPanel(otui, r, sidebar, {
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       load: () => loadChannelsSnapshot(channelsClient),
       onOpen: () => showChannels(),
     });
@@ -4601,7 +4699,9 @@ export async function launchTuiAgentShell(opts: {
       otui,
       chrome,
       parent: sidebar,
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
       notice: (text) => io.onSystem?.(text),
     });
@@ -4611,7 +4711,9 @@ export async function launchTuiAgentShell(opts: {
       otui,
       chrome,
       parent: sidebar,
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       root: opts.session?.cwd ?? process.cwd(),
       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
       notice: (text) => io.onSystem?.(text),
@@ -4622,7 +4724,9 @@ export async function launchTuiAgentShell(opts: {
       otui,
       chrome,
       parent: sidebar,
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       cwd: opts.session?.cwd ?? process.cwd(),
       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
       // `/decisions reason <why>` and `/decisions change <option>` tell their outcome in the transcript
@@ -4635,14 +4739,18 @@ export async function launchTuiAgentShell(opts: {
     // Flow 404 (AC9): when the Part 1 materials were last synced; a row only in a checkout that has the catalog.
     liveResearchSync = mountResearchSyncPanel(otui, r, sidebar, {
       root: opts.session?.cwd ?? process.cwd(),
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
     });
     // Flow 370 (AC6): one row, only while a write run awaits review.
     const externalDiff = mountExternalDiffSidebar({
       otui,
       chrome,
       parent: sidebar,
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       cwd: opts.session?.cwd ?? process.cwd(),
       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
     });
@@ -4670,8 +4778,11 @@ export async function launchTuiAgentShell(opts: {
       if (hint?.kind === "log") {
         return;
       }
+      pushBusyFooter();
       paintSubagentSidebar(otui, r, sbSubagents, sessions.list(), {
-        width: SIDEBAR_TEXT_WIDTH,
+        get width() {
+          return sbTextWidth();
+        },
         onOpen: (id) => {
           // Flow 176 T18: one list, two inspectors. An external child's Work
           // tab is a vendor transcript and its Meta/Command tabs carry argv,
@@ -4694,8 +4805,11 @@ export async function launchTuiAgentShell(opts: {
       if (hint?.kind === "output") {
         return;
       }
+      pushBusyFooter();
       paintBackgroundJobSidebar(otui, r, sbJobs, jobs.list(), {
-        width: SIDEBAR_TEXT_WIDTH,
+        get width() {
+          return sbTextWidth();
+        },
         onOpen: (id) => {
           // `deps.jobRegistry` is `let`-captured live (see `deps` reassignment
           // on `/model`/`/connect` below) — always defined for a real TUI
@@ -4712,6 +4826,94 @@ export async function launchTuiAgentShell(opts: {
     fleet.subscribe(paintFleet);
     sessions.subscribe(paintSubagents);
     jobs.subscribe(paintJobs);
+    // Flow 468 phase C (AC12, AC13, AC17): the seven cards. Each former section is read from the node
+    // it painted (`SIDEBAR_SECTION_SOURCES`); the attention signals come from their own sources. A
+    // 400 ms tick compares the snapshot and repaints the cards only when it changed, so a section
+    // that repaints itself (a poll, a click, a store event) reaches its card without every panel
+    // having to know the cards exist.
+    const SIDEBAR_SECTION_SOURCES: Readonly<Record<string, string>> = {
+      model: "sb-model-v",
+      mode: "sb-mode-v",
+      usage: "sb-usage-v",
+      context: "sb-ctx-v",
+      balance: "sb-balance",
+      directory: "sb-cwd-v",
+      branch: "sb-branch-v",
+      pr: "sb-pr-v",
+      workspace: "sb-workspace",
+      status: "sb-status-v",
+      plan: "sb-plan",
+      subagents: "sb-subagents",
+      jobs: "sb-jobs",
+      catchup: "sb-review",
+      findings: "sb-reviews",
+      autoreview: "sb-autoreview",
+      "external-diff": "sb-external-diff",
+      governance: "sb-governance",
+      triggers: "sb-triggers",
+      schedules: "sb-schedules",
+      intake: "sb-intake",
+      decisions: "sb-decisions",
+      "research-sync": "sb-research-sync",
+      route: "sb-route",
+      guard: "sb-guard",
+      "edit-guard": "sb-edit-guard",
+      rewind: "sb-rewind",
+      "project-ctx": "sb-project-ctx",
+      external: "sb-external",
+      tools: "sb-tools-v",
+      remote: "sb-remote",
+      telegram: "sb-channels",
+      approvals: "sb-approvals",
+    };
+    let updateAvailableVersion: string | undefined;
+    void opts.versionCheck?.then(
+      (result) => {
+        if (result.status === "update-available") updateAvailableVersion = result.latestVersion;
+      },
+      () => {
+        // An unavailable check shows no update; it is never an error in the sidebar.
+      },
+    );
+    const sidebarSnapshot = (): SidebarSnapshot => {
+      const sections: Record<string, string> = {};
+      for (const [section, sourceId] of Object.entries(SIDEBAR_SECTION_SOURCES)) {
+        const text = collectRenderableText(sidebarLegacy.findDescendantById(sourceId));
+        if (text !== "") sections[section] = text;
+      }
+      const hold = leaseView()?.banner();
+      return {
+        sections,
+        approvalsPending: liveApprovals?.pending() ?? 0,
+        ...(hold !== undefined ? { hold } : {}),
+        ...(updateAvailableVersion !== undefined ? { updateAvailable: updateAvailableVersion } : {}),
+        reviewsNotReady: liveReviewsPanel?.notReadyCount() ?? 0,
+      };
+    };
+    let cardSnapshot: SidebarSnapshot = sidebarSnapshot();
+    let cardSnapshotKey = JSON.stringify(cardSnapshot);
+    const sidebarCards = mountSidebarCards(otui, r, chrome.sidebarTop, {
+      geometry: sidebarGeometry,
+      snapshot: () => cardSnapshot,
+      onOpenCard: (cardId) => {
+        // A fresh read, not the last tick's: the modal shows the value as of the click.
+        openSidebarCard(otui, chrome, cardId, { snapshot: sidebarSnapshot, runCommand: (command) => runLine(command) });
+      },
+    });
+    const tickSidebarCards = (): void => {
+      const next = sidebarSnapshot();
+      const key = JSON.stringify(next);
+      if (key === cardSnapshotKey) return;
+      cardSnapshot = next;
+      cardSnapshotKey = key;
+      sidebarCards.refresh();
+    };
+    const sidebarCardsTimer = setInterval(tickSidebarCards, 400);
+    (sidebarCardsTimer as { unref?: () => void }).unref?.();
+    offSidebarGeometry = () => {
+      clearInterval(sidebarCardsTimer);
+      sidebarCards.destroy();
+    };
     // MAE spawn_subagent → inspectable session list only (never dual-write to fleet).
     setSubagentFleetListener((ev) => {
       sessions.apply(ev);
@@ -4963,6 +5165,8 @@ export async function launchTuiAgentShell(opts: {
     const usage = attachUsageIo(io, {
       setHeaderMeta: (text) => chrome.setHeaderMeta(text),
       setContextTotal: (total) => {
+        contextTotal = total;
+        pushBusyFooter();
         sbContext.content = otui.t`${dimChunk(otui, `${total.toLocaleString()} tokens`)}`;
       },
       onExactUsage: () => {
@@ -6202,7 +6406,7 @@ export async function launchTuiAgentShell(opts: {
     const TRANSCRIPT_CHROME_COLS = 4;
     const HELP_MIN_COLS = 40;
     const helpText = (): string => {
-      const mainWidth = chrome.main.width > 0 ? chrome.main.width : r.width - SIDEBAR_WIDTH;
+      const mainWidth = chrome.main.width > 0 ? chrome.main.width : r.width - sidebarGeometry.state().width;
       return renderCommandHelp("agent", undefined, Math.max(HELP_MIN_COLS, mainWidth - TRANSCRIPT_CHROME_COLS));
     };
     // Flow 303 (AC6): `/help` opens the grouped, tabbed modal — one tab per
@@ -8250,6 +8454,7 @@ export async function launchTuiAgentShell(opts: {
         chrome.queueDock.add(mainQueueHelp);
       }
       chrome.queueDock.visible = turnLoop.queue.length > 0;
+      pushBusyFooter();
       applyQueueNavHighlight();
       // Fleet/status counter.
       if (turnLoop.queue.length > 0) {
@@ -9867,11 +10072,11 @@ export async function launchTuiAgentShell(opts: {
               {
                 stopBusy,
                 complete: () => {
-                  const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+                  const worked = formatDuration(Date.now() - startedAt);
                   transcript.add(
                     new otui.TextRenderable(r, {
                       id: `w${uid++}`,
-                      content: otui.t`${dimChunk(otui, `worked for ${secs}s`)}`,
+                      content: otui.t`${dimChunk(otui, `worked for ${worked}`)}`,
                       marginTop: 1,
                     }),
                   );
@@ -9935,7 +10140,20 @@ export async function launchTuiAgentShell(opts: {
         turnOutputTokens += usage.outputTokens ?? 0;
         turnCacheReadTokens += usage.cacheReadTokens ?? 0;
         turnCacheWriteTokens += usage.cacheWriteTokens ?? 0;
+        // Flow 468 (AC20): the busy footer shows THIS turn's tokens, and the
+        // cost only when the stored model profile prices the model.
+        turnFooter.tokensIn = turnInputTokens;
+        turnFooter.tokensOut = turnOutputTokens;
+        turnFooter.costUsd = estimateTurnCostUsd({
+          providerId: deps.providerId,
+          modelId: deps.modelId,
+          inputTokens: turnInputTokens,
+          outputTokens: turnOutputTokens,
+          cacheReadTokens: turnCacheReadTokens,
+          cacheWriteTokens: turnCacheWriteTokens,
+        });
         prevOnUsageForCost?.(usage);
+        pushBusyFooter();
       };
       // --- Claude-style "next step" suggestion (placeholder + Tab accept) ---
       // After a settled main turn with an empty queue, ask the model for ONE
@@ -10094,7 +10312,7 @@ export async function launchTuiAgentShell(opts: {
         void remoteQueue.turnSettled({ failed: turnFailed, aborted: turnSignal.aborted });
         if (foregroundOperation.isDisposed) return;
         refreshRewindSidebar();
-        const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+        const worked = formatDuration(Date.now() - startedAt);
         stopBusy();
         // SLATE-16 binds a workspace mid-turn, on the action-intent turn's
         // FIRST action — the sidebar can only reflect that once the turn
@@ -10163,7 +10381,7 @@ export async function launchTuiAgentShell(opts: {
           // best-effort persist
         }
         transcript.add(
-          new otui.TextRenderable(r, { id: `w${uid++}`, content: otui.t`${dimChunk(otui, `worked for ${secs}s`)}`, marginTop: 1 }),
+          new otui.TextRenderable(r, { id: `w${uid++}`, content: otui.t`${dimChunk(otui, `worked for ${worked}`)}`, marginTop: 1 }),
         );
         // No exact provider usage → show an estimated context size (never stuck at 0).
         if (!hasExactUsage) {

@@ -50,6 +50,9 @@ import { currentDebugRun, debugEvent } from "./debug-log";
 import { attachRendererGuards } from "./renderer-debug";
 import { isCtrlC } from "./ctrl-c-policy";
 import { SIDEBAR_WIDTH } from "./sidebar-metrics";
+import { SIDEBAR_MODES, sidebarModeIcon, type SidebarGeometry, type SidebarMode } from "./sidebar-geometry";
+import { BUSY_FOOTER_MIN_HINT, formatBusyFooter, type BusyFooterInfo } from "./busy-footer";
+import { formatDuration } from "./duration-format";
 import { TRANSCRIPT_HISTORY_LIMIT, transcriptNodeProtected, forgetTranscriptNode } from "./transcript-history";
 
 /** The `@opentui/core` module shape, referenced structurally (type-only). */
@@ -107,6 +110,8 @@ export { SIDEBAR_WIDTH };
 const SIDEBAR_BORDER_LEFT = 1;
 const SIDEBAR_PADDING_LEFT = 2;
 const SIDEBAR_PADDING_RIGHT = 1;
+/** Rail: border (1) + padding (1) + three text cells = `SIDEBAR_RAIL_WIDTH`. */
+const SIDEBAR_RAIL_PADDING_LEFT = 1;
 const WORKSPACE_GUTTER_X = 1;
 const TRANSCRIPT_PADDING_X = 1;
 /**
@@ -365,6 +370,14 @@ export interface ShellChromeOptions {
   versionCheck?: Promise<VersionCheckResult> | undefined;
   /** Current permission mode (ask/trust/auto), shown in the footer's right slot while busy. */
   permissionMode?: (() => string | undefined) | undefined;
+  /**
+   * Flow 468 phase C: the sidebar's geometry store. With it the chrome pins a
+   * header (`sb-header`: the `sb-title` row and three mode buttons) above the
+   * scroll area, sizes the sidebar from the store, re-clamps it when the terminal
+   * resizes, and binds Ctrl+L to cycle the modes. Without it the sidebar is the
+   * fixed 34-column column it always was.
+   */
+  sidebar?: { geometry: SidebarGeometry; version?: string | undefined; asciiIcons?: boolean | undefined } | undefined;
 }
 
 /**
@@ -476,6 +489,12 @@ export interface ShellChrome {
   stopBusy(): void;
   /** Update the spinner phase; a no-op paint while idle. */
   setBusyPhase(phase: string): void;
+  /**
+   * Feed the busy footer (tokens, cost, context fill, queue / job / subagent
+   * counts). Repaints at once; ignored while idle and cleared by `stopBusy`.
+   * Pass `undefined` to drop the figures and keep only the key hints.
+   */
+  setBusyFooter(info: BusyFooterInfo | undefined): void;
   isBusy(): boolean;
   /** Repaint the footer status (after something changed the override). */
   repaintStatus(): void;
@@ -650,19 +669,89 @@ export async function createShellChrome(
     paddingRight: WORKSPACE_GUTTER_X,
   });
   rootRow.add(main);
+  const geometry = opts.sidebar?.geometry;
+  // The renderer's width is the truth: a store built before the terminal reported its size catches up here.
+  if (geometry !== undefined && typeof r.width === "number" && r.width > 0) geometry.resize(r.width);
+  const sidebarWidth = (): number => geometry?.state().width ?? SIDEBAR_WIDTH;
   const sidebar = new otui.BoxRenderable(r, {
     id: "sidebar",
-    width: SIDEBAR_WIDTH,
+    width: sidebarWidth(),
     flexShrink: 0,
     flexDirection: "column",
     border: ["left"],
     borderColor: getTheme().border,
     backgroundColor: getTheme().panel,
-    paddingLeft: SIDEBAR_PADDING_LEFT,
-    paddingRight: SIDEBAR_PADDING_RIGHT,
+    paddingLeft: geometry?.state().mode === "rail" ? SIDEBAR_RAIL_PADDING_LEFT : SIDEBAR_PADDING_LEFT,
+    paddingRight: geometry?.state().mode === "rail" ? 0 : SIDEBAR_PADDING_RIGHT,
     paddingTop: 1,
   });
   rootRow.add(sidebar);
+
+  // --- pinned sidebar header (flow 468 AC14) ---------------------------------
+  // Above the scroll area, so it stays on screen while the panels scroll. It keeps
+  // the id `sb-title` the title row had inside the scroll area (flow 266). Built
+  // only when a geometry store was passed; the buttons are Text renderables whose
+  // glyphs are single cells (`sidebarModeIcon`), clickable like every other
+  // sidebar row.
+  const sbVersion = opts.sidebar?.version ?? "";
+  const asciiIcons = opts.sidebar?.asciiIcons === true;
+  const sbHeader =
+    geometry === undefined
+      ? undefined
+      : new otui.BoxRenderable(r, {
+          id: "sb-header",
+          flexShrink: 0,
+          flexDirection: "row",
+          justifyContent: "space-between",
+        });
+  const sbTitle =
+    sbHeader === undefined
+      ? undefined
+      : new otui.TextRenderable(r, { id: "sb-title", content: "", flexShrink: 1, minWidth: 0 });
+  const sbModes =
+    sbHeader === undefined
+      ? undefined
+      : new otui.BoxRenderable(r, { id: "sb-modes", flexShrink: 0, flexDirection: "row", gap: 1 });
+  const modeButtons = new Map<SidebarMode, Text>();
+  if (sbHeader !== undefined && sbTitle !== undefined && sbModes !== undefined && geometry !== undefined) {
+    for (const mode of SIDEBAR_MODES) {
+      const button = new otui.TextRenderable(r, {
+        id: `sb-mode-${mode}`,
+        content: "",
+        flexShrink: 0,
+        width: 3,
+        onMouseDown: () => {
+          geometry.setMode(mode);
+        },
+      });
+      modeButtons.set(mode, button);
+      sbModes.add(button);
+    }
+    sbHeader.add(sbTitle);
+    sbHeader.add(sbModes);
+    sidebar.add(sbHeader);
+  }
+  /** Paint the header from the geometry: title, button glyphs, which button is accented, rail collapse. */
+  const paintSidebarHeader = (theme: Theme = getTheme()): void => {
+    if (geometry === undefined || sbHeader === undefined || sbTitle === undefined || sbModes === undefined) return;
+    const state = geometry.state();
+    const rail = state.mode === "rail";
+    sbHeader.flexDirection = rail ? "column" : "row";
+    sbTitle.content = rail
+      ? otui.t`${boldChunk(otui, "◆")}`
+      : otui.t`${boldChunk(otui, "keryx")} ${dimChunk(otui, sbVersion.length > 0 ? `v${sbVersion}` : "")}`;
+    sbModes.flexDirection = rail ? "column" : "row";
+    for (const mode of SIDEBAR_MODES) {
+      const button = modeButtons.get(mode);
+      if (button === undefined) continue;
+      // Two buttons: the modes the sidebar is NOT set to. The id names the mode a click switches TO.
+      button.visible = mode !== state.preferred;
+      button.content = ` ${sidebarModeIcon(mode, asciiIcons)} `;
+      button.fg = theme.text;
+      button.bg = theme.highlight;
+    }
+  };
+  paintSidebarHeader();
 
   // --- toast, FIRST so `showToast` is never a no-op -----------------------
   // Pinned to the bottom of the sidebar; the spacer pushes it down and leaves
@@ -685,6 +774,8 @@ export async function createShellChrome(
   });
   sidebar.add(sidebarTopScroll);
   const sidebarTop = sidebarTopScroll.content;
+  /** The pinned update notice; rail mode has three cells, so the Session card's badge stands for it there. */
+  let versionNoticeNode: Text | undefined;
   if (opts.versionCheck !== undefined) {
     // Reserve the notice's position before callers append model/context/worker
     // panels. Late settlement then changes content in place instead of appending
@@ -694,6 +785,8 @@ export async function createShellChrome(
       content: "",
     });
     sidebarTop.add(versionNotice);
+    versionNoticeNode = versionNotice;
+    versionNotice.visible = geometry?.state().mode !== "rail";
     void opts.versionCheck.then(
       (result) => {
         const advisory = formatSidebarVersionUpdateAdvisory(result);
@@ -1200,7 +1293,30 @@ export async function createShellChrome(
   // then snapped back to the launch-time `opts.status`.
   let status = opts.status;
 
+  let busyFooterInfo: BusyFooterInfo | undefined;
+
+  /** Columns the footer's left text may use: the row less its padding and the right slot. */
+  const footerLeftBudget = (rightText: string): number => {
+    // The footer's laid-out width lags a resize by a frame, so also bound it by the
+    // terminal width less the sidebar and the workspace gutters, and take the smaller.
+    const laidOut = typeof footer.width === "number" && footer.width > 0 ? footer.width : Number.POSITIVE_INFINITY;
+    const termWidth = typeof r.width === "number" && r.width > 0 ? r.width : Number.POSITIVE_INFINITY;
+    const rowWidth = Math.min(laidOut, termWidth - sidebarWidth() - 2 * WORKSPACE_GUTTER_X);
+    if (!Number.isFinite(rowWidth)) return Number.POSITIVE_INFINITY;
+    const room = rowWidth - 2 - rightText.length;
+    // The gap before the right slot is the first thing to go: on a very narrow
+    // terminal "Esc interrupt" outranks the breathing space.
+    return Math.max(1, room - 1 >= BUSY_FOOTER_MIN_HINT.length ? room - 1 : room);
+  };
+
   const paintBusyStatus = (): void => {
+    // The busy line (spinner, phase, timer) is painted ONCE, in the transcript
+    // above the composer; the footer never repeats it (flow 468 AC20).
+    if (busy && liveStatus !== undefined) {
+      const frame = SPINNER[spinIdx % SPINNER.length] ?? "\u280b";
+      const line = `${frame} ${busyPhase} \u00b7 ${formatDuration(Date.now() - busyStartedAt)}`;
+      liveStatus.content = otui.t`${dimChunk(otui, line)}`;
+    }
     // The override owns the footer even mid-turn: the spinner interval would
     // otherwise repaint over it every 120ms.
     const override = footerOverride?.();
@@ -1213,20 +1329,20 @@ export async function createShellChrome(
       footerRight.content = otui.t`${dimChunk(otui, status)}`;
       return;
     }
-    const frame = SPINNER[spinIdx % SPINNER.length] ?? "⠋";
-    const secs = ((Date.now() - busyStartedAt) / 1000).toFixed(1);
-    const line = `${frame} ${busyPhase} · ${secs}s`;
-    footerLeft.content = otui.t`${roleChunk(otui, "attention", line)}`;
     // The footer's right slot carries the permission mode while a turn runs
     // (provider/model stays in the header title); idle restores the status.
     const perm = opts.permissionMode?.();
-    footerRight.content = otui.t`${dimChunk(otui, 
-      perm !== undefined && perm.length > 0 ? `mode ${perm}` : status,
-    )}`;
-    if (liveStatus !== undefined) {
-      liveStatus.content = otui.t`${dimChunk(otui, line)}`;
-    }
+    const right = perm !== undefined && perm.length > 0 ? `mode ${perm}` : status;
+    footerRight.content = otui.t`${dimChunk(otui, right)}`;
+    footerLeft.content = otui.t`${dimChunk(otui, formatBusyFooter(busyFooterInfo, footerLeftBudget(right)))}`;
   };
+
+  // The footer's width is known only after layout; refit the busy parts when it moves.
+  const onFooterResized = (): void => {
+    if (busy) paintBusyStatus();
+  };
+  footer.on(otui.LayoutEvents.RESIZED, onFooterResized);
+  r.on(otui.CliRenderEvents.RESIZE, onFooterResized);
 
   const clearBusyTimer = (): void => {
     if (busyTimer !== undefined) {
@@ -1240,14 +1356,21 @@ export async function createShellChrome(
     paintBusyStatus();
   };
 
+  const setBusyFooter = (info: BusyFooterInfo | undefined): void => {
+    if (!busy) return;
+    busyFooterInfo = info;
+    paintBusyStatus();
+  };
+
   const startBusy = (phase = "waiting for model"): void => {
     busy = true;
+    busyFooterInfo = undefined;
     busyPhase = phase;
     busyStartedAt = Date.now();
     spinIdx = 0;
     liveStatus = new otui.TextRenderable(r, {
       id: `ls${uid++}`,
-      content: otui.t`${dimChunk(otui, `⠋ ${phase} · 0.0s`)}`,
+      content: otui.t`${dimChunk(otui, `⠋ ${phase} · ${formatDuration(0)}`)}`,
       marginTop: 1,
     });
     transcript.add(liveStatus);
@@ -1261,6 +1384,7 @@ export async function createShellChrome(
 
   const stopBusy = (): void => {
     busy = false;
+    busyFooterInfo = undefined;
     clearBusyTimer();
     // Remove the in-transcript spinner line; the caller's "worked for Ns"
     // replaces it.
@@ -1484,6 +1608,38 @@ export async function createShellChrome(
     }
   });
 
+  // --- sidebar geometry (flow 468 AC14, AC16) -----------------------------
+  // The store owns the mode and the width; the chrome follows it. A renderer
+  // resize is fed to the store (which re-clamps wide, or falls back to default
+  // below the width threshold), and the store's notification moves the box.
+  let unsubscribeGeometry: (() => void) | undefined;
+  let offSidebarKeys: (() => void) | undefined;
+  const onGeometryResize = (): void => {
+    if (geometry !== undefined && typeof r.width === "number" && r.width > 0) geometry.resize(r.width);
+  };
+  if (geometry !== undefined) {
+    unsubscribeGeometry = geometry.subscribe((state) => {
+      if (!alive) return;
+      const rail = state.mode === "rail";
+      sidebar.width = state.width;
+      sidebar.paddingLeft = rail ? SIDEBAR_RAIL_PADDING_LEFT : SIDEBAR_PADDING_LEFT;
+      sidebar.paddingRight = rail ? 0 : SIDEBAR_PADDING_RIGHT;
+      paintSidebarHeader();
+      if (versionNoticeNode !== undefined) versionNoticeNode.visible = !rail;
+      onFooterResized(); // the busy footer's budget depends on the sidebar width
+    });
+    r.on(otui.CliRenderEvents.RESIZE, onGeometryResize);
+    // Ctrl+L cycles the modes. A modal, a prompt dock or any other overlay owns the
+    // keyboard, so the shortcut does nothing there; the key never reaches the composer.
+    offSidebarKeys = onKeypress(r, (key) => {
+      if (!key.ctrl || key.meta || key.name !== "l") return;
+      if (overlayActive()) return;
+      key.preventDefault();
+      key.stopPropagation();
+      geometry.cycle();
+    });
+  }
+
   const applyTheme = (theme: Theme = getTheme()): void => {
     // Theme-switch repaint, in place. The chrome's own surfaces are listed
     // explicitly below; everything else the shell painted with the theme —
@@ -1530,6 +1686,10 @@ export async function createShellChrome(
     recolorThemeTree(menu, appliedTheme, theme, chunkColor);
     recolorThemeTree(composer, appliedTheme, theme, chunkColor);
     recolorThemeTree(header, appliedTheme, theme, chunkColor);
+    if (sbHeader !== undefined) {
+      recolorThemeTree(sbHeader, appliedTheme, theme, chunkColor);
+      paintSidebarHeader(theme);
+    }
     recolorThemeTree(footer, appliedTheme, theme, chunkColor);
     appliedTheme = theme;
   };
@@ -1590,6 +1750,7 @@ export async function createShellChrome(
     startBusy,
     stopBusy,
     setBusyPhase,
+    setBusyFooter,
     isBusy: () => busy,
     repaintStatus: paintBusyStatus,
     setFooterOverride: (paint) => {
@@ -1624,6 +1785,8 @@ export async function createShellChrome(
     destroy: () => {
       alive = false;
       unsubTheme();
+      unsubscribeGeometry?.();
+      offSidebarKeys?.();
       destroyModalHost(r);
       clearBusyTimer();
       clearToastTimer();
@@ -1631,6 +1794,9 @@ export async function createShellChrome(
       unsubscribeSuggestionKeys();
       try {
         textarea.off(otui.LayoutEvents.RESIZED, onComposerResized);
+        footer.off(otui.LayoutEvents.RESIZED, onFooterResized);
+        r.off(otui.CliRenderEvents.RESIZE, onFooterResized);
+        r.off(otui.CliRenderEvents.RESIZE, onGeometryResize);
       } catch {
         // best-effort teardown
       }

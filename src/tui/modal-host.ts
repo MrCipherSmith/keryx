@@ -173,6 +173,12 @@ const CLOSE_HINT = "[x] esc";
 export function resolveModalAvailableWidth(chrome: ModalChrome): number {
   const rWidth = chrome.renderer.width;
   const mainWidth = chrome.main?.width ?? 0;
+  // Flow 468 AC13: a WIDENED sidebar can leave `main` narrower than the panel's floor
+  // (68 beside 100 columns leaves 32). The dialog is then sized against the terminal and
+  // its backdrop spans it (see `modalSpansTerminal`), instead of being squeezed.
+  if (modalSpansTerminal(chrome)) {
+    return rWidth;
+  }
   if (mainWidth > 0) {
     return Math.min(rWidth, mainWidth);
   }
@@ -181,6 +187,22 @@ export function resolveModalAvailableWidth(chrome: ModalChrome): number {
     return Math.max(20, rWidth - sidebarWidth);
   }
   return rWidth;
+}
+
+/**
+ * True when the sidebar has been widened past its default column AND the main
+ * column that remains is narrower than the panel floor: the one case where the
+ * flow 269 AC2 clamp to `main` would squeeze the dialog below `MODAL_PANEL_MIN_WIDTH`.
+ * With the default sidebar the clamp is unchanged, however narrow the terminal.
+ */
+export function modalSpansTerminal(chrome: ModalChrome): boolean {
+  const sidebar = chrome.sidebar;
+  if (sidebar === undefined || !(sidebar.width > SIDEBAR_WIDTH)) {
+    return false;
+  }
+  const rWidth = chrome.renderer.width;
+  const mainWidth = chrome.main?.width && chrome.main.width > 0 ? chrome.main.width : rWidth - sidebar.width;
+  return mainWidth < MODAL_PANEL_MIN_WIDTH && rWidth >= MODAL_PANEL_MIN_WIDTH;
 }
 
 export function resolveModalInnerWidth(availableWidth: number): number {
@@ -235,6 +257,8 @@ type HostState = {
   savedScrollTop: number | undefined;
   savedFocus: Renderer["currentFocusedRenderable"];
   unsubTheme: () => void;
+  /** The renderable the backdrop is currently a child of (`main`, or the root for a wide sidebar). */
+  mountedAt: { add: (child: unknown) => number; remove: (child: never) => void };
 };
 
 const hosts = new WeakMap<Renderer, HostState>();
@@ -400,6 +424,15 @@ function closeHost(state: HostState, opts: { restoreFocus: boolean; runOnClose: 
   }
 }
 
+function mountBackdrop(state: HostState, target: { add: (child: unknown) => number; remove: (child: never) => void }): void {
+  if (state.mountedAt === target) {
+    return;
+  }
+  state.mountedAt?.remove(state.backdrop as never);
+  target.add(state.backdrop);
+  state.mountedAt = target;
+}
+
 function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
   const existing = hosts.get(chrome.renderer);
   if (existing !== undefined) {
@@ -545,6 +578,7 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     savedScrollTop: undefined,
     savedFocus: null,
     unsubTheme: () => {},
+    mountedAt: mountTarget,
   };
 
   state.releaseOverlay = chrome.addOverlaySource(() => state.open, { kind: "modal" });
@@ -704,6 +738,10 @@ export function openModal(
   const size = resolveModalPanelSize(availWidth, chrome.renderer.height, input.contentRows);
   state.panel.width = Math.min(availWidth, size.width);
   state.panel.height = size.height;
+  // The backdrop lives in `main` (the sidebar stays visible, flow 269 AC2). When the dialog is
+  // sized against the terminal it is moved to the renderer root instead: a child of `main` is
+  // drawn under the sidebar however high its zIndex, and would be clipped at `main`'s edge.
+  mountBackdrop(state, modalSpansTerminal(chrome) ? chrome.renderer.root : (chrome.main ?? chrome.renderer.root));
 
   if (state.open) {
     unmountActiveTab(state);

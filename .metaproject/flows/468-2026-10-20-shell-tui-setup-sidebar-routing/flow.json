@@ -11,12 +11,12 @@
   "title": "Shell TUI: runnable /setup plan, compact card sidebar with three widths, working /routing model picker",
   "status": "in-progress",
   "createdAt": "2026-10-20T07:58:41.266Z",
-  "updatedAt": "2026-10-20T17:33:26.068Z",
+  "updatedAt": "2026-10-20T20:45:28.371Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:0c0c9739c3a0637539537df580d6f79d384f724db2986b3c8704aaa4e9bff88a",
+  "acChecksum": "sha256:10da106f8df456a27cdaf530dfbdabdf2bf21c5c6fd98fa204978fa83d87355d",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -272,7 +272,7 @@
       "id": "T13",
       "title": "B setup: PR 2 review rounds, merge into main, release",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T11"
       ],
@@ -282,55 +282,81 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR 1068 merged on green required checks (f6c66ac28); dependency-audit red only from the unrelated hono advisory; no release per operator cadence"
     },
     {
       "id": "T14",
       "title": "C sidebar: red tests for card projection, mode geometry, tui.json merge, header buttons, wide-mode modal width",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T13"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T17:37:10.616Z",
+            "outcome": "started",
+            "detail": "468-T14 tests-creator dispatch (sonnet), phase C sidebar, stacked on feat/flow-468-b-setup while PR 1068 CI runs"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "red tests for AC12-AC17; operator accepted Ctrl+L, 100-col wide threshold, Tools on Policy, update->Session and review->Reviews"
     },
     {
       "id": "T15",
       "title": "C sidebar: geometry store, pinned header with three mode buttons and shortcut, persistence, width plumbing, modal sizing",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T14"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T18:49:59.964Z",
+            "outcome": "started",
+            "detail": "468-T15 task-implementer dispatch (sonnet), phase C sidebar geometry/header/persistence/modal sizing"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "geometry store, pinned header with two separate mode buttons (operator), Ctrl+L, tui.json merge, live widths, modal over wide sidebar; AC16 card tests wait for T16"
     },
     {
       "id": "T16",
       "title": "C sidebar: seven cards with detail modals, attention badges, rail glyphs, theme repaint, docs",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T15"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T19:44:28.052Z",
+            "outcome": "started",
+            "detail": "468-T16 task-implementer dispatch (sonnet), phase C seven cards"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "seven cards, detail modals, badges, rail glyphs, theme repaint, docs; 377 tests + pty smoke pass; operator accepted icons, 4-line cards, click->modal->Enter"
     },
     {
       "id": "T17",
@@ -418,7 +444,7 @@
       "id": "T22",
       "title": "C sidebar: run the 80x24 pty smoke locally before merge",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T16",
         "T26"
@@ -429,7 +455,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "80x24 pty smoke run locally on darwin with KERYX_ALLOW_REAL_SUBPROCESS=1 after T16 and T26: 5 pass, including flow 468 AC16 (Session card, Work card, toast visible)"
     },
     {
       "id": "T23",
@@ -474,33 +502,49 @@
       "id": "T25",
       "title": "C chrome: red tests for the busy footer (one waiting line, useful footer bar) and the one compact duration formatter",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T13"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T17:37:11.435Z",
+            "outcome": "started",
+            "detail": "468-T25 tests-creator dispatch (sonnet), phase C chrome, stacked on feat/flow-468-b-setup while PR 1068 CI runs"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "20 red tests for AC20/AC21, red for the right reasons; operator chose the proposed footer wording and a Duration row"
     },
     {
       "id": "T26",
       "title": "C chrome: busy line once above the composer, footer shows key hints, turn tokens/cost, context fill, queue/background; one duration formatter everywhere in the TUI",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T25"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T18:00:40.221Z",
+            "outcome": "started",
+            "detail": "468-T26 task-implementer dispatch (sonnet), phase C chrome"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "busy footer and one duration formatter; two T25 tests corrected to assert no 'queue <n>' count; operator accepted hint shortening on narrow terminals"
     }
   ],
   "history": [
@@ -816,6 +860,71 @@
       "at": "2026-10-20T17:33:26.068Z",
       "event": "task-done",
       "detail": "T11: B setup: modal layout, contrast, scroll, Copy/Optional/Run buttons, Run through external agent with main-agent fallback, docs"
+    },
+    {
+      "at": "2026-10-20T17:37:10.616Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 468-T14 tests-creator dispatch (sonnet), phase C sidebar, stacked on feat/flow-468-b-setup while PR 1068 CI runs"
+    },
+    {
+      "at": "2026-10-20T17:37:11.435Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — 468-T25 tests-creator dispatch (sonnet), phase C chrome, stacked on feat/flow-468-b-setup while PR 1068 CI runs"
+    },
+    {
+      "at": "2026-10-20T17:51:11.552Z",
+      "event": "task-done",
+      "detail": "T25: C chrome: red tests for the busy footer (one waiting line, useful footer bar) and the one compact duration formatter"
+    },
+    {
+      "at": "2026-10-20T17:58:01.261Z",
+      "event": "task-done",
+      "detail": "T14: C sidebar: red tests for card projection, mode geometry, tui.json merge, header buttons, wide-mode modal width"
+    },
+    {
+      "at": "2026-10-20T18:00:40.221Z",
+      "event": "task-attempt",
+      "detail": "T26: started (attempt 1) — 468-T26 task-implementer dispatch (sonnet), phase C chrome"
+    },
+    {
+      "at": "2026-10-20T18:47:26.088Z",
+      "event": "task-done",
+      "detail": "T13: B setup: PR 2 review rounds, merge into main, release"
+    },
+    {
+      "at": "2026-10-20T18:49:37.417Z",
+      "event": "task-done",
+      "detail": "T26: C chrome: busy line once above the composer, footer shows key hints, turn tokens/cost, context fill, queue/background; one duration formatter everywhere in the TUI"
+    },
+    {
+      "at": "2026-10-20T18:49:59.964Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 468-T15 task-implementer dispatch (sonnet), phase C sidebar geometry/header/persistence/modal sizing"
+    },
+    {
+      "at": "2026-10-20T19:37:03.908Z",
+      "event": "ac-updated",
+      "detail": "AC14: \"Three icon buttons next to \"keryx vX.Y.Z\", in a header pinned above the scroll area that keeps the id `sb-title`, switch between default (today's 34 columns), wide (twice that, capped at half the terminal) and rail (a thin strip with one icon and badge per card). The active button is highlighted. A keyboard shortcut cycles the modes and does nothing while a modal owns the keyboard. Each icon has a single-cell display width and an ASCII fallback. [verify: exec `bun test src/tui/shell-chrome.test.ts src/tui/sidebar-geometry.test.ts -t AC14`]\" -> \"Two icon buttons next to \"keryx vX.Y.Z\", in a header pinned above the scroll area that keeps the id `sb-title`, switch to the two modes the sidebar is not set to, among default (today's 34 columns), wide (twice that, capped at half the terminal) and rail (a thin strip with one icon and badge per card). Each button is its own mouse target, at least three cells wide, with a visible gap between the two, so a click lands on the intended one; after a switch the pair shows the two other modes. A keyboard shortcut cycles the modes and does nothing while a modal owns the keyboard. Each icon has a single-cell display width and an ASCII fallback. [verify: exec `bun test src/tui/shell-chrome.test.ts src/tui/sidebar-geometry.test.ts -t AC14`]\" (operator 2026-10-20 (question tool, T15 behavior change): «нужно что бы я мог мышкой кликнуть на них и они были раздельные что бы попасть. кстати все 3 показывать не надо, достаточно 2 в которое можно переключить»)"
+    },
+    {
+      "at": "2026-10-20T19:44:15.328Z",
+      "event": "task-done",
+      "detail": "T15: C sidebar: geometry store, pinned header with three mode buttons and shortcut, persistence, width plumbing, modal sizing"
+    },
+    {
+      "at": "2026-10-20T19:44:28.053Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 468-T16 task-implementer dispatch (sonnet), phase C seven cards"
+    },
+    {
+      "at": "2026-10-20T20:45:23.628Z",
+      "event": "task-done",
+      "detail": "T16: C sidebar: seven cards with detail modals, attention badges, rail glyphs, theme repaint, docs"
+    },
+    {
+      "at": "2026-10-20T20:45:28.371Z",
+      "event": "task-done",
+      "detail": "T22: C sidebar: run the 80x24 pty smoke locally before merge"
     }
   ],
   "acKinds": {

@@ -130,4 +130,63 @@
 - T11 is being reworked to the model-free step runner.
 - T11 reworked and verified by the main session: 272 tests pass across the nine phase B files, `tsc` and eslint clean on the touched files. Result: `results/T10-T11.json`.
 - Operator answers to the two T11 behavior changes (question tool): per-step idle timeout «30 минут (Recommended)», the longest the job registry allows; Run wording (card, transcript lines, toasts, divergence reason) «Принять как есть (Recommended)».
+- PR 2 opened: https://github.com/MrCipherSmith/keryx/pull/1068 (branch `feat/flow-468-b-setup`). It merges once CI is green; there is no release.
+
+### Phase C started, stacked on phase B (2026-10-20)
+
+- Branch `feat/flow-468-c-sidebar` is cut from `feat/flow-468-b-setup` (279843d61), not from main, so T14 and T25 run while PR 1068's CI runs. PRs merge with merge commits, so once #1068 lands the branch sits on main with no rewrite. T14 and T25 nominally depend on T13 (the PR 2 merge). The stacking is the reason they start before it.
+- T25 done: 20 red tests (AC20, AC21), red for the right reasons; the 69 tests that were already in those three files still pass. The main session validated the result contract after renaming the test ids to the `test-N` pattern. Operator answers (question tool):
+  - busy footer «Как предложено (Recommended)»: `Esc interrupt · Enter queue · / commands · ↑1.2K ↓420 $0.50 · ctx 42% · jobs 1`, cost with two decimals; the test now pins `$0.50`;
+  - a Duration row in the Background Jobs Meta tab «Добавить (Recommended)».
+- T14 done (DONE_WITH_CONCERNS): 43 new sidebar tests plus additions to `modal-host.test.ts`, `theme.test.ts` and the pty smoke. The flow 468 KNOWN_MISSING entry is removed from `verify-exec-files.test.ts`. 36 tests pass and 47 are red across the five unit files, each for its expected reason: a missing module, a 32-col modal, or `persistThemeId` overwriting. The main session added the schema ids to the result. Operator answers (question tool), each the implemented choice:
+  - shortcut «Ctrl+L (Recommended)»;
+  - wide threshold «100 колонок (Recommended)»;
+  - the Tools row on the Policy card «Policy (Recommended)»;
+  - an update raises Session and a not-ready review raises Reviews «Session и Reviews (Recommended)».
+- Concerns carried to T15/T16:
+  - the chrome-level tests are red only on the missing module, so their harness assumptions (span offsets, `pressKey("l", {ctrl:true})`, `h.resize`, button-position clicks) are unproven until T15;
+  - `shell-pty-launch.smoke.test.ts` still asserts the old labels Context/Tools/Status/Ready in two existing tests (`TUI_ONLY_LABELS`, the flow 300 80×24 test), which T16 must update;
+  - the 80×24 smoke relies on the first Ctrl+C raising the exit toast.
+- T14 (sidebar red tests) and T25 (busy footer and duration formatter red tests) are dispatched in parallel.
+
+### PR 2 merged; T26 done (2026-10-20)
+
+- PR 1068 failed CI once. `shell-source-audits.test.ts` did not know the new `/setup` wiring audit in `commands/shell.test.ts`. 9aff5acbd records it in `docs/requirements/keryx-shell-split/source-text-audit-inventory.md`.
+- After that every required check (typecheck-and-tests, standard-pr, metrics-contract) passed. `dependency-audit` is not required and stayed red, for an unrelated reason: a new hono serveStatic advisory, and the PR touches no dependencies. A separate session was proposed for the override bump.
+- PR 1068 merged at f6c66ac28 with no release, per the operator's cadence. T13 done.
+- T26 came back BLOCKED. Two T25 tests asserted the bare word `queue` was absent, which contradicts the frozen hint "Enter queue". The main session corrected both to assert no `queue <n>` count, as the AC means. Everything else in T26 was done.
+- After the correction, 274 tests pass across shell-chrome, subagent-session, background-job-inspector, tui-shell and shell-source-audits, and `tsc` is clean.
+- Operator answer on the narrow-footer behavior change: «Укорачивать подсказки (Recommended)». The hints shorten to "Esc interrupt · Enter queue", then "Esc interrupt", and "mode <permission>" stays.
+- T15 reported DONE_WITH_CONCERNS. AC13 (modal width), AC14, AC15 and the AC16 geometry are met. The main session reran the checks: 337 of 338 pass; the one red test is AC16's card visibility, which waits for T16. `tsc` is clean.
+- Operator answers to the three T15 behavior changes (question tool):
+  - header buttons: «нужно что бы я мог мышкой кликнуть на них и они были раздельные что бы попасть. кстати все 3 показывать не надо, достаточно 2 в которое можно переключить». AC14 is rewritten to match: two buttons for the modes the sidebar is not set to, each its own mouse target at least three cells wide, with a gap between them. T15 is re-dispatched for this fix before its boundary commit;
+  - rail until T16: «♦ и кнопка «развернуть» (Recommended)»;
+  - modal over a wide sidebar: «Поверх сайдбара (Recommended)».
+- T15 committed at de93e7707. Draft PR 3 opened: https://github.com/MrCipherSmith/keryx/pull/1070. Its first CI run failed in exactly the 22 tests that wait for T16 (sidebar-cards plus the AC16 card visibility). The other 2646 tests in the terminal matrix passed.
+- PR #1069, from a separate session, bumped the hono override to ^4.13.11 and merged. It fixes `dependency-audit` on main.
+- T16 reported DONE_WITH_CONCERNS: seven cards with detail modals, rail glyphs and attention badges. The main session reran 14 phase C files (377 pass) and `tsc` (clean). The T22 pty smoke was run locally on darwin with `KERYX_ALLOW_REAL_SUBPROCESS=1`: 5 pass, including the 80×24 AC16 test.
+- Operator answers to the T16 behavior changes (question tool), all as implemented:
+  - icons ◉ ▣ ▸ ◈ ◧ ◇ ◎ with badges ↑ ! and counts: «Как сделано (Recommended)»;
+  - a title plus up to three value rows: «До 4 строк (Recommended)». At 80×24 Remote is below the fold, while a laptop screen fits all seven;
+  - click card → modal tab → Enter instead of the former direct row clicks: «Так оставить (Recommended)».
+- T16 follow-ups, not done here:
+  - the former sections still mount, hidden, and a 400 ms tick reads their painted text into the card snapshot. A headless data API per section would remove the hidden renderables and their polling;
+  - the boot splash and the subagent/job inspector width defaults still assume 34/30 columns.
+- Left as noticed, not changed:
+  - `reasoning-display` prints whole seconds ("thought for 12s"), pinned by existing tests;
+  - relative ages and stat latencies keep their own units;
+  - a running job's Duration in the inspector refreshes on store events, not on a timer. Their test files do not overlap: T25 owns `shell-chrome.test.ts`, `subagent-session.test.ts` and `background-job-inspector.test.ts`. T14 puts its AC14 and AC17 tests in the new `sidebar-geometry.test.ts` and `sidebar-cards.test.ts`.
 - 2026-10-20T17:33:26.068Z - task-done: T11: B setup: modal layout, contrast, scroll, Copy/Optional/Run buttons, Run through external agent with main-agent fallback, docs
+- 2026-10-20T17:37:10.616Z - task-attempt: T14: started (attempt 1) — 468-T14 tests-creator dispatch (sonnet), phase C sidebar, stacked on feat/flow-468-b-setup while PR 1068 CI runs
+- 2026-10-20T17:37:11.435Z - task-attempt: T25: started (attempt 1) — 468-T25 tests-creator dispatch (sonnet), phase C chrome, stacked on feat/flow-468-b-setup while PR 1068 CI runs
+- 2026-10-20T17:51:11.552Z - task-done: T25: C chrome: red tests for the busy footer (one waiting line, useful footer bar) and the one compact duration formatter
+- 2026-10-20T17:58:01.261Z - task-done: T14: C sidebar: red tests for card projection, mode geometry, tui.json merge, header buttons, wide-mode modal width
+- 2026-10-20T18:00:40.221Z - task-attempt: T26: started (attempt 1) — 468-T26 task-implementer dispatch (sonnet), phase C chrome
+- 2026-10-20T18:47:26.088Z - task-done: T13: B setup: PR 2 review rounds, merge into main, release
+- 2026-10-20T18:49:37.417Z - task-done: T26: C chrome: busy line once above the composer, footer shows key hints, turn tokens/cost, context fill, queue/background; one duration formatter everywhere in the TUI
+- 2026-10-20T18:49:59.964Z - task-attempt: T15: started (attempt 1) — 468-T15 task-implementer dispatch (sonnet), phase C sidebar geometry/header/persistence/modal sizing
+- 2026-10-20T19:37:03.908Z - ac-updated: AC14: "Three icon buttons next to "keryx vX.Y.Z", in a header pinned above the scroll area that keeps the id `sb-title`, switch between default (today's 34 columns), wide (twice that, capped at half the terminal) and rail (a thin strip with one icon and badge per card). The active button is highlighted. A keyboard shortcut cycles the modes and does nothing while a modal owns the keyboard. Each icon has a single-cell display width and an ASCII fallback. [verify: exec `bun test src/tui/shell-chrome.test.ts src/tui/sidebar-geometry.test.ts -t AC14`]" -> "Two icon buttons next to "keryx vX.Y.Z", in a header pinned above the scroll area that keeps the id `sb-title`, switch to the two modes the sidebar is not set to, among default (today's 34 columns), wide (twice that, capped at half the terminal) and rail (a thin strip with one icon and badge per card). Each button is its own mouse target, at least three cells wide, with a visible gap between the two, so a click lands on the intended one; after a switch the pair shows the two other modes. A keyboard shortcut cycles the modes and does nothing while a modal owns the keyboard. Each icon has a single-cell display width and an ASCII fallback. [verify: exec `bun test src/tui/shell-chrome.test.ts src/tui/sidebar-geometry.test.ts -t AC14`]" (operator 2026-10-20 (question tool, T15 behavior change): «нужно что бы я мог мышкой кликнуть на них и они были раздельные что бы попасть. кстати все 3 показывать не надо, достаточно 2 в которое можно переключить»)
+- 2026-10-20T19:44:15.328Z - task-done: T15: C sidebar: geometry store, pinned header with three mode buttons and shortcut, persistence, width plumbing, modal sizing
+- 2026-10-20T19:44:28.053Z - task-attempt: T16: started (attempt 1) — 468-T16 task-implementer dispatch (sonnet), phase C seven cards
+- 2026-10-20T20:45:23.628Z - task-done: T16: C sidebar: seven cards with detail modals, attention badges, rail glyphs, theme repaint, docs
+- 2026-10-20T20:45:28.371Z - task-done: T22: C sidebar: run the 80x24 pty smoke locally before merge
