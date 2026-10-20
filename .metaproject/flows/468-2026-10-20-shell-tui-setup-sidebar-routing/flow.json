@@ -11,7 +11,7 @@
   "title": "Shell TUI: runnable /setup plan, compact card sidebar with three widths, working /routing model picker",
   "status": "in-progress",
   "createdAt": "2026-10-20T07:58:41.266Z",
-  "updatedAt": "2026-10-20T19:37:03.908Z",
+  "updatedAt": "2026-10-20T19:44:15.328Z",
   "source": {
     "type": "description",
     "ref": null
@@ -314,7 +314,7 @@
       "id": "T15",
       "title": "C sidebar: geometry store, pinned header with three mode buttons and shortcut, persistence, width plumbing, modal sizing",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T14"
       ],
@@ -330,7 +330,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "geometry store, pinned header with two separate mode buttons (operator), Ctrl+L, tui.json merge, live widths, modal over wide sidebar; AC16 card tests wait for T16"
     },
     {
       "id": "T16",
@@ -893,6 +895,11 @@
       "at": "2026-10-20T19:37:03.908Z",
       "event": "ac-updated",
       "detail": "AC14: \"Three icon buttons next to \"keryx vX.Y.Z\", in a header pinned above the scroll area that keeps the id `sb-title`, switch between default (today's 34 columns), wide (twice that, capped at half the terminal) and rail (a thin strip with one icon and badge per card). The active button is highlighted. A keyboard shortcut cycles the modes and does nothing while a modal owns the keyboard. Each icon has a single-cell display width and an ASCII fallback. [verify: exec `bun test src/tui/shell-chrome.test.ts src/tui/sidebar-geometry.test.ts -t AC14`]\" -> \"Two icon buttons next to \"keryx vX.Y.Z\", in a header pinned above the scroll area that keeps the id `sb-title`, switch to the two modes the sidebar is not set to, among default (today's 34 columns), wide (twice that, capped at half the terminal) and rail (a thin strip with one icon and badge per card). Each button is its own mouse target, at least three cells wide, with a visible gap between the two, so a click lands on the intended one; after a switch the pair shows the two other modes. A keyboard shortcut cycles the modes and does nothing while a modal owns the keyboard. Each icon has a single-cell display width and an ASCII fallback. [verify: exec `bun test src/tui/shell-chrome.test.ts src/tui/sidebar-geometry.test.ts -t AC14`]\" (operator 2026-10-20 (question tool, T15 behavior change): «нужно что бы я мог мышкой кликнуть на них и они были раздельные что бы попасть. кстати все 3 показывать не надо, достаточно 2 в которое можно переключить»)"
+    },
+    {
+      "at": "2026-10-20T19:44:15.328Z",
+      "event": "task-done",
+      "detail": "T15: C sidebar: geometry store, pinned header with three mode buttons and shortcut, persistence, width plumbing, modal sizing"
     }
   ],
   "acKinds": {
