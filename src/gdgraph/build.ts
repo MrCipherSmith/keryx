@@ -39,6 +39,10 @@ const IGNORE_DIRS = new Set([
   // one real cycle is reported N+1 times, and `affected` can resolve a target to
   // a stale copy. Never source-index a nested checkout of ourselves.
   ".claude",
+  // Repo-root `.worktrees/<name>/` holds more nested checkouts of this repository
+  // (same failure as `.claude/worktrees`: one checkout is ~3k files, thirteen of
+  // them turned a 3k-file graph into 45k and dirtied the artifacts every build).
+  ".worktrees",
   ".metaproject",
   "node_modules",
   ".cache",

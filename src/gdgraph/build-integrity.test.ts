@@ -46,6 +46,21 @@ test("buildGraph never indexes a nested checkout under .claude/worktrees", async
   expect(paths.some((file) => file.startsWith(".claude/"))).toBe(false);
 });
 
+test("buildGraph never indexes a nested checkout under .worktrees", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-gdgraph-dot-worktrees");
+  await reset(root);
+  await mkdir(path.join(root, "src", "lib"), { recursive: true });
+  await mkdir(path.join(root, ".worktrees", "wt-1", "src", "lib"), { recursive: true });
+
+  await writeFile(path.join(root, "src", "lib", "fs.ts"), "export const real = true;\n");
+  await writeFile(path.join(root, ".worktrees", "wt-1", "src", "lib", "fs.ts"), "export const real = true;\n");
+
+  await buildGraph(root);
+  const graph = await loadGraph(root);
+
+  expect(graph.nodes.map((node) => node.path)).toEqual(["src/lib/fs.ts"]);
+});
+
 // --- 2. target resolution ----------------------------------------------------
 
 function graphOf(...paths: string[]): GraphData {
