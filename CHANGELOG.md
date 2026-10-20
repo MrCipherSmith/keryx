@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.3.126] - 2026-10-20
+
+### Review questions reach a Telegram operator
+
+- **Fixed:** the review-orchestrator skill told Claude Code to ask every operator question with `AskUserQuestion`. In a session driven from Telegram that draws a selector in a terminal nobody watches, and the session hangs. When the `send_poll` tool is present the skill now asks every question through it (one call for the three start questions), waits for the poll answer, and records it as `helyx-poll:<poll-id>`.
+
 ## [0.3.125] - 2026-10-20
 
 ### Operator acts answered through the host's own question
