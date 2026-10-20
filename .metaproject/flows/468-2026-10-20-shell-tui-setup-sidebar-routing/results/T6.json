@@ -1,0 +1,61 @@
+{
+  "task_id": "task-6",
+  "task_name": "Phase A /routing: implement the seams until the T5 red tests pass",
+  "task_type": "mixed",
+  "status": "success",
+  "description": "Startup catalog refresh falls back to a live redetect when detected is empty; a zero-provider catalog is never served or saved as fresh; the session provider/model is connected and pickable (current session); /routing shows visible states (no providers, unavailable with reason, auth failed, 0 models, why a category falls back) and reload() never sticks or rejects; the session pair reaches subagent routing resolution and keryx routing list.",
+  "files_modified": [
+    "src/harness/provider-catalog.ts",
+    "src/harness/routing/table.ts",
+    "src/tui/routing-inspector.ts",
+    "src/tui/tui-shell.ts",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "src/commands/routing.ts",
+    "docs/docs/cli-reference.md"
+  ],
+  "files_created": [],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not run (tsc only, per dispatch)",
+  "type_check_result": "pass",
+  "test_result": "207 passed, 0 failed across 8 files (the 4 T5 files: 79 passed, 0 failed)",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "none",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c", "how": "followed" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b", "how": "followed" }
+  ],
+  "noticed_not_touched": [
+    { "what": "routing-classifier-source.ts resolves categories with connectedPredicateFrom(providers) and no session argument. Passing the session makes an empty or stale provider list resolve to a no-op route to the session's own model, which breaks 5 existing tests (flow 411 provider-default rejections and the 'live picker catalog overrides stale startup ids' test). Left unchanged.", "where": "src/tui/routing-classifier-source.ts:143,178" },
+    { "what": "applyReviewRoutingCategory resolves the review category with connectedPredicateFrom(catalog) and has no session in scope, so an assignment to the review session's own model can still fall back at runtime.", "where": "src/commands/review.ts:1545" },
+    { "what": "keryx routing list still prints the generic 'not connected, falling back' wording because it does not pass the provider list to describeRejectionNotice; only /routing shows the new reasons.", "where": "src/commands/routing.ts:168" }
+  ],
+  "assumptions": [
+    "The default provider-loader timeout in /routing is 12s, above the catalog's own 8s per-provider bound.",
+    "catalogToFlatPickerProviders keeps excluding auth-failed providers by default (an existing test pins it); only /routing's loader opts in with withAuthFailed."
+  ],
+  "behavior_changes": [
+    {
+      "description": "Model tab status rows (shown above the picker, only when something is wrong): 'no providers connected — add one with /connect'; 'model list unavailable (<reason>)'; '<provider>: auth failed — /connect to re-enter the key'; '<provider>: 0 models'. Category fallback notices now read '<assignment> - provider list unavailable|provider not connected|model not in <provider>'s list, falling back to <resolved>' in /routing.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["Single-line status in the footer instead of rows above the picker", "Keep the generic 'not connected' wording and only add the reason in a tooltip/detail line"]
+    },
+    {
+      "description": "Auth-failed providers are listed on the Model tab and are neither selectable nor treated as connected; previously they were omitted entirely.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["Keep omitting them and only mention them in the startup notice"]
+    },
+    {
+      "description": "/routing and the per-turn classifier loader now fall back to the live redetect when the catalog cache is empty or stale (the same detection /model uses); previously only the cache refresh ran its own detection.",
+      "user_visible": false,
+      "needs_operator": false,
+      "alternatives": ["Only /routing falls back; leave the classifier loader on the cache-only path"]
+    }
+  ],
+  "not_touched": [],
+  "notes": "bun test exits 1 in this environment even with 0 failures (reproduced on src/commands/routing.test.ts, which I did not touch); the pass/fail counts are the signal. Docs: updated docs/docs/cli-reference.md (Live provider catalog section); cli-reference-coverage.test.ts passes."
+}

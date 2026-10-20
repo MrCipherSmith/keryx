@@ -18,6 +18,7 @@
 // (however it got there) is dropped on the next load rather than echoed back
 // out by a reader of this cache.
 
+import { rmSync } from "node:fs";
 import path from "node:path";
 import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
 import { withFileLock } from "../lib/fs";
@@ -175,6 +176,26 @@ export async function saveProviderCatalogCache(catalog: ProviderCatalog, dir?: s
   } catch {
     // Same posture as `version-check.ts`'s `saveCache`: a cache is a courtesy,
     // never a dependency a caller's real result should be blocked on.
+  }
+}
+
+/**
+ * Drop the on-disk cache (flow 468): a refresh that found zero providers must
+ * not leave an older non-empty file behind to be served until its own TTL
+ * lapses. Same lock as the writers; best-effort like them, and a missing file
+ * is not an error.
+ */
+export async function clearProviderCatalogCache(dir?: string): Promise<void> {
+  try {
+    await withFileLock(
+      `${catalogFile(dir)}.lock`,
+      async () => {
+        rmSync(catalogFile(dir), { force: true });
+      },
+      { timeoutMs: CACHE_LOCK_TIMEOUT_MS, retryMs: CACHE_LOCK_RETRY_MS, staleMs: CACHE_LOCK_STALE_MS },
+    );
+  } catch {
+    // Best-effort, like every other write in this module: a stale file just ages out.
   }
 }
 
