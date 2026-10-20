@@ -385,7 +385,7 @@ A review must be reproducible from its package: the same inputs give the same co
 
 Item 10, `memory-outside-stage`, reads that log. Outside the stage is: a memory search with a different query, a search without `--status accepted`, any other memory command or MCP memory tool, and a stage call stamped before the round started. The same query repeated is the stage. Repair is to rerun from a session whose only memory read is the stage; only the operator's waiver lifts it: in keryx shell call `review_waive_readiness` (the operator answers a card, never a terminal), then call `review_complete`; outside keryx shell `keryx review complete <package> --waive memory-outside-stage "<operator quote>"` in a terminal; unattended, record Not run. With no orchestrator log the item passes and its evidence says it could not see your reads; with a log that holds no memory call it passes and says so. Outside keryx shell, `keryx review start` prints a caller token (`export KERYX_REVIEW_CALLER_TOKEN=…`): export it on this session's keryx calls so they are attributed to you; without it the item reads "not observable on this host" rather than a clean pass. Only calls that go through keryx are visible: a read through a tool keryx does not wrap is not in the log.
 
-**Open questions.** One general rule, replacing per-fork wording: the answer is in this skill or `SKILL.detail.md`, or it is the user's. Interactive: one `AskUserQuestion`. Unattended: the whole output is one line, `STATUS: BLOCKED question — <the question>`, and you stop. A guess and a recollection are both wrong answers.
+**Open questions.** One general rule, replacing per-fork wording: the answer is in this skill or `SKILL.detail.md`, or it is the user's. Interactive: one `AskUserQuestion`, or one `send_poll` when the operator is in Telegram. Unattended: the whole output is one line, `STATUS: BLOCKED question — <the question>`, and you stop. A guess and a recollection are both wrong answers.
 
 **Named limit.** An agent runtime that loads its memory before this skill starts cannot be prevented by keryx. The guarantee is instruction plus detection, not isolation, and reads of the agent's personal memory outside `keryx memory` are not visible to the log.
 
@@ -395,7 +395,7 @@ The round asks its operator three questions, once, in one interaction, after
 Step 1 (context pack) and Step 3 (scope) — never before them: the counterpart
 question cannot be answered well until the context pack has looked for the
 other side. On Claude Code that is one `AskUserQuestion` call carrying the
-three questions; on any other host, the lettered prompt below. An unattended
+three questions (one `send_poll` for a Telegram operator); on any other host, the lettered prompt below. An unattended
 round (job pipeline, trigger, schedule) asks nothing, applies the defaults and
 records them under `### How this review was run`.
 
