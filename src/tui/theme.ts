@@ -497,13 +497,43 @@ export function loadPersistedThemeId(dir?: string): ThemeId {
   }
 }
 
-export function persistThemeId(id: ThemeId, dir?: string): void {
+/**
+ * Read `tui.json` as a plain object. A missing, unreadable, corrupt or non-object
+ * file reads as `{}`: callers merge into it, and a bad file must never stop a
+ * preference from being saved (flow 468 AC15).
+ */
+export function readTuiConfig(dir?: string): Record<string, unknown> {
+  try {
+    const read = readConfigFile(tuiConfigPath(dir));
+    if (!read.ok) {
+      return {};
+    }
+    const raw: unknown = JSON.parse(read.text);
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+      return {};
+    }
+    return { ...(raw as Record<string, unknown>) };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Read-merge-write keys of `tui.json`, keeping every other key (the theme, the
+ * sidebar mode, keys a later release adds). Best-effort, like the theme write.
+ */
+export function mergeTuiConfig(patch: Record<string, unknown>, dir?: string): void {
   try {
     ensureKeryxConfigDir(dir);
-    writeOwnerOnlyFile(tuiConfigPath(dir), `${JSON.stringify({ theme: id }, null, 2)}\n`);
+    const next = { ...readTuiConfig(dir), ...patch };
+    writeOwnerOnlyFile(tuiConfigPath(dir), `${JSON.stringify(next, null, 2)}\n`);
   } catch {
     // best-effort
   }
+}
+
+export function persistThemeId(id: ThemeId, dir?: string): void {
+  mergeTuiConfig({ theme: id }, dir);
 }
 
 export function formatThemeList(active: ThemeId = kind): string {

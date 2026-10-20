@@ -374,20 +374,7 @@ function lineWith(frame: string, needle: string): string {
   return frame.split("\n").find((line) => line.includes(needle)) ?? "";
 }
 
-/** `fg|bg|attributes` of the first span that holds `needle`, on the header row only. */
-function spanStyle(h: TestSetup, needle: string): string | undefined {
-  for (const line of h.captureSpans().lines) {
-    if (!line.spans.map((span) => span.text).join("").includes("keryx v")) continue;
-    for (const span of line.spans) {
-      if (span.text.includes(needle)) {
-        return `${String(span.fg)}|${String(span.bg)}|${span.attributes}`;
-      }
-    }
-  }
-  return undefined;
-}
-
-otuiTest("flow 468 AC14: the header is pinned above the scroll area, keeps the id sb-title, and shows keryx, the version and three icon buttons", async () => {
+otuiTest("flow 468 AC14: the header is pinned above the scroll area, keeps the id sb-title, and shows keryx, the version and two icon buttons", async () => {
   const g = await loadGeometry();
   const otui = requireOtui();
   await withTmpDir(async (configDir) => {
@@ -402,10 +389,12 @@ otuiTest("flow 468 AC14: the header is pinned above the scroll area, keeps the i
       const frame = h.captureCharFrame();
       const headerLine = lineWith(frame, "keryx v");
       expect(headerLine).toContain(`keryx v${VERSION}`);
-      for (const mode of g.SIDEBAR_MODES) {
+      // Default preferred: the pair is wide and rail; the id names the mode a click switches TO.
+      for (const mode of ["wide", "rail"] as const) {
         expect(byId(h, `sb-mode-${mode}`)).toBeDefined();
         expect(headerLine).toContain(g.sidebarModeIcon(mode));
       }
+      expect(headerLine).not.toContain(g.sidebarModeIcon("default"));
     } finally {
       h.destroy();
     }
@@ -434,29 +423,62 @@ otuiTest("flow 468 AC14: the header stays on screen when the sidebar content is 
   });
 });
 
-otuiTest("flow 468 AC14: the active mode button is highlighted and the highlight follows the mode", async () => {
+function visibleButtons(h: TestSetup, g: GeometryModule): Mode[] {
+  return g.SIDEBAR_MODES.filter((mode) => {
+    const node = h.renderer.root.findDescendantById(`sb-mode-${mode}`) as unknown as { visible: boolean } | undefined;
+    return node !== undefined && node.visible;
+  });
+}
+
+otuiTest("flow 468 AC14: exactly two buttons show, the two modes the sidebar is not set to, and the pair changes after a switch", async () => {
+  const g = await loadGeometry();
+  const otui = requireOtui();
+  await withTmpDir(async (configDir) => {
+    const expected: Record<Mode, Mode[]> = { default: ["wide", "rail"], wide: ["default", "rail"], rail: ["default", "wide"] };
+    const geo = g.createSidebarGeometry({ columns: 140, configDir, mode: "default" });
+    const h = await mountChrome(otui, geo);
+    try {
+      for (const mode of ["default", "wide", "rail", "default"] as const) {
+        geo.setMode(mode);
+        await h.flush();
+        expect(visibleButtons(h, g), mode).toEqual(expected[mode]);
+        if (mode !== "rail") {
+          const headerLine = lineWith(h.captureCharFrame(), "keryx v");
+          for (const shown of expected[mode]) expect(headerLine).toContain(g.sidebarModeIcon(shown));
+          expect(headerLine).not.toContain(g.sidebarModeIcon(mode));
+        }
+      }
+    } finally {
+      h.destroy();
+    }
+  });
+});
+
+otuiTest("flow 468 AC14: each button is its own target at least three cells wide, with a gap cell between them that is not a hit target", async () => {
   const g = await loadGeometry();
   const otui = requireOtui();
   await withTmpDir(async (configDir) => {
     const geo = g.createSidebarGeometry({ columns: 140, configDir, mode: "default" });
     const h = await mountChrome(otui, geo);
     try {
-      const icon = (mode: Mode): string => g.sidebarModeIcon(mode);
-      const styles = (): Record<Mode, string | undefined> => ({
-        default: spanStyle(h, icon("default")),
-        wide: spanStyle(h, icon("wide")),
-        rail: spanStyle(h, icon("rail")),
-      });
-      const before = styles();
-      expect(before.default).toBeDefined();
-      expect(before.default).not.toBe(before.wide);
-      expect(before.wide).toBe(before.rail); // the two inactive buttons look alike
-      geo.setMode("wide");
+      const wide = byId(h, "sb-mode-wide");
+      const rail = byId(h, "sb-mode-rail");
+      expect(wide.width).toBeGreaterThanOrEqual(3);
+      expect(rail.width).toBeGreaterThanOrEqual(3);
+      expect(rail.x - (wide.x + wide.width)).toBeGreaterThanOrEqual(1); // a blank cell that belongs to neither
+      for (let x = wide.x; x < wide.x + wide.width; x++) {
+        geo.setMode("default");
+        await h.flush();
+        await h.mockMouse.click(x, wide.y);
+        await h.flush();
+        expect(geo.state().mode, `x=${x}`).toBe("wide"); // every cell of the button hits it
+      }
+      geo.setMode("default");
       await h.flush();
-      const after = styles();
-      expect(after.wide).not.toBe(after.default);
-      expect(after.default).toBe(after.rail);
-      expect(after.wide).toBe(before.default); // the accent moved, it did not change colour
+      const gap = wide.x + wide.width;
+      await h.mockMouse.click(gap, wide.y);
+      await h.flush();
+      expect(geo.state().mode).toBe("default"); // the gap changes nothing
     } finally {
       h.destroy();
     }
@@ -479,16 +501,20 @@ otuiTest("flow 468 AC14: clicking a mode button switches the mode, resizes the s
       expect(sidebar.width).toBe(68);
       expect((await readTuiJson(configDir)).sidebar).toBe("wide");
 
+      // Now the pair is default and rail.
       const rail = byId(h, "sb-mode-rail");
       await h.mockMouse.click(rail.x, rail.y);
       await h.flush();
       expect(geo.state().mode).toBe("rail");
       expect(sidebar.width).toBe(5);
+      expect((await readTuiJson(configDir)).sidebar).toBe("rail");
 
-      // Rail collapses the header to a glyph and an expand button; the id stays.
+      // Rail: the glyph keeps the id; the two buttons (default, wide) sit on separate rows.
       expect(byId(h, "sb-title")).toBeDefined();
-      const expand = byId(h, "sb-mode-default");
-      await h.mockMouse.click(expand.x, expand.y);
+      const expandDefault = byId(h, "sb-mode-default");
+      const expandWide = byId(h, "sb-mode-wide");
+      expect(expandWide.y).toBeGreaterThan(expandDefault.y);
+      await h.mockMouse.click(expandDefault.x, expandDefault.y);
       await h.flush();
       expect(geo.state().mode).toBe("default");
       expect(sidebar.width).toBe(SIDEBAR_WIDTH);
@@ -568,7 +594,7 @@ otuiTest("flow 468 AC14: asciiIcons draws the ASCII fallback icons and none of t
     const h = await mountChrome(otui, geo, { asciiIcons: true });
     try {
       const headerLine = lineWith(h.captureCharFrame(), `keryx v${VERSION}`);
-      for (const mode of g.SIDEBAR_MODES) {
+      for (const mode of ["wide", "rail"] as const) {
         expect(headerLine).toContain(g.sidebarModeIcon(mode, true));
         expect(headerLine).not.toContain(g.sidebarModeIcon(mode));
       }

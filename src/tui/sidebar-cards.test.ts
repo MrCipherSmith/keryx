@@ -329,7 +329,7 @@ async function mountChrome(
     commands: commandsForMode("agent"),
     toastMs: 60_000,
     sidebar: { geometry: geo, version: VERSION },
-  } as ShellChromeOptions);
+  } as unknown as ShellChromeOptions);
   await setup.flush();
   return {
     ...setup,

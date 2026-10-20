@@ -1,0 +1,98 @@
+{
+  "task_id": "task-15",
+  "task_name": "C sidebar: geometry store, pinned header with three mode buttons and shortcut, persistence, width plumbing, modal sizing",
+  "task_type": "mixed",
+  "status": "success",
+  "description": "New src/tui/sidebar-geometry.ts (mode store, 34/68-capped-at-half/5 widths, 100-column wide threshold, tui.json persistence, icons, text width). theme.ts gained readTuiConfig/mergeTuiConfig and persistThemeId is now read-merge-write. shell-chrome.ts takes ShellChromeOptions.sidebar: pinned sb-header (sb-title + sb-mode-default|wide|rail buttons), width/padding follow the store, renderer resize feeds geometry.resize, Ctrl+L cycles (gated by overlayActive()), applyTheme recolours the header, rail collapses to a glyph plus the expand button. modal-host.ts sizes against the terminal and mounts its backdrop on the renderer root when a widened sidebar leaves main narrower than 72. tui-shell.ts builds the geometry from the persisted mode, passes it to the chrome with the version, drops the in-scroll title, mounts the legacy sections into one sb-legacy wrapper (hidden in rail), reads the text width at paint time at every mount site and re-fits on geometry change. Fix round: the header shows only TWO buttons (the modes other than the preferred one), each a separate 3-cell renderable with a background, a 1-cell gap between them; rail stacks them under the diamond.",
+  "files_modified": [
+    "src/tui/theme.ts",
+    "src/tui/shell-chrome.ts",
+    "src/tui/modal-host.ts",
+    "src/tui/tui-shell.ts",
+    "src/tui/sidebar-cards.test.ts",
+    "src/tui/sidebar-geometry.test.ts"
+  ],
+  "files_created": [
+    "src/tui/sidebar-geometry.ts"
+  ],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "pass (npx eslint on sidebar-geometry.ts, shell-chrome.ts, modal-host.ts, theme.ts, tui-shell.ts, sidebar-cards.test.ts)",
+  "type_check_result": "pass (bun run typecheck)",
+  "test_result": "sidebar-geometry (21 of 22 pass), modal-host, theme, shell-chrome, tui-shell, capability/tui-layout, capability/no-optional-imports, shell-source-audits, 28 further sidebar/panel/inspector/shell tests and src/lib/config-dir*: all pass. Only failing test: 'flow 468 AC16: at 80x24 in default mode the Session card, the Work card and the toast stay visible' in sidebar-geometry.test.ts (needs ./sidebar-cards, T16). Pty smoke (KERYX_ALLOW_REAL_SUBPROCESS=1): 4 pass, 1 fail, the AC16 80x24 Session/Work card test (T16); the pty frame shows the real header 'keryx v0.3.127 ▢ ▭ ▕'.",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "partial by design: AC13 modal-width part met (modal-host tests green; card part is T16); AC14 met; AC15 met; AC16 geometry/resize part met, the Session/Work card visibility part (sidebar-geometry 80x24 test and the pty smoke test) stays red until T16 delivers the cards.",
+  "skill_drift": "none",
+  "project_context_applied": [
+    {
+      "path": ".metaproject/rules/core/tdd-workflow.mdc",
+      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/core/error-handling.mdc",
+      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
+      "how": "followed"
+    },
+    {
+      "path": ".metaproject/rules/core/solid-principles.mdc",
+      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
+      "how": "followed"
+    }
+  ],
+  "noticed_not_touched": [
+    {
+      "what": "The default width parameters of formatSubagentRow/formatSubagentList, formatJobRow and the options.width ?? fallbacks of the subagent and background-job inspectors still default to the 30-column SIDEBAR_TEXT_WIDTH. The shell now always passes a live width (getter), so the defaults are only hit by callers that pass none; making them follow the geometry would need a process-wide singleton, which would leak between tests.",
+      "where": "src/tui/subagent-session.ts:96,116; src/tui/background-job-session.ts:87; src/tui/subagent-inspector.ts:228; src/tui/background-job-inspector.ts:305"
+    },
+    {
+      "what": "The boot splash centres itself in terminal width minus the fixed 34-column SIDEBAR_WIDTH; with a persisted wide or rail mode the splash is off-centre until the shell chrome is up.",
+      "where": "src/tui/boot-animation.ts:346"
+    },
+    {
+      "what": "mountTitlePanel is no longer called by the shell (the chrome header owns sb-title) but stays exported for the flow 266 tests.",
+      "where": "src/tui/tui-shell.ts mountTitlePanel"
+    }
+  ],
+  "assumptions": [
+    "The active mode button is the PREFERRED mode, so a wide choice on a terminal below 100 columns keeps the wide button lit while default is shown.",
+    "Ctrl+L is also inert while the dock, a withOverlay run or any registered overlay source is active; with the / menu open it still cycles.",
+    "In rail mode the legacy sections are hidden through one sb-legacy wrapper in tui-shell; the toast and the version-update notice are left in place (they clip in 3 cells) until T16 gives rail its own content."
+  ],
+  "behavior_changes": [
+    {
+      "description": "Header buttons (answered by the operator: «нужно что бы я мог мышкой кликнуть на них и они были раздельные что бы попасть. кстати все 3 показывать не надо, достаточно 2 в которое можно переключить»): two buttons, the modes the sidebar is not set to, each ' <icon> ' (3 cells) on a highlight background with a blank gap cell between; id sb-mode-<target mode>; glyphs ▢ ▭ ▕ with ASCII - = |; rail stacks both under the diamond.",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": [
+        "a different glyph set (e.g. box-drawing pictograms)",
+        "highlight with a background instead of foreground colour"
+      ]
+    },
+    {
+      "description": "Rail mode after T15: the sidebar is 5 columns with 1 padding cell; the header collapses to a diamond glyph (id sb-title) over a single expand button (sb-mode-default); the existing sections are hidden; the toast and update notice stay but clip. T16 replaces this with one icon and badge per card. (accepted by the operator)",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": [
+        "keep the legacy sections visible and clipped in rail",
+        "hide the toast in rail"
+      ]
+    },
+    {
+      "description": "With a widened sidebar that leaves main under 72 columns (68 beside 100), the detail modal is sized against the terminal and its backdrop is mounted on the renderer root, so the modal covers the sidebar; with the default sidebar the flow 269 clamp to main is unchanged. (accepted by the operator)",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": [
+        "shrink the modal below 72 columns inside main",
+        "temporarily fall back the sidebar to default while a modal is open"
+      ]
+    },
+    {
+      "description": "The mode lives under the 'sidebar' key of tui.json and is saved on every button click or Ctrl+L, as the preferred mode; a resize never writes.",
+      "user_visible": true,
+      "needs_operator": false
+    }
+  ],
+  "not_touched": [],
+  "notes": "Test edit: src/tui/sidebar-cards.test.ts line 332 changed `as ShellChromeOptions` to `as unknown as ShellChromeOptions` because its local Geometry type lacks cycle/subscribe and, now that ShellChromeOptions.sidebar exists, tsc rejected the cast (harness typing only, no assertion changed). sidebar-geometry.test.ts, modal-host.test.ts and theme.test.ts needed no edits: span offsets, mockInput.pressKey with ctrl, h.resize and clicks at button x/y all worked as T14 assumed. Rail icon ▕ and the other glyphs measure 1 via displayWidth. Routing audit: graph_used no (small known file set), wiki_used not-relevant, ctx_used yes, raw_rg_used no. Auto-commit off: nothing committed. flow.json untouched. Fix-round test changes in sidebar-geometry.test.ts (AC14 re-frozen to two buttons): header test now expects the wide and rail icons and not the default one; the active-highlight test is replaced by a pair-changes test; new test for >=3-cell targets, a gap cell that is not a hit target; the click test now follows the changing pair and the stacked rail buttons; the ASCII test checks the two shown icons; unused spanStyle helper removed. shell-chrome.ts: buttons are fixed 3-wide Text with highlight bg, row gap 1, rail column. Retested: modal-host, theme, shell-chrome, tui-shell, tui-layout, no-optional-imports, shell-source-audits pass; tsc and eslint pass; pty smoke 4 pass, 1 fail (T16 cards)."
+}

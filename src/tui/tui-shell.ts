@@ -414,7 +414,8 @@ import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { ASK_USER_CANCEL, type AskUserAnswer } from "../harness/tool/builtin/ask-user-tool";
 import { showComposerChoice, showComposerChoiceDetailed, type ChoiceOption, type ComposerChoiceResult } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
-import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, SIDEBAR_WIDTH, type ShellChrome } from "./shell-chrome";
+import { createShellChrome, createShellRenderer, selectThemeColors, SIDEBAR_TEXT_WIDTH, type ShellChrome } from "./shell-chrome";
+import { createSidebarGeometry, sidebarTextWidth, type SidebarGeometry } from "./sidebar-geometry";
 import {
   buildSideWorkerPrompt,
   buildSideWorkerSystemInstruction,
@@ -1338,34 +1339,37 @@ export function mountCwdPanel(
   sidebarTop: Box,
   cwd: string,
   metadata: SidebarRepoMetadata = resolveSidebarMetadata(cwd),
-): void {
+  textWidth: () => number = () => SIDEBAR_TEXT_WIDTH,
+): { refit(): void } {
+  const rows: { node: InstanceType<OpenTui["TextRenderable"]>; value: string }[] = [];
+  const paintValue = (row: { node: InstanceType<OpenTui["TextRenderable"]>; value: string }): void => {
+    row.node.content = otui.t`${dimChunk(otui, shortenCwd(row.value, textWidth()))}`;
+  };
+  const addValue = (id: string, value: string): void => {
+    const node = new otui.TextRenderable(r, { id, content: "" });
+    const row = { node, value };
+    rows.push(row);
+    paintValue(row);
+    sidebarTop.add(node);
+  };
   sidebarTop.add(new otui.TextRenderable(r, { id: "sb-cwd-k", content: otui.t`${dimChunk(otui, "Directory")}`, marginTop: 1 }));
-  sidebarTop.add(
-    new otui.TextRenderable(r, {
-      id: "sb-cwd-v",
-      content: otui.t`${dimChunk(otui, shortenCwd(cwd, SIDEBAR_TEXT_WIDTH))}`,
-    }),
-  );
+  addValue("sb-cwd-v", cwd);
 
   if (metadata.branch !== undefined) {
     sidebarTop.add(new otui.TextRenderable(r, { id: "sb-branch-k", content: otui.t`${dimChunk(otui, "Branch")}`, marginTop: 1 }));
-    sidebarTop.add(
-      new otui.TextRenderable(r, {
-        id: "sb-branch-v",
-        content: otui.t`${dimChunk(otui, shortenCwd(metadata.branch, SIDEBAR_TEXT_WIDTH))}`,
-      }),
-    );
+    addValue("sb-branch-v", metadata.branch);
   }
 
   if (metadata.prUrl !== undefined) {
     sidebarTop.add(new otui.TextRenderable(r, { id: "sb-pr-k", content: otui.t`${dimChunk(otui, "PR")}`, marginTop: 1 }));
-    sidebarTop.add(
-      new otui.TextRenderable(r, {
-        id: "sb-pr-v",
-        content: otui.t`${dimChunk(otui, shortenCwd(metadata.prUrl, SIDEBAR_TEXT_WIDTH))}`,
-      }),
-    );
+    addValue("sb-pr-v", metadata.prUrl);
   }
+  // The sidebar width changed (flow 468): fit the values to the new budget.
+  return {
+    refit: () => {
+      for (const row of rows) paintValue(row);
+    },
+  };
 }
 
 /** Cumulative-counter sinks the shell owns; `attachUsageIo` drives them. */
@@ -3951,6 +3955,7 @@ export async function launchTuiAgentShell(opts: {
   let liveDeps: AgentDeps | undefined;
   let liveJobs: BackgroundJobStore | undefined;
   let disposeExecutionPlanPanel: (() => void) | undefined;
+  let offSidebarGeometry: (() => void) | undefined;
   // Flow 300: same nullable-ref idiom — the Governance/Triggers sections own a
   // poller and possibly a running `keryx trigger run` child to stop on exit.
   let liveOps: OpsSidebar | undefined;
@@ -4074,6 +4079,7 @@ export async function launchTuiAgentShell(opts: {
     const r = (renderer = await createShellRenderer(otui, {
     onCtrlC: () => (ctrlCPress ?? (() => renderer?.destroy()))(),
     onDestroy: () => {
+        offSidebarGeometry?.();
         disposeExecutionPlanPanel?.();
         liveSchedules?.dispose();
         liveAutoReview?.dispose();
@@ -4204,6 +4210,7 @@ export async function launchTuiAgentShell(opts: {
     // for the rest of this very long function) and assigned inside it.
     let deps: AgentDeps;
     let chrome: ShellChrome;
+    let sidebarGeometry: SidebarGeometry;
     // Flow 309 (AC2): the live provider catalog refresh — starts during THIS
     // startup loading phase (the spinner names it below) and is never
     // `await`ed inline, so a hung provider cannot delay the composer taking
@@ -4255,8 +4262,12 @@ export async function launchTuiAgentShell(opts: {
       // choice dock, `/`-menu, composer, footer/spinner, toast, overlay guard
       // and copy-on-select. Everything below is agent-specific and mounts ON it.
       startupTrace.mark("session-start-dispatch");
+      // Flow 468 phase C: the sidebar mode (default | wide | rail) is restored from tui.json and
+      // owned by one store; the chrome pins the header with its three buttons and follows it.
+      sidebarGeometry = createSidebarGeometry({ columns: r.width > 0 ? r.width : 80 });
       chrome = await createShellChrome(otui, r, {
         title: `keryx · agent · ${sel.provider}/${sel.model}`,
+        sidebar: { geometry: sidebarGeometry, version: packageJson.version },
         status: `${sel.provider}/${sel.model}`,
         footerHint: FOOTER_IDLE,
         placeholder: "type a task or / for commands · Enter send · Shift+Enter newline",
@@ -4354,8 +4365,19 @@ export async function launchTuiAgentShell(opts: {
     // Sidebar panels (model, context, tools, workers) go in `sidebarTop`, NOT
     // `sidebar`: the chrome pins the toast to the bottom with a flexGrow spacer,
     // so anything added to `sidebar` itself would land beside the toast.
-    const sidebar = chrome.sidebarTop;
-    mountTitlePanel(otui, r, sidebar);
+    // The title row moved into the chrome's pinned header (`sb-title` keeps its id there). The
+    // sections below mount into one wrapper so rail mode, which has room for nothing but an
+    // icon per card, can hide them all at once until the cards replace them.
+    const sidebarLegacy = new otui.BoxRenderable(r, { id: "sb-legacy", flexDirection: "column", flexShrink: 0 });
+    chrome.sidebarTop.add(sidebarLegacy);
+    const sidebar = sidebarLegacy;
+    // Width plumbing: every text budget below reads the CURRENT sidebar text width at paint time
+    // (a getter on the options object, not a number frozen at mount), so wide mode does not leave
+    // text truncated at 30 columns. Rail keeps the default budget: its panels are hidden.
+    const sbTextWidth = (): number => {
+      const state = sidebarGeometry.state();
+      return state.mode === "rail" ? SIDEBAR_TEXT_WIDTH : sidebarTextWidth(state.width);
+    };
     sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${dimChunk(otui, "Model")}`, marginTop: 1 }));
     const sbModelV = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${dimChunk(otui, `${sel.provider}/${sel.model}`)}` });
     sidebar.add(sbModelV);
@@ -4405,7 +4427,7 @@ export async function launchTuiAgentShell(opts: {
     });
     // The directory the agent's tools act on — directly under Model, matching the
     // readline header's `provider/model … · <cwd>` order (gap G-2).
-    mountCwdPanel(otui, r, sidebar, opts.session?.cwd ?? process.cwd());
+    const cwdPanel = mountCwdPanel(otui, r, sidebar, opts.session?.cwd ?? process.cwd(), undefined, sbTextWidth);
     // SAC workspace (SLATE-16 resolve-or-create): absent until the session's
     // first action-intent turn binds one, so this row starts empty and is
     // refreshed — not mounted once like Directory/Branch/PR above, which are
@@ -4423,8 +4445,10 @@ export async function launchTuiAgentShell(opts: {
     });
     sidebar.add(sbWorkspace);
     let currentSlates: SlateInspectorItem[] = [];
+    let currentWorkspace: WorkspaceInfo | undefined;
     /** Rebuild the Workspace panel: no bound workspace ⇒ no rows at all. */
     const paintWorkspaceSidebar = (workspace: WorkspaceInfo | undefined, slates: readonly SlateInspectorItem[]): void => {
+      currentWorkspace = workspace;
       clearTranscriptChildren(sbWorkspace);
       if (workspace === undefined) {
         return;
@@ -4433,7 +4457,7 @@ export async function launchTuiAgentShell(opts: {
       sbWorkspace.add(
         new otui.TextRenderable(r, {
           id: "sb-workspace-v",
-          content: otui.t`${dimChunk(otui, `${shortenCwd(workspace.title, SIDEBAR_TEXT_WIDTH)} · ${workspace.status} · ${slates.length} slate${slates.length === 1 ? "" : "s"}`)}`,
+          content: otui.t`${dimChunk(otui, `${shortenCwd(workspace.title, sbTextWidth())} · ${workspace.status} · ${slates.length} slate${slates.length === 1 ? "" : "s"}`)}`,
           onMouseDown: () => {
             showWorkspace();
           },
@@ -4565,7 +4589,9 @@ export async function launchTuiAgentShell(opts: {
     sidebar.add(sbPlan);
     const executionPlanPanel = mountExecutionPlanPanel(otui, r, sbPlan, {
       getSessionDir: () => liveSlateSession()?.dir,
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       maxRows: 7,
       // Clicking the Plan section opens the full plan in the shared modal host,
       // the same way the Workspace/Review/Tools rows and every subagent or job
@@ -4599,7 +4625,9 @@ export async function launchTuiAgentShell(opts: {
       chrome,
       parent: sidebar,
       cwd: opts.session?.cwd ?? process.cwd(),
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
       notice: (text) => io.onSystem?.(text),
     });
@@ -4611,7 +4639,9 @@ export async function launchTuiAgentShell(opts: {
       chrome,
       parent: sidebar,
       cwd: opts.session?.cwd ?? process.cwd(),
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       ops,
       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
       notice: (text) => io.onSystem?.(text),
@@ -4624,7 +4654,9 @@ export async function launchTuiAgentShell(opts: {
       renderer: r,
       parent: sidebar,
       cwd: opts.session?.cwd ?? process.cwd(),
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       notice: (text) => io.onSystem?.(text),
     });
     liveAutoReview = autoReview;
@@ -4632,14 +4664,18 @@ export async function launchTuiAgentShell(opts: {
     // count; a click opens the same modal the slash command does.
     const reviewsPanel = mountReviewsPanel(otui, r, sidebar, {
       cwd: opts.session?.cwd ?? process.cwd(),
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       onOpen: () => showReviews(),
     });
     liveReviewsPanel = reviewsPanel;
     // Flow 376 (AC12): `Remote: off | <topic> | offline`; a click opens the `/remote-control` modal.
     const remoteStatus = (): RemoteStatus => remoteBridge?.status() ?? { state: "off", events: [] };
     liveRemotePanel = mountRemotePanel(otui, r, sidebar, {
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       getStatus: remoteStatus,
       getWaitingCards: () => operatorCards.waiting().length,
       onOpen: () => showRemoteControl(),
@@ -4651,7 +4687,9 @@ export async function launchTuiAgentShell(opts: {
     });
     // Flow 377: `Telegram: off | pairing | connected | serve down`; a click opens `/channels`.
     liveChannelsPanel = mountChannelsPanel(otui, r, sidebar, {
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       load: () => loadChannelsSnapshot(channelsClient),
       onOpen: () => showChannels(),
     });
@@ -4661,7 +4699,9 @@ export async function launchTuiAgentShell(opts: {
       otui,
       chrome,
       parent: sidebar,
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
       notice: (text) => io.onSystem?.(text),
     });
@@ -4671,7 +4711,9 @@ export async function launchTuiAgentShell(opts: {
       otui,
       chrome,
       parent: sidebar,
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       root: opts.session?.cwd ?? process.cwd(),
       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
       notice: (text) => io.onSystem?.(text),
@@ -4682,7 +4724,9 @@ export async function launchTuiAgentShell(opts: {
       otui,
       chrome,
       parent: sidebar,
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       cwd: opts.session?.cwd ?? process.cwd(),
       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
       // `/decisions reason <why>` and `/decisions change <option>` tell their outcome in the transcript
@@ -4695,14 +4739,18 @@ export async function launchTuiAgentShell(opts: {
     // Flow 404 (AC9): when the Part 1 materials were last synced; a row only in a checkout that has the catalog.
     liveResearchSync = mountResearchSyncPanel(otui, r, sidebar, {
       root: opts.session?.cwd ?? process.cwd(),
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
     });
     // Flow 370 (AC6): one row, only while a write run awaits review.
     const externalDiff = mountExternalDiffSidebar({
       otui,
       chrome,
       parent: sidebar,
-      width: SIDEBAR_TEXT_WIDTH,
+      get width() {
+          return sbTextWidth();
+        },
       cwd: opts.session?.cwd ?? process.cwd(),
       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
     });
@@ -4732,7 +4780,9 @@ export async function launchTuiAgentShell(opts: {
       }
       pushBusyFooter();
       paintSubagentSidebar(otui, r, sbSubagents, sessions.list(), {
-        width: SIDEBAR_TEXT_WIDTH,
+        get width() {
+          return sbTextWidth();
+        },
         onOpen: (id) => {
           // Flow 176 T18: one list, two inspectors. An external child's Work
           // tab is a vendor transcript and its Meta/Command tabs carry argv,
@@ -4757,7 +4807,9 @@ export async function launchTuiAgentShell(opts: {
       }
       pushBusyFooter();
       paintBackgroundJobSidebar(otui, r, sbJobs, jobs.list(), {
-        width: SIDEBAR_TEXT_WIDTH,
+        get width() {
+          return sbTextWidth();
+        },
         onOpen: (id) => {
           // `deps.jobRegistry` is `let`-captured live (see `deps` reassignment
           // on `/model`/`/connect` below) — always defined for a real TUI
@@ -4774,6 +4826,44 @@ export async function launchTuiAgentShell(opts: {
     fleet.subscribe(paintFleet);
     sessions.subscribe(paintSubagents);
     jobs.subscribe(paintJobs);
+    // Flow 468 phase C (AC14, AC16): a sidebar mode or width change re-fits every text budget.
+    // Each panel reads `sbTextWidth()` at paint time, AFTER any await in its own refresh, so an
+    // in-flight refresh that lands after the switch paints at the new width and cannot leave
+    // stale-width text behind; this pass repaints what is already on screen. Rail hides the
+    // sections (they have no room) and skips the work.
+    const refitSidebar = (): void => {
+      cwdPanel.refit();
+      paintWorkspaceSidebar(currentWorkspace, currentSlates);
+      paintSubagents();
+      paintJobs();
+      const panels: readonly unknown[] = [
+        liveSchedules,
+        liveAutoReview,
+        liveReviewsPanel,
+        liveRemotePanel,
+        liveChannelsPanel,
+        liveApprovals,
+        liveIntake,
+        liveDecisions,
+        liveResearchSync,
+        liveExternalDiff,
+      ];
+      for (const panel of panels) {
+        const handle = panel as { repaint?: () => unknown; refresh?: () => unknown } | undefined;
+        try {
+          const run = handle?.repaint ?? handle?.refresh;
+          const result = run?.call(handle);
+          if (result instanceof Promise) result.catch(() => undefined);
+        } catch {
+          // A panel that cannot repaint keeps its last text; the next poll fixes it.
+        }
+      }
+    };
+    offSidebarGeometry = sidebarGeometry.subscribe((state) => {
+      sidebarLegacy.visible = state.mode !== "rail";
+      if (state.mode !== "rail") refitSidebar();
+    });
+    sidebarLegacy.visible = sidebarGeometry.state().mode !== "rail";
     // MAE spawn_subagent → inspectable session list only (never dual-write to fleet).
     setSubagentFleetListener((ev) => {
       sessions.apply(ev);
@@ -6266,7 +6356,7 @@ export async function launchTuiAgentShell(opts: {
     const TRANSCRIPT_CHROME_COLS = 4;
     const HELP_MIN_COLS = 40;
     const helpText = (): string => {
-      const mainWidth = chrome.main.width > 0 ? chrome.main.width : r.width - SIDEBAR_WIDTH;
+      const mainWidth = chrome.main.width > 0 ? chrome.main.width : r.width - sidebarGeometry.state().width;
       return renderCommandHelp("agent", undefined, Math.max(HELP_MIN_COLS, mainWidth - TRANSCRIPT_CHROME_COLS));
     };
     // Flow 303 (AC6): `/help` opens the grouped, tabbed modal — one tab per

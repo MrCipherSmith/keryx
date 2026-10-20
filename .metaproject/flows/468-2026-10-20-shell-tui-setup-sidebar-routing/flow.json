@@ -11,12 +11,12 @@
   "title": "Shell TUI: runnable /setup plan, compact card sidebar with three widths, working /routing model picker",
   "status": "in-progress",
   "createdAt": "2026-10-20T07:58:41.266Z",
-  "updatedAt": "2026-10-20T18:49:37.417Z",
+  "updatedAt": "2026-10-20T19:37:03.908Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:0c0c9739c3a0637539537df580d6f79d384f724db2986b3c8704aaa4e9bff88a",
+  "acChecksum": "sha256:10da106f8df456a27cdaf530dfbdabdf2bf21c5c6fd98fa204978fa83d87355d",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -319,8 +319,14 @@
         "T14"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T18:49:59.964Z",
+            "outcome": "started",
+            "detail": "468-T15 task-implementer dispatch (sonnet), phase C sidebar geometry/header/persistence/modal sizing"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -877,6 +883,16 @@
       "at": "2026-10-20T18:49:37.417Z",
       "event": "task-done",
       "detail": "T26: C chrome: busy line once above the composer, footer shows key hints, turn tokens/cost, context fill, queue/background; one duration formatter everywhere in the TUI"
+    },
+    {
+      "at": "2026-10-20T18:49:59.964Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 468-T15 task-implementer dispatch (sonnet), phase C sidebar geometry/header/persistence/modal sizing"
+    },
+    {
+      "at": "2026-10-20T19:37:03.908Z",
+      "event": "ac-updated",
+      "detail": "AC14: \"Three icon buttons next to \"keryx vX.Y.Z\", in a header pinned above the scroll area that keeps the id `sb-title`, switch between default (today's 34 columns), wide (twice that, capped at half the terminal) and rail (a thin strip with one icon and badge per card). The active button is highlighted. A keyboard shortcut cycles the modes and does nothing while a modal owns the keyboard. Each icon has a single-cell display width and an ASCII fallback. [verify: exec `bun test src/tui/shell-chrome.test.ts src/tui/sidebar-geometry.test.ts -t AC14`]\" -> \"Two icon buttons next to \"keryx vX.Y.Z\", in a header pinned above the scroll area that keeps the id `sb-title`, switch to the two modes the sidebar is not set to, among default (today's 34 columns), wide (twice that, capped at half the terminal) and rail (a thin strip with one icon and badge per card). Each button is its own mouse target, at least three cells wide, with a visible gap between the two, so a click lands on the intended one; after a switch the pair shows the two other modes. A keyboard shortcut cycles the modes and does nothing while a modal owns the keyboard. Each icon has a single-cell display width and an ASCII fallback. [verify: exec `bun test src/tui/shell-chrome.test.ts src/tui/sidebar-geometry.test.ts -t AC14`]\" (operator 2026-10-20 (question tool, T15 behavior change): «нужно что бы я мог мышкой кликнуть на них и они были раздельные что бы попасть. кстати все 3 показывать не надо, достаточно 2 в которое можно переключить»)"
     }
   ],
   "acKinds": {
