@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.3.127] - 2026-10-20
+
+### `/routing` lists the connected providers again
+
+- **Fixed:** a shell started with a saved provider and model skipped provider detection, so the startup catalog refresh saved an empty catalog as fresh. `/routing` then offered only "session default" and called every saved assignment "not connected". The refresh now runs a real detection, and an empty catalog is neither served nor saved as fresh. A refresh that finds zero providers also removes an older non-empty cache file, including `keryx providers status --refresh`.
+- **Added:** the provider and model the session runs on are always pickable in `/routing`, labelled `(current session)`, and routing resolution treats that provider as connected.
+- **Added:** the Model tab shows a status row for each failure: no providers connected (with a `/connect` hint), model list unavailable (with the reason), auth failed, and 0 models. These providers are listed but cannot be selected.
+- **Added:** a category that falls back says why, in the Model tab's words: "no providers connected", "provider list unavailable", "provider not connected", "provider auth failed", "model list unavailable (<reason>)" or "model not in <provider>'s list". Loading the providers is bounded by a timeout, so the modal no longer sticks on "Reading routing table…".
+
+### The code graph and the test analyzer skip nested checkouts
+
+- **Fixed:** `keryx gdgraph build` and the testing analyzer now skip a repo-root `.worktrees/` folder, as they already skipped `.claude/`. Nested worktrees there inflated the graph from about 3k to 45k files, dirtied the graph artifacts after every commit, and made the pre-push test gate select their tests. `.worktrees/` is also gitignored.
+
 ## [0.3.126] - 2026-10-20
 
 ### Review questions reach a Telegram operator
