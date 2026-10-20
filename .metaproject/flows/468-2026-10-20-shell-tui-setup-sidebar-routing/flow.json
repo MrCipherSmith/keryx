@@ -11,7 +11,7 @@
   "title": "Shell TUI: runnable /setup plan, compact card sidebar with three widths, working /routing model picker",
   "status": "in-progress",
   "createdAt": "2026-10-20T07:58:41.266Z",
-  "updatedAt": "2026-10-20T17:51:11.552Z",
+  "updatedAt": "2026-10-20T17:58:01.261Z",
   "source": {
     "type": "description",
     "ref": null
@@ -288,7 +288,7 @@
       "id": "T14",
       "title": "C sidebar: red tests for card projection, mode geometry, tui.json merge, header buttons, wide-mode modal width",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T13"
       ],
@@ -304,7 +304,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "red tests for AC12-AC17; operator accepted Ctrl+L, 100-col wide threshold, Tools on Policy, update->Session and review->Reviews"
     },
     {
       "id": "T15",
@@ -845,6 +847,11 @@
       "at": "2026-10-20T17:51:11.552Z",
       "event": "task-done",
       "detail": "T25: C chrome: red tests for the busy footer (one waiting line, useful footer bar) and the one compact duration formatter"
+    },
+    {
+      "at": "2026-10-20T17:58:01.261Z",
+      "event": "task-done",
+      "detail": "T14: C sidebar: red tests for card projection, mode geometry, tui.json merge, header buttons, wide-mode modal width"
     }
   ],
   "acKinds": {

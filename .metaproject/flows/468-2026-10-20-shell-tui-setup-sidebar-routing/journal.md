@@ -152,3 +152,4 @@
 - 2026-10-20T17:37:10.616Z - task-attempt: T14: started (attempt 1) — 468-T14 tests-creator dispatch (sonnet), phase C sidebar, stacked on feat/flow-468-b-setup while PR 1068 CI runs
 - 2026-10-20T17:37:11.435Z - task-attempt: T25: started (attempt 1) — 468-T25 tests-creator dispatch (sonnet), phase C chrome, stacked on feat/flow-468-b-setup while PR 1068 CI runs
 - 2026-10-20T17:51:11.552Z - task-done: T25: C chrome: red tests for the busy footer (one waiting line, useful footer bar) and the one compact duration formatter
+- 2026-10-20T17:58:01.261Z - task-done: T14: C sidebar: red tests for card projection, mode geometry, tui.json merge, header buttons, wide-mode modal width
