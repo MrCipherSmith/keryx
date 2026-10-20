@@ -190,3 +190,10 @@
 - 2026-10-20T19:44:28.053Z - task-attempt: T16: started (attempt 1) — 468-T16 task-implementer dispatch (sonnet), phase C seven cards
 - 2026-10-20T20:45:23.628Z - task-done: T16: C sidebar: seven cards with detail modals, attention badges, rail glyphs, theme repaint, docs
 - 2026-10-20T20:45:28.371Z - task-done: T22: C sidebar: run the 80x24 pty smoke locally before merge
+- 2026-10-20T21:08:24.800Z - task-done: T18: C sidebar: PR 3 review rounds, merge into main, release
+
+### PR 3 merged; combined release 0.3.128 (2026-10-21)
+
+- PR 1070 merged at a49b8c780 with all 19 checks green, `dependency-audit` included.
+- The combined release 0.3.128 starts on branch `chore/release-0.3.128`. It bumps package.json from 0.3.127 and folds the unpublished `[0.3.127]` CHANGELOG section into `[0.3.128]`, together with `/setup`, the sidebar cards and widths, the busy footer and duration format, and the hono override.
+- Tag `v0.3.128` goes on the release PR's merge commit. The operator checks T20, T21, T23 and T19 after `npm i -g @mrciphersmith/keryx@0.3.128`.

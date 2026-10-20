@@ -11,7 +11,7 @@
   "title": "Shell TUI: runnable /setup plan, compact card sidebar with three widths, working /routing model picker",
   "status": "in-progress",
   "createdAt": "2026-10-20T07:58:41.266Z",
-  "updatedAt": "2026-10-20T20:45:28.371Z",
+  "updatedAt": "2026-10-20T21:08:24.800Z",
   "source": {
     "type": "description",
     "ref": null
@@ -380,7 +380,7 @@
       "id": "T18",
       "title": "C sidebar: PR 3 review rounds, merge into main, release",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T22"
       ],
@@ -390,7 +390,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR 1070 merged on fully green CI (19/19); no separate review round per operator cadence"
     },
     {
       "id": "T19",
@@ -925,6 +927,11 @@
       "at": "2026-10-20T20:45:28.371Z",
       "event": "task-done",
       "detail": "T22: C sidebar: run the 80x24 pty smoke locally before merge"
+    },
+    {
+      "at": "2026-10-20T21:08:24.800Z",
+      "event": "task-done",
+      "detail": "T18: C sidebar: PR 3 review rounds, merge into main, release"
     }
   ],
   "acKinds": {

@@ -2,7 +2,55 @@
 
 ## [Unreleased]
 
-## [0.3.127] - 2026-10-20
+## [0.3.128] - 2026-10-21
+
+0.3.127 was tagged but never published to npm. Its changes ship here.
+
+### `/setup` is a plan you can read, copy and run
+
+- **Changed:** `/setup` opens on the tab that fits the project. With no `.metaproject/index.md` it is Init. With an index, a manifest and modules it is Refresh. Anything else is Repair. An explicit `/setup <scenario>` still wins.
+- **Changed:** every step is exactly one `keryx …` command with a `[required]`/`[optional]` mark and a reason. `keryx setup <scenario>` prints the same marks and reasons.
+- **Changed:** the modal is readable and complete: bold titles, commands in the accent colour, and a body that scrolls to its last line at any height.
+- **Added:** an agent prompt generated from the tab's steps sits under the plan. It holds:
+  - the project root, and an instruction to read `.metaproject/index.md` first;
+  - the required and optional lists;
+  - the stop rules;
+  - the prohibitions: no deletion, no extra `--force`, no commit or push.
+- **Added:** buttons on the right of the modal, also on keys:
+  - Copy prompt (`c`) copies through OSC 52;
+  - Optional (`o`) adds or removes the optional steps in the list and the prompt;
+  - Run (`r`) runs the steps.
+- **Added:** Run shows a confirmation card with the exact commands. On yes, keryx runs the steps itself, one background job per step in the project root, using the keryx the shell runs on; no model is involved.
+  - A failed required step stops the run, and so does a `keryx update` version divergence. The reason goes in the transcript, and Run never picks `--accept-version` or `--keep-existing` for you.
+  - A failed optional step is reported, and the run goes on.
+  - A step that still needs a value is listed as skipped.
+  - Each step may stay silent for up to 30 minutes.
+
+### Sidebar cards, three widths and a pinned header
+
+- **Changed:** the ~30 sidebar sections become seven cards in a fixed order: Session, Workspace, Work, Reviews, Ops, Policy and Remote. Each card is a title row plus up to three summary rows.
+  - A click opens the card's detail modal, with one tab per former section.
+  - Enter on a tab runs its command: Route → `/routing`, Model → `/model`.
+- **Added:** a pending approval, a hold, an available update or a not-ready review raises its card with a badge (`↑`, `!` or a count) in every mode, without opening anything.
+- **Added:** three sidebar widths:
+  - default: 34 columns;
+  - wide: up to 68 columns, at most half the terminal, from a 100-column terminal;
+  - rail: a 5-column strip with one glyph and badge per card.
+- **Added:** a pinned header keeps `keryx vX.Y.Z` on screen. Two separate buttons switch to the other two modes, and Ctrl+L cycles the modes.
+- **Added:** the mode is saved in `~/.keryx/tui.json`. `/theme` no longer overwrites that file, so a theme change keeps the mode and a mode change keeps the theme.
+- **Fixed:** a modal opened beside a wide sidebar is sized against the terminal and keeps at least 72 columns.
+
+### A useful busy footer and one duration format
+
+- **Changed:** while a turn runs, the spinner, phase and timer show once, above the composer. Previously the footer repeated them in the attention colour.
+- **Changed:** the busy footer now shows:
+  - `Esc interrupt · Enter queue · / commands`;
+  - the turn's `↑in ↓out` tokens, and its cost when the price is known;
+  - `ctx N%`;
+  - queue, job and agent counts, when non-zero.
+
+  Parts drop from the end to fit the width, and the permission mode stays on the right.
+- **Changed:** every TUI duration prints as `58.3s`, `12:04.5` or `1:02:15.4`, never raw seconds such as `3600.0s`. This covers the busy timer, "worked for", subagent elapsed time and background jobs. A background job's Meta tab gains a Duration row.
 
 ### `/routing` lists the connected providers again
 
@@ -14,6 +62,10 @@
 ### The code graph and the test analyzer skip nested checkouts
 
 - **Fixed:** `keryx gdgraph build` and the testing analyzer now skip a repo-root `.worktrees/` folder, as they already skipped `.claude/`. Nested worktrees there inflated the graph from about 3k to 45k files, dirtied the graph artifacts after every commit, and made the pre-push test gate select their tests. `.worktrees/` is also gitignored.
+
+### Dependencies
+
+- **Security:** the `hono` override is raised to `^4.13.11`. Older versions have the `serveStatic` double-decode advisory.
 
 ## [0.3.126] - 2026-10-20
 
