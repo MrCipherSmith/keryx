@@ -133,7 +133,17 @@ Fix the source of truth, then make every failure visible.
 6. **Persistence.** `~/.keryx/tui.json` becomes read-merge-write for `{theme, sidebar}`. `persistThemeId` stops overwriting the file. An unknown value falls back to default.
 7. **Modals with a wide sidebar.** The detail modal must not be squeezed to the `main` width (on a 100-column terminal, `main` is about 32 columns). Size it against the terminal, or mount the backdrop at the root, so it keeps at least 72 columns. This is a `modal-host.ts` change.
 8. **Theme.** `applyTheme` also recolours the pinned header and the rail; cards use `guardedThemeRepaint`.
-9. **Layout rules.** No `alignSelf` (capability test); hug with `maxWidth`; `flexShrink: 0` on cards; no top-level `@opentui/core` import in new files. Keep the 80×24 pty smoke green.
+9. **Busy footer and one duration format** (added by the operator 2026-10-20, AC20/AC21, tasks T25/T26).
+   - Today `paintBusyStatus` (`src/tui/shell-chrome.ts:1203-1228`) paints the same "⠋ phase · NN.Ns" line twice: as `liveStatus` above the composer and in the attention colour in `footer-left`. Keep it once, above the composer.
+   - While busy, the footer shows, by priority and only the parts that are non-empty:
+     - key hints (Esc interrupt · Enter queue · / commands);
+     - the turn's ↑in ↓out tokens and $ when the price is known;
+     - context fill;
+     - queue, background-job and subagent counts.
+     The right slot keeps the permission mode.
+   - Check `tui-shell.ts:4277-4290`, which has its own busy-phase state, so the two painters do not diverge.
+   - One formatter, `58.3s` / `12:04.5` / `1:02:15.4`, replaces `toFixed(1) + "s"`. It covers the busy timer, "worked for" (`tui-shell.ts:9843, 10135`), `formatElapsed` (`subagent-session.ts:91`) and background-job durations.
+10. **Layout rules.** No `alignSelf` (capability test); hug with `maxWidth`; `flexShrink: 0` on cards; no top-level `@opentui/core` import in new files. Keep the 80×24 pty smoke green.
 
 ### Delivery
 
