@@ -39,6 +39,10 @@ const IGNORED_DIRS = new Set([
   // tests. Excluded by exact directory name only (not a broad "skip nested dirs"
   // rule), so an ordinary monorepo package (e.g. `packages/foo/`) is still walked.
   ".claude",
+  // Repo-root `.worktrees/<name>/` holds more nested checkouts of this repo. Left
+  // in, the committed testing context listed ~22k of their paths and the
+  // pre-push gate selected their test files.
+  ".worktrees",
   "node_modules",
   "dist",
   "build",
