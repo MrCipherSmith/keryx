@@ -11,12 +11,12 @@
   "title": "Shell TUI: runnable /setup plan, compact card sidebar with three widths, working /routing model picker",
   "status": "in-progress",
   "createdAt": "2026-10-20T07:58:41.266Z",
-  "updatedAt": "2026-10-20T12:01:56.837Z",
+  "updatedAt": "2026-10-20T17:33:26.068Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:7e1fb9a00fc8575c16772cd1ed73954f337d98a78809ee26c642e8302300c104",
+  "acChecksum": "sha256:0c0c9739c3a0637539537df580d6f79d384f724db2986b3c8704aaa4e9bff88a",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -184,49 +184,71 @@
       "id": "T9",
       "title": "B setup: red tests for step model, detection, generated prompt, readable scrolling modal, copy and Run",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T12:26:11.785Z",
+            "outcome": "started",
+            "detail": "468-T9 tests-creator dispatch (sonnet), phase B setup"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "B setup: step model with required/optional, full step lists, scenario detection, generated agent prompt, CLI output",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T12:45:23.254Z",
+            "outcome": "started",
+            "detail": "468-T10/T11 task-implementer dispatch (sonnet), phase B setup"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "B setup: modal layout, contrast, scroll, Copy/Optional/Run buttons, Run through external agent with main-agent fallback, docs",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T10"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-20T12:45:24.265Z",
+            "outcome": "started",
+            "detail": "468-T10/T11 task-implementer dispatch (sonnet), phase B setup"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "model-free Run step runner, modal layout/scroll/Copy/Optional/Run; 272 tests pass, tsc clean; operator accepted 30-min idle timeout and Run wording"
     },
     {
       "id": "T12",
@@ -754,6 +776,46 @@
       "at": "2026-10-20T12:01:56.837Z",
       "event": "task-done",
       "detail": "T8: A routing: PR 1 review rounds, merge into main, release"
+    },
+    {
+      "at": "2026-10-20T12:26:11.786Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 468-T9 tests-creator dispatch (sonnet), phase B setup"
+    },
+    {
+      "at": "2026-10-20T12:45:12.820Z",
+      "event": "task-done",
+      "detail": "T9: B setup: red tests for step model, detection, generated prompt, readable scrolling modal, copy and Run"
+    },
+    {
+      "at": "2026-10-20T12:45:23.254Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 468-T10/T11 task-implementer dispatch (sonnet), phase B setup"
+    },
+    {
+      "at": "2026-10-20T12:45:24.265Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 468-T10/T11 task-implementer dispatch (sonnet), phase B setup"
+    },
+    {
+      "at": "2026-10-20T13:15:15.290Z",
+      "event": "ac-updated",
+      "detail": "AC10: \"Run (button on the right, or `r`) opens a confirmation card naming the scenario, the steps that will run and the agent. On yes, the external agent starts with the generated prompt in the project root, appears in the fleet, and the composer stays usable; its report lands in the transcript. On no, nothing starts. With no external agent configured or allowed, the card says so and offers the session's main agent instead; the run never falls back silently. [verify: exec `bun test src/tui/setup-modal.test.ts src/commands/shell.test.ts -t AC10`]\" -> \"Run (button on the right, or `r`) opens a confirmation card naming the scenario and the commands that will run. On yes, keryx itself runs the steps in order as background jobs, visible in Background Jobs, and the composer stays usable. Optional steps run only when Optional is on. The run stops at the first failed required step, and at a `keryx update` version divergence, then says in the transcript which step stopped it and why. On no, nothing starts. [verify: exec `bun test src/tui/setup-modal.test.ts src/commands/shell.test.ts -t AC10`]\" (operator 2026-10-20 (question tool): external agents run read-only (OPERATOR_SANDBOX, D-04), so they cannot run init/update/sync; Run executes the steps itself without a model («Шаги без модели (Recommended)»))"
+    },
+    {
+      "at": "2026-10-20T13:15:16.780Z",
+      "event": "ac-updated",
+      "detail": "AC11: \"(operator-only) After PR 2 is released and keryx is installed from npm, in a project that already has a `.metaproject/`, the operator opens `/setup`, lands on Refresh, reads the plan without squinting, copies the prompt, presses Run, and the external agent completes the required steps. The agent does not confirm this criterion. [verify: judged]\" -> \"(operator-only) After the release is installed from npm, in a project that already has a `.metaproject/`, the operator opens `/setup`, lands on Refresh, reads the plan without squinting, copies the prompt, presses Run, and the required steps complete as background jobs, or the run stops with a visible reason. The agent does not confirm this criterion. [verify: judged]\" (operator 2026-10-20: Run executes the steps without a model (external agents are read-only under D-04); one combined release at the end instead of per-PR releases)"
+    },
+    {
+      "at": "2026-10-20T13:15:25.454Z",
+      "event": "task-done",
+      "detail": "T10: B setup: step model with required/optional, full step lists, scenario detection, generated agent prompt, CLI output"
+    },
+    {
+      "at": "2026-10-20T17:33:26.068Z",
+      "event": "task-done",
+      "detail": "T11: B setup: modal layout, contrast, scroll, Copy/Optional/Run buttons, Run through external agent with main-agent fallback, docs"
     }
   ],
   "acKinds": {

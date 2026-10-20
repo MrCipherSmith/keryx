@@ -223,18 +223,49 @@ keryx setup [init|refresh|repair]
 | Argument | What it prints |
 |---|---|
 | _(none)_ | All three scenarios. |
-| `init` | From scratch: scaffold, graph, health, wiki drafts, memory index, gates. |
-| `refresh` | After a pull: refresh service files and rebuild only stale layers. |
-| `repair` | Partial or stale: read `standard doctor` first, then idempotent rebuild. |
+| `init` | From scratch: scaffold, graph and the Standard and security-policy gates; wiki drafts, memory index, health and hooks as optional steps. |
+| `refresh` | After a pull: refresh service files, rebuild only stale layers, re-check the wiki and the Standard. |
+| `repair` | Partial or stale: read `standard doctor`, `status` and `modules status` first, then idempotent rebuild and every completion gate. |
 
-Each scenario shows the CLI lines and a prompt to paste to a coding agent.
-An unknown argument, or more than one, exits non-zero and names the three
-choices.
+Each scenario lists its steps, one `keryx` command per step. A step is marked
+`[required]` or `[optional]` and carries the reason it is in the plan. The guide
+ends with the prompt for a coding agent, generated from those steps: the project
+root, "read `.metaproject/index.md` first", the required steps and the optional
+ones, and the rules (stop at the first failed required step, stop and ask when
+`keryx update` reports divergent files, never delete `.metaproject` or accepted
+content, no `--force` beyond the listed commands, no commit or push). An unknown
+argument, or more than one, exits non-zero and names the three choices.
 
-In `keryx shell`, `/setup` opens the same guide. The TUI shows one tab per
-scenario; readline prints the text. `/setup init` opens that scenario, and an
-unknown or extra argument prints the same error instead of the guide.
-Neither form runs the commands.
+In `keryx shell`, `/setup` opens the same guide in the TUI, one tab per scenario,
+on the tab that fits the project: no `.metaproject/index.md` opens Init, a complete
+workspace opens Refresh, a partial one opens Repair. `/setup init` opens that
+scenario instead, and an unknown or extra argument prints the same error instead of
+the guide. Readline prints the text. The TUI also has three keys and buttons:
+
+| Key | Button | What it does |
+|---|---|---|
+| `c` | `[Copy prompt]` | Copies the generated prompt to the clipboard. |
+| `o` | `[Optional: off]` / `[Optional: on]` | Adds or removes the optional steps in the list and in the prompt. |
+| `r` | `[Run]` | Shows a confirmation card (scenario, the exact commands that will run), and on yes keryx runs the steps itself. |
+
+Run needs no model and no external agent. On yes, keryx runs the listed steps in
+order, in the project root, each as a background job with a description
+(`setup 2/8: keryx sync --apply`) that shows in Background Jobs, so the composer
+stays usable. Each step runs with the same keryx the shell is running on (its own
+interpreter and entry script, never a `keryx` found on `PATH`). Optional steps run
+only when Optional is on. A step whose command holds a placeholder
+(`keryx integrate <editor>`, `keryx modules enable <name>`) needs a value from you,
+so the card lists it as skipped and it never runs.
+
+The transcript gets one line when the run starts, one line per step (`✓` or `✗` and
+the command) and a summary. A failed required step stops the run; a failed optional
+step is reported and the run continues. A `keryx update` that stops on a version
+divergence ends the run and tells you to rerun that step by hand with
+`--accept-version` or `--keep-existing`; the run never picks one. Killing a step's
+job (Background Jobs, `/interrupt`) stops the run and says so. A second Run while
+one is active is refused. The steps start through the session's job registry, so the
+same OS sandbox posture as `shell_exec` applies. `keryx setup` and the readline form
+never run anything.
 
 ---
 

@@ -1678,17 +1678,17 @@ describe("--deny-tools", () => {
 //
 // SOURCE-TEXT AUDIT, on purpose and only here. `openSetup` lives inside
 // `runTuiShell`'s closure in `src/tui/tui-shell.ts`; the launcher needs a real
-// renderer, a session, a provider and an external-agent registry, so it cannot
+// renderer, a session and a provider, so it cannot
 // run headless. The modal itself is covered behaviourally, through injected
 // seams, in `src/tui/setup-modal.test.ts` (AC6/AC8/AC9/AC10); this block pins
 // only that the shell hands the modal the real ones:
-//   projectRoot     the session cwd (tab detection and the delegated run's cwd)
+//   projectRoot     the session cwd (tab detection and where the run starts)
 //   copyText        OSC 52 (`copyToClipboardOSC52`)
 //   showToast       `chrome.showToast`
-//   externalAgents  the configured external agents
 //   confirm         `confirmOperatorCard` (the operator confirm card)
-//   delegate        `external.delegate` (the `/delegate` path)
-//   runLine         the main agent turn (the visible fallback)
+//   startRun        `runSetupSteps` over the session's job registry: keryx runs the steps itself
+//   isRunning       the one-run-at-a-time guard
+// There is no external agent and no main agent turn in this path.
 describe("flow 468 AC10 — the TUI shell wires /setup's Run, Copy and detection seams (source-text audit; the launcher cannot run headless)", () => {
   const tuiShellSource = readFileSync(path.join(import.meta.dir, "..", "tui", "tui-shell.ts"), "utf8");
   const openSetupStart = tuiShellSource.indexOf("const openSetup = ");
@@ -1708,14 +1708,16 @@ describe("flow 468 AC10 — the TUI shell wires /setup's Run, Copy and detection
     expect(openSetupCall).toMatch(/showToast\b/);
   });
 
-  test("flow 468 AC10: Run confirms through the operator card and delegates through the external agent path", () => {
-    expect(openSetupCall).toMatch(/externalAgents\b/);
+  test("flow 468 AC10: Run confirms through the operator card and runs the steps through the job registry", () => {
     expect(openSetupCall).toContain("confirmOperatorCard");
-    expect(openSetupCall).toMatch(/delegate\b/);
-    expect(openSetupCall).toContain("external.delegate");
+    expect(openSetupCall).toMatch(/startRun\b/);
+    expect(openSetupCall).toContain("runSetupSteps");
+    expect(openSetupCall).toContain("deps.jobRegistry");
+    expect(openSetupCall).toContain("ownKeryxPrefix()");
   });
 
-  test("flow 468 AC10: the fallback is the session's main agent turn", () => {
-    expect(openSetupCall).toMatch(/runLine\b/);
+  test("flow 468 AC10: one run at a time, and no external agent or main agent turn is involved", () => {
+    expect(openSetupCall).toMatch(/isRunning\b/);
+    expect(openSetupCall).not.toMatch(/external\.delegate|externalAgents|\bdelegate\b|runLine/);
   });
 });

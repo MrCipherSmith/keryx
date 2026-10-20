@@ -9,14 +9,13 @@
 // from the rendered frame and its styled spans, never from private state.
 //
 // Seams this file assumes (named once here; the modal's options are all injected,
-// so nothing below touches the clipboard, the agent registry or the transcript):
-//   projectRoot     string                  project the plan is for (also `cwd` of a delegated run)
+// so nothing below touches the clipboard, the job registry or the transcript):
+//   projectRoot     string                  project the plan is for (also where the run starts)
 //   copyText        (text) => void          clipboard write (the shell wires OSC 52)
 //   showToast       (message) => void       "Copied to clipboard" goes here
-//   externalAgents  [{ id, name }]          configured external agents, first one is used
 //   confirm         (card: string[]) => Promise<boolean>   the operator confirm card, as lines
-//   delegate        ({ agentId, task, cwd }) => Promise<unknown>   external agent run
-//   runLine         (prompt) => void        main-agent turn (the visible fallback)
+//   startRun        (request) => Promise    keryx runs the confirmed steps itself (setup-run.ts)
+//   isRunning       () => boolean           a run from an earlier modal is still going
 
 import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -34,6 +33,7 @@ import {
   type MountedChrome,
 } from "./ops-sidebar.test-helpers";
 import { openSetupModal, type SetupModalOptions } from "./setup-modal";
+import { ownKeryxPrefix, runSetupSteps, selectSetupSteps, stepCommand, type SetupRunRequest } from "./setup-run";
 import { roleColor } from "./theme";
 
 const OTUI = await loadOpenTui();
@@ -48,7 +48,6 @@ function requireOtui(): NonNullable<typeof OTUI> {
 
 const ESC_PARSER_TIMEOUT_MS = 20;
 const ROOT = "/work/demo";
-const AGENT = { id: "claude-code", name: "Claude Code" } as const;
 
 /** `openSetupModal` with the test's options spread over the keypress source (no excess-property check on a not-yet-typed seam). */
 function openWith(h: MountedChrome, extra: Record<string, unknown> = {}) {
@@ -512,56 +511,44 @@ otuiTest("flow 468 AC9: the body is wrapped to the modal's own width, at a mediu
 });
 
 // ---------------------------------------------------------------------------
-// AC10 — Run through an external agent, visible fallback to the main agent
+// AC10 — Run: keryx runs the confirmed steps itself as background jobs (no model)
 // ---------------------------------------------------------------------------
 
 interface RunHarness {
   readonly confirms: string[][];
-  readonly delegated: Array<{ agentId: string; task: string; cwd: string }>;
-  readonly runLines: string[];
-  readonly order: string[];
+  readonly runs: SetupRunRequest[];
+  readonly toasts: string[];
   readonly options: Record<string, unknown>;
 }
 
-function runHarness(
-  answer: boolean,
-  opts: { agents?: ReadonlyArray<{ id: string; name: string }> } = {},
-): RunHarness {
+function runHarness(answer: boolean, extra: Record<string, unknown> = {}): RunHarness {
   const confirms: string[][] = [];
-  const delegated: Array<{ agentId: string; task: string; cwd: string }> = [];
-  const runLines: string[] = [];
-  const order: string[] = [];
+  const runs: SetupRunRequest[] = [];
+  const toasts: string[] = [];
   return {
     confirms,
-    delegated,
-    runLines,
-    order,
+    runs,
+    toasts,
     options: {
       projectRoot: ROOT,
       initialScenario: "refresh",
       copyText: () => {},
-      showToast: () => {},
-      externalAgents: opts.agents ?? [AGENT],
+      showToast: (message: string) => toasts.push(message),
       confirm: async (card: readonly string[]) => {
-        order.push("confirm");
         confirms.push([...card]);
         return answer;
       },
-      // A real delegated run lasts: it never settles inside the test, the modal must not wait for it.
-      delegate: (request: { agentId: string; task: string; cwd: string }) => {
-        order.push("delegate");
-        delegated.push(request);
+      // A real run lasts: it never settles inside the test, the modal must not wait for it.
+      startRun: (request: SetupRunRequest) => {
+        runs.push(request);
         return new Promise<unknown>(() => {});
       },
-      runLine: (prompt: string) => {
-        order.push("runLine");
-        runLines.push(prompt);
-      },
+      ...extra,
     },
   };
 }
 
-otuiTest("flow 468 AC10: r asks to confirm with the scenario, the steps that will run and the agent", async () => {
+otuiTest("flow 468 AC10: r asks to confirm with the scenario and the exact commands that will run", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 200, height: 70 });
   const run = runHarness(true);
@@ -570,36 +557,31 @@ otuiTest("flow 468 AC10: r asks to confirm with the scenario, the steps that wil
   await press(h, "r");
   await waitFor(() => run.confirms.length > 0);
 
-  expect(run.confirms.length).toBe(1);
   expect(run.confirms).toHaveLength(1);
   const card = run.confirms[0]!.join("\n");
   expect(card).toContain("Refresh");
   for (const cli of planClis("refresh", false)) expect(card).toContain(cli);
-  expect(card).toContain(AGENT.name);
+  expect(card).toMatch(/no model/i);
   // Optional steps are not run unless the operator turned them on.
   expect(card).not.toContain("keryx update --preview");
   h.destroy();
 });
 
-otuiTest("flow 468 AC10: yes starts the external agent with the prompt in the project root and the modal stays usable", async () => {
+otuiTest("flow 468 AC10: yes starts the run with the required steps in order, in the project root, and the modal stays usable", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 200, height: 70 });
   const run = runHarness(true);
   openWith(h, run.options);
   await settle(h);
   await press(h, "r");
-  await waitFor(() => run.delegated.length > 0);
+  await waitFor(() => run.runs.length > 0);
 
-  expect(run.delegated).toHaveLength(1);
-  expect(run.delegated[0]).toMatchObject({
-    agentId: AGENT.id,
-    task: expectedPrompt("refresh", false),
-    cwd: ROOT,
-  });
-  expect(run.runLines).toEqual([]);
-  expect(run.order).toEqual(["confirm", "delegate"]);
+  expect(run.runs).toHaveLength(1);
+  expect(run.runs[0]!.steps.map((step) => step.cli)).toEqual(planClis("refresh", false));
+  expect(run.runs[0]!.projectRoot).toBe(ROOT);
+  expect(run.runs[0]!.skipped).toEqual([]);
 
-  // The delegated run never settles; the modal still answers keys.
+  // The run never settles; the modal still answers keys.
   await press(h, "o");
   expect(h.captureCharFrame()).toMatch(/Optional: on/);
   h.destroy();
@@ -613,26 +595,30 @@ otuiTest("flow 468 AC10: the Run button works like r", async () => {
   await settle(h);
   expect(h.captureCharFrame()).toContain("[Run]");
   await clickLabel(h, "[Run]");
-  await waitFor(() => run.delegated.length > 0);
+  await waitFor(() => run.runs.length > 0);
   expect(run.confirms).toHaveLength(1);
-  expect(run.delegated[0]).toMatchObject({ agentId: AGENT.id, cwd: ROOT });
+  expect(run.runs[0]!.projectRoot).toBe(ROOT);
   h.destroy();
 });
 
-otuiTest("flow 468 AC10: with Optional on, the confirm card and the delegated prompt include the optional steps", async () => {
+otuiTest("flow 468 AC10: with Optional on the optional steps run too, and a step that needs a value is listed as skipped and never run", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 200, height: 70 });
-  const run = runHarness(true);
+  const run = runHarness(true, { initialScenario: "init" });
   openWith(h, run.options);
   await settle(h);
   await press(h, "o");
   await press(h, "r");
-  await waitFor(() => run.delegated.length > 0);
+  await waitFor(() => run.runs.length > 0);
 
-  expect(run.confirms).toHaveLength(1);
+  const runnable = planClis("init", true).filter((cli) => !/<[^<>\s]+>/.test(cli));
+  expect(run.runs[0]!.steps.map((step) => step.cli)).toEqual(runnable);
+  expect(run.runs[0]!.skipped.map((step) => step.cli)).toEqual(["keryx integrate <editor>"]);
   const card = run.confirms[0]!.join("\n");
-  for (const cli of planClis("refresh", true)) expect(card).toContain(cli);
-  expect(run.delegated[0]?.task).toBe(expectedPrompt("refresh", true));
+  for (const cli of runnable) expect(card).toContain(cli);
+  const skippedAt = card.indexOf("Skipped");
+  expect(skippedAt).toBeGreaterThan(-1);
+  expect(card.indexOf("keryx integrate <editor>")).toBeGreaterThan(skippedAt);
   h.destroy();
 });
 
@@ -647,44 +633,178 @@ otuiTest("flow 468 AC10: no starts nothing", async () => {
   await settle(h);
 
   expect(run.confirms).toHaveLength(1);
-  expect(run.delegated).toEqual([]);
-  expect(run.runLines).toEqual([]);
+  expect(run.runs).toEqual([]);
   h.destroy();
 });
 
-otuiTest("flow 468 AC10: with no external agent the card says so and offers the main agent; yes runs the prompt there", async () => {
+otuiTest("flow 468 AC10: a second Run while one is active is refused with a toast", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 200, height: 70 });
-  const run = runHarness(true, { agents: [] });
+  const run = runHarness(true);
   openWith(h, run.options);
   await settle(h);
   await press(h, "r");
-  await waitFor(() => run.runLines.length > 0);
+  await waitFor(() => run.runs.length > 0);
+  await press(h, "r");
 
   expect(run.confirms).toHaveLength(1);
-  const card = run.confirms[0]!.join("\n");
-  expect(card).toMatch(/no external agent/i);
-  expect(card).toMatch(/main agent/i);
-  for (const cli of planClis("refresh", false)) expect(card).toContain(cli);
-  expect(run.runLines).toEqual([expectedPrompt("refresh", false)]);
-  expect(run.delegated).toEqual([]);
-  // Asked first, then run: the fallback is never silent.
-  expect(run.order).toEqual(["confirm", "runLine"]);
+  expect(run.runs).toHaveLength(1);
+  expect(run.toasts).toContain("A setup run is already in progress");
   h.destroy();
 });
 
-otuiTest("flow 468 AC10: with no external agent, no to the main agent starts nothing", async () => {
+otuiTest("flow 468 AC10: a run started by an earlier modal also blocks Run", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 200, height: 70 });
-  const run = runHarness(false, { agents: [] });
+  const run = runHarness(true, { isRunning: () => true });
   openWith(h, run.options);
   await settle(h);
   await press(h, "r");
-  await waitFor(() => run.confirms.length > 0);
-  await settle(h);
 
-  expect(run.confirms).toHaveLength(1);
-  expect(run.runLines).toEqual([]);
-  expect(run.delegated).toEqual([]);
+  expect(run.confirms).toEqual([]);
+  expect(run.runs).toEqual([]);
+  expect(run.toasts).toContain("A setup run is already in progress");
   h.destroy();
+});
+
+// --- the step runner: order, stop rules, divergence, cancel -------------------------------
+
+interface Scripted {
+  readonly status: "completed" | "failed" | "killed";
+  readonly exitCode?: number;
+  readonly output?: string;
+}
+
+/** A job registry double: each command is looked up in `script`, default is a clean exit. */
+function fakeJobs(script: Record<string, Scripted> = {}) {
+  const started: Array<{ command: string; description: string | undefined }> = [];
+  const observed: string[] = [];
+  const results = new Map<string, Scripted>();
+  const jobs = {
+    started,
+    observed,
+    start: async (command: string, opts?: { description?: string }) => {
+      const id = `task-${started.length + 1}`;
+      started.push({ command, description: opts?.description });
+      results.set(id, script[command.replace(/^KERYX/, "keryx")] ?? { status: "completed", exitCode: 0 });
+      return { ok: true as const, jobId: id, pid: 1, output: "" };
+    },
+    waitForExit: async () => "exited" as const,
+    get: (id: string) => {
+      const result = results.get(id);
+      return result === undefined ? undefined : ({ status: result.status, exitCode: result.exitCode } as never);
+    },
+    readOutput: (id: string) => ({ ok: true as const, output: results.get(id)?.output ?? "" }),
+    markObserved: (id: string) => {
+      observed.push(id);
+    },
+  };
+  return jobs;
+}
+
+function planRequest(id: "init" | "refresh" | "repair", includeOptional: boolean): SetupRunRequest {
+  const scenario = guide.setupScenario(id)!;
+  const { run, skipped } = selectSetupSteps(scenario.steps, includeOptional);
+  return { scenarioTab: scenario.tab, scenarioTitle: scenario.title, projectRoot: ROOT, steps: run, skipped };
+}
+
+async function runWith(request: SetupRunRequest, jobs: ReturnType<typeof fakeJobs>) {
+  const lines: string[] = [];
+  const outcome = await runSetupSteps(request, jobs as never, { prefix: "KERYX", say: (line) => lines.push(line) });
+  return { outcome, lines };
+}
+
+test("flow 468 AC10: the runner starts one job per step, in order, with the running keryx and a description", async () => {
+  const jobs = fakeJobs();
+  const request = planRequest("refresh", false);
+  const { outcome, lines } = await runWith(request, jobs);
+
+  expect(outcome.status).toBe("done");
+  expect(jobs.started.map((job) => job.command)).toEqual(
+    request.steps.map((step) => step.cli.replace(/^keryx/, "KERYX")),
+  );
+  expect(jobs.started[0]!.description).toBe(`setup 1/${request.steps.length}: ${request.steps[0]!.cli}`);
+  expect(lines[0]).toContain("running");
+  for (const step of request.steps) expect(lines).toContain(`✓ ${step.cli}`);
+  expect(lines.at(-1)).toContain("finished");
+  // The main agent is not also told about each job.
+  expect(jobs.observed.length).toBeGreaterThanOrEqual(request.steps.length);
+});
+
+test("flow 468 AC10: a failed required step stops the run and the summary names it", async () => {
+  const request = planRequest("refresh", false);
+  const failing = request.steps[1]!.cli; // keryx sync --apply
+  const jobs = fakeJobs({ [failing]: { status: "failed", exitCode: 2, output: "boom\n" } });
+  const { outcome, lines } = await runWith(request, jobs);
+
+  expect(outcome.status).toBe("stopped");
+  expect(jobs.started).toHaveLength(2);
+  expect(lines).toContain(`✓ ${request.steps[0]!.cli}`);
+  expect(lines.some((line) => line.startsWith(`✗ ${failing}`) && line.includes("exit 2") && line.includes("boom"))).toBe(true);
+  expect(lines.at(-1)).toContain(`stopped at required step ${failing}`);
+});
+
+test("flow 468 AC10: a failed optional step is reported and the run continues", async () => {
+  const request = planRequest("refresh", true);
+  const optional = request.steps.find((step) => !step.required)!;
+  const jobs = fakeJobs({ [optional.cli]: { status: "failed", exitCode: 1, output: "nope" } });
+  const { outcome, lines } = await runWith(request, jobs);
+
+  expect(outcome.status).toBe("done");
+  expect(jobs.started).toHaveLength(request.steps.length);
+  expect(lines.some((line) => line.startsWith(`✗ ${optional.cli}`))).toBe(true);
+  expect(lines.at(-1)).toContain(`optional steps that failed: ${optional.cli}`);
+});
+
+test("flow 468 AC10: a keryx update version divergence stops the run and names both flags without picking one", async () => {
+  const request = planRequest("refresh", false);
+  const update = request.steps.find((step) => step.cli.startsWith("keryx update"))!;
+  const output = [
+    "keryx update published nothing: 1 lifecycle target(s) diverged from what this writer recorded.",
+    "  --accept-version   publish this version's content over the divergent bytes (not undoable)",
+    "  --keep-existing    leave the divergent bytes in place and record that this run did not publish them",
+  ].join("\n");
+  const jobs = fakeJobs({ [update.cli]: { status: "failed", exitCode: 1, output } });
+  const { outcome, lines } = await runWith(request, jobs);
+
+  expect(outcome.status).toBe("stopped");
+  expect(jobs.started).toHaveLength(1);
+  const last = lines.at(-1)!;
+  expect(last).toContain("--accept-version");
+  expect(last).toContain("--keep-existing");
+  for (const job of jobs.started) {
+    expect(job.command).not.toContain("--accept-version");
+    expect(job.command).not.toContain("--keep-existing");
+  }
+});
+
+test("flow 468 AC10: a step whose command holds a placeholder is skipped, and Optional off leaves optional steps out", () => {
+  const withOptional = selectSetupSteps(guide.setupScenario("init")!.steps, true);
+  expect(withOptional.skipped.map((step) => step.cli)).toEqual(["keryx integrate <editor>"]);
+  expect(withOptional.run.some((step) => step.cli.includes("<"))).toBe(false);
+  const repairOptional = selectSetupSteps(guide.setupScenario("repair")!.steps, true);
+  expect(repairOptional.skipped.map((step) => step.cli)).toEqual(["keryx modules enable <name>"]);
+
+  const without = selectSetupSteps(guide.setupScenario("init")!.steps, false);
+  expect(without.skipped).toEqual([]);
+  expect(without.run.every((step) => step.required)).toBe(true);
+  expect(without.run.map((step) => step.cli)).toEqual(planClis("init", false));
+});
+
+test("flow 468 AC10: killing a step's job stops the run and says so", async () => {
+  const request = planRequest("refresh", false);
+  const killed = request.steps[0]!.cli;
+  const jobs = fakeJobs({ [killed]: { status: "killed" } });
+  const { outcome, lines } = await runWith(request, jobs);
+
+  expect(outcome.status).toBe("cancelled");
+  expect(jobs.started).toHaveLength(1);
+  expect(lines.some((line) => line.includes("cancelled") && line.includes(killed))).toBe(true);
+});
+
+test("flow 468 AC10: the prefix is the keryx this process runs on, quoted, never keryx on PATH", () => {
+  const prefix = ownKeryxPrefix();
+  expect(prefix).toContain(process.execPath.includes(" ") ? `'${process.execPath}'` : process.execPath);
+  expect(prefix.startsWith("keryx")).toBe(false);
+  expect(stepCommand("keryx update --skip-runtime --yes", "P")).toBe("P update --skip-runtime --yes");
 });

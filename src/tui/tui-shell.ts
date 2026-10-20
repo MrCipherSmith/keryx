@@ -266,6 +266,7 @@ import { smallActionButton } from "./action-button";
 import { openModal, type ModalChrome, type ModalFooterAction } from "./modal-host";
 import { openHelpModal } from "./help-modal"; // flow 303 AC6: the grouped, tabbed `/help` modal
 import { openSetupModal } from "./setup-modal";
+import { ownKeryxPrefix, runSetupSteps } from "./setup-run";
 import { parseSetupArgs } from "../commands/setup-guide";
 import { helpFirstRunShown, markHelpFirstRunShown, resolveFirstRunHelp } from "./help-first-run"; // flow 303 AC8
 import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
@@ -6216,6 +6217,8 @@ export async function launchTuiAgentShell(opts: {
       });
     };
 
+    // One `/setup` Run at a time per session, whichever modal started it.
+    let setupRunActive = false;
     // `line` is the whole `/setup [id]` input. An unknown or extra argument
     // prints the same error `keryx setup` gives instead of opening a tab.
     const openSetup = (line: string): void => {
@@ -6224,10 +6227,38 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.(`${request.message}\n`);
         return;
       }
-      openSetupModal(otui, chrome, {
+      const modal = openSetupModal(otui, chrome, {
         onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
         inputBlocked: () => chrome.keyboardOwnedElsewhere(),
         ...(request.kind === "scenario" ? { initialScenario: request.scenario.id } : {}),
+        // The tab follows the project, and a run starts in it.
+        projectRoot: opts.session?.cwd ?? process.cwd(),
+        copyText: (text) => r.copyToClipboardOSC52(text),
+        showToast: (message) => chrome.showToast(message),
+        // The card prints into the transcript and asks in the composer dock, which the modal's
+        // backdrop covers, so the modal closes first; nothing runs unless the answer is yes.
+        confirm: (card) => {
+          modal?.close({ restoreFocus: false });
+          return confirmOperatorCard(card, undefined, "Run this setup plan?");
+        },
+        // Keryx runs the confirmed steps itself, one background job each, with the keryx this
+        // shell runs on. No model, no external agent.
+        isRunning: () => setupRunActive,
+        startRun: async (plan) => {
+          if (deps.jobRegistry === undefined) {
+            io.onSystem?.("◇ setup: this session tracks no background jobs, so nothing was run\n");
+            return;
+          }
+          setupRunActive = true;
+          try {
+            await runSetupSteps(plan, deps.jobRegistry, {
+              prefix: ownKeryxPrefix(),
+              say: (line) => io.onSystem?.(`${line}\n`),
+            });
+          } finally {
+            setupRunActive = false;
+          }
+        },
       });
     };
 

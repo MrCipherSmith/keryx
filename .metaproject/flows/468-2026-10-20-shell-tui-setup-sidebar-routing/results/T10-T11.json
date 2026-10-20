@@ -1,0 +1,68 @@
+{
+  "task_id": "task-10",
+  "task_name": "Phase B /setup (T10 + T11, T11 reworked): Run runs the steps itself as background jobs",
+  "task_type": "mixed",
+  "status": "success",
+  "description": "T10 (committed e7d7e12cd): step model, detection, generated prompt, CLI marks. T11: the /setup modal opens on the detected tab with the plan, the generated prompt, Copy and Optional (unchanged from the first pass). Run reworked on the operator's decision 'Шаги без модели (Recommended)': the confirm card names the scenario and the exact commands (optional only when Optional is on; steps holding a placeholder are listed as skipped and never run); on yes keryx runs the steps itself in order in the project root, one background job per step through the session JobRegistry, with a description per step, using the keryx the shell runs on (resolveKeryxInvocation/invocationArgv). Required failure stops; optional failure continues; a keryx update version divergence stops with a reason naming --accept-version and --keep-existing and never picks one; killing a job cancels the run. Transcript: a start line, a line per step, a summary. A second Run is refused with a toast. The external-agent path (delegate, externalAgents, runLine, setupRunAgents) is removed and external-operator.ts is back to its original state.",
+  "files_modified": [
+    "src/commands/shell.test.ts",
+    "src/tui/setup-modal.ts",
+    "src/tui/setup-modal.test.ts",
+    "src/tui/tui-shell.ts",
+    "src/standard/help-groups.ts",
+    "src/commands/agent-commands.ts",
+    "docs/docs/cli-reference.md",
+    "docs/docs/commands-by-task.md"
+  ],
+  "files_created": [
+    "src/tui/setup-run.ts"
+  ],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not run (tsc only, per dispatch)",
+  "type_check_result": "pass",
+  "test_result": "272 passed, 0 failed across 9 files: setup-modal.test.ts 33, shell.test.ts (incl. 4 AC10), setup-guide.test.ts, modal-host.test.ts, background-job-inspector.test.ts, cli-reference-coverage.test.ts, commands-by-task.test.ts, help-groups.test.ts, agent-commands.test.ts",
+  "story_result": "not applicable",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "none",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c", "how": "followed" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b", "how": "followed" }
+  ],
+  "noticed_not_touched": [
+    { "what": "JobRegistry.start has no approval or permission-mode gate of its own: the shell's default-deny approval lives in the shell_exec tool call path, which Run does not go through. The registry does enforce the OS sandbox posture (resolveShellSpawn, fail-closed when a requested sandbox launcher is missing), the idle timeout and the output cap. Run relies on the operator's confirm card as the approval for exactly the listed commands and adds no second prompt.", "where": "src/harness/tool/builtin/background-job-registry.ts (realSpawner, start)" },
+    { "what": "`keryx update --help` prints the group-level summary that omits --preview, --yes, --accept-version and --keep-existing, which update's own printHelp lists and parseUpdateArgs accepts.", "where": "src/cli-registry.ts update usage line, src/commands/update.ts:1945" },
+    { "what": "The group-level help for `keryx wiki` and `keryx memory` omits `wiki validate` and `memory check`, which the setup steps use.", "where": "src/cli-registry.ts wiki/memory usage blocks" }
+  ],
+  "assumptions": [
+    "The keryx the shell runs on is resolveKeryxInvocation() (process.execPath plus process.argv[1], or the compiled binary alone) turned into argv by invocationArgv, the helper schedules and triggers use; it adds the Bun safe-spawn flags for a Bun interpreter. It never falls back to keryx on PATH because execPath is always known.",
+    "A version divergence is recognised from a failed `keryx update` step whose output holds 'diverged from what this writer recorded' or both flag names (blockedMessage in install-plan.ts); update exits non-zero on InstallPlanBlockedError and prints that message.",
+    "Steps are started with phase background and marked observed right after start and after exit, so the main agent is not woken for each step. A step that exits within the registry's initial 500 ms buffer can still reach the completion drain once before markObserved runs; not observed in tests."
+  ],
+  "behavior_changes": [
+    {
+      "description": "Operator answer 'Принять как сделано (Recommended)' to the earlier behavior_changes: the confirm card shape with No preselected, the modal closing before the card, `--yes` on the optional update steps, the narrow stacked layout, the reasons/titles/prompt wording and the plan-note dedupe stay as built.",
+      "user_visible": true,
+      "needs_operator": false,
+      "alternatives": ["Keep the modal open and reopen it after the card", "Bare `keryx update` as written in plan.md"]
+    },
+    {
+      "description": "New wording for the Run path: card lines 'Skipped, each needs a value from you and never runs unattended:' and 'Keryx runs these steps itself as background jobs; no model is involved.'; dock title 'Run this setup plan?'; transcript '◇ setup <Tab>: running N steps in <root> (progress in Background Jobs)', '◇ skipped, needs a value: <cli>', '✓ <cli>', '✗ <cli> (exit N: <last output line>)', '◇ setup <Tab> stopped at required step <cli>: <reason>', '◇ setup <Tab> cancelled at <cli>', '◇ setup <Tab> finished: N steps run[, optional steps that failed: ...]'; divergence reason 'version divergence: rerun the step by hand with --accept-version or --keep-existing; this run never picks one'; toasts 'A setup run is already in progress' and 'Setup run failed: <reason>'; '◇ setup: this session tracks no background jobs, so nothing was run' when the session has no registry.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["Shorter one-line step results without the output tail", "Name the next command to run after a divergence"]
+    },
+    {
+      "description": "Each step job gets the longest idle timeout the registry allows (30 minutes) instead of the 2 minute default, because gdgraph build, sync and update print nothing for long stretches; a step silent for longer is killed by the registry and counts as a failed step.",
+      "user_visible": false,
+      "needs_operator": true,
+      "alternatives": ["Default 2 minute idle rail (kills long silent steps)", "Idle rail disabled with 0 (a hung step runs until cancelled)"]
+    }
+  ],
+  "not_touched": [
+    { "path": "src/tui/external-operator.ts", "reason": "back to its original state: setupRunAgents was removed because nothing else uses it (git checkout of this task's own edit)" },
+    { "path": "src/commands/setup-guide.ts", "reason": "T10, committed in e7d7e12cd; the rework needed no change there" }
+  ],
+  "notes": "Changes to T10-committed files: only the /setup summary wording in src/standard/help-groups.ts and src/commands/agent-commands.ts (they said 'run it through an external agent') and the regenerated docs/docs/commands-by-task.md. Removed from the modal: delegate, externalAgents, runLine, SetupExternalAgent, SetupDelegateRequest; added: startRun, isRunning (so a run from an earlier modal blocks Run). New module src/tui/setup-run.ts holds the runner (runSetupSteps, selectSetupSteps, ownKeryxPrefix, stepCommand) with an injected registry slice; its tests, with a registry double, are in setup-modal.test.ts under AC10 (order, required stop, optional continue, divergence, placeholder skip, Optional off, no, second Run, cancel). The source-text wiring audit stays only in shell.test.ts. Nothing committed."
+}
