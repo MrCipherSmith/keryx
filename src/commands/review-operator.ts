@@ -1,4 +1,4 @@
-import { formatCompletionException } from "../flow/completion-exceptions";
+import { formatCompletionException } from "../flow/service";
 // Terminal counterparts of the flow-457 operator cards, and `verify-run` (flow 457, T7).
 //
 //   keryx review waive-mutation      --package <dir> --reason "<why>"     (TTY; card: review_waive_mutation)
@@ -541,7 +541,7 @@ async function journalHostQuestion(command: HostVerb, host: HostAnswer, choice: 
 /** Bind the host answer to every current refusal, reason and the flow identity. */
 export function completionHostAnswer(
   args: string[],
-  selected: readonly import("../flow/completion-exceptions").CompletionExceptionSelection[],
+  selected: readonly import("../flow/service").CompletionExceptionSelection[],
   flowId: string,
   cwd: string,
   env: Readonly<Record<string, string | undefined>> = process.env,

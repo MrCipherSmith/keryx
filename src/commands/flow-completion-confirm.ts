@@ -1,6 +1,6 @@
 import { hiddenInCard } from "../lib/card-safe";
 import { isAutonomousEnv, readRunProfile } from "../review/run-profile";
-import { formatCompletionException, type CompletionExceptionSelection } from "../flow/completion-exceptions";
+import { formatCompletionException, type CompletionExceptionSelection } from "../flow/service";
 import { completionHostAnswer } from "./review-operator";
 
 export class CompletionConfirmationError extends Error {}
