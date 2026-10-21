@@ -11,8 +11,7 @@ afterEach(async () => { await Promise.all(dirs.splice(0).map((p) => rm(p, { recu
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), "probe-git-")); dirs.push(root);
   const git = (...args: string[]) => exec("git", args, { cwd: root });
-  const email = (await exec("git", ["config", "user.email"])).stdout.trim();
-  await git("init"); await git("config", "user.email", email); await git("config", "user.name", "Fixture");
+  await git("init"); await git("config", "user.email", "probe-fixture@example.invalid"); await git("config", "user.name", "Fixture");
   await writeFile(path.join(root, "gold.json"), "answer"); await writeFile(path.join(root, "source.ts"), "export const source = 1;");
   await git("add", "."); await git("commit", "-m", "fixture");
   const commit = (await git("rev-parse", "HEAD")).stdout.trim();
