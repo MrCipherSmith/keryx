@@ -1,0 +1,22 @@
+# Flow Journal
+
+- 2026-10-20T19:50:57.728Z - flow created
+- 2026-10-20T19:57:31.463Z - task-added: T5: Correct learn-probe docpack contracts before freeze per operator decisions
+- 2026-10-20T19:59:04.513Z - task-attempt: T5: started (attempt 1) — 469-T5: agent-1 docpack-only correction before freeze; operator decisions recorded
+- 2026-10-20T20:01:01.146Z - task-attempt: T5: blocked (attempt 2) — Resolved by operator: comparison publication cut-off; post-publication drift skips evidence with exit 3
+- 2026-10-20T20:01:01.322Z - task-attempt: T5: started (attempt 3) — 469-T5 resumes with recorded cut-off clarification
+- 2026-10-20T20:02:45.537Z - task-added: T6: Independently verify corrected docpack schemas examples and operator decisions before freeze
+- 2026-10-20T20:02:45.707Z - task-added: T7: Lane A: TDD pure Newcombe scoring and exhaustive verdict precedence
+- 2026-10-20T20:02:45.870Z - task-added: T8: Lane A: TDD probe sourceType schemas config and immutable plan checkpoint contracts
+- 2026-10-20T20:02:46.038Z - task-added: T9: Lane A: TDD core identity resume durable spend exactly-once finalization and retention
+- 2026-10-20T20:02:46.200Z - task-added: T10: Lane B: TDD isolated paired runner gold checks usage checkpoints cancellation and cleanup
+- 2026-10-20T20:02:46.362Z - task-added: T11: Lane B: TDD CLI dry-run TTY budget validation JSON envelope and recovery outcomes
+- 2026-10-20T20:02:46.538Z - task-added: T12: Lane A: integrate learn router prune hook and decision-module regression guards
+- 2026-10-20T20:02:46.718Z - task-added: T13: Independent integration quality gate and failure-scenario AC verification on working-tree CLI
+- 2026-10-20T20:02:46.885Z - task-added: T14: Update implementation docs and verified handoff report; select completion target with operator
+- 2026-10-20T20:03:20.090Z - task-done: T2: Implement per plan
+- 2026-10-20T20:03:20.271Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-20T20:03:20.444Z - task-depends-set: T4: dependsOn T13, T14 (was empty) — Review only after verified integration and handoff report; no PR without operator target
+- 2026-10-20T20:15:37.247Z - task-done: T5: Correct learn-probe docpack contracts before freeze per operator decisions
+- 2026-10-20T20:15:37.590Z - task-attempt: T6: started (attempt 1) — Independent docpack review dispatched to agent-2; no runtime before explicit operator freeze
+- 2026-10-20T20:35:56.832Z - task-done: T6: Independently verify corrected docpack schemas examples and operator decisions before freeze

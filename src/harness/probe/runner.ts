@@ -1,7 +1,7 @@
 import { writeContained } from "../../lib/contained-write";
 import type { ProbeSession } from "../../learning/probe";
 import type { ProbeTask, ProbeComparison, ProbeFinalization } from "../../learning/probe-schema";
-import { scoreProbe, type ProbeArmCounts } from "../../learning/probe-score";
+import { scoreProbe, type ProbeArmCounts } from "../../learning/service";
 
 export type ProbeArm = "base" | "probe";
 export interface ProbeTurnInput {

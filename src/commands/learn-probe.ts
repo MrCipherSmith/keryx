@@ -3,11 +3,11 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { promisify } from "node:util";
-import { parseLearnArgs } from "../learning/cli-args";
-import { loadLearningConfig } from "../learning/config";
-import { buildProbePlan, hashProbeBytes, runProbeSession, findPublishedProbePlan } from "../learning/probe";
-import { validateProbeTaskSet, type ProbeTaskSet } from "../learning/probe-schema";
-import { readPattern } from "../learning/store";
+import {
+  parseLearnArgs, loadLearningConfig, buildProbePlan, hashProbeBytes,
+  runProbeSession, findPublishedProbePlan, validateProbeTaskSet,
+  readPattern, type ProbeTaskSet,
+} from "../learning/service";
 import { loadShellConfig } from "../lib/shell-config";
 
 export const PROBE_BASELINE = "Investigate this repository with read-only tools. Return only FILE: <relative-path> SYMBOL: <symbol>.";
