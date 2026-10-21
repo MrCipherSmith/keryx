@@ -1,3 +1,4 @@
+import type { CompletionWriter } from "./completion-write";
 // Which in-scope files a review actually looked at. In scope is scope A (the changed files) together with scope B (the
 // blast radius, including the files the cap dropped). Every file ends up covered, omitted under a named reason, or
 // uncovered; `keryx review complete` refuses while any is uncovered unless the operator waives them in their own words.
@@ -9,7 +10,7 @@ import { type ChunkPass, computeChunkPass, hasChunkPlan } from "./chunks";
 import { BLAST_RADIUS_SCOPE_REVIEWER, isCapDrop, isReasonedDrop } from "./blast-radius";
 import { packageScopeFiles } from "./coverage";
 import type { SliceManifest } from "./slice";
-import { cardPressFields, type CardPress, type ConfirmedVia } from "./types";
+import { cardPressFields, type CardPress, type ConfirmedVia, type HostQuestion, hostQuestionFields, isHostQuestion } from "./types";
 import { readJsonFileOr } from "../lib/json";
 import { asRecord as record, dispatchRunRecords } from "./record";
 
@@ -29,7 +30,7 @@ export type CoverageFile = {
   reason?: string;
 };
 
-export type CoverageWaiver = { operatorQuote: string; time: string; files: string[]; confirmedVia?: ConfirmedVia | undefined } & CardPress;
+export type CoverageWaiver = { hostQuestion?: HostQuestion; operatorQuote: string; time: string; files: string[]; confirmedVia?: ConfirmedVia | undefined } & CardPress;
 
 export type CoverageReport = {
   schemaVersion: 1;
@@ -94,10 +95,10 @@ export function readCoverageWaiver(dispatch: unknown): CoverageWaiver | undefine
   const waiver = record(record(dispatch)?.coverageWaiver);
   if (waiver === undefined || !text(waiver.operatorQuote) || !text(waiver.time)) return undefined;
   const files = Array.isArray(waiver.files) ? waiver.files.filter(text) : [];
-  const via = waiver.confirmedVia === "tui-card" || waiver.confirmedVia === "remote-card" ? waiver.confirmedVia : undefined;
+  const via = waiver.confirmedVia === "tui-card" || waiver.confirmedVia === "remote-card" || waiver.confirmedVia === "host-question" ? waiver.confirmedVia : undefined;
   const pressedBy = typeof waiver.pressedBy === "number" && Number.isSafeInteger(waiver.pressedBy) ? waiver.pressedBy : undefined;
   const pressedAt = text(waiver.pressedAt) ? waiver.pressedAt : undefined;
-  return { operatorQuote: waiver.operatorQuote, time: waiver.time, files, ...(via === undefined ? {} : { confirmedVia: via }), ...cardPressFields({ pressedBy, pressedAt }) };
+  return { operatorQuote: waiver.operatorQuote, time: waiver.time, files, ...(via === undefined ? {} : { confirmedVia: via }), ...cardPressFields({ pressedBy, pressedAt }), ...(via === "host-question" && isHostQuestion(waiver.hostQuestion) ? { hostQuestion: waiver.hostQuestion } : {}) };
 }
 
 export type ComputeCoverageOptions = {
@@ -212,7 +213,7 @@ const MIN_WAIVER_QUOTE_CHARS = 8;
  * Records the operator's waiver of every file uncovered right now in `research.json` (`dispatch.coverageWaiver`, the shape
  * of the mutation waiver: their quote, the time, and the waived file list). Nothing uncovered means nothing to waive.
  */
-export async function recordCoverageWaiver(packageDir: string, operatorQuote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia, press?: CardPress): Promise<CoverageWaiver | undefined> {
+export async function recordCoverageWaiver(packageDir: string, operatorQuote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia, press?: CardPress & { hostQuestion?: HostQuestion }, write: CompletionWriter = writeFileAtomic): Promise<CoverageWaiver | undefined> {
   // A flag name or a one-word "ok" is not the operator's words; the flag is also a human-confirmation command (see command-risk).
   const quote = operatorQuote.replace(/-{0,2}waive[- ]?coverage/gi, "").trim();
   if (quote.length < MIN_WAIVER_QUOTE_CHARS || !/[\p{L}\p{N}]/u.test(quote)) {
@@ -225,8 +226,8 @@ export async function recordCoverageWaiver(packageDir: string, operatorQuote: st
   const report = await computeCoverage(packageDir, { research });
   const uncovered = report.files.filter((entry) => entry.status === "uncovered").map((entry) => entry.file);
   if (!report.tracked || uncovered.length === 0) return undefined;
-  const waiver: CoverageWaiver = { operatorQuote: quote, time: now.toISOString(), files: uncovered, ...(confirmedVia === undefined ? {} : { confirmedVia }), ...cardPressFields(press) };
-  await writeFileAtomic(file, `${JSON.stringify({ ...research, dispatch: { ...dispatch, coverageWaiver: waiver } }, null, 2)}\n`);
+  const waiver: CoverageWaiver = { operatorQuote: quote, time: now.toISOString(), files: uncovered, ...(confirmedVia === undefined ? {} : { confirmedVia }), ...cardPressFields(press), ...hostQuestionFields(press) };
+  await write(file, `${JSON.stringify({ ...research, dispatch: { ...dispatch, coverageWaiver: waiver } }, null, 2)}\n`);
   return waiver;
 }
 

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Operator-accepted flow completion exceptions (#1062)
+
+- **Added:** `flow complete --accept-gate <gate|review:condition> --reason "<why>"` requests fresh operator confirmation by shell card, controlling terminal or existing host-question protocol. Only selected current eligible failures may be accepted; mandatory AC, tasks, ownership, folder and confirmation gates cannot be bypassed.
+- **Added:** attempts, signatures and journal preserve the original failures and operator words; status/list/check-complete and product index distinguish clean closure from completion with exceptions.
+- **Added:** `flow base set` repairs the recorded base with a reason; `flow implemented --fix-of` records subsequent fix-PR lineage. `review complete` supports host-question confirmation bound to head, evidence, dispositions and waivers.
+
 ## [0.3.128] - 2026-10-21
 
 0.3.127 was tagged but never published to npm. Its changes ship here.

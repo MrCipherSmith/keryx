@@ -726,27 +726,23 @@ describe("HQ-10: a stored malformed hostQuestion is not trusted by the readers",
   });
 });
 
-describe("AC7: review complete refuses the host-question flags", () => {
+describe("flow 469 supersedes AC7: review complete accepts host-question flags", () => {
   function complete(...extra: string[]): { exitCode: number; output: string } {
     const child = Bun.spawnSync(["bun", CLI, "review", "complete", "no-such-review", ...extra], { cwd: repo, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
     return { exitCode: child.exitCode ?? -1, output: `${child.stdout.toString()}${child.stderr.toString()}` };
   }
 
-  test("AC7 its flag check names --answered-by, --answer-text and --question-text as unknown", () => {
+  test("host flags pass parsing but cannot close a missing package", () => {
     const result = complete("--answered-by", "claude-code:q1", "--answer-text", "yes", "--question-text", "ok?");
     expect(result.exitCode).not.toBe(0);
-    expect(result.output).toContain("Unknown option");
-    expect(result.output).toContain("--answered-by");
-    expect(result.output).toContain("--answer-text");
-    expect(result.output).toContain("--question-text");
+    expect(result.output).not.toContain("Unknown option");
   }, 60_000);
 
   for (const flag of ["--answered-by", "--answer-text", "--question-text"]) {
-    test(`AC7 ${flag} alone is refused as an unknown option`, () => {
+    test(`${flag} alone is refused without treating it as an unknown option`, () => {
       const result = complete(flag, "x");
       expect(result.exitCode).not.toBe(0);
-      expect(result.output).toContain("Unknown option");
-      expect(result.output).toContain(flag);
+      expect(result.output).not.toContain("Unknown option");
     }, 60_000);
   }
 

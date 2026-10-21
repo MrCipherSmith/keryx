@@ -1,3 +1,4 @@
+import { formatCompletionException } from "../flow/completion-exceptions";
 // Terminal counterparts of the flow-457 operator cards, and `verify-run` (flow 457, T7).
 //
 //   keryx review waive-mutation      --package <dir> --reason "<why>"     (TTY; card: review_waive_mutation)
@@ -28,7 +29,7 @@ import { answerPremiseQuestion, findHeldFinding } from "../review/premise-questi
 import { isAutonomousEnv, readRunProfile } from "../review/run-profile";
 import { HOST_QUESTION_SOURCES, type HostQuestion } from "../review/types";
 import { verifyRun } from "../review/verify-run";
-import { cardSafe } from "../lib/card-safe";
+import { cardSafe, hiddenInCard } from "../lib/card-safe";
 import { resolvePackageDir } from "./review-layers";
 
 export const OPERATOR_COMMANDS = ["waive-mutation", "override-reviewers", "confirm-plan", "decide-premise", "verify-run"] as const;
@@ -290,7 +291,7 @@ const wordsOf = (text: string): string[] => text.toLowerCase().split(/[^\p{L}\p{
 const shortened = (text: string): string => JSON.stringify(text.trim().slice(0, 80));
 
 /** The `--answered-by` value as `<source>:<ref>`, split on the first colon (a ref may hold colons: a poll id plus a message id). */
-function parseAnsweredBy(raw: string | undefined, command: HostVerb): Pick<HostQuestion, "source" | "ref"> {
+function parseAnsweredBy(raw: string | undefined, command: HostVerb | "flow-complete" | "complete"): Pick<HostQuestion, "source" | "ref"> {
   const refuse = (why: string): never => {
     throw new Error(
       `--answered-by must be <source>:<ref>: <source> one of ${HOST_QUESTION_SOURCES.join(", ")} and <ref> the host's own id for the question, not empty, at most ${REF_MAX_LENGTH} characters, no control characters` +
@@ -345,9 +346,10 @@ function refuseOtherChoice(answerText: string, answer: "uphold" | "dismiss"): vo
   }
 }
 
-function requireText(flag: "--answer-text" | "--question-text", value: string | undefined, command: HostVerb): string {
+function requireText(flag: "--answer-text" | "--question-text", value: string | undefined, command: HostVerb | "flow-complete" | "complete"): string {
   if (value === undefined || value.trim() === "") throw new Error(`${flag} "<text>" is required and must not be blank: it holds ${flag === "--answer-text" ? "the operator's own words" : "the question as it was asked"}. See \`keryx review ${command} --help\`.`);
-  if (value.length > MAX_OPERATOR_TEXT_LENGTH) throw new Error(`${flag} is ${value.length} characters; at most ${MAX_OPERATOR_TEXT_LENGTH} are recorded. Pass the operator's words or the question as asked, shortened. See \`keryx review ${command} --help\`.`);
+  const limit = flag === "--question-text" && (command === "flow-complete" || command === "complete") ? 100_000 : MAX_OPERATOR_TEXT_LENGTH;
+  if (value.length > limit) throw new Error(`${flag} is ${value.length} characters; at most ${limit} are recorded. Pass the operator's words or the question as asked, shortened. See \`keryx review ${command} --help\`.`);
   return value;
 }
 
@@ -534,4 +536,48 @@ async function journalHostQuestion(command: HostVerb, host: HostAnswer, choice: 
   } catch (error) {
     log(`warning: the answer is recorded, but the keryx decisions journal was not updated (${error instanceof Error ? error.message : String(error)})`);
   }
+}
+
+/** Bind the host answer to every current refusal, reason and the flow identity. */
+export function completionHostAnswer(
+  args: string[],
+  selected: readonly import("../flow/completion-exceptions").CompletionExceptionSelection[],
+  flowId: string,
+  cwd: string,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): { operatorWords: string; confirmedVia: "host-question"; hostQuestion: HostQuestion } {
+  if (env["KERYX_TOOL_CALL"] === "1" || env["KERYX_UNATTENDED"] === "1" ||
+      isAutonomousEnv(env) || readRunProfile(cwd)?.mode === "unattended") {
+    throw new Error("flow complete --answered-by is refused in a nested agent shell or unattended run; use the operator card.");
+  }
+  const by = parseAnsweredBy(optionValue(args, "--answered-by"), "flow-complete");
+  const answerText = requireText("--answer-text", optionValue(args, "--answer-text"), "flow-complete");
+  const questionText = requireText("--question-text", optionValue(args, "--question-text"), "flow-complete");
+  if (!/^(yes|y|да)$/iu.test(answerText.trim())) {
+    throw new Error("Exception completion requires the operator's plain yes; nothing was recorded.");
+  }
+  if (hiddenInCard(questionText) || hiddenInCard(answerText) || hiddenInCard(by.ref)) {
+    throw new Error("Host question and answer must contain no hidden or control characters.");
+  }
+  const expected = `Complete flow ${flowId} with exceptions? ` + selected.map(formatCompletionException).join(" ");
+  if (questionText !== expected) {
+    throw new Error(`Ask the current completion question verbatim: ${expected}`);
+  }
+  return {
+    operatorWords: answerText,
+    confirmedVia: "host-question",
+    hostQuestion: { ...by, questionText, answerText, time: new Date().toISOString() },
+  };
+}
+
+/** Parse the existing host-question protocol; completion validates its package snapshot separately. */
+export function reviewCompletionHostAnswer(args: string[]): HostQuestion | undefined {
+  const supplied = ["--answered-by", "--answer-text", "--question-text"].some((flag) => optionValue(args, flag) !== undefined);
+  if (!supplied) return undefined;
+  return {
+    ...parseAnsweredBy(optionValue(args, "--answered-by"), "complete"),
+    answerText: requireText("--answer-text", optionValue(args, "--answer-text"), "complete"),
+    questionText: requireText("--question-text", optionValue(args, "--question-text"), "complete"),
+    time: new Date().toISOString(),
+  };
 }
