@@ -1,5 +1,5 @@
-import { formatCompletionException, selectCompletionExceptions, type CompletionExceptionSelection } from "../flow/completion-exceptions";
-import type { FlowService } from "../flow/types";
+import { formatCompletionException, selectCompletionExceptions, type CompletionExceptionSelection } from "../flow/service";
+import type { FlowService } from "../flow/service";
 import { hiddenInCard } from "../lib/card-safe";
 import type { OperatorConfirmSpec } from "./operator-confirm-tools";
 import { CompletionConfirmationError } from "./flow-completion-confirm";

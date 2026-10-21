@@ -851,6 +851,7 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "ask_user",
     // Flow 456: operator-confirmed cards. The operator answers; nothing else can.
     "external_apply",
+    "flow_complete_exceptions",
     "flow_confirm",
     "flow_status",
     "get_cwd",

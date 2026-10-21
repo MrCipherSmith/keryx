@@ -57,6 +57,12 @@ import {
 } from "./confirm-token";
 // Re-exported so a client (the CLI) reads the caveat through this facade,
 // not from the zone's internals (import policy, rule 2).
+export {
+  formatCompletionException,
+  selectCompletionExceptions,
+  type CompletionExceptionSelection,
+} from "./completion-exceptions";
+export type { FlowService } from "./types";
 export { CONFIRMATION_CAVEAT, completionTarget } from "./confirm-token";
 // Flow 456: the shell's operator card tools reach the GitHub adapter through this facade, not the zone's internals.
 export { githubAdapter, githubPostReview, githubPrFiles } from "./tracker/github";
