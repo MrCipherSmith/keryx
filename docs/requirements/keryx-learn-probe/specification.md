@@ -1,5 +1,5 @@
 # Learn Probe Specification
-Version: 0.2.0
+Version: 0.2.1
 
 ## 1. Identity and status
 
@@ -49,7 +49,9 @@ No probe path imports an instruction/agent/rule/memory writer.
 
 Use `learningDataDir()` and `assertInsideLearningRoot()` in `src/learning/paths.ts`.
 All writes are contained and atomic. `keryx init` must ignore the probes data root
-in its managed gitignore block (new guard test; not a current capability).
+in its managed block in `<git-common-dir>/info/exclude`. Preserve the existing
+init/update contract: tracked `.gitignore` is never changed. Add a probe-root
+guard test (planned capability, not current passing evidence).
 
 `patternDigest` = full lowercase SHA-256 of UTF-8 `JSON.stringify([trigger, action])`
 without Unicode normalization. `taskSetDigest` hashes exact task-set file bytes.

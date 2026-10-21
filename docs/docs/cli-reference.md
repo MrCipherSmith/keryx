@@ -3168,6 +3168,7 @@ keryx learn promote <id>
 keryx learn graduate [--domain <d>]
 keryx learn graduate apply <proposal-id>
 keryx learn prune [--dry-run] [--json]
+keryx learn probe <id> --task <task-id> [--task-set <path>] [--runs <n>] [--model <id>] [--provider <name>] [--max-usd <n>] [--dry-run] [--json]
 ```
 
 The self-learning loop's consent CLI (flow 312, W3): passive observation

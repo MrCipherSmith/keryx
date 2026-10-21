@@ -15,8 +15,9 @@ model and the same prompt, twice â€” once without the pattern and once with it â
 in isolated git worktrees, and turns the measured difference into an evidence
 item the existing confidence model already knows how to consume.
 
-Status: **spec ready; runtime not implemented.** Every command, path and schema
-below is planned. Observed effects are not yet measured.
+Status: **runtime implemented in the working tree; release acceptance pending.**
+See the [implementation report](implementation-report.md) for verification and
+remaining gates. No live effectiveness measurement or release is claimed.
 
 ## Document index
 

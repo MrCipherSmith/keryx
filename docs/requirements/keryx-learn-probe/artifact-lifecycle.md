@@ -1,5 +1,5 @@
 # Learn Probe Artifact Lifecycle
-Version: 0.2.0
+Version: 0.2.1
 
 ## Storage and ownership
 
@@ -20,7 +20,9 @@ are retained for the life of the pattern, including rejected/expired patterns.
 Only finalized transcript directories count toward retainRunsPerPattern (default
 20). The planned third prune pass removes oldest runs/ only; it preserves audit
 JSON, skips locked/unfinalized probes and leaves today's two passes unchanged.
-The probes data root is gitignored by a planned init guard, not checked in as data.
+The probes data root is ignored through the managed block in
+`<git-common-dir>/info/exclude`, covered by a planned init/update guard;
+tracked `.gitignore` remains unchanged. Probe data is not checked in.
 
 ## Identity and resume
 

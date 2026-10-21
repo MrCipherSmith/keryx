@@ -7,7 +7,10 @@
 //    has passed, with no human decision.
 import { readdir } from "node:fs/promises";
 import path from "node:path";
-import { removeContained } from "../lib/contained-write";
+import { assertWritableContained, removeContained } from "../lib/contained-write";
+import { isNotFound } from "../lib/fs";
+import { loadLearningConfig } from "./config";
+import { retainProbeRuns } from "./probe-retention";
 import { observationsDir } from "./paths";
 import { listPatterns, updatePattern, type StoreEnvOptions } from "./store";
 import type { LearnedPattern, LearningScope } from "./types";
@@ -175,5 +178,26 @@ export async function pruneLearning(root: string, opts: PruneOptions = {}): Prom
     errors.push(`candidate-expiry prune pass failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
+  if (!dryRun) await pruneProbeTranscripts(root, errors);
   return { deletedObservationFiles, expired, errors };
+}
+
+
+/** Probe audit files outlive pattern records; enumerate the contained artifact root. */
+async function pruneProbeTranscripts(root: string, errors: string[]): Promise<void> {
+  const relative = ".metaproject/data/learning/probes";
+  try {
+    await assertWritableContained(root, relative, "directory");
+    const { probe } = await loadLearningConfig(root);
+    let entries;
+    try { entries = await readdir(path.join(root, relative), { withFileTypes: true }); }
+    catch (error) { if (isNotFound(error)) return; throw error; }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      try { await retainProbeRuns(root, entry.name, probe.retainRunsPerPattern); }
+      catch (error) { errors.push(`probe retention failed for "${entry.name}": ${error instanceof Error ? error.message : String(error)}`); }
+    }
+  } catch (error) {
+    errors.push(`probe retention pass failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }

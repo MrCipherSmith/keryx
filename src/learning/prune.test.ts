@@ -6,6 +6,7 @@ import { createAcceptCapability } from "./accept-capability";
 import { observationsDir } from "./paths";
 import { pruneLearning, pruneObservationFilesPass } from "./prune";
 import { readPattern, writePattern } from "./store";
+import { buildProbePlan, runProbeSession } from "./probe";
 import type { LearnedPattern } from "./types";
 
 const SHA_A = "a".repeat(64);
@@ -56,6 +57,32 @@ function makeCandidate(overrides: Partial<LearnedPattern> = {}): LearnedPattern 
 }
 
 describe("pruneLearning: observation files", () => {
+  test("probe retention follows config, preserves audit and honors dry-run", async () => {
+    await withProjectRoot(async (root) => {
+      const pattern = makeCandidate();
+      await writePattern(root, pattern);
+      const plan = buildProbePlan({ pattern, taskId: "fixture", runs: 1, maxUsd: 1, estimateUsd: null,
+        createdAt: NOW.toISOString(), environment: { provider: "fake", model: "fake", commit: "a".repeat(40),
+          baseRef: "HEAD", taskSetDigest: SHA_A, baselineDigest: SHA_A } });
+      const result = await runProbeSession(root, plan, async (session) => {
+        await session.publish({ verdict: "unmeasurable", reason: "no-task", arms: { base: null, probe: null }, delta: null });
+        await session.finalize();
+      });
+      expect(result.ok).toBe(true);
+      const directory = path.join(root, ".metaproject/data/learning/probes", pattern.id, plan.probeId);
+      mkdirSync(path.join(directory, "runs"), { recursive: true });
+      writeFileSync(path.join(directory, "runs", "trace.ndjson"), "audit\n");
+      mkdirSync(path.join(root, ".metaproject/config"), { recursive: true });
+      writeFileSync(path.join(root, ".metaproject/learning.config.json"), JSON.stringify({ probe: { retainRunsPerPattern: 0 } }));
+      await pruneLearning(root, { now: NOW, dryRun: true });
+      expect(readdirSync(directory)).toContain("runs");
+      const report = await pruneLearning(root, { now: NOW });
+      expect(report.errors).toEqual([]);
+      expect(readdirSync(directory)).not.toContain("runs");
+      for (const name of ["plan.json", "comparison.json", "checkpoint.json"]) expect(readdirSync(directory)).toContain(name);
+    });
+  });
+
   test("deletes a file more than 30 days past its own date, keeps a fresher one", async () => {
     await withProjectRoot(async (root) => {
       writeObservationFile(root, "2026-08-01"); // 54 days before NOW: stale

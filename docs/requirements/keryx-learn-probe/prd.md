@@ -1,5 +1,5 @@
 # Learn Probe PRD
-Version: 0.2.0
+Version: 0.2.1
 
 ## Problem
 
@@ -31,8 +31,9 @@ lose confidence as well as gain it.
   count, before making an instruction durable.
 - **Loop maintainer**: wants to know whether a candidate that looked strong is
   actually inert, and to see that rate over time.
-- **Agent** consuming an accepted pattern: benefits indirectly, because a pattern
-  that cannot pass a probe does not reach the skill it loads.
+- **Agent** consuming an accepted pattern: benefits indirectly from better evidence
+  for the operator’s optional acceptance and skill-creation decisions; probing does
+  not gate acceptance or skill creation.
 
 ## Requirements
 
@@ -149,7 +150,8 @@ Verification: judged
 - A recorded fixture probe produces a `probe-comparison.schema.json`-valid file
   and the expected confidence movement for each of the four verdicts.
 - `.metaproject/data/learning/probes/` is gitignored by `keryx init`'s managed
-  block, asserted by a guard test.
+  block in `<git-common-dir>/info/exclude`, asserted by a guard test; tracked
+  `.gitignore` remains unchanged under both init and update.
 
 ### Outcome criteria
 

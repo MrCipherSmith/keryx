@@ -45,36 +45,45 @@ schema("probe-plan.schema.json", plan);
 schema("probe-comparison.schema.json", comparison);
 schema("probe-checkpoint.schema.json", checkpoint);
 const digestOfPlan = (p: any) => hash(`${JSON.stringify(p)}\n`);
-function semantic(b: any) {
-  const { plan: p, comparison: c, checkpoint: k } = b;
-  const pd = hash(JSON.stringify([p.snapshot.trigger, p.snapshot.action]));
-  const e = p.environment;
-  const id = hash([p.patternId, pd, p.taskId, e.model, e.provider, e.commit, e.taskSetDigest, String(p.request.runs)].join("\0"));
-  if (p.patternDigest !== pd || p.identityDigest !== id || p.probeId !== id.slice(0, 12)) return false;
-  if (k.planDigest !== digestOfPlan(p) || k.probeId !== p.probeId || !Number.isFinite(p.request.maxUsd) || p.request.maxUsd <= 0) return false;
-  if (["probeId", "identityDigest", "patternId", "patternDigest", "taskId"].some(key => c[key] !== p[key])) return false;
-  if (JSON.stringify(e) !== JSON.stringify(c.environment)) return false;
+function semanticViolation(b: any): string | null {
+  const { plan, comparison, checkpoint } = b;
+  const patternDigest = hash(JSON.stringify([plan.snapshot.trigger, plan.snapshot.action]));
+  const environment = plan.environment;
+  const identityDigest = hash([plan.patternId, patternDigest, plan.taskId, environment.model, environment.provider, environment.commit, environment.taskSetDigest, String(plan.request.runs)].join("\0"));
+  if (plan.patternDigest !== patternDigest || plan.identityDigest !== identityDigest || plan.probeId !== identityDigest.slice(0, 12)) return 'identity digest';
+  if (checkpoint.planDigest !== digestOfPlan(plan) || checkpoint.probeId !== plan.probeId || !Number.isFinite(plan.request.maxUsd) || plan.request.maxUsd <= 0) return 'checkpoint plan linkage or budget';
+  if (["probeId", "identityDigest", "patternId", "patternDigest", "taskId"].some(key => comparison[key] !== plan[key])) return 'comparison identity linkage';
+  if (JSON.stringify(environment) !== JSON.stringify(comparison.environment)) return 'comparison environment';
   const unique = (xs: any[]) => new Set(xs.map(x => `${x.arm}/${x.seed}`)).size === xs.length;
-  if (!unique(c.runs) || !unique(k.seeds)) return false;
-  if (k.seeds.some((s: any) => s.planDigest !== k.planDigest || s.seed >= p.request.runs || (s.success && !s.answered))) return false;
-  if (c.runs.some((s: any) => s.seed >= p.request.runs || (s.success && !s.answered))) return false;
-  const charged = k.seeds.reduce((n: number, s: any) => n + s.chargedUsd, 0);
-  const reserved = k.seeds.reduce((n: number, s: any) => n + s.reservedUsd, 0);
-  if (Math.abs(charged - k.spendUsd) > 1e-9 || Math.abs(reserved - k.reservedUsd) > 1e-9) return false;
-  if (k.seeds.some((s: any) => s.state !== "running" && s.reservedUsd !== 0)) return false;
-  if (k.phase === "finalized" && k.seeds.some((s: any) => s.state === "running")) return false;
-  if (c.verdict !== "unmeasurable") {
+  if (!unique(comparison.runs) || !unique(checkpoint.seeds)) return 'duplicate arm/seed';
+  if (checkpoint.seeds.some((s: any) => s.planDigest !== checkpoint.planDigest || s.seed >= plan.request.runs || (s.success && !s.answered))) return 'checkpoint seed accounting';
+  if (comparison.runs.some((s: any) => s.seed >= plan.request.runs || (s.success && !s.answered))) return 'comparison seed accounting';
+  const charged = checkpoint.seeds.reduce((n: number, s: any) => n + s.chargedUsd, 0);
+  const reserved = checkpoint.seeds.reduce((n: number, s: any) => n + s.reservedUsd, 0);
+  if (Math.abs(charged - checkpoint.spendUsd) > 1e-9 || Math.abs(reserved - checkpoint.reservedUsd) > 1e-9) return 'spend totals';
+  if (checkpoint.seeds.some((s: any) => s.state !== "running" && s.reservedUsd !== 0)) return 'reservation state';
+  if (checkpoint.phase === "finalized" && checkpoint.seeds.some((s: any) => s.state === "running")) return 'finalization state';
+  if (comparison.verdict !== "unmeasurable") {
     for (const arm of ["base", "probe"]) {
-      const a = c.arms[arm], runs = c.runs.filter((s: any) => s.arm === arm);
-      if (a.seeds !== p.request.runs || runs.length !== a.seeds || runs.some((s: any) => !s.answered)) return false;
-      if (a.successes !== runs.filter((s: any) => s.success).length || a.rate !== a.successes / a.seeds || a.ci[0] > a.ci[1]) return false;
+      const a = comparison.arms[arm], runs = comparison.runs.filter((s: any) => s.arm === arm);
+      if (a.seeds !== plan.request.runs || runs.length !== a.seeds || runs.some((s: any) => !s.answered)) return 'arm sample count or unanswered run';
+      if (a.successes !== runs.filter((s: any) => s.success).length || a.rate !== a.successes / a.seeds || a.ci[0] > a.ci[1]) return 'arm aggregates';
     }
-    if (c.delta.rate !== c.arms.probe.rate - c.arms.base.rate || c.delta.ci[0] > c.delta.ci[1]) return false;
+    if (comparison.delta.rate !== comparison.arms.probe.rate - comparison.arms.base.rate || comparison.delta.ci[0] > comparison.delta.ci[1]) return 'delta aggregates';
   }
-  return true;
+  for (const run of comparison.runs) {
+    const seed = checkpoint.seeds.find((entry: any) => entry.arm === run.arm && entry.seed === run.seed);
+    if (!seed || seed.state !== "completed" || seed.transcript !== run.transcript ||
+        seed.answered !== run.answered || seed.success !== run.success) {
+      return `checkpoint outcome ${run.arm}/${run.seed}`;
+    }
+  }
+  return null;
 }
+function semantic(bundle: any): boolean { return semanticViolation(bundle) === null; }
 check(plan.environment.taskSetDigest === hash(readFileSync(path.join(dir, "examples/task-set.json"))), "task-set byte digest");
-check(semantic(bundle), "fixture semantic linkage");
+const fixtureViolation = semanticViolation(bundle);
+check(fixtureViolation === null, `fixture semantic linkage: ${fixtureViolation}`);
 // Every verdict/reason branch, including partial-failure runs and pre-run empty runs.
 for (const reason of ["no-task", "gold-leak", "underpowered", "run-failed", "budget-exceeded", "environment-drift"]) {
   const c = clone(comparison); c.verdict = "unmeasurable"; c.reason = reason;
@@ -126,6 +135,18 @@ schema("probe-comparison.schema.json", badReason, false);
 for (const mutate of [(b: any) => b.plan.snapshot.action += " Changed", (b: any) => b.checkpoint.planDigest = "0".repeat(64), (b: any) => b.checkpoint.spendUsd = 1, (b: any) => b.comparison.runs.push(clone(b.comparison.runs[0])), (b: any) => b.comparison.arms.base.successes = 0]) {
   const b = clone(bundle); mutate(b); check(!semantic(b), "negative semantic mutation"); negative++;
 }
+for (const [field, value] of [
+  ["success", false], ["answered", false],
+  ["transcript", "runs/base/99.ndjson"], ["state", "failed"],
+] as const) {
+  const changed = clone(bundle);
+  changed.checkpoint.seeds[0][field] = value;
+  check(!semantic(changed), `checkpoint/comparison outcome mismatch: ${field}`);
+  negative++;
+}
+const missingOutcome = clone(bundle); missingOutcome.checkpoint.seeds.shift();
+check(!semantic(missingOutcome), "checkpoint/comparison missing outcome"); negative++;
+
 // Demonstrate separate late-drift output without mutating its published comparison.
 const published = JSON.stringify(comparison);
 const envelope = { schemaVersion: 1, comparison, finalization: { evidence: "skipped", reason: "environment-drift" } };
