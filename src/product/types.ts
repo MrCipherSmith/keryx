@@ -41,6 +41,9 @@ export interface Intent {
   readonly flowStatus: string | null;
   readonly closedAt: string | null;
   readonly outcome: IntentOutcome;
+  /** Absent on historical records; done alone never implies clean completion. */
+  readonly cleanCompletion?: boolean;
+  readonly exceptions?: readonly unknown[];
   /**
    * Who wrote the flow's outcome criterion: `agent`, `human`, or `unknown` when
    * `flow.json` does not carry the field. Optional: an index written before the

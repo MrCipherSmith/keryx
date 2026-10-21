@@ -197,6 +197,8 @@ export type SignatureConfirmation = {
  * when (e.g.) an AC is reconfirmed.
  */
 export type FlowSignature = {
+  cleanCompletion?: boolean;
+  exceptions?: CompletionException[];
   at: string;
   kind: "ac-confirm" | "complete";
   identity: Identity;
@@ -243,7 +245,7 @@ export type FlowState = {
   source: FlowSource;
   acChecksum: string | null;
   acConfirmed: Record<string, { at: string; note?: string | undefined }>;
-  pr: { url: string | null };
+  pr: { url: string | null; previous?: Array<{ url: string; fixOf: string }> };
   /**
    * The branch this flow was told to land on, when something told it.
    *
@@ -342,6 +344,8 @@ export type FlowSummary = {
   dir: string; // relative flow dir
   tasksDone: number;
   tasksTotal: number;
+  cleanCompletion?: boolean;
+  exceptions?: CompletionException[];
   /**
    * Whether ANOTHER flow in the same listing carries this id — the post-merge
    * collision `flow check` fails on and `flow renumber` repairs. Computed by
@@ -409,6 +413,15 @@ export type GateOutcome = {
     | "confirmation";
   status: "pass" | "fail" | "skipped";
   detail: string;
+  /** Current individual review refusals; absent when evaluation failed. */
+  conditions?: import("./review-gate").ReviewGateCondition[] | undefined;
+};
+
+export type CompletionException = import("./completion-exceptions").CompletionExceptionSelection & {
+  operatorWords: string;
+  confirmedVia: "host-question" | "terminal" | "shell-card";
+  hostQuestion?: import("../review/types").HostQuestion;
+  at: string;
 };
 
 /**
@@ -419,6 +432,8 @@ export type GateOutcome = {
  * written.
  */
 export type FlowCompletionAttempt = {
+  cleanCompletion?: boolean;
+  exceptions?: CompletionException[];
   at: string;
   gates: GateOutcome[];
   passed: boolean;
@@ -723,7 +738,8 @@ export interface FlowService {
    * `errors` (that criterion reads `unclassified` in `report`).
    */
   acKinds(input: { cwd: string; id: string }): Promise<{ report: AcKindReport; errors: readonly AcKindError[] }>;
-  implemented(input: { cwd: string; id: string; prUrl: string }): Promise<FlowState>;
+  implemented(input: { cwd: string; id: string; prUrl: string; fixOf?: string | undefined }): Promise<FlowState>;
+  baseSet(input: { cwd: string; id: string; base: string; reason: string }): Promise<FlowState>;
   /**
    * Set or change a flow's owner (AC1, AC2). Always requires a non-empty
    * `reason`, even for the FIRST assignment: every change — including from
@@ -749,6 +765,9 @@ export interface FlowService {
     source?: string | undefined;
   }): Promise<OriginSetResult>;
   complete(input: {
+    acceptGates?: string[] | undefined;
+    reason?: string | undefined;
+    confirmExceptions?: ((selected: readonly import("./completion-exceptions").CompletionExceptionSelection[]) => Promise<Pick<CompletionException, "operatorWords" | "confirmedVia" | "hostQuestion"> | undefined>) | undefined;
     cwd: string;
     id: string;
     comment?: boolean | undefined;

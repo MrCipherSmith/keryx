@@ -119,6 +119,7 @@ interface FlowJsonShape {
   history?: unknown;
   outcomeAuthor?: unknown;
   origin?: unknown;
+  signatures?: unknown;
 }
 
 function text(value: unknown): string | null {
@@ -148,6 +149,9 @@ export function extractFlowIntent(source: FlowSource, repoPath: string): Intent 
   const title = text(flow.title) ?? /^#\s+(.+)$/m.exec(description)?.[1]?.trim() ?? repoPath.split("/").at(-1) ?? repoPath;
   const criterion = outcomeCriterionFrom(description) ?? outcomeCriterionFrom(source.criteria ?? "");
   const origin = readOrigin(flow.origin);
+  const completion = Array.isArray(flow.signatures)
+    ? flow.signatures.slice().reverse().find((entry: unknown) => typeof entry === "object" && entry !== null && "kind" in entry && entry.kind === "complete") as Record<string, unknown> | undefined
+    : undefined;
   return {
     id: text(flow.id) ?? repoPath.split("/").at(-1)?.slice(0, 3) ?? repoPath,
     source: "flow",
@@ -159,6 +163,8 @@ export function extractFlowIntent(source: FlowSource, repoPath: string): Intent 
     flowStatus: status,
     closedAt: closed ? closedAtOf(flow) : null,
     outcome: { criterion, ...observationFrom(source.journal) },
+    ...(closed && typeof completion?.cleanCompletion === "boolean" ? { cleanCompletion: completion.cleanCompletion } : {}),
+    ...(closed && Array.isArray(completion?.exceptions) ? { exceptions: completion.exceptions } : {}),
     // The flow module's own reading, so `unknown` means one thing on every surface.
     // An explicit author wins; without one a recorded origin derives `agent` (flow 390).
     outcomeAuthor: effectiveOutcomeAuthor(flow),

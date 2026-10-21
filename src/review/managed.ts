@@ -1,3 +1,7 @@
+import { completionWriter, type CompletionWriter } from "./completion-write";
+import { validateCompletionHost } from "./completion-host";
+import { isAutonomousEnv, readRunProfile } from "./run-profile";
+import type { HostQuestion } from "./types";
 import { type CoverageWaiver, recordCoverageWaiver } from "./coverage-complete";
 import { revisionOperand } from "../lib/git-revision";
 import { flagMissingCitations } from "./rebuttal-citation";
@@ -16,7 +20,7 @@ import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat } from "nod
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { loadSchema, validateJson } from "../gdskills/contracts";
-import { pathExists, writeFileAtomic } from "../lib/fs";
+import { pathExists, withFileLock, writeFileAtomic } from "../lib/fs";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { clearActiveReview } from "./active-review";
 import { listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
@@ -940,6 +944,7 @@ export type FindingDispositionRecord = {
 };
 
 export type CompleteManagedReviewOptions = {
+  hostQuestion?: HostQuestion | undefined;
   dispositions?: readonly FindingDispositionRecord[] | undefined;
   /** Injectable clock, so a note's `Created:` date is deterministic in a test. */
   now?: Date | undefined;
@@ -1010,6 +1015,24 @@ export async function completeManagedReview(
   options: CompleteManagedReviewOptions = {},
 ): Promise<CompleteManagedReviewResult> {
   const packageDir = await resolveReviewPackagePath(cwd, ref);
+  return withFileLock(path.join(packageDir, ".completion.lock"), () => completeManagedReviewLocked(cwd, packageDir, options));
+}
+
+async function completionSnapshot(packageDir: string): Promise<string> {
+  return JSON.stringify(await Promise.all(["manifest.json", "report.md", "research.json", "findings.json", "decisions.md"].map(async (name) => {
+    try { return await readFile(path.join(packageDir, name), "utf8"); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT" && name === "research.json") return "{}"; throw error; }
+  })));
+}
+
+async function completeManagedReviewLocked(
+  cwd: string,
+  packageDir: string,
+  options: CompleteManagedReviewOptions,
+): Promise<CompleteManagedReviewResult> {
+  const writer = options.hostQuestion === undefined ? undefined : completionWriter(packageDir, await completionSnapshot(packageDir));
+  const writeCompletion: CompletionWriter = writer?.write ?? writeFileAtomic;
+  const assertUnchanged = async (): Promise<void> => { writer?.assertUnchanged(); };
   const manifestPath = path.join(packageDir, "manifest.json");
   const stored = JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
   const missing = await missingArtifacts(packageDir);
@@ -1036,6 +1059,21 @@ export async function completeManagedReview(
     manifest = { ...stored, target: { ...stored.target, head } };
   }
   const reportText = await readFile(path.join(packageDir, "report.md"), "utf8");
+  if (options.hostQuestion !== undefined) {
+    if (process.env["KERYX_TOOL_CALL"] === "1" || process.env["KERYX_UNATTENDED"] === "1" || isAutonomousEnv(process.env) || readRunProfile(packageDir)?.mode === "unattended") {
+      throw new Error("review complete --answered-by is refused in a nested agent shell or unattended run; use the operator card.");
+    }
+    const context = {
+      reviewId: manifest.reviewId, head: manifest.target.head ?? "not recorded", report: reportText, manifest: stored,
+      research: await readFile(path.join(packageDir, "research.json"), "utf8").catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return "{}"; throw error; }),
+      findings: await readFile(path.join(packageDir, "findings.json"), "utf8"),
+      decisions: await readFile(path.join(packageDir, "decisions.md"), "utf8"),
+      dispositions: options.dispositions ?? [], waiveReadiness: options.waiveReadiness ?? [], waiveCoverage: options.waiveCoverage,
+    };
+    const confirmation = validateCompletionHost(context, options.hostQuestion, stored.completionConfirmations ?? []);
+    if (!confirmation.ok) throw new Error(`review complete refused: ${confirmation.reason}`);
+  }
+
   if (options.prLookup !== undefined) warnings.push(...(await completeHeadGate({ manifest, report: withoutPartialHeader(reportText), lookup: options.prLookup })).warnings);
   const evidence = parseEvidenceLevel(reportText);
   if (!evidence.ok) {
@@ -1063,10 +1101,11 @@ export async function completeManagedReview(
   let notRun: string[];
   let estimateLine: string | undefined;
   const waiverBackup = (options.waiveReadiness ?? []).length === 0 ? undefined : { manifest: await readFile(manifestPath, "utf8"), report: reportText };
+  await assertUnchanged();
   try {
-    coverageWaiver = options.waiveCoverage === undefined ? undefined : await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now);
+    coverageWaiver = options.waiveCoverage === undefined ? undefined : await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now, options.hostQuestion === undefined ? undefined : "host-question", options.hostQuestion === undefined ? undefined : { hostQuestion: options.hostQuestion }, writeCompletion);
     for (const waiver of options.waiveReadiness ?? []) {
-      await waiveReadiness(packageDir, waiver.items, waiver.quote, { prFiles: options.prFiles, headChecked: options.prLookup !== undefined, ...(options.now === undefined ? {} : { now: options.now }) });
+      await waiveReadiness(packageDir, waiver.items, waiver.quote, { ...(options.hostQuestion === undefined ? {} : { confirmedVia: "host-question" as const, hostQuestion: options.hostQuestion }), prFiles: options.prFiles, headChecked: options.prLookup !== undefined, writeCompletion, ...(options.now === undefined ? {} : { now: options.now }) });
     }
     if ((options.waiveReadiness ?? []).length > 0) manifest = { ...(JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest), ...(options.head === undefined ? {} : { target: manifest.target }) };
     const waivedRadius = (manifest.readiness_waivers ?? []).some((waiver) => ["files-covered", "blast-radius", "reviewers", "ledger"].includes(waiver.item));
@@ -1077,31 +1116,36 @@ export async function completeManagedReview(
     }
     readiness = await computeReadiness(packageDir, { prLookup: options.prLookup, prFiles: options.prFiles, headChecked: options.prLookup !== undefined });
     if (readiness.verdict !== "READY") throw new Error(readinessRefusal(readiness, "complete the review"));
+    await assertUnchanged();
     const dispositions = options.dispositions ?? [];
     if (dispositions.length > 0) {
-      await recordDispositions(packageDir, dispositions);
+      await recordDispositions(packageDir, dispositions, writeCompletion);
     }
     updated = {
       ...manifest,
       status: "closed",
+      ...(options.hostQuestion === undefined ? {} : { completionConfirmations: [...(stored.completionConfirmations ?? []), options.hostQuestion] }),
       updatedAt: new Date().toISOString(),
     };
     const validation = await validateManagedReviewManifest(cwd, updated);
     if (!validation.valid) {
       throw new Error(`Invalid managed review manifest: ${validation.errors.map((item) => `${item.path} ${item.message}`).join("; ")}`);
     }
-    await writeFileAtomic(manifestPath, `${JSON.stringify(updated, null, 2)}\n`);
+    await writeCompletion(manifestPath, `${JSON.stringify(updated, null, 2)}\n`);
     // Before the round is recorded as finished, because the registry hashes the package.
     estimateLine = await packageEstimateLine(packageDir, { open: false });
     notRun = await packageRolesNotRun(packageDir).catch(() => []);
     // Read again: a readiness waiver above may have put the partial-review header at the top since `reportText` was read.
     const current = await readFile(path.join(packageDir, "report.md"), "utf8");
     const marked = upsertEstimateLine(upsertOptionalRolesLine(upsertMissingSection(current, passMissing), optionalRolesLine(notRun)), estimateLine);
-    if (marked !== current) await writeFileAtomic(path.join(packageDir, "report.md"), marked);
+    if (marked !== current) await writeCompletion(path.join(packageDir, "report.md"), marked);
   } catch (error) {
     // Any failure before the manifest is closed takes the waiver back, so the next plain close meets the gate again.
-    if (researchBefore !== undefined) await writeFileAtomic(researchPath, researchBefore).catch(() => undefined);
-    if (waiverBackup !== undefined) {
+    if (writer !== undefined) {
+      try { writer.rollback(); }
+      catch (rollbackError) { throw new AggregateError([error, rollbackError], "Review completion failed and rollback was incomplete", { cause: rollbackError }); }
+    } else if (researchBefore !== undefined) await writeFileAtomic(researchPath, researchBefore).catch(() => undefined);
+    if (writer === undefined && waiverBackup !== undefined) {
       await writeFileAtomic(manifestPath, waiverBackup.manifest).catch(() => undefined);
       await writeFileAtomic(path.join(packageDir, "report.md"), waiverBackup.report).catch(() => undefined);
     }
@@ -1994,13 +2038,15 @@ function refutedClassification(state: FindingDispositionState): FindingClassific
 async function recordDispositions(
   packageDir: string,
   records: readonly FindingDispositionRecord[],
+  write: CompletionWriter = writeFileAtomic,
 ): Promise<void> {
-  await withOperatorDecisionsLock(packageDir, () => recordDispositionsLocked(packageDir, records));
+  await withOperatorDecisionsLock(packageDir, () => recordDispositionsLocked(packageDir, records, write));
 }
 
 async function recordDispositionsLocked(
   packageDir: string,
   records: readonly FindingDispositionRecord[],
+  write: CompletionWriter = writeFileAtomic,
 ): Promise<void> {
   const findingsPath = path.join(packageDir, "findings.json");
   const findings = JSON.parse(await readFile(findingsPath, "utf8")) as StructuredReviewFinding[];
@@ -2008,7 +2054,7 @@ async function recordDispositionsLocked(
   for (const { finding, disposition } of pending) {
     finding.disposition = disposition;
   }
-  await writeFileAtomic(findingsPath, `${JSON.stringify(findings, null, 2)}\n`);
+  await write(findingsPath, `${JSON.stringify(findings, null, 2)}\n`);
 }
 
 /**

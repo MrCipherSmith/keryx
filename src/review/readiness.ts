@@ -1,3 +1,5 @@
+import type { CompletionWriter } from "./completion-write";
+import { hostQuestionFields, type HostQuestion } from "./types";
 // One checklist that a review passes before it may be called completed or reach GitHub. Every item reuses a check that
 // already exists; this module only puts them in one list, names the repair command of each, and records a waiver in the
 // operator's own words. Nothing here writes except `waiveReadiness`.
@@ -547,12 +549,12 @@ export function partialHeader(waivers: readonly ReadinessWaiver[]): string[] {
   return waivers.map((waiver) => `Partial review: ${waiver.item} waived by the operator: ${waiver.operator_quote}`);
 }
 
-async function writePartialHeader(packageDir: string, waivers: readonly ReadinessWaiver[]): Promise<void> {
+async function writePartialHeader(packageDir: string, waivers: readonly ReadinessWaiver[], write: CompletionWriter = writeFileAtomic): Promise<void> {
   const file = path.join(packageDir, "report.md");
   const lines = (await readFile(file, "utf8").catch(() => "")).split(/\r?\n/);
   while (lines.length > 0 && (PARTIAL_LINE.test(lines[0]!) || (lines[0]!.trim() === "" && PARTIAL_LINE.test(lines[1] ?? "")))) lines.shift();
   while (lines.length > 0 && lines[0]!.trim() === "") lines.shift();
-  await writeFileAtomic(file, `${[...partialHeader(waivers), "", ...lines].join("\n").replace(/\n+$/, "")}\n`);
+  await write(file, `${[...partialHeader(waivers), "", ...lines].join("\n").replace(/\n+$/, "")}\n`);
 }
 
 /**
@@ -562,7 +564,7 @@ async function writePartialHeader(packageDir: string, waivers: readonly Readines
  * (`keryx review decide-premise` / the `review_decide_premise` card), which says uphold or dismiss for that finding; a
  * blanket quote would let every held finding through unanswered.
  */
-export async function waiveReadiness(packageDir: string, selectors: readonly string[], operatorQuote: string, options: ReadinessOptions & { now?: Date; confirmedVia?: ConfirmedVia } & CardPress = {}): Promise<ReadinessWaiver[]> {
+export async function waiveReadiness(packageDir: string, selectors: readonly string[], operatorQuote: string, options: ReadinessOptions & { writeCompletion?: CompletionWriter; now?: Date; confirmedVia?: ConfirmedVia; hostQuestion?: HostQuestion } & CardPress = {}): Promise<ReadinessWaiver[]> {
   const quote = operatorQuote.replace(/-{0,2}waive/gi, "").trim();
   if (quote.length < MIN_WAIVER_QUOTE_CHARS || !/[\p{L}\p{N}]/u.test(quote)) {
     throw new Error(`--waive needs the operator's own words as its value: at least ${MIN_WAIVER_QUOTE_CHARS} characters, with letters or digits in them.`);
@@ -582,9 +584,10 @@ export async function waiveReadiness(packageDir: string, selectors: readonly str
   const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
   const time = (options.now ?? new Date()).toISOString();
   const kept = (manifest.readiness_waivers ?? []).filter((waiver) => !(ids as string[]).includes(waiver.item));
-  const added: ReadinessWaiver[] = ids.map((item) => ({ item, operator_quote: quote, time, ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }), ...cardPressFields(options) }));
+  const added: ReadinessWaiver[] = ids.map((item) => ({ item, operator_quote: quote, time, ...(options.confirmedVia === undefined ? {} : { confirmedVia: options.confirmedVia }), ...cardPressFields(options), ...hostQuestionFields(options) }));
   const all = [...kept, ...added].sort((a, b) => READINESS_ITEMS.findIndex((i) => (i.id as string) === a.item) - READINESS_ITEMS.findIndex((i) => (i.id as string) === b.item));
-  await writeFileAtomic(manifestPath, `${JSON.stringify({ ...manifest, readiness_waivers: all }, null, 2)}\n`);
-  await writePartialHeader(packageDir, all);
+  const write = options.writeCompletion ?? writeFileAtomic;
+  await write(manifestPath, `${JSON.stringify({ ...manifest, readiness_waivers: all }, null, 2)}\n`);
+  await writePartialHeader(packageDir, all, write);
   return added;
 }

@@ -162,7 +162,11 @@ export function flowStateSchema(): Record<string, unknown> {
       pr: {
         type: "object",
         additionalProperties: false,
-        properties: { url: { type: ["string", "null"] } },
+        properties: {
+          url: { type: ["string", "null"] },
+          previous: { type: "array", items: { type: "object", additionalProperties: false,
+            required: ["url", "fixOf"], properties: { url: { type: "string" }, fixOf: { type: "string", minLength: 1 } } } },
+        },
       },
       merged: {
         type: "object",

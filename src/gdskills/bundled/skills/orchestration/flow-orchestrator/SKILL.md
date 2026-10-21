@@ -614,6 +614,24 @@ Completion is allowed only after the PR merge has been confirmed. The merge
 target must be the base branch captured when the flow was created; do not
 silently retarget or close against another branch. The flow folder is committed in the same PR as the code; the commit at closing is a rule to follow, not one the gate checks. `flow complete` fails the `folder-committed` gate while the flow's `flow.json` is not in `HEAD` (flows created from 0.3.53 on; commit it with `git add .metaproject/flows/<dir> && git commit`, then run `flow complete` again). `flow init` and `flow renumber` avoid numbers used on known remote branches, and `keryx flow check` reports a clash with a remote branch (repair with `keryx flow renumber <dir> --to <free id> --reason "<why>"`) and warns about a folder that is not committed. Flows created since the owner gate fail completion while no owner is set (`keryx flow owner set <id> --owner "<name>" --reason "<why>"`); `ac confirm` and `flow complete` append a signature — `--signed-by "<name>"` names the signer, otherwise `KERYX_ACTOR` or the local git identity is recorded, as a claim. A flow created with `--require-confirmation` needs one more gate — `--confirm-token <token>` from `keryx flow confirm <id>`, a short-lived single-use token. In keryx shell call the `flow_confirm` tool (the operator answers it as a card; never send the operator to a terminal); outside it, a typed challenge in a terminal mints it. It proves an interactive step ran, not that a human ran it. A flow left stuck in `completing` by a crash or interrupted attempt (never a normal gate failure) recovers with `keryx flow recover <id> --reason "<why>"`.
 
+### Known exceptions are not blocked work
+
+For released work whose remaining refusal is known, show `flow check-complete
+<id>` and ask the operator; do not mark it blocked just because clean closure
+is impossible. Repair a retargeted base with `flow base set <id> --base
+<branch> --reason "<why>"`. Record subsequent fix PRs with `flow implemented
+<id> --pr <url> --fix-of <round-ref>`.
+
+Use `flow complete <id> --accept-gate <gate|review:condition>` once per current
+refusal, with `--reason "<why>"`. This requests fresh operator confirmation,
+not an automatic override. In shell call `flow_complete_exceptions`; elsewhere
+use the controlling terminal or the existing host-question protocol
+(`--answered-by <host:ref>`). Never invent the operator's words. Nested and
+unattended contexts cannot confirm. AC integrity/confirmation, tasks, owner,
+committed folder and required completion-token gates cannot be excepted.
+Preserve failed outcomes and operator words; report **completed with
+exceptions**, not clean. Status/list, journal and product index retain it.
+
 If gates fail, the CLI returns the flow to `in-progress`. Add a journal note,
 create fix tasks, and repeat Phase 2.
 
