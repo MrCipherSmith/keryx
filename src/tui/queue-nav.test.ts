@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { clampQueueNavIndex, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
+import { clampQueueNavIndex, stepAddNavAction, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
 
 test("stepQueueNavIndex moves up/down and wraps at both ends", () => {
   expect(stepQueueNavIndex(1, 3, "up")).toBe(0);
@@ -35,4 +35,12 @@ test("stepConnectNavAction cycles label -> test -> disconnect -> label and back"
   expect(stepConnectNavAction("disconnect", "right")).toBe("label"); // wraps
   expect(stepConnectNavAction("label", "left")).toBe("disconnect"); // wraps the other way
   expect(stepConnectNavAction("test", "left")).toBe("label");
+});
+
+// flow 471: the Add provider tab alternates Connect <-> Test in either direction.
+test("stepAddNavAction toggles connect and test in both directions", () => {
+  expect(stepAddNavAction("connect", "right")).toBe("test");
+  expect(stepAddNavAction("test", "right")).toBe("connect");
+  expect(stepAddNavAction("connect", "left")).toBe("test");
+  expect(stepAddNavAction("test", "left")).toBe("connect");
 });

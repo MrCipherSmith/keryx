@@ -36,7 +36,6 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/routing` | Route task categories to models — a flat, searchable list across every connected provider. |
 | `/search-provider` | Configure and test a web search provider. |
 | `/search-connect` | Select a connected web search provider. |
-| `/provider` | Switch provider — /provider <name>, or no arg to re-select. |
 | `/external` | Block/allow sending private work to Jev/TypeSafe and other listed providers/models — /external [on\|off]. |
 
 ## Look and feel

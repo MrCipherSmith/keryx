@@ -96,7 +96,7 @@ afterEach(() => {
   }
 });
 
-describe("flow 270: /provider wizard steps render in ModalHost", () => {
+describe("flow 270: /connect wizard steps render in ModalHost", () => {
   otuiTest("AC1: provider → API key → model, each step a dialog inside the shell", async () => {
     const otui = requireOtui();
     const h = await mountChrome(otui);

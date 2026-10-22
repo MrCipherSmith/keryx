@@ -324,6 +324,39 @@ otuiTest("panel size does not change when switching short and long tab bodies", 
   h.destroy();
 });
 
+otuiTest("footerFor shows each tab's own footer, and falls back to footer when it returns undefined", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const connected = [{ key: "a", label: "add" }, { key: "esc", label: "close" }];
+  const add = [{ key: "1", label: "connected" }, { key: "esc", label: "close" }];
+  const fallback = [{ key: "q", label: "fallback" }];
+  const handle = openModal(otui.core, h.chrome, {
+    title: "Providers",
+    tabs: [
+      { id: "connected", label: "Connected" },
+      { id: "add", label: "Add provider" },
+      { id: "other", label: "Other" },
+    ],
+    renderTab: () => {},
+    footer: fallback,
+    footerFor: (tabId) => (tabId === "connected" ? connected : tabId === "add" ? add : undefined),
+  });
+  await h.flush();
+  expect(h.captureCharFrame()).toContain(formatModalFooter(connected));
+  expect(h.captureCharFrame()).not.toContain(formatModalFooter(add));
+
+  handle?.setTab("add");
+  await h.flush();
+  expect(h.captureCharFrame()).toContain(formatModalFooter(add));
+  expect(h.captureCharFrame()).not.toContain(formatModalFooter(connected));
+
+  handle?.setTab("other");
+  await h.flush();
+  expect(h.captureCharFrame()).toContain(formatModalFooter(fallback));
+  handle?.close();
+  h.destroy();
+});
+
 otuiTest("x closes the modal the same as Esc", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 24 });

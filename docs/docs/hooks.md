@@ -763,7 +763,7 @@ production wiring for `keryx shell` (`buildShellHookRuntime` in
 calls `createHookRuntime` with no `ports` option, so both built-ins run
 against their no-op defaults today. W3 and W8 plug in by extending
 `BuildShellHookRuntimeOptions`/`buildShellHookRuntime` to accept and forward
-a real sink/provider (or by calling `createHookRuntime` directly with their
+a real sink or provider (or by calling `createHookRuntime` directly with their
 own ports, for a bespoke entry point).
 
 ### The `hook_invocation` session record

@@ -265,7 +265,7 @@ import {
   openSessionInfo,
 } from "./session-info";
 import { smallActionButton } from "./action-button";
-import { openModal, type ModalChrome, type ModalFooterAction } from "./modal-host";
+import { formatModalFooter, openModal, type ModalChrome, type ModalFooterAction, type ModalHandle } from "./modal-host";
 import { openHelpModal } from "./help-modal"; // flow 303 AC6: the grouped, tabbed `/help` modal
 import { openSetupModal } from "./setup-modal";
 import { ownKeryxPrefix, runSetupSteps } from "./setup-run";
@@ -277,6 +277,7 @@ import type { SearchFieldDescriptor } from "../harness/search/types";
 import {
   commandsForMode,
   describeUnavailableCommand,
+  removedCommandHint,
   filterCommands,
   findAgentCommand,
   parseDelegateCommand,
@@ -433,8 +434,8 @@ import {
 } from "./main-queue";
 import { buildMainQueueHelp, buildMainQueueRow } from "./main-queue-view";
 import { createTurnLoop } from "./turn-loop";
-import type { ConnectNavAction, QueueNavAction } from "./queue-nav";
-import { clampQueueNavIndex, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
+import type { AddNavAction, ConnectNavAction, QueueNavAction } from "./queue-nav";
+import { clampQueueNavIndex, stepAddNavAction, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
 
 import { setSubagentFleetListener } from "./subagent-bridge";
 import { openSubagentInspector, paintSubagentSidebar } from "./subagent-inspector";
@@ -917,7 +918,7 @@ async function promptCustomProviderWizard(otui: OpenTui, target: StepTarget): Pr
   while (true) {
     const nameStep = await promptCustomFieldStep(otui, target, {
       title: "Provider name",
-      note: "unique id used in /provider (letters, digits, - _)",
+      note: "unique id used in /connect (letters, digits, - _)",
     });
     if (nameStep.kind === "back") {
       return undefined; // Esc at the first step → cancel the wizard
@@ -2063,6 +2064,7 @@ export type KeypressEvent = {
   ctrl: boolean;
   meta: boolean;
   sequence: string;
+  shift?: boolean;
   preventDefault: () => void;
   stopPropagation: () => void;
 };
@@ -2195,6 +2197,191 @@ function openStepSurface(
       // caller refocuses the composer once the whole wizard resolves.
       handle.close({ restoreFocus: false });
     },
+  };
+}
+
+/** One tab of a {@link openTabbedSurface} screen. */
+interface TabbedSurfaceTab {
+  id: string;
+  label: string;
+}
+
+interface TabbedSurfaceOptions {
+  id: string;
+  title: string;
+  tabs: readonly TabbedSurfaceTab[];
+  initialTab: string;
+  /** The keys of the tab on screen, evaluated each time a tab is mounted. */
+  footerFor: (tabId: string) => readonly ModalFooterAction[];
+  /** Content rows below the title (the tallest tab), so the dialog fits them. */
+  contentRows: number;
+  /** Fill `body` for `tabId`; runs again every time the tab is (re)mounted. */
+  renderTab: (tabId: string, body: Box, ctx: { width: number; height: number }) => void;
+  /** Left/right, offered to the tab before the surface's own handling; true = consumed. */
+  onArrowKeys: (key: KeypressEvent, direction: "left" | "right") => boolean;
+  /** True while the tab takes every key itself (an armed confirmation): the surface then ignores all of them. */
+  ownsKeys: () => boolean;
+  /** Esc / `x` / the close hint, whichever surface is on screen. Not called by {@link TabbedSurface.close}. */
+  onEscape: () => void;
+}
+
+/** A multi-tab screen: a ModalHost dialog given the shell chrome, a full-screen overlay given a bare renderer. */
+interface TabbedSurface {
+  /** True in a ModalHost dialog. */
+  modal: boolean;
+  activeTab(): string;
+  setTab(id: string): void;
+  /** Remove the screen WITHOUT running `onEscape`. Idempotent. */
+  close(): void;
+}
+
+/** Digit that jumps to the Nth tab (1-based), or undefined when `key` is not a digit. */
+function tabDigit(key: { name: string; sequence: string }): number | undefined {
+  const digit = key.sequence.length === 1 ? key.sequence : key.name;
+  return digit.length === 1 && digit >= "1" && digit <= "9" ? Number(digit) : undefined;
+}
+
+/**
+ * Open a screen with a tab strip. Given the shell chrome it is ONE ModalHost
+ * dialog (the host owns Esc, `x`, Tab, the digit jumps and the mouse on the
+ * strip); given a bare renderer — the chat shell and the startup picker, which
+ * have no chrome — it is a full-screen overlay that answers the same keys
+ * itself, so a tab body behaves identically on both.
+ */
+function openTabbedSurface(otui: OpenTui, target: StepTarget, opts: TabbedSurfaceOptions): TabbedSurface {
+  const r = stepRenderer(target);
+  if (isModalChrome(target)) {
+    let closedByStep = false;
+    const tabIds = opts.tabs.map((tab) => tab.id);
+    let handle: ModalHandle | undefined;
+    handle = openModal(otui, target, {
+      title: opts.title,
+      tabs: opts.tabs,
+      initialTab: opts.initialTab,
+      footer: opts.footerFor(opts.initialTab),
+      footerFor: opts.footerFor,
+      contentRows: opts.contentRows,
+      renderTab: (tabId, tabBody, ctx) => {
+        opts.renderTab(tabId, tabBody as Box, ctx);
+      },
+      onArrowKeys: opts.onArrowKeys,
+      // Tab walks the strip both ways round, so it also leaves the LAST tab.
+      claimKey: (key) => {
+        if (key.name !== "tab" || handle === undefined) return false;
+        const at = tabIds.indexOf(handle.activeTab());
+        const next = tabIds[(at + 1) % tabIds.length];
+        if (next !== undefined) handle.setTab(next);
+        return true;
+      },
+      ownsKeys: opts.ownsKeys,
+      onClose: () => {
+        if (!closedByStep) opts.onEscape();
+      },
+    });
+    if (handle !== undefined) {
+      const opened = handle;
+      return {
+        modal: true,
+        activeTab: () => opened.activeTab(),
+        setTab: (id) => opened.setTab(id),
+        close: () => {
+          if (closedByStep) return;
+          closedByStep = true;
+          // The caller runs more of the wizard (often a network call) before it
+          // reopens a dialog; a live composer in between would let the operator
+          // submit a turn mid-wizard (flow 270).
+          opened.close({ restoreFocus: false });
+        },
+      };
+    }
+    // No host could open (no OpenTUI at runtime): fall through to the overlay.
+  }
+
+  const theme = (): ReturnType<typeof getTheme> => getTheme();
+  const box = overlayBox(otui, r, opts.id);
+  r.root.add(box);
+  box.add(new otui.TextRenderable(r, { id: `${opts.id}-title`, content: otui.t`${boldChunk(otui, opts.title)} ${dimChunk(otui, "(esc close)")}` }));
+  const strip = new otui.BoxRenderable(r, { id: `${opts.id}-tabs`, width: "100%", height: 1, flexShrink: 0, flexDirection: "row" });
+  const body = new otui.BoxRenderable(r, { id: `${opts.id}-body`, width: "100%", flexGrow: 1, minHeight: 0, flexDirection: "column" });
+  const footer = new otui.TextRenderable(r, { id: `${opts.id}-footer`, content: "", flexShrink: 0 });
+  box.add(strip);
+  box.add(body);
+  box.add(footer);
+  let active = opts.initialTab;
+  let closed = false;
+
+  const paintStrip = (): void => {
+    clearTranscriptChildren(strip);
+    for (const [index, tab] of opts.tabs.entries()) {
+      const isActive = tab.id === active;
+      const label = isActive ? `[${tab.label}]` : ` ${tab.label} `;
+      const prefix = index === 0 ? "" : " ";
+      strip.add(
+        new otui.TextRenderable(r, {
+          id: `${opts.id}-tab-${tab.id}`,
+          content: isActive ? otui.t`${prefix}${boldChunk(otui, label)}` : otui.t`${prefix}${dimChunk(otui, label)}`,
+          fg: isActive ? theme().focus : theme().muted,
+          onMouseDown: () => {
+            if (!closed && tab.id !== active) mount(tab.id);
+          },
+        }),
+      );
+    }
+  };
+  function mount(tabId: string): void {
+    clearTranscriptChildren(body);
+    active = tabId;
+    paintStrip();
+    footer.content = otui.t`${dimChunk(otui, formatModalFooter(opts.footerFor(tabId)))}`;
+    opts.renderTab(tabId, body, { width: Math.max(20, r.width - 4), height: Math.max(4, r.height - 6) });
+  }
+  const cycle = (): void => {
+    const at = opts.tabs.findIndex((tab) => tab.id === active);
+    const next = opts.tabs[(at + 1) % opts.tabs.length];
+    if (next !== undefined) mount(next.id);
+  };
+  const close = (): void => {
+    if (closed) return;
+    closed = true;
+    unsub();
+    r.root.remove(box);
+  };
+  const stop = (key: KeypressEvent): void => {
+    key.preventDefault();
+    key.stopPropagation();
+  };
+  const unsub = onKeypress(r, (key) => {
+    if (closed || opts.ownsKeys()) return;
+    if (key.name === "escape" || key.name === "x" || key.sequence === "x") {
+      close();
+      opts.onEscape();
+      stop(key);
+      return;
+    }
+    if ((key.name === "left" || key.name === "right") && opts.onArrowKeys(key, key.name)) {
+      stop(key);
+      return;
+    }
+    if (key.name === "tab") {
+      cycle();
+      stop(key);
+      return;
+    }
+    const jump = tabDigit(key);
+    const to = jump === undefined ? undefined : opts.tabs[jump - 1];
+    if (to !== undefined) {
+      if (to.id !== active) mount(to.id);
+      stop(key);
+    }
+  });
+  mount(opts.initialTab);
+  return {
+    modal: false,
+    activeTab: () => active,
+    setTab: (id) => {
+      if (!closed && id !== active && opts.tabs.some((tab) => tab.id === id)) mount(id);
+    },
+    close,
   };
 }
 
@@ -2924,8 +3111,36 @@ function pickProviderStep(otui: OpenTui, target: StepTarget, detected: DetectedP
   });
 }
 
-/** {@link pickConnectedProviderStep}'s dependencies for the two row buttons. */
-interface ConnectedProviderStepOptions {
+/** The two tabs of the `/connect` dialog. */
+type ProvidersTabId = "connected" | "add";
+
+/** What the tabbed `/connect` step resolved to. The caller closes the dialog first, runs the wizard, and reopens it. */
+type ProvidersTabAction =
+  | { kind: "close" }
+  /** A Connected-tab label: pick this provider's model. */
+  | { kind: "pick"; provider: DetectedProvider }
+  /** An Add-tab [Connect]: run the connect sequence for this provider. */
+  | { kind: "connect"; provider: DetectedProvider }
+  /** The Add-tab "Add custom provider" row. */
+  | { kind: "custom" };
+
+/** A one-line result shown under the tab header (never carries a credential). */
+interface ProvidersNotice {
+  tone: "ok" | "error" | "info";
+  text: string;
+}
+
+/** {@link pickProvidersTabbedStep}'s inputs. */
+interface ProvidersTabbedStepOptions {
+  /** The connected providers. Shared with the caller and shrunk in place on a disconnect. */
+  connected: DetectedProvider[];
+  /** Every detected provider, connected or not: the Add tab's rows (plus the custom entry). */
+  all: readonly DetectedProvider[];
+  /** The tab to open on; forced to `add` when nothing is connected. */
+  initialTab: ProvidersTabId;
+  notice?: ProvidersNotice;
+  /** A provider to highlight on the tab being opened. */
+  focusName?: string;
   fetch?: typeof fetch;
   env?: Record<string, string | undefined>;
   configDir?: string;
@@ -2941,143 +3156,188 @@ interface ConnectedProviderStepOptions {
   onDisconnected?: (name: string, sharedWith: readonly string[]) => void;
 }
 
+const PROVIDERS_TABS: readonly { id: ProvidersTabId; label: string }[] = [
+  { id: "connected", label: "Connected" },
+  { id: "add", label: "Add provider" },
+];
+
+// Each footer stays under ~42 columns so it fits the 80x24 panel (the sidebar
+// takes the rest); Esc is already shown in the dialog's own header.
+const PROVIDERS_FOOTERS: Record<ProvidersTabId, readonly ModalFooterAction[]> = {
+  connected: [
+    { key: "↑/↓", label: "row" },
+    { key: "←/→", label: "action" },
+    { key: "Enter", label: "run" },
+    { key: "a", label: "add" },
+  ],
+  add: [
+    { key: "↑/↓", label: "row" },
+    { key: "←/→", label: "Connect/Test" },
+    { key: "Enter", label: "run" },
+  ],
+};
+
+/** Clip `text` to `max` columns with an ellipsis. */
+function clipText(text: string, max: number): string {
+  if (max <= 1) return "";
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+}
+
+/** What a status line under a row can hold: plain text or styled text. */
+type StatusContent = string | ReturnType<OpenTui["t"]>;
+
 /**
- * `/connect`'s provider list (flow 304, AC1–AC3): one row per connected
- * provider, drawn like the queue dock's rows — a label (Enter/click still
- * selects the provider, unchanged from `pickProviderStep`'s old
- * `SelectRenderable` behavior) plus `[Test]` and `[Disconnect]` buttons built
- * by the SAME `smallActionButton` the queue dock uses. `/provider`'s own
- * wizard keeps calling `pickProviderStep` unchanged — this step is used only
- * for the `onlyConnected` (`/connect`) path in `selectProviderModelInTui`.
+ * `/connect`'s dialog (flow 304 AC1–AC3, flow 471): ONE "Providers" dialog with
+ * two tabs.
  *
- * Row/action navigation (AC3) reuses `stepQueueNavIndex`/`clampQueueNavIndex`
- * verbatim for up/down, and the sibling `stepConnectNavAction` for left/right
- * across Label/Test/Disconnect. No separate `chrome.addOverlaySource`
- * registration is needed: this step already runs inside the caller's
- * `chrome.withOverlay(...)` (see the `/connect` command handler), whose
- * `overlayDepth` counter stays incremented for this step's entire lifetime —
- * the same reason none of `pickProviderStep`/`promptApiKeyStep`/etc. register
- * their own overlay source either.
+ * - **Connected** — one row per connected provider, drawn like the queue dock's
+ *   rows: a label (Enter/click selects the provider) plus `[Test]` and
+ *   `[Disconnect]` buttons built by the SAME `smallActionButton` the queue dock
+ *   uses, and an `[Add provider]` button that opens the other tab.
+ * - **Add provider** — every detected provider (connected or not) plus "Add
+ *   custom provider", each with `[Connect]` and `[Test]`.
+ *
+ * Row/action navigation reuses `stepQueueNavIndex`/`clampQueueNavIndex` for
+ * up/down and `stepConnectNavAction`/`stepAddNavAction` for left/right. Tabs
+ * switch with 1/2, Tab, the mouse and `[Add provider]`/`a`. Long lists scroll in
+ * a window sized to the body, so the dialog fits 80x24 with its footer.
+ *
+ * The step only reports what was chosen; running the wizard is the caller's
+ * job (see {@link runProvidersModal}), after this dialog has closed.
+ *
+ * No separate `chrome.addOverlaySource` registration is needed: this step
+ * already runs inside the caller's `chrome.withOverlay(...)`, whose
+ * `overlayDepth` counter stays incremented for the step's entire lifetime.
  */
-function pickConnectedProviderStep(
-  otui: OpenTui,
-  target: StepTarget,
-  detected: readonly DetectedProvider[],
-  opts: ConnectedProviderStepOptions,
-): Promise<DetectedProvider | undefined> {
+function pickProvidersTabbedStep(otui: OpenTui, target: StepTarget, opts: ProvidersTabbedStepOptions): Promise<ProvidersTabAction> {
   const r = stepRenderer(target);
   return new Promise((resolve) => {
-    let rows: DetectedProvider[] = [...detected];
-    let selectedIndex = 0;
-    let selectedAction: ConnectNavAction = "label";
+    const connected = opts.connected;
+    const addRows = (): DetectedProvider[] => [...opts.all, CUSTOM_ADD_ENTRY];
+    const rowsOf = (tabId: ProvidersTabId): readonly DetectedProvider[] => (tabId === "connected" ? connected : addRows());
+    const isConnected = (name: string): boolean => connected.some((d) => d.name === name);
+
+    let tab: ProvidersTabId = connected.length === 0 ? "add" : opts.initialTab;
+    const selected: Record<ProvidersTabId, number> = { connected: 0, add: 0 };
+    const windowStart: Record<ProvidersTabId, number> = { connected: 0, add: 0 };
+    let connectAction: ConnectNavAction = "label";
+    let addAction: AddNavAction = "connect";
     let pendingDisconnect: string | undefined;
     let resolved = false;
+    let notice = opts.notice;
+    let nextNotice: ProvidersNotice | undefined;
+    let rendered = false;
+    let bodyBox: Box | undefined;
+    let bodyWidth = 70;
+    let bodyHeight = 15;
+    const statuses = new Map<string, StatusContent>();
     interface RowBlock {
+      tab: ProvidersTabId;
+      index: number;
       name: string;
       outer: Box;
-      label: Box;
       labelText: InstanceType<OpenTui["TextRenderable"]>;
       status: InstanceType<OpenTui["TextRenderable"]>;
-      test: { box: Box; setActive: (active: boolean) => void };
-      disconnect: { box: Box; setActive: (active: boolean) => void };
+      first: { box: Box; setActive: (active: boolean) => void };
+      second?: { box: Box; setActive: (active: boolean) => void };
     }
-    let rowBlocks: RowBlock[] = [];
+    let blocks: RowBlock[] = [];
 
     const labelOf = (d: DetectedProvider): string => d.label ?? d.name;
-    // Flow 309 (AC6): decorate each row with the CACHED catalog's status,
-    // balance (when known) and reading age — read once, synchronously, when
-    // this step opens. Additive only: it never changes which providers are
+    // Flow 309 (AC6): decorate each Connected row with the CACHED catalog's
+    // status, balance (when known) and reading age — read once, synchronously,
+    // when this step opens. Additive only: it never changes which providers are
     // listed (that stays `filterConnectedDetectedProviders`'s live probe,
-    // called by this step's caller) or what `[Test]` does — a provider with
-    // no cache entry yet (never refreshed) just shows its plain note,
-    // unchanged from before this flow.
+    // called by this step's caller) or what `[Test]` does — a provider with no
+    // cache entry yet just shows its plain note.
     const catalogCache = loadProviderCatalogCache(opts.configDir);
     const noteOf = (d: DetectedProvider): string => {
       const base = d.note ?? `${d.models.length} model(s)`;
       const entry = catalogCache?.providers[d.name];
-      if (entry === undefined) return base;
-      const balanceNote = entry.balance !== undefined ? ` · ${formatBalance(entry.balance)}` : "";
-      return `${base} · ${describeCatalogStatus(entry.status)}${balanceNote} · ${formatCatalogAge(entry.fetchedAt)}`;
+      const full =
+        entry === undefined
+          ? base
+          : `${base} · ${describeCatalogStatus(entry.status)}${entry.balance !== undefined ? ` · ${formatBalance(entry.balance)}` : ""} · ${formatCatalogAge(entry.fetchedAt)}`;
+      // [Test] and [Disconnect] take ~22 columns; a narrow dialog (80x24) clips
+      // the note instead of wrapping it into the next line.
+      return clipText(full, bodyWidth - 24 - labelOf(d).length);
+    };
+    const addNoteOf = (d: DetectedProvider): string => {
+      if (d.name === CUSTOM_PROVIDER_ADD_ID) return "OpenAI-compatible · name, URL, key, models";
+      // Buttons (Connect, Test) take ~22 columns; keep the row on one line.
+      const room = bodyWidth - 24 - labelOf(d).length - (isConnected(d.name) ? 13 : 0);
+      return clipText(d.note ?? `${d.models.length} model(s)`, room);
     };
 
-    // flow 304 review finding #4: Esc while a Disconnect is armed used to
-    // close the WHOLE step, even though the hint says "Esc to cancel" (of
-    // the arm, an operator reasonably assumes). Registered BEFORE
-    // `openStepSurface` below, so it is called FIRST on every keypress
-    // (OpenTUI's `InternalKeyHandler.emit` walks `renderableHandlers` in
-    // registration order and stops at the first handler that calls
-    // `stopPropagation()` — confirmed against the bundled implementation,
-    // `node_modules/@opentui/core/chunk-bun-t2myhmwd.js`'s `emit`/`onInternal`
-    // pair, the same investigation technique the queue buttons' own mouse-
-    // bubbling comment used). When nothing is armed this does nothing and
-    // the key falls through to `openStepSurface`'s own Escape handler
-    // (`onEscape` below) unchanged — so a SECOND Esc still leaves, matching
-    // AC3's "Esc leaves" and this step's own footer.
-    const unsubEscapeGuard = onKeypress(r, (key) => {
-      if (resolved || key.name !== "escape" || pendingDisconnect === undefined) return;
-      clearPending();
-      applyHighlight();
-      key.preventDefault();
-      key.stopPropagation();
-    });
+    const statusKey = (tabId: ProvidersTabId, name: string): string => `${tabId}:${name}`;
+    function setStatus(tabId: ProvidersTabId, name: string, content: StatusContent): void {
+      statuses.set(statusKey(tabId, name), content);
+      const block = blocks.find((b) => b.tab === tabId && b.name === name);
+      if (block !== undefined) block.status.content = content;
+    }
 
-    const surface = openStepSurface(otui, target, {
-      id: "connect-picker",
-      title: "Connected providers",
-      tab: "Providers",
-      hint: "(↑/↓ row · ←/→ Label/Test/Disconnect · Enter · Esc to cancel)",
-      footer: [
-        { key: "↑/↓", label: "row" },
-        { key: "←/→", label: "Label/Test/Disconnect" },
-        { key: "Enter", label: "select/run" },
-        { key: "esc", label: "cancel" },
-      ],
-      contentRows: selectBoxHeight(Math.max(rows.length, 1), true),
-      onEscape: () => finish(undefined),
-    });
-    const body = surface.body;
-
-    function finish(value: DetectedProvider | undefined): void {
-      if (resolved) return;
-      resolved = true;
-      unsubEscapeGuard();
-      unsub();
-      surface.close();
-      resolve(value);
+    /** The label's text for a row, bold when its action is the highlighted one. */
+    function labelContent(block: Pick<RowBlock, "tab" | "index" | "name">, d: DetectedProvider): ReturnType<OpenTui["t"]> {
+      const active = block.index === selected[block.tab];
+      if (block.tab === "connected") {
+        const head = active && connectAction === "label" ? boldChunk(otui, labelOf(d)) : labelOf(d);
+        return otui.t`${head}  ${dimChunk(otui, noteOf(d))}`;
+      }
+      const head = active ? boldChunk(otui, labelOf(d)) : labelOf(d);
+      const mark = isConnected(d.name) ? roleChunk(otui, "ok", "  ✓ connected") : "";
+      return otui.t`${head}${mark}  ${dimChunk(otui, addNoteOf(d))}`;
     }
 
     /** Cancel an armed Disconnect confirmation on any OTHER action, so it never fires from a stale arm. */
     function clearPending(): void {
       if (pendingDisconnect === undefined) return;
-      const armed = rowBlocks.find((b) => b.name === pendingDisconnect);
+      const armed = pendingDisconnect;
       pendingDisconnect = undefined;
-      if (armed !== undefined) armed.status.content = "";
+      setStatus("connected", armed, "");
     }
 
     function applyHighlight(): void {
-      for (let i = 0; i < rowBlocks.length; i++) {
-        const block = rowBlocks[i];
-        if (block === undefined) continue;
-        const active = i === selectedIndex;
+      for (const block of blocks) {
+        const d = rowsOf(block.tab)[block.index];
+        if (d === undefined) continue;
+        const active = block.index === selected[block.tab];
         block.outer.backgroundColor = active ? getTheme().highlight : undefined;
-        block.labelText.content = active && selectedAction === "label" ? otui.t`${boldChunk(otui, `${labelOf(rows[i]!)}`)}  ${dimChunk(otui, noteOf(rows[i]!))}` : otui.t`${labelOf(rows[i]!)}  ${dimChunk(otui, noteOf(rows[i]!))}`;
-        block.test.setActive(active && selectedAction === "test");
-        block.disconnect.setActive(active && selectedAction === "disconnect");
+        block.labelText.content = labelContent(block, d);
+        if (block.tab === "connected") {
+          block.first.setActive(active && connectAction === "test");
+          block.second?.setActive(active && connectAction === "disconnect");
+        } else {
+          block.first.setActive(active && (addAction === "connect" || block.second === undefined));
+          block.second?.setActive(active && addAction === "test");
+        }
       }
     }
 
-    async function runTest(name: string): Promise<void> {
-      const block = rowBlocks.find((b) => b.name === name);
+    function finish(value: ProvidersTabAction): void {
+      if (resolved) return;
+      resolved = true;
+      unsub();
+      surface?.close();
+      resolve(value);
+    }
+
+    async function runTest(tabId: ProvidersTabId, name: string): Promise<void> {
+      const d = rowsOf(tabId).find((row) => row.name === name);
       const provider = connectionProviderByName(name, opts.configDir);
-      if (block === undefined) return;
+      if (d === undefined) return;
       if (provider === undefined) {
-        block.status.content = otui.t`${roleChunk(otui, "error", "✗")} unknown provider — cannot test`;
+        setStatus(tabId, name, otui.t`${roleChunk(otui, "error", "✗")} unknown provider — cannot test`);
         return;
       }
-      block.status.content = otui.t`${dimChunk(otui, "testing…")}`;
+      // Nothing to authenticate with, so nothing to probe: say so instead of
+      // sending an anonymous request that can only come back 401.
+      if (tabId === "add" && (provider.requiresApiKey ?? true) && classifyProviderConnection(name, opts.env ?? process.env, opts.configDir).kind === "no-credential") {
+        setStatus(tabId, name, otui.t`${roleChunk(otui, "attention", "·")} no credential, Connect first`);
+        return;
+      }
+      setStatus(tabId, name, otui.t`${dimChunk(otui, "testing…")}`);
       // Flow 327 (AC2/AC13): refresh the model-profile store from this same
-      // probe (`opts.configDir` is the SAME test seam `providerByName` above
-      // already uses) and mention the diff in the result line.
+      // probe and mention the diff in the result line.
       let profileSummary: ProfileRefreshSummary | undefined;
       const result = await testProviderConnection(provider, opts.fetch ?? globalThis.fetch, opts.env ?? process.env, {
         ...(opts.configDir !== undefined ? { dir: opts.configDir } : {}),
@@ -3085,178 +3345,624 @@ function pickConnectedProviderStep(
           profileSummary = s;
         },
       });
-      // The row (or the whole step) may be gone by the time the probe
-      // resolves — a disconnect elsewhere repaints `rowBlocks`, and Esc/a
-      // label selection closes the step outright. Re-look-up by name rather
-      // than trusting the captured reference; write nothing if it's gone.
-      const current = rowBlocks.find((b) => b.name === name);
-      if (current === undefined || resolved) return;
-      current.status.content =
+      // The row (or the whole step) may be gone by the time the probe resolves
+      // — Esc, a selection or a disconnect elsewhere. Write nothing then.
+      if (resolved) return;
+      setStatus(
+        tabId,
+        name,
         result.source === "live"
           ? otui.t`${roleChunk(otui, "ok", "✓")} ok — ${String(result.models.length)} model(s)${formatProfileSummarySuffix(profileSummary)}`
-          : otui.t`${roleChunk(otui, "error", "✗")} ${modelsFailureLine(labelOf(rows.find((d) => d.name === name) ?? { name, models: [] }), result.failure ?? { kind: "empty" })}`;
+          : otui.t`${roleChunk(otui, "error", "✗")} ${modelsFailureLine(labelOf(d), result.failure ?? { kind: "empty" })}`,
+      );
     }
 
     function armOrConfirmDisconnect(name: string): void {
-      const block = rowBlocks.find((b) => b.name === name);
-      if (block === undefined) return;
+      if (!blocks.some((b) => b.tab === "connected" && b.name === name)) return;
       if (pendingDisconnect !== name) {
         clearPending();
         pendingDisconnect = name;
-        // flow 304 review finding #2: warn BEFORE the irreversible action
-        // when this provider shares its env var with another (e.g. built-in
+        // flow 304 review finding #2: warn BEFORE the irreversible action when
+        // this provider shares its env var with another (e.g. built-in
         // zai/zai-coding both reading ZAI_API_KEY) — classified fresh here,
         // not reused from paint time, since the credential state could have
         // changed since this row was last drawn.
         const env = opts.env ?? process.env;
         const classification = classifyProviderConnection(name, env, opts.configDir);
         const warning = sharedCredentialWarning(classification.sharedWith, classification.envKey);
-        const label = labelOf(rows.find((d) => d.name === name) ?? { name, models: [] });
-        block.status.content =
+        const label = labelOf(connected.find((d) => d.name === name) ?? { name, models: [] });
+        setStatus(
+          "connected",
+          name,
           warning === undefined
             ? otui.t`${roleChunk(otui, "attention", "?")} disconnect '${label}'? ${dimChunk(otui, "click/Enter Disconnect again to confirm, Esc to cancel")}`
-            : otui.t`${roleChunk(otui, "attention", "?")} disconnect '${label}'? ${roleChunk(otui, "attention", `Note: ${warning}.`)} ${dimChunk(otui, "click/Enter Disconnect again to confirm, Esc to cancel")}`;
+            : otui.t`${roleChunk(otui, "attention", "?")} disconnect '${label}'? ${roleChunk(otui, "attention", `Note: ${warning}.`)} ${dimChunk(otui, "click/Enter Disconnect again to confirm, Esc to cancel")}`,
+        );
         return;
       }
       pendingDisconnect = undefined;
       const result = disconnectProvider(name, opts.env ?? process.env, opts.configDir);
       if (!result.ok) {
-        block.status.content = otui.t`${roleChunk(otui, "error", "✗")} not removed — ${result.reason ?? "unknown reason"}`;
+        setStatus("connected", name, otui.t`${roleChunk(otui, "error", "✗")} not removed — ${result.reason ?? "unknown reason"}`);
         return;
       }
       opts.onDisconnected?.(name, result.sharedWith);
-      rows = rows.filter((d) => d.name !== name);
+      const at = connected.findIndex((d) => d.name === name);
+      if (at >= 0) connected.splice(at, 1);
+      statuses.delete(statusKey("connected", name));
+      if (connected.length === 0) {
+        // Nothing left to manage here: the Add tab is the only useful place.
+        switchTab("add", { tone: "info", text: "No providers connected. Add one below." });
+        return;
+      }
       paint();
     }
 
-    function paint(): void {
-      for (const block of rowBlocks) {
-        try {
-          body.remove(block.outer);
-        } catch {
-          // already detached
-        }
-      }
-      rowBlocks = [];
-      if (rows.length === 0) {
-        finish(undefined);
+    function switchTab(id: ProvidersTabId, withNotice?: ProvidersNotice): void {
+      if (tab === id) return;
+      nextNotice = withNotice;
+      surface?.setTab(id);
+    }
+
+    /** Move the selection by one row; repaint when it leaves the visible window. */
+    function moveSelection(direction: "up" | "down"): void {
+      const total = rowsOf(tab).length;
+      selected[tab] = stepQueueNavIndex(selected[tab], total, direction);
+      if (addCustomRowSelected()) addAction = "connect";
+      const start = windowStart[tab];
+      if (selected[tab] < start || selected[tab] >= start + capacityRows()) paint();
+      else applyHighlight();
+    }
+
+    function addCustomRowSelected(): boolean {
+      return tab === "add" && rowsOf("add")[selected.add]?.name === CUSTOM_PROVIDER_ADD_ID;
+    }
+
+    function capacityRows(): number {
+      // header row + the notice row (when shown) + one spare line; a row is two lines (label + status).
+      return Math.max(1, Math.floor((bodyHeight - 2 - (notice === undefined ? 0 : 1)) / 2));
+    }
+
+    function runAddSelection(d: DetectedProvider): void {
+      if (d.name === CUSTOM_PROVIDER_ADD_ID) {
+        finish({ kind: "custom" });
         return;
       }
-      selectedIndex = clampQueueNavIndex(selectedIndex, rows.length);
-      for (let i = 0; i < rows.length; i++) {
-        const d = rows[i]!;
-        const outer = new otui.BoxRenderable(r, { id: `cp-${d.name}`, width: "100%", flexDirection: "column" });
-        const row = new otui.BoxRenderable(r, { id: `cp-${d.name}-row`, width: "100%", flexDirection: "row" });
-        const labelText = new otui.TextRenderable(r, {
-          id: `cp-${d.name}-label-t`,
-          content: otui.t`${labelOf(d)}  ${dimChunk(otui, noteOf(d))}`,
+      finish({ kind: "connect", provider: d });
+    }
+
+    function paint(): void {
+      if (bodyBox === undefined) return;
+      const body = bodyBox;
+      clearTranscriptChildren(body);
+      blocks = [];
+      const rows = rowsOf(tab);
+      selected[tab] = clampQueueNavIndex(selected[tab], rows.length);
+
+      // Header: the tab's one-line context + its call to action.
+      const header = new otui.BoxRenderable(r, { id: `prov-${tab}-header`, width: "100%", flexDirection: "row", flexShrink: 0 });
+      if (tab === "connected") {
+        const addButton = smallActionButton(otui, r, "Add provider", "cp-add-provider", getTheme().focus, () => {
+          clearPending();
+          switchTab("add");
         });
+        addButton.box.marginLeft = 0;
+        header.add(addButton.box);
+        header.add(new otui.TextRenderable(r, { id: "cp-count", marginLeft: 1, content: otui.t`${dimChunk(otui, `${connected.length} connected`)}` }));
+      } else {
+        header.add(
+          new otui.TextRenderable(r, {
+            id: "ap-hint",
+            content: otui.t`${dimChunk(otui, `Connect saves a key or login · Test checks it   ${rows.length === 0 ? 0 : selected.add + 1}/${rows.length}`)}`,
+          }),
+        );
+      }
+      body.add(header);
+      if (notice !== undefined) {
+        const icon = notice.tone === "ok" ? roleChunk(otui, "ok", "✓") : notice.tone === "error" ? roleChunk(otui, "error", "✗") : dimChunk(otui, "·");
+        body.add(new otui.TextRenderable(r, { id: "prov-notice", content: otui.t`${icon} ${notice.text}`, flexShrink: 0 }));
+      }
+      if (rows.length === 0) {
+        body.add(new otui.TextRenderable(r, { id: "cp-empty", content: otui.t`${dimChunk(otui, "Nothing connected yet. Press a, or open Add provider.")}` }));
+        return;
+      }
+
+      // Window the rows so header + rows + footer fit the dialog.
+      const cap = capacityRows();
+      let start = windowStart[tab];
+      if (selected[tab] < start) start = selected[tab];
+      else if (selected[tab] >= start + cap) start = selected[tab] - cap + 1;
+      start = Math.max(0, Math.min(start, Math.max(0, rows.length - cap)));
+      windowStart[tab] = start;
+
+      const prefix = tab === "connected" ? "cp" : "ap";
+      for (let i = start; i < Math.min(rows.length, start + cap); i++) {
+        const d = rows[i]!;
+        const isCustom = d.name === CUSTOM_PROVIDER_ADD_ID;
+        const outer = new otui.BoxRenderable(r, { id: `${prefix}-${d.name}`, width: "100%", flexDirection: "column", flexShrink: 0 });
+        const row = new otui.BoxRenderable(r, { id: `${prefix}-${d.name}-row`, width: "100%", flexDirection: "row" });
+        const base = { tab, index: i, name: d.name };
+        const labelText = new otui.TextRenderable(r, { id: `${prefix}-${d.name}-label-t`, content: labelContent(base, d) });
         const label = new otui.BoxRenderable(r, {
-          id: `cp-${d.name}-label`,
+          id: `${prefix}-${d.name}-label`,
           flexGrow: 1,
           minWidth: 0,
           onMouseDown: (event: { stopPropagation: () => void }) => {
             event.stopPropagation();
             clearPending();
-            selectedIndex = i;
-            selectedAction = "label";
-            finish(d);
+            selected[tab] = i;
+            if (tab === "connected") {
+              connectAction = "label";
+              finish({ kind: "pick", provider: d });
+              return;
+            }
+            if (isCustom) addAction = "connect";
+            applyHighlight();
           },
         });
         label.add(labelText);
         row.add(label);
-        const test = smallActionButton(otui, r, "Test", `cp-test-${d.name}`, getTheme().focus, () => {
-          clearPending();
-          selectedIndex = i;
-          selectedAction = "test";
-          applyHighlight();
-          void runTest(d.name);
-        });
-        const disconnect = smallActionButton(otui, r, "Disconnect", `cp-disc-${d.name}`, getTheme().error, () => {
-          selectedIndex = i;
-          selectedAction = "disconnect";
-          applyHighlight();
-          armOrConfirmDisconnect(d.name);
-        });
-        row.add(test.box);
-        row.add(disconnect.box);
+
+        let first: RowBlock["first"];
+        let second: RowBlock["second"];
+        if (tab === "connected") {
+          first = smallActionButton(otui, r, "Test", `cp-test-${d.name}`, getTheme().focus, () => {
+            clearPending();
+            selected.connected = i;
+            connectAction = "test";
+            applyHighlight();
+            void runTest("connected", d.name);
+          });
+          second = smallActionButton(otui, r, "Disconnect", `cp-disc-${d.name}`, getTheme().error, () => {
+            selected.connected = i;
+            connectAction = "disconnect";
+            applyHighlight();
+            armOrConfirmDisconnect(d.name);
+          });
+        } else {
+          first = smallActionButton(otui, r, "Connect", `ap-connect-${d.name}`, getTheme().focus, () => {
+            selected.add = i;
+            addAction = "connect";
+            runAddSelection(d);
+          });
+          if (!isCustom) {
+            second = smallActionButton(otui, r, "Test", `ap-test-${d.name}`, getTheme().focus, () => {
+              selected.add = i;
+              addAction = "test";
+              applyHighlight();
+              void runTest("add", d.name);
+            });
+          }
+        }
+        row.add(first.box);
+        if (second !== undefined) row.add(second.box);
         outer.add(row);
-        const status = new otui.TextRenderable(r, { id: `cp-${d.name}-status`, content: "", marginLeft: 1 });
+        const status = new otui.TextRenderable(r, { id: `${prefix}-${d.name}-status`, content: statuses.get(statusKey(tab, d.name)) ?? "", marginLeft: 1 });
         outer.add(status);
         body.add(outer);
-        rowBlocks.push({ name: d.name, outer, label, labelText, status, test, disconnect });
+        blocks.push({ tab, index: i, name: d.name, outer, labelText, status, first, ...(second !== undefined ? { second } : {}) });
       }
       applyHighlight();
     }
 
+    // The dialog calls this synchronously while it opens (before `surface` is
+    // assigned) and again on every tab change, mouse click included.
+    function renderTab(tabId: string, body: Box, ctx: { width: number; height: number }): void {
+      const id: ProvidersTabId = tabId === "add" ? "add" : "connected";
+      if (rendered && id !== tab) notice = nextNotice;
+      nextNotice = undefined;
+      rendered = true;
+      // A tab click can arrive while a Disconnect is armed (the dialog stops
+      // owning keys only when the arm clears): drop the arm so it cannot fire later.
+      if (pendingDisconnect !== undefined) {
+        const armed = pendingDisconnect;
+        pendingDisconnect = undefined;
+        statuses.set(statusKey("connected", armed), "");
+      }
+      tab = id;
+      bodyBox = body;
+      bodyWidth = ctx.width;
+      bodyHeight = ctx.height;
+      if (opts.focusName !== undefined && !focusApplied.has(id)) {
+        focusApplied.add(id);
+        const at = rowsOf(id).findIndex((d) => d.name === opts.focusName);
+        if (at >= 0) selected[id] = at;
+      }
+      paint();
+    }
+    const focusApplied = new Set<ProvidersTabId>();
+
+    const rowCount = Math.max(connected.length, opts.all.length + 1);
+    const surface: TabbedSurface | undefined = openTabbedSurface(otui, target, {
+      id: "providers",
+      title: "Providers",
+      tabs: PROVIDERS_TABS,
+      initialTab: tab,
+      footerFor: (tabId) => PROVIDERS_FOOTERS[tabId === "add" ? "add" : "connected"],
+      contentRows: Math.min(24, rowCount * 2 + 3),
+      renderTab,
+      ownsKeys: () => pendingDisconnect !== undefined,
+      onArrowKeys: (key, direction) => {
+        if (resolved) return false;
+        if (tab === "connected") connectAction = stepConnectNavAction(connectAction, direction);
+        else if (!addCustomRowSelected()) addAction = stepAddNavAction(addAction, direction);
+        applyHighlight();
+        key.preventDefault();
+        key.stopPropagation();
+        return true;
+      },
+      onEscape: () => finish({ kind: "close" }),
+    });
+
     const unsub = onKeypress(r, (key) => {
       if (resolved) return;
-      if (key.name === "up") {
+      // Esc while a Disconnect is armed cancels the arm only (flow 304 review
+      // finding #4); with nothing armed the dialog's own Esc closes it.
+      if (key.name === "escape") {
+        if (pendingDisconnect === undefined) return;
         clearPending();
-        selectedIndex = stepQueueNavIndex(selectedIndex, rows.length, "up");
         applyHighlight();
         key.preventDefault();
         key.stopPropagation();
         return;
       }
-      if (key.name === "down") {
+      if (key.name === "up" || key.name === "down") {
         clearPending();
-        selectedIndex = stepQueueNavIndex(selectedIndex, rows.length, "down");
-        applyHighlight();
+        moveSelection(key.name);
         key.preventDefault();
         key.stopPropagation();
         return;
       }
-      if (key.name === "left") {
+      // Reached only while a Disconnect is armed: unarmed, the dialog hands
+      // left/right to `onArrowKeys` and stops the key there.
+      if (key.name === "left" || key.name === "right") {
         clearPending();
-        selectedAction = stepConnectNavAction(selectedAction, "left");
-        applyHighlight();
-        key.preventDefault();
-        key.stopPropagation();
-        return;
-      }
-      if (key.name === "right") {
-        clearPending();
-        selectedAction = stepConnectNavAction(selectedAction, "right");
+        if (tab === "connected") connectAction = stepConnectNavAction(connectAction, key.name);
+        else if (!addCustomRowSelected()) addAction = stepAddNavAction(addAction, key.name);
         applyHighlight();
         key.preventDefault();
         key.stopPropagation();
         return;
       }
       if (key.name === "return" || key.name === "linefeed" || key.name === "kpenter") {
-        const row = rows[selectedIndex];
+        const row = rowsOf(tab)[selected[tab]];
         if (row === undefined) return;
-        if (selectedAction === "label") {
-          clearPending();
-          finish(row);
-        } else if (selectedAction === "test") {
-          clearPending();
-          void runTest(row.name);
+        if (tab === "connected") {
+          if (connectAction === "label") {
+            clearPending();
+            finish({ kind: "pick", provider: row });
+          } else if (connectAction === "test") {
+            clearPending();
+            void runTest("connected", row.name);
+          } else {
+            armOrConfirmDisconnect(row.name);
+          }
+        } else if (addAction === "test" && row.name !== CUSTOM_PROVIDER_ADD_ID) {
+          void runTest("add", row.name);
         } else {
-          armOrConfirmDisconnect(row.name);
+          runAddSelection(row);
         }
         key.preventDefault();
         key.stopPropagation();
+        return;
       }
-      // Escape is handled by `openStepSurface`'s own handler (`onEscape`
-      // above) — this step declares no interest in it, matching every other
-      // step in this file.
+      if (tab === "connected" && key.sequence === "a" && !key.ctrl && !key.meta) {
+        clearPending();
+        switchTab("add");
+        key.preventDefault();
+        key.stopPropagation();
+      }
     });
-
-    paint();
   });
 }
 
+/** Where a connect sequence stopped: the operator went back, or the provider is ready for a model pick. */
+type ConnectSequenceResult =
+  | { kind: "back" }
+  | {
+      kind: "ready";
+      /** The provider as listed, with the endpoint the sequence settled on. */
+      provider: DetectedProvider;
+      baseUrl: string | undefined;
+      /** The `/models` result the sequence ended on. */
+      models: ModelsResolveResult;
+      label: string;
+    };
+
+/** The seams a connect sequence reads and writes through (all default to the real ones). */
+interface ConnectSequenceDeps {
+  fetch?: typeof fetch;
+  env?: Record<string, string | undefined>;
+  configDir?: string;
+}
+
 /**
- * In-TUI provider → model → key wizard with BACK navigation. `/provider` and
- * startup prompt + persist a key and may edit a local endpoint. `/connect`
- * (`onlyConnected`) only lists live providers and their live `/models` list —
- * no key or URL setup. Every step renders in ModalHost given the shell chrome
- * (flow 270), or as a full-screen overlay given a bare renderer (the startup
- * picker, the chat shell). Resolves the selection or `undefined`.
+ * One provider's connect sequence, shared by the startup/chat-shell wizard loop
+ * (startup, chat shell) and the `/connect` dialog's Add tab: base URL, then
+ * credential (login or API key, saved 0600 in the user-global store), then a
+ * live `/models` check. It stops there — picking a model is the caller's call,
+ * so the Add tab's [Connect] can return to the list without switching the
+ * session.
+ *
+ * `setup` is true when the operator may enter a key or edit the endpoint; false
+ * only for picking an already-connected provider, where neither is asked.
+ * Esc at any step resolves `back` and saves nothing from that step. A rejected
+ * key shows the provider's reason and asks again.
+ *
+ * IMPORTANT: the key is asked BEFORE `/models` is fetched — Z.AI and most
+ * OpenAI-compat gateways return 401 without a Bearer key, and we would
+ * otherwise show only the short curated fallback (e.g. stale glm-4.5/4.6).
+ */
+async function runProviderConnectSequence(
+  otui: OpenTui,
+  target: StepTarget,
+  prov: DetectedProvider,
+  deps: ConnectSequenceDeps,
+  setup: boolean,
+): Promise<ConnectSequenceResult> {
+  // Picking a connected provider never edits the endpoint or collects a key.
+  // Copilot's API host comes from the token exchange (`endpoints.api`),
+  // not from typing api.githubcopilot.com — that origin 404s on /v1/models.
+  const lockDiscoveredHost = ["github-copilot", "openai", "openai-codex"].includes(prov.name);
+  let selectedBaseUrl =
+    !setup || prov.baseUrl === undefined || lockDiscoveredHost
+      ? prov.baseUrl
+      : await promptBaseUrlStep(otui, target, prov.label ?? prov.name, prov.baseUrl);
+  if (setup && !lockDiscoveredHost && prov.baseUrl !== undefined && selectedBaseUrl === undefined) {
+    return { kind: "back" };
+  }
+  if (setup && !lockDiscoveredHost && selectedBaseUrl !== undefined) {
+    saveProviderBaseUrl(prov.name, selectedBaseUrl, deps.configDir);
+  }
+  let selectedProvider = selectedBaseUrl === undefined ? prov : { ...prov, baseUrl: selectedBaseUrl };
+
+  const envKey = prov.envKey;
+  const label = prov.label ?? prov.name;
+
+  /**
+   * The credential step. `notice` is set only on the retry, where the
+   * provider has already refused what we hold: a value in `env` is then
+   * proof of nothing, so the "we already have one" shortcut is skipped
+   * and the operator finally gets asked.
+   */
+  const collectCredential = async (notice?: string): Promise<"ok" | "back"> => {
+    if (!setup || (envKey === undefined && !catalogAllows(prov.name, "device-code"))) {
+      return "ok";
+    }
+    if (notice === undefined) {
+      const existingKey = envKey === undefined ? undefined : (deps.env ?? process.env)[envKey] ?? loadShellConfig(deps.configDir).apiKeys?.[envKey];
+      const hasOauth = prov.name !== "openai" && oauthAccessToken(prov.name, deps.configDir) !== undefined;
+      if ((existingKey !== undefined && existingKey.length > 0) || hasOauth) {
+        return "ok";
+      }
+    }
+    const offered: AuthMethodChoice[] = [];
+    if (catalogAllows(prov.name, "device-code")) offered.push("device-code");
+    if (catalogMethods(prov.name).includes("api-key")) offered.push("api-key");
+    let method: AuthMethodChoice | undefined = offered.length === 1 ? offered[0] : undefined;
+    if (offered.length > 1) {
+      method = await pickAuthMethodStep(otui, target, label, offered);
+      if (method === undefined) {
+        return "back";
+      }
+    }
+    if (method === "device-code") {
+      if (!(await runDeviceLoginInTui(otui, target, prov.name, deps.configDir, deps.fetch))) {
+        return "back";
+      }
+      const saved = loadShellConfig(deps.configDir).baseUrls?.[prov.name];
+      if (typeof saved === "string" && saved.length > 0) {
+        selectedBaseUrl = saved;
+        selectedProvider = { ...prov, baseUrl: saved };
+      }
+      return "ok";
+    }
+    if (envKey === undefined) return "back";
+    const kr = await promptApiKeyStep(otui, target, {
+      label: prov.name === "openai" ? "OpenAI" : label,
+      envKey,
+      ...(notice === undefined ? {} : { notice }),
+    });
+    if (kr.kind === "back") {
+      return "back"; // Esc at the key step → nothing saved, back to the list
+    }
+    if (kr.kind === "key") {
+      process.env[envKey] = kr.value;
+      // Set here, not exported by the operator: `shell_exec` withholds it (K-015).
+      noteSavedCredentialEnv([envKey]);
+      saveApiKey(envKey, kr.value, deps.configDir); // persist (0600)
+    }
+    // kind === "skip" → proceed without a key (curated fallback models)
+    return "ok";
+  };
+
+  if ((await collectCredential()) === "back") {
+    return { kind: "back" };
+  }
+
+  const modelDeps = {
+    ...(deps.fetch === undefined ? {} : { fetch: deps.fetch }),
+    ...(deps.env === undefined ? {} : { env: deps.env }),
+    ...(deps.configDir === undefined ? {} : { configDir: deps.configDir }),
+  };
+  // Fetch AFTER key is available so live GET /models can authenticate.
+  let models = await modelsForPicker(selectedProvider, modelDeps);
+  // A refused credential is the one failure that is fixable from right
+  // here, and the old code could not offer the fix: the dead value in
+  // `env` was itself the reason the key step never ran, so an expired
+  // grok login produced an empty model list and no way out of it.
+  if (models.failure?.kind === "rejected") {
+    if ((await collectCredential(modelsFailureLine(label, models.failure))) === "back") {
+      return { kind: "back" };
+    }
+    models = await modelsForPicker(selectedProvider, modelDeps);
+  }
+  // The endpoint is the other failure fixable from right here — see
+  // `endpointMayBeAtFault` for which kinds re-open the URL step and why.
+  if (setup && !lockDiscoveredHost && selectedProvider.baseUrl !== undefined && endpointMayBeAtFault(models.failure)) {
+    const corrected = await promptBaseUrlStep(otui, target, label, selectedProvider.baseUrl, modelsFailureLine(label, models.failure));
+    if (corrected === undefined) {
+      return { kind: "back" }; // Esc at the endpoint step → back to the list
+    }
+    if (corrected !== selectedProvider.baseUrl) {
+      saveProviderBaseUrl(prov.name, corrected, deps.configDir);
+      selectedBaseUrl = corrected;
+      selectedProvider = { ...prov, baseUrl: corrected };
+      models = await modelsForPicker(selectedProvider, modelDeps);
+    }
+  }
+  return { kind: "ready", provider: selectedProvider, baseUrl: selectedBaseUrl, models, label };
+}
+
+/** Persist what the custom-provider wizard collected (into `configDir` when given, never the real home in a test). */
+function saveCustomProviderFromWizard(created: CustomProviderWizardResult, configDir?: string): DetectedProvider {
+  saveCustomCompatProvider(
+    {
+      name: created.name,
+      label: created.name,
+      baseUrl: created.baseUrl,
+      ...(created.apiKey !== undefined ? { apiKey: created.apiKey } : {}),
+      models: created.models,
+      requiresApiKey: false,
+      ...(created.temperature !== undefined ? { temperature: created.temperature } : {}),
+      ...(created.maxOutputTokens !== undefined ? { maxOutputTokens: created.maxOutputTokens } : {}),
+      ...(created.timeoutMs !== undefined ? { timeoutMs: created.timeoutMs } : {}),
+    },
+    configDir,
+  );
+  return { name: created.name, models: created.models, baseUrl: created.baseUrl, label: created.name, note: "custom" };
+}
+
+/** Insert `entry`, or replace the provider already listed under its name. */
+function upsertProvider(list: DetectedProvider[], entry: DetectedProvider): void {
+  const at = list.findIndex((d) => d.name === entry.name);
+  if (at >= 0) list[at] = entry;
+  else list.push(entry);
+}
+
+/** Resolve the model a picked provider's selection names, or `undefined` when the operator backs out. */
+async function pickModelForProvider(
+  otui: OpenTui,
+  target: StepTarget,
+  ready: Extract<ConnectSequenceResult, { kind: "ready" }>,
+  providerName: string,
+): Promise<TuiSelection | undefined> {
+  // Esc here returns to the list, so the modal footer says "back".
+  const model = await pickModelInTui(otui, target, ready.models.models, modelPickerNotice(ready.label, ready.models), {
+    escLabel: "back",
+  });
+  if (model === undefined) return undefined;
+  return ready.baseUrl === undefined ? { provider: providerName, model } : { provider: providerName, model, baseUrl: ready.baseUrl };
+}
+
+/**
+ * `/connect`'s dialog loop (flow 471): open the tabbed step, run what it asks
+ * for (the model pick, a provider's connect sequence, the custom-provider
+ * wizard) with the dialog closed, and reopen it on the right tab.
+ *
+ * [Connect] never switches the session: a successful connect lands back on the
+ * Connected tab with the provider highlighted, a failed one back on the Add tab
+ * with the reason. Only picking a Connected row resolves a selection.
+ */
+async function runProvidersModal(
+  otui: OpenTui,
+  target: StepTarget,
+  detected: readonly DetectedProvider[],
+  options: SelectProviderModelOptions,
+): Promise<TuiSelection | undefined> {
+  const deps: ConnectSequenceDeps = {
+    ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
+    ...(options.env !== undefined ? { env: options.env } : {}),
+    ...(options.configDir !== undefined ? { configDir: options.configDir } : {}),
+  };
+  const all = [...detected];
+  const connected = await filterConnectedDetectedProviders(detected, deps);
+  let tab: ProvidersTabId = connected.length > 0 ? "connected" : "add";
+  let notice: ProvidersNotice | undefined;
+  let focusName: string | undefined;
+  while (true) {
+    const action = await pickProvidersTabbedStep(otui, target, {
+      connected,
+      all,
+      initialTab: tab,
+      ...(notice !== undefined ? { notice } : {}),
+      ...(focusName !== undefined ? { focusName } : {}),
+      ...deps,
+      ...(options.onDisconnected !== undefined ? { onDisconnected: options.onDisconnected } : {}),
+    });
+    notice = undefined;
+    focusName = undefined;
+    if (action.kind === "close") return undefined;
+    try {
+      if (action.kind === "pick") {
+        const ready = await runProviderConnectSequence(otui, target, action.provider, deps, false);
+        if (ready.kind === "ready") {
+          const selection = await pickModelForProvider(otui, target, ready, action.provider.name);
+          if (selection !== undefined) return selection;
+        }
+        tab = "connected";
+        focusName = action.provider.name;
+        continue;
+      }
+      if (action.kind === "connect") {
+        const result = await runProviderConnectSequence(otui, target, action.provider, deps, true);
+        focusName = action.provider.name;
+        if (result.kind === "back") {
+          tab = "add";
+          continue;
+        }
+        if (result.models.failure === undefined && result.models.models.length > 0) {
+          upsertProvider(connected, { ...result.provider, models: result.models.models });
+          tab = "connected";
+          notice = { tone: "ok", text: `${result.label} connected — ${result.models.models.length} model(s)` };
+        } else {
+          tab = "add";
+          notice = {
+            tone: "error",
+            text: result.models.failure !== undefined ? modelsFailureLine(result.label, result.models.failure) : `${result.label}: no models returned`,
+          };
+        }
+        continue;
+      }
+      // action.kind === "custom"
+      tab = "add";
+      const created = await promptCustomProviderWizard(otui, target);
+      if (created === undefined) continue; // Esc in the wizard → back to the list
+      const entry = saveCustomProviderFromWizard(created, options.configDir);
+      upsertProvider(all, entry);
+      focusName = entry.name;
+      const probed = await modelsForPicker(entry, deps);
+      if (probed.failure === undefined && probed.models.length > 0) {
+        upsertProvider(connected, { ...entry, models: probed.models });
+        tab = "connected";
+        notice = { tone: "ok", text: `${entry.label ?? entry.name} connected — ${probed.models.length} model(s)` };
+      } else {
+        notice = {
+          tone: "error",
+          text: probed.failure !== undefined ? modelsFailureLine(entry.label ?? entry.name, probed.failure) : `${entry.label ?? entry.name}: no models returned`,
+        };
+      }
+    } catch (error) {
+      // A throw from one step must not close the whole dialog: report the kind
+      // of failure (never its text, which could echo a request) and carry on.
+      tab = action.kind === "pick" ? "connected" : "add";
+      notice = { tone: "error", text: `could not finish (${error instanceof Error ? error.name : "unexpected error"}) — try again` };
+    }
+  }
+}
+
+/**
+ * In-TUI provider → model → key wizard with BACK navigation. Startup and the
+ * chat shell prompt + persist a key and may edit a local endpoint. `/connect`
+ * (`onlyConnected`) opens the two-tab Providers dialog instead
+ * ({@link runProvidersModal}): connected providers with Test/Disconnect, and an
+ * Add tab that runs the same connect sequence. Every step renders in ModalHost
+ * given the shell chrome (flow 270), or as a full-screen overlay given a bare
+ * renderer (the startup picker, the chat shell). Resolves the selection or
+ * `undefined`.
  *
  * Exported since flow 112 so the CHAT shell injects this very wizard as
- * `ShellDeps.selectProviderModel`: `/provider` must open an overlay instead of
+ * `ShellDeps.selectProviderModel`: `/connect` must open an overlay instead of
  * `pickProviderModel`'s numbered text menu, which would read the next composer
  * submissions as its answers.
  */
@@ -3266,51 +3972,32 @@ export function selectProviderModelInTui(
   detected: DetectedProvider[],
   options: SelectProviderModelOptions = {},
 ): Promise<TuiSelection | undefined> {
+  if (options.onlyConnected) {
+    // Before any "nothing detected" shortcut: with nothing connected the
+    // dialog still opens, on the Add tab.
+    return runProvidersModal(otui, rOrChrome, detected, options);
+  }
   return new Promise((resolve) => {
     if (detected.length === 0) {
       resolve(undefined);
       return;
     }
-    const candidatesPromise = options.onlyConnected
-      ? filterConnectedDetectedProviders(detected, {
-          ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
-          ...(options.env !== undefined ? { env: options.env } : {}),
-          ...(options.configDir !== undefined ? { configDir: options.configDir } : {}),
-        })
-      : Promise.resolve(detected);
     void (async () => {
-      const candidates = await candidatesPromise;
-      if (candidates.length === 0) {
-        resolve(undefined);
-        return;
-      }
-
-      // Non-`/connect` selection also offers the synthetic "add custom provider"
-      // entry: choosing it runs the mini-wizard, persists llm-providers.json,
-      // and appends the new provider so it is selectable this session too.
-      const allCandidates: DetectedProvider[] = options.onlyConnected
-        ? candidates
-        : [...candidates, CUSTOM_ADD_ENTRY];
+      // The synthetic "add custom provider" entry: choosing it runs the
+      // mini-wizard, persists llm-providers.json, and appends the new provider
+      // so it is selectable this session too.
+      const allCandidates: DetectedProvider[] = [...detected, CUSTOM_ADD_ENTRY];
+      const deps: ConnectSequenceDeps = {
+        ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
+        ...(options.env !== undefined ? { env: options.env } : {}),
+        ...(options.configDir !== undefined ? { configDir: options.configDir } : {}),
+      };
 
       // Provider ← Esc cancels.
       // Key (when required) ← Esc backs to provider.
       // Model ← Esc backs to provider.
-      // IMPORTANT: prompt for the API key BEFORE fetching /models — Z.AI and most
-      // OpenAI-compat gateways return 401 without a Bearer key, and we would
-      // otherwise show only the short curated fallback (e.g. stale glm-4.5/4.6).
       while (true) {
-        // flow 304, AC1: `/connect` (`onlyConnected`) gets the row-list step
-        // with Test/Disconnect buttons; `/provider`'s fuller wizard (base-URL
-        // edit, credential prompt, "add custom provider") keeps the plain
-        // `SelectRenderable` picker unchanged.
-        const prov = options.onlyConnected
-          ? await pickConnectedProviderStep(otui, rOrChrome, allCandidates, {
-              ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
-              ...(options.env !== undefined ? { env: options.env } : {}),
-              ...(options.configDir !== undefined ? { configDir: options.configDir } : {}),
-              ...(options.onDisconnected !== undefined ? { onDisconnected: options.onDisconnected } : {}),
-            })
-          : await pickProviderStep(otui, rOrChrome, allCandidates);
+        const prov = await pickProviderStep(otui, rOrChrome, allCandidates);
         if (prov === undefined) {
           resolve(undefined);
           return;
@@ -3321,162 +4008,16 @@ export function selectProviderModelInTui(
         if (prov.name === CUSTOM_PROVIDER_ADD_ID) {
           const created = await promptCustomProviderWizard(otui, rOrChrome);
           if (created !== undefined) {
-            saveCustomCompatProvider({
-              name: created.name,
-              label: created.name,
-              baseUrl: created.baseUrl,
-              ...(created.apiKey !== undefined ? { apiKey: created.apiKey } : {}),
-              models: created.models,
-              requiresApiKey: false,
-              ...(created.temperature !== undefined ? { temperature: created.temperature } : {}),
-              ...(created.maxOutputTokens !== undefined ? { maxOutputTokens: created.maxOutputTokens } : {}),
-              ...(created.timeoutMs !== undefined ? { timeoutMs: created.timeoutMs } : {}),
-            });
-            allCandidates.push({
-              name: created.name,
-              models: created.models,
-              baseUrl: created.baseUrl,
-              label: created.name,
-              note: "custom",
-            });
+            allCandidates.push(saveCustomProviderFromWizard(created, options.configDir));
           }
           continue; // Esc inside the wizard or after a save → re-pick the provider
         }
 
-        // `/connect` only switches: never edit the endpoint or collect a key.
-        // Copilot's API host comes from the token exchange (`endpoints.api`),
-        // not from typing api.githubcopilot.com — that origin 404s on /v1/models.
-        const lockDiscoveredHost = ["github-copilot", "openai", "openai-codex"].includes(prov.name);
-        let selectedBaseUrl =
-          options.onlyConnected || prov.baseUrl === undefined || lockDiscoveredHost
-            ? prov.baseUrl
-            : await promptBaseUrlStep(otui, rOrChrome, prov.label ?? prov.name, prov.baseUrl);
-        if (!options.onlyConnected && !lockDiscoveredHost && prov.baseUrl !== undefined && selectedBaseUrl === undefined) {
-          continue;
-        }
-        if (!options.onlyConnected && !lockDiscoveredHost && selectedBaseUrl !== undefined) {
-          saveProviderBaseUrl(prov.name, selectedBaseUrl, options.configDir);
-        }
-        let selectedProvider = selectedBaseUrl === undefined ? prov : { ...prov, baseUrl: selectedBaseUrl };
-
-        const envKey = prov.envKey;
-        const label = prov.label ?? prov.name;
-
-        /**
-         * The credential step. `notice` is set only on the retry, where the
-         * provider has already refused what we hold: a value in `env` is then
-         * proof of nothing, so the "we already have one" shortcut is skipped
-         * and the operator finally gets asked.
-         */
-        const collectCredential = async (notice?: string): Promise<"ok" | "back"> => {
-          if (options.onlyConnected || (envKey === undefined && !catalogAllows(prov.name, "device-code"))) {
-            return "ok";
-          }
-          if (notice === undefined) {
-            const existingKey = envKey === undefined ? undefined : (options.env ?? process.env)[envKey] ?? loadShellConfig(options.configDir).apiKeys?.[envKey];
-            const hasOauth = prov.name !== "openai" && oauthAccessToken(prov.name, options.configDir) !== undefined;
-            if ((existingKey !== undefined && existingKey.length > 0) || hasOauth) {
-              return "ok";
-            }
-          }
-          const offered: AuthMethodChoice[] = [];
-          if (catalogAllows(prov.name, "device-code")) offered.push("device-code");
-          if (catalogMethods(prov.name).includes("api-key")) offered.push("api-key");
-          let method: AuthMethodChoice | undefined = offered.length === 1 ? offered[0] : undefined;
-          if (offered.length > 1) {
-            method = await pickAuthMethodStep(otui, rOrChrome, label, offered);
-            if (method === undefined) {
-              return "back";
-            }
-          }
-          if (method === "device-code") {
-            if (!(await runDeviceLoginInTui(otui, rOrChrome, prov.name, options.configDir, options.fetch))) {
-              return "back";
-            }
-            const saved = loadShellConfig(options.configDir).baseUrls?.[prov.name];
-            if (typeof saved === "string" && saved.length > 0) {
-              selectedBaseUrl = saved;
-              selectedProvider = { ...prov, baseUrl: saved };
-            }
-            return "ok";
-          }
-          if (envKey === undefined) return "back";
-          const kr = await promptApiKeyStep(otui, rOrChrome, {
-            label: prov.name === "openai" ? "OpenAI" : label,
-            envKey,
-            ...(notice === undefined ? {} : { notice }),
-          });
-          if (kr.kind === "back") {
-            return "back"; // Esc at the key step → re-pick the provider
-          }
-          if (kr.kind === "key") {
-            process.env[envKey] = kr.value;
-            // Set here, not exported by the operator: `shell_exec` withholds it (K-015).
-            noteSavedCredentialEnv([envKey]);
-            saveApiKey(envKey, kr.value, options.configDir); // persist (0600)
-          }
-          // kind === "skip" → proceed without a key (curated fallback models)
-          return "ok";
-        };
-
-        if ((await collectCredential()) === "back") {
-          continue;
-        }
-
-        const modelDeps = {
-          ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-          ...(options.env === undefined ? {} : { env: options.env }),
-          ...(options.configDir === undefined ? {} : { configDir: options.configDir }),
-        };
-        // Fetch AFTER key is available so live GET /models can authenticate.
-        let models = await modelsForPicker(selectedProvider, modelDeps);
-        // A refused credential is the one failure that is fixable from right
-        // here, and the old code could not offer the fix: the dead value in
-        // `env` was itself the reason the key step never ran, so an expired
-        // grok login produced an empty model list and no way out of it.
-        if (models.failure?.kind === "rejected") {
-          if ((await collectCredential(modelsFailureLine(label, models.failure))) === "back") {
-            continue;
-          }
-          models = await modelsForPicker(selectedProvider, modelDeps);
-        }
-        // The endpoint is the other failure fixable from right here — see
-        // `endpointMayBeAtFault` for which kinds re-open the URL step and why.
-        if (
-          !options.onlyConnected
-          && !lockDiscoveredHost
-          && selectedProvider.baseUrl !== undefined
-          && endpointMayBeAtFault(models.failure)
-        ) {
-          const corrected = await promptBaseUrlStep(
-            otui,
-            rOrChrome,
-            label,
-            selectedProvider.baseUrl,
-            modelsFailureLine(label, models.failure),
-          );
-          if (corrected === undefined) {
-            continue; // Esc at the endpoint step → re-pick the provider
-          }
-          if (corrected !== selectedProvider.baseUrl) {
-            saveProviderBaseUrl(prov.name, corrected, options.configDir);
-            selectedBaseUrl = corrected;
-            selectedProvider = { ...prov, baseUrl: corrected };
-            models = await modelsForPicker(selectedProvider, modelDeps);
-          }
-        }
-        // Esc here returns to the provider step, so the modal footer says "back".
-        const model = await pickModelInTui(otui, rOrChrome, models.models, modelPickerNotice(label, models), {
-          escLabel: "back",
-        });
-        if (model === undefined) {
-          continue; // Esc at the model step → re-pick the provider
-        }
-        resolve(
-          selectedBaseUrl === undefined
-            ? { provider: prov.name, model }
-            : { provider: prov.name, model, baseUrl: selectedBaseUrl },
-        );
+        const ready = await runProviderConnectSequence(otui, rOrChrome, prov, deps, true);
+        if (ready.kind === "back") continue;
+        const selection = await pickModelForProvider(otui, rOrChrome, ready, prov.name);
+        if (selection === undefined) continue; // Esc at the model step → re-pick the provider
+        resolve(selection);
         return;
       }
     })();
@@ -9808,47 +10349,46 @@ export async function launchTuiAgentShell(opts: {
           runDelegate(line);
           return;
         }
-        if (command.name === "/connect" || command.name === "/provider") {
+        if (command.name === "/connect") {
           detachSlashWork((async () => {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+            // flow 471: ONE "Providers" dialog (Connected / Add provider). It
+            // opens on the Add tab when nothing is connected yet, so there is
+            // no "nothing found" dead end to report here.
             const ns = await chrome.withOverlay(() =>
-              command.name === "/connect"
-                ? selectProviderModelInTui(otui, chrome, detected, {
-                    onlyConnected: true,
-                    env: process.env,
-                    // flow 304 AC7: disconnecting the provider the session is
-                    // CURRENTLY using neither switches provider nor interrupts
-                    // a turn — this only reports it. The session keeps
-                    // whatever it already loaded into memory this run;
-                    // `disconnectProvider` has already cleared the env var
-                    // for THIS process when it was keryx-saved, so a LATER
-                    // `/connect` (or a fresh launch) no longer offers it.
-                    onDisconnected: (name, sharedWith) => {
-                      // flow 304 review finding #2: the RESULT must name
-                      // every other provider a shared env var also
-                      // disconnected (e.g. built-in zai/zai-coding sharing
-                      // ZAI_API_KEY) — the row-nav step's own confirmation
-                      // text already warned about this before the operator
-                      // confirmed; this is the durable, transcript-printed
-                      // follow-up.
-                      if (sharedWith.length > 0) {
-                        io.onSystem?.(`◇ ${name} disconnected — this also disconnected: ${sharedWith.join(", ")}.\n`);
-                      }
-                      if (name === currentSel.provider) {
-                        io.onSystem?.(
-                          name === "openai-codex"
-                            ? `◇ ${name} disconnected — it stays selected, but the next turn requires a new login. Use /provider to reconnect or /connect to switch.\n`
-                            : `◇ ${name} disconnected — this session keeps its already-loaded credential until you /connect another provider or restart.\n`,
-                        );
-                      }
-                    },
-                  })
-                : selectProviderModelInTui(otui, chrome, detected),
+              selectProviderModelInTui(otui, chrome, detected, {
+                onlyConnected: true,
+                env: process.env,
+                // flow 304 AC7: disconnecting the provider the session is
+                // CURRENTLY using neither switches provider nor interrupts
+                // a turn — this only reports it. The session keeps
+                // whatever it already loaded into memory this run;
+                // `disconnectProvider` has already cleared the env var
+                // for THIS process when it was keryx-saved, so a LATER
+                // `/connect` (or a fresh launch) no longer offers it.
+                onDisconnected: (name, sharedWith) => {
+                  // flow 304 review finding #2: the RESULT must name
+                  // every other provider a shared env var also
+                  // disconnected (e.g. built-in zai/zai-coding sharing
+                  // ZAI_API_KEY) — the row-nav step's own confirmation
+                  // text already warned about this before the operator
+                  // confirmed; this is the durable, transcript-printed
+                  // follow-up.
+                  if (sharedWith.length > 0) {
+                    io.onSystem?.(`◇ ${name} disconnected — this also disconnected: ${sharedWith.join(", ")}.\n`);
+                  }
+                  if (name === currentSel.provider) {
+                    io.onSystem?.(
+                      name === "openai-codex"
+                        ? `◇ ${name} disconnected — it stays selected, but the next turn requires a new login. Run /connect to log in again or to switch.\n`
+                        : `◇ ${name} disconnected — this session keeps its already-loaded credential until you /connect another provider or restart.\n`,
+                    );
+                  }
+                },
+              }),
             );
             if (ns !== undefined) {
               await switchTo(ns);
-            } else if (command.name === "/connect") {
-              chrome.showToast("No connected providers found. Run /provider to configure one first.");
             }
             // Wizard steps close without refocusing the composer (flow 270), so
             // it comes back here, once, whichever way the wizard ended.
@@ -9860,10 +10400,11 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       if (line.startsWith("/")) {
-        // A real command belonging to the OTHER mode (`/models`, `/provider`)
+        // A real command belonging to the OTHER mode (`/models`)
         // says so; only a genuinely unknown token is "unknown" (S4 parity with
         // the readline surfaces).
-        io.onSystem?.(describeUnavailableCommand(line, "agent") ?? `Unknown command: ${line}\n`);
+        const removedHint = removedCommandHint(line);
+        io.onSystem?.(describeUnavailableCommand(line, "agent") ?? `Unknown command: ${line}${removedHint === undefined ? "" : `. ${removedHint}`}\n`);
         const help = renderCommandHelp("agent");
         addBlock({ kind: "output", fullText: help, summary: "Available commands", lineCount: help.trimEnd().split("\n").length }, {
           hint: "ctrl+o · Enter to expand",
