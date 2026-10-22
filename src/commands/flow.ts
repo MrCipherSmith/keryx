@@ -1560,7 +1560,10 @@ async function runComplete(args: string[]): Promise<void> {
     confirmToken: optionValue(args, "--confirm-token"),
     acceptGates: acceptedGateArgs(args),
     reason: optionValue(args, "--reason"),
-    confirmExceptions: (selected, context) => confirmCompletionExceptions(args, selected, id, cwd, {}, context),
+    confirmExceptions: async (selected, context) => {
+      const flow = await getService().get({ cwd, id });
+      return confirmCompletionExceptions(args, selected, flow.id, cwd, {}, context);
+    },
   });
 
   heading(

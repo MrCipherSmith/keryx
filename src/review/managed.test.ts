@@ -2209,7 +2209,13 @@ for (const phase of ["waiver", "disposition", "readiness"] as const) {
     const hostQuestion = { source: "codex" as const, ref: `race-${phase}`, time: "2026-10-21T10:00:00Z", answerText: "yes", questionText: reviewCompletionQuestion(context) };
     let waiverRecorded = false;
     const now = new Date("2026-10-21T10:00:00Z");
-    now.toISOString = () => { waiverRecorded = true; if (phase === "waiver" || phase === "readiness") mutate(); return "2026-10-21T10:00:00.000Z"; };
+    let clockCalls = 0;
+    now.toISOString = () => {
+      clockCalls++;
+      waiverRecorded = true;
+      if (phase === "waiver" || (phase === "readiness" && clockCalls === 2)) mutate();
+      return "2026-10-21T10:00:00.000Z";
+    };
     if (phase === "disposition") {
       Object.defineProperty(dispositions[0], "state", { enumerable: true, get() { if (waiverRecorded) mutate(); return "acted-on"; } });
     }
@@ -2218,6 +2224,7 @@ for (const phase of ["waiver", "disposition", "readiness"] as const) {
     armed = true;
     try {
       await expect(completeManagedReview(ROOT, pkg, { hostQuestion, dispositions, waiveReadiness, waiveCoverage: waiver, now })).rejects.toThrow(/changed|stale/i);
+      if (phase === "readiness") expect(clockCalls).toBe(2);
       expect(JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8"))).toEqual(stored);
       expect(await readFile(path.join(dir, "research.json"), "utf8")).toBe(context.research);
       expect(await readFile(path.join(dir, "findings.json"), "utf8")).toBe(context.findings);
