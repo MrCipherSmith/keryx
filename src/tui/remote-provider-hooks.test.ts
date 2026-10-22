@@ -123,12 +123,12 @@ describe("createRemoteDeviceLogin", () => {
   it("answers a failed login in fixed words, with no error text, token or device code", async () => {
     const failed = loginRig(async () => ({ ok: false, error: `denied ${TOKEN} ${DEVICE_CODE} ${MASKED.join(" ")}` }) as unknown as DeviceLoginResult);
     const a = await failed.hook.connect("copilot", failed.notify);
-    expect(a).toEqual({ ok: false, message: "Device login failed; see the shell for the cause." });
+    expect(a).toEqual({ ok: false, message: "Device login failed. Try /connect in the shell." });
     const thrown = loginRig(async () => {
       throw new Error(`boom ${TOKEN} ${DEVICE_CODE} ${MASKED.join(" ")}`);
     });
     const b = await thrown.hook.connect("copilot", thrown.notify);
-    expect(b).toEqual({ ok: false, message: "Device login failed; see the shell for the cause." });
+    expect(b).toEqual({ ok: false, message: "Device login failed. Try /connect in the shell." });
     for (const text of [a.message, b.message]) expect(leaks(text)).toEqual([]);
     expect(failed.applied).toEqual([]);
     expect(thrown.applied).toEqual([]);
@@ -169,6 +169,23 @@ describe("createRemoteDeviceLogin", () => {
     const out = await rig.hook.connect("copilot", rig.notify);
     expect(out.ok).toBe(false);
     expect(out.message).toContain("busy");
+    expect(rig.applied).toEqual([]);
+    expect(rig.connected).toEqual([]);
+  });
+
+  it("says so when the login succeeded but was aborted before the token could be applied", async () => {
+    let finish: (() => void) | undefined;
+    const rig = loginRig(
+      () =>
+        new Promise<DeviceLoginResult>((resolve) => {
+          finish = () => resolve(SUCCESS);
+        }),
+    );
+    const pending = rig.hook.connect("copilot", rig.notify);
+    rig.hook.abort();
+    finish?.();
+    const out = await pending;
+    expect(out).toEqual({ ok: false, message: "Signed in, but not applied to this session; run /connect again or restart." });
     expect(rig.applied).toEqual([]);
     expect(rig.connected).toEqual([]);
   });

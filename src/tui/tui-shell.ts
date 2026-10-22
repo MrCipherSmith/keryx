@@ -733,6 +733,8 @@ export interface SelectProviderModelOptions {
    * names every OTHER provider the same disconnect also affected.
    */
   onDisconnected?: (name: string, sharedWith: readonly string[]) => void;
+  /** `onlyConnected` only: a provider was connected from the Add tab (the caller drops its cached provider lists). */
+  onConnected?: (name: string) => void;
 }
 
 /**
@@ -3985,6 +3987,7 @@ async function runProvidersModal(
         }
         if (result.models.failure === undefined && result.models.models.length > 0) {
           upsertProvider(connected, { ...result.provider, models: result.models.models });
+          options.onConnected?.(action.provider.name);
           tab = "connected";
           notice = { tone: "ok", text: `${result.label} connected — ${result.models.models.length} model(s)` };
         } else {
@@ -4006,6 +4009,7 @@ async function runProvidersModal(
       const probed = await modelsForPicker(entry, deps);
       if (probed.failure === undefined && probed.models.length > 0) {
         upsertProvider(connected, { ...entry, models: probed.models });
+        options.onConnected?.(entry.name);
         tab = "connected";
         notice = { tone: "ok", text: `${entry.label ?? entry.name} connected — ${probed.models.length} model(s)` };
       } else {
@@ -4585,6 +4589,12 @@ export async function launchTuiAgentShell(opts: {
   let remoteBridge: RemoteBridge | undefined;
   // A device login started from the topic (flow 471); ended when remote control goes off or the shell closes.
   let remoteDeviceLogin: RemoteDeviceLogin | undefined;
+  // `/connect` in the topic asks for the connected providers and then for the Add list; each would
+  // otherwise probe every provider's `/models` again. One probe serves both for a short while.
+  const connectedProviders = createConnectedProvidersCache(async () => {
+    const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+    return { detected, connected: await filterConnectedDetectedProviders(detected, {}) };
+  });
   let liveRemotePanel: RemotePanelHandle | undefined;
   // Flow 464 (AC6): the operator cards this shell mirrored to the topic, for the sidebar, the status tab and /decisions.
   const operatorCards = new OperatorConfirmationLog();
@@ -10434,6 +10444,7 @@ export async function launchTuiAgentShell(opts: {
               selectProviderModelInTui(otui, chrome, detected, {
                 onlyConnected: true,
                 env: process.env,
+                onConnected: () => connectedProviders.invalidate(),
                 // flow 304 AC7: disconnecting the provider the session is
                 // CURRENTLY using neither switches provider nor interrupts
                 // a turn — this only reports it. The session keeps
@@ -10442,6 +10453,7 @@ export async function launchTuiAgentShell(opts: {
                 // for THIS process when it was keryx-saved, so a LATER
                 // `/connect` (or a fresh launch) no longer offers it.
                 onDisconnected: (name, sharedWith) => {
+                  connectedProviders.invalidate();
                   // flow 304 review finding #2: the RESULT must name
                   // every other provider a shared env var also
                   // disconnected (e.g. built-in zai/zai-coding sharing
@@ -11229,12 +11241,6 @@ export async function launchTuiAgentShell(opts: {
       forceHandoff.isAwaitingSettlement ||
       turnLoop.queue.length > 0 ||
       leaseView()?.held() === true;
-    // `/connect` in the topic asks for the connected providers and then for the Add list; each would
-    // otherwise probe every provider's `/models` again. One probe serves both for a short while.
-    const connectedProviders = createConnectedProvidersCache(async () => {
-      const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
-      return { detected, connected: await filterConnectedDetectedProviders(detected, {}) };
-    });
     remoteBridge = new RemoteBridge({
       host: {
         sessionId: () => liveSession.summary.id,
@@ -11258,7 +11264,8 @@ export async function launchTuiAgentShell(opts: {
           }
         },
         recordOff: () => {
-          // Remote control going off ends a device login that was started from the topic.
+          // Also fires when the topic leaves with /new or /resume (sessionLeaving): a device login started from
+          // the topic ends whenever remote control goes off.
           remoteDeviceLogin?.abort();
           if (!sessionLease.canPersist()) return;
           try {

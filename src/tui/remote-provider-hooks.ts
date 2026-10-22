@@ -81,7 +81,8 @@ export interface RemoteDeviceLogin {
   readonly running: boolean;
 }
 
-const LOGIN_FAILED_TEXT = "Device login failed; see the shell for the cause.";
+const LOGIN_FAILED_TEXT = "Device login failed. Try /connect in the shell.";
+const LOGIN_NOT_APPLIED_TEXT = "Signed in, but not applied to this session; run /connect again or restart.";
 const LOGIN_TIMED_OUT_TEXT = "Device login timed out; nothing was saved.";
 const LOGIN_ABORTED_TEXT = "Device login was stopped; nothing was saved.";
 
@@ -135,8 +136,12 @@ export function createRemoteDeviceLogin(deps: RemoteDeviceLoginDeps = {}): Remot
             void notify(`Open ${challenge.verificationUri} and enter the code ${challenge.userCode}`).catch(() => undefined);
           },
         });
-        if (!result.ok || controller.signal.aborted) {
+        if (!result.ok) {
           return endedEarly();
+        }
+        if (controller.signal.aborted) {
+          // The grant is already saved; only this session did not pick it up.
+          return { ok: false, message: LOGIN_NOT_APPLIED_TEXT };
         }
         if (deps.isBusy?.() === true) {
           // A turn is running on the current provider's credentials; do not change the environment under it.
