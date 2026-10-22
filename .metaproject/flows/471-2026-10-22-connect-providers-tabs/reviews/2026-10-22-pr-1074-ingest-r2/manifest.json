@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewId": "2026-10-22-pr-1074-ingest-r2",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "report",
     "ref": "6a8941b75fd90a79caff47484440faffe1e226f2",
@@ -105,7 +105,7 @@
     "evidence-level"
   ],
   "createdAt": "2026-10-22T17:41:49.031Z",
-  "updatedAt": "2026-10-22T17:41:49.031Z",
+  "updatedAt": "2026-10-22T18:21:17.118Z",
   "flow": {
     "id": "471",
     "path": ".metaproject/flows/471-2026-10-22-connect-providers-tabs"

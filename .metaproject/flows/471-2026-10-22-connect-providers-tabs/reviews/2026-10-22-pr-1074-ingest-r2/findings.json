@@ -109,6 +109,10 @@
           "time": "2026-10-22T17:42:36.971Z"
         }
       }
+    },
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-02: reported at minor, not fixed in flow 471, operator poll 258"
     }
   },
   {
@@ -161,6 +165,10 @@
           "time": "2026-10-22T17:42:37.550Z"
         }
       }
+    },
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-03: reported at minor, not fixed in flow 471, operator poll 258"
     }
   },
   {
@@ -213,6 +221,10 @@
           "time": "2026-10-22T17:42:38.131Z"
         }
       }
+    },
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-04: reported at minor, not fixed in flow 471, operator poll 258"
     }
   },
   {
@@ -225,7 +237,11 @@
     "evidence": "src/commands/providers.ts resolveModelsForPicker: registry providers go through fetchOpenAiCompatModelsDetailed (empty models plus a failure on rejected/http/unreachable/empty); providerByName undefined returns the fallback list with no failure. tui-shell.ts runProvidersModal connect and custom branches use the condition quoted above. Merged from: review-logic-w3:L1, review-regression-w2:F-001, review-logic-w3:L4, review-logic-w3:L6.",
     "confidence": "medium",
     "file": "src/tui/tui-shell.ts",
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-05"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-05",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-05: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-06",
@@ -237,7 +253,11 @@
     "evidence": "src/remote/command-router.ts, diff hunk @@ 592,749 @@: testAddable and pickAddableProvider have no catch; connectAddable has `try { outcome = await host.connectWithDeviceLogin(...) } catch { outcome = { ok: false, message: \"Device login failed...\" } }`. handle() runs picker() inside detach(), and its `ended(end, result)` is skipped when picker() throws. Merged from: review-logic-w2:F-001, review-highload-w1:F-001.",
     "confidence": "medium",
     "file": "src/remote/command-router.ts",
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-06"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-06",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-06: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-07",
@@ -249,7 +269,11 @@
     "evidence": "tui-shell.ts runTest: no guard before probeProviderConnection(...), called from the Enter handler (`void runTest(\"connected\", row.name)`, `void runTest(\"add\", row.name)`) and from both [Test] button handlers. testProvider: (providerId) => testProviderForRemote(providerId, { probe: (id) => probeProviderConnection(id, { requireCredential: true }) }) has no dedup either. Merged from: review-highload-w2:F-001, review-performance-w2:F-002.",
     "confidence": "medium",
     "file": "src/tui/tui-shell.ts",
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-07"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-07",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-07: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-08",
@@ -262,7 +286,11 @@
     "confidence": "medium",
     "file": "src/tui/remote-provider-hooks.ts",
     "line": 136,
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-08"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-08",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-08: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-09",
@@ -274,7 +302,11 @@
     "evidence": "src/tui/remote-provider-hooks.ts createConnectedProvidersCache: `const mine = { at: now(), value }; entry = mine;` and `now() - entry.at < ttlMs`. Probe loop read in src/tui/tui-shell.ts filterConnectedDetectedProviders (lines ~780-787: `const result = await fetchOpenAiCompatModelsDetailed(fetchFn, compat, ..., { timeoutMs: MODELS_FETCH_TIMEOUT_MS })` inside `for (const prov of detected)`). The TTL-on-completion behaviour is not tested in the diff (the cache's test file is in another slice and was not read). Merged from: review-performance-w2:F-001, review-performance-w2:F-003.",
     "confidence": "medium",
     "file": "src/tui/remote-provider-hooks.ts",
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-09"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-09",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-09: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-10",
@@ -286,7 +318,11 @@
     "evidence": "pr-context.md:13 (Summary bullet 4) vs docs/docs/guides/drive-keryx-remotely.md:429. The README (`/model` and `/connect` as buttons) and cli-reference.md (`button pickers (`/model`, `/connect`, `/resume`)`) say only that /connect is a button picker and are not contradicted. Merged from: review-pr-contract-w1:PC-001, review-pr-contract-w1:PC-002, review-pr-contract-w1:PC-003, review-pr-contract-w2:PC-101, review-pr-contract-w3:PC-201, review-style-w1:F-002, review-logic-w1:LOGIC-1, review-logic-w1:LOGIC-2, review-pr-contract-w1:PC-005, review-pr-contract-w1:PC-006, review-style-w1:F-003.",
     "confidence": "high",
     "file": "docs/docs/guides/drive-keryx-remotely.md",
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-10"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-10",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-10: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-11",
@@ -298,7 +334,11 @@
     "evidence": "pr-context.md:22 vs flow.json acConfirmed.AC12 and journal.md line for AC12 in slice-01. Merged from: review-pr-contract-w1:PC-004, review-pr-contract-w4:PC-301, review-pr-contract-w1:PC-007, review-pr-contract-w4:PC-302.",
     "confidence": "high",
     "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/flow.json",
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-11"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-11",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-11: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-12",
@@ -310,7 +350,11 @@
     "evidence": "Diff hunk src/commands/shell.ts @@ 3246,3290 (agent REPL else-branch gains removedCommandHint); shell.ts lines 266-304 (READLINE_AGENT_COMMANDS has no /connect); shell.ts comment 'this readline AGENT REPL has no `/model`/`/connect` command to react to'. Merged from: review-architecture-w2:F-001, review-architecture-w1:F-001, review-architecture-w2:F-002, review-architecture-w2:F-003, review-pr-contract-w2:PC-102, review-architecture-w2:F-005, review-pr-contract-w2:PC-103.",
     "confidence": "high",
     "file": "src/commands/shell.ts",
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-12"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-12",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-12: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-13",
@@ -322,7 +366,11 @@
     "evidence": "shell.ts 3266-3267 and the changed message at 3270 (head 22e8cf835); the diff hunk at old 3246-3290. Merged from: review-clean-code-w1:F-004, review-style-w1:F-001, review-style-w2:F-004, review-style-w2:F-005.",
     "confidence": "high",
     "file": "src/commands/shell.ts",
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-13"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-13",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-13: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-14",
@@ -334,7 +382,11 @@
     "evidence": "command-router.ts connectAddable, lines 687-728 at head. Merged from: review-clean-code-w1:F-003, review-clean-code-w1:F-001, review-architecture-w2:F-004.",
     "confidence": "medium",
     "file": "src/remote/command-router.ts",
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-14"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-14",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-14: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-15",
@@ -347,7 +399,11 @@
     "confidence": "medium",
     "file": "src/tui/tui-shell.ts",
     "line": 3260,
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-15"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-15",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-15: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-16",
@@ -360,7 +416,11 @@
     "confidence": "medium",
     "file": "src/tui/tui-shell.ts",
     "line": 2278,
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-16"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-16",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-16: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-17",
@@ -373,7 +433,11 @@
     "confidence": "high",
     "file": "src/tui/tui-shell.ts",
     "line": 3987,
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-17"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-17",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-17: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-18",
@@ -386,7 +450,11 @@
     "confidence": "medium",
     "file": "src/tui/tui-shell.ts",
     "line": 3746,
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-18"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-18",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-18: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-19",
@@ -398,7 +466,11 @@
     "evidence": "waitFor: `if (predicate(frame) || Date.now() >= until) return frame;`. Discarded positive waits at connect-modal.test.ts ~416 (API key), ~571 (endpoint URL), ~593 (Device login), ~618 (Provider name), read from slice-04. Downstream assertions at the same tests: `readdirSync(configDir)` equals [], `not.toContain(...)`, `calls()` is 0, `frame.toContain(\"[Connect]\")`. Not run; reading only. Merged from: review-testing-practices-w2:F-001, review-testing-practices-w2:F-002, review-testing-practices-w2:F-003, review-logic-w4:F-001, review-logic-w4:F-002, review-logic-w4:F-003, review-testing-practices-w2:F-006.",
     "confidence": "high",
     "file": "src/tui/connect-modal.test.ts",
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-19"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-19",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-19: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-20",
@@ -410,7 +482,11 @@
     "evidence": "command-connect.test.ts 93-118 (existing refusal test and the new duplicate), 268-281 (not-answered test), 176-184 (add-list tests that end with `answer(undefined)` and no assertion). Producer branches: command-router.ts `pickAddableProvider` (`chosen === \"refused\"`, `chosen === undefined`, `action === \"refused\"`), `connectAddable` (`host.connectWithDeviceLogin === undefined`, try/catch). Not run; reading only. See M1, M5, M6, M7 below. Merged from: review-testing-practices-w2:F-004, review-testing-practices-w2:F-005, review-testing-practices-w1:F-001, review-testing-practices-w2:F-007, review-testing-practices-w2:F-008, review-style-w2:F-001, review-clean-code-w1:F-005, review-style-w2:F-006.",
     "confidence": "high",
     "file": "src/remote/command-connect.test.ts",
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-20"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-20",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-20: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-21",
@@ -422,7 +498,11 @@
     "evidence": "Slice lines 1520-1523, 1619-1621, 1803-1805, 1831. Merged from: review-style-w3:F-009, review-style-w3:F-010, review-style-w3:F-014, review-style-w3:F-015, review-style-w3:F-011.",
     "confidence": "low",
     "file": "src/tui/tui-shell.ts",
-    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-21"
+    "global_id": "2026-10-22-pr-1074-ingest-r2#CP-21",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-21: reported at minor, not fixed in flow 471, operator poll 258"
+    }
   },
   {
     "id": "CP-22",
@@ -444,6 +524,10 @@
         "evidence": "mutation-1.json#w1-M3",
         "reason": "mutant w1-M3 survived but 3 of 5 mutants in src/commands/shell.ts were killed: the suite covers this code, so it is a gap in covered code, severity held"
       }
+    },
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-22: reported at minor, not fixed in flow 471, operator poll 258"
     }
   },
   {
@@ -466,6 +550,10 @@
         "evidence": "mutation-1.json#w2-M7",
         "reason": "mutant w2-M7 survived but 5 of 9 mutants in src/remote/command-router.ts were killed: the suite covers this code, so it is a gap in covered code, severity held"
       }
+    },
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-23: reported at minor, not fixed in flow 471, operator poll 258"
     }
   },
   {
@@ -488,6 +576,10 @@
         "evidence": "mutation-1.json#w1-M4",
         "reason": "mutant w1-M4 survived but 1 of 2 mutants in src/tui/tui-shell.ts were killed: the suite covers this code, so it is a gap in covered code, severity held"
       }
+    },
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/report.md#CP-24: reported at minor, not fixed in flow 471, operator poll 258"
     }
   },
   {
@@ -506,6 +598,10 @@
       "from": "minor",
       "to": "major",
       "evidence": "mutation-2.json#w2-M10"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "PR #1077 (Tab test); .metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/2026-10-22-pr-1074-ingest-r2/research-evidence/mutation-4.md"
     }
   },
   {
