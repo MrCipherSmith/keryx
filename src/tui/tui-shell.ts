@@ -2263,8 +2263,7 @@ function openTabbedSurface(otui: OpenTui, target: StepTarget, opts: TabbedSurfac
   if (isModalChrome(target)) {
     let closedByStep = false;
     const tabIds = opts.tabs.map((tab) => tab.id);
-    let handle: ModalHandle | undefined;
-    handle = openModal(otui, target, {
+    const handle: ModalHandle | undefined = openModal(otui, target, {
       title: opts.title,
       tabs: opts.tabs,
       initialTab: opts.initialTab,
