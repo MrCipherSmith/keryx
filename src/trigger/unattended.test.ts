@@ -1,7 +1,17 @@
 import { expect, test } from "bun:test";
 import { OPERATOR_COMMANDS } from "../commands/review-operator";
 import { HOST_QUESTION_VERBS } from "../review/host-question-verbs";
-import { unattendedShellRefusal } from "./unattended";
+import { isUnattendedExcludedTool, unattendedRefusal, unattendedShellRefusal } from "./unattended";
+
+test("flow completion exceptions are never offered or confirmed unattended", () => {
+  expect(isUnattendedExcludedTool("flow_complete_exceptions")).toBe(true);
+  expect(unattendedRefusal("flow_complete_exceptions", {})).toContain("not offered");
+  expect(unattendedShellRefusal('keryx flow complete 469 --accept-gate review:head-commit --reason known'))
+    .toContain("only an operator");
+  expect(unattendedShellRefusal('keryx flow base set 469 --base main --reason retargeted'))
+    .toContain("only an operator");
+  expect(unattendedShellRefusal("keryx flow check-complete 469 --json")).toBeUndefined();
+});
 
 test("R2-40: an unattended run cannot state the coverage waiver or the over-ceiling answer, in any spelling", () => {
   for (const command of [

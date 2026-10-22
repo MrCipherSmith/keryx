@@ -37,6 +37,7 @@ function check(over: Partial<FlowCompletionCheck> = {}): FlowCompletionCheck {
     gates: [{ name: "acceptance-criteria", status: "pass", detail: "8 confirmed" }],
     passed: true,
     confirmationRequired: false,
+    exceptionContext: { head: null, acChecksum: null, prUrl: null, baseBranch: "main", mergedCommit: null },
     ...over,
   };
 }

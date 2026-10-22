@@ -221,6 +221,7 @@ function fakeActions(over: { passed?: boolean; merged?: boolean; updatedAt?: () 
         gates: [{ name: "acceptance-criteria", status: over.passed === false ? "fail" : "pass", detail: over.passed === false ? "unconfirmed: AC1" : "1 confirmed" }],
         passed: over.passed !== false,
         confirmationRequired: false,
+        exceptionContext: { head: null, acChecksum: null, prUrl: null, baseBranch: "main", mergedCommit: null },
       };
     },
     close: async (id) => {

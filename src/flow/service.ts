@@ -1,3 +1,4 @@
+import { completionExceptionQuestion, formatCompletionException, selectCompletionExceptions } from "./completion-exceptions";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { DEFAULT_LOCK_STALE_MS, isLockHeld, pathExists, writeFileAtomic, withFileLock } from "../lib/fs";
@@ -56,6 +57,14 @@ import {
 } from "./confirm-token";
 // Re-exported so a client (the CLI) reads the caveat through this facade,
 // not from the zone's internals (import policy, rule 2).
+export {
+  completionExceptionQuestion,
+  type CompletionExceptionContext,
+  formatCompletionException,
+  selectCompletionExceptions,
+  type CompletionExceptionSelection,
+} from "./completion-exceptions";
+export type { FlowService } from "./types";
 export { CONFIRMATION_CAVEAT, completionTarget } from "./confirm-token";
 // Flow 456: the shell's operator card tools reach the GitHub adapter through this facade, not the zone's internals.
 export { githubAdapter, githubPostReview, githubPrFiles } from "./tracker/github";
@@ -880,6 +889,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       for (const dir of dirs) {
         try {
           const flow = await readFlow(cwd, dir);
+          const completion = flow.signatures?.slice().reverse().find((signature) => signature.kind === "complete");
           summaries.push({
             id: flow.id,
             slug: flow.slug,
@@ -888,6 +898,8 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
             dir: `.metaproject/flows/${dir}`,
             tasksDone: flow.tasks.filter((task) => task.status === "done").length,
             tasksTotal: flow.tasks.length,
+            ...(flow.status === "done" && completion?.cleanCompletion !== undefined ? { cleanCompletion: completion.cleanCompletion } : {}),
+            ...(flow.status === "done" && completion?.exceptions ? { exceptions: completion.exceptions } : {}),
           });
         } catch {
           // surfaced by `flow check`
@@ -1388,13 +1400,29 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
-    async implemented({ cwd, id, prUrl }): Promise<FlowState> {
+    async baseSet({ cwd, id, base, reason }): Promise<FlowState> {
+      if (!base.trim() || !reason.trim() || /[\r\n]/.test(base + reason)) {
+        throw new Error("flow base set requires --base <branch> and a non-empty single-line --reason");
+      }
+      return mutate(cwd, id, async ({ dir, flow }) => {
+        await assertAcIntact(cwd, dir, flow);
+        const previous = flow.baseBranch ?? "not set";
+        flow.baseBranch = base.trim();
+        return save(cwd, dir, flow, "base-set", `${previous} → ${flow.baseBranch}: ${reason.trim()}`);
+      });
+    },
+
+    async implemented({ cwd, id, prUrl, fixOf }): Promise<FlowState> {
       if (!prUrl?.trim()) {
         throw new Error("flow implemented requires --pr <draft PR url>");
       }
       return mutate(cwd, id, async ({ dir, flow }) => {
       await assertAcIntact(cwd, dir, flow);
-      assertTransition(flow.status, "implemented");
+      const followUp = flow.status === "implemented" && Boolean(fixOf?.trim());
+      if (!followUp) assertTransition(flow.status, "implemented");
+      if (fixOf !== undefined && (!fixOf.trim() || /[\r\n]/.test(fixOf) || !flow.pr.url || flow.pr.url === prUrl)) {
+        throw new Error("--fix-of requires a round reference and a different, previously recorded PR");
+      }
 
       let detail = `draft PR: ${prUrl}`;
       if (deps.tracker && (await deps.tracker.detect())) {
@@ -1418,6 +1446,10 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         detail += " (tracker unavailable: existence not verified)";
       }
 
+      if (fixOf && flow.pr.url) {
+        flow.pr.previous = [...(flow.pr.previous ?? []), { url: flow.pr.url, fixOf: fixOf.trim() }];
+        detail += ` (fix-of: ${fixOf.trim()}; previous PR: ${flow.pr.url})`;
+      }
       flow.pr.url = prUrl;
       flow.status = "implemented";
       return save(cwd, dir, flow, "implemented", detail);
@@ -1453,10 +1485,15 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         gates: evaluation.gates,
         passed: allowed && evaluation.gates.every((gate) => gate.status !== "fail"),
         confirmationRequired: flow.gates?.confirmation === true,
+        exceptionContext: { head: evaluation.evaluatedHeadCommit ?? null, acChecksum: flow.acChecksum,
+          prUrl: flow.pr.url, baseBranch: flow.baseBranch ?? null, mergedCommit: mergedCommit ?? null },
       };
     },
 
     async complete({
+      acceptGates = [],
+      reason,
+      confirmExceptions,
       cwd,
       id,
       comment,
@@ -1496,7 +1533,42 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         confirmToken,
       );
 
-      const passed = gates.every((gate) => gate.status !== "fail");
+      const exceptionContext = { head: evaluatedHeadCommit ?? null, acChecksum: flow.acChecksum,
+        prUrl: flow.pr.url, baseBranch: flow.baseBranch ?? null, mergedCommit: mergedCommit ?? null };
+      const selection = selectCompletionExceptions(gates, acceptGates, reason);
+      let exceptions: import("./types").CompletionException[] = [];
+      let confirmationError: string | undefined;
+      if (!selection.ok) {
+        confirmationError = selection.error;
+      } else if (selection.exceptions.length && !selection.remaining.length) {
+        try {
+          const decision = await confirmExceptions?.(structuredClone(selection.exceptions), structuredClone(exceptionContext));
+          if (!decision || !/^(yes|да|y)$/iu.test(decision.operatorWords.trim()) ||
+              !["host-question", "terminal", "shell-card"].includes(decision.confirmedVia)) {
+            confirmationError = "Accepted exceptions require an affirmative operator decision.";
+          } else if (decision.confirmedVia === "host-question" && (!decision.hostQuestion ||
+              flow.completionAttempts?.some((attempt) => attempt.exceptions?.some((item) =>
+                item.hostQuestion?.source === decision.hostQuestion?.source &&
+                item.hostQuestion?.ref === decision.hostQuestion?.ref)))) {
+            confirmationError = "Host question is missing or already used; ask a fresh question.";
+          } else {
+            if (decision.confirmedVia === "host-question" && decision.hostQuestion?.questionText !== completionExceptionQuestion(flow.id, selection.exceptions, exceptionContext)) {
+              throw new Error("Stale completion question; ask the current question with its HEAD, AC and PR context.");
+            }
+            const current = await evaluateCompletionGates(cwd, dir, flow, mergedCommit ?? undefined, confirmToken);
+            if (current.evaluatedHeadCommit !== evaluatedHeadCommit || JSON.stringify(current.gates) !== JSON.stringify(gates)) {
+              confirmationError = "Completion gates changed while the operator answered; ask again with current refusal text.";
+            } else {
+              exceptions = selection.exceptions.map((item) => ({ ...item, ...decision, at: now() }));
+            }
+          }
+        } catch (error) {
+          confirmationError = `Exception confirmation failed: ${error instanceof Error ? error.message : String(error)}`;
+        }
+      }
+      if (confirmationError) gates.push({ name: "confirmation", status: "fail", detail: confirmationError });
+      const passed = selection.ok && !selection.remaining.length && !confirmationError &&
+        (!selection.exceptions.length || exceptions.length === selection.exceptions.length);
 
       // Flow 291, AC4 (review fix): re-check AC intactness HERE, explicitly
       // and caught, before anything below is trusted or written. Every gate
@@ -1532,7 +1604,9 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // inferring or backfilling anything about it.
       flow.completionAttempts = [
         ...(flow.completionAttempts ?? []),
-        { at: now(), gates: recordedGates, passed: recordedPassed, acChecksum: flow.acChecksum },
+        { at: now(), gates: recordedGates, passed: recordedPassed, acChecksum: flow.acChecksum,
+          ...(recordedPassed ? { cleanCompletion: exceptions.length === 0, ...(exceptions.length ? { exceptions } : {}) } : {}),
+        },
       ];
 
       // Persisted NOW, independent of the transition below — a plain `save`,
@@ -1597,7 +1671,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         return { flow, gates: lateGates, passed: false, issueComment, commented };
       }
 
-      if (mergedCommit) {
+      if (mergedCommit && recordedGates.some((gate) => gate.name === "main-merge" && gate.status === "pass")) {
         flow.merged = { commit: mergedCommit, ref: "origin/main", at: now() };
       }
       // Spent only here, on the passing path, immediately before the one write
@@ -1620,6 +1694,8 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         {
           at: now(),
           kind: "complete",
+          cleanCompletion: exceptions.length === 0,
+          ...(exceptions.length ? { exceptions } : {}),
           identity: completionIdentity,
           acChecksum: flow.acChecksum,
           ...(evaluatedHeadCommit ? { headCommit: evaluatedHeadCommit } : {}),
@@ -1633,7 +1709,9 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       const warnNote = healthWarnNote(recordedGates);
       assertTransition(flow.status, "done");
       flow.status = "done";
-      flow = await save(cwd, dir, flow, "done", warnNote ? `all gates passed (${warnNote})` : "all gates passed");
+      flow = await save(cwd, dir, flow, "done", exceptions.length
+        ? `completed with exceptions: ${exceptions.map((item) => `${item.gate}${item.condition ? `:${item.condition}` : ""}: ${item.detail}; reason: ${item.reason}; operator: ${item.operatorWords}`).join(" | ")}`
+        : warnNote ? `all gates passed (${warnNote})` : "all gates passed");
       issueComment = buildIssueComment(flow, recordedGates);
       if (comment && flow.source.type === "github-issue" && flow.source.ref && deps.tracker) {
         const ref = deps.tracker.parseRef(flow.source.ref);
@@ -2448,7 +2526,8 @@ function buildIssueComment(flow: FlowState, gates: GateOutcome[]): string {
     .map((gate) => (gate.name === "health" && warnNote ? warnNote : `${gate.name}: ${gate.status}`))
     .join(", ");
   return [
-    `Flow ${flow.id} (${flow.title}) is complete.`,
+    `Flow ${flow.id} (${flow.title}) is complete${flow.signatures?.at(-1)?.cleanCompletion === false ? " with exceptions" : ""}.`,
+    ...(flow.signatures?.at(-1)?.exceptions ?? []).map((item) => `- Accepted exception: ${formatCompletionException(item)}; operator: ${item.operatorWords}`),
     "",
     `- Draft PR: ${flow.pr.url ?? "n/a"}`,
     ...(flow.merged ? [`- Main merge: ${flow.merged.commit} contained in ${flow.merged.ref}`] : []),

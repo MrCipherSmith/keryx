@@ -1,3 +1,4 @@
+import { reviewCompletionHostAnswer } from "./review-operator";
 import { spawn } from "node:child_process";
 import { closeSync, openSync } from "node:fs";
 import { mkdir, readdir, readFile } from "node:fs/promises";
@@ -571,7 +572,7 @@ const TIER_FLAGS = [
   "--json",
 ] as const;
 
-const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage", "--head", "--waive"] as const;
+const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage", "--head", "--waive", "--answered-by", "--answer-text", "--question-text"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
@@ -4543,6 +4544,7 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
     throw new Error("Usage: keryx review complete <review-id-or-path>");
   }
   const dispositions = parseDispositions(args);
+  const hostQuestion = reviewCompletionHostAnswer(args);
   const headFlag = flagTokens(args).find((token) => token.name === "--head");
   if (headFlag !== undefined && (headFlag.value === undefined || headFlag.value.trim() === "")) {
     throw new Error("--head needs a commit SHA: --head <sha> (the commit this round ran against, 7-40 hex characters).");
@@ -4554,11 +4556,11 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
   // The command-risk floor is a text match; this is the check behind it. A coverage waiver is the operator's
   // statement, so a person has to be at the terminal that carries it.
   const isTerminal = seams?.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
-  if (waiver !== undefined && !isTerminal()) {
+  if (waiver !== undefined && hostQuestion === undefined && !isTerminal()) {
     throw new Error("--waive-coverage needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_coverage tool: the operator answers it as a card, then call the review_complete card. Outside keryx shell, run this command in a terminal.");
   }
   const readinessWaivers = parseReadinessWaivers(args);
-  if (readinessWaivers.length > 0 && !isTerminal()) {
+  if (readinessWaivers.length > 0 && hostQuestion === undefined && !isTerminal()) {
     throw new Error("--waive needs a terminal: the waiver is the operator's own statement and is refused when stdin or stdout is not a TTY. Inside keryx shell, call the review_waive_readiness tool: the operator answers it as a card, then call the review_complete card. Outside keryx shell, run this command in a terminal.");
   }
   // completeReviewGated also refuses slice routing narrower than a slice's content needs (security review M3).
@@ -4569,7 +4571,7 @@ async function runComplete(args: string[], seams?: ReviewCommandSeams): Promise<
     coverageWaiver,
     readiness,
     warnings,
-  } = await completeReviewGated(process.cwd(), ref, { dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
+  } = await completeReviewGated(process.cwd(), ref, { hostQuestion, dispositions, prLookup: seams?.prLookup ?? trackerPrLookup, prFiles: seams?.prFiles ?? githubPrFiles, ...(readinessWaivers.length === 0 ? {} : { waiveReadiness: readinessWaivers }), ...(waiver?.value === undefined ? {} : { waiveCoverage: waiver.value }), ...(headFlag?.value === undefined ? {} : { head: headFlag.value }) });
   for (const warning of warnings) console.error(`warning: ${warning}`);
   if (coverageWaiver !== undefined) {
     const shown = coverageWaiver.files.slice(0, FIRST_FILES).join(", ");
@@ -4652,7 +4654,7 @@ function parseDispositions(args: readonly string[]): FindingDispositionRecord[] 
     if (token.value === undefined) {
       throw new Error(`${token.name} needs a value.`);
     }
-    if (token.name === "--waive-coverage" || token.name === "--head" || token.name === "--waive") {
+    if (["--waive-coverage", "--head", "--waive", "--answered-by", "--answer-text", "--question-text"].includes(token.name)) {
       continue;
     }
     if (token.name === "--finding") {

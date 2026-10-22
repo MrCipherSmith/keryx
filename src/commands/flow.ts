@@ -1,3 +1,4 @@
+import { acceptedGateArgs, confirmCompletionExceptions } from "./flow-completion-confirm";
 import { randomInt } from "node:crypto";
 import path from "node:path";
 import { optionValue } from "../lib/args";
@@ -358,6 +359,8 @@ export async function flowCommand(args: string[]): Promise<void> {
         return await runCheckAcCommand(args.slice(1));
       case "owner":
         return await runOwner(args.slice(1));
+      case "base":
+        return await runBase(args.slice(1));
       case "outcome":
         return await runOutcome(args.slice(1));
       case "origin":
@@ -548,6 +551,8 @@ async function runList(args: string[] = []): Promise<void> {
           tasksDone: flow.tasksDone,
           tasksTotal: flow.tasksTotal,
           dir: flow.dir,
+          ...(flow.cleanCompletion === undefined ? {} : { cleanCompletion: flow.cleanCompletion }),
+          ...(flow.exceptions === undefined ? {} : { exceptions: flow.exceptions }),
         })),
         null,
         2,
@@ -583,6 +588,7 @@ async function runList(args: string[] = []): Promise<void> {
     // `flow.dir` is the project-relative path; the check keys by folder name.
     const folder = flow.dir.slice(flow.dir.lastIndexOf("/") + 1);
     const tags = [
+      ...(flow.cleanCompletion === false ? ["completed with exceptions"] : []),
       ...(remoteClash.has(folder) && !shared.has(flow.id) ? ["dup id"] : []),
       ...(notCommitted.has(folder) ? ["not committed"] : []),
     ];
@@ -635,6 +641,14 @@ async function runStatus(args: string[]): Promise<void> {
   const flow = await getService().get({ cwd: process.cwd(), id });
   banner(`flow ${flow.id}`, flow.title);
   console.log(`  status:  ${flowStatusLabel(flow.status)}`);
+  const completion = flow.signatures?.slice().reverse().find((signature) => signature.kind === "complete");
+  if (flow.status === "done" && completion?.cleanCompletion !== undefined) {
+    console.log(`  closure: ${completion.cleanCompletion ? "clean" : "completed with exceptions"}`);
+    for (const exception of completion.exceptions ?? []) {
+      console.log(`    ${exception.gate}: ${exception.detail}`);
+      console.log(`      reason: ${exception.reason}; operator: ${exception.operatorWords} [${exception.confirmedVia}]`);
+    }
+  }
   // Flow 299 (AC6): a `completing` flow whose lock nobody holds is not being
   // completed by anyone. It was interrupted, and only `flow recover` moves it.
   if (await isCompletionInterrupted(process.cwd(), flow)) {
@@ -1424,13 +1438,26 @@ async function printAcCheckAdvisory(cwd: string, id: string): Promise<void> {
   note(renderAcCheckAdvisoryNotice(outcome.verdicts));
 }
 
+async function runBase(args: string[]): Promise<void> {
+  const base = baseBranchOption(optionValue(args, "--base"));
+  const reason = textFlag(args, "--reason");
+  if (args[0] !== "set" || !base || !reason?.trim()) {
+    throw new Error('Usage: keryx flow base set <id> --base <branch> --reason "<why>"');
+  }
+  const flow = await getService().baseSet({
+    cwd: process.cwd(), id: requireId(args.slice(1)), base, reason,
+  });
+  console.log(`  ${style.green(symbols.ok)} Flow ${flow.id} base: ${flow.baseBranch}`);
+}
+
 async function runImplemented(args: string[]): Promise<void> {
   const id = requireId(args);
   const prUrl = optionValue(args, "--pr");
   if (!prUrl) {
     throw new Error("Usage: keryx flow implemented <id> --pr <draft PR url>");
   }
-  const flow = await getService().implemented({ cwd: process.cwd(), id, prUrl });
+  const fixOf = textFlag(args, "--fix-of");
+  const flow = await getService().implemented({ cwd: process.cwd(), id, prUrl, fixOf });
   console.log(
     `  ${style.green(symbols.ok)} Flow ${flow.id} ${style.cyan(symbols.arrow)} ${flowStatusLabel(flow.status)} ${style.dim(`(PR: ${prUrl})`)}`,
   );
@@ -1517,6 +1544,7 @@ async function runCheckComplete(args: string[]): Promise<void> {
   const mergeMark = result.merge.state === "merged" ? style.green(symbols.ok) : style.yellow(symbols.off);
   console.log(`  ${mergeMark} merge ${style.dim(`(${result.merge.state}: ${result.merge.detail})`)}`);
   printGateOutcomes(result.gates, (gate) => completionFixHint(gate, result.id));
+  note('Known exceptions: flow complete --accept-gate <gate|review:condition> --reason "<why>"; requires a fresh operator confirmation. Mandatory gates cannot be accepted.');
   note("Nothing was written: no status change, no completion attempt, no signature, no spent token.");
 }
 
@@ -1530,6 +1558,12 @@ async function runComplete(args: string[]): Promise<void> {
     mergedCommit: optionValue(args, "--merged"),
     ...(await signerIdentityArgs(cwd, optionValue(args, "--signed-by"))),
     confirmToken: optionValue(args, "--confirm-token"),
+    acceptGates: acceptedGateArgs(args),
+    reason: optionValue(args, "--reason"),
+    confirmExceptions: async (selected, context) => {
+      const flow = await getService().get({ cwd, id });
+      return confirmCompletionExceptions(args, selected, flow.id, cwd, {}, context);
+    },
   });
 
   heading(
@@ -1538,6 +1572,8 @@ async function runComplete(args: string[]): Promise<void> {
       : `${style.yellow(symbols.cross)} flow complete: returned to in-progress`,
   );
   printGateOutcomes(result.gates);
+  const completion = result.flow.signatures?.slice().reverse().find((signature) => signature.kind === "complete");
+  if (result.passed && completion?.cleanCompletion === false) note("Completed with exceptions — failing gate outcomes are preserved, not reported as passed.");
   if (result.passed) {
     const signature = result.flow.signatures?.at(-1);
     if (signature) {
@@ -1821,8 +1857,10 @@ function printHelp(): void {
     "keryx flow ac kinds <id> [--json]   (verification kind per criterion; read-only, never gates)",
     "  every `flow ac` subcommand refuses an argument it does not use — an extra positional, an unknown flag, or --criterion/--text given alone",
     "keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]   (ADVISORY: Jev vs. the frozen criteria; never changes flow state)",
-    "keryx flow implemented <id> --pr <url>",
+    'keryx flow base set <id> --base <branch> --reason "<why>"',
+    "keryx flow implemented <id> --pr <url> [--fix-of <round-ref>]",
     'keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"] [--confirm-token <token>]',
+    '  [--accept-gate <gate|review:condition>]... --reason "<why>" [--answered-by <host:ref>] (fresh operator approval; no blanket --force)',
     "keryx flow check-complete <id> [--merged <commit>] [--confirm-token <token>] [--json]   (every completion gate plus the PR's merge state; writes nothing)",
     "keryx flow confirm <id> [--merged]   (mint a completion confirmation token; needs a terminal and a typed challenge)",
     'keryx flow recover <id> --reason "<why>"   (move a flow left in `completing` back to `in-progress`)',

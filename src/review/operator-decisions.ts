@@ -1,3 +1,4 @@
+import { withCompletionLock } from "./completion-lock";
 // Operator decisions in `<package>/operator-decisions.json`. Two record families share the file.
 //
 // - Gate decisions (flow 457, T7) relax a review gate. A mutation waiver ("Not run: mutation pass" on an attended
@@ -188,11 +189,12 @@ async function readEntries(packageDir: string): Promise<unknown[]> {
 }
 
 /**
- * Run `fn` holding the package's decisions lock. Not re-entrant: `fn` must not call a recorder in this module, which
+ * Run `fn` holding completion then decisions locks, so completion rollback cannot erase a concurrent answer.
+ * The completion lock is re-entrant; the decisions lock is not: `fn` must not call a recorder in this module, which
  * takes the lock itself.
  */
 export async function withOperatorDecisionsLock<T>(packageDir: string, fn: () => Promise<T>): Promise<T> {
-  return withFileLock(path.join(packageDir, OPERATOR_DECISIONS_LOCK), fn);
+  return withCompletionLock(packageDir, () => withFileLock(path.join(packageDir, OPERATOR_DECISIONS_LOCK), fn));
 }
 
 /** Append one entry, keeping every valid entry the file holds. The caller holds the lock. */

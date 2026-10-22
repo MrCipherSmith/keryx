@@ -1,3 +1,4 @@
+import { completionSnapshot } from "./completion-snapshot";
 import { READY_DISPATCH } from "./dispatch.test-helpers";
 import { COVERAGE_MD_MARK } from "./coverage-md";
 import { afterEach, describe, test, expect } from "bun:test";
@@ -33,6 +34,7 @@ import {
 } from "./types";
 import type { ManagedReviewInput, ManagedReviewManifest, StructuredReviewFinding } from "./types";
 import { withSpendSection } from "./dispatch-usage";
+import { reviewCompletionQuestion } from "./completion-host";
 
 let ROOT = "";
 const ORIGINAL_CWD = process.cwd();
@@ -2062,5 +2064,173 @@ function createManagedReviewPackage(input: ManagedReviewIngestInput) {
   return createPendingManagedReviewPackage({
     research: { version: 1, scopeReviewed: true, rawReconciled: true, obligations: [], dispatch: READY_DISPATCH },
     ...input,
+  });
+}
+
+
+test("the authoritative manifest schema accepts completion host provenance", async () => {
+  await fresh(); await useRealSchema();
+  const host = { source: "codex" as const, ref: "q", questionText: "Complete?", answerText: "yes", time: "2026-10-20T10:00:00Z" };
+  const manifest = { ...validManifest(), completionConfirmations: [host], readiness_waivers: [{ item: "tests", operator_quote: "operator accepts", time: host.time, confirmedVia: "host-question", hostQuestion: host }] };
+  expect(await validateManagedReviewManifest(ROOT, manifest as ManagedReviewManifest)).toMatchObject({ valid: true });
+});
+
+
+for (const scenario of ["success", "changed report", "replay", "nested", "unattended"] as const) {
+  test(`host completion integration: ${scenario}`, async () => {
+    await fresh();
+    const { path: pkg } = await ingestFindings("2026-10-21-host-integration", {
+      target: { kind: "pr", ref: "https://github.com/acme/app/pull/1", head: "1234567" },
+    });
+    const dir = path.join(ROOT, pkg);
+    const stored = JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")) as ManagedReviewManifest;
+    const context = {
+      reviewId: stored.reviewId, head: stored.target.head ?? "not recorded",
+      report: await readFile(path.join(dir, "report.md"), "utf8"),
+      manifest: stored,
+      research: await readFile(path.join(dir, "research.json"), "utf8"),
+      findings: await readFile(path.join(dir, "findings.json"), "utf8"),
+      decisions: await readFile(path.join(dir, "decisions.md"), "utf8"),
+      coverage: JSON.parse(await completionSnapshot(dir)) as Record<string, string | null>,
+      dispositions: [], waiveReadiness: [], waiveCoverage: undefined,
+    };
+    const hostQuestion = { source: "codex" as const, ref: "host-integration", questionText: reviewCompletionQuestion(context), answerText: "yes", time: "2026-10-21T10:00:00Z" };
+    const previous = process.env["KERYX_TOOL_CALL"];
+    const previousUnattended = process.env["KERYX_UNATTENDED"];
+    delete process.env["KERYX_TOOL_CALL"];
+    if (scenario === "nested") process.env["KERYX_TOOL_CALL"] = "1";
+    if (scenario === "unattended") process.env["KERYX_UNATTENDED"] = "1";
+    try {
+      const close = () => completeManagedReview(ROOT, pkg, { hostQuestion, prLookup: async () => {
+        if (scenario === "changed report") await appendFile(path.join(dir, "report.md"), "\nChanged during head lookup\n");
+        return { exists: true, state: "OPEN", headSha: "1234567" };
+      } });
+      if (scenario === "nested" || scenario === "unattended") {
+        await expect(close()).rejects.toThrow(/nested|unattended/);
+        expect(JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8"))).toEqual(stored);
+        expect(await readFile(path.join(dir, "research.json"), "utf8")).toBe(context.research);
+        expect(await readFile(path.join(dir, "findings.json"), "utf8")).toBe(context.findings);
+      } else if (scenario === "changed report") {
+        await expect(close()).rejects.toThrow(/changed|stale/i);
+        expect(JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")).status).toBe("draft");
+      } else if (scenario === "replay") {
+        const outcomes = await Promise.allSettled([close(), close()]);
+        expect(outcomes.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+        expect(JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")).completionConfirmations).toEqual([hostQuestion]);
+      } else {
+        const result = await close();
+        expect(result.manifest.status).toBe("closed");
+        expect(result.manifest.completionConfirmations).toEqual([hostQuestion]);
+      }
+    } finally {
+      if (previous === undefined) delete process.env["KERYX_TOOL_CALL"]; else process.env["KERYX_TOOL_CALL"] = previous;
+      if (previousUnattended === undefined) delete process.env["KERYX_UNATTENDED"]; else process.env["KERYX_UNATTENDED"] = previousUnattended;
+    }
+  });
+}
+
+
+for (const throughCli of [false, true]) {
+test(`host completion persists dispositions and both waiver provenances atomically (CLI=${throughCli})`, async () => {
+  await fresh();
+  const pkg = await packageWithUncoveredFiles("2026-10-21-host-waivers");
+  const dir = path.join(ROOT, pkg);
+  await writeFile(path.join(dir, "coverage.md"), "# Coverage\n\nReviewer results omitted in this deliberately incomplete fixture.\n");
+  const stored = JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")) as ManagedReviewManifest;
+  const evidence = "fixed by regression test " + "verified evidence ".repeat(150);
+  const dispositions = [{ finding: "F-001", state: "acted-on" as const, evidence }];
+  const waiveReadiness = [{ items: ["coverage-md"], quote: "Operator accepts this recorded coverage limitation" }];
+  const waiveCoverage = "Operator accepts the explicitly recorded scope limitation";
+  const context = { reviewId: stored.reviewId, head: stored.target.head ?? "not recorded",
+    report: await readFile(path.join(dir, "report.md"), "utf8"),
+    manifest: stored,
+    research: await readFile(path.join(dir, "research.json"), "utf8"),
+    findings: await readFile(path.join(dir, "findings.json"), "utf8"),
+    decisions: await readFile(path.join(dir, "decisions.md"), "utf8"),
+      coverage: JSON.parse(await completionSnapshot(dir)) as Record<string, string | null>, dispositions, waiveReadiness, waiveCoverage };
+  const hostQuestion = { source: "codex" as const, ref: "host-waivers", time: "2026-10-21T10:00:00Z", answerText: "yes", questionText: reviewCompletionQuestion(context) };
+  expect(hostQuestion.questionText.length).toBeGreaterThan(2000);
+  const previous = process.env["KERYX_TOOL_CALL"];
+  delete process.env["KERYX_TOOL_CALL"];
+  try {
+    if (throughCli) {
+      process.chdir(ROOT);
+      process.exitCode = 0;
+      await reviewCommand(["complete", pkg,
+        "--answered-by", `codex:${hostQuestion.ref}`, "--answer-text", hostQuestion.answerText,
+        "--question-text", hostQuestion.questionText,
+        "--finding", "F-001", "--disposition", "acted-on", "--evidence", evidence,
+        "--waive", "coverage-md", "Operator accepts this recorded coverage limitation",
+        "--waive-coverage", waiveCoverage,
+      ], { isTerminal: () => false });
+      expect(process.exitCode ?? 0).toBe(0);
+    } else {
+      await completeManagedReview(ROOT, pkg, { hostQuestion, dispositions, waiveReadiness, waiveCoverage });
+    }
+    const manifest = JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")) as ManagedReviewManifest;
+    if (throughCli) hostQuestion.time = manifest.completionConfirmations![0]!.time;
+    expect(manifest.status).toBe("closed");
+    expect(manifest.completionConfirmations).toEqual([hostQuestion]);
+    expect(manifest.readiness_waivers).toContainEqual(expect.objectContaining({ confirmedVia: "host-question", hostQuestion }));
+    const research = JSON.parse(await readFile(path.join(dir, "research.json"), "utf8"));
+    expect(research.dispatch.coverageWaiver).toMatchObject({ confirmedVia: "host-question", hostQuestion });
+    const findings = JSON.parse(await readFile(path.join(dir, "findings.json"), "utf8"));
+    expect(findings[0].disposition).toMatchObject({ state: "acted-on", evidence });
+  } finally {
+    if (previous === undefined) delete process.env["KERYX_TOOL_CALL"]; else process.env["KERYX_TOOL_CALL"] = previous;
+  }
+});
+
+
+}
+
+for (const phase of ["waiver", "disposition", "readiness"] as const) {
+  test(`host completion refuses unrelated mutation during ${phase}`, async () => {
+    await fresh();
+    const pkg = await packageWithUncoveredFiles(`2026-10-21-race-${phase}`);
+    const dir = path.join(ROOT, pkg);
+    const waiveReadiness = phase === "readiness" ? [{ items: ["coverage-md"], quote: "Operator accepts this recorded coverage limitation" }] : [];
+    if (phase === "readiness") await writeFile(path.join(dir, "coverage.md"), "# Coverage\n\nReviewer results omitted in this deliberately incomplete fixture.\n");
+    const stored = JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")) as ManagedReviewManifest;
+    const waiver = "Operator accepts the explicitly recorded scope limitation";
+    let armed = false;
+    const mutate = () => {
+      if (!armed) return;
+      armed = false;
+      require("node:fs").appendFileSync(path.join(dir, "report.md"), "\nUnconfirmed change\n");
+    };
+    const dispositions = phase === "disposition" ? [{ finding: "F-001", state: "acted-on" as const, evidence: "fixed by regression test" }] : [];
+    const context = { reviewId: stored.reviewId, head: stored.target.head ?? "not recorded",
+      report: await readFile(path.join(dir, "report.md"), "utf8"), manifest: stored,
+      research: await readFile(path.join(dir, "research.json"), "utf8"),
+      findings: await readFile(path.join(dir, "findings.json"), "utf8"),
+      decisions: await readFile(path.join(dir, "decisions.md"), "utf8"),
+      coverage: JSON.parse(await completionSnapshot(dir)) as Record<string, string | null>, dispositions, waiveReadiness, waiveCoverage: waiver };
+    const hostQuestion = { source: "codex" as const, ref: `race-${phase}`, time: "2026-10-21T10:00:00Z", answerText: "yes", questionText: reviewCompletionQuestion(context) };
+    let waiverRecorded = false;
+    const now = new Date("2026-10-21T10:00:00Z");
+    let clockCalls = 0;
+    now.toISOString = () => {
+      clockCalls++;
+      waiverRecorded = true;
+      if (phase === "waiver" || (phase === "readiness" && clockCalls === 2)) mutate();
+      return "2026-10-21T10:00:00.000Z";
+    };
+    if (phase === "disposition") {
+      Object.defineProperty(dispositions[0], "state", { enumerable: true, get() { if (waiverRecorded) mutate(); return "acted-on"; } });
+    }
+    const previous = process.env["KERYX_TOOL_CALL"];
+    delete process.env["KERYX_TOOL_CALL"];
+    armed = true;
+    try {
+      await expect(completeManagedReview(ROOT, pkg, { hostQuestion, dispositions, waiveReadiness, waiveCoverage: waiver, now })).rejects.toThrow(/changed|stale/i);
+      if (phase === "readiness") expect(clockCalls).toBe(2);
+      expect(JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8"))).toEqual(stored);
+      expect(await readFile(path.join(dir, "research.json"), "utf8")).toBe(context.research);
+      expect(await readFile(path.join(dir, "findings.json"), "utf8")).toBe(context.findings);
+      expect(await readFile(path.join(dir, "report.md"), "utf8")).toContain("Unconfirmed change");
+    } finally {
+      if (previous === undefined) delete process.env["KERYX_TOOL_CALL"]; else process.env["KERYX_TOOL_CALL"] = previous;
+    }
   });
 }
