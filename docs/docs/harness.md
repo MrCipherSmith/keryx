@@ -35,7 +35,7 @@ testable with no network at all.
 
 Every full adapter (`anthropic`, `openai`, `gemini`, the OpenAI-compatible
 engine behind the gateways above) normalizes to the same event stream, and a
-shared contract test (`src/harness/provider/stream-contract.test.ts`) pins
+shared contract test (`stream-contract.test.ts` in the harness provider directory) pins
 three cases identically across all four: a stream that ends mid tool-call
 (a `provider_error` naming the pending call, never a synthesized result), an
 in-stream error envelope (classified into the same retry taxonomy a pre-2xx

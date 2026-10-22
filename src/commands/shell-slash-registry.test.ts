@@ -68,7 +68,7 @@ async function chatOutput(...lines: string[]): Promise<string> {
     clock: () => "1970-01-01T00:00:00.000Z",
     idSeq: () => "id",
     initial: { provider: "fake", model: "fixture-model" },
-    // Present so `/models` / `/provider` do not take the "not available" branch.
+    // Present so `/models` / `/connect` do not take the "not available" branch.
     selectProviderModel: async () => ({ provider: "fake", model: "fixture-model" }),
   };
   await runShell(io, deps);
