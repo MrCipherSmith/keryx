@@ -39,7 +39,7 @@ export const REMOTE_COMMANDS: readonly RemoteCommandSpec[] = [
   { name: "status", kind: "text", description: "Show the session: model, mode, queue, usage" },
   { name: "doctor", kind: "text", description: "Run the health checks" },
   { name: "model", kind: "picker", description: "Pick another model with buttons" },
-  { name: "connect", kind: "picker", description: "Switch to a connected provider with buttons" },
+  { name: "connect", kind: "picker", description: "Switch to a connected provider with buttons; also add a provider (device login only) and test it" },
   { name: "resume", kind: "picker", description: "Return to an earlier session with buttons" },
   { name: "sessions", kind: "builtin", description: "List recent sessions" },
   { name: "history", kind: "builtin", description: "Post the last messages of this session here: /history [N], 1 to 20" },

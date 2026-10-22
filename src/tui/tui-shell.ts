@@ -3183,6 +3183,58 @@ function clipText(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
+/** How long a device login started from Telegram may wait for the operator to authorize it. */
+const REMOTE_DEVICE_LOGIN_LIMIT_MS = 10 * 60_000;
+
+/** What a provider test says when there is nothing to authenticate with; no network call is made. */
+const NO_CREDENTIAL_TEXT = "no credential, Connect first";
+
+/** How probing one provider's `/models` ended. Carries no credential, address or response body. */
+export type ProviderProbeOutcome =
+  | { kind: "unknown" }
+  | { kind: "no-credential" }
+  | { kind: "live"; modelCount: number; profileSummary?: ProfileRefreshSummary }
+  | { kind: "failed"; failure: ModelsFailure };
+
+/**
+ * The [Test] probe of the Add provider tab, shared with Telegram's `/connect`.
+ * With `requireCredential`, a provider that needs a key and has none answers
+ * `no-credential` without sending anything (an anonymous request could only
+ * come back 401).
+ */
+export async function probeProviderConnection(
+  name: string,
+  deps: {
+    fetch?: typeof fetch;
+    env?: Record<string, string | undefined>;
+    configDir?: string;
+    requireCredential: boolean;
+    /** Called once, right before the network call. */
+    onStart?: () => void;
+  },
+): Promise<ProviderProbeOutcome> {
+  const provider = connectionProviderByName(name, deps.configDir);
+  if (provider === undefined) return { kind: "unknown" };
+  const env = deps.env ?? process.env;
+  if (deps.requireCredential && (provider.requiresApiKey ?? true) && classifyProviderConnection(name, env, deps.configDir).kind === "no-credential") {
+    return { kind: "no-credential" };
+  }
+  deps.onStart?.();
+  // Flow 327 (AC2/AC13): refresh the model-profile store from this same
+  // probe and mention the diff in the result line.
+  let profileSummary: ProfileRefreshSummary | undefined;
+  const result = await testProviderConnection(provider, deps.fetch ?? globalThis.fetch, env, {
+    ...(deps.configDir !== undefined ? { dir: deps.configDir } : {}),
+    onSummary: (s) => {
+      profileSummary = s;
+    },
+  });
+  if (result.source === "live") {
+    return { kind: "live", modelCount: result.models.length, ...(profileSummary !== undefined ? { profileSummary } : {}) };
+  }
+  return { kind: "failed", failure: result.failure ?? { kind: "empty" } };
+}
+
 /** What a status line under a row can hold: plain text or styled text. */
 type StatusContent = string | ReturnType<OpenTui["t"]>;
 
@@ -3323,38 +3375,33 @@ function pickProvidersTabbedStep(otui: OpenTui, target: StepTarget, opts: Provid
 
     async function runTest(tabId: ProvidersTabId, name: string): Promise<void> {
       const d = rowsOf(tabId).find((row) => row.name === name);
-      const provider = connectionProviderByName(name, opts.configDir);
       if (d === undefined) return;
-      if (provider === undefined) {
-        setStatus(tabId, name, otui.t`${roleChunk(otui, "error", "✗")} unknown provider — cannot test`);
-        return;
-      }
-      // Nothing to authenticate with, so nothing to probe: say so instead of
-      // sending an anonymous request that can only come back 401.
-      if (tabId === "add" && (provider.requiresApiKey ?? true) && classifyProviderConnection(name, opts.env ?? process.env, opts.configDir).kind === "no-credential") {
-        setStatus(tabId, name, otui.t`${roleChunk(otui, "attention", "·")} no credential, Connect first`);
-        return;
-      }
-      setStatus(tabId, name, otui.t`${dimChunk(otui, "testing…")}`);
-      // Flow 327 (AC2/AC13): refresh the model-profile store from this same
-      // probe and mention the diff in the result line.
-      let profileSummary: ProfileRefreshSummary | undefined;
-      const result = await testProviderConnection(provider, opts.fetch ?? globalThis.fetch, opts.env ?? process.env, {
-        ...(opts.configDir !== undefined ? { dir: opts.configDir } : {}),
-        onSummary: (s) => {
-          profileSummary = s;
-        },
+      // The probe, the "no credential" rule and the failure wording are shared
+      // with Telegram's /connect [Test] (see `probeProviderConnection`).
+      const outcome = await probeProviderConnection(name, {
+        ...(opts.fetch !== undefined ? { fetch: opts.fetch } : {}),
+        ...(opts.env !== undefined ? { env: opts.env } : {}),
+        ...(opts.configDir !== undefined ? { configDir: opts.configDir } : {}),
+        requireCredential: tabId === "add",
+        onStart: () => setStatus(tabId, name, otui.t`${dimChunk(otui, "testing…")}`),
       });
       // The row (or the whole step) may be gone by the time the probe resolves
       // — Esc, a selection or a disconnect elsewhere. Write nothing then.
       if (resolved) return;
-      setStatus(
-        tabId,
-        name,
-        result.source === "live"
-          ? otui.t`${roleChunk(otui, "ok", "✓")} ok — ${String(result.models.length)} model(s)${formatProfileSummarySuffix(profileSummary)}`
-          : otui.t`${roleChunk(otui, "error", "✗")} ${modelsFailureLine(labelOf(d), result.failure ?? { kind: "empty" })}`,
-      );
+      switch (outcome.kind) {
+        case "unknown":
+          setStatus(tabId, name, otui.t`${roleChunk(otui, "error", "✗")} unknown provider — cannot test`);
+          return;
+        case "no-credential":
+          setStatus(tabId, name, otui.t`${roleChunk(otui, "attention", "·")} ${NO_CREDENTIAL_TEXT}`);
+          return;
+        case "live":
+          setStatus(tabId, name, otui.t`${roleChunk(otui, "ok", "✓")} ok — ${String(outcome.modelCount)} model(s)${formatProfileSummarySuffix(outcome.profileSummary)}`);
+          return;
+        case "failed":
+          setStatus(tabId, name, otui.t`${roleChunk(otui, "error", "✗")} ${modelsFailureLine(labelOf(d), outcome.failure)}`);
+          return;
+      }
     }
 
     function armOrConfirmDisconnect(name: string): void {
@@ -11212,6 +11259,65 @@ export async function launchTuiAgentShell(opts: {
             label: prov.label ?? prov.name,
             ...(prov.name === currentSel.provider ? { current: true } : {}),
           }));
+        },
+        // Flow 471: the Add provider list of Telegram's /connect. The label, whether it is connected and
+        // whether it offers a device login; never a key, an address or an env var name.
+        listAddableProviders: async () => {
+          const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+          const connectedNames = new Set((await filterConnectedDetectedProviders(detected, {})).map((prov) => prov.name));
+          return detected
+            .filter((prov) => prov.name !== "fake")
+            .map((prov) => ({
+              id: prov.name,
+              label: prov.label ?? prov.name,
+              connected: connectedNames.has(prov.name),
+              deviceLogin: catalogAllows(prov.name, "device-code"),
+            }));
+        },
+        // The same probe as the Add provider tab's [Test]; the reply is the status text, never a credential.
+        testProvider: async (providerId) => {
+          const outcome = await probeProviderConnection(providerId, { requireCredential: true });
+          switch (outcome.kind) {
+            case "unknown":
+              return { ok: false, message: "Unknown provider, cannot test." };
+            case "no-credential":
+              return { ok: false, message: NO_CREDENTIAL_TEXT };
+            case "live":
+              return { ok: true, message: `ok — ${outcome.modelCount} model(s)` };
+            case "failed": {
+              const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+              const label = detected.find((prov) => prov.name === providerId)?.label ?? providerId;
+              return { ok: false, message: modelsFailureLine(label, outcome.failure) };
+            }
+          }
+        },
+        // Device login only: the code and link go to the chat through `notify` (public by design); the tokens go to the
+        // user-global store and never leave it. A login nobody completes ends at the time limit.
+        connectWithDeviceLogin: async (providerId, notify) => {
+          if (!catalogAllows(providerId, "device-code")) {
+            return { ok: false, message: "This provider has no device login; its key is entered in the shell with /connect." };
+          }
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), REMOTE_DEVICE_LOGIN_LIMIT_MS);
+          try {
+            const result = await loginDeviceCode({
+              provider: providerId,
+              fetch: (input, init) => globalThis.fetch(input, init),
+              signal: controller.signal,
+              onChallenge: (challenge) => {
+                void notify(`Open ${challenge.verificationUri} and enter the code ${challenge.userCode}`).catch(() => undefined);
+              },
+            });
+            if (!result.ok) {
+              return { ok: false, message: controller.signal.aborted ? "Device login timed out; nothing was saved." : `Device login failed: ${result.error}` };
+            }
+            applyOAuthAccessToEnv();
+            return { ok: true, message: `${providerId} connected. The session and model are unchanged.` };
+          } catch (error) {
+            return { ok: false, message: controller.signal.aborted ? "Device login timed out; nothing was saved." : `Device login failed: ${error instanceof Error ? error.message : "device authorization failed"}` };
+          } finally {
+            clearTimeout(timer);
+          }
         },
         listModels: async (providerId) => {
           const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
