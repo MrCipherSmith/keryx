@@ -1,0 +1,127 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Slice-02 (registry/help text, shell.ts /provider removal, Telegram router Add provider/Test/device-login Connect) is clean at the Clean Code level. The /provider removal is complete in the slice and the removed-command hint is a small pure function with a typed table. Four minor findings: one repeated 'not answered' guard (5 sites), one dead guard in pickAddableProvider, one 41-line connectAddable with mixed abstraction, one comment left plural after /provider was removed. One info: a test that duplicates an earlier one.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/remote/command-router.ts",
+      "line": null,
+      "quote": "    if (action === undefined) {\n      this.ctx.record(\"/connect not answered in time; nothing changed\");",
+      "problem": "The picker-answer guard `if (x === \"refused\") return \"failed\"; if (x === undefined) { record(\"... not answered in time; nothing changed\"); return \"failed\"; }` is now written five times in this class. The diff adds two new copies in pickAddableProvider (after `this.pick(...)` and after `this.ask(...)`), next to the existing ones in pickModel, pickProvider and pickSession. The string \"/connect not answered in time; nothing changed\" alone appears three times inside the /connect flow.",
+      "impact": "Cost to whoever next changes the wording, the reaction or the record text of a timed-out picker: five sites must be edited in step. No wrong behaviour today.",
+      "suggested_fix": "Extract one private helper, e.g. `settledOrFailed(answer, command)`, that returns true when the caller should stop, records the timeout text and handles \"refused\"; call it at all five sites.",
+      "evidence": "command-router.ts: pickModel 578-584, pickProvider 626-632, pickAddableProvider 653-659 and 665-671, pickSession 742-748 (head 22e8cf835). Sites found by reading the file's pick*/ask call sites; `keryx ctx rg 'not answered in time; nothing changed'` lists the record lines.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:router-unanswered-guard-dry"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/remote/command-router.ts",
+      "line": null,
+      "quote": "    if (host.listAddableProviders === undefined) {\n      await this.ctx.reply(\"/connect is not available from this shell.\").catch(() => false);",
+      "problem": "This guard in pickAddableProvider cannot be reached. The method is private and has exactly two callers, both in pickProvider (lines 616 and 634), and both run only when `canAdd` (`host.listAddableProviders !== undefined`) is true. The check and its reply are dead code, and the reply text reads as though the path exists.",
+      "impact": "A reader has to prove the guard unreachable before trusting the method, and a later caller that drops the `canAdd` check would get a silent fallback message instead of a type error.",
+      "suggested_fix": "Pass the already-checked `listAddableProviders` function (or the host method) into pickAddableProvider as a parameter, or use a non-optional host type there, and delete the guard.",
+      "evidence": "`keryx ctx rg pickAddableProvider src/remote/command-router.ts`: matches at 616, 634 (callers) and 640 (definition); 612 sets `canAdd`; 614 and 622 gate both calls.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:router-dead-guard-addable"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/remote/command-router.ts",
+      "line": null,
+      "quote": "  private async connectAddable(provider: AddableProvider): Promise<AskResult> {",
+      "problem": "connectAddable is 41 lines and mixes levels: three refusal branches (already connected, key provider, host hook missing), a busy check, the notify closure, a try/catch around the host call, and the result post. The refusal branches repeat the same record + compose + reply + return \"failed\" shape (691-693, 697-701, 709-712).",
+      "impact": "Cost to whoever adds the next connect rule: the decision table (who may connect, and how) is interleaved with the I/O to the topic.",
+      "suggested_fix": "Split a pure `connectRefusal(provider, host)` that returns the refusal text or undefined, and keep connectAddable as: refusal check, busy check, run login, post result.",
+      "evidence": "command-router.ts connectAddable, lines 687-728 at head.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:router-connectaddable-size"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "file": "src/commands/shell.ts",
+      "line": null,
+      "quote": "// calling them unknown. Anything else falls back to the old message.",
+      "problem": "Stale comment. The diff changed its first line from `/models` / `/provider` are chat-mode commands to `/models` is a chat-mode command, but the continuation still says `calling them unknown`. It also now sits above a fallback that appends removedCommandHint, which the comment does not mention.",
+      "impact": "Misleads the next reader about how many commands the branch covers and what 'the old message' is.",
+      "suggested_fix": "Reword: `/models` is a chat-mode command: say so instead of calling it unknown. A removed command gets its hint; anything else falls back to the old message.",
+      "evidence": "shell.ts 3266-3267 and the changed message at 3270 (head 22e8cf835); the diff hunk at old 3246-3290.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:shell-stale-comment-them"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/remote/command-connect.test.ts",
+      "line": null,
+      "quote": "it(\"keeps that refusal when the shell cannot list addable providers\"",
+      "problem": "The new test sets up the same harness as the test just above it (`listProviders: async () => []`, no `listAddableProviders`) and asserts a subset of its expectations (no choices, reply contains 'No provider is connected'). The name implies a new case, but the existing test already runs with no `listAddableProviders`, so nothing new is covered.",
+      "impact": "Two occurrences only, so informational. It reads as coverage of a new branch that it does not exercise.",
+      "suggested_fix": "Delete it, or make the previous test's name state that it covers the host with no Add provider hook.",
+      "evidence": "command-connect.test.ts: the earlier test 'sends the operator to the shell when no provider is connected' and the added test, both in the slice diff at old lines 93-356.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:test-duplicate-no-add-hook",
+      "publication": "omit"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 1 },
+  "slices": ["slice-02"]
+}
+```
+
+## Clean Code Review
+
+### Review Scope
+- Branch: `feat/connect-providers-tabs`, base 6a8941b75, head 2e1936eeb (code read at the merged tree, 22e8cf835)
+- Slice reviewed in full: slice-02 (agent-commands.ts, agent.ts comment, shell-types.ts, shell.ts, command-router.ts, shell-bridge.ts, command-gateway.ts, help-groups.ts and their tests/helpers)
+
+### Summary
+The slice removes `/provider` cleanly and adds the Telegram Add provider path in small, well-named methods (pickAddableProvider, testAddable, connectAddable). The key-never-in-chat rule is kept by a visible early return, and the removed-command hint is a pure lookup. The concerns are maintainability only: a guard repeated five times, one dead guard, one long method, one stale comment.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 4  |  info: 1
+
+### Findings
+
+#### Naming
+No naming issues found. `ADD_PROVIDER_ID`, `AddableProvider`, `ProviderOutcome`, `removedCommandHint` say what they are.
+
+#### Functions
+- [F-002] minor: dead `listAddableProviders` guard in pickAddableProvider (command-router.ts).
+- [F-003] minor: connectAddable, 41 lines, mixed abstraction (command-router.ts).
+
+#### Comments
+- [F-004] minor: stale `calling them unknown` comment (shell.ts 3266-3267).
+
+#### Error Handling
+No error handling issues found. The try/catch in connectAddable converts a thrown login into a fixed message without echoing the error text, and the message points to the shell; nothing is swallowed silently (the outcome is recorded and posted).
+
+#### DRY
+- [F-001] minor: the 'refused / not answered' guard repeated at five sites (command-router.ts).
+- [F-005] info: duplicate test (command-connect.test.ts).
+
+#### SOLID
+No SOLID violations found. The host interface keeps the new members optional, so a shell without them still compiles and answers 'not available'.
+
+### Clean Areas
+- Part A names: reviewed, none.
+- Part D error handling: reviewed, none.
+- Part F SOLID: reviewed, none (RemoteCommandHost gains three optional methods, which is the existing extension pattern).
+- agent-commands.ts REMOVED_COMMAND_HINTS: a typed record plus one pure function; the lookup key includes the slash, so no prototype-key collision.
+- Remaining `/provider` text in this slice's source comments (agent.ts, shell-types.ts, shell.ts) was updated; only F-004 is left.
+- Not covered by this slice: TUI connect modal and modal-host `footerFor` (other slices).

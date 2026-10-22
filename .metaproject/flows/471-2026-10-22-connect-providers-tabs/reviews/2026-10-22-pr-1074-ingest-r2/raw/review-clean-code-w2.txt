@@ -1,0 +1,244 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-clean-code",
+  "summary": "slice-03 (src/tui/tui-shell.ts, remote-provider-hooks.ts and small comment edits) is readable and well commented, with sound seams (hooks injected as parameters, fixed-vocabulary chat texts). The concerns are size and shape, not defects: pickProvidersTabbedStep is ~440 lines, runProviderConnectSequence takes six parameters with two boolean flags, the same deps spread appears three times, and a few magic numbers and one silent catch remain. No blocker or major: none has a reproducible runtime path.",
+  "findings": [
+    {
+      "id": "CC-1",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 3260,
+      "quote": null,
+      "problem": "pickProvidersTabbedStep is about 440 lines (3260-3700). One closure holds row layout (RowBlock, labelOf, mark text), highlight, key handling, tab switching, painting (paint is ~110 lines), capacity maths and the surface wiring.",
+      "impact": "Hard to read and to change one concern without reading the rest; paint and the key handlers share mutable closure state (connected, focusApplied, surface), so the order of assignment matters (see CC-9).",
+      "suggested_fix": "Extract row building and painting into pure helpers taking the state they read (rows, selected, tab, width), and keep the step function as wiring. Not needed for this PR; do it when the next tab is added.",
+      "evidence": "src/tui/tui-shell.ts:3260-3700; paint at 3481-3589; finish at 3368-3374; surface at 3619.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:long-function:tui-shell",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "CC-2",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 3746,
+      "quote": null,
+      "problem": "runProviderConnectSequence(otui, target, prov, deps, setup, requireKey = false) has six parameters, two of them booleans. The call at 3980 reads `runProviderConnectSequence(otui, target, action.provider, deps, true, true)`, and the pick call at 3970 ends `deps, false)`; the meaning of each bare boolean is invisible at the call site.",
+      "impact": "A caller can swap `setup` and `requireKey` with no type error; the next flag makes it worse.",
+      "suggested_fix": "Take an options object `{ setup, requireKey }` (or a named mode such as `\"add\" | \"first-run\"` if the two always travel together).",
+      "evidence": "src/tui/tui-shell.ts:3746 (signature), 3970, 3980 (call sites).",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:boolean-flags:connect-sequence",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "CC-3",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 3945,
+      "quote": null,
+      "problem": "The same dependency object is rebuilt by spreading modelDeps three times: in runProvidersModal (3945-3949), in runProviderConnectSequence (3851-3855) and in selectProviderModelInTui (~4085-4089). Each adds the same couple of fields to the shared base.",
+      "impact": "Adding a dependency means touching three places; one is easy to miss, and the three then differ silently.",
+      "suggested_fix": "Build the extended deps once (a small `withConnectDeps(modelDeps)` helper) and pass it down.",
+      "evidence": "src/tui/tui-shell.ts:3851-3855, 3945-3949, ~4085-4089. Three sites, so the DRY threshold is met.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:dry:deps-spread",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "CC-4",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 4050,
+      "quote": null,
+      "problem": "The option `onlyConnected` (SelectProviderModelOptions, chat-shell.ts pickSelection type ~314-317 and use ~650-652, /connect handler 10444) now means \"open the Providers modal\", not \"list only connected providers\". `selectProviderModelInTui` returns `runProvidersModal(...)` early when it is set, and the modal opens on the Add provider tab when nothing is connected.",
+      "impact": "Name and behaviour have drifted; a reader looking for a filter finds a mode switch.",
+      "suggested_fix": "Rename to something like `providersModal` (or `mode: \"providers\"`) in all three places in one commit.",
+      "evidence": "src/tui/tui-shell.ts:4050-4053, 10444; src/tui/chat-shell.ts:~314-317, ~650-652. Naming is at most minor.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:naming:onlyConnected",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "CC-5",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 3292,
+      "quote": null,
+      "problem": "RowBlock fields `first` and `second` (3292-3293) say nothing about what they hold, while the surrounding code is about label and detail lines.",
+      "impact": "Readers must trace the painter to learn which is the title line and which the secondary line.",
+      "suggested_fix": "Rename to `title` and `detail` (or whatever the painter treats them as).",
+      "evidence": "src/tui/tui-shell.ts:3292-3293.",
+      "confidence": "low",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:naming:rowblock",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "CC-6",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 3314,
+      "quote": null,
+      "problem": "Unnamed layout numbers in pickProvidersTabbedStep: `bodyWidth - 24 - labelOf(d).length` (3314), the same `24` plus a `13` for the connected mark at 3319 (13 is the length of the literal `\"  ✓ connected\"` at 3338, restated by hand), and `Math.min(24, rowCount * 2 + 3)` for contentRows at 3625.",
+      "impact": "If the mark text changes, the width maths at 3319 is wrong with no error. The two 24s mean different things (a column reserve and a row cap) and look the same.",
+      "suggested_fix": "Name them (`DETAIL_COLUMN_RESERVE`, `MAX_CONTENT_ROWS`) and derive 13 from the mark string's `.length`.",
+      "evidence": "src/tui/tui-shell.ts:3314, 3319, 3338, 3625.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:magic-numbers:providers-tab",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "CC-7",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 3987,
+      "quote": null,
+      "problem": "In runProvidersModal the connect-success block (3987-3998) and the custom-success block (4009-4018) are near-duplicates: both save the provider, run the /models check and emit the same \"no models returned\" literal (3996, 4017). The custom branch is also the catch-all, identified only by the comment `// action.kind === \"custom\"` at 4001.",
+      "impact": "A third action kind would silently fall into the custom branch; a fix to the models check has to be made twice.",
+      "suggested_fix": "Share one `finishConnect(entry)` helper and switch on `action.kind` explicitly with an exhaustive default.",
+      "evidence": "src/tui/tui-shell.ts:3987-3998, 4001, 4009-4018. Two blocks, so this is OCP/clarity rather than the 3-site DRY rule.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:duplication:modal-success",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "CC-8",
+      "severity": "minor",
+      "file": "src/tui/remote-provider-hooks.ts",
+      "line": 136,
+      "quote": "void notify(`Open ${challenge.verificationUri} and enter the code ${challenge.userCode}`).catch(() => undefined);",
+      "problem": "A failure to send the challenge message to Telegram is swallowed with no comment. If the notify fails, the user never sees the code, the login waits out the full 10-minute limit and then reports only \"Device login timed out\".",
+      "impact": "The user gets a silent dead end: there is no way to tell \"message not delivered\" from \"I did not authorize\". It needs a notify failure, which is plausible (rate limit, network), so it is not theoretical, but it only costs a retry.",
+      "suggested_fix": "Keep the swallow (an unhandled rejection would be worse) but add a comment saying why, and either abort the login on a failed notify or record the failure so endedEarly can say \"could not send the code\".",
+      "evidence": "src/tui/remote-provider-hooks.ts:135-137 and endedEarly at 128.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:swallowed-error:notify",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "CC-9",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 3591,
+      "quote": null,
+      "problem": "The code relies on ordering inside one closure: a comment at 3591-3592 says \"(before `surface` is assigned)\", `focusApplied` (3616) guards a first paint that may run before `surface` exists, and `finish` (3368-3374) and `switchTab` (3448-3452) both use `surface?.`. The `const surface: TabbedSurface | undefined = openTabbedSurface(...)` at 3619 is typed as possibly undefined only to satisfy those earlier references.",
+      "impact": "Fragile: moving the openTabbedSurface call or adding a handler that runs earlier changes behaviour without a type error.",
+      "suggested_fix": "Part of the CC-1 extraction: pass the surface into paint/finish explicitly, or create the surface first and fill in the paint callback afterwards.",
+      "evidence": "src/tui/tui-shell.ts:3368-3374, 3448-3452, 3591-3592, 3616, 3619.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:temporal-coupling:surface",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "CC-10",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": 2278,
+      "quote": null,
+      "problem": "openTabbedSurface duplicates the ModalHost key handling (Esc, x, Tab, digit keys) for its full-screen fallback; the Tab cycle is written twice in the same function (claimKey at ~2278 and `cycle` at ~2347).",
+      "impact": "The two paths can drift: a key added to the ModalHost branch is missing from the overlay branch. This is a fallback path, so the exposure is small.",
+      "suggested_fix": "Make `cycle` the single implementation and call it from claimKey; share the key table between the two branches.",
+      "evidence": "src/tui/tui-shell.ts:~2261-2395; Tab at ~2278 and ~2347.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:duplication:tabbed-surface-keys",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "CC-11",
+      "severity": "minor",
+      "file": "src/tui/remote-provider-hooks.ts",
+      "line": 128,
+      "quote": null,
+      "problem": "createRemoteDeviceLogin.connect is about 47 lines with a nested ternary in endedEarly (`timedOut ? ... : stoppedByCaller ? ... : ...`). The LOGIN_* constants (84-87) cover some messages, but four sentences are inline (115, 131-ish, 148, 152).",
+      "impact": "Mixed styles in one function; the nested ternary hides a three-way outcome.",
+      "suggested_fix": "Turn the outcome into a small `endReason()` function with if/return, and move the inline sentences next to the other LOGIN_* constants.",
+      "evidence": "src/tui/remote-provider-hooks.ts:84-87, 115, 128, 148, 152.",
+      "confidence": "low",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:readability:device-login",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "CC-12",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": 3909,
+      "quote": null,
+      "problem": "`upsertProvider(list, entry): void` mutates its argument. It is a local helper with one obvious use and the name signals the mutation, so this is a style note only. `connected.splice` at 3438 is the same idiom.",
+      "impact": "None found; the callers hold the list in a local variable.",
+      "suggested_fix": "None required. Return the new list if the callers ever share it.",
+      "evidence": "src/tui/tui-shell.ts:3438, 3909.",
+      "confidence": "low",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:mutation:upsertProvider",
+      "location_class": "in-diff",
+      "publication": "omit"
+    },
+    {
+      "id": "CC-13",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": 4020,
+      "quote": null,
+      "problem": "The catch in runProvidersModal reads `error.name` (4020-4024) to decide how to treat the failure. I could not show a wrong outcome from it: the error types in this path are keryx's own.",
+      "impact": "No reproducible path, so this is info. It would be fragile only if an error from another module reused a name.",
+      "suggested_fix": "None; use `instanceof` if a typed error class exists for it.",
+      "evidence": "src/tui/tui-shell.ts:4020-4024.",
+      "confidence": "low",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "clean-code:error-name:providers-modal",
+      "location_class": "in-diff",
+      "publication": "omit"
+    }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 11, "info": 2 }
+}
+```
+
+## Review Scope
+
+Reviewer review-clean-code, wave 2, round 1. Diff mode, slice-03 read in full (src/tui/tui-shell.ts, src/tui/remote-provider-hooks.ts, src/tui/chat-shell.ts, src/tui/modal-host.ts, src/tui/queue-nav.ts, balance-panel.ts, game-modal.ts, games/model-turn.ts). Read-only; project files used for context and line numbers only.
+
+## Summary
+
+The change is clear in intent and the new module remote-provider-hooks.ts is a good seam: every dependency is a parameter, and the chat texts come from a fixed vocabulary on purpose. The code-health concerns are concentrated in tui-shell.ts: one very long step function, a six-parameter function with two bare booleans, a thrice-repeated deps spread, and a few magic numbers. All are minor.
+
+## Stats
+
+blocker 0, major 0, minor 11, info 2.
+
+## Findings by category
+
+- Long function: CC-1 (and CC-11 in the hooks file).
+- Parameters and boolean flags: CC-2.
+- DRY: CC-3 (3 sites), CC-7 (2 blocks, noted as clarity), CC-10.
+- Naming: CC-4, CC-5.
+- Magic numbers: CC-6.
+- Error handling: CC-8 (swallowed notify failure, minor because the cost is a retry).
+- Coupling and ordering: CC-9.
+- Info: CC-12, CC-13.
+
+## Clean Areas
+
+- src/tui/remote-provider-hooks.ts: NO_CREDENTIAL_TEXT, REMOTE_DEVICE_LOGIN_LIMIT_MS, remoteFailureText, testProviderForRemote and createConnectedProvidersCache (failed loads are not cached, and the identity check on `mine` is correct).
+- src/tui/modal-host.ts: footerFor and paintFooter in mountTab.
+- src/tui/queue-nav.ts: AddNavAction; the unused `_direction` is intentional for symmetry.
+- balance-panel.ts, game-modal.ts, games/model-turn.ts: comment and string changes only.
+- tui-shell.ts: the connectedProviders cache wiring, remoteDeviceLogin abort calls and the shellIsBusy extraction.
+
+/home/altsay/keryx/.worktrees/connect-providers-tabs/.metaproject/reviews/2026-10-22-review-flow-github-com-mrciphersmith-keryx-pull-1074/raw/review-clean-code-w2.txt — STATUS: DONE_WITH_CONCERNS

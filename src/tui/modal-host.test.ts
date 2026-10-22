@@ -357,6 +357,35 @@ otuiTest("footerFor shows each tab's own footer, and falls back to footer when i
   h.destroy();
 });
 
+otuiTest("Tab on the tab strip moves to the next tab and Shift+Tab to the previous", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const handle = openModal(otui.core, h.chrome, {
+    title: "Providers",
+    tabs: [
+      { id: "connected", label: "Connected" },
+      { id: "add", label: "Add provider" },
+    ],
+    renderTab: () => {},
+  });
+  await h.flush();
+  const strip = h.renderer.root.findDescendantById("modal-tab-strip") as { focus: () => void };
+  expect(handle?.activeTab()).toBe("connected");
+
+  strip.focus();
+  h.mockInput.pressTab();
+  await h.flush();
+  expect(handle?.activeTab()).toBe("add");
+
+  strip.focus();
+  h.mockInput.pressTab({ shift: true });
+  await h.flush();
+  expect(handle?.activeTab()).toBe("connected");
+
+  handle?.close();
+  h.destroy();
+});
+
 otuiTest("x closes the modal the same as Esc", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 24 });

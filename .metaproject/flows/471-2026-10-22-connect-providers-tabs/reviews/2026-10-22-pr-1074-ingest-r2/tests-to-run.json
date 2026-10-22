@@ -1,0 +1,904 @@
+[
+  {
+    "file": "src/acp/commands.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "AGENT_SLASH_COMMANDS"
+    ]
+  },
+  {
+    "file": "src/cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/agent-approval-binding.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-approval-context-p0.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-approval-context.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-bus-notification.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-commands.confusable.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "AGENT_SLASH_COMMANDS"
+    ]
+  },
+  {
+    "file": "src/commands/agent-destructive-gate.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-fewer-prompts.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-granted-json.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-hooks.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-instruction-roster.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-lifecycle-hooks.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-orchestrator-log.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-permission-mode.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-question-axis.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-review-gate.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-rewind-seam.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-task-notification.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-tool-call-budget.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-trust-orchestration.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent-untrusted-batch.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent.context-guard.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent.error-hint.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent.host-contracts.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent.overflow-retry.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent.recovery.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent.repeat-guard-prune.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent.slate-trail.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agent.working-memory.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents-catalog-commands.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents-external-antigravity.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents-external-run.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents-external-write.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents-external.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/agents.monitor.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/help-grouped.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "readlineAgentHelpText",
+      "runShell"
+    ]
+  },
+  {
+    "file": "src/commands/help.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "HELP_GROUPS"
+    ]
+  },
+  {
+    "file": "src/commands/interactive-agent-tools.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/providers.subscription.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "filterConnectedDetectedProviders"
+    ]
+  },
+  {
+    "file": "src/commands/shell-agent-repl.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "readlineAgentHelpText",
+      "runAgentRepl"
+    ]
+  },
+  {
+    "file": "src/commands/shell-approval.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/shell-bus.process.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/shell-bus.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runShell",
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-chat-preservation.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runShell"
+    ]
+  },
+  {
+    "file": "src/commands/shell-cli-validation.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-events.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/shell-headless-sigint.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/shell-launch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-lease.process.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/shell-lease.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runShell",
+      "shellCommand"
+    ]
+  },
+  {
+    "file": "src/commands/shell-pause.process.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/shell-preservation-signal.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/shell-pty-launch.smoke.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/shell-starting-line.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/shell-startup-exit.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/shell-task-registry-wiring.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/shell-task-tools.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "KeypressEvent",
+      "SelectProviderModelOptions",
+      "filterConnectedDetectedProviders",
+      "launchTuiAgentShell",
+      "onKeypress",
+      "pickModelInTui",
+      "pickSearchProviderStep",
+      "pickSessionInTui",
+      "probeProviderConnection",
+      "searchProviderWizardInTui",
+      "selectProviderModelInTui"
+    ]
+  },
+  {
+    "file": "src/commands/trigger-agent-task.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/docs/own-answer-docs.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "findCliEntry",
+      "findSlashEntry"
+    ]
+  },
+  {
+    "file": "src/docs/remote-commands-docs.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "REMOTE_COMMANDS",
+      "REMOTE_REFUSED"
+    ]
+  },
+  {
+    "file": "src/product/never-gates.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "*"
+    ]
+  },
+  {
+    "file": "src/remote/ask-user-topic.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "RemoteBridge"
+    ]
+  },
+  {
+    "file": "src/remote/channels-serialize.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "RemoteHub"
+    ]
+  },
+  {
+    "file": "src/remote/command-busy.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "commandHarness"
+    ]
+  },
+  {
+    "file": "src/remote/command-confirm.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "commandHarness"
+    ]
+  },
+  {
+    "file": "src/remote/command-menu.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "REMOTE_COMMANDS",
+      "REMOTE_REFUSED",
+      "classifyRemoteCommand",
+      "menuNamesAreValid",
+      "remoteHelpText",
+      "remoteMenu"
+    ]
+  },
+  {
+    "file": "src/remote/command-model.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "commandHarness"
+    ]
+  },
+  {
+    "file": "src/remote/command-output.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "remoteMenu"
+    ]
+  },
+  {
+    "file": "src/remote/command-panel.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "commandHarness"
+    ]
+  },
+  {
+    "file": "src/remote/command-queued.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "REMOTE_COMMANDS",
+      "REMOTE_REFUSED",
+      "classifyRemoteCommand",
+      "remoteMenu"
+    ]
+  },
+  {
+    "file": "src/remote/command-review-fixes.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "commandHarness"
+    ]
+  },
+  {
+    "file": "src/remote/command-secrets.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "commandHarness"
+    ]
+  },
+  {
+    "file": "src/remote/command-session.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "commandHarness"
+    ]
+  },
+  {
+    "file": "src/remote/message-state.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "RemoteBridge"
+    ]
+  },
+  {
+    "file": "src/remote/mirror-undelivered.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "RemoteBridge"
+    ]
+  },
+  {
+    "file": "src/remote/orphan.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "RemoteHub"
+    ]
+  },
+  {
+    "file": "src/remote/progress-notes.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "commandHarness"
+    ]
+  },
+  {
+    "file": "src/remote/shell-bridge.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "RemoteBridge"
+    ]
+  },
+  {
+    "file": "src/remote/stop.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "classifyRemoteCommand",
+      "remoteHelpText",
+      "remoteMenu"
+    ]
+  },
+  {
+    "file": "src/remote/topic-history.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "REMOTE_COMMANDS"
+    ]
+  },
+  {
+    "file": "src/standard/commands-by-task.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "renderCommandsByTaskMarkdown"
+    ]
+  },
+  {
+    "file": "src/tui/ac-kinds-surface.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "presentFlows"
+    ]
+  },
+  {
+    "file": "src/tui/approvals-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "openApprovals"
+    ]
+  },
+  {
+    "file": "src/tui/approvals-sidebar.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "routeApprovalsCommand"
+    ]
+  },
+  {
+    "file": "src/tui/ask-user-transcript.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "commandsForMode"
+    ]
+  },
+  {
+    "file": "src/tui/autoreview-surface.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "routeAutoReviewCommand"
+    ]
+  },
+  {
+    "file": "src/tui/balance-panel.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/tui/boot-animation.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "onKeypress"
+    ]
+  },
+  {
+    "file": "src/tui/channels-surface.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "HELP_GROUPS"
+    ]
+  },
+  {
+    "file": "src/tui/chat-shell.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runShell"
+    ]
+  },
+  {
+    "file": "src/tui/ci-triage-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "openCiTriage"
+    ]
+  },
+  {
+    "file": "src/tui/composer-choice.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "commandsForMode"
+    ]
+  },
+  {
+    "file": "src/tui/conform-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "openConform"
+    ]
+  },
+  {
+    "file": "src/tui/decisions-surface.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "findAgentCommand"
+    ]
+  },
+  {
+    "file": "src/tui/digest-surface.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "routeSchedulesCommand"
+    ]
+  },
+  {
+    "file": "src/tui/external-diff-modal.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "openExternalDiff"
+    ]
+  },
+  {
+    "file": "src/tui/external-diff-sidebar.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "routeExternalDiffCommand"
+    ]
+  },
+  {
+    "file": "src/tui/flow-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "presentFlows"
+    ]
+  },
+  {
+    "file": "src/tui/game-modal.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "modelMove",
+      "presentGame"
+    ]
+  },
+  {
+    "file": "src/tui/games/modal.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "presentGamesModal"
+    ]
+  },
+  {
+    "file": "src/tui/governance-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "openGovernanceReport"
+    ]
+  },
+  {
+    "file": "src/tui/governance-panel.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "mountChrome"
+    ]
+  },
+  {
+    "file": "src/tui/help-modal.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "openHelpModal"
+    ]
+  },
+  {
+    "file": "src/tui/intake-surface.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "mountIntakeSidebar",
+      "routeIntakeCommand"
+    ]
+  },
+  {
+    "file": "src/tui/jev-profile-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "openJevProfile"
+    ]
+  },
+  {
+    "file": "src/tui/mcp-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "presentMcpTools"
+    ]
+  },
+  {
+    "file": "src/tui/model-session-picker-modal.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "pickModelInTui",
+      "pickSessionInTui"
+    ]
+  },
+  {
+    "file": "src/tui/operator-confirmations.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "HELP_GROUPS"
+    ]
+  },
+  {
+    "file": "src/tui/ops-sidebar.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "routeOpsCommand"
+    ]
+  },
+  {
+    "file": "src/tui/permissions-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "openPermissions"
+    ]
+  },
+  {
+    "file": "src/tui/picker-theme.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "selectProviderModelInTui"
+    ]
+  },
+  {
+    "file": "src/tui/project-context-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "OpenModalInput"
+    ]
+  },
+  {
+    "file": "src/tui/remote-control-surface.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "HELP_GROUPS"
+    ]
+  },
+  {
+    "file": "src/tui/remote-queue-wiring.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "RemoteBridge"
+    ]
+  },
+  {
+    "file": "src/tui/research-sync-panel.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "mountChrome"
+    ]
+  },
+  {
+    "file": "src/tui/review-buttons.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "commandsForMode"
+    ]
+  },
+  {
+    "file": "src/tui/review-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "presentReview"
+    ]
+  },
+  {
+    "file": "src/tui/reviews-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "mountChrome"
+    ]
+  },
+  {
+    "file": "src/tui/rewind-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "openRewind"
+    ]
+  },
+  {
+    "file": "src/tui/routing-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "openRouting"
+    ]
+  },
+  {
+    "file": "src/tui/schedules-sidebar.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "routeSchedulesCommand"
+    ]
+  },
+  {
+    "file": "src/tui/session-info.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "presentSessionInfo"
+    ]
+  },
+  {
+    "file": "src/tui/settings-actions.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "openSettings"
+    ]
+  },
+  {
+    "file": "src/tui/settings-modal.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "openSettings"
+    ]
+  },
+  {
+    "file": "src/tui/setup-modal.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "openSetupModal"
+    ]
+  },
+  {
+    "file": "src/tui/shell-chrome.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "commandsForMode"
+    ]
+  },
+  {
+    "file": "src/tui/sidebar-cards.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "commandsForMode"
+    ]
+  },
+  {
+    "file": "src/tui/sidebar-geometry.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "commandsForMode"
+    ]
+  },
+  {
+    "file": "src/tui/subscription-provider-wizard.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "selectProviderModelInTui"
+    ]
+  },
+  {
+    "file": "src/tui/theme-picker.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "commandsForMode"
+    ]
+  },
+  {
+    "file": "src/tui/triggers-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "openTriggers"
+    ]
+  },
+  {
+    "file": "src/tui/triggers-panel.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "mountChrome"
+    ]
+  },
+  {
+    "file": "src/tui/tui-session-lease.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runLeasedChatShell"
+    ]
+  },
+  {
+    "file": "src/tui/tui-shell.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "filterConnectedDetectedProviders",
+      "onKeypress",
+      "pickSearchProviderStep",
+      "searchProviderWizardInTui"
+    ]
+  },
+  {
+    "file": "src/tui/turn-guard-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "openTurnGuard"
+    ]
+  },
+  {
+    "file": "src/tui/workspace-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "presentWorkspace"
+    ]
+  }
+]

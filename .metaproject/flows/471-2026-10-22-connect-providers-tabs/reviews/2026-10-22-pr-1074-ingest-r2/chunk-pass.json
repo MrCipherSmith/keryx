@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "reviewer": "review-regression",
+  "tier": "middle",
+  "totals": {
+    "chunks": 3,
+    "files": 23,
+    "done": 3,
+    "failed": 0,
+    "pending": 0
+  },
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "files": [
+        "src/tui/project-context-inspector.ts",
+        "src/tui/remote-queue-wiring.ts",
+        "src/tui/rewind-inspector.ts",
+        "src/tui/routing-inspector.ts",
+        "src/tui/setup-modal.ts",
+        "src/tui/sidebar-cards.ts",
+        "src/tui/subagent-inspector.ts",
+        "src/tui/triggers-inspector.ts",
+        "src/tui/turn-guard-inspector.ts",
+        "src/tui/workspace-inspector.ts",
+        "src/tui/games/modal.test-helpers.ts",
+        "fixtures/routing-shell-pty.ts",
+        "scripts/generate-commands-by-task.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-002",
+      "files": [
+        "src/remote/remote.test-helpers.ts",
+        "src/cli.ts",
+        "src/scheduler/digest-delivery.ts",
+        "src/remote/http-surface.ts",
+        "src/commands/serve-digest.ts",
+        "src/remote/service.ts",
+        "src/remote/bootstrap.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    },
+    {
+      "id": "chunk-003",
+      "files": [
+        "src/acp/server.ts",
+        "src/remote/channels.ts",
+        "src/tui/turn-loop.ts"
+      ],
+      "state": "done",
+      "attempts": 1
+    }
+  ],
+  "uncoveredFiles": [],
+  "findings": []
+}

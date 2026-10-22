@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-pr-contract",
+  "wave": 4,
+  "waves": 4,
+  "slices": [
+    "slice-04"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-04",
+      "path": "/home/altsay/keryx/.worktrees/connect-providers-tabs/.metaproject/reviews/2026-10-22-review-flow-github-com-mrciphersmith-keryx-pull-1074/slices/slice-04.diff",
+      "bytes": 58248
+    }
+  ],
+  "result": "raw/review-pr-contract-w4.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+}

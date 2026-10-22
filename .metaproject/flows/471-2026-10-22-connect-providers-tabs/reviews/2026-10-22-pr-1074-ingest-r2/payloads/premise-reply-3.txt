@@ -1,0 +1,113 @@
+STATUS: DONE
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-sonnet-5-5",
+  "premises": [
+    {
+      "finding_id": "review-pr-contract-w1:PC-003",
+      "verdict": "upheld",
+      "reasoning": "CHANGELOG.md:11 names `/providers`, a command no registry entry defines; the removed command is `/provider` (CHANGELOG.md:13 says so two bullets later). No intent signal or practice source supports the plural name."
+    },
+    {
+      "finding_id": "review-pr-contract-w1:PC-004",
+      "verdict": "upheld",
+      "reasoning": "pr-context.md:22 leaves the AC12 box open while flow.json (acConfirmed.AC12, 'Live run 2026-10-22 in tmux ...') and journal.md record it confirmed. The record and the PR body disagree and nothing marks the open box as deliberate."
+    },
+    {
+      "finding_id": "review-pr-contract-w2:PC-101",
+      "verdict": "upheld",
+      "reasoning": "docs/docs/guides/drive-keryx-remotely.md:429 still says /connect shows connected providers then models, with no Add provider, [Test] or device-login step; src/remote/command-router.ts:622-728 now implements all three. The same PR edited line 521 of this file but not this row."
+    },
+    {
+      "finding_id": "review-pr-contract-w2:PC-102",
+      "verdict": "upheld",
+      "reasoning": "src/commands/shell.ts:1367-1389 realSelectProviderModel never reads opts.onlyConnected and has no add step, yet src/commands/agent-commands.ts chat text says 'switch to a connected provider or add one'. The removed /provider (commit 29417a4fe diff) was the readline path's way to reach other providers. Help text promises more than the surface does."
+    },
+    {
+      "finding_id": "review-pr-contract-w3:PC-201",
+      "verdict": "upheld",
+      "reasoning": "src/remote/command-router.ts:664-672 offers [Test]/[Connect] for every addable provider; for a key-only provider [Test] returns NO_CREDENTIAL_TEXT 'no credential, Connect first' (src/tui/remote-provider-hooks.ts:19,51-52) while [Connect] on the same row answers 'needs a key ... entered in the shell' (router 695-702). The two texts contradict; the test at command-connect.test.ts:227 pins the misleading wording rather than showing it was chosen."
+    },
+    {
+      "finding_id": "review-pr-contract-w4:PC-301",
+      "verdict": "upheld",
+      "reasoning": "pr-context.md:23 leaves '- [ ] Review round' open while the PR's tests name review rounds already run. The box could mean the outstanding managed review, but no file marks that as the intent, so the body and the test comments disagree as reported."
+    },
+    {
+      "finding_id": "review-regression-w2:F-001",
+      "verdict": "upheld",
+      "reasoning": "src/tui/tui-shell.ts:3950 snapshots `all`; armOrConfirmDisconnect (3431-3439) removes only from `connected`, so rowsOf('add') (3264, `[...opts.all, CUSTOM_ADD_ENTRY]`) keeps listing a disconnected custom provider. runAddSelection (3473-3479) then starts the connect sequence on it. No comment or lint exemption shows this was chosen."
+    },
+    {
+      "finding_id": "review-style-w1:F-001",
+      "verdict": "upheld",
+      "reasoning": "src/commands/shell.test.ts:92-94 reads '/connect calls selectProviderModel(io, { onlyConnected: true }) — a full re-detection/pick across all providers' (line 92 rewritten by 29417a4fec, line 93 original from b27bf23f76), and lines 98-100 still describe /connect as static guidance. The contradiction was created by the PR's partial rename, so it is not a prior choice."
+    },
+    {
+      "finding_id": "review-style-w1:F-002",
+      "verdict": "upheld",
+      "reasoning": "CHANGELOG.md:11 says `/providers` (not a registered command) and CHANGELOG.md:14 says 'the same modal opens' in Telegram, while src/remote/command-router.ts:605-728 shows buttons, not a modal. Same root as PC-003 plus the Telegram wording; no signal of intent."
+    },
+    {
+      "finding_id": "review-style-w2:F-001",
+      "verdict": "upheld",
+      "reasoning": "src/remote/command-connect.test.ts:113-120 builds the same harness (listProviders [], no listAddableProviders), sends /connect and asserts no choices and 'No provider is connected', all already asserted at lines 99-111. The test adds no coverage and nothing marks it as deliberate."
+    },
+    {
+      "finding_id": "review-style-w2:F-002",
+      "verdict": "challenged",
+      "intent_signals": [
+        { "ref": "src/remote/command-connect.test.ts:28-97 (blame 805714edc2, before the PR)", "says": "the flow 387 tests in the same file repeat the same inline say('/connect') / waitFor(choices.length) / answer(index) preamble with no helper" },
+        { "ref": "src/remote/command-connect.test.ts:141-163", "says": "addRig already shares the harness setup; the per-test steps were left inline so each test shows its own button presses" }
+      ],
+      "practice_sources": [
+        { "name": "Software Engineering at Google, ch. 12 'Unit Testing', section 'Tests and Code Sharing: DAMP, Not DRY'", "says": "tests favour descriptive, self-contained steps over factoring every repeated line into helpers; some repetition is acceptable when it keeps cause and effect readable" }
+      ],
+      "reasoning": "The repetition matches the file's established style and the documented DAMP practice for tests. A helper that hides which button is pressed would make the sequence of presses, which is the behaviour under test, harder to read.",
+      "question": "The Add provider tests repeat the same press sequence inline, as the file's earlier tests do. Keep it, or add a pressAddProvider helper?",
+      "options": ["dismiss - keep the inline sequence, as the file's earlier tests and DAMP practice do", "uphold - add a helper to drive /connect to the Test / Connect step"]
+    },
+    {
+      "finding_id": "review-style-w2:F-003",
+      "verdict": "challenged",
+      "intent_signals": [
+        { "ref": "src/remote/command-router.ts:578-584 (blame 8b5fb6a501 / 805714edc2, before the PR)", "says": "pickModel carries the same refused / not-answered pair with its own record string" },
+        { "ref": "src/remote/command-router.ts:626-632", "says": "pickProvider carries the same pair; written before the PR" },
+        { "ref": "src/remote/command-router.ts:742-748", "says": "pickSession carries the same pair; written before the PR" }
+      ],
+      "reasoning": "Every picker in the router already follows this shape, so pickAddableProvider is consistent with its siblings. A helper used only for /connect would make one picker differ from the others, and the reviewer states the change is not required for this PR.",
+      "question": "pickAddableProvider repeats the refused / not-answered handling that pickModel, pickProvider and pickSession already use. Keep the shared shape, or extract a helper for all pickers?",
+      "options": ["dismiss - keep the shape every picker uses", "uphold - extract a helper for the refused / not-answered pair"]
+    },
+    {
+      "finding_id": "review-style-w3:F-001",
+      "verdict": "challenged",
+      "intent_signals": [
+        { "ref": "29417a4fe^:src/tui/tui-shell.ts:2962-3248", "says": "the previous pickConnectedProviderStep was already a single ~290-line closure with nested row builders and mutable lets, from flows 304 and 309" },
+        { "ref": "src/tui/tui-shell.ts:3261-3262, 3285-3294, 3407 (blame e04715a209)", "says": "the Promise closure, the RowBlock type and armOrConfirmDisconnect inside pickProvidersTabbedStep are inherited from flow 304, not written by this PR" },
+        { "ref": "29417a4fe^:src/tui/tui-shell.ts:2735, 2885", "says": "sibling steps pickAuthMethodStep and pickProviderStep use the same one-closure step shape" }
+      ],
+      "reasoning": "The closure shape is the established pattern for every modal step in this file, and this PR merged two such steps into one. Splitting only this step would make it differ from its siblings; a split belongs in a refactor that covers all steps.",
+      "question": "pickProvidersTabbedStep is one ~400-line closure, as the modal steps it replaced were. Keep the established step shape, or split this one now?",
+      "options": ["dismiss - keep the step shape used by the other modal steps; refactor all of them separately", "uphold - split this step into row builders and a key handler now"]
+    },
+    {
+      "finding_id": "review-style-w3:F-002",
+      "verdict": "upheld",
+      "reasoning": "src/tui/tui-shell.ts:3987-3998 and 4009-4019 do the same 'upsert into connected, onConnected, switch to the Connected tab, ok notice, else error notice' sequence. No signal marks the duplication as deliberate and a sibling doing the same does not apply, as both copies are new in this PR."
+    }
+  ]
+}
+```
+
+## Premise summary (wave D, input 3)
+
+14 findings judged: 11 upheld, 3 challenged (held), 0 downgraded, 0 owner-decision. History was read with git log/blame/show only.
+
+Held findings:
+
+- review-style-w2:F-002 (repeated press-sequence preamble in command-connect.test.ts). Question: keep the inline sequence or add a helper. Signals: the pre-PR flow 387 tests (lines 28-97, blame 805714edc2) use the same inline preamble. Source: Software Engineering at Google, ch. 12, "DAMP, Not DRY".
+- review-style-w2:F-003 (repeated refused / not-answered handling in pickAddableProvider). Question: keep the shared shape or extract a helper for all pickers. Signals: pickModel, pickProvider and pickSession (command-router.ts:578-584, 626-632, 742-748, pre-PR) carry the same pair.
+- review-style-w3:F-001 (pickProvidersTabbedStep is a ~400-line closure). Question: keep the modal-step shape or split now. Signals: the predecessor pickConnectedProviderStep was a ~290-line closure (29417a4fe^ tui-shell.ts:2962-3248); the closure, RowBlock and armOrConfirmDisconnect are inherited from e04715a209; siblings pickAuthMethodStep and pickProviderStep share the shape.

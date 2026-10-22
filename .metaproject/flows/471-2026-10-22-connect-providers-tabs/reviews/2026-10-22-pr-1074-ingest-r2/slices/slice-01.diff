@@ -1,0 +1,2796 @@
+--- .metaproject/data/gdgraph/.provenance.json
+@@ 1,5 @@
+ {
+-  "commit": "a8c725da0dfb0ab6caec9e5abfd09099d54e5fcf",
+-  "branch": "feature-/festive-hawking-hdutk9",
+-  "builtAt": "2026-10-19T10:17:42.194Z"
++  "commit": "6b539b2556de46208d6b35a6b39540fd46f9eb99",
++  "branch": "chore/release-0.3.130",
++  "builtAt": "2026-10-22T14:43:12.881Z"
+ }
+
+--- .metaproject/data/gdgraph/artifacts/module-map.json
+@@ 533,573 @@
+     "src/commands/research-sync.test.ts",
+     "src/commands/research-sync.ts",
+     "src/commands/retention.test.ts",
+     "src/commands/retention.ts",
+     "src/commands/review-ac-check-cli.test.ts",
+     "src/commands/review-arbiter-config.test.ts",
+     "src/commands/review-arbiter-config.ts",
+     "src/commands/review-arbiter-eval.test.ts",
+     "src/commands/review-arbiter-install.ts",
+     "src/commands/review-arbiter.test.ts",
+     "src/commands/review-arbiter.ts",
+     "src/commands/review-blast-radius-base.test.ts",
+     "src/commands/review-bot.ts",
+     "src/commands/review-chunks.test.ts",
+     "src/commands/review-chunks.ts",
+     "src/commands/review-ci-triage-cli.test.ts",
+     "src/commands/review-comments-cli.test.ts",
+     "src/commands/review-conform-cli.test.ts",
+     "src/commands/review-floor-cli.test.ts",
+     "src/commands/review-help.test.ts",
++    "src/commands/review-host-question.test.ts",
+     "src/commands/review-jev-comments-cli.test.ts",
+     "src/commands/review-jev-comments.ts",
+     "src/commands/review-jev-contract-cli.test.ts",
+     "src/commands/review-jev-contract.ts",
+     "src/commands/review-jev-docs-cli.test.ts",
+     "src/commands/review-jev-docs.ts",
+     "src/commands/review-jev-edit-guard.test.ts",
+     "src/commands/review-jev-edit-guard.ts",
+     "src/commands/review-jev-profile-cli.test.ts",
+     "src/commands/review-jev-profile.ts",
+     "src/commands/review-jev-risk-cli.test.ts",
+     "src/commands/review-jev-risk.ts",
+     "src/commands/review-jev-rules-cli.test.ts",
+     "src/commands/review-jev-rules-discovery.test.ts",
+     "src/commands/review-jev-rules.ts",
+     "src/commands/review-jev-scenarios-cli.test.ts",
+     "src/commands/review-jev-scenarios.ts",
+     "src/commands/review-jev-select-cli.test.ts",
+     "src/commands/review-jev-select.ts",
+     "src/commands/review-jev-triage-cli.test.ts",
+
+--- .metaproject/data/gdgraph/artifacts/module-map.json
+@@ 2404,2444 @@
+     "src/review/dispatch-usage.ts",
+     "src/review/dispatch.test-helpers.ts",
+     "src/review/dispatch.test.ts",
+     "src/review/dispatch.ts",
+     "src/review/display-id.ts",
+     "src/review/driver-read.ts",
+     "src/review/estimate.test.ts",
+     "src/review/estimate.ts",
+     "src/review/evidence-level.test.ts",
+     "src/review/evidence-level.ts",
+     "src/review/filter-stats.test.ts",
+     "src/review/filter-stats.ts",
+     "src/review/fixtures/autonomous-child.ts",
+     "src/review/floor.test.ts",
+     "src/review/floor.ts",
+     "src/review/flow-move.ts",
+     "src/review/git-base.ts",
+     "src/review/git-fixture.test-helpers.ts",
+     "src/review/harness-robustness.test.ts",
+     "src/review/host-profile.ts",
++    "src/review/host-question-verbs.ts",
+     "src/review/import-reviewers.test.ts",
+     "src/review/import-reviewers.ts",
+     "src/review/ingest-locator-sha.test.ts",
+     "src/review/jev-comments-config.test.ts",
+     "src/review/jev-comments-config.ts",
+     "src/review/jev-comments.test.ts",
+     "src/review/jev-comments.ts",
+     "src/review/jev-contract-config.test.ts",
+     "src/review/jev-contract-config.ts",
+     "src/review/jev-contract.test.ts",
+     "src/review/jev-contract.ts",
+     "src/review/jev-docs-config.test.ts",
+     "src/review/jev-docs-config.ts",
+     "src/review/jev-docs.test.ts",
+     "src/review/jev-docs.ts",
+     "src/review/jev-edit-guard-config.test.ts",
+     "src/review/jev-edit-guard-config.ts",
+     "src/review/jev-edit-guard-log.test.ts",
+     "src/review/jev-edit-guard-log.ts",
+     "src/review/jev-edit-guard.test.ts",
+
+--- .metaproject/data/gdgraph/artifacts/module-map.json
+@@ 2989,3058 @@
+     "src/tui/ask-user-transcript.test.ts",
+     "src/tui/ask-user-transcript.ts",
+     "src/tui/autoreview-surface.test.ts",
+     "src/tui/autoreview-surface.ts",
+     "src/tui/background-job-inspector.test.ts",
+     "src/tui/background-job-inspector.ts",
+     "src/tui/background-job-session.test.ts",
+     "src/tui/background-job-session.ts",
+     "src/tui/balance-panel.test.ts",
+     "src/tui/balance-panel.ts",
+     "src/tui/boot-animation.test.ts",
+     "src/tui/boot-animation.ts",
+     "src/tui/bus-command.ts",
+     "src/tui/bus-join.test.ts",
+     "src/tui/bus-join.ts",
+     "src/tui/bus-panel.ts",
+     "src/tui/bus-wake.test.ts",
+     "src/tui/bus-wake.ts",
+     "src/tui/busy-dispatch.test.ts",
+     "src/tui/busy-dispatch.ts",
++    "src/tui/busy-footer.ts",
+     "src/tui/card-lifecycle.test.ts",
+     "src/tui/channels-surface.test.ts",
+     "src/tui/channels-surface.ts",
+     "src/tui/chat-shell.test.ts",
+     "src/tui/chat-shell.ts",
+     "src/tui/ci-triage-inspector.test.ts",
+     "src/tui/ci-triage-inspector.ts",
+     "src/tui/ci-triage-source.test.ts",
+     "src/tui/ci-triage-source.ts",
+     "src/tui/composer-choice.test.ts",
+     "src/tui/composer-choice.ts",
+     "src/tui/conform-inspector.test.ts",
+     "src/tui/conform-inspector.ts",
+     "src/tui/conform-source.ts",
++    "src/tui/connect-modal.test.ts",
+     "src/tui/connect-provider-buttons.test.ts",
+     "src/tui/context-usage.test.ts",
+     "src/tui/context-usage.ts",
+     "src/tui/ctrl-c-policy.test.ts",
+     "src/tui/ctrl-c-policy.ts",
+     "src/tui/custom-provider-wizard.test.ts",
+     "src/tui/debug-log.test.ts",
+     "src/tui/debug-log.ts",
+     "src/tui/debug-watcher.test.ts",
+     "src/tui/debug-watcher.ts",
+     "src/tui/decisions-surface.test.ts",
+     "src/tui/decisions-surface.ts",
+     "src/tui/digest-surface.test.ts",
++    "src/tui/duration-format.ts",
+     "src/tui/execution-plan-inspector.test.ts",
+     "src/tui/execution-plan-inspector.ts",
+     "src/tui/execution-plan-panel.test.ts",
+     "src/tui/execution-plan-panel.ts",
+     "src/tui/external-antigravity-surfaces.test.ts",
+     "src/tui/external-bridge.ts",
+     "src/tui/external-command.test.ts",
+     "src/tui/external-command.ts",
+     "src/tui/external-delivery.test.ts",
+     "src/tui/external-delivery.ts",
+     "src/tui/external-diff-modal.test.ts",
+     "src/tui/external-diff-modal.ts",
+     "src/tui/external-diff-sidebar.test.ts",
+     "src/tui/external-diff-sidebar.ts",
+     "src/tui/external-inspector.test.ts",
+     "src/tui/external-inspector.ts",
+     "src/tui/external-operator.test.ts",
+     "src/tui/external-operator.ts",
+     "src/tui/external-session.test.ts",
+     "src/tui/external-session.ts",
+
+--- .metaproject/data/gdgraph/artifacts/module-map.json
+@@ 3146,3194 @@
+     "src/tui/model-session-picker-modal.test.ts",
+     "src/tui/next-step-suggestion.reasoning-guard.test.ts",
+     "src/tui/next-step-suggestion.test.ts",
+     "src/tui/next-step-suggestion.ts",
+     "src/tui/operator-confirmations.test.ts",
+     "src/tui/operator-confirmations.ts",
+     "src/tui/ops-sidebar.test-helpers.ts",
+     "src/tui/ops-sidebar.test.ts",
+     "src/tui/ops-sidebar.ts",
+     "src/tui/origin-surface.test.ts",
+     "src/tui/permissions-inspector.test.ts",
+     "src/tui/permissions-inspector.ts",
+     "src/tui/picker-theme.test.ts",
+     "src/tui/product-open-surface.test.ts",
+     "src/tui/product-open-surface.ts",
+     "src/tui/project-context-inspector.test.ts",
+     "src/tui/project-context-inspector.ts",
+     "src/tui/project-references-view.ts",
+     "src/tui/provider-catalog-startup.test.ts",
+     "src/tui/provider-endpoint-retry.test.ts",
++    "src/tui/provider-probe.test.ts",
+     "src/tui/queue-nav.test.ts",
+     "src/tui/queue-nav.ts",
+     "src/tui/reasoning-display.test.ts",
+     "src/tui/reasoning-display.ts",
+     "src/tui/remote-control-surface.test.ts",
+     "src/tui/remote-control-surface.ts",
++    "src/tui/remote-provider-hooks.test.ts",
++    "src/tui/remote-provider-hooks.ts",
+     "src/tui/remote-queue-wiring.test.ts",
+     "src/tui/remote-queue-wiring.ts",
+     "src/tui/renderer-debug.test.ts",
+     "src/tui/renderer-debug.ts",
+     "src/tui/rendering-command.test.ts",
+     "src/tui/rendering-command.ts",
+     "src/tui/research-sync-panel.test.ts",
+     "src/tui/research-sync-panel.ts",
+     "src/tui/review-accept.test.ts",
+     "src/tui/review-accept.ts",
+     "src/tui/review-buttons.test.ts",
+     "src/tui/review-inspector.test.ts",
+     "src/tui/review-inspector.ts",
+     "src/tui/review-layers-actions.test.ts",
+     "src/tui/review-layers-actions.ts",
+     "src/tui/review-layers-child.test.ts",
+     "src/tui/review-panel.test.ts",
+     "src/tui/review-panel.ts",
+     "src/tui/review-parity-visibility.test.ts",
+     "src/tui/review-readiness.test.ts",
+
+--- .metaproject/data/gdgraph/artifacts/module-map.json
+@@ 3209,3261 @@
+     "src/tui/schedules-inspector.allowlist.test.ts",
+     "src/tui/schedules-inspector.ts",
+     "src/tui/schedules-panel.ts",
+     "src/tui/schedules-sidebar.test.ts",
+     "src/tui/schedules-sidebar.ts",
+     "src/tui/session-info.test.ts",
+     "src/tui/session-info.ts",
+     "src/tui/session-picker-acp.test.ts",
+     "src/tui/session-switch.test.ts",
+     "src/tui/session-switch.ts",
+     "src/tui/settings-actions.test.ts",
+     "src/tui/settings-actions.ts",
+     "src/tui/settings-modal.test.ts",
+     "src/tui/settings-modal.ts",
+     "src/tui/settings-model.test.ts",
+     "src/tui/settings-model.ts",
+     "src/tui/settings-state.test.ts",
+     "src/tui/settings-state.ts",
+     "src/tui/setup-modal.test.ts",
+     "src/tui/setup-modal.ts",
++    "src/tui/setup-run.ts",
+     "src/tui/shell-chrome.test.ts",
+     "src/tui/shell-chrome.ts",
+     "src/tui/shell-exit.test.ts",
+     "src/tui/shell-exit.ts",
+     "src/tui/shell-fallback.test.ts",
+     "src/tui/side-worker.test.ts",
+     "src/tui/side-worker.ts",
++    "src/tui/sidebar-cards-read.test.ts",
++    "src/tui/sidebar-cards.test.ts",
++    "src/tui/sidebar-cards.ts",
++    "src/tui/sidebar-geometry.test.ts",
++    "src/tui/sidebar-geometry.ts",
+     "src/tui/sidebar-metrics.ts",
+     "src/tui/stdin-guard.test.ts",
+     "src/tui/stdin-guard.ts",
+     "src/tui/subagent-bridge.ts",
+     "src/tui/subagent-inspector.test.ts",
+     "src/tui/subagent-inspector.ts",
+     "src/tui/subagent-session.test.ts",
+     "src/tui/subagent-session.ts",
+     "src/tui/subscription-provider-wizard.test.ts",
+     "src/tui/task-cost-shell-wiring.test.ts",
+     "src/tui/tasks-command.test.ts",
+     "src/tui/tasks-command.ts",
+     "src/tui/theme-picker.test.ts",
+     "src/tui/theme-picker.ts",
+     "src/tui/theme-repaint.test.ts",
+     "src/tui/theme-repaint.ts",
+     "src/tui/theme-text.ts",
+     "src/tui/theme.test.ts",
+     "src/tui/theme.ts",
+     "src/tui/transcript-blocks.test.ts",
+
+--- .metaproject/flows/471-2026-10-22-connect-providers-tabs/flow.json
+@@ 1,545 @@
++{
++  "schemaVersion": 2,
++  "gates": {
++    "tasks": true,
++    "review": true,
++    "owner": true,
++    "folderCommitted": true
++  },
++  "id": "471",
++  "slug": "connect-providers-tabs",
++  "title": "One /connect modal with Connected and Add provider tabs",
++  "status": "implemented",
++  "createdAt": "2026-10-22T09:13:24.137Z",
++  "updatedAt": "2026-10-22T16:11:21.376Z",
++  "source": {
++    "type": "description",
++    "ref": null
++  },
++  "acChecksum": "sha256:1260a02aeb3a5267d5cee8c2ca6aa5b38443f98e62f1ff3fe92ebb17741ef337",
++  "acConfirmed": {
++    "AC1": {
++      "at": "2026-10-22T12:09:29.737Z",
++      "note": "bun test agent-commands + help-groups: 301 pass across the AC suites, 2026-10-22"
++    },
++    "AC2": {
++      "at": "2026-10-22T12:09:29.961Z",
++      "note": "connect-modal.test.ts green; live run opened Providers with Connected and Add provider tabs"
++    },
++    "AC3": {
++      "at": "2026-10-22T12:09:30.192Z",
++      "note": "connect-provider-buttons.test.ts green; only the line-565 source anchor changed to the new /connect handler (deviation from 'unchanged', noted in plan)"
++    },
++    "AC4": {
++      "at": "2026-10-22T12:09:30.412Z",
++      "note": "connect-modal.test.ts green; live: key a and the [Add provider] button switch the open modal"
++    },
++    "AC5": {
++      "at": "2026-10-22T12:09:30.636Z",
++      "note": "connect-modal.test.ts green; live: 14 rows incl. custom, Test on a provider with a key answered ok with 2 models; fake local provider answered 'unknown provider'"
++    },
++    "AC6": {
++      "at": "2026-10-22T12:09:30.860Z",
++      "note": "connect-modal.test.ts green; live: custom wizard returned to Connected with 'livetest connected - 2 model(s)', session unchanged"
++    },
++    "AC7": {
++      "at": "2026-10-22T12:09:31.078Z",
++      "note": "connect-modal.test.ts green; live: typed key absent from the screen and scrollback; stored only in llm-providers.json at mode 600, dir 700"
++    },
++    "AC8": {
++      "at": "2026-10-22T12:09:31.310Z",
++      "note": "command-connect.test.ts green (19+ tests), no key/URL/Disconnect step in chat"
++    },
++    "AC9": {
++      "at": "2026-10-22T12:09:31.531Z",
++      "note": "shell.test.ts, main-queue-drain, busy-dispatch green"
++    },
++    "AC10": {
++      "at": "2026-10-22T12:09:31.746Z",
++      "note": "rg for /provider across README, docs/docs, src/standard, init.ts: 0 matches"
++    },
++    "AC11": {
++      "at": "2026-10-22T12:09:31.967Z",
++      "note": "connect-modal.test.ts green; live run at 100x30; footer per tab"
++    },
++    "AC12": {
++      "at": "2026-10-22T12:09:32.187Z",
++      "note": "Live run 2026-10-22 in tmux, bun src/cli.ts shell, XDG_DATA_HOME empty: added local OpenAI-compatible provider 'livetest' on Add provider (fake server on :18765), returned to Connected, Test = ok 2 model(s); config dir 700, files 600; found one cosmetic defect (stale n/14 counter), fixed in e99d0a717. Caveat: env-var keys from this machine made other providers appear connected"
++    }
++  },
++  "pr": {
++    "url": "https://github.com/MrCipherSmith/keryx/pull/1074"
++  },
++  "baseBranch": "main",
++  "owner": {
++    "value": "MrCipherSmith",
++    "basis": "stated",
++    "source": "`--owner` flag on `flow init`"
++  },
++  "outcomeAuthor": "agent",
++  "tasks": [
++    {
++      "id": "T1",
++      "title": "Collect remaining context",
++      "kind": "context",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed",
++      "dispositionReason": "context collected, plan.md written"
++    },
++    {
++      "id": "T2",
++      "title": "Implement per plan",
++      "kind": "implement",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T3",
++      "title": "Add/adjust tests and make them pass",
++      "kind": "test",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T4",
++      "title": "Self-review and prepare draft PR",
++      "kind": "review",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T5",
++      "title": "Verify: AC10 invariant and AC12 live run in keryx shell with empty config dir",
++      "kind": "verify",
++      "status": "done",
++      "dependsOn": [
++        "T3"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    }
++  ],
++  "history": [
++    {
++      "at": "2026-10-22T09:13:24.137Z",
++      "event": "created"
++    },
++    {
++      "at": "2026-10-22T09:14:16.051Z",
++      "event": "origin-set",
++      "detail": "unknown -> human-request; quote: \"Синхронизируйся с main. Изучи как работают команды /providers и /connect, я хочу объединить их. То есть 1 команда, 1 модалка и 2 табы. На первой connect как сейчас + кнопка add provider который переключает на следующую табу, на второй провайдеры где можно подключить и проверить конеекшн,\"; source: telegram:219474 (Operator asked for the merge in Telegram message 219474)"
++    },
++    {
++      "at": "2026-10-22T09:15:19.330Z",
++      "event": "frozen",
++      "detail": "12 criteria; checksum recorded"
++    },
++    {
++      "at": "2026-10-22T09:15:19.710Z",
++      "event": "started"
++    },
++    {
++      "at": "2026-10-22T09:19:10.931Z",
++      "event": "task-done",
++      "detail": "T1: Collect remaining context"
++    },
++    {
++      "at": "2026-10-22T09:19:11.530Z",
++      "event": "task-added",
++      "detail": "T5: Verify: AC10 invariant and AC12 live run in keryx shell with empty config dir"
++    },
++    {
++      "at": "2026-10-22T09:51:31.094Z",
++      "event": "task-done",
++      "detail": "T2: Implement per plan"
++    },
++    {
++      "at": "2026-10-22T09:59:25.856Z",
++      "event": "task-done",
++      "detail": "T3: Add/adjust tests and make them pass"
++    },
++    {
++      "at": "2026-10-22T12:02:49.047Z",
++      "event": "task-done",
++      "detail": "T4: Self-review and prepare draft PR"
++    },
++    {
++      "at": "2026-10-22T12:09:29.737Z",
++      "event": "ac-confirmed",
++      "detail": "AC1: bun test agent-commands + help-groups: 301 pass across the AC suites, 2026-10-22 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
++    },
++    {
++      "at": "2026-10-22T12:09:29.961Z",
++      "event": "ac-confirmed",
++      "detail": "AC2: connect-modal.test.ts green; live run opened Providers with Connected and Add provider tabs (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
++    },
++    {
++      "at": "2026-10-22T12:09:30.192Z",
++      "event": "ac-confirmed",
++      "detail": "AC3: connect-provider-buttons.test.ts green; only the line-565 source anchor changed to the new /connect handler (deviation from 'unchanged', noted in plan) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
++    },
++    {
++      "at": "2026-10-22T12:09:30.412Z",
++      "event": "ac-confirmed",
++      "detail": "AC4: connect-modal.test.ts green; live: key a and the [Add provider] button switch the open modal (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
++    },
++    {
++      "at": "2026-10-22T12:09:30.636Z",
++      "event": "ac-confirmed",
++      "detail": "AC5: connect-modal.test.ts green; live: 14 rows incl. custom, Test on a provider with a key answered ok with 2 models; fake local provider answered 'unknown provider' (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
++    },
++    {
++      "at": "2026-10-22T12:09:30.860Z",
++      "event": "ac-confirmed",
++      "detail": "AC6: connect-modal.test.ts green; live: custom wizard returned to Connected with 'livetest connected - 2 model(s)', session unchanged (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
++    },
++    {
++      "at": "2026-10-22T12:09:31.078Z",
++      "event": "ac-confirmed",
++      "detail": "AC7: connect-modal.test.ts green; live: typed key absent from the screen and scrollback; stored only in llm-providers.json at mode 600, dir 700 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
++    },
++    {
++      "at": "2026-10-22T12:09:31.310Z",
++      "event": "ac-confirmed",
++      "detail": "AC8: command-connect.test.ts green (19+ tests), no key/URL/Disconnect step in chat (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
++    },
++    {
++      "at": "2026-10-22T12:09:31.531Z",
++      "event": "ac-confirmed",
++      "detail": "AC9: shell.test.ts, main-queue-drain, busy-dispatch green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
++    },
++    {
++      "at": "2026-10-22T12:09:31.746Z",
++      "event": "ac-confirmed",
++      "detail": "AC10: rg for /provider across README, docs/docs, src/standard, init.ts: 0 matches (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
++    },
++    {
++      "at": "2026-10-22T12:09:31.967Z",
++      "event": "ac-confirmed",
++      "detail": "AC11: connect-modal.test.ts green; live run at 100x30; footer per tab (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
++    },
++    {
++      "at": "2026-10-22T12:09:32.187Z",
++      "event": "ac-confirmed",
++      "detail": "AC12: Live run 2026-10-22 in tmux, bun src/cli.ts shell, XDG_DATA_HOME empty: added local OpenAI-compatible provider 'livetest' on Add provider (fake server on :18765), returned to Connected, Test = ok 2 model(s); config dir 700, files 600; found one cosmetic defect (stale n/14 counter), fixed in e99d0a717. Caveat: env-var keys from this machine made other providers appear connected (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
++    },
++    {
++      "at": "2026-10-22T12:09:36.074Z",
++      "event": "task-done",
++      "detail": "T5: Verify: AC10 invariant and AC12 live run in keryx shell with empty config dir"
++    },
++    {
++      "at": "2026-10-22T12:09:38.887Z",
++      "event": "implemented",
++      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1074"
++    },
++    {
++      "at": "2026-10-22T16:01:36.297Z",
++      "event": "completing"
++    },
++    {
++      "at": "2026-10-22T16:01:43.351Z",
++      "event": "completion-attempt-recorded",
++      "detail": "attempt 1: failed"
++    },
++    {
++      "at": "2026-10-22T16:01:43.352Z",
++      "event": "completion-failed",
++      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1074 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1074.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1074 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from | health: no report; run `keryx health run` first"
++    },
++    {
++      "at": "2026-10-22T16:11:21.376Z",
++      "event": "implemented",
++      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1074 (warning: PR is not a draft)"
++    }
++  ],
++  "origin": {
++    "kind": "human-request",
++    "quote": "Синхронизируйся с main. Изучи как работают команды /providers и /connect, я хочу объединить их. То есть 1 команда, 1 модалка и 2 табы. На первой connect как сейчас + кнопка add provider который переключает на следующую табу, на второй провайдеры где можно подключить и проверить конеекшн,",
++    "source": "telegram:219474"
++  },
++  "acKinds": {
++    "AC1": {
++      "kind": "exec",
++      "check": "bun test src/commands/agent-commands.test.ts src/standard/help-groups.test.ts"
++    },
++    "AC2": {
++      "kind": "exec",
++      "check": "bun test src/tui/connect-modal.test.ts"
++    },
++    "AC3": {
++      "kind": "exec",
++      "check": "bun test src/tui/connect-provider-buttons.test.ts"
++    },
++    "AC4": {
++      "kind": "exec",
++      "check": "bun test src/tui/connect-modal.test.ts"
++    },
++    "AC5": {
++      "kind": "exec",
++      "check": "bun test src/tui/connect-modal.test.ts"
++    },
++    "AC6": {
++      "kind": "exec",
++      "check": "bun test src/tui/connect-modal.test.ts"
++    },
++    "AC7": {
++      "kind": "exec",
++      "check": "bun test src/tui/connect-modal.test.ts"
++    },
++    "AC8": {
++      "kind": "exec",
++      "check": "bun test src/remote/command-connect.test.ts"
++    },
++    "AC9": {
++      "kind": "exec",
++      "check": "bun test src/commands/shell.test.ts src/tui/main-queue-drain.test.ts src/tui/busy-dispatch.test.ts"
++    },
++    "AC10": {
++      "kind": "invariant",
++      "check": "! rg -n \"/provider\\b\" README.md docs/docs src/standard src/commands/init.ts"
++    },
++    "AC11": {
++      "kind": "exec",
++      "check": "bun test src/tui/connect-modal.test.ts"
++    },
++    "AC12": {
++      "kind": "judged"
++    }
++  },
++  "signatures": [
++    {
++      "at": "2026-10-22T12:09:29.737Z",
++      "kind": "ac-confirm",
++      "identity": {
++        "value": "200531777+MrCipherSmith@users.noreply.github.com",
++        "basis": "derived",
++        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
++      },
++      "criterion": "AC1",
++      "acChecksum": "sha256:1260a02aeb3a5267d5cee8c2ca6aa5b38443f98e62f1ff3fe92ebb17741ef337"
++    },
++    {
++      "at": "2026-10-22T12:09:29.961Z",
++      "kind": "ac-confirm",
++      "identity": {
++        "value": "200531777+MrCipherSmith@users.noreply.github.com",
++        "basis": "derived",
++        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
++      },
++      "criterion": "AC2",
++      "acChecksum": "sha256:1260a02aeb3a5267d5cee8c2ca6aa5b38443f98e62f1ff3fe92ebb17741ef337"
++    },
++    {
++      "at": "2026-10-22T12:09:30.192Z",
++      "kind": "ac-confirm",
++      "identity": {
++        "value": "200531777+MrCipherSmith@users.noreply.github.com",
++        "basis": "derived",
++        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
++      },
++      "criterion": "AC3",
++      "acChecksum": "sha256:1260a02aeb3a5267d5cee8c2ca6aa5b38443f98e62f1ff3fe92ebb17741ef337"
++    },
++    {
++      "at": "2026-10-22T12:09:30.412Z",
++      "kind": "ac-confirm",
++      "identity": {
++        "value": "200531777+MrCipherSmith@users.noreply.github.com",
++        "basis": "derived",
++        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
++      },
++      "criterion": "AC4",
++      "acChecksum": "sha256:1260a02aeb3a5267d5cee8c2ca6aa5b38443f98e62f1ff3fe92ebb17741ef337"
++    },
++    {
++      "at": "2026-10-22T12:09:30.636Z",
++      "kind": "ac-confirm",
++      "identity": {
++        "value": "200531777+MrCipherSmith@users.noreply.github.com",
++        "basis": "derived",
++        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
++      },
++      "criterion": "AC5",
++      "acChecksum": "sha256:1260a02aeb3a5267d5cee8c2ca6aa5b38443f98e62f1ff3fe92ebb17741ef337"
++    },
++    {
++      "at": "2026-10-22T12:09:30.860Z",
++      "kind": "ac-confirm",
++      "identity": {
++        "value": "200531777+MrCipherSmith@users.noreply.github.com",
++        "basis": "derived",
++        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
++      },
++      "criterion": "AC6",
++      "acChecksum": "sha256:1260a02aeb3a5267d5cee8c2ca6aa5b38443f98e62f1ff3fe92ebb17741ef337"
++    },
++    {
++      "at": "2026-10-22T12:09:31.078Z",
++      "kind": "ac-confirm",
++      "identity": {
++        "value": "200531777+MrCipherSmith@users.noreply.github.com",
++        "basis": "derived",
++        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
++      },
++      "criterion": "AC7",
++      "acChecksum": "sha256:1260a02aeb3a5267d5cee8c2ca6aa5b38443f98e62f1ff3fe92ebb17741ef337"
++    },
++    {
++      "at": "2026-10-22T12:09:31.310Z",
++      "kind": "ac-confirm",
++      "identity": {
++        "value": "200531777+MrCipherSmith@users.noreply.github.com",
++        "basis": "derived",
++        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
++      },
++      "criterion": "AC8",
++      "acChecksum": "sha256:1260a02aeb3a5267d5cee8c2ca6aa5b38443f98e62f1ff3fe92ebb17741ef337"
++    },
++    {
++      "at": "2026-10-22T12:09:31.531Z",
++      "kind": "ac-confirm",
++      "identity": {
++        "value": "200531777+MrCipherSmith@users.noreply.github.com",
++        "basis": "derived",
++        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
++      },
++      "criterion": "AC9",
++      "acChecksum": "sha256:1260a02aeb3a5267d5cee8c2ca6aa5b38443f98e62f1ff3fe92ebb17741ef337"
++    },
++    {
++      "at": "2026-10-22T12:09:31.746Z",
++      "kind": "ac-confirm",
++      "identity": {
++        "value": "200531777+MrCipherSmith@users.noreply.github.com",
++        "basis": "derived",
++        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
++      },
++      "criterion": "AC10",
++      "acChecksum": "sha256:1260a02aeb3a5267d5cee8c2ca6aa5b38443f98e62f1ff3fe92ebb17741ef337"
++    },
++    {
++      "at": "2026-10-22T12:09:31.967Z",
++      "kind": "ac-confirm",
++      "identity": {
++        "value": "200531777+MrCipherSmith@users.noreply.github.com",
++        "basis": "derived",
++        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
++      },
++      "criterion": "AC11",
++      "acChecksum": "sha256:1260a02aeb3a5267d5cee8c2ca6aa5b38443f98e62f1ff3fe92ebb17741ef337"
++    },
++    {
++      "at": "2026-10-22T12:09:32.187Z",
++      "kind": "ac-confirm",
++      "identity": {
++        "value": "200531777+MrCipherSmith@users.noreply.github.com",
++        "basis": "derived",
++        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
++      },
++      "criterion": "AC12",
++      "acChecksum": "sha256:1260a02aeb3a5267d5cee8c2ca6aa5b38443f98e62f1ff3fe92ebb17741ef337"
++    }
++  ],
++  "completionAttempts": [
++    {
++      "at": "2026-10-22T16:01:43.351Z",
++      "gates": [
++        {
++          "name": "acceptance-criteria",
++          "status": "pass",
++          "detail": "12 confirmed"
++        },
++        {
++          "name": "pull-request",
++          "status": "pass",
++          "detail": "PR exists, checks green"
++        },
++        {
++          "name": "base-branch",
++          "status": "pass",
++          "detail": "the pull request targets main, the base this flow recorded"
++        },
++        {
++          "name": "tasks",
++          "status": "pass",
++          "detail": "5 task(s) terminal"
++        },
++        {
++          "name": "owner",
++          "status": "pass",
++          "detail": "owner: MrCipherSmith"
++        },
++        {
++          "name": "folder-committed",
++          "status": "pass",
++          "detail": "471-2026-10-22-connect-providers-tabs is committed in HEAD"
++        },
++        {
++          "name": "review",
++          "status": "fail",
++          "detail": "5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1074 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1074.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1074 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
++        },
++        {
++          "name": "health",
++          "status": "fail",
++          "detail": "no report; run `keryx health run` first"
++        },
++        {
++          "name": "security",
++          "status": "pass",
++          "detail": "security advisory: informational (advisory does not block)"
++        },
++        {
++          "name": "confirmation",
++          "status": "skipped",
++          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
++        }
++      ],
++      "passed": false,
++      "acChecksum": "sha256:1260a02aeb3a5267d5cee8c2ca6aa5b38443f98e62f1ff3fe92ebb17741ef337"
++    }
++  ]
++}
+
+--- .metaproject/flows/471-2026-10-22-connect-providers-tabs/resolved/T2.implement.json
+@@ 1,48 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/commands/agent-commands.ts",
++    "src/commands/shell.ts",
++    "src/standard/help-groups.ts",
++    "src/tui/chat-shell.ts",
++    "src/tui/modal-host.ts",
++    "src/tui/tui-shell.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
++      "bytes": 3891,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
++      "bytes": 5675,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
++      "bytes": 5733,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/flows/471-2026-10-22-connect-providers-tabs/resolved/T2b.implement.json
+@@ 1,47 @@
++{
++  "schema": 1,
++  "for": "implement",
++  "files": [
++    "src/remote/command-gateway.ts",
++    "src/remote/command-router.ts",
++    "src/remote/command.test-helpers.ts",
++    "src/remote/shell-bridge.ts",
++    "src/tui/tui-shell.ts"
++  ],
++  "entries": [
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/tdd-workflow.mdc",
++      "sha256": "3d43be89e4fcf4e6e297073047df83077104566a9c7d836e14c19d3ace7e08f3",
++      "bytes": 3891,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/error-handling.mdc",
++      "sha256": "78292e60e0951780a20ae370fc4f41236f20f77879b5e9eab09e2b735fa32f0c",
++      "bytes": 5675,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    },
++    {
++      "kind": "rule",
++      "source": "bundled",
++      "path": ".metaproject/rules/core/solid-principles.mdc",
++      "sha256": "ef5fa709b48455929607b9e5b23ec0ed5eaa7708c17fb9d59b43b8108ed8f43b",
++      "bytes": 5733,
++      "reason": "bundled-default",
++      "tier": "must_read"
++    }
++  ],
++  "budget": {
++    "limitBytes": 131072,
++    "usedBytes": 0,
++    "exceeded": false,
++    "limitSource": "default"
++  },
++  "warnings": []
++}
+
+--- .metaproject/data/gdgraph/artifacts/summary.md
+@@ 1,83 @@
+ # gdgraph Summary
+ 
+ ## Stats
+ 
+-- Source files indexed: 3253
++- Source files indexed: 3267
+ - Imported asset files indexed: 14
+-- Total nodes: 3267
+-- Edges: 11703
+-- Import edges: 11550
++- Total nodes: 3281
++- Edges: 11780
++- Import edges: 11627
+ - Asset edges: 31
+ - Unresolved imports: 122
+ - Import resolution: 99%
+-- Skipped generated/static directories: 18
++- Skipped generated/static directories: 15
+ 
+ ## Top Modules
+ 
+ | Module | Source Files |
+ |---|---:|
+-| commands | 404 |
++| commands | 405 |
+ | harness | 400 |
+-| tui | 310 |
+-| review | 280 |
++| tui | 322 |
++| review | 281 |
+ | lib | 212 |
+ | gdskills | 137 |
+ | remote | 132 |
+ | flow | 92 |
+ | security | 88 |
+ | wiki | 70 |
+ | scripts | 67 |
+ | sac | 65 |
+ | health | 57 |
+ | learning | 57 |
+ | mcp-servers | 56 |
+ | gdgraph | 55 |
+ | memory | 49 |
+ | session | 46 |
+ | acp | 42 |
+ | metrics | 39 |
+ 
+ ## Unresolved By Type
+ 
+ | Type | Count |
+ |---|---:|
+ | relative-code | 94 |
+ | package | 17 |
+ | .js | 3 |
+ | . | 2 |
+ | .css | 1 |
+ | .slice(4, -3)} | 1 |
+ | .scanner | 1 |
+ | .scan-helper | 1 |
+ | .ts | 1 |
+ | .key | 1 |
+ 
+ ## Skipped Directories
+ 
+ - `.claude`
+-- `.git`
+ - `.metaproject`
+ - `bench/jev-review/fixtures/conform-project/.metaproject`
+-- `dist`
+ - `docs/requirements/keryx-mcp-client/.metaproject`
+ - `fixtures/memory-reliability-p0/.metaproject`
+ - `fixtures/paraphrase/.metaproject`
+ - `fixtures/temporal/.metaproject`
+-- `node_modules`
+ - `src/bundle/fixtures/roundtrip/project/.metaproject`
+ - `src/security/audit-harness/fixtures/agents/.metaproject`
+ - `src/security/audit-harness/fixtures/baseline-indefinite/.metaproject`
+ - `src/security/audit-harness/fixtures/baseline-tampered/.metaproject`
+ - `src/security/audit-harness/fixtures/hook-exfil/.claude`
+ - `src/security/audit-harness/fixtures/hook-injection/.claude`
+ - `src/security/audit-harness/fixtures/hook-suppression/.claude`
+ - `src/security/audit-harness/fixtures/permissive-settings/.claude`
+ 
+ ## Generated Files
+ 
+ - `.metaproject/data/gdgraph/storage/nodes.jsonl`
+ - `.metaproject/data/gdgraph/storage/edges.jsonl`
+ - `.metaproject/data/gdgraph/artifacts/module-map.json`
+ 
+ ## Next Commands
+ 
+ ```bash
+ keryx gdgraph query cycles
+ keryx gdgraph query orphans
+
+--- .metaproject/flows/471-2026-10-22-connect-providers-tabs/acceptance-criteria.md
+@@ 1,29 @@
++# Acceptance Criteria
++
++Rules:
++
++- Criteria lines use the exact format `- ACn: <criterion>`.
++- Every criterion ends with [verify: exec `<command>`],
++  [verify: invariant `<command>`], [verify: judged] or
++  [verify: none — <reason>].
++- After `flow freeze` this file is checksum-protected: any edit outside
++  `keryx flow ac update` fails every gate and status transition.
++- Completion requires every ACn to be confirmed via
++  `keryx flow ac confirm <id> <ACn>`.
++
++## Criteria
++
++- AC1: `/provider` is not a registered slash command in agent or chat mode, is absent from the `/` menu, `/help` and the help-groups catalog, and typing it answers "Unknown command" with a hint to use `/connect`. [verify: exec `bun test src/commands/agent-commands.test.ts src/standard/help-groups.test.ts`]
++- AC2: `/connect` opens one ModalHost dialog titled "Providers" with exactly two tabs, "Connected" and "Add provider". It opens on "Connected", or on "Add provider" when no provider is connected (replacing today's "No connected providers" toast). [verify: exec `bun test src/tui/connect-modal.test.ts`]
++- AC3: The "Connected" tab keeps today's behaviour: one row per connected provider with catalog status, balance and age, [Test], [Disconnect] with the confirmation and shared-env-var warning, Enter on the label picks the provider then its model and switches the session. The existing flow 304 and 309 tests stay green unchanged. [verify: exec `bun test src/tui/connect-provider-buttons.test.ts`]
++- AC4: The "Connected" tab has an [Add provider] button, reachable by mouse and by keyboard, that switches the same open modal to "Add provider" without closing it. [verify: exec `bun test src/tui/connect-modal.test.ts`]
++- AC5: The "Add provider" tab lists every known provider (built-in, catalog and custom) plus "Add custom provider". Each row shows whether it is connected and has [Connect] and [Test]. [Test] uses the same probe as the "Connected" tab and prints "ok — N model(s)" or the failure reason; a provider with no credential answers "no credential, Connect first" without a network call. [verify: exec `bun test src/tui/connect-modal.test.ts`]
++- AC6: [Connect] runs today's base-URL, key or device-login steps, then checks `/models`. On success it returns to the "Connected" tab with the provider listed, and the session's provider and model are unchanged. On a rejected key it shows the reason and re-asks for the key. Esc at any step returns to "Add provider" and saves nothing from that step. [verify: exec `bun test src/tui/connect-modal.test.ts`]
++- AC7: A key typed in [Connect] is saved exactly as before (user-global store, mode 0600) and appears nowhere else: not in the transcript, toasts, journal, test output or the flow log. [verify: exec `bun test src/tui/connect-modal.test.ts`]
++- AC8: In Telegram `/connect` shows the connected providers as buttons (pick provider, then model, as today) and an "Add provider" button that shows the provider list with a [Test] button per row. [Connect] in chat runs the device login (code and link sent to the chat, nothing secret typed) for providers that offer it; a provider that needs a key answers that the key is entered in the shell, never in chat; there is still no Disconnect, key or URL step in chat. [verify: exec `bun test src/remote/command-connect.test.ts`]
++- AC9: The chat shell with the TUI opens the same modal for `/connect`; the shell without a TUI prints guidance that names only `/connect`, never `/provider`. [verify: exec `bun test src/commands/shell.test.ts src/tui/main-queue-drain.test.ts src/tui/busy-dispatch.test.ts`]
++- AC10: README, the docs site, the CLI hint after `keryx init`, and the "Connect a model provider" help group describe the single `/connect` command and its two tabs, and no user-facing text outside `docs/decisions` mentions `/provider`. [verify: invariant `! rg -n "/provider\b" README.md docs/docs src/standard src/commands/init.ts`]
++- AC11: The modal fits an 80x24 terminal: both tab labels and the footer keys are visible, rows scroll, and the footer lists the keys for the active tab. [verify: exec `bun test src/tui/connect-modal.test.ts`]
++- AC12: A live run in a real `keryx shell` with an empty config directory adds a local OpenAI-compatible provider on "Add provider", tests it, and finds it on "Connected"; the evidence (frames and the config file mode) is recorded in the flow journal. [verify: judged]
++
++Not applicable: a sidebar card. The sidebar has no provider card today and this flow adds none; the modal is reached by `/connect`, the `/` menu and the help modal.
+
+--- .metaproject/flows/471-2026-10-22-connect-providers-tabs/context.md
+@@ 1,58 @@
++# Context
++
++Collected deterministically by `keryx flow init` at 2026-10-22T09:13:23.327Z.
++The flow-init skill enriches this with formalization, brainstorm results, and
++interview answers.
++
++## Related Memory
++
++1. [1.996] Theme switch repaints already-rendered chrome via old-slot value matching (lesson/accepted) - lessons/theme-switch-repaint.md
++   `/theme` in the OpenTUI shell applied and persisted correctly on 0.2.66, but `applyTheme` (src/tui/shell-chrome.ts) only recolored the chrome's OWN surfaces (renderer background, sidebar border, docks, composer, `/`-menu). Every renderable painted EARLIER with `getTheme()` — transcript frames (user echoes, code-segment boxes, block bodies, side-worker boxes), tone-colored block headers (`theme.error`/`theme.tool`), dock/queue-dock buttons, sidebar panels — kept the old palette's hex in its `borderColor`/`backgroundColor`/`fg` props, so a dark→dark switch (groknight↔tokyonight) looked like "the theme did not apply". Fix: on every `applyTheme`, walk the renderable trees (transcript, docks, sidebarTop, menu, composer, header, footer) and rewrite any prop whose color equals an OLD theme slot hex to the NEW slot hex.
++   claimType: lesson | confidence: high | version: 0.2.0
++   scope: module:src/tui, entity:shell-chrome.ts
++   provenance: source=manual link=unknown author=unknown confirmedBy=unknown
++2. [1.934] keryx-gdctx-gdgraph-routing-index-cost-not-measured-before-shipping (known-mistake/accepted) - known-mistakes/keryx-gdctx-routing-index-cost-not-measured-before-shipping.md
++   A mandatory context-injection rule's per-read cost multiplies by every subsequent turn and every subagent dispatch. Measure the re-billed cost across a realistic turn count and subagent fan-out before setting a rule's default scope, not just its one-time size.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:context, orchestration, keryx-cli, subagent-dispatch, entity:hard-gate rule, transcript re-sending, subagent-context-assembly, orient-runtime
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-5) and docs/requirements/keryx-context-measurement/context-loading.md author=unknown confirmedBy=Measured in context-loading.md: 41,556→42,133 tokens across 4 turns with full index re-billing
++3. [1.902] Findings reach a review round through the report's keryx:findings block, and a round without one silently records none (known-mistake/accepted) - known-mistakes/review-ingest-discards-verdicts.md
++   `keryx review ingest --report <md>` reads structured findings from a fenced ` ```json keryx:findings ` block inside the report. A report without that block ingests as `findings: in=0`, and every `--verifications` claim naming one of its findings is then discarded as unresolvable — because the finding it names is not in the round.
++   claimType: known-mistake | confidence: high | version: 0.3.0
++   scope: module:review, flow, entity:parseEmbeddedFindings, ManagedReviewInput.findings, flow-complete gate
++   provenance: source=manual link=https://github.com/MrCipherSmith/keryx/pull/499 author=MrCipherSmith confirmedBy=flow 243 closed through the gate on round r06 with 3 findings, 3 refuted verdicts, 0 discarded
++   caveat: Version 0.2.0 of this entry asserted the opposite — that `review ingest`
++4. [1.833] A fix round needs its own review: three consecutive rounds each introduced a blocker (lesson/accepted) - lessons/a-fix-round-needs-its-own-review-three-consecutive-rounds-each-introduced-a-blocker.md
++   On PR #215 (flow 127, project registry) three consecutive review-fix rounds each introduced a new blocker while closing the previous one. The defect was not in any single fix; it was in treating a fix as finished once it addressed the reported symptom.
++   claimType: lesson | confidence: high | version: 0.5.0
++   scope: module:core, entity:project-registry
++   provenance: source=review rounds on PR #215 (flow 127), PR #216 (flow 128), PR #220 (flow 133) link=https://github.com/MrCipherSmith/keryx/pull/215 author=unknown confirmedBy=unknown
++5. [1.809] gdctx-redaction-ignores-trust-tag (known-mistake/accepted) - known-mistakes/gdctx-redaction-ignores-trust-tag.md
++   A `SecuritySource` tag (`trusted-project`) can be threaded all the way to a redaction call and still have zero effect on the policy outcome if the resolver only branches on `category`. Verify a trust axis actually changes a decision before shipping the tag, not just that the tag is present in the type.
++   claimType: known-mistake | confidence: high | version: 0.1.0
++   scope: module:security, redaction, policy-resolution, entity:resolveDecision, buildFinding, SecuritySource, policyFor, image-url policy
++   provenance: source=flow 320 (W7 gdgraph/gdctx correctness) link=docs/requirements/keryx-agent-platform-expansion/workstreams/W7-graph-ctx-correctness.md (GDCTX-2) author=unknown confirmedBy=Reproduced this session via `keryx ctx read README.md --mode full`
++
++## Code Graph
++
++- `.metaproject/data/gdgraph/artifacts/summary.md`
++- `.metaproject/data/gdgraph/artifacts/module-map.json`
++
++Use `keryx gdgraph affected <file>` for blast radius.
++
++## Enabled Metaproject Modules
++
++- gdgraph
++- gdctx
++- gdskills
++- memory
++- tasks
++- health
++- testing
++- gdwiki
++- security
++- mcp
++
++## Agent Findings
++
++_(flow-init skill appends here)_
+
+--- .metaproject/flows/471-2026-10-22-connect-providers-tabs/description.md
+@@ 1,35 @@
++# One /connect modal with Connected and Add provider tabs
++
++Status: draft
++Source: operator request, Telegram message 219474 (2026-10-22), answers to poll 248
++
++## Problem
++
++Connecting a model provider is split across two commands that open different dialogs. `/connect` lists only the providers that already work, with [Test] and [Disconnect] per row. `/provider` is a separate step-by-step wizard (list of every known provider, base URL, key or device login, models, model pick) and has no Test button: a bad key shows up only as a failed `/models` call. The operator has to know which command does which, and a provider added in one dialog is tested in the other.
++
++## Expected Outcome
++
++`/connect` is the only command. It opens one modal titled "Providers" with two tabs.
++
++- Tab "Connected": what `/connect` shows today (rows, [Test], [Disconnect], pick a provider then a model), plus an [Add provider] button that switches to the second tab.
++- Tab "Add provider": every known provider, each with [Connect] and [Test]. [Connect] collects the key or runs the device login, checks `/models`, then returns to the first tab. It does not switch the session.
++
++`/provider` is removed. Telegram gets the same two-part flow with buttons; [Connect] there runs the device login where a provider offers one, and never takes a key in chat. Release: a separate release right after merge (operator, poll 249).
++
++## Outcome criteria
++
++- An operator adds a new provider, tests it and sees it listed under Connected without leaving `/connect` or typing a second command.
++- `/provider` is gone from the command menu, help, README and docs site.
++
++## Out of Scope
++
++- `/search-provider` and `/search-connect` (web search providers).
++- Disconnect, key entry or URL editing from Telegram (flow 387 AC4 keeps them in the shell).
++- Changing what Test measures, the catalog cache or the profile refresh behind it.
++- Putting wizard steps (key, URL, device login) inside the tab body: they stay separate dialogs that return to the tabbed modal.
++
++## Effects
++
++- Запрос (дословно): «Синхронизируйся с main. Изучи как работают команды /providers и /connect, я хочу объединить их. То есть 1 команда, 1 модалка и 2 табы. На первой connect как сейчас + кнопка add provider который переключает на следующую табу, на второй провайдеры где можно подключить и проверить конеекшн,» (message 219474)
++- Эффект (формализация агента): одна команда `/connect` открывает модалку из двух табов; `/provider` удалён; на втором табе у каждого провайдера [Connect] и [Test].
++- Как наблюдать (предложение агента): открыть `/connect` в живой оболочке с пустым config-каталогом, добавить локальный OpenAI-совместимый провайдер на втором табе, нажать [Test], увидеть его на первом табе.
+
+--- .metaproject/flows/471-2026-10-22-connect-providers-tabs/journal.md
+@@ 1,29 @@
++# Flow Journal
++
++- 2026-10-22T09:13:24.137Z - flow created
++- 2026-10-22T09:14:16.051Z - origin-set: unknown -> human-request; quote: "Синхронизируйся с main. Изучи как работают команды /providers и /connect, я хочу объединить их. То есть 1 команда, 1 модалка и 2 табы. На первой connect как сейчас + кнопка add provider который переключает на следующую табу, на второй провайдеры где можно подключить и проверить конеекшн,"; source: telegram:219474 (Operator asked for the merge in Telegram message 219474)
++- 2026-10-22T09:15:19.330Z - frozen: 12 criteria; checksum recorded
++- 2026-10-22T09:15:19.710Z - started
++- 2026-10-22T09:19:10.931Z - task-done: T1: Collect remaining context
++- 2026-10-22T09:19:11.530Z - task-added: T5: Verify: AC10 invariant and AC12 live run in keryx shell with empty config dir
++- 2026-10-22T09:51:31.094Z - task-done: T2: Implement per plan
++- 2026-10-22T09:59:25.856Z - task-done: T3: Add/adjust tests and make them pass
++- 2026-10-22T12:02:49.047Z - task-done: T4: Self-review and prepare draft PR
++- 2026-10-22T12:09:29.737Z - ac-confirmed: AC1: bun test agent-commands + help-groups: 301 pass across the AC suites, 2026-10-22 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
++- 2026-10-22T12:09:29.961Z - ac-confirmed: AC2: connect-modal.test.ts green; live run opened Providers with Connected and Add provider tabs (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
++- 2026-10-22T12:09:30.192Z - ac-confirmed: AC3: connect-provider-buttons.test.ts green; only the line-565 source anchor changed to the new /connect handler (deviation from 'unchanged', noted in plan) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
++- 2026-10-22T12:09:30.412Z - ac-confirmed: AC4: connect-modal.test.ts green; live: key a and the [Add provider] button switch the open modal (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
++- 2026-10-22T12:09:30.636Z - ac-confirmed: AC5: connect-modal.test.ts green; live: 14 rows incl. custom, Test on a provider with a key answered ok with 2 models; fake local provider answered 'unknown provider' (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
++- 2026-10-22T12:09:30.860Z - ac-confirmed: AC6: connect-modal.test.ts green; live: custom wizard returned to Connected with 'livetest connected - 2 model(s)', session unchanged (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
++- 2026-10-22T12:09:31.078Z - ac-confirmed: AC7: connect-modal.test.ts green; live: typed key absent from the screen and scrollback; stored only in llm-providers.json at mode 600, dir 700 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
++- 2026-10-22T12:09:31.310Z - ac-confirmed: AC8: command-connect.test.ts green (19+ tests), no key/URL/Disconnect step in chat (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
++- 2026-10-22T12:09:31.531Z - ac-confirmed: AC9: shell.test.ts, main-queue-drain, busy-dispatch green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
++- 2026-10-22T12:09:31.746Z - ac-confirmed: AC10: rg for /provider across README, docs/docs, src/standard, init.ts: 0 matches (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
++- 2026-10-22T12:09:31.967Z - ac-confirmed: AC11: connect-modal.test.ts green; live run at 100x30; footer per tab (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
++- 2026-10-22T12:09:32.187Z - ac-confirmed: AC12: Live run 2026-10-22 in tmux, bun src/cli.ts shell, XDG_DATA_HOME empty: added local OpenAI-compatible provider 'livetest' on Add provider (fake server on :18765), returned to Connected, Test = ok 2 model(s); config dir 700, files 600; found one cosmetic defect (stale n/14 counter), fixed in e99d0a717. Caveat: env-var keys from this machine made other providers appear connected (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
++- 2026-10-22T12:09:36.074Z - task-done: T5: Verify: AC10 invariant and AC12 live run in keryx shell with empty config dir
++- 2026-10-22T12:09:38.887Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1074
++- 2026-10-22T16:01:36.297Z - completing
++- 2026-10-22T16:01:43.351Z - completion-attempt-recorded: attempt 1: failed
++- 2026-10-22T16:01:43.352Z - completion-failed: review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/471-2026-10-22-connect-providers-tabs/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#1074 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__1074.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 1074 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from | health: no report; run `keryx health run` first
++- 2026-10-22T16:11:21.376Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1074 (warning: PR is not a draft)
+
+--- .metaproject/flows/471-2026-10-22-connect-providers-tabs/plan.md
+@@ 1,46 @@
++# Implementation Plan
++
++Status: approved (operator, polls 248 and 249, 2026-10-22)
++
++## Approach
++
++One tabbed ModalHost step in `src/tui/tui-shell.ts` replaces both `pickConnectedProviderStep` (as the host) and the `/provider` wizard entry. The step resolves to one action; the caller closes the modal, runs the existing wizard step, then re-opens the modal on the right tab. Wizard steps (base URL, key, device login) stay separate dialogs, as today.
++
++- Tab "Connected" is today's rows and buttons unchanged, plus an [Add provider] button.
++- Tab "Add provider" lists every provider from `detectProviders` plus "Add custom provider", each row with [Connect] and [Test].
++- The per-provider connect sequence (custom wizard, base URL, credential, `/models` check with the rejected-key and endpoint retries) is extracted so the wizard loop and tab 2 [Connect] share it. [Connect] stops after the `/models` check: no model pick, no session switch.
++- `modal-host.ts` gets an optional `footerFor(tabId)` so the footer lists the keys of the active tab.
++- `/provider` is removed from the agent registry, handlers, help groups, `CONNECT_GUIDANCE`, init hint, README and docs. `/connect` is the only entry. The non-`onlyConnected` wizard path stays for first-run startup.
++- Telegram: `RemoteCommandHost` gets `listAddableProviders`, `testProvider` and `connectProviderDeviceLogin`. The router shows connected providers as buttons plus "Add provider"; the add list has a [Test] per row; [Connect] runs the device login (code and link posted to the chat) where the auth catalog says `device-code`, and answers "key is entered in the shell" otherwise. No key, URL or Disconnect step in chat (flow 387 AC4).
++
++## State x event matrix (modal)
++
++| State | Event | Result |
++|---|---|---|
++| Connected, rows > 0 | Enter on label | pick provider then model, switch session (unchanged) |
++| Connected | [Test] / [Disconnect] | unchanged (flow 304, 309) |
++| Connected | [Add provider], key `a`, Tab, digit 2, click tab | same modal switches to Add provider |
++| Connected, last row disconnected | Disconnect confirmed | switches to Add provider, modal stays open |
++| Add provider, no credential | [Test] | "no credential, Connect first", no network call |
++| Add provider, credential | [Test] | "ok - N model(s)" or the failure reason |
++| Add provider | [Connect] | modal closes, wizard steps run, `/models` checked, modal re-opens on Connected with the provider listed; session unchanged |
++| Add provider, wizard | Esc at any step | modal re-opens on Add provider; nothing from that step saved |
++| Add provider, rejected key | `/models` rejects | reason shown, key asked again |
++| Any tab | Esc, `x` | modal closes, focus restored |
++| Opened, nothing connected | `/connect` | opens on Add provider (no "No connected providers" toast) |
++| Any tab | theme change | active tab re-rendered |
++| 80x24 terminal | open | both tab labels and active-tab footer visible, rows scroll |
++
++## Tasks
++
++- T1 context (this file).
++- T2 implement the modal, the shared connect step, the removal, the Telegram hooks.
++- T3 tests: new `src/tui/connect-modal.test.ts`; update agent-commands, help-groups, shell, remote command-connect; the line-565 source anchor in `connect-provider-buttons.test.ts` (a necessary deviation from "unchanged", noted in the journal).
++- T4 self-review, `keryx review budget`, review through `vantage-review`, draft PR.
++- Verification: AC10 invariant, AC12 live run in a real `keryx shell` with an empty config dir.
++
++## Risks
++
++- `connect-provider-buttons.test.ts` drives the real wizard and asserts handler source text; the handler rewrite must keep the asserted strings.
++- A key must never reach transcript, toast, journal or logs; the live run checks this and the config file mode (0600).
++- Device login in chat posts a user code and a verification URL; both are public by design, neither is a secret.
+
+--- .metaproject/flows/471-2026-10-22-connect-providers-tabs/tasks.md
+@@ 1,15 @@
++# Tasks
++
++Task definitions live here; task **statuses** live in flow.json and are managed
++only via `keryx flow task done <id> <taskId>`.
++
++These four are created by `keryx flow init` as a default checklist. Add your
++own with `keryx flow task add`; a scaffold row your plan supersedes is closed
++with `--disposition skipped --reason "<why>"`, not left open.
++
++| ID | Kind | Title |
++|----|------|-------|
++| T1 | context | Collect remaining context |
++| T2 | implement | Implement per plan |
++| T3 | test | Add/adjust tests and make them pass |
++| T4 | review | Self-review and prepare draft PR |
+
+--- CHANGELOG.md
+@@ 1,35 @@
+ # Changelog
+ 
+ ## [Unreleased]
+ 
++## [0.3.130] - 2026-10-22
++
++0.3.129 was tagged but never published to npm: its release had no changelog section. Its changes ship here.
++
++### `/connect` is the one place for providers
++
++- **Changed:** `/connect` and `/providers` are one command and one modal with two tabs. Connected lists what is connected, as before, and has an Add provider button that moves to the second tab.
++- **Added:** the Add provider tab lists the providers you can connect. Each row has [Connect], which saves the key or login and checks `/models`, and [Test], which checks a provider without changing anything. A successful Connect returns to the Connected tab and does not switch the session's model.
++- **Removed:** `/provider` is gone. Use `/connect`.
++- **Added:** in Telegram the same modal opens, with Add provider and a [Test] on each row. A provider with a device login can be connected there. A provider that needs a key says to enter it in the shell: a key is never typed into a chat.
++
+ ## [0.3.128] - 2026-10-21
+ 
+ 0.3.127 was tagged but never published to npm. Its changes ship here.
+ 
+ ### `/setup` is a plan you can read, copy and run
+ 
+ - **Changed:** `/setup` opens on the tab that fits the project. With no `.metaproject/index.md` it is Init. With an index, a manifest and modules it is Refresh. Anything else is Repair. An explicit `/setup <scenario>` still wins.
+ - **Changed:** every step is exactly one `keryx …` command with a `[required]`/`[optional]` mark and a reason. `keryx setup <scenario>` prints the same marks and reasons.
+ - **Changed:** the modal is readable and complete: bold titles, commands in the accent colour, and a body that scrolls to its last line at any height.
+ - **Added:** an agent prompt generated from the tab's steps sits under the plan. It holds:
+   - the project root, and an instruction to read `.metaproject/index.md` first;
+   - the required and optional lists;
+   - the stop rules;
+   - the prohibitions: no deletion, no extra `--force`, no commit or push.
+ - **Added:** buttons on the right of the modal, also on keys:
+   - Copy prompt (`c`) copies through OSC 52;
+   - Optional (`o`) adds or removes the optional steps in the list and the prompt;
+   - Run (`r`) runs the steps.
+ - **Added:** Run shows a confirmation card with the exact commands. On yes, keryx runs the steps itself, one background job per step in the project root, using the keryx the shell runs on; no model is involved.
+   - A failed required step stops the run, and so does a `keryx update` version divergence. The reason goes in the transcript, and Run never picks `--accept-version` or `--keep-existing` for you.
+
+--- README.md
+@@ 81,123 @@
+ `.git/info/exclude`), so the files your team tracks stay untouched and
+ `git pull` never meets an edit made by keryx. A team that wants the block committed opts
+ into `scope: "shared"`; see
+ [where the block goes](docs/docs/workspace-and-lifecycle.md#where-the-block-goes-local-and-shared-scope).
+ 
+ ### Connect a model provider
+ 
+ `keryx shell` needs one configured provider. The first run with none
+ configured opens a picker: choose a built-in provider (Anthropic, Ollama,
+ OpenRouter, DeepSeek, Z.AI, Cerebras, Groq, Moonshot, Grok, …) or add a custom
+ OpenAI-compatible endpoint, paste an API key if the provider needs one, then
+ pick a model.
+ 
+ To set one up before the first run, or add another later:
+ 
+ ```bash
+ keryx providers list         # providers you already have configured
+ keryx auth login <provider>  # subscription login (device code / OAuth) or API key
+ ```
+ 
+-Inside a running session, `/provider` reopens the same add/reconfigure wizard
+-and `/connect` switches between providers you already configured.
++Inside a running session, `/connect` opens one Providers dialog with two tabs:
++Connected (switch to a provider you already configured, test it, disconnect it)
++and Add provider (save a key or log in, then check the provider's model list).
+ 
+ ChatGPT / Codex model discovery reads the current stable Codex version from npm
+ metadata and caches it for one day. **Test** in `/connect` (or
+ `keryx providers test openai-codex`) always checks for a newer version before
+ listing models. This does not install Codex or poll npm in the background.
+ If npm is unavailable, a previously discovered version is reused; without a
+ cached version, discovery reports the problem instead of guessing a version.
+ 
+ Once you have more than one provider connected, `keryx routing` (and, inside a
+ session, `/routing`) maps a task category — `review`, `subagents`, and a
+ catalogue of others — to a specific model, so reviews and subagent spawns can
+ run on a different (cheaper, or stronger) model than your main session without
+ switching `/model` before every turn. Leave a category unset and a sensible
+ default is built automatically from your connected provider's own models and
+ their recorded price/strength profiles (`keryx routing profile list`) — cheap
+ models for high-volume work, strong ones for planning/review. See [the CLI
+ reference](docs/docs/cli-reference.md#routing).
+ 
+ ### Your first session
+ 
+
+--- README.md
+@@ 368,408 @@
+ 
+ <p align="center">
+   <img src="https://raw.githubusercontent.com/MrCipherSmith/keryx/main/docs/assets/shell.png" alt="keryx shell answering a blast-radius question with the graph_affected tool" width="880">
+ </p>
+ 
+ And when it needs a decision from you, it asks with structured options instead
+ of guessing — the same `ask` the policy engine raises for a guarded action:
+ 
+ <p align="center">
+   <img src="https://raw.githubusercontent.com/MrCipherSmith/keryx/main/docs/assets/shell-ask.png" alt="keryx shell asking the user a structured question with selectable options" width="880">
+ </p>
+ 
+ What is in it today:
+ 
+ - **Provider-neutral loop.** Anthropic, Ollama, and any OpenAI-compatible
+   gateway — OpenRouter, DeepSeek, Z.AI, Cerebras, Groq, Moonshot, Grok — plus an
+   offline fake provider for deterministic runs. Swapping the model does not
+   change the loop, the tools or the policy.
+ - **Custom file-backed providers.** Register any OpenAI-compatible endpoint —
+   including one on your own LAN — in `~/.local/share/keryx/llm-providers.json`;
+-  it merges into the built-in provider list. The `/provider` wizard in the TUI
++  it merges into the built-in provider list. The Add provider tab of `/connect` in the TUI
+   has an "add custom provider" entry that walks name → URL → key → models and
+   writes the file for you; a name that collides with a built-in provider is
+   rejected. Custom providers get a narrow, opt-in SSRF allowance for private
+   LAN hosts (RFC1918/CGNAT) as an explicit operator-trust boundary — built-in
+   providers never get it, and loopback/link-local metadata addresses stay
+   denied regardless.
+ - **Reasoning effort, provider-neutral.** `/reasoning
+   [off|minimal|low|medium|high|xhigh|max]` sets the session's thinking effort
+   for the main turn (no argument shows the resolved level and its source);
+   `KERYX_REASONING_EFFORT` and a persisted shell-config setting sit below it
+   in precedence, defaulting to `off`. Anthropic, OpenAI and Gemini each map
+   the level onto their own reasoning knob, clamping a level a model does not
+   support rather than sending it unrecognized. A custom OpenAI-compatible
+   provider ignores this control — its reasoning shape (inline `<think>` tags,
+   an out-of-band field, a gateway-specific request flag) is configured
+   per-provider in `llm-providers.json` instead. Reasoning streams live into
+   the shell and collapses to a `◆ thought for 12s · 1.8k tokens` block;
+   `/think auto|expand|hide` chooses how it is shown. See [the CLI
+   reference](docs/docs/cli-reference.md#reasoning-effort-and-output-budget).
+ - **Durable sessions, per project.** JSONL transcripts on disk, resume across a
+
+--- README.md
+@@ 1079,1119 @@
+ Telegram supergroup: you send a line from your phone and it runs as if typed
+ there, the reply and any approval question come back to the topic. Nothing
+ happens until Telegram is connected to the machine: make a separate bot with
+ BotFather and a supergroup with topics, then type `/channels` in any shell and
+ choose Connect. The only thing you type is the bot token (hidden); your Telegram
+ user id and the group id are found from a one-time pairing code and from adding
+ the bot to the group as an admin with the manage topics right. Test sends a
+ message to the group's General topic, Disconnect deletes the topics and erases the
+ token. The connection is per machine, so use one bot per machine (Telegram allows
+ one poller per token); `/remote-control` then turns individual sessions on. The
+ files it writes, `remote/bot-token` (mode 600) and `remote/config.json`, can still
+ be made by hand. The Telegram transport is the single poller inside `keryx serve` — shells
+ talk to `serve` over loopback with a local shell token (new on every `serve`
+ start, and never sent to an endpoint whose `serve` is gone), they never poll
+ Telegram themselves, and a second `keryx serve` does not poll while the first one
+ runs. At most 500 lines wait per topic, and turning it off tells the topic which
+ queued lines will not run. From the topic you can also run a fixed list of slash
+ commands (`/status`, `/model` and `/connect` as buttons, `/new`, `/clear`, `/resume`
+ in the same topic); `/mode trust`, `/plan off`, `/delegate` and `/external*` run only
+ after a Yes press (so do `/route on` and `/route off`; bare `/route` shows at once),
+-and commands such as `/mcp`, `/guard`, `/provider`, `/schedule`, `/rewind`,
++and commands such as `/mcp`, `/guard`, `/schedule`, `/rewind`,
+ `/conform` and `/ci` stay local. When main is busy, `/route`, `/external`,
+ `/external-agents` and `/model` are queued with a notice in the topic and run when
+ it goes idle; `/mode` takes effect at once. A topic is archived when the shell
+ exits (a closing note, the topic and its history stay readable), but a resumed
+ session gets a new one, so `/history [N]` (1 to 20, 10 by default) posts the session's last messages
+ back into the topic, yours and the agent's final answers, one message each; a resumed
+ session whose topic was just created gets the last 10 by itself, once (the first time remote control is turned on in that shell); a turn that looks like it holds a secret is replaced by a placeholder. Each message shows its state as a reaction and the topic shows typing
+ while a turn runs; see
+ [commands from the topic](docs/docs/guides/drive-keryx-remotely.md#commands-from-the-topic).
+ Every approval, `ask_user` question and queue dialog the shell raises is posted to
+ the topic with buttons, whoever started the turn; the first answer wins, from the
+ terminal or the topic, and an unanswered one gets a reminder every 2 minutes (at most 3).
+ While a turn runs, the topic gets at most one progress note a minute (at wave
+ boundaries and after tool-heavy stretches: counts and tool names, never tool output),
+ and a short status question such as "how is it going?" is answered from session state
+ without waiting for the turn; see
+ [What the topic hears](docs/docs/guides/drive-keryx-remotely.md#what-the-topic-hears).
+ Without a connection `serve` starts as before, with remote control off, and only
+ offers the local `/channels` routes. Replies are rendered in one of four modes,
+ `remote.rendering` = `auto` (the default), `rich`, `html` or `plain`, set from the
+
+--- docs/docs/cli-reference.md
+@@ 1012,1052 @@
+   argument, prints the state — `off`, `on` or `offline` when `serve` is
+   unreachable — the topic, the last heartbeat and recent events; `off` removes the
+   topic. A line sent from the topic runs as if typed here, shown as `tg ❯` in the
+   transcript and `[tg]` in the queue panel. In the full-screen shell the sidebar
+   row and the `/remote-control` modal (key `o` toggles) show the same state; the
+   readline shell (`--no-tui`) can only print that it is off. Each time it is
+   turned on or off is recorded in the session's history (see
+   [sessions](#sessions)).
+   `/history [N]` posts the last N messages of this session (1 to 20, default 10:
+   what you typed and the agent's final answer of each turn, redacted, one message
+   each) into the topic; typed in the shell, sent from the topic, or key `h` in the
+   modal. A resumed session whose topic `/remote-control <name>` just created gets
+   the last 10 by itself, once.
+   Slash commands typed in the topic run only if they are on a fixed list
+   (`/help` and the Telegram menu show it): text commands such as `/status`, `/new`
+   and `/clear` (same topic, one separator line), button pickers (`/model`,
+   `/connect`, `/resume`), and commands that ask first with a Yes/No button
+   (`/mode trust|auto`, `/plan off` (bare `/plan` shows the mode and does not ask),
+   and `/delegate`, `/external` and `/external-agents`, which name the agent and say
+   it is external and paid). The rest, for example `/mcp`, `/guard`, `/route`,
+-  `/editguard`, `/provider`, `/channels`, `/schedule`, `/rewind`, `/conform`, `/ci`,
++  `/editguard`, `/channels`, `/schedule`, `/rewind`, `/conform`, `/ci`,
+   bare `/theme` and bare `/think`, stay local (they open a panel, form or picker in
+   the shell) and are refused in the topic with the reason. A command from the topic
+   never cancels the turn running in the shell; `/stop` in the topic ends the run
+   that topic started. A Telegram turn runs in `trust` by default, with the same
+   floors as a shell `trust` turn, and an approval question carries an `Always`
+   button (see `/permissions` and `/remote-policy`). The modal
+   has a Commands tab with the recent ones. Full list and rules:
+   [Drive keryx remotely](guides/drive-keryx-remotely.md#commands-from-the-topic).
+ - `/channels [status]` connects Telegram to this machine, from any shell. The modal
+   lists Telegram: when it is not connected there is one button, Connect; when it is,
+   Test and Disconnect. Connect asks for the bot token (hidden, paste works, never in
+   the transcript, history or logs) and writes `remote/bot-token` and
+   `remote/config.json` itself, mode 600. It then shows a one-time code (valid 10
+   minutes, single use); the first private message to the bot carrying it adds that
+   sender to the allowlist. Add the bot to your group as an administrator with the
+   manage topics right and the group id is taken from that event; the modal says what
+   is missing (a group without topics, a bot without the right). Test sends one
+   message naming this machine to the General topic and shows delivered or the
+   reason. Disconnect asks `serve` to delete every topic and stop polling, then
+   erases the token and config; with `serve` down it erases the files and says the
+
+--- docs/docs/cli-reference.md
+@@ 1189,1229 @@
+ 
+ ```
+ keryx harness run --provider <p> --model <m> [--base-url <url>] [--record <path>] "<prompt>"
+ keryx harness exec [options] -- <path> [args...]
+ keryx harness extension --spec <path>
+ keryx harness wave --spec <path>
+ keryx harness replay --record <path> [--fixture <path>] [--write-fixture <path>] [--json]
+ ```
+ 
+ | Subcommand | Description |
+ |---|---|
+ | `run` | Execute one prompt through the run loop against the named provider and model. `fake` is a deterministic in-process provider, which is what makes the loop testable without a network. |
+ 
+ `--provider` accepts `anthropic`, `ollama`, `fake`, and the OpenAI-compatible
+ gateways — `openrouter`, `deepseek`, `zai`, `zai-coding`, `cerebras`, `groq`,
+ `moonshot`, `grok`. `keryx shell` offers the same set through its picker, which
+ lists each provider with the environment variable it reads.
+ 
+ Operator-defined OpenAI-compatible providers can be added on top of that list
+ by registering them in `~/.local/share/keryx/llm-providers.json`; the
+-`/provider` wizard in `keryx shell` has an "add custom provider" entry that
++Add provider tab of `/connect` in `keryx shell` has an "add custom provider" entry that
+ writes this file for you (name → URL → key → models → temperature (optional)
+ → max output tokens (optional) → request timeout ms (optional)). A custom
+ name colliding with a built-in provider is rejected. Custom providers may
+ target private LAN hosts (RFC1918/CGNAT) — an explicit opt-in that built-in
+ providers never get; loopback and link-local metadata addresses stay denied
+ regardless.
+ 
+ The three optional wizard fields persist straight onto the provider's
+ `llm-providers.json` entry and are consulted on every request: `temperature`
+ (any finite number, including `0`) is sent verbatim; `maxOutputTokens` and
+ `timeoutMs` must each be a positive integer when set — a `0`, negative, or
+ fractional value is rejected by the wizard and by a hand-edited file (the
+ whole entry is dropped rather than accepted). See "Output budget" and
+ "Streaming and timeouts" under
+ [Reasoning effort and output budget](#reasoning-effort-and-output-budget)
+ above for how each is applied.
+ 
+ | `exec` | Run a subprocess under the containment options below. |
+ | `extension` | Run a declared extension from a spec file. |
+ | `wave` | Run a declared multi-agent wave from a spec file. |
+
+--- docs/docs/cli-reference.md
+@@ 1466,1533 @@
+ ## auth
+ 
+ Authorize a **vendor-sanctioned subscription** (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) or inspect that state. Credentials are written to the user-global `auth.json` at mode 0600. Secrets are never printed.
+ 
+ Claude Pro/Max, Gemini Google-account login, and DeepSeek subscription OAuth are refused at the point of choice.
+ 
+ ```
+ keryx auth list [--json]
+ keryx auth login <provider>
+ keryx auth logout <provider>
+ keryx auth status <provider> [--json]
+ ```
+ 
+ | Subcommand | Flags | Description |
+ |---|---|---|
+ | `list` | `--json` | Authorized providers (method and expiry, never a token) and which subscription logins are offered. |
+ | `login` | `<provider>` | Run the provider's device authorization grant. Prints a verification URL and code (opens a browser only when a graphical session is present); keryx polls for the token. |
+ | `logout` | `<provider>` | Discard the stored grant. |
+ | `status` | `<provider>`, `--json` | Method, state, expiry, refreshability — never the secret. |
+ 
+-`/provider` in `keryx shell` offers the same SuperGrok vs API-key choice for xAI.
++The Add provider tab of `/connect` in `keryx shell` offers the same SuperGrok vs API-key choice for xAI.
+ 
+ ### OpenAI API and ChatGPT subscriptions
+ 
+-`/provider` offers two independent entries:
++The Add provider tab of `/connect` offers two independent entries:
+ 
+ | Entry | Provider ID | Credential and usage |
+ |---|---|---|
+ | OpenAI API | `openai` | Platform API key (`OPENAI_API_KEY`), billed through the API account. |
+ | ChatGPT / Codex | `openai-codex` | ChatGPT subscription login, using the account's Codex access and limits. |
+ 
+ For a ChatGPT subscription, enable device-code login in your ChatGPT security
+-settings, then choose **ChatGPT / Codex** in `/provider`. Keryx displays a
++settings, then open `/connect`, switch to Add provider and choose **ChatGPT / Codex**. Keryx displays a
+ verification URL and a one-time code and opens the browser when available.
+ Sign in to your account in that browser and enter the code. On a headless
+ machine, open the displayed URL on another device. Escape cancels the Shell
+-login. The command is `/provider`, not `/provide`.
++login and returns to the list.
+ 
+ The same login can be started before opening Shell:
+ 
+ ```bash
+ keryx auth login openai-codex
+ keryx auth status openai-codex
+ keryx shell
+ ```
+ 
+-Then choose `/provider` → **ChatGPT / Codex** and a model returned by the
+-subscription service. `/connect` lists connected providers and offers Test and
+-Disconnect; CLI equivalents are `keryx providers test openai-codex` and
++Then open `/connect`: the Connected tab lists **ChatGPT / Codex** and a model returned by the
++subscription service, with Test and Disconnect buttons; CLI equivalents are `keryx providers test openai-codex` and
+ `keryx providers remove openai-codex`. A successful model-list probe verifies
+ authentication and discovery; send a short prompt to verify inference too.
+ 
+ For ChatGPT / Codex, Keryx discovers the current stable Codex client version
+ from official npm metadata and uses it to request the live subscription model
+ catalog. It does not install Codex. The discovered version is cached for one
+ day in `codex-catalog-version.json` in Keryx's user-global config directory.
+ Normal model discovery refreshes an expired cache on demand; there is no
+ background polling. **Test** in `/connect` and
+ `keryx providers test openai-codex` always attempt a fresh version lookup,
+ even when the cache is still fresh. Subscription credentials are never sent
+ to npm. If npm is unavailable, a previously discovered version is reused;
+ without a cached version, discovery reports the lookup failure. Run Test
+ again once npm is reachable to refresh the catalog version.
+ 
+ OAuth tokens stay in Keryx's owner-only credential store and are refreshed
+ before use. They are never exported as `OPENAI_API_KEY`. Existing OAuth grants
+ saved under the old `openai` name remain readable by `openai-codex`. Disconnecting
+ the subscription removes its canonical and legacy OAuth grants, not the API
+ key. Disconnecting OpenAI API leaves subscription credentials intact.
+
+--- docs/docs/commands-by-task.md
+@@ 15,58 @@
+ | `keryx doctor` | One-page health check: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness. |
+ | `keryx setup` | Print the Metaproject preparation guide: init, refresh, or repair. |
+ 
+ | Shell command | Summary |
+ |---|---|
+ | `/help` | Show available commands, grouped by task. |
+ | `/doctor` | Same one-page health check, inside the session. |
+ | `/setup` | Same preparation guide, inside the session — copy the agent prompt, or let keryx run the steps as background jobs after you confirm. |
+ 
+ ## Connect a model provider
+ 
+ | CLI command | Summary |
+ |---|---|
+ | `keryx auth` | Subscription login (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) and API-key status. |
+ | `keryx providers` | Providers this operator has configured, the live model/balance catalog (status), and cross-family review eligibility. |
+ | `keryx routing` | Category -> model routing table (list, set, unset, trust), the model-profile catalogue (profile list, profile set), and real measured task cost (stats). |
+ | `keryx external` | Keep private work in-house: block Jev/TypeSafe and other listed providers/models (on\|off\|status\|list). |
+ 
+ | Shell command | Summary |
+ |---|---|
+-| `/connect` | Switch provider; row buttons test/disconnect it. |
++| `/connect` | Providers dialog: switch, test or disconnect a connected provider, or add one (Connected / Add provider tabs). |
+ | `/routing` | Route task categories to models — a flat, searchable list across every connected provider. |
+ | `/search-provider` | Configure and test a web search provider. |
+ | `/search-connect` | Select a connected web search provider. |
+-| `/provider` | Switch provider — /provider <name>, or no arg to re-select. |
+ | `/external` | Block/allow sending private work to Jev/TypeSafe and other listed providers/models — /external [on\|off]. |
+ 
+ ## Look and feel
+ 
+ | Shell command | Summary |
+ |---|---|
+ | `/theme` | Open the theme picker — /theme [name] applies immediately. |
+ | `/settings` | Every setting in one place, each with its On/Off or value buttons. |
+ | `/model` | Switch the model. |
+ | `/models` | Pick a model for the current provider (numbered menu). |
+ | `/mode` | Show or switch the permission mode — /mode [ask\|trust\|auto]. Round limit: 40 rounds per turn, 200 in trust, 200 in auto and in automatic review; KERYX_AGENT_MAX_ROUNDS overrides. |
+ | `/think` | Expand the last reasoning block — /think [auto\|expand\|hide\|collapse]. |
+ | `/reasoning` | Show or set reasoning effort — /reasoning [off\|minimal\|low\|medium\|high\|xhigh\|max]. |
+ 
+ ## Working in keryx shell
+ 
+ | CLI command | Summary |
+ |---|---|
+ | `keryx sessions` | List or export per-project shell sessions. |
+ 
+
+--- docs/docs/guides/drive-keryx-remotely.md
+@@ 504,544 @@
+ shell was no longer waiting for this question, so the Allow from user N changed
+ nothing."; the shell's transcript says the same and never says it allowed anything.
+ A shell older than this field sends an ack without it, which means only that the frame
+ was received, and the message ends "Allowed" as before, so an older shell can
+ over-report: it says Allowed even when it applied nothing, and only a current shell
+ produces the "Not applied" ending. Like every shell route, the ack is authorised by the
+ shared shell token and names its session in the body: `serve` refuses an id that was
+ sent to another session, but anyone holding the token can ack for a session it names.
+ Without it the message ends "Sent to the shell at <time>, not confirmed;
+ the shell denies by itself if it did not receive it." and the short reply says the
+ answer was sent but not confirmed. That wording is about an answer the shell never
+ received: its own approval question then times out as a denial. An Allow that the
+ shell received after the 5 seconds is still applied there, and the topic keeps
+ saying not confirmed, because a late ack changes nothing. Pressing again during the wait does nothing, a
+ closed stream stops the wait at once, and an ack that arrives after the wait is
+ accepted and changes nothing. The shell acks every approval frame, including a
+ repeat of one it already handled, and does not apply a repeat twice. While an ack
+ has not gone through, `/remote-control` shows "Approvals not confirmed: N" and the
+ sidebar row reads "<topic> · N unconfirmed".
+ 
+-**These commands stay in the shell.** `/exit`, `/quit`, `/channels`, `/provider`,
++**These commands stay in the shell.** `/exit`, `/quit`, `/channels`,
+ `/search-provider`, `/search-connect`, `/remote-control`, `/integrate`, `/copy`,
+ `/game`, `/setup`, `/mcp`, `/guard`, `/route`, `/editguard`, `/settings`, `/bus`,
+ `/review`, `/reviews`, `/product`, `/governance`, `/expand`, `/interrupt` (use `/stop`),
+ `/permissions`, `/remote-policy`, `/demote`, `/models`, `/external-diff`, `/flows`, `/ac`, `/workspace`,
+ `/approvals`, `/decisions`, `/triggers`, `/routing`, `/schedules`, `/jevprofile`, `/schedule`,
+ `/rewind`, `/conform` and `/ci`. Bare `/theme` and bare `/think` (and `/think
+ collapse`) are refused too; use `/theme <name>` or `/think auto|expand|hide`. They
+ ask for a key, change a safety guard or where work is routed, edit another tool's
+ configuration, open a panel, a form or a picker that exists only in the shell, or
+ would close the shell. `/mcp trust`, `/guard`,
+ `/route` and `/editguard` are deliberately local. The topic is told which command
+ was refused and why.
+ 
+ **While a turn runs.** The shell refuses `/new`, `/clear`, `/resume`, `/sessions`,
+ `/compact` and `/connect`, and the topic says `main is busy: command deferred`;
+ nothing is queued behind it. `/route`, `/external`, `/external-agents` and `/model`
+ are different: when main is busy they are **queued**, the topic gets
+ `<command> is queued: main is busy` at once, and the command runs when main goes
+ idle (a confirmation, where one is needed, is still asked first). The queued command
+ is dropped with a note if main stays busy too long, or quietly if remote control goes
+
+--- docs/docs/harness.md
+@@ 18,58 @@
+ | Interactive | `keryx shell` | A TUI on the same tool registry and the same policy profile |
+ 
+ CLI and RPC delegate to the same `runOffline`, so a transport cannot upgrade a
+ decision — framing carries data, the policy engine decides policy. The
+ interactive shell runs its own turn loop over the same registry and profile; it
+ is a different loop, not a different rulebook.
+ 
+ ## Providers
+ 
+ `anthropic`, `ollama`, a deterministic offline `fake`, and the
+ OpenAI-compatible gateways: `openrouter`, `deepseek`, `zai`, `zai-coding`,
+ `cerebras`, `groq`, `moonshot`, `grok`. `keryx shell` offers the same set through
+ its picker, listing each with the environment variable it reads.
+ 
+ Swapping the model changes neither the loop, the tool registry, nor the policy.
+ The `fake` provider replays a recorded transcript, which is what makes the loop
+ testable with no network at all.
+ 
+ Every full adapter (`anthropic`, `openai`, `gemini`, the OpenAI-compatible
+ engine behind the gateways above) normalizes to the same event stream, and a
+-shared contract test (`src/harness/provider/stream-contract.test.ts`) pins
++shared contract test (`stream-contract.test.ts` in the harness provider directory) pins
+ three cases identically across all four: a stream that ends mid tool-call
+ (a `provider_error` naming the pending call, never a synthesized result), an
+ in-stream error envelope (classified into the same retry taxonomy a pre-2xx
+ failure gets), and a tool call the provider sent with no id (a synthetic id,
+ unique within the response, so two same-named calls never collide).
+ 
+ ## Sessions
+ 
+ Sessions are **per project** — isolated by git root, or by absolute cwd outside a
+ repository — and durable on disk as JSONL:
+ 
+ - `context.jsonl` — the model window a resume loads
+ - `archive.jsonl` — the full audit log, which survives `/compact`
+ 
+ User messages and tool results are checkpointed immediately; streamed assistant
+ text is journaled at most every 300 ms and is flushed when a turn ends or is
+ interrupted. An interrupted turn therefore remains resumable with its latest
+ partial answer.
+ 
+ ```bash
+
+--- docs/docs/hooks.md
+@@ 746,786 @@
+ `unattended-untrusted`). That escalation is not implemented by this runtime:
+ the registration's `class` is currently fixed at `gate-advisory` in
+ `builtins.ts` and is not read from a strict-mode flag. Implementing strict
+ mode is W8's to do, along the lines of either (a) W8 makes
+ `keryx.impact-evidence`'s `class` conditional on the active profile/strict
+ flag when building the registration list, or (b) W8's provider itself
+ always returns `decision: "ask"` on a lookup failure it considers
+ disqualifying, relying on `composeDecision`'s tighten-only rule rather than
+ changing the hook's own class. Either path is additive to this runtime, not
+ a change to it.
+ 
+ ### Where the ports are injected
+ 
+ Both ports are optional fields of `HookRuntimePorts`, passed to
+ `createHookRuntime({..., ports})` (`src/harness/hooks/runtime.ts`). The
+ production wiring for `keryx shell` (`buildShellHookRuntime` in
+ `src/commands/agent-hooks.ts`) does not yet pass either port through — it
+ calls `createHookRuntime` with no `ports` option, so both built-ins run
+ against their no-op defaults today. W3 and W8 plug in by extending
+ `BuildShellHookRuntimeOptions`/`buildShellHookRuntime` to accept and forward
+-a real sink/provider (or by calling `createHookRuntime` directly with their
++a real sink or provider (or by calling `createHookRuntime` directly with their
+ own ports, for a bespoke entry point).
+ 
+ ### The `hook_invocation` session record
+ 
+ Every hook invocation — built-in or user/project-configured — produces one
+ `HookInvocationRecord` (`src/harness/hooks/types.ts`), mirrored into the
+ session's append-only record stream as a `hook_invocation` entry
+ (`src/harness/run/run.ts`, alongside the existing `policy_decision`
+ entries, same envelope: `artifactRef`, `correlationId`):
+ 
+ ```ts
+ export interface HookInvocationRecord {
+   hookId: string;
+   event: HookEventName;
+   class: HookClass;
+   scope: HookScope;              // "builtin" | "user" | "project"
+   outcome: PolicyOutcome | "none";
+   failure?: HookFailureKind;     // "timeout" | "crash" | "malformed" | "sandbox-unavailable" | "refused"
+   reason?: string;
+   durationMs: number;
+
+--- docs/docs/onboarding.md
+@@ 418,476 @@
+   endpoint. If the provider needs a key, you are prompted for it before the
+   model list loads (so a gateway that 401s without one still shows a real
+   model list, not a stale fallback). Pick a model and the session starts.
+ - **Set one up before the first run, or add another later**, from outside the
+   shell:
+ 
+   ```bash
+   keryx providers list         # every provider you already have configured,
+                                 # and its model family
+   keryx providers test <name>  # run its live model-list probe; ok + count,
+                                 # or the failure reason
+   keryx providers remove <name> [--yes]  # disconnect it: remove the saved
+                                 # key/grant/custom entry (asks first)
+   keryx auth login <provider>  # subscription login (device code / OAuth,
+                                 # where the provider supports it) or API key
+   keryx auth status <provider> # is this provider currently authorized
+   keryx auth logout <provider> # delete a stored OAuth grant, LOCALLY —
+                                 # no vendor revoke call is made
+   ```
+ 
+-- **Inside a running session**, `/connect` switches between providers you
+-  already configured (no key/URL prompts). Since flow 304, each row in that
+-  list also carries two buttons, drawn and reachable the same way the queue
++- **Inside a running session**, `/connect` opens one Providers dialog with two
++  tabs, Connected and Add provider (switch with `1`/`2`, Tab or the mouse). The
++  Connected tab switches between providers you already configured (no key/URL
++  prompts). Since flow 304, each row in that list also carries two buttons, drawn and reachable the same way the queue
+   dock's Force/Edit/Delete are: `[Test]` runs the same live model-list probe
+   `keryx providers test` does and shows the result on the row; `[Disconnect]`
+   asks for confirmation, then removes that provider's saved credential the
+   same way `keryx providers remove` does. Reach both without a mouse: ↑/↓
+   picks a row, ←/→ picks Label, Test or Disconnect, Enter fires it, Esc backs
+   out. Disconnecting the provider the CURRENT session is using does not
+   switch it or interrupt a turn — the session keeps its already-loaded
+-  credential until you `/connect` another provider or restart. `/provider`
+-  opens the same add/reconfigure wizard the startup picker used (no row
+-  buttons there), so it also covers a provider you have not set up yet.
++  credential until you `/connect` another provider or restart. The
++  `[Add provider]` button (or `a`) opens the Add provider tab, which lists
++  every provider keryx knows about, including one you have not set up yet.
++  `[Connect]` there saves the key or login (kept in the user-global store with
++  owner-only permissions), checks the provider's `/models` list, and returns to
++  the Connected tab without switching your session; `[Test]` checks a provider
++  that already has a credential and says "no credential, Connect first"
++  otherwise. When nothing is connected yet, `/connect` opens on that tab.
+   `/model` opens a model picker for the current provider; in chat mode
+   (`--no-tui --chat`) it instead takes an argument (`/model <name>`) and
+   `/models` lists what is available as a numbered menu.
+ 
+ For **ChatGPT / Codex**, model discovery obtains the current stable Codex
+ client version from official npm metadata; installing Codex is unnecessary.
+ The version is cached for one day and refreshed on demand. **Test** in
+ `/connect` (or `keryx providers test openai-codex`) always checks for a newer
+ version before fetching the live model catalog. There is no background npm
+ polling. If npm is unavailable, Keryx reuses a previously discovered version;
+ without a cached version, it reports the lookup failure. Subscription
+ credentials are never sent to npm.
+ 
+ #### Pick a theme
+ 
+ ```
+ /theme
+ ```
+ 
+ opens the theme picker in the running session; `/theme <name>` applies one
+
+--- package.json
+@@ 1,23 @@
+ {
+   "name": "@mrciphersmith/keryx",
+-  "version": "0.3.128",
++  "version": "0.3.130",
+   "description": "Version-controlled project context for AI coding agents: code graph, architecture wiki, project memory, relevant tests, quality signals, and task flows.",
+   "private": false,
+   "publishConfig": {
+     "access": "public"
+   },
+   "license": "MIT",
+   "type": "module",
+   "repository": {
+     "type": "git",
+     "url": "git+ssh://git@github.com/MrCipherSmith/keryx.git"
+   },
+   "keywords": [
+     "ai-agents",
+     "coding-agents",
+     "agent-harness",
+     "agent-context",
+     "repository-context",
+     "code-graph",
+     "project-memory",
+     "test-impact-analysis",
+
+--- src/commands/agent-commands.test.ts
+@@ 1,51 @@
+-import { expect, test } from "bun:test";
++import { describe, expect, test } from "bun:test";
+ import {
+   AGENT_SLASH_COMMANDS,
+   DELEGATE_USAGE,
+   SHELL_MODES,
+   commandsForMode,
+   describeCommand,
+   describeUnavailableCommand,
+   filterCommands,
+   findAgentCommand,
+   isCommandInMode,
+   parseDelegateCommand,
++  removedCommandHint,
+   renderCommandHelp,
+ } from "./agent-commands";
+ 
+ // SLATE-15 (flow 161, T10 — AC1/AC2): `/goal` is added to the registry
+ // AGENT_ONLY (mirrors `/expand`/`/think`/`/copy` — deterministic entry is a
+ // TUI/readline agent-mode concept, not a chat-mode one), positioned right
+ // after `/new` (session-lifecycle grouping: `/new`, `/goal`, `/resume`,
+ // `/sessions`). RED until T11 adds this entry — the exact-order lists below
+ // (and `filterCommands("/", "agent")`, further down this file) are the
+ // pinned target shape, not yet true of the real registry.
+ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
+   expect(AGENT_SLASH_COMMANDS.map((c) => c.name)).toEqual([
+     "/help",
+     "/model",
+     "/models",
+     "/connect",
+     "/search-provider",
+     "/search-connect",
+-    "/provider",
+     "/think",
+     "/expand",
+     "/copy",
+     "/new",
+     "/goal",
+     "/resume",
+     "/sessions",
+     "/status",
+     "/flows",
+     "/doctor",
+     "/setup",
+     "/ac",
+     "/workspace",
+     "/review",
+     "/reviews",
+     "/remote-control",
+     "/history",
+     "/channels",
+     "/intake",
+     "/rendering",
+
+--- src/commands/agent-commands.test.ts
+@@ 153,192 @@
+   expect(filterCommands("/sett", "chat")).toEqual([]);
+ });
+ 
+ test("every command declares at least one mode, and every mode resolves a description", () => {
+   for (const command of AGENT_SLASH_COMMANDS) {
+     expect(command.modes.length).toBeGreaterThan(0);
+     for (const mode of command.modes) {
+       expect(SHELL_MODES).toContain(mode);
+       expect(describeCommand(command, mode).length).toBeGreaterThan(0);
+     }
+   }
+ });
+ 
+ test("commandsForMode: agent lists its commands in stable order", () => {
+   expect(commandsForMode("agent").map((c) => c.name)).toEqual([
+     "/help",
+     "/model",
+     "/connect",
+     "/search-provider",
+     "/search-connect",
+-    "/provider",
+     "/think",
+     "/expand",
+     "/copy",
+     "/new",
+     "/goal",
+     "/resume",
+     "/sessions",
+     "/status",
+     "/flows",
+     "/doctor",
+     "/setup",
+     "/ac",
+     "/workspace",
+     "/review",
+     "/reviews",
+     "/remote-control",
+     "/history",
+     "/channels",
+     "/intake",
+     "/rendering",
+
+--- src/commands/agent-commands.test.ts
+@@ 232,377 @@
+     "/reasoning",
+     "/plan",
+     "/clear",
+     "/interrupt",
+     "/queue",
+     "/delegate",
+     "/tasks",
+     "/demote",
+     "/bus",
+     "/exit",
+   ]);
+ });
+ 
+ test("commandsForMode: chat gets its commands and none of the agent-only trio", () => {
+   const chat = commandsForMode("chat").map((c) => c.name);
+   expect(chat).toEqual([
+     "/help",
+     "/model",
+     "/models",
+     "/connect",
+-    "/provider",
+     "/new",
+     "/status",
+     "/flows",
+     "/doctor",
+     "/setup",
+     "/compact",
+     "/theme",
+     "/clear",
+     "/bus",
+     "/exit",
+   ]);
+   expect(chat).not.toContain("/think");
+   expect(chat).not.toContain("/expand");
+   expect(chat).not.toContain("/copy");
+ });
+ 
+ // Flow 273 (agent bus P2): /bus is a presence/messaging command, not a tool,
+ // so it is available in both modes exactly like /status and /flows above.
+ test("/bus is available in both modes", () => {
+   const bus = AGENT_SLASH_COMMANDS.find((c) => c.name === "/bus");
+   expect(bus?.modes).toEqual(["chat", "agent"]);
+   expect(findAgentCommand("/bus", "chat")?.name).toBe("/bus");
+   expect(findAgentCommand("/bus @release hi", "agent")?.name).toBe("/bus");
+ });
+ 
+ test("/status and /flows are available in both modes; old aliases are gone", () => {
+   for (const name of ["/status", "/flows"]) {
+     const command = AGENT_SLASH_COMMANDS.find((c) => c.name === name);
+     expect(command?.modes).toEqual(["chat", "agent"]);
+     expect(findAgentCommand(name, "chat")?.name).toBe(name);
+     expect(findAgentCommand(name, "agent")?.name).toBe(name);
+   }
+   expect(findAgentCommand("/session-info", "agent")).toBeUndefined();
+   expect(findAgentCommand("/info", "agent")).toBeUndefined();
+ });
+ 
+-test("/expand, /think and /copy are agent-only; /models is chat-only; /provider is available in both modes", () => {
++test("/expand, /think and /copy are agent-only; /models is chat-only; /connect is available in both modes", () => {
+   for (const name of ["/expand", "/think", "/copy"]) {
+     const command = AGENT_SLASH_COMMANDS.find((c) => c.name === name);
+     expect(command?.modes).toEqual(["agent"]);
+   }
+   for (const name of ["/models"]) {
+     const command = AGENT_SLASH_COMMANDS.find((c) => c.name === name);
+     expect(command?.modes).toEqual(["chat"]);
+   }
+-  const provider = AGENT_SLASH_COMMANDS.find((c) => c.name === "/provider");
+-  expect(provider?.modes).toEqual(["chat", "agent"]);
++  const connect = AGENT_SLASH_COMMANDS.find((c) => c.name === "/connect");
++  expect(connect?.modes).toEqual(["chat", "agent"]);
++});
++
++// Flow 471 (AC1): the add/reconfigure command was folded into `/connect`.
++// The removed name is built from parts so this file names it nowhere literally.
++describe("the removed provider command (flow 471, AC1)", () => {
++  const removed = `/${"provider"}`;
++
++  test("is not registered in any mode and does not resolve", () => {
++    expect(AGENT_SLASH_COMMANDS.some((c) => c.name === removed)).toBe(false);
++    expect(findAgentCommand(removed, "agent")).toBeUndefined();
++    expect(findAgentCommand(removed, "chat")).toBeUndefined();
++    expect(filterCommands(removed, "agent")).toEqual([]);
++    expect(filterCommands(removed, "chat")).toEqual([]);
++  });
++
++  test("falls through to Unknown command, with a /connect hint", () => {
++    const hint = removedCommandHint(`${removed} openai`);
++    expect(hint).toContain("/connect");
++    expect(removedCommandHint("/connect")).toBeUndefined();
++    expect(removedCommandHint("/nope")).toBeUndefined();
++  });
+ });
+ 
+ test("/model and /connect carry PER-MODE descriptions, not one flattened entry (R4)", () => {
+   const model = AGENT_SLASH_COMMANDS.find((c) => c.name === "/model");
+   const connect = AGENT_SLASH_COMMANDS.find((c) => c.name === "/connect");
+   expect(model).toBeDefined();
+   expect(connect).toBeDefined();
+   if (model === undefined || connect === undefined) {
+     return;
+   }
+   expect(describeCommand(model, "chat")).not.toBe(describeCommand(model, "agent"));
+   expect(describeCommand(connect, "chat")).not.toBe(describeCommand(connect, "agent"));
+   // chat's /model takes an argument and opens no picker; the TUI's opens one.
+   expect(describeCommand(model, "chat")).toContain("<name>");
+   expect(describeCommand(model, "agent")).toContain("picker");
+-  // chat's /connect is a connected-only switch; agent wording names the picker.
++  // chat's /connect is a connected-only switch; agent wording names the two tabs.
+   expect(describeCommand(connect, "chat")).toContain("connected");
+-  expect(describeCommand(connect, "agent")).toContain("picker");
++  expect(describeCommand(connect, "agent")).toContain("Connected");
++  expect(describeCommand(connect, "agent")).toContain("Add provider");
+ });
+ 
+ test("isCommandInMode reflects the declared modes", () => {
+   const expand = AGENT_SLASH_COMMANDS.find((c) => c.name === "/expand");
+   expect(expand).toBeDefined();
+   if (expand === undefined) {
+     return;
+   }
+   expect(isCommandInMode(expand, "agent")).toBe(true);
+   expect(isCommandInMode(expand, "chat")).toBe(false);
+ });
+ 
+ test("filterCommands: `/` returns all of the mode's commands", () => {
+   expect(filterCommands("/", "agent").map((c) => c.name)).toEqual([
+     "/help",
+     "/model",
+     "/connect",
+     "/search-provider",
+     "/search-connect",
+-    "/provider",
+     "/think",
+     "/expand",
+     "/copy",
+     "/new",
+     "/goal",
+     "/resume",
+     "/sessions",
+     "/status",
+     "/flows",
+     "/doctor",
+     "/setup",
+     "/ac",
+     "/workspace",
+     "/review",
+     "/reviews",
+     "/remote-control",
+     "/history",
+     "/channels",
+     "/intake",
+     "/rendering",
+
+--- src/commands/agent-commands.test.ts
+@@ 413,452 @@
+     "/theme",
+     "/settings",
+     "/game",
+     "/mode",
+     "/reasoning",
+     "/plan",
+     "/clear",
+     "/interrupt",
+     "/queue",
+     "/delegate",
+     "/tasks",
+     "/demote",
+     "/bus",
+     "/exit",
+   ]);
+   expect(filterCommands("/", "chat").map((c) => c.name)).toEqual([
+     "/help",
+     "/model",
+     "/models",
+     "/connect",
+-    "/provider",
+     "/new",
+     "/status",
+     "/flows",
+     "/doctor",
+     "/setup",
+     "/compact",
+     "/theme",
+     "/clear",
+     "/bus",
+     "/exit",
+   ]);
+ });
+ 
+ test("filterCommands: prefix narrows the set (agent)", () => {
+   expect(filterCommands("/h", "agent").map((c) => c.name)).toEqual(["/help", "/history"]);
+   expect(filterCommands("/c", "agent").map((c) => c.name)).toEqual([
+     "/connect",
+     "/copy",
+     "/channels",
+     "/ci",
+
+--- src/commands/agent-commands.test.ts
+@@ 482,523 @@
+     "/status",
+     "/setup",
+     "/schedule",
+     "/schedules",
+     "/scenarios",
+     "/staledocs",
+     "/settings",
+   ]);
+   expect(filterCommands("/i", "agent").map((c) => c.name)).toEqual([
+     "/intake",
+     "/integrate",
+     "/interrupt",
+   ]);
+   expect(filterCommands("/f", "agent").map((c) => c.name)).toEqual(["/flows", "/flow"]);
+   expect(filterCommands("/n", "agent").map((c) => c.name)).toEqual(["/new", "/notes"]);
+   expect(filterCommands("/comp", "agent").map((c) => c.name)).toEqual(["/compact"]);
+ });
+ 
+ test("filterCommands: prefix narrows the set (chat)", () => {
+   expect(filterCommands("/m", "chat").map((c) => c.name)).toEqual(["/model", "/models"]);
+-  expect(filterCommands("/p", "chat").map((c) => c.name)).toEqual(["/provider"]);
+-  expect(filterCommands("/p", "agent").map((c) => c.name)).toEqual(["/provider", "/product", "/permissions", "/projectctx", "/plan"]);
++  expect(filterCommands("/p", "chat").map((c) => c.name)).toEqual([]);
++  expect(filterCommands("/p", "agent").map((c) => c.name)).toEqual(["/product", "/permissions", "/projectctx", "/plan"]);
+   expect(filterCommands("/e", "chat").map((c) => c.name)).toEqual(["/exit"]);
+   expect(filterCommands("/c", "chat").map((c) => c.name)).toEqual([
+     "/connect",
+     "/compact",
+     "/clear",
+   ]);
+   expect(filterCommands("/s", "chat").map((c) => c.name)).toEqual(["/status", "/setup"]);
+   expect(filterCommands("/f", "chat").map((c) => c.name)).toEqual(["/flows"]);
+   expect(filterCommands("/re", "chat")).toEqual([]);
+ });
+ 
+ test("filterCommands: options carry the mode's own wording", () => {
+   const chatModel = filterCommands("/model", "chat")[0];
+   const agentModel = filterCommands("/model", "agent")[0];
+   expect(chatModel?.description).toContain("<name>");
+   expect(agentModel?.description).toContain("picker");
+ });
+ 
+ test("filterCommands: no match → empty; non-slash → empty", () => {
+   expect(filterCommands("/zzz", "agent")).toEqual([]);
+
+--- src/commands/agent-commands.test.ts
+@@ 549,589 @@
+   expect(message).toContain("agent mode");
+   expect(message).toContain("chat mode");
+   expect(describeUnavailableCommand("/models", "agent")).toContain("chat mode");
+   // Available here, or not a command at all → nothing to explain.
+   expect(describeUnavailableCommand("/expand", "agent")).toBeUndefined();
+   expect(describeUnavailableCommand("/help", "chat")).toBeUndefined();
+   expect(describeUnavailableCommand("/nope", "chat")).toBeUndefined();
+   expect(describeUnavailableCommand("just text", "chat")).toBeUndefined();
+ });
+ 
+ test("renderCommandHelp lists the mode's commands with the mode's descriptions", () => {
+   const chat = renderCommandHelp("chat");
+   expect(chat.startsWith("Commands:\n")).toBe(true);
+   for (const option of commandsForMode("chat")) {
+     expect(chat).toContain(option.name);
+     expect(chat).toContain(option.description);
+   }
+   expect(chat).not.toContain("/expand");
+   const agent = renderCommandHelp("agent");
+   expect(agent).toContain("/expand");
+-  expect(agent).toContain("/provider");
++  expect(agent).toContain("/connect");
+ });
+ 
+ test("renderCommandHelp `only` restricts the list to a surface's subset", () => {
+   const help = renderCommandHelp("agent", ["/help", "/expand"]);
+   expect(help).toContain("/help");
+   expect(help).toContain("/expand");
+   expect(help).not.toContain("/compact");
+ });
+ 
+ test("AC9: renderCommandHelp renders multi-line descriptions with hanging indent matching description column", () => {
+   const help = renderCommandHelp("agent", ["/model"]);
+   const lines = help.trim().split("\n");
+   expect(lines[0]).toBe("Commands:");
+   expect(lines[1]?.startsWith("  /model")).toBe(true);
+ 
+   // When rendered with narrow maxColumns that forces wrapping:
+   const narrow = renderCommandHelp("agent", ["/model"], 35);
+   const narrowLines = narrow.trim().split("\n").slice(1);
+   expect(narrowLines.length).toBeGreaterThan(1);
+   const firstCol = narrowLines[0]!.indexOf("Switch");
+
+--- src/commands/providers.models-failure.test.ts
+@@ 1,31 @@
+ // Why an empty model list is empty.
+ //
+ // `fetchOpenAiCompatModelsDetailed` stopped substituting curated ids for a
+ // failed probe (commit d0d86c76), which was right — a documentary id is not a
+ // model you can call. But it dropped the ANSWER along with the ids: every
+ // failure became `{ models: [] }`, and the picker said "(no models found)"
+ // whether the provider had nothing to offer, refused the credential, or was
+ // never reached.
+ //
+ // On a machine holding an expired grok login that read as a broken picker.
+-// `/provider` → grok → no prompt (a value WAS in env, just a dead one) → an
++// the old /provider (now /connect) → grok → no prompt (a value WAS in env, just a dead one) → an
+ // empty list, and no way to learn that `api.x.ai` had answered "403 The OAuth2
+ // access token could not be validated".
+ //
+ // These tests pin the reason, not just the emptiness.
+ 
+ import { describe, expect, test } from "bun:test";
+ import type { ModelsFailure, OpenAiCompatProvider } from "./providers";
+ import {
+   fetchOpenAiCompatModelsDetailed,
+   modelsErrorDetail,
+   modelsFailureLine,
+   resolveModelsForPicker,
+ } from "./providers";
+ 
+ const PROVIDER: OpenAiCompatProvider = {
+   name: "example",
+   label: "Example",
+   baseUrl: "https://api.example.invalid",
+   envKey: "EXAMPLE_API_KEY",
+   models: ["curated-1", "curated-2"],
+
+--- src/commands/shell-grant-refresh.test.ts
+@@ 11,42 @@
+ import path from "node:path";
+ 
+ const source = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+ 
+ test("the shell refreshes stored grants before it picks a surface", () => {
+   const refresh = source.indexOf("await refreshSavedGrants(");
+   const surface = source.indexOf("const surface = chooseShellSurface(");
+   expect(refresh).toBeGreaterThan(-1);
+   expect(surface).toBeGreaterThan(-1);
+   expect(refresh).toBeLessThan(surface);
+ });
+ 
+ test("the refresh is bounded, so a silent network cannot hang a scripted run (review F-001)", () => {
+   const call = source.slice(source.indexOf("const { refreshSavedGrants }"), source.indexOf("const surface = chooseShellSurface("));
+   expect(call).toContain("AbortSignal.timeout(GRANT_REFRESH_TIMEOUT_MS)");
+   expect(source).toMatch(/const GRANT_REFRESH_TIMEOUT_MS = \d[\d_]*;/);
+ });
+ 
+ test("readline provider detection reads saved keys itself, not through a shell_exec side effect (review F-003)", () => {
+   // `resolveShellEnv` used to load saved keys into `process.env`, so a provider
+-  // configured only by a saved key appeared in readline `/provider` once any
++  // configured only by a saved key appeared in the old /provider (now /connect) readline picker once any
+   // command had run. It no longer does (K-015); the selector reads them directly.
+   const start = source.indexOf("function realSelectProviderModel(");
+   const body = source.slice(start, source.indexOf("\n}\n", start));
+   expect(start).toBeGreaterThan(-1);
+   expect(body).toContain("const env = envWithSavedApiKeys(process.env);");
+   expect(body).not.toContain("env: process.env");
+ });
+ 
+ test("no refresh failure is swallowed silently any more", () => {
+   expect(source).not.toContain('refreshProviderGrant("grok", { fetch: oauthFetch }, opts.configDir).catch(() => undefined)');
+ });
+
+--- src/commands/shell-slash-registry.test.ts
+@@ 51,91 @@
+ 
+ async function* linesFrom(...lines: string[]): AsyncIterable<string> {
+   for (const line of lines) {
+     yield line;
+   }
+ }
+ 
+ /** Run the chat REPL over `lines` and return everything it wrote. */
+ async function chatOutput(...lines: string[]): Promise<string> {
+   const streamCalls = { count: 0 };
+   const writes: string[] = [];
+   const io: ShellIO = {
+     lines: linesFrom(...lines, "/exit"),
+     write: (s: string) => writes.push(s),
+   };
+   const deps: ShellDeps = {
+     makeProvider: () => countingProvider(streamCalls),
+     clock: () => "1970-01-01T00:00:00.000Z",
+     idSeq: () => "id",
+     initial: { provider: "fake", model: "fixture-model" },
+-    // Present so `/models` / `/provider` do not take the "not available" branch.
++    // Present so `/models` / `/connect` do not take the "not available" branch.
+     selectProviderModel: async () => ({ provider: "fake", model: "fixture-model" }),
+   };
+   await runShell(io, deps);
+   expect(streamCalls.count).toBe(0); // no slash command may start a model turn
+   return writes.join("");
+ }
+ 
+ describe("AC9 — the readline chat surface derives its commands from the registry", () => {
+   test("/help lists EVERY chat-mode command with the registry's chat wording", async () => {
+     const output = await chatOutput("/help");
+     for (const option of commandsForMode("chat")) {
+       expect(output).toContain(option.name);
+       // The description is the registry's, resolved for chat — a duplicated
+       // literal in `shell.ts` would not track a registry edit.
+       expect(output).toContain(option.description);
+     }
+   });
+ 
+   test("/help never advertises an agent-only command in chat", async () => {
+     const output = await chatOutput("/help");
+
+--- src/commands/shell-subscription-selection.test.ts
+@@ 1,27 @@
+ import { expect, test } from "bun:test";
+ import { FakeProvider } from "../harness/provider/fake-provider";
+ import { runShell } from "./shell";
+ 
+ async function* lines(...values: string[]) { yield* values; }
+ 
+-test("explicit subscription provider switch goes through authorization/model selection", async () => {
++test("/connect goes through the connected-provider authorization/model selection", async () => {
+   const selected: unknown[] = []; const built: string[] = [];
+-  await runShell({ lines: lines("/provider openai-codex", "/exit"), write: () => {} }, {
++  await runShell({ lines: lines("/connect", "/exit"), write: () => {} }, {
+     initial: { provider: "fake", model: "old-model" }, clock: () => "2026-09-26T00:00:00Z", idSeq: () => "id",
+     makeProvider: (name, model) => { built.push(`${name}:${model}`); return new FakeProvider([]); },
+     selectProviderModel: async (_io, options) => { selected.push(options); return { provider: "openai-codex", model: "authorized-model" }; },
+   });
+-  expect(selected).toEqual([{ onlyProvider: "openai-codex" }]);
++  expect(selected).toEqual([{ onlyConnected: true }]);
+   expect(built).toEqual(["fake:old-model", "openai-codex:authorized-model"]);
+ });
+ 
+ test("cancelling subscription authorization preserves the active Shell session", async () => {
+   const built: string[] = []; const output: string[] = [];
+-  await runShell({ lines: lines("/provider openai-codex", "/exit"), write: (text) => { output.push(text); } }, {
++  await runShell({ lines: lines("/connect", "/exit"), write: (text) => { output.push(text); } }, {
+     initial: { provider: "fake", model: "old-model" }, clock: () => "2026-09-26T00:00:00Z", idSeq: () => "id",
+     makeProvider: (name) => { built.push(name); return new FakeProvider([]); },
+     selectProviderModel: async () => { throw new Error("ChatGPT subscription login cancelled"); },
+   });
+   expect(built).toEqual(["fake"]);
+   expect(output.join("")).toContain("cancelled");
+ });
+
+--- src/commands/shell.test.ts
+@@ 21,70 @@
+ //     initial: { provider: string; model: string; baseUrl?: string };
+ //   }
+ //   export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void>;
+ //   export async function shellCommand(args: string[]): Promise<void>; // thin TTY wrapper, NOT unit-tested here
+ //
+ // PINNED CONTRACT (unpinned before this dispatch; fixed here so T6 and this
+ // suite agree):
+ //   - `runShell` keeps an in-memory `history: NormalizedMessage[]`, empty at
+ //     start. Each non-slash-command input line is one "turn": push
+ //     `{role:"user", content:line}` onto history, build a `NormalizedRequest`
+ //     whose `messages` is the CURRENT history (i.e. it always includes the
+ //     just-pushed user line), call `provider.stream(request, opts)`, write
+ //     every `text_delta.text` to `io.write` as it arrives, and on `model_end`
+ //     push `{role:"assistant", content: <accumulated text>}` onto history.
+ //     History therefore grows by exactly 2 entries (user + assistant) per
+ //     completed turn, and the NEXT turn's request carries the full
+ //     accumulated history — this is what proves multi-turn without exposing
+ //     `history` externally.
+ //   - `deps.makeProvider(provider, model, baseUrl)` is called to obtain the
+ //     active `ProviderPort`: at least once (using `deps.initial`) before/at
+-//     the first turn, and again whenever `/model` or `/provider` changes the
++//     the first turn, and again whenever `/model` or `/connect` changes the
+ //     active selection. The provider instance used for a given turn's
+ //     `stream()` call reflects whichever (provider, model) selection is
+ //     active at the time that turn runs; exact call timing (immediately on
+ //     the slash command vs. lazily before the next turn) is an implementation
+ //     choice.
+ //   - Slash commands (never trigger `provider.stream`, except where noted):
+ //       `/help`            — write help text (mentions the other commands).
+ //       `/model <m>`       — switch the active model for subsequent turns.
+-//       `/provider <name>` — switch the active provider for subsequent turns.
++//       `/connect` — switch the active provider to a connected one for subsequent turns.
+ //       `/clear`           — reset history to empty.
+ //       `/exit`, `/quit`   — terminate the loop; `runShell` resolves cleanly.
+ //   - End-of-input (the `io.lines` async iterable completes without `/exit`)
+ //     also terminates the loop; `runShell` resolves cleanly (never throws).
+ //   - A turn whose provider stream yields `provider_error` writes a readable
+ //     error line via `io.write` and the loop CONTINUES to the next input line
+ //     (it does not throw/crash the whole session).
+ //
+ // Provider wiring note: rather than reverse-engineer `runShell`'s internal
+ // `NormalizedRequest` shape, tests wrap the real, committed `FakeProvider` in
+ // a thin local adapter that captures the ACTUAL request `runShell` builds (for
+ // history/multi-turn assertions) but replays a LOCALLY built, hash-stamped
+ // request against the underlying `FakeProvider` (same technique as
+ // `src/harness/run/run.test.ts`'s `fixtureProvider` / `fake-provider.test.ts`'s
+ // `withMatchingHash`). This keeps the suite decoupled from the unpinned exact
+ // request-construction shape while still exercising the real `FakeProvider`
+ // replay behaviour end-to-end.
+ //
+ // OFFLINE / DETERMINISTIC: no real `process.stdin`/`stdout`, no network, no
+ // `Date.now`/`Math.random` — `deps.clock`/`deps.idSeq` are always injected
+
+--- src/commands/shell.test.ts
+@@ 72,115 @@
+ //
+ // --- flow 022, T5 / AC3 additions (RED: pins an ADDITIVE `ShellDeps` field
+ // `runShell` does not implement yet — T6 adds it to `src/commands/shell.ts`).
+ // See `.metaproject/flows/022-2026-07-13-keryx-r2-4-tui/{context.md,
+ // acceptance-criteria.md}` (AC3) for the frozen scope.
+ //
+ // PINNED SELECTOR SEAM (T6 implements exactly this; chosen to keep `runShell`
+ // decoupled from `./select`'s `fetch`/`env` plumbing — it only needs the
+ // bundled detect+pick behaviour as one injected function):
+ //   export interface ShellDeps {
+ //     ...(unchanged fields)...
+ //     selectProviderModel?: (
+ //       io: ShellIO,
+ //       opts?: { onlyProvider?: string },
+ //     ) => Promise<{ provider: string; model: string; baseUrl?: string }>;
+ //   }
+ //   - `/models`  calls `deps.selectProviderModel?.(io, { onlyProvider: <current providerName> })`
+ //     — offers ONLY the current provider's models. On a valid result, `runShell`
+ //     updates the active provider/model/baseUrl (recreating the provider via
+ //     the existing `makeActive()` pattern) so the NEXT turn uses it.
+-//   - `/provider` calls `deps.selectProviderModel?.(io)` (no `onlyProvider`) —
++//   - `/connect` calls `deps.selectProviderModel?.(io, { onlyConnected: true })` —
+ //     a full re-detection/pick across all providers; same update-then-use
+ //     behaviour.
+-//   - When `deps.selectProviderModel` is undefined, `/models` and `/provider`
++//   - When `deps.selectProviderModel` is undefined, `/models` and `/connect`
+ //     write a message containing "not available" and are no-ops — NEVER a
+ //     crash, NEVER a model turn.
+ //   - `/connect` needs NO new deps: it writes STATIC guidance mentioning
+ //     `ANTHROPIC_API_KEY` (how to `export` it) and never reads/echoes any
+ //     actual credential value.
+ //   - `shellCommand` (T6, not unit-tested here) wires `selectProviderModel` by
+ //     composing `./select`'s `detectProviders` + `pickProviderModel` with the
+ //     real `process.env`/`fetch`, filtering to `opts.onlyProvider` when given.
+ //
+ // This file's NEW tests below will not fully typecheck until T6 lands the
+ // additive `selectProviderModel` field on `ShellDeps` — the same kind of
+ // expected RED as `select.test.ts`'s missing-module import (a documented gap
+ // for T6 to fill, not a test bug).
+ 
+ import { readFileSync } from "node:fs";
+ import { mkdtemp } from "node:fs/promises";
+ import os from "node:os";
+ import path from "node:path";
+ import { describe, expect, test } from "bun:test";
+ import { FakeProvider, type FakeProviderTranscript, requestHashOf } from "../harness/provider/fake-provider";
+
+--- src/commands/shell.test.ts
+@@ 349,413 @@
+     const { provider, captured } = capturingFakeProvider([turnA, turnB]);
+ 
+     const io: ShellIO = {
+       lines: linesFrom("First", "/clear", "Second", "/exit"),
+       write: () => {},
+     };
+     const deps: ShellDeps = {
+       makeProvider: () => provider,
+       clock: fixedClock(),
+       idSeq: fixedIdSeq(),
+       initial: { provider: "fake", model: "fixture-model" },
+     };
+ 
+     await runShell(io, deps);
+ 
+     expect(captured.length).toBe(2);
+     const secondReq = at(captured, 1);
+     expect(secondReq.messages.map((m) => m.content)).toEqual(["Second"]);
+   });
+ 
+-  test("/model and /provider switch the active selection for subsequent turns", async () => {
++  test("/model and /connect switch the active selection for subsequent turns", async () => {
+     const initialTurn = textTranscript("init", ["Hello!"]);
+     const { provider: initialProvider, captured: initialCaptured } = capturingFakeProvider([initialTurn]);
+     const switchedTurn = textTranscript("switched", ["Yo"]);
+     const { provider: switchedProvider, captured: switchedCaptured } = capturingFakeProvider([switchedTurn]);
+ 
+     const makeProviderCalls: Array<{ name: string; model: string; baseUrl?: string }> = [];
+     const makeProvider = (name: string, model: string, baseUrl?: string): ProviderPort => {
+       makeProviderCalls.push(baseUrl === undefined ? { name, model } : { name, model, baseUrl });
+       if (name === "ollama" && model === "llama3.2") {
+         return switchedProvider;
+       }
+       return initialProvider;
+     };
+ 
+     const io: ShellIO = {
+-      lines: linesFrom("Hi", "/model llama3.2", "/provider ollama", "Yo there", "/exit"),
++      lines: linesFrom("Hi", "/model llama3.2", "/connect", "Yo there", "/exit"),
+       write: () => {},
+     };
+     const deps: ShellDeps = {
+       makeProvider,
+       clock: fixedClock(),
+       idSeq: fixedIdSeq(),
+       initial: { provider: "fake", model: "fixture-model" },
++      selectProviderModel: async () => ({ provider: "ollama", model: "llama3.2" }),
+     };
+ 
+     await runShell(io, deps);
+ 
+     // The switched (provider, model) pair was requested from the factory at some point.
+     expect(makeProviderCalls.some((call) => call.name === "ollama" && call.model === "llama3.2")).toBe(true);
+ 
+     // The turn issued AFTER both switches used the switched provider instance.
+     expect(switchedCaptured.length).toBe(1);
+     expect(at(switchedCaptured, 0).modelId).toBe("llama3.2");
+ 
+     // Only the very first turn (before any switch) used the initial provider instance.
+     expect(initialCaptured.length).toBe(1);
+   });
+ 
+   test("/help prints help text and does NOT start a model turn", async () => {
+     const streamCalls = { count: 0 };
+     const writes: string[] = [];
+     const io: ShellIO = {
+       lines: linesFrom("/help", "/exit"),
+
+--- src/commands/shell.test.ts
+@@ 473,660 @@
+       idSeq: fixedIdSeq(),
+       initial: { provider: "fake", model: "fixture-model" },
+     };
+ 
+     await expect(runShell(io, deps)).resolves.toBeUndefined();
+ 
+     const output = writes.join("");
+     expect(/error|unavailable/i.test(output)).toBe(true);
+     expect(output).toContain("Recovered");
+     // Both turns reached the provider: the loop did not stop after the error.
+     expect(captured.length).toBe(2);
+   });
+ });
+ 
+ /** Local alias for the pinned, additive `ShellDeps.selectProviderModel` seam (see file header). */
+ type SelectProviderModel = (
+   io: ShellIO,
+   opts?: { onlyProvider?: string; onlyConnected?: boolean },
+ ) => Promise<{ provider: string; model: string; baseUrl?: string }>;
+ 
+-describe("AC3 — /models, /provider, /connect + credential safety (flow 022)", () => {
+-  test("/help now also documents /models, /provider, and /connect", async () => {
++describe("AC3 — /models, /connect + credential safety (flow 022, flow 471)", () => {
++  test("/help documents /models and /connect, and no longer lists the removed provider command", async () => {
+     const streamCalls = { count: 0 };
+     const writes: string[] = [];
+     const io: ShellIO = {
+       lines: linesFrom("/help", "/exit"),
+       write: (s: string) => writes.push(s),
+     };
+     const deps: ShellDeps = {
+       makeProvider: () => countingProvider(streamCalls),
+       clock: fixedClock(),
+       idSeq: fixedIdSeq(),
+       initial: { provider: "fake", model: "fixture-model" },
+     };
+ 
+     await runShell(io, deps);
+ 
+     expect(streamCalls.count).toBe(0);
+     const output = writes.join("");
+     expect(output).toMatch(/\/models/);
+-    expect(output).toMatch(/\/provider/);
++    expect(output).not.toContain(`/${"provider"}`);
+     expect(output).toMatch(/\/connect/);
+   });
+ 
+   test("/models lists the current provider's models and a numeric pick switches the model used by the NEXT turn", async () => {
+     const turn = textTranscript("after-models-switch", ["ok"]);
+     const { provider, captured } = capturingFakeProvider([turn]);
+ 
+     const selectCalls: Array<{ onlyProvider?: string }> = [];
+     // RED: `selectProviderModel` is not yet a known `ShellDeps` field (T6 adds
+     // it) — this object literal is expected to fail typecheck until then.
+     const selectProviderModel: SelectProviderModel = async (io, opts) => {
+       selectCalls.push(opts ?? {});
+       io.write("1. fixture-model-2\n");
+       return { provider: "fake", model: "fixture-model-2" };
+     };
+ 
+     const io: ShellIO = {
+       lines: linesFrom("/models", "hello after switch", "/exit"),
+       write: () => {},
+     };
+     const deps: ShellDeps = {
+       makeProvider: () => provider,
+       clock: fixedClock(),
+       idSeq: fixedIdSeq(),
+       initial: { provider: "fake", model: "fixture-model" },
+       selectProviderModel,
+     };
+ 
+     await runShell(io, deps);
+ 
+     // `/models` restricts detection/pick to the CURRENT provider ("fake").
+     expect(selectCalls).toEqual([{ onlyProvider: "fake" }]);
+     // The turn AFTER the switch used the newly picked model.
+     expect(captured.length).toBe(1);
+     expect(at(captured, 0).modelId).toBe("fixture-model-2");
+   });
+ 
+-  test("/provider re-runs full selection (no onlyProvider) and can switch to a different provider entirely", async () => {
++  test("/connect opens the connected-only selection and can switch to a different provider entirely", async () => {
+     const turn = textTranscript("after-provider-switch", ["hi"]);
+     const { provider: switchedProvider, captured } = capturingFakeProvider([turn]);
+ 
+-    const selectCalls: Array<{ onlyProvider?: string } | undefined> = [];
++    const selectCalls: Array<{ onlyProvider?: string; onlyConnected?: boolean } | undefined> = [];
+     const makeProviderCalls: Array<{ name: string; model: string; baseUrl?: string }> = [];
+     const selectProviderModel: SelectProviderModel = async (_io, opts) => {
+       selectCalls.push(opts);
+       return { provider: "ollama", model: "llama3.2", baseUrl: "http://localhost:11434" };
+     };
+     const makeProvider = (name: string, model: string, baseUrl?: string): ProviderPort => {
+       makeProviderCalls.push(baseUrl === undefined ? { name, model } : { name, model, baseUrl });
+       return switchedProvider;
+     };
+ 
+     const io: ShellIO = {
+-      lines: linesFrom("/provider", "hi there", "/exit"),
++      lines: linesFrom("/connect", "hi there", "/exit"),
+       write: () => {},
+     };
+     const deps: ShellDeps = {
+       makeProvider,
+       clock: fixedClock(),
+       idSeq: fixedIdSeq(),
+       initial: { provider: "fake", model: "fixture-model" },
+       selectProviderModel,
+     };
+ 
+     await runShell(io, deps);
+ 
+-    // `/provider` passes NO `onlyProvider` restriction (full re-detection).
+-    expect(selectCalls.length).toBe(1);
+-    expect(at(selectCalls, 0)?.onlyProvider).toBeUndefined();
++    // `/connect` asks for the connected-only selection, with no `onlyProvider` restriction.
++    expect(selectCalls).toEqual([{ onlyConnected: true }]);
+ 
+     expect(
+       makeProviderCalls.some(
+         (call) => call.name === "ollama" && call.model === "llama3.2" && call.baseUrl === "http://localhost:11434",
+       ),
+     ).toBe(true);
+     expect(captured.length).toBe(1);
+     expect(at(captured, 0).providerId).toBe("ollama");
+     expect(at(captured, 0).modelId).toBe("llama3.2");
+   });
+ 
+-  test("/models and /provider fail-soft (write a message, never crash) when no selector is injected", async () => {
++  test("/models and /connect fail-soft (write a message, never crash) when no selector is injected", async () => {
+     const streamCalls = { count: 0 };
+     const writes: string[] = [];
+     const io: ShellIO = {
+-      lines: linesFrom("/models", "/provider", "/exit"),
++      lines: linesFrom("/models", "/connect", "/exit"),
+       write: (s: string) => writes.push(s),
+     };
+     const deps: ShellDeps = {
+       makeProvider: () => countingProvider(streamCalls),
+       clock: fixedClock(),
+       idSeq: fixedIdSeq(),
+       initial: { provider: "fake", model: "fixture-model" },
+       // selectProviderModel intentionally omitted — must not crash runShell.
+     };
+ 
+     await expect(runShell(io, deps)).resolves.toBeUndefined();
+     expect(streamCalls.count).toBe(0);
+     expect(writes.join("")).toMatch(/not available/i);
+   });
+ 
++  test("the removed provider command answers Unknown command with a /connect hint and starts no selection or turn", async () => {
++    const streamCalls = { count: 0 };
++    const writes: string[] = [];
++    const selectCalls: unknown[] = [];
++    const io: ShellIO = {
++      lines: linesFrom(`/${"provider"} ollama`, "/exit"),
++      write: (s: string) => writes.push(s),
++    };
++    const deps: ShellDeps = {
++      makeProvider: () => countingProvider(streamCalls),
++      clock: fixedClock(),
++      idSeq: fixedIdSeq(),
++      initial: { provider: "fake", model: "fixture-model" },
++      selectProviderModel: async (_io, opts) => {
++        selectCalls.push(opts);
++        return { provider: "ollama", model: "llama3.2" };
++      },
++    };
++
++    await runShell(io, deps);
++
++    expect(selectCalls).toEqual([]);
++    expect(streamCalls.count).toBe(0);
++    const out = writes.join("");
++    expect(out).toContain("Unknown command");
++    expect(out).toContain("/connect");
++  });
++
+   test("/connect with a selector switches among connected providers only", async () => {
+     const turn = textTranscript("after-connect-switch", ["ok"]);
+     const { provider, captured } = capturingFakeProvider([turn]);
+     const selectCalls: Array<{ onlyProvider?: string; onlyConnected?: boolean } | undefined> = [];
+     const selectProviderModel: SelectProviderModel = async (_io, opts) => {
+       selectCalls.push(opts);
+       return { provider: "deepseek", model: "deepseek-chat" };
+     };
+ 
+     const io: ShellIO = {
+       lines: linesFrom("/connect", "hello after connect", "/exit"),
+       write: () => {},
+     };
+     const deps: ShellDeps = {
+       makeProvider: () => provider,
+       clock: fixedClock(),
+       idSeq: fixedIdSeq(),
+       initial: { provider: "fake", model: "fixture-model" },
+       selectProviderModel,
+     };

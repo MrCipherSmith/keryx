@@ -1,0 +1,34 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "slice-03 read in full (balance-panel, chat-shell, game-modal, games/model-turn, modal-host, queue-nav, remote-provider-hooks, tui-shell). No blocker or major regression found. The payload carries no blast-radius record (no computed set, no dropped-file count, `layers` absent) and this lane ran read-only with no graph command, so the check was done over the changed files only: callers of selectProviderModelInTui / the removed pickConnectedProviderStep outside this slice (src/commands/shell.ts, agent.ts, remote/command-gateway.ts, agent-commands.ts) were NOT verified here; they sit in other slices. Walked and found intact: (1) selectProviderModelInTui(onlyConnected) callers (tui-shell /connect, chat-shell pickSelection) keep their signature and still resolve a TuiSelection or undefined; the only behaviour change is the intended one (zero connected providers opens the Add tab instead of a toast). (2) The `pick` path of runProvidersModal calls runProviderConnectSequence with setup=false, which skips the endpoint prompt, the credential step and the endpoint-retry step exactly as the old onlyConnected branch did. (3) The startup / non-onlyConnected wizard keeps the same credential-before-/models order after the extraction into runProviderConnectSequence (collectCredential gained a 'no-key' result that only the Add tab's requireKey=true can reach). (4) Esc-while-armed, ownsKeys and the unarmed left/right hand-off were checked for both the ModalHost surface and the bare-renderer overlay; the arm is dropped on tab change. (5) shellIsBusy is the old isBusy expression verbatim. (6) probeProviderConnection with requireCredential=false (Connected tab) is byte-equivalent to the old runTest; classifyProviderConnection treats an OAuth grant and a saved/env key as credentials, so requireCredential=true on the Add tab does not mislabel an OAuth-connected provider as 'no credential'. One below-major observation is filed (it will be refused by the scope B screen as non-regression-severity; it is a defect in new code, not a break of existing behaviour, and is kept here so it is not lost).",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const all = [...detected];",
+      "problem": "runProvidersModal (new in flow 471) snapshots `all` from `detected` once and never prunes it. A Disconnect on the Connected tab removes the row from `connected` (spliced in place by armOrConfirmDisconnect) and, for a custom provider, deletes its llm-providers.json entry via disconnectProvider -> removeCustomCompatProvider, but the provider stays in `all`, so the Add provider tab still lists it with [Connect] for the rest of the dialog loop. [Connect] on it runs runProviderConnectSequence (setup=true): it writes a baseUrls override for a provider that no longer exists, probes the endpoint, and on a live /models answer upserts the phantom into `connected`, calls options.onConnected and shows '<label> connected - N model(s)'. [Test] on the same row answers 'unknown provider, cannot test' because connectionProviderByName no longer resolves it.",
+      "impact": "Trigger: connect or create a custom provider, Disconnect it, open the Add provider tab, press Connect. Outcome: a false 'connected' notice and a Connected row that is gone the next time /connect opens; picking that row in the same dialog resolves a selection naming a provider the registry no longer has, so switchTo fails or lands on a missing provider. Built-in providers are unaffected (they stay valid Add rows after a disconnect). Not a break of pre-existing behaviour: the old /connect list had no Add tab, and the old /provider list was a fresh detection each time.",
+      "suggested_fix": "On a successful disconnect of a provider whose classification kind is 'custom' (disconnectProvider returns kind 'custom'), remove it from `all` as well as `connected`; or rebuild `all` from a fresh redetect each time the dialog reopens. Alternatively have runAddSelection re-resolve the provider with connectionProviderByName before starting the sequence and answer 'no longer exists' when it is gone.",
+      "evidence": "src/tui/tui-shell.ts diff: `const all = [...detected];` in runProvidersModal; armOrConfirmDisconnect only does `connected.splice(at, 1)` and `statuses.delete(...)`; `all` is only appended to by upsertProvider on the custom-provider path. disconnectProvider 'custom' branch (src/commands/providers.ts ~1207) calls removeCustomCompatProvider.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "dedupe_key": "providers-modal-stale-add-list-after-custom-disconnect",
+      "location_class": "in-diff"
+    }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "follow_ups": [
+    "Blast-radius callers outside slice-03 were not walked (no radius record in the payload, read-only lane). The ones to confirm in their own slices: every remaining caller of selectProviderModelInTui / ShellDeps.selectProviderModel (src/commands/shell.ts, src/commands/agent.ts) now that /provider is gone and onlyConnected opens the tabbed dialog, and the readline /connect path, which has no tabbed surface."
+  ]
+}
+```
+
+Summary: no blocker or major regression in slice-03. The radius could not answer the question beyond the changed files: the payload has no computed blast-radius set (nothing recorded as capped or dropped) and this run was read-only with no graph query, so callers outside this slice are unverified and named in follow_ups. One minor observation (stale Add-tab list after disconnecting a custom provider) is filed; expect scope B to refuse it as non-regression-severity, and treat it as a scope A note on new code.

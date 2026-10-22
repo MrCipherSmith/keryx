@@ -1,0 +1,97 @@
+{
+  "judge": "review-premise",
+  "model": "claude-sonnet-5-5",
+  "premises": [
+    {
+      "finding_id": "review-architecture-w2:F-001",
+      "verdict": "upheld",
+      "reasoning": "src/commands/shell.ts:272-304 READLINE_AGENT_COMMANDS omits /connect and its comment (266-271) says /connect has no readline equivalent; the PR (29417a4fe) adds the 'run /connect' hint to that REPL's unknown-command branch. The hint is introduced by the PR, so it is no prior intent; no practice source makes it right."
+    },
+    {
+      "finding_id": "review-architecture-w2:F-002",
+      "verdict": "upheld",
+      "reasoning": "src/commands/shell.ts realSelectProviderModel (~1366-1391) ignores onlyConnected and only runs pickProviderModel over detected providers: no add/login step. The 'add one' wording is added by the PR itself (29417a4fe agent-commands.ts); the removed /provider <name> and /provider openai-codex branches (shell.ts, deleted in 29417a4fe) have no chat /connect equivalent. No signal of intent."
+    },
+    {
+      "finding_id": "review-architecture-w2:F-003",
+      "verdict": "upheld",
+      "reasoning": "CONNECT_GUIDANCE (src/commands/shell.ts:240-248) is printed only when deps.selectProviderModel is undefined, i.e. when /connect cannot pick; the PR (29417a4fe) turned its last sentence from /provider into /connect, so the fallback tells the user to run the command that just printed it. No prior intent: the edit is the PR's own."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-001",
+      "verdict": "upheld",
+      "reasoning": "pickProvidersTabbedStep (src/tui/tui-shell.ts:3260, new in 29417a4fe) mixes view, key routing and effects in one closure and grew the earlier single-tab step. Sibling step closures in the file do the same, but no exemption or reasoned choice is on record, and the reviewer already marks the fix as not required for this PR."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-002",
+      "verdict": "upheld",
+      "reasoning": "The 'needs a key and has none' rule is written in two places in src/tui/tui-shell.ts (runProviderConnectSequence skip branch and probeProviderConnection), both added or reshaped by the PR; no signal that the duplication is deliberate, and a shared helper is a sound, consistent fix."
+    },
+    {
+      "finding_id": "review-architecture-w3:F-003",
+      "verdict": "upheld",
+      "reasoning": "onlyConnected in src/tui/tui-shell.ts (selectProviderModelInTui, `if (options.onlyConnected)`) now opens the two-tab Providers dialog, not 'only connected'. The name predates the PR, the semantic change is the PR's own, and only a JSDoc line in shell-types.ts was adjusted. Renaming or documenting at the declaration is sound."
+    },
+    {
+      "finding_id": "review-clean-code-w1:F-001",
+      "verdict": "upheld",
+      "reasoning": "The picker-answer guard is repeated in pickModel, pickProvider, pickSession and, new in this PR, twice in pickAddableProvider (src/remote/command-router.ts:640-670). A sibling doing the same is repetition rather than a reasoned stance, and a small settle-or-fail helper is a sound, consistent fix."
+    },
+    {
+      "finding_id": "review-clean-code-w1:F-002",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "src/remote/command-router.ts:565 (blame 805714edc2, 2026-10-02, predates the PR)",
+          "says": "pickModel re-checks host.listModels/host.switchModel at its own top even though its caller pickProvider (line 607) already checked the same capabilities before calling it at line 635: private pickers self-guard their own optional host capability."
+        },
+        {
+          "ref": "src/remote/command-router.ts:642-646",
+          "says": "the guard in pickAddableProvider is also what narrows the optional host.listAddableProviders for the call at 646 without a non-null assertion; it follows the same per-picker idiom as pickModel and pickSession."
+        }
+      ],
+      "practice_sources": [
+        {
+          "name": "TypeScript handbook - Narrowing (optional members and truthiness/undefined checks)",
+          "says": "an optional member is narrowed by a check in the same scope; a caller's check does not narrow it in a separate method, so a self-contained guard is the idiomatic way to call it."
+        }
+      ],
+      "reasoning": "The fact reproduces (both callers pass canAdd first), but an unreachable-by-construction self-guard on an optional host capability is the file's established idiom since 2026-10-02 and also does the type narrowing. The suggested fix (pass the function in) is workable but changes the idiom at one site only, making it differ from pickModel, pickProvider and pickSession.",
+      "question": "The guard in pickAddableProvider matches how pickModel and pickSession already self-guard their optional host capability. Keep it as is, or pass the already-checked function in and drop the guard?",
+      "options": [
+        "dismiss - keep the self-guard, as the sibling pickers do",
+        "uphold - pass listAddableProviders in and remove the guard"
+      ]
+    },
+    {
+      "finding_id": "review-clean-code-w1:F-003",
+      "verdict": "upheld",
+      "reasoning": "connectAddable (src/remote/command-router.ts, ~690-731) is long and its refusal branches repeat one shape, all new in this PR (d4d9d4bdf); no signal of intent or practice against splitting a pure connectRefusal helper."
+    },
+    {
+      "finding_id": "review-clean-code-w1:F-004",
+      "verdict": "upheld",
+      "reasoning": "The comment at src/commands/shell.ts (~3263-3266) was half-edited by the PR: its first line now says /models is a chat-mode command while the continuation still says 'calling them unknown' and ignores the new removedCommandHint fallback. A stale comment is a defect; no signal against it."
+    },
+    {
+      "finding_id": "review-clean-code-w2:CC-1",
+      "verdict": "upheld",
+      "reasoning": "pickProvidersTabbedStep (src/tui/tui-shell.ts:3260-3700) is a single ~440-line closure. Sibling steps are large closures too, but that is not a recorded decision and the reviewer says the split is for the next tab, not this PR; the finding stands as reported."
+    },
+    {
+      "finding_id": "review-clean-code-w2:CC-2",
+      "verdict": "upheld",
+      "reasoning": "runProviderConnectSequence (src/tui/tui-shell.ts:3746) takes six parameters, two bare booleans, with call sites like `deps, true, true`; the signature is new in the PR and an options object is a sound fix. No intent or practice signal against."
+    },
+    {
+      "finding_id": "review-clean-code-w2:CC-3",
+      "verdict": "upheld",
+      "reasoning": "The modelDeps spread with the same added fields is rebuilt in runProvidersModal, runProviderConnectSequence and selectProviderModelInTui (src/tui/tui-shell.ts ~3851, ~3945, ~4085), all touched by the PR; a single builder is consistent and sound."
+    },
+    {
+      "finding_id": "review-clean-code-w2:CC-4",
+      "verdict": "upheld",
+      "reasoning": "onlyConnected now means 'open the Providers modal' (selectProviderModelInTui early-returns runProvidersModal; chat-shell.ts pickSelection, /connect handler): the name is misleading after the PR's own semantic change. Renaming in one commit or documenting at the declaration is sound; no signal of intent."
+    }
+  ]
+}

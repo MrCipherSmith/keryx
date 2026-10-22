@@ -1,0 +1,4550 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/flows/471-2026-10-22-connect-providers-tabs/acceptance-criteria.md",
+    ".metaproject/flows/471-2026-10-22-connect-providers-tabs/context.md",
+    ".metaproject/flows/471-2026-10-22-connect-providers-tabs/description.md",
+    ".metaproject/flows/471-2026-10-22-connect-providers-tabs/flow.json",
+    ".metaproject/flows/471-2026-10-22-connect-providers-tabs/journal.md",
+    ".metaproject/flows/471-2026-10-22-connect-providers-tabs/plan.md",
+    ".metaproject/flows/471-2026-10-22-connect-providers-tabs/resolved/T2.implement.json",
+    ".metaproject/flows/471-2026-10-22-connect-providers-tabs/resolved/T2b.implement.json",
+    ".metaproject/flows/471-2026-10-22-connect-providers-tabs/tasks.md",
+    "README.md",
+    "docs/docs/cli-reference.md",
+    "docs/docs/commands-by-task.md",
+    "docs/docs/guides/drive-keryx-remotely.md",
+    "docs/docs/harness.md",
+    "docs/docs/hooks.md",
+    "docs/docs/onboarding.md",
+    "src/commands/agent-commands.test.ts",
+    "src/commands/agent-commands.ts",
+    "src/commands/agent.ts",
+    "src/commands/providers.models-failure.test.ts",
+    "src/commands/shell-grant-refresh.test.ts",
+    "src/commands/shell-slash-registry.test.ts",
+    "src/commands/shell-subscription-selection.test.ts",
+    "src/commands/shell-types.ts",
+    "src/commands/shell.test.ts",
+    "src/commands/shell.ts",
+    "src/remote/command-connect.test.ts",
+    "src/remote/command-gateway.test.ts",
+    "src/remote/command-gateway.ts",
+    "src/remote/command-router.ts",
+    "src/remote/command.test-helpers.ts",
+    "src/remote/shell-bridge.ts",
+    "src/standard/help-groups.test.ts",
+    "src/standard/help-groups.ts",
+    "src/tui/balance-panel.ts",
+    "src/tui/chat-shell.ts",
+    "src/tui/connect-modal.test.ts",
+    "src/tui/connect-provider-buttons.test.ts",
+    "src/tui/game-modal.ts",
+    "src/tui/games/model-turn.ts",
+    "src/tui/modal-host.test.ts",
+    "src/tui/modal-host.ts",
+    "src/tui/model-picker-notice.test.ts",
+    "src/tui/provider-endpoint-retry.test.ts",
+    "src/tui/provider-probe.test.ts",
+    "src/tui/queue-nav.test.ts",
+    "src/tui/queue-nav.ts",
+    "src/tui/remote-provider-hooks.test.ts",
+    "src/tui/remote-provider-hooks.ts",
+    "src/tui/tui-shell.ts",
+    "src/tui/wizard-modal.test.ts"
+  ],
+  "files": [
+    {
+      "file": "src/tui/shell-chrome.ts",
+      "hop": 1,
+      "fanIn": 40,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/shell-chrome.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/ops-sidebar.test-helpers.ts",
+      "hop": 1,
+      "fanIn": 30,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/ops-sidebar.test-helpers.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/flow-inspector.ts",
+      "hop": 1,
+      "fanIn": 28,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/flow-inspector.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/remote/hub.ts",
+      "hop": 1,
+      "fanIn": 21,
+      "via": "src/remote/command-gateway.ts",
+      "path": [
+        "src/remote/hub.ts",
+        "src/remote/command-gateway.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/commands/shell.ts",
+      "path": [
+        "src/cli-registry.ts",
+        "src/commands/shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/ops-sidebar.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/ops-sidebar.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/reviews-inspector.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/reviews-inspector.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/composer-choice.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/composer-choice.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/remote-control-surface.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/remote-control-surface.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/decisions-surface.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/decisions-surface.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/review-inspector.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/review-inspector.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/settings-modal.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/settings-modal.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/ci-triage-inspector.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/ci-triage-inspector.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/external-diff-modal.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/external-diff-modal.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/mcp-inspector.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/mcp-inspector.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/product-open-surface.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/product-open-surface.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/schedules-inspector.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/schedules-inspector.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/session-info.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/session-info.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/acp/commands.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/standard/help-groups.ts",
+      "path": [
+        "src/acp/commands.ts",
+        "src/standard/service.ts",
+        "src/standard/help-groups.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/channels-surface.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/channels-surface.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/conform-inspector.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/conform-inspector.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/execution-plan-inspector.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/execution-plan-inspector.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/external-inspector.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/external-inspector.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/games/modal.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/tui/games/model-turn.ts",
+      "path": [
+        "src/tui/games/modal.ts",
+        "src/tui/games/model-turn.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/governance-inspector.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/governance-inspector.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/intake-surface.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/intake-surface.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/mcp-consumer.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/mcp-consumer.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/schedules-sidebar.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/schedules-sidebar.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/theme-picker.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/theme-picker.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/help.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/standard/help-groups.ts",
+      "path": [
+        "src/commands/help.ts",
+        "src/standard/service.ts",
+        "src/standard/help-groups.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/approvals-inspector.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/approvals-inspector.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/approvals-sidebar.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/approvals-sidebar.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/autoreview-surface.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/autoreview-surface.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/background-job-inspector.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/background-job-inspector.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/bus-panel.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/bus-panel.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/external-diff-sidebar.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/external-diff-sidebar.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/help-modal.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/standard/help-groups.ts",
+      "path": [
+        "src/tui/help-modal.ts",
+        "src/standard/service.ts",
+        "src/standard/help-groups.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/jev-edit-guard-inspector.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/jev-edit-guard-inspector.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/jev-profile-inspector.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/jev-profile-inspector.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/permissions-inspector.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "path": [
+        "src/tui/permissions-inspector.ts",
+        "src/tui/modal-host.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/acp/commands.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {AGENT_SLASH_COMMANDS} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 1, from src/commands/shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-commands.confusable.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {AGENT_SLASH_COMMANDS} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/help-grouped.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {readlineAgentHelpText, runShell} of src/commands/shell.ts (hop 1, from src/commands/shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/help.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {HELP_GROUPS} of src/standard/service.ts (hop 1, from src/standard/help-groups.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/providers.subscription.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {filterConnectedDetectedProviders} of src/tui/tui-shell.ts (hop 1, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-agent-repl.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {readlineAgentHelpText, runAgentRepl} of src/commands/shell.ts (hop 1, from src/commands/shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runShell, shellCommand} of src/commands/shell.ts (hop 1, from src/commands/shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-chat-preservation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runShell} of src/commands/shell.ts (hop 1, from src/commands/shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 1, from src/commands/shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {shellCommand} of src/commands/shell.ts (hop 1, from src/commands/shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runShell, shellCommand} of src/commands/shell.ts (hop 1, from src/commands/shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {KeypressEvent, SelectProviderModelOptions, filterConnectedDetectedProviders, launchTuiAgentShell, onKeypress, pickModelInTui, pickSearchProviderStep, pickSessionInTui, probeProviderConnection, searchProviderWizardInTui, selectProviderModelInTui} of src/tui/tui-shell.ts (hop 1, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/docs/own-answer-docs.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {findCliEntry, findSlashEntry} of src/standard/help-groups.ts (hop 1, from src/standard/help-groups.ts): run it, it is not read"
+    },
+    {
+      "file": "src/docs/remote-commands-docs.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {REMOTE_COMMANDS, REMOTE_REFUSED} of src/remote/command-gateway.ts (hop 1, from src/remote/command-gateway.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/ask-user-topic.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/shell-bridge.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RemoteBridge} of src/remote/shell-bridge.ts (hop 1, from src/remote/shell-bridge.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/command-busy.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/command.test-helpers.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandHarness} of src/remote/command.test-helpers.ts (hop 1, from src/remote/command.test-helpers.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/command-confirm.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/command.test-helpers.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandHarness} of src/remote/command.test-helpers.ts (hop 1, from src/remote/command.test-helpers.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/command-menu.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {REMOTE_COMMANDS, REMOTE_REFUSED, classifyRemoteCommand, menuNamesAreValid, remoteHelpText, remoteMenu} of src/remote/command-gateway.ts (hop 1, from src/remote/command-gateway.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/command-model.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/command.test-helpers.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandHarness} of src/remote/command.test-helpers.ts (hop 1, from src/remote/command.test-helpers.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/command-output.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {remoteMenu} of src/remote/command-gateway.ts (hop 1, from src/remote/command-gateway.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/command-panel.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/command.test-helpers.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandHarness} of src/remote/command.test-helpers.ts (hop 1, from src/remote/command.test-helpers.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/command-queued.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {REMOTE_COMMANDS, REMOTE_REFUSED, classifyRemoteCommand, remoteMenu} of src/remote/command-gateway.ts (hop 1, from src/remote/command-gateway.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/command-review-fixes.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/command.test-helpers.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandHarness} of src/remote/command.test-helpers.ts (hop 1, from src/remote/command.test-helpers.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/command-secrets.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/command.test-helpers.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandHarness} of src/remote/command.test-helpers.ts (hop 1, from src/remote/command.test-helpers.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/command-session.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/command.test-helpers.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandHarness} of src/remote/command.test-helpers.ts (hop 1, from src/remote/command.test-helpers.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/message-state.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/shell-bridge.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RemoteBridge} of src/remote/shell-bridge.ts (hop 1, from src/remote/shell-bridge.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/mirror-undelivered.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/shell-bridge.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RemoteBridge} of src/remote/shell-bridge.ts (hop 1, from src/remote/shell-bridge.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/progress-notes.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/command.test-helpers.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandHarness} of src/remote/command.test-helpers.ts (hop 1, from src/remote/command.test-helpers.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/shell-bridge.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/shell-bridge.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RemoteBridge} of src/remote/shell-bridge.ts (hop 1, from src/remote/shell-bridge.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/stop.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {classifyRemoteCommand, remoteHelpText, remoteMenu} of src/remote/command-gateway.ts (hop 1, from src/remote/command-gateway.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/topic-history.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {REMOTE_COMMANDS} of src/remote/command-gateway.ts (hop 1, from src/remote/command-gateway.ts): run it, it is not read"
+    },
+    {
+      "file": "src/standard/commands-by-task.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {renderCommandsByTaskMarkdown} of src/standard/help-groups.ts (hop 1, from src/standard/help-groups.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/ask-user-transcript.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandsForMode} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/boot-animation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {onKeypress} of src/tui/tui-shell.ts (hop 1, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/channels-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {HELP_GROUPS} of src/standard/help-groups.ts (hop 1, from src/standard/help-groups.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runShell} of src/commands/shell.ts (hop 1, from src/commands/shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/composer-choice.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandsForMode} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/decisions-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {findAgentCommand} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/game-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/game-modal.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {modelMove, presentGame} of src/tui/game-modal.ts (hop 1, from src/tui/game-modal.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/model-session-picker-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {pickModelInTui, pickSessionInTui} of src/tui/tui-shell.ts (hop 1, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/operator-confirmations.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {HELP_GROUPS} of src/standard/help-groups.ts (hop 1, from src/standard/help-groups.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/picker-theme.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {selectProviderModelInTui} of src/tui/tui-shell.ts (hop 1, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/project-context-inspector.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {OpenModalInput} of src/tui/modal-host.ts (hop 1, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {HELP_GROUPS} of src/standard/help-groups.ts (hop 1, from src/standard/help-groups.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/remote-queue-wiring.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/shell-bridge.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RemoteBridge} of src/remote/shell-bridge.ts (hop 1, from src/remote/shell-bridge.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/review-buttons.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandsForMode} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/shell-chrome.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandsForMode} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/sidebar-cards.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandsForMode} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/sidebar-geometry.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandsForMode} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/subscription-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {selectProviderModelInTui} of src/tui/tui-shell.ts (hop 1, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/theme-picker.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {commandsForMode} of src/commands/agent-commands.ts (hop 1, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/tui-session-lease.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {runLeasedChatShell} of src/commands/shell.ts (hop 1, from src/commands/shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {filterConnectedDetectedProviders, onKeypress, pickSearchProviderStep, searchProviderWizardInTui} of src/tui/tui-shell.ts (hop 1, from src/tui/tui-shell.ts): run it, it is not read"
+    },
+    {
+      "file": "src/product/never-gates.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {*} of src/tui/product-open-surface.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/channels-serialize.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RemoteHub} of src/remote/hub.ts (hop 2, from src/remote/command-gateway.ts): run it, it is not read"
+    },
+    {
+      "file": "src/remote/orphan.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {RemoteHub} of src/remote/hub.ts (hop 2, from src/remote/command-gateway.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/ac-kinds-surface.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {presentFlows} of src/tui/flow-inspector.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/approvals-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openApprovals} of src/tui/approvals-inspector.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/approvals-sidebar.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {routeApprovalsCommand} of src/tui/approvals-sidebar.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/autoreview-surface.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {routeAutoReviewCommand} of src/tui/autoreview-surface.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/ci-triage-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openCiTriage} of src/tui/ci-triage-inspector.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/conform-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openConform} of src/tui/conform-inspector.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/digest-surface.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {routeSchedulesCommand} of src/tui/schedules-sidebar.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/external-diff-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openExternalDiff} of src/tui/external-diff-modal.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/external-diff-sidebar.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {routeExternalDiffCommand} of src/tui/external-diff-sidebar.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/flow-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {presentFlows} of src/tui/flow-inspector.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/games/modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/games/model-turn.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {presentGamesModal} of src/tui/games/modal.ts (hop 2, from src/tui/games/model-turn.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/governance-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openGovernanceReport} of src/tui/governance-inspector.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/governance-panel.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/help-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openHelpModal} of src/tui/help-modal.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/intake-surface.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountIntakeSidebar, routeIntakeCommand} of src/tui/intake-surface.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/jev-profile-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openJevProfile} of src/tui/jev-profile-inspector.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/mcp-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {presentMcpTools} of src/tui/mcp-inspector.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/ops-sidebar.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {routeOpsCommand} of src/tui/ops-sidebar.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/permissions-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openPermissions} of src/tui/permissions-inspector.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/research-sync-panel.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/review-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {presentReview} of src/tui/review-inspector.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/reviews-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/rewind-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openRewind} of src/tui/rewind-inspector.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/routing-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openRouting} of src/tui/routing-inspector.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/schedules-sidebar.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {routeSchedulesCommand} of src/tui/schedules-sidebar.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/session-info.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {presentSessionInfo} of src/tui/session-info.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/settings-actions.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openSettings} of src/tui/settings-modal.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/settings-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openSettings} of src/tui/settings-modal.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/setup-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openSetupModal} of src/tui/setup-modal.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/triggers-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openTriggers} of src/tui/triggers-inspector.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/triggers-panel.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {mountChrome} of src/tui/ops-sidebar.test-helpers.ts (hop 2, from src/commands/agent-commands.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/turn-guard-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {openTurnGuard} of src/tui/turn-guard-inspector.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/tui/workspace-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "test-consumer",
+      "detail": "exercises {presentWorkspace} of src/tui/workspace-inspector.ts (hop 2, from src/tui/modal-host.ts): run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-approval-binding.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-approval-context-p0.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-approval-context.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-bus-notification.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-destructive-gate.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-fewer-prompts.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-granted-json.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-hooks.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-instruction-roster.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-lifecycle-hooks.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-orchestrator-log.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-question-axis.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-review-gate.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-rewind-seam.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-task-notification.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-tool-call-budget.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-trust-orchestration.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent-untrusted-batch.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.context-guard.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.error-hint.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.host-contracts.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.overflow-retry.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.recovery.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.repeat-guard-prune.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.slate-trail.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agent.working-memory.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agents-catalog-commands.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agents-external-antigravity.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agents-external-run.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agents-external-write.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agents-external.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/agents.monitor.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-approval.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/shell.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-bus.process.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/shell.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-events.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/shell.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-headless-sigint.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/shell.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-lease.process.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/shell.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-pause.process.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/shell.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-preservation-signal.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/shell.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-pty-launch.smoke.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/shell.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-starting-line.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/shell.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-startup-exit.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/shell.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/shell-task-registry-wiring.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/shell.ts: run it, it is not read"
+    },
+    {
+      "file": "src/commands/trigger-agent-task.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/commands/agent.ts: run it, it is not read"
+    },
+    {
+      "file": "src/tui/balance-panel.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/tui/balance-panel.ts",
+      "source": "related-test",
+      "reason": "test-consumer",
+      "detail": "a test named after the changed src/tui/balance-panel.ts: run it, it is not read"
+    },
+    {
+      "file": "src/tui/project-context-inspector.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 63 at hop 1, fan-in 2, reached via src/tui/modal-host.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/remote-queue-wiring.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/remote/shell-bridge.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 63 at hop 1, fan-in 2, reached via src/remote/shell-bridge.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/rewind-inspector.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 63 at hop 1, fan-in 2, reached via src/tui/modal-host.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/routing-inspector.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 63 at hop 1, fan-in 2, reached via src/tui/modal-host.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/setup-modal.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 63 at hop 1, fan-in 2, reached via src/tui/modal-host.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/sidebar-cards.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 63 at hop 1, fan-in 2, reached via src/tui/modal-host.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/subagent-inspector.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 63 at hop 1, fan-in 2, reached via src/tui/modal-host.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/triggers-inspector.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 63 at hop 1, fan-in 2, reached via src/tui/modal-host.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/turn-guard-inspector.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 63 at hop 1, fan-in 2, reached via src/tui/modal-host.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/workspace-inspector.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 63 at hop 1, fan-in 2, reached via src/tui/modal-host.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/games/modal.test-helpers.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 63 at hop 1, fan-in 1, reached via src/tui/modal-host.ts. It was NOT reviewed."
+    },
+    {
+      "file": "fixtures/routing-shell-pty.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 63 at hop 1, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/generate-commands-by-task.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 63 at hop 1, fan-in 0, reached via src/standard/help-groups.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/remote/remote.test-helpers.ts",
+      "hop": 2,
+      "fanIn": 54,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 54 of 63 at hop 2, fan-in 54, reached via src/remote/command-gateway.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 55 of 63 at hop 2, fan-in 12, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/scheduler/digest-delivery.ts",
+      "hop": 2,
+      "fanIn": 10,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 56 of 63 at hop 2, fan-in 10, reached via src/remote/command-gateway.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/remote/http-surface.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 57 of 63 at hop 2, fan-in 6, reached via src/remote/command-gateway.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/serve-digest.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 58 of 63 at hop 2, fan-in 4, reached via src/remote/command-gateway.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/remote/service.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 59 of 63 at hop 2, fan-in 4, reached via src/remote/command-gateway.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/remote/bootstrap.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 60 of 63 at hop 2, fan-in 3, reached via src/remote/command-gateway.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/server.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 61 of 63 at hop 2, fan-in 2, reached via src/standard/help-groups.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/remote/channels.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 62 of 63 at hop 2, fan-in 2, reached via src/remote/command-gateway.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/turn-loop.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/remote/shell-bridge.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 63 of 63 at hop 2, fan-in 2, reached via src/remote/shell-bridge.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/tools.ts",
+      "hop": 1,
+      "fanIn": 12,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runValidate} from src/standard/service.ts; changed: {HELP_GROUPS, entriesInGroup, findCliEntry, findEntry, findSlashEntry, renderCliGroupHelp, renderCommandsByTaskMarkdown, renderGroupedCliHelp, renderGroupedNamedHelp, renderGroupedSlashHelp}"
+    },
+    {
+      "file": "src/commands/doctor.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runDoctor} from src/standard/service.ts; changed: {HELP_GROUPS, entriesInGroup, findCliEntry, findEntry, findSlashEntry, renderCliGroupHelp, renderCommandsByTaskMarkdown, renderGroupedCliHelp, renderGroupedNamedHelp, renderGroupedSlashHelp}"
+    },
+    {
+      "file": "src/tui/approval-mirror.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/remote/shell-bridge.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {RemoteApprovalAnswer} from src/remote/shell-bridge.ts; changed: {RemoteBridge}"
+    },
+    {
+      "file": "src/tui/operator-confirmations.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/remote/shell-bridge.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {RemoteApprovalAnswer} from src/remote/shell-bridge.ts; changed: {RemoteBridge}"
+    },
+    {
+      "file": "src/commands/standard.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runCapabilities, runDoctor, runValidate} from src/standard/service.ts; changed: {HELP_GROUPS, entriesInGroup, findCliEntry, findEntry, findSlashEntry, renderCliGroupHelp, renderCommandsByTaskMarkdown, renderGroupedCliHelp, renderGroupedNamedHelp, renderGroupedSlashHelp}"
+    },
+    {
+      "file": "src/commands/acp.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {GRANT_REFRESH_TIMEOUT_MS, realMakeProvider, resolveTuiStartup, withSavedBaseUrls} from src/commands/shell.ts; changed: {readlineAgentHelpText, runAgentRepl, runLeasedChatShell, runShell, shellCommand}"
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/pr940.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/slices/slice-10.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-418/slices/slice-11.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/consolidated-report.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/dispositions.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/pr978.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/scope.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/slices/slice-02.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/slices/slice-03.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/slices/slice-04.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/slices/slice-05.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/review-419/slices/slice-06.diff",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/018-2026-07-13-keryx-harness-w14-real-provider/context.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/019-2026-07-13-keryx-harness-release1-boundary/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/019-2026-07-13-keryx-harness-release1-boundary/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/020-2026-07-13-keryx-harness-ollama-cli/context.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/020-2026-07-13-keryx-harness-ollama-cli/tasks.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/057-2026-07-19-keryx-agent-loop-guard/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/057-2026-07-19-keryx-agent-loop-guard/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/057-2026-07-19-keryx-agent-loop-guard/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/057-2026-07-19-keryx-agent-loop-guard/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/057-2026-07-19-keryx-agent-loop-guard/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/130-2026-08-01-close-round-4-findings-on-pr-216-bound-t/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/130-2026-08-01-close-round-4-findings-on-pr-216-bound-t/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/130-2026-08-01-close-round-4-findings-on-pr-216-bound-t/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/132-2026-08-01-fix-round-pr219/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/132-2026-08-01-fix-round-pr219/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/132-2026-08-01-fix-round-pr219/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/132-2026-08-01-fix-round-pr219/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/142-2026-08-10-keryx-version-update-checks-for-shell-an/change-report.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/142-2026-08-10-keryx-version-update-checks-for-shell-an/metrics/run-2026-08-10T21-23-46Z.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/151-2026-08-12-shared-agent-context-phase-5-opt-in-poli/reviews/2026-08-12-ingest-273/report.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/163-2026-08-16-slate-phase-4-ephemeral-subagent-slate-a/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/167-2026-08-17-tui-busy-input-routing/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/167-2026-08-17-tui-busy-input-routing/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/167-2026-08-17-tui-busy-input-routing/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/167-2026-08-17-tui-busy-input-routing/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/170-2026-08-18-tui-queue-dock-move-queue-off-transcript/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/170-2026-08-18-tui-queue-dock-move-queue-off-transcript/description.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/171-2026-08-18-multi-agent-engine-phase-d-concurrent-sp/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/177-2026-08-19-tool-call-loop-continuity/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/187-2026-08-20-keryx-mcp-client-stdio-client-codex-elic/context.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/187-2026-08-20-keryx-mcp-client-stdio-client-codex-elic/flow.json",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/187-2026-08-20-keryx-mcp-client-stdio-client-codex-elic/journal.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/187-2026-08-20-keryx-mcp-client-stdio-client-codex-elic/plan.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/219-2026-09-02-make-tui-foreground-operations-cancellab/acceptance-criteria.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": ".metaproject/flows/219-2026-09-02-make-tui-foreground-operations-cancellab/change-report.md",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/remote-provider-hooks.test.ts",
+      "source": "text-link",
+      "reason": "text-hub",
+      "detail": "event \"abort\" (changed in src/tui/remote-provider-hooks.test.ts) is mentioned by 656 files, over the 20-file hub limit; its consumers are not followed one by one"
+    },
+    {
+      "file": "src/commands/acp.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {resolveTuiStartup} from src/commands/shell.ts; changed: {readlineAgentHelpText, runAgentRepl, runLeasedChatShell, runShell, shellCommand}"
+    },
+    {
+      "file": "src/commands/approval-cause.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/shell-bridge.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {describeApprovalForTopic} from src/remote/shell-bridge.ts; changed: {RemoteBridge}"
+    },
+    {
+      "file": "src/commands/operator-confirm-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {operatorCardDialog} from src/tui/tui-shell.ts; changed: {KeypressEvent, SelectProviderModelOptions, filterConnectedDetectedProviders, launchTuiAgentShell, onKeypress, pickModelInTui, pickSearchProviderStep, pickSessionInTui, probeProviderConnection, searchProviderWizardInTui, selectProviderModelInTui}"
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ShellIO} from src/commands/shell.ts; changed: {readlineAgentHelpText, runAgentRepl, runLeasedChatShell, runShell, shellCommand}"
+    },
+    {
+      "file": "src/harness/provider-catalog.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {resolveTuiStartup} from src/commands/shell.ts; changed: {readlineAgentHelpText, runAgentRepl, runLeasedChatShell, runShell, shellCommand}"
+    },
+    {
+      "file": "src/mcp/mcp.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runValidate} from src/standard/service.ts; changed: {HELP_GROUPS, entriesInGroup, findCliEntry, findEntry, findSlashEntry, renderCliGroupHelp, renderCommandsByTaskMarkdown, renderGroupedCliHelp, renderGroupedNamedHelp, renderGroupedSlashHelp}"
+    },
+    {
+      "file": "src/remote/operator-card-length.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/shell-bridge.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {operatorCardTooLongForTopic} from src/remote/shell-bridge.ts; changed: {RemoteBridge}"
+    },
+    {
+      "file": "src/remote/picker-callbacks.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/command.test-helpers.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SECRET} from src/remote/command.test-helpers.ts; changed: {CommandHarnessOptions, commandHarness}"
+    },
+    {
+      "file": "src/review/review-system.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {parseShellCliFlags} from src/commands/shell.ts; changed: {readlineAgentHelpText, runAgentRepl, runLeasedChatShell, runShell, shellCommand}"
+    },
+    {
+      "file": "src/standard/standard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/standard/help-groups.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runCapabilities, runValidate} from src/standard/service.ts; changed: {HELP_GROUPS, entriesInGroup, findCliEntry, findEntry, findSlashEntry, renderCliGroupHelp, renderCommandsByTaskMarkdown, renderGroupedCliHelp, renderGroupedNamedHelp, renderGroupedSlashHelp}"
+    },
+    {
+      "file": "src/tui/approval-mirror.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/shell-bridge.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {RemoteApprovalAnswer} from src/remote/shell-bridge.ts; changed: {RemoteBridge}"
+    },
+    {
+      "file": "src/tui/background-job-inspector.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {MODAL_PANEL_INNER_WIDTH, formatModalFooter} from src/tui/modal-host.ts; changed: {OpenModalInput, destroyModalHost, modalHides, openModal}"
+    },
+    {
+      "file": "src/tui/card-lifecycle.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/shell-bridge.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {RemoteApprovalAnswer} from src/remote/shell-bridge.ts; changed: {RemoteBridge}"
+    },
+    {
+      "file": "src/tui/custom-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {validateOptionalWizardNumber} from src/tui/tui-shell.ts; changed: {KeypressEvent, SelectProviderModelOptions, filterConnectedDetectedProviders, launchTuiAgentShell, onKeypress, pickModelInTui, pickSearchProviderStep, pickSessionInTui, probeProviderConnection, searchProviderWizardInTui, selectProviderModelInTui}"
+    },
+    {
+      "file": "src/tui/external-antigravity-surfaces.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {parseDelegateCommand} from src/commands/agent-commands.ts; changed: {AGENT_SLASH_COMMANDS, commandsForMode, describeUnavailableCommand, filterCommands, findAgentCommand, removedCommandHint, renderCommandHelp}"
+    },
+    {
+      "file": "src/tui/external-inspector.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {MODAL_PANEL_INNER_WIDTH, formatModalFooter} from src/tui/modal-host.ts; changed: {OpenModalInput, destroyModalHost, modalHides, openModal}"
+    },
+    {
+      "file": "src/tui/session-picker-acp.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {sessionPickerOptions} from src/tui/tui-shell.ts; changed: {KeypressEvent, SelectProviderModelOptions, filterConnectedDetectedProviders, launchTuiAgentShell, onKeypress, pickModelInTui, pickSearchProviderStep, pickSessionInTui, probeProviderConnection, searchProviderWizardInTui, selectProviderModelInTui}"
+    },
+    {
+      "file": "src/tui/subagent-inspector.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {MODAL_PANEL_INNER_WIDTH, formatModalFooter} from src/tui/modal-host.ts; changed: {OpenModalInput, destroyModalHost, modalHides, openModal}"
+    },
+    {
+      "file": "src/tui/turn-loop.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/remote/shell-bridge.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {TG_SOURCE} from src/remote/shell-bridge.ts; changed: {RemoteBridge}"
+    },
+    {
+      "file": "src/remote/remote.http.test-helpers.ts",
+      "hop": 2,
+      "fanIn": 25,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {RemoteEvent} from src/remote/hub.ts; changed: {RemoteHub}"
+    },
+    {
+      "file": "src/intake/intake-actions.test-helpers.ts",
+      "hop": 2,
+      "fanIn": 13,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {IntakeCallbackPress, ServiceSendResult} from src/remote/hub.ts; changed: {RemoteHub}"
+    },
+    {
+      "file": "src/intake/press.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {IntakeCallbackHandler, IntakeCallbackPress, ServiceSendResult} from src/remote/hub.ts; changed: {RemoteHub}"
+    },
+    {
+      "file": "src/commands/agents-external.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {VERSION} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, ctx, dash, dashboard, doctor, external, gdgraph, modules, orient, permissions, printCommandHelp, projects, providers, routing, serve, setup, skills, status, sync, update, wiki}"
+    },
+    {
+      "file": "src/intake/card.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ServiceSendResult} from src/remote/hub.ts; changed: {RemoteHub}"
+    },
+    {
+      "file": "src/remote/pairing.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {HubTimers, realTimers} from src/remote/hub.ts; changed: {RemoteHub}"
+    },
+    {
+      "file": "src/tui/background-job-session.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SIDEBAR_TEXT_WIDTH} from src/tui/shell-chrome.ts; changed: {createShellChrome}"
+    },
+    {
+      "file": "src/tui/subagent-session.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SIDEBAR_TEXT_WIDTH} from src/tui/shell-chrome.ts; changed: {createShellChrome}"
+    },
+    {
+      "file": "src/tui/filter-list.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {selectThemeColors} from src/tui/shell-chrome.ts; changed: {createShellChrome}"
+    },
+    {
+      "file": "src/tui/tui-session-lease.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ChoiceOption} from src/tui/composer-choice.ts; changed: {showComposerChoice, showComposerChoiceDetailed}"
+    },
+    {
+      "file": "src/tui/ask-user-transcript.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ComposerChoiceResult} from src/tui/composer-choice.ts; changed: {showComposerChoice, showComposerChoiceDetailed}"
+    },
+    {
+      "file": "src/tui/boot-animation.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SIDEBAR_WIDTH} from src/tui/shell-chrome.ts; changed: {createShellChrome}"
+    },
+    {
+      "file": "src/tui/ci-triage-source.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CiTriageJobItem, CiTriageListRead, CiTriageRunResult} from src/tui/ci-triage-inspector.ts; changed: {openCiTriage}"
+    },
+    {
+      "file": "src/commands/serve-intake.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {IntakeCallbackHandler} from src/remote/hub.ts; changed: {RemoteHub}"
+    },
+    {
+      "file": "src/remote/run-limits.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {HubTimers, realTimers} from src/remote/hub.ts; changed: {RemoteHub}"
+    },
+    {
+      "file": "src/tui/conform-source.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {ConformClauseRow, ConformRunOutcome, ConformSetupRead, ConformTargetOption} from src/tui/conform-inspector.ts; changed: {openConform}"
+    },
+    {
+      "file": "src/commands/approvals.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {groupUsage} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, ctx, dash, dashboard, doctor, external, gdgraph, modules, orient, permissions, printCommandHelp, projects, providers, routing, serve, setup, skills, status, sync, update, wiki}"
+    },
+    {
+      "file": "src/commands/permissions-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {groupUsage} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, ctx, dash, dashboard, doctor, external, gdgraph, modules, orient, permissions, printCommandHelp, projects, providers, routing, serve, setup, skills, status, sync, update, wiki}"
+    },
+    {
+      "file": "src/commands/review-host-question.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {formatDecisionsLines} from src/tui/decisions-surface.ts; changed: {routeDecisionsCommand}"
+    },
+    {
+      "file": "src/commands/skills-references.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {knownSubcommandsFor} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, ctx, dash, dashboard, doctor, external, gdgraph, modules, orient, permissions, printCommandHelp, projects, providers, routing, serve, setup, skills, status, sync, update, wiki}"
+    },
+    {
+      "file": "src/commands/skills-remove.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {knownSubcommandsFor} from src/cli-registry.ts; changed: {CLI_ROUTES, approvals, auth, ctx, dash, dashboard, doctor, external, gdgraph, modules, orient, permissions, printCommandHelp, projects, providers, routing, serve, setup, skills, status, sync, update, wiki}"
+    },
+    {
+      "file": "src/decisions/round3.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {runDecisionsFollowup} from src/tui/decisions-surface.ts; changed: {routeDecisionsCommand}"
+    },
+    {
+      "file": "src/remote/allowlist.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CallbackDelivery} from src/remote/hub.ts; changed: {RemoteHub}"
+    },
+    {
+      "file": "src/remote/history-host.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {HISTORY_COMMAND, isHistoryCommand, readlineHistoryText} from src/tui/remote-control-surface.ts; changed: {openRemoteControl}"
+    },
+    {
+      "file": "src/remote/intake-callback-route.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CallbackDelivery, INTAKE_EARLY_ACK_MS, INTAKE_EARLY_ACK_TEXT, INTAKE_HANDLER_TIMEOUT_MS, IntakeCallbackHandler, IntakeCallbackPress} from src/remote/hub.ts; changed: {RemoteHub}"
+    },
+    {
+      "file": "src/remote/run-limits.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {HubTimers} from src/remote/hub.ts; changed: {RemoteHub}"
+    },
+    {
+      "file": "src/remote/token-secrecy.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/remote/command-gateway.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {RemoteEvent} from src/remote/hub.ts; changed: {RemoteHub}"
+    },
+    {
+      "file": "src/tui/ci-triage-source.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CiTriageJobItem} from src/tui/ci-triage-inspector.ts; changed: {openCiTriage}"
+    },
+    {
+      "file": "src/tui/execution-plan-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {PLAN_EMPTY_TEXT, PlanModalInput, formatPlanLegend, formatPlanMeta, formatPlanRow, formatPlanSummary, planCounts, planProgressBar, presentExecutionPlanInspector, stylePlanText} from src/tui/execution-plan-inspector.ts; changed: {openExecutionPlanInspector}"
+    },
+    {
+      "file": "src/tui/flow-hygiene.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {formatFlowDetailLines, formatFlowListLines, formatFlowListText} from src/tui/flow-inspector.ts; changed: {openFlows, presentFlows}"
+    },
+    {
+      "file": "src/tui/flow-inspector-interrupted.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {formatFlowDetailLines, formatFlowListLines, formatFlowListText} from src/tui/flow-inspector.ts; changed: {openFlows, presentFlows}"
+    },
+    {
+      "file": "src/tui/flow-inspector-outcome-author.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {formatFlowDetailLines} from src/tui/flow-inspector.ts; changed: {openFlows, presentFlows}"
+    },
+    {
+      "file": "src/tui/flow-inspector-uncommitted.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {formatFlowDetailLines} from src/tui/flow-inspector.ts; changed: {openFlows, presentFlows}"
+    },
+    {
+      "file": "src/tui/jev-edit-guard-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {EDIT_GUARD_COMMAND, EditGuardStatusSnapshot, formatEditGuardLines, isEditGuardCommand, renderEditGuardSidebarValue} from src/tui/jev-edit-guard-inspector.ts; changed: {openEditGuard}"
+    },
+    {
+      "file": "src/tui/mcp-consumer.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {MCP_CONSUMER_COMMAND, buildConsumerModel, collapseHome, consumerActionFor, formatConsumerModalRow, formatConsumerRow, isMcpConsumerCommand, presentMcpConsumer, renderConsumerLines} from src/tui/mcp-consumer.ts; changed: {openMcpConsumer}"
+    },
+    {
+      "file": "src/tui/mcp-trust-shell-wiring.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {isMcpConsumerCommand} from src/tui/mcp-consumer.ts; changed: {openMcpConsumer}"
+    },
+    {
+      "file": "src/tui/origin-surface.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {formatFlowDetailLines, isFlowsCommand} from src/tui/flow-inspector.ts; changed: {openFlows, presentFlows}"
+    },
+    {
+      "file": "src/tui/product-open-surface.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {PresentProductOptions, isProductCommand, presentProductOpen} from src/tui/product-open-surface.ts; changed: {openProduct}"
+    },
+    {
+      "file": "src/tui/review-panel.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {presentReviews, renderReviewsText} from src/tui/reviews-inspector.ts; changed: {openReviews}"
+    },
+    {
+      "file": "src/tui/review-parity-visibility.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {isReviewParityCommand, projectReviewsParityLines} from src/tui/reviews-inspector.ts; changed: {openReviews}"
+    },
+    {
+      "file": "src/tui/review-readiness.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {isReviewReadinessCommand, projectReviewsReadinessLines} from src/tui/reviews-inspector.ts; changed: {openReviews}"
+    },
+    {
+      "file": "src/tui/schedules-inspector.allowlist.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {grantsLines, runsLines} from src/tui/schedules-inspector.ts; changed: {openScheduleDetail, openSchedulesList}"
+    },
+    {
+      "file": "src/tui/sidebar-cards-read.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {collectRenderableText} from src/tui/sidebar-cards.ts; changed: {openSidebarCard}"
+    },
+    {
+      "file": "src/tui/subagent-session.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {SIDEBAR_TEXT_WIDTH} from src/tui/shell-chrome.ts; changed: {createShellChrome}"
+    },
+    {
+      "file": "src/tui/trigger-ledger.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {appendRuns, makeProject, manualInterval, writeReport, writeTriggers} from src/tui/ops-sidebar.test-helpers.ts; changed: {mountChrome}"
+    },
+    {
+      "file": "src/tui/trigger-run-now.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {CLI, appendRuns, makeProject, writeTriggers} from src/tui/ops-sidebar.test-helpers.ts; changed: {mountChrome}"
+    },
+    {
+      "file": "src/tui/tui-bus.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/tui/modal-host.ts",
+      "source": "graph",
+      "reason": "unrelated-symbol",
+      "detail": "imports {formatBusLeasesLines, formatBusLogLines, formatBusPeersLines} from src/tui/bus-panel.ts; changed: {openBus}"
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/description.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/resolved/T2.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/resolved/T2b.implement.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/471-2026-10-22-connect-providers-tabs/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "README.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/commands-by-task.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/guides/drive-keryx-remotely.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/harness.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/hooks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/onboarding.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 51,
+    "changedFilesResolved": 35,
+    "changedFilesUnresolved": 16,
+    "candidates": 201,
+    "retained": 40,
+    "droppedByCap": 23,
+    "droppedByPreFilter": 0,
+    "droppedUnrelatedSymbol": 72,
+    "droppedHubDamped": 0,
+    "droppedTextHub": 50,
+    "droppedTestConsumer": 138,
+    "textLinksAdded": 0,
+    "relatedTestsAdded": 48,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 40
+    }
+  },
+  "graph": {
+    "nodes": 3281,
+    "edges": 11780
+  },
+  "reach": {
+    "mode": "symbol",
+    "seeds": [
+      {
+        "file": "src/commands/agent-commands.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/commands/agent-commands.ts",
+        "names": [
+          "AGENT_SLASH_COMMANDS",
+          "commandsForMode",
+          "describeUnavailableCommand",
+          "filterCommands",
+          "findAgentCommand",
+          "removedCommandHint",
+          "renderCommandHelp"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: AGENT_SLASH_COMMANDS, commandsForMode, describeUnavailableCommand, filterCommands, findAgentCommand, removedCommandHint, renderCommandHelp"
+      },
+      {
+        "file": "src/commands/agent.ts",
+        "names": [],
+        "mode": "symbol",
+        "detail": "the change touches no exported declaration"
+      },
+      {
+        "file": "src/commands/providers.models-failure.test.ts",
+        "names": [],
+        "mode": "symbol",
+        "detail": "the change touches no exported declaration"
+      },
+      {
+        "file": "src/commands/shell-grant-refresh.test.ts",
+        "names": [],
+        "mode": "symbol",
+        "detail": "the change touches no exported declaration"
+      },
+      {
+        "file": "src/commands/shell-slash-registry.test.ts",
+        "names": [],
+        "mode": "symbol",
+        "detail": "the change touches no exported declaration"
+      },
+      {
+        "file": "src/commands/shell-subscription-selection.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/commands/shell-types.ts",
+        "names": [],
+        "mode": "symbol",
+        "detail": "the change touches no exported declaration"
+      },
+      {
+        "file": "src/commands/shell.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/commands/shell.ts",
+        "names": [
+          "readlineAgentHelpText",
+          "runAgentRepl",
+          "runLeasedChatShell",
+          "runShell",
+          "shellCommand"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: readlineAgentHelpText, runAgentRepl, runLeasedChatShell, runShell, shellCommand"
+      },
+      {
+        "file": "src/remote/command-connect.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/remote/command-gateway.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change removes or edits module-level code at the base"
+      },
+      {
+        "file": "src/remote/command-gateway.ts",
+        "names": [
+          "REMOTE_COMMANDS",
+          "REMOTE_REFUSED",
+          "classifyRemoteCommand",
+          "menuNamesAreValid",
+          "remoteHelpText",
+          "remoteMenu"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: REMOTE_COMMANDS, REMOTE_REFUSED, classifyRemoteCommand, menuNamesAreValid, remoteHelpText, remoteMenu"
+      },
+      {
+        "file": "src/remote/command-router.ts",
+        "names": [
+          "AddableProvider",
+          "ProviderOutcome",
+          "RemoteCommandHost",
+          "RemoteCommandRouter",
+          "RouterContext"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: AddableProvider, ProviderOutcome, RemoteCommandHost, RemoteCommandRouter, RouterContext"
+      },
+      {
+        "file": "src/remote/command.test-helpers.ts",
+        "names": [
+          "CommandHarnessOptions",
+          "commandHarness"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: CommandHarnessOptions, commandHarness"
+      },
+      {
+        "file": "src/remote/shell-bridge.ts",
+        "names": [
+          "RemoteBridge"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: RemoteBridge"
+      },
+      {
+        "file": "src/standard/help-groups.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/standard/help-groups.ts",
+        "names": [
+          "HELP_GROUPS",
+          "entriesInGroup",
+          "findCliEntry",
+          "findEntry",
+          "findSlashEntry",
+          "renderCliGroupHelp",
+          "renderCommandsByTaskMarkdown",
+          "renderGroupedCliHelp",
+          "renderGroupedNamedHelp",
+          "renderGroupedSlashHelp"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: HELP_GROUPS, entriesInGroup, findCliEntry, findEntry, findSlashEntry, renderCliGroupHelp, renderCommandsByTaskMarkdown, renderGroupedCliHelp, renderGroupedNamedHelp, renderGroupedSlashHelp"
+      },
+      {
+        "file": "src/tui/balance-panel.ts",
+        "names": [],
+        "mode": "symbol",
+        "detail": "the change touches no exported declaration"
+      },
+      {
+        "file": "src/tui/chat-shell.ts",
+        "names": [],
+        "mode": "symbol",
+        "detail": "the change touches no exported declaration"
+      },
+      {
+        "file": "src/tui/connect-modal.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/tui/connect-provider-buttons.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/tui/game-modal.ts",
+        "names": [
+          "modelMove",
+          "openGameModal",
+          "presentGame"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: modelMove, openGameModal, presentGame"
+      },
+      {
+        "file": "src/tui/games/model-turn.ts",
+        "names": [
+          "runGameModelTurn"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: runGameModelTurn"
+      },
+      {
+        "file": "src/tui/modal-host.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/tui/modal-host.ts",
+        "names": [
+          "OpenModalInput",
+          "destroyModalHost",
+          "modalHides",
+          "openModal"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: OpenModalInput, destroyModalHost, modalHides, openModal"
+      },
+      {
+        "file": "src/tui/model-picker-notice.test.ts",
+        "names": [],
+        "mode": "symbol",
+        "detail": "the change touches no exported declaration"
+      },
+      {
+        "file": "src/tui/provider-endpoint-retry.test.ts",
+        "names": [],
+        "mode": "symbol",
+        "detail": "the change touches no exported declaration"
+      },
+      {
+        "file": "src/tui/provider-probe.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/tui/queue-nav.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/tui/queue-nav.ts",
+        "names": [
+          "AddNavAction",
+          "stepAddNavAction"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: AddNavAction, stepAddNavAction"
+      },
+      {
+        "file": "src/tui/remote-provider-hooks.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      },
+      {
+        "file": "src/tui/remote-provider-hooks.ts",
+        "names": [
+          "NO_CREDENTIAL_TEXT",
+          "ProviderProbeOutcome",
+          "REMOTE_DEVICE_LOGIN_LIMIT_MS",
+          "RemoteDeviceLogin",
+          "RemoteDeviceLoginDeps",
+          "createConnectedProvidersCache",
+          "createRemoteDeviceLogin",
+          "remoteFailureText",
+          "testProviderForRemote"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: NO_CREDENTIAL_TEXT, ProviderProbeOutcome, REMOTE_DEVICE_LOGIN_LIMIT_MS, RemoteDeviceLogin, RemoteDeviceLoginDeps, createConnectedProvidersCache, createRemoteDeviceLogin, remoteFailureText, testProviderForRemote"
+      },
+      {
+        "file": "src/tui/tui-shell.ts",
+        "names": [
+          "KeypressEvent",
+          "SelectProviderModelOptions",
+          "filterConnectedDetectedProviders",
+          "launchTuiAgentShell",
+          "onKeypress",
+          "pickModelInTui",
+          "pickSearchProviderStep",
+          "pickSessionInTui",
+          "probeProviderConnection",
+          "searchProviderWizardInTui",
+          "selectProviderModelInTui"
+        ],
+        "mode": "symbol",
+        "detail": "changed exports: KeypressEvent, SelectProviderModelOptions, filterConnectedDetectedProviders, launchTuiAgentShell, onKeypress, pickModelInTui, pickSearchProviderStep, pickSessionInTui, probeProviderConnection, searchProviderWizardInTui, selectProviderModelInTui"
+      },
+      {
+        "file": "src/tui/wizard-modal.test.ts",
+        "names": "*",
+        "mode": "file-edge",
+        "detail": "the change touches module-level code (a side effect), not only exported declarations"
+      }
+    ],
+    "barrels": [
+      "src/core.ts",
+      "src/standard/service.ts",
+      "src/tui/games/index.ts"
+    ],
+    "textKeys": 1,
+    "textHubs": [
+      {
+        "key": "abort",
+        "kind": "event",
+        "via": "src/tui/remote-provider-hooks.test.ts",
+        "hits": 656
+      }
+    ],
+    "textSkipped": 0
+  },
+  "testsToRun": [
+    {
+      "file": "src/acp/commands.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "AGENT_SLASH_COMMANDS"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/cli.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/agent-approval-binding.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-approval-context-p0.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-approval-context.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-bus-notification.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-commands.confusable.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "AGENT_SLASH_COMMANDS"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/commands/agent-destructive-gate.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-fewer-prompts.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-granted-json.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-hooks.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-instruction-roster.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-lifecycle-hooks.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-orchestrator-log.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-question-axis.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-review-gate.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-rewind-seam.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-task-notification.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-tool-call-budget.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-trust-orchestration.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent-untrusted-batch.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.context-guard.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.error-hint.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.host-contracts.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.overflow-retry.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.recovery.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.repeat-guard-prune.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.slate-trail.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agent.working-memory.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agents-catalog-commands.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agents-external-antigravity.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agents-external-run.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agents-external-write.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agents-external.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/agents.monitor.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/help-grouped.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "readlineAgentHelpText",
+        "runShell"
+      ],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/help.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "HELP_GROUPS"
+      ],
+      "via": "src/standard/help-groups.ts"
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/commands/providers.subscription.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "filterConnectedDetectedProviders"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/shell-agent-repl.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "readlineAgentHelpText",
+        "runAgentRepl"
+      ],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-approval.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-bus.process.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runShell",
+        "shellCommand"
+      ],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-chat-preservation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runShell"
+      ],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-events.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-headless-sigint.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "shellCommand"
+      ],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-lease.process.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runShell",
+        "shellCommand"
+      ],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-pause.process.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-preservation-signal.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-pty-launch.smoke.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-starting-line.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-startup-exit.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-task-registry-wiring.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "KeypressEvent",
+        "SelectProviderModelOptions",
+        "filterConnectedDetectedProviders",
+        "launchTuiAgentShell",
+        "onKeypress",
+        "pickModelInTui",
+        "pickSearchProviderStep",
+        "pickSessionInTui",
+        "probeProviderConnection",
+        "searchProviderWizardInTui",
+        "selectProviderModelInTui"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/commands/trigger-agent-task.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/commands/agent.ts"
+    },
+    {
+      "file": "src/docs/own-answer-docs.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "findCliEntry",
+        "findSlashEntry"
+      ],
+      "via": "src/standard/help-groups.ts"
+    },
+    {
+      "file": "src/docs/remote-commands-docs.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "REMOTE_COMMANDS",
+        "REMOTE_REFUSED"
+      ],
+      "via": "src/remote/command-gateway.ts"
+    },
+    {
+      "file": "src/product/never-gates.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "*"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/remote/ask-user-topic.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RemoteBridge"
+      ],
+      "via": "src/remote/shell-bridge.ts"
+    },
+    {
+      "file": "src/remote/channels-serialize.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RemoteHub"
+      ],
+      "via": "src/remote/command-gateway.ts"
+    },
+    {
+      "file": "src/remote/command-busy.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandHarness"
+      ],
+      "via": "src/remote/command.test-helpers.ts"
+    },
+    {
+      "file": "src/remote/command-confirm.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandHarness"
+      ],
+      "via": "src/remote/command.test-helpers.ts"
+    },
+    {
+      "file": "src/remote/command-menu.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "REMOTE_COMMANDS",
+        "REMOTE_REFUSED",
+        "classifyRemoteCommand",
+        "menuNamesAreValid",
+        "remoteHelpText",
+        "remoteMenu"
+      ],
+      "via": "src/remote/command-gateway.ts"
+    },
+    {
+      "file": "src/remote/command-model.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandHarness"
+      ],
+      "via": "src/remote/command.test-helpers.ts"
+    },
+    {
+      "file": "src/remote/command-output.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "remoteMenu"
+      ],
+      "via": "src/remote/command-gateway.ts"
+    },
+    {
+      "file": "src/remote/command-panel.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandHarness"
+      ],
+      "via": "src/remote/command.test-helpers.ts"
+    },
+    {
+      "file": "src/remote/command-queued.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "REMOTE_COMMANDS",
+        "REMOTE_REFUSED",
+        "classifyRemoteCommand",
+        "remoteMenu"
+      ],
+      "via": "src/remote/command-gateway.ts"
+    },
+    {
+      "file": "src/remote/command-review-fixes.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandHarness"
+      ],
+      "via": "src/remote/command.test-helpers.ts"
+    },
+    {
+      "file": "src/remote/command-secrets.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandHarness"
+      ],
+      "via": "src/remote/command.test-helpers.ts"
+    },
+    {
+      "file": "src/remote/command-session.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandHarness"
+      ],
+      "via": "src/remote/command.test-helpers.ts"
+    },
+    {
+      "file": "src/remote/message-state.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RemoteBridge"
+      ],
+      "via": "src/remote/shell-bridge.ts"
+    },
+    {
+      "file": "src/remote/mirror-undelivered.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RemoteBridge"
+      ],
+      "via": "src/remote/shell-bridge.ts"
+    },
+    {
+      "file": "src/remote/orphan.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RemoteHub"
+      ],
+      "via": "src/remote/command-gateway.ts"
+    },
+    {
+      "file": "src/remote/progress-notes.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandHarness"
+      ],
+      "via": "src/remote/command.test-helpers.ts"
+    },
+    {
+      "file": "src/remote/shell-bridge.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RemoteBridge"
+      ],
+      "via": "src/remote/shell-bridge.ts"
+    },
+    {
+      "file": "src/remote/stop.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "classifyRemoteCommand",
+        "remoteHelpText",
+        "remoteMenu"
+      ],
+      "via": "src/remote/command-gateway.ts"
+    },
+    {
+      "file": "src/remote/topic-history.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "REMOTE_COMMANDS"
+      ],
+      "via": "src/remote/command-gateway.ts"
+    },
+    {
+      "file": "src/standard/commands-by-task.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "renderCommandsByTaskMarkdown"
+      ],
+      "via": "src/standard/help-groups.ts"
+    },
+    {
+      "file": "src/tui/ac-kinds-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "presentFlows"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/approvals-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openApprovals"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/approvals-sidebar.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "routeApprovalsCommand"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/ask-user-transcript.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandsForMode"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/autoreview-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "routeAutoReviewCommand"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/balance-panel.test.ts",
+      "reason": "related-test",
+      "symbols": [],
+      "via": "src/tui/balance-panel.ts"
+    },
+    {
+      "file": "src/tui/boot-animation.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "onKeypress"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/tui/channels-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "HELP_GROUPS"
+      ],
+      "via": "src/standard/help-groups.ts"
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runShell"
+      ],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/tui/ci-triage-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openCiTriage"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/composer-choice.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandsForMode"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/conform-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openConform"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/decisions-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "findAgentCommand"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/digest-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "routeSchedulesCommand"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/external-diff-modal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openExternalDiff"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/external-diff-sidebar.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "routeExternalDiffCommand"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/flow-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "presentFlows"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/game-modal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "modelMove",
+        "presentGame"
+      ],
+      "via": "src/tui/game-modal.ts"
+    },
+    {
+      "file": "src/tui/games/modal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "presentGamesModal"
+      ],
+      "via": "src/tui/games/model-turn.ts"
+    },
+    {
+      "file": "src/tui/governance-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openGovernanceReport"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/governance-panel.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/help-modal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openHelpModal"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/intake-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountIntakeSidebar",
+        "routeIntakeCommand"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/jev-profile-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openJevProfile"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/mcp-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "presentMcpTools"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/model-session-picker-modal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "pickModelInTui",
+        "pickSessionInTui"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/tui/operator-confirmations.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "HELP_GROUPS"
+      ],
+      "via": "src/standard/help-groups.ts"
+    },
+    {
+      "file": "src/tui/ops-sidebar.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "routeOpsCommand"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/permissions-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openPermissions"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/picker-theme.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "selectProviderModelInTui"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/tui/project-context-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "OpenModalInput"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/remote-control-surface.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "HELP_GROUPS"
+      ],
+      "via": "src/standard/help-groups.ts"
+    },
+    {
+      "file": "src/tui/remote-queue-wiring.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "RemoteBridge"
+      ],
+      "via": "src/remote/shell-bridge.ts"
+    },
+    {
+      "file": "src/tui/research-sync-panel.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/review-buttons.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandsForMode"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/review-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "presentReview"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/reviews-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/rewind-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openRewind"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/routing-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openRouting"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/schedules-sidebar.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "routeSchedulesCommand"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/session-info.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "presentSessionInfo"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/settings-actions.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openSettings"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/settings-modal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openSettings"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/setup-modal.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openSetupModal"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/shell-chrome.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandsForMode"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/sidebar-cards.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandsForMode"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/sidebar-geometry.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandsForMode"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/subscription-provider-wizard.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "selectProviderModelInTui"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/tui/theme-picker.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "commandsForMode"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/triggers-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openTriggers"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/triggers-panel.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "mountChrome"
+      ],
+      "via": "src/commands/agent-commands.ts"
+    },
+    {
+      "file": "src/tui/tui-session-lease.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "runLeasedChatShell"
+      ],
+      "via": "src/commands/shell.ts"
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "filterConnectedDetectedProviders",
+        "onKeypress",
+        "pickSearchProviderStep",
+        "searchProviderWizardInTui"
+      ],
+      "via": "src/tui/tui-shell.ts"
+    },
+    {
+      "file": "src/tui/turn-guard-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "openTurnGuard"
+      ],
+      "via": "src/tui/modal-host.ts"
+    },
+    {
+      "file": "src/tui/workspace-inspector.test.ts",
+      "reason": "graph-consumer",
+      "symbols": [
+        "presentWorkspace"
+      ],
+      "via": "src/tui/modal-host.ts"
+    }
+  ],
+  "testCommand": "bun test"
+}

@@ -1,0 +1,1244 @@
+{
+  "version": 1,
+  "scopeReviewed": true,
+  "rawReconciled": true,
+  "obligations": [
+    {
+      "id": "review-architecture-w1:F-001",
+      "source": "raw/review-architecture-w1.txt",
+      "question": "Is review-architecture finding F-001 (With /provider removed, the readline chat shell (--no-tui --chat) has no in-session way to add or re) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-12 (minor): The readline shell loses the add path and its /connect text over-promises",
+      "reason": "Consolidated into CP-12: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-12"
+    },
+    {
+      "id": "review-architecture-w2:F-001",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-001 (removedCommandHint answers a typed /provider in the readline AGENT REPL with 'run /connect', but tha) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-12 (minor): The readline shell loses the add path and its /connect text over-promises",
+      "reason": "Consolidated into CP-12: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-12"
+    },
+    {
+      "id": "review-architecture-w2:F-002",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-002 (The chat-mode registry text says /connect can 'add one', and /provider was removed on the grounds th) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-12 (minor): The readline shell loses the add path and its /connect text over-promises",
+      "reason": "Consolidated into CP-12: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-12"
+    },
+    {
+      "id": "review-architecture-w2:F-003",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-003 (CONNECT_GUIDANCE is what /connect prints when deps.selectProviderModel is undefined (the 'not availa) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-12 (minor): The readline shell loses the add path and its /connect text over-promises",
+      "reason": "Consolidated into CP-12: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-12"
+    },
+    {
+      "id": "review-architecture-w2:F-004",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-004 (The Add provider capability is advertised by one hook only (listAddableProviders), while the actions) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-14 (minor): Router add flow: duplicated refusal guards and a 41-line connectAddable",
+      "reason": "Consolidated into CP-14: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-14"
+    },
+    {
+      "id": "review-architecture-w2:F-005",
+      "source": "raw/review-architecture-w2.txt",
+      "question": "Is review-architecture finding F-005 (Removing 'provider' from REMOTE_REFUSED means a topic that sends /provider now gets the generic 'not) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-12 (minor): The readline shell loses the add path and its /connect text over-promises",
+      "reason": "Consolidated into CP-12: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-12"
+    },
+    {
+      "id": "review-architecture-w3:F-001",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-001 (pickProvidersTabbedStep holds, in one closure of roughly 350 lines, the view (row/button/notice rend) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-15 (minor): pickProvidersTabbedStep: hidden ordering, unnamed layout numbers, first/second buttons, repeated stepping",
+      "reason": "Consolidated into CP-15: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-15"
+    },
+    {
+      "id": "review-architecture-w3:F-002",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-002 (The rule 'this provider needs a key and has none' is written twice: in runProviderConnectSequence (s) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-17 (minor): Connect-success block and the needs-a-key rule are written twice",
+      "reason": "Consolidated into CP-17: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-17"
+    },
+    {
+      "id": "review-architecture-w3:F-003",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-003 (`onlyConnected: true` used to mean 'list only connected providers'. It now selects the whole two-tab) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-18 (minor): Option and parameter shape: onlyConnected meaning, six positional parameters",
+      "reason": "Consolidated into CP-18: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-18"
+    },
+    {
+      "id": "review-architecture-w3:F-004",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-004 (openTabbedSurface's overlay branch re-implements ModalHost's tab strip, Tab cycling, digit jumps, Es) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-16 (minor): The tabbed surface duplicates ModalHost and sits inside tui-shell.ts",
+      "reason": "Consolidated into CP-16: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-16"
+    },
+    {
+      "id": "review-architecture-w3:F-005",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-005 (probeProviderConnection is UI-free provider logic (credential pre-check, probe, profile-store refres) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-27 (info): Provider logic placement and small cleanups in tui-shell.ts (probe, literal fake id, upsertProvider, error.name, rowsOf)",
+      "reason": "Consolidated into CP-27: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-27"
+    },
+    {
+      "id": "review-architecture-w3:F-006",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-006 (The shell's listAddableProviders hides the test provider by comparing against the literal id \"fake\" ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-27 (info): Provider logic placement and small cleanups in tui-shell.ts (probe, literal fake id, upsertProvider, error.name, rowsOf)",
+      "reason": "Consolidated into CP-27: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-27"
+    },
+    {
+      "id": "review-architecture-w3:F-007",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-007 (The `connected` array is owned by runProvidersModal and passed into the step, which mutates it in pl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-17 (minor): Connect-success block and the needs-a-key rule are written twice",
+      "reason": "Consolidated into CP-17: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-17"
+    },
+    {
+      "id": "review-architecture-w3:F-008",
+      "source": "raw/review-architecture-w3.txt",
+      "question": "Is review-architecture finding F-008 (runProviderConnectSequence now takes two positional booleans after `deps` (`setup`, `requireKey`); t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-18 (minor): Option and parameter shape: onlyConnected meaning, six positional parameters",
+      "reason": "Consolidated into CP-18: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-18"
+    },
+    {
+      "id": "review-clean-code-w1:F-001",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-001 (The picker-answer guard `if (x === \"refused\") return \"failed\"; if (x === undefined) { record(\"... no) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-14 (minor): Router add flow: duplicated refusal guards and a 41-line connectAddable",
+      "reason": "Consolidated into CP-14: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-14"
+    },
+    {
+      "id": "review-clean-code-w1:F-002",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-002 (This guard in pickAddableProvider cannot be reached. The method is private and has exactly two calle) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-01 (minor): Held: self-guard in pickAddableProvider cannot be reached",
+      "reason": "Reported as CP-01.",
+      "finding": "CP-01"
+    },
+    {
+      "id": "review-clean-code-w1:F-003",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-003 (connectAddable is 41 lines and mixes levels: three refusal branches (already connected, key provider) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-14 (minor): Router add flow: duplicated refusal guards and a 41-line connectAddable",
+      "reason": "Consolidated into CP-14: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-14"
+    },
+    {
+      "id": "review-clean-code-w1:F-004",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-004 (Stale comment. The diff changed its first line from `/models` / `/provider` are chat-mode commands t) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-13 (minor): Stale comments and awkward removed-command hint wording",
+      "reason": "Consolidated into CP-13: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-13"
+    },
+    {
+      "id": "review-clean-code-w1:F-005",
+      "source": "raw/review-clean-code-w1.txt",
+      "question": "Is review-clean-code finding F-005 (The new test sets up the same harness as the test just above it (`listProviders: async () => []`, no) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-20 (minor): tests: remote Add flow gaps, fixtures a producer cannot emit, thin probe and gateway tests",
+      "reason": "Consolidated into CP-20: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-20"
+    },
+    {
+      "id": "review-clean-code-w2:CC-1",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-1 (pickProvidersTabbedStep is about 440 lines (3260-3700). One closure holds row layout (RowBlock, labe) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-15 (minor): pickProvidersTabbedStep: hidden ordering, unnamed layout numbers, first/second buttons, repeated stepping",
+      "reason": "Consolidated into CP-15: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-15"
+    },
+    {
+      "id": "review-clean-code-w2:CC-2",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-2 (runProviderConnectSequence(otui, target, prov, deps, setup, requireKey = false) has six parameters, ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-18 (minor): Option and parameter shape: onlyConnected meaning, six positional parameters",
+      "reason": "Consolidated into CP-18: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-18"
+    },
+    {
+      "id": "review-clean-code-w2:CC-3",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-3 (The same dependency object is rebuilt by spreading modelDeps three times: in runProvidersModal (3945) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-17 (minor): Connect-success block and the needs-a-key rule are written twice",
+      "reason": "Consolidated into CP-17: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-17"
+    },
+    {
+      "id": "review-clean-code-w2:CC-4",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-4 (The option `onlyConnected` (SelectProviderModelOptions, chat-shell.ts pickSelection type ~314-317 an) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-18 (minor): Option and parameter shape: onlyConnected meaning, six positional parameters",
+      "reason": "Consolidated into CP-18: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-18"
+    },
+    {
+      "id": "review-clean-code-w2:CC-5",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-5 (RowBlock fields `first` and `second` (3292-3293) say nothing about what they hold, while the surroun) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-15 (minor): pickProvidersTabbedStep: hidden ordering, unnamed layout numbers, first/second buttons, repeated stepping",
+      "reason": "Consolidated into CP-15: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-15"
+    },
+    {
+      "id": "review-clean-code-w2:CC-6",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-6 (Unnamed layout numbers in pickProvidersTabbedStep: `bodyWidth - 24 - labelOf(d).length` (3314), the ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-15 (minor): pickProvidersTabbedStep: hidden ordering, unnamed layout numbers, first/second buttons, repeated stepping",
+      "reason": "Consolidated into CP-15: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-15"
+    },
+    {
+      "id": "review-clean-code-w2:CC-7",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-7 (In runProvidersModal the connect-success block (3987-3998) and the custom-success block (4009-4018) ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-17 (minor): Connect-success block and the needs-a-key rule are written twice",
+      "reason": "Consolidated into CP-17: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-17"
+    },
+    {
+      "id": "review-clean-code-w2:CC-8",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-8 (A failure to send the challenge message to Telegram is swallowed with no comment. If the notify fail) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-08 (minor): Telegram device login: unbounded wait, single slot, swallowed notify failure",
+      "reason": "Consolidated into CP-08: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-08"
+    },
+    {
+      "id": "review-clean-code-w2:CC-9",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-9 (The code relies on ordering inside one closure: a comment at 3591-3592 says \"(before `surface` is as) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-15 (minor): pickProvidersTabbedStep: hidden ordering, unnamed layout numbers, first/second buttons, repeated stepping",
+      "reason": "Consolidated into CP-15: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-15"
+    },
+    {
+      "id": "review-clean-code-w2:CC-10",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-10 (openTabbedSurface duplicates the ModalHost key handling (Esc, x, Tab, digit keys) for its full-scree) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-16 (minor): The tabbed surface duplicates ModalHost and sits inside tui-shell.ts",
+      "reason": "Consolidated into CP-16: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-16"
+    },
+    {
+      "id": "review-clean-code-w2:CC-11",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-11 (createRemoteDeviceLogin.connect is about 47 lines with a nested ternary in endedEarly (`timedOut ? .) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-08 (minor): Telegram device login: unbounded wait, single slot, swallowed notify failure",
+      "reason": "Consolidated into CP-08: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-08"
+    },
+    {
+      "id": "review-clean-code-w2:CC-12",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-12 (`upsertProvider(list, entry): void` mutates its argument. It is a local helper with one obvious use ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-27 (info): Provider logic placement and small cleanups in tui-shell.ts (probe, literal fake id, upsertProvider, error.name, rowsOf)",
+      "reason": "Consolidated into CP-27: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-27"
+    },
+    {
+      "id": "review-clean-code-w2:CC-13",
+      "source": "raw/review-clean-code-w2.txt",
+      "question": "Is review-clean-code finding CC-13 (The catch in runProvidersModal reads `error.name` (4020-4024) to decide how to treat the failure. I ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-27 (info): Provider logic placement and small cleanups in tui-shell.ts (probe, literal fake id, upsertProvider, error.name, rowsOf)",
+      "reason": "Consolidated into CP-27: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-27"
+    },
+    {
+      "id": "review-highload-w1:F-001",
+      "source": "raw/review-highload-w1.txt",
+      "question": "Is review-highload finding F-001 (testAddable awaits host.testProvider, and pickAddableProvider awaits host.listAddableProviders, with) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-06 (minor): Router awaits host.testProvider and host.listAddableProviders with no try/catch",
+      "reason": "Consolidated into CP-06: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-06"
+    },
+    {
+      "id": "review-highload-w2:F-001",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-001 (Provider [Test] has no in-flight guard, on either surface. In the Providers dialog, Enter or a click) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-07 (minor): Provider [Test] has no in-flight guard",
+      "reason": "Consolidated into CP-07: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-07"
+    },
+    {
+      "id": "review-highload-w2:F-002",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-002 (The one-login-at-a-time rule covers only logins started from Telegram. shellIsBusy does not include ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-08 (minor): Telegram device login: unbounded wait, single slot, swallowed notify failure",
+      "reason": "Consolidated into CP-08: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-08"
+    },
+    {
+      "id": "review-highload-w2:F-003",
+      "source": "raw/review-highload-w2.txt",
+      "question": "Is review-highload finding F-003 (A Telegram device login holds the single `current` slot until the operator authorizes it, it times o) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-08 (minor): Telegram device login: unbounded wait, single slot, swallowed notify failure",
+      "reason": "Consolidated into CP-08: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-08"
+    },
+    {
+      "id": "review-logic-w1:LOGIC-1",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding LOGIC-1 (The 0.3.130 CHANGELOG entry says '/connect and /providers are one command and one modal'. There was ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-10 (minor): CHANGELOG, docs and PR text disagree with what the change does",
+      "reason": "Consolidated into CP-10: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-10"
+    },
+    {
+      "id": "review-logic-w1:LOGIC-2",
+      "source": "raw/review-logic-w1.txt",
+      "question": "Is review-logic finding LOGIC-2 (The CHANGELOG announces Telegram behaviour (an Add provider button, a [Test] per provider, device-lo) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-10 (minor): CHANGELOG, docs and PR text disagree with what the change does",
+      "reason": "Consolidated into CP-10: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-10"
+    },
+    {
+      "id": "review-logic-w2:F-001",
+      "source": "raw/review-logic-w2.txt",
+      "question": "Is review-logic finding F-001 (testAddable awaits host.testProvider, and pickAddableProvider awaits host.listAddableProviders, with) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-06 (minor): Router awaits host.testProvider and host.listAddableProviders with no try/catch",
+      "reason": "Consolidated into CP-06: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-06"
+    },
+    {
+      "id": "review-logic-w3:L1",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding L1 (runProvidersModal decides 'connected' from `failure === undefined && models.length > 0`. For a provi) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-05 (minor): The Providers dialog goes stale after a disconnect or a failed probe",
+      "reason": "Consolidated into CP-05: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-05"
+    },
+    {
+      "id": "review-logic-w3:L2",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding L2 (AC6 says a rejected key is re-asked, but the connect sequence asks once and then reports the failure) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-26 (info): Add tab and PR claims: [Connect] on a connected provider, rejected key asked once",
+      "reason": "Consolidated into CP-26: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-26"
+    },
+    {
+      "id": "review-logic-w3:L3",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding L3 (createRemoteDeviceLogin reports 'connected.' after the device login succeeds without a /models check) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-08 (minor): Telegram device login: unbounded wait, single slot, swallowed notify failure",
+      "reason": "Consolidated into CP-08: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-08"
+    },
+    {
+      "id": "review-logic-w3:L4",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding L4 (createConnectedProvidersCache is not invalidated when a custom provider is saved but its probe fails) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-05 (minor): The Providers dialog goes stale after a disconnect or a failed probe",
+      "reason": "Consolidated into CP-05: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-05"
+    },
+    {
+      "id": "review-logic-w3:L5",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding L5 (footerFor(tabId) replaces the shared footer, so the per-tab footers drop the tab-switch hint unless ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-16 (minor): The tabbed surface duplicates ModalHost and sits inside tui-shell.ts",
+      "reason": "Consolidated into CP-16: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-16"
+    },
+    {
+      "id": "review-logic-w3:L6",
+      "source": "raw/review-logic-w3.txt",
+      "question": "Is review-logic finding L6 (Providers that share a credential (sharedWith) stay listed as connected after one of them is disconn) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-05 (minor): The Providers dialog goes stale after a disconnect or a failed probe",
+      "reason": "Consolidated into CP-05: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-05"
+    },
+    {
+      "id": "review-logic-w4:F-001",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-001 (In 'the typed key is on no channel the shell shows' the test mounts selectProviderModelInTui directl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-19 (minor): tests: waitFor never throws, a Tab test discards its results, AC7 has negative-only checks",
+      "reason": "Consolidated into CP-19: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-19"
+    },
+    {
+      "id": "review-logic-w4:F-002",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-002 (AC7's [verify: exec bun test src/tui/connect-modal.test.ts] can only be satisfied for frames, the st) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-19 (minor): tests: waitFor never throws, a Tab test discards its results, AC7 has negative-only checks",
+      "reason": "Consolidated into CP-19: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-19"
+    },
+    {
+      "id": "review-logic-w4:F-003",
+      "source": "raw/review-logic-w4.txt",
+      "question": "Is review-logic finding F-003 (After `first` resolves, `rig.hook.connect(...)` is called and `release?.()` is invoked on the next l) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-19 (minor): tests: waitFor never throws, a Tab test discards its results, AC7 has negative-only checks",
+      "reason": "Consolidated into CP-19: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-19"
+    },
+    {
+      "id": "review-performance-w1:F-001",
+      "source": "raw/review-performance-w1.txt",
+      "question": "Is review-performance finding F-001 (connectAddable awaits the host's device login with no time bound of its own. The router's commandLim) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-08 (minor): Telegram device login: unbounded wait, single slot, swallowed notify failure",
+      "reason": "Consolidated into CP-08: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-08"
+    },
+    {
+      "id": "review-performance-w2:F-001",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding F-001 (createConnectedProvidersCache stamps `at: now()` when the load STARTS and treats an entry older than) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-09 (minor): Connected-providers cache stamps the load start; the dialog waits on a probe of every keyed provider",
+      "reason": "Consolidated into CP-09: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-09"
+    },
+    {
+      "id": "review-performance-w2:F-002",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding F-002 ([Test] has no in-flight guard. On the Add tab (button click, or Enter with the Test column highlight) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-07 (minor): Provider [Test] has no in-flight guard",
+      "reason": "Consolidated into CP-07: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-07"
+    },
+    {
+      "id": "review-performance-w2:F-003",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding F-003 (The /connect dialog opens only after filterConnectedDetectedProviders has probed every keyed provide) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-09 (minor): Connected-providers cache stamps the load start; the dialog waits on a probe of every keyed provider",
+      "reason": "Consolidated into CP-09: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-09"
+    },
+    {
+      "id": "review-performance-w2:F-004",
+      "source": "raw/review-performance-w2.txt",
+      "question": "Is review-performance finding F-004 (`rowsOf(\"add\")` allocates a fresh copy of the provider list on every call, and it is called per bloc) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-27 (info): Provider logic placement and small cleanups in tui-shell.ts (probe, literal fake id, upsertProvider, error.name, rowsOf)",
+      "reason": "Consolidated into CP-27: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-27"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-001",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-001 (pr-context.md claims: \"Telegram `/connect` gains an \\\"Add provider\\\" button, a [Test] per provider, ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-10 (minor): CHANGELOG, docs and PR text disagree with what the change does",
+      "reason": "Consolidated into CP-10: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-10"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-002",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-002 (The 0.3.130 entry says \"in Telegram the same modal opens\". pr-context.md describes Telegram as butto) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-10 (minor): CHANGELOG, docs and PR text disagree with what the change does",
+      "reason": "Consolidated into CP-10: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-10"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-003",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-003 (The 0.3.130 entry names the merged commands as `/connect` and `/providers`. pr-context.md and the fl) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-10 (minor): CHANGELOG, docs and PR text disagree with what the change does",
+      "reason": "Consolidated into CP-10: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-10"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-004",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-004 (The PR body leaves the box unticked: \"- [ ] AC12 live run in a real `keryx shell` with an empty conf) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-11 (minor): PR body boxes left unticked or not checked (AC12 live run, Review round, AC10 invariant)",
+      "reason": "Consolidated into CP-11: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-11"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-005",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-005 (description.md in the diff says: \"Release: a separate release right after merge (operator, poll 249)) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-10 (minor): CHANGELOG, docs and PR text disagree with what the change does",
+      "reason": "Consolidated into CP-10: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-10"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-006",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-006 (The PR body says `/provider` is removed from \"docs\". docs/docs/harness.md and docs/docs/hooks.md als) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-10 (minor): CHANGELOG, docs and PR text disagree with what the change does",
+      "reason": "Consolidated into CP-10: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-10"
+    },
+    {
+      "id": "review-pr-contract-w1:PC-007",
+      "source": "raw/review-pr-contract-w1.txt",
+      "question": "Is review-pr-contract finding PC-007 (Unverified: the ticked box \"- [x] AC10 invariant: no `/provider` in README, docs/docs, src/standard,) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-11 (minor): PR body boxes left unticked or not checked (AC12 live run, Review round, AC10 invariant)",
+      "reason": "Consolidated into CP-11: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-11"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-101",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-101 (The PR changes Telegram /connect: the diff adds an 'Add provider' button to the connected picker (sr) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-10 (minor): CHANGELOG, docs and PR text disagree with what the change does",
+      "reason": "Consolidated into CP-10: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-10"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-102",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-102 (PR body: '`/connect` is the only command ... \"Add provider\" lists every known provider with [Connect) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-12 (minor): The readline shell loses the add path and its /connect text over-promises",
+      "reason": "Consolidated into CP-12: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-12"
+    },
+    {
+      "id": "review-pr-contract-w2:PC-103",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is review-pr-contract finding PC-103 (PR body: '`/provider` is removed (registry, menu, help, README, docs, init hint). Typing it answers ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-12 (minor): The readline shell loses the add path and its /connect text over-promises",
+      "reason": "Consolidated into CP-12: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-12"
+    },
+    {
+      "id": "review-pr-contract-w2:fu1",
+      "source": "raw/review-pr-contract-w2.txt",
+      "question": "Is the parent follow-up from review-pr-contract done or ruled out, and where is that recorded? none.",
+      "status": "refuted",
+      "evidence": "The reviewer's own follow-up reads \"none\"; the parity output prints 'Not verified: none.' for it.",
+      "reason": "No open question remains in this follow-up."
+    },
+    {
+      "id": "review-pr-contract-w3:PC-201",
+      "source": "raw/review-pr-contract-w3.txt",
+      "question": "Is review-pr-contract finding PC-201 (PR body: \"Telegram `/connect` gains an \\\"Add provider\\\" button, a [Test] per provider, and [Connect]) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-10 (minor): CHANGELOG, docs and PR text disagree with what the change does",
+      "reason": "Consolidated into CP-10: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-10"
+    },
+    {
+      "id": "review-pr-contract-w3:PC-202",
+      "source": "raw/review-pr-contract-w3.txt",
+      "question": "Is review-pr-contract finding PC-202 (PR body: \"[Connect] runs the base-URL, key or device-login steps, checks `/models`, returns to \\\"Con) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-26 (info): Add tab and PR claims: [Connect] on a connected provider, rejected key asked once",
+      "reason": "Consolidated into CP-26: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-26"
+    },
+    {
+      "id": "review-pr-contract-w3:PC-203",
+      "source": "raw/review-pr-contract-w3.txt",
+      "question": "Is review-pr-contract finding PC-203 (PR body: \"\\\"Add provider\\\" lists every known provider with [Connect] and [Test].\" The TUI Add tab bu) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-26 (info): Add tab and PR claims: [Connect] on a connected provider, rejected key asked once",
+      "reason": "Consolidated into CP-26: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-26"
+    },
+    {
+      "id": "review-pr-contract-w4:PC-301",
+      "source": "raw/review-pr-contract-w4.txt",
+      "question": "Is review-pr-contract finding PC-301 (pr-context.md Test plan line 23: `- [ ] Review round` (unticked). The diff of this slice adds tests ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-11 (minor): PR body boxes left unticked or not checked (AC12 live run, Review round, AC10 invariant)",
+      "reason": "Consolidated into CP-11: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-11"
+    },
+    {
+      "id": "review-pr-contract-w4:PC-302",
+      "source": "raw/review-pr-contract-w4.txt",
+      "question": "Is review-pr-contract finding PC-302 (UNVERIFIED. pr-context.md Summary line 11: `[Connect] runs the base-URL, key or device-login steps, ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-11 (minor): PR body boxes left unticked or not checked (AC12 live run, Review round, AC10 invariant)",
+      "reason": "Consolidated into CP-11: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-11"
+    },
+    {
+      "id": "review-regression-w2:F-001",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is review-regression finding F-001 (runProvidersModal (new in flow 471) snapshots `all` from `detected` once and never prunes it. A Disc) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-05 (minor): The Providers dialog goes stale after a disconnect or a failed probe",
+      "reason": "Consolidated into CP-05: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-05"
+    },
+    {
+      "id": "review-regression-w2:fu1",
+      "source": "raw/review-regression-w2.txt",
+      "question": "Is the parent follow-up from review-regression done or ruled out, and where is that recorded? Blast-radius callers outside slice-03 were not walked (no radius record in the payload, read-only lane). The ones to confirm in their own slices: every remaining caller of selectProviderModelInTui / S",
+      "status": "narrowed",
+      "evidence": "research-evidence/premises.json: slice-03 callers of selectProviderModelInTui were checked; the radius record was absent from the payload.",
+      "reason": "Callers outside slice-03 were not walked.",
+      "remains": "Every remaining caller of selectProviderModelInTui and its siblings outside slice-03 is unconfirmed."
+    },
+    {
+      "id": "review-security-code-w2:F-001",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding F-001 (The Add provider tab lists every detected provider, including ones already marked '✓ connected', and) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-26 (info): Add tab and PR claims: [Connect] on a connected provider, rejected key asked once",
+      "reason": "Consolidated into CP-26: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-26"
+    },
+    {
+      "id": "review-security-code-w2:F-002",
+      "source": "raw/review-security-code-w2.txt",
+      "question": "Is review-security-code finding F-002 (loginDeviceCode saves the OAuth grant (saveOAuthGrant in src/lib/oauth/login.ts) before createRemote) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-08 (minor): Telegram device login: unbounded wait, single slot, swallowed notify failure",
+      "reason": "Consolidated into CP-08: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-08"
+    },
+    {
+      "id": "review-style-w1:F-001",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-001 (The pinned-contract header comment was edited from `/provider` to `/connect` on one line only. The e) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-13 (minor): Stale comments and awkward removed-command hint wording",
+      "reason": "Consolidated into CP-13: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-13"
+    },
+    {
+      "id": "review-style-w1:F-002",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-002 (The 0.3.130 entry says `/connect` and `/providers` were merged. No `/providers` slash command is reg) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-10 (minor): CHANGELOG, docs and PR text disagree with what the change does",
+      "reason": "Consolidated into CP-10: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-10"
+    },
+    {
+      "id": "review-style-w1:F-003",
+      "source": "raw/review-style-w1.txt",
+      "question": "Is review-style finding F-003 (Two docs sentences unrelated to /connect were reworded in this PR: harness.md replaced the repo path) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-10 (minor): CHANGELOG, docs and PR text disagree with what the change does",
+      "reason": "Consolidated into CP-10: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-10"
+    },
+    {
+      "id": "review-style-w2:F-001",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-001 (This test is a near-copy of the test directly above it, \"sends the operator to the shell when no pro) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-20 (minor): tests: remote Add flow gaps, fixtures a producer cannot emit, thin probe and gateway tests",
+      "reason": "Consolidated into CP-20: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-20"
+    },
+    {
+      "id": "review-style-w2:F-002",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-002 (Eleven tests in this block open with the same five-line preamble: enable the bridge, say \"/connect\",) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-02 (minor): Held: the same press sequence is repeated across the Add provider tests",
+      "reason": "Reported as CP-02.",
+      "finding": "CP-02"
+    },
+    {
+      "id": "review-style-w2:F-003",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-003 (pickAddableProvider copies the shape that pickProvider (and pickModel, pickSession) already carry: a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-03 (minor): Held: refused / not-answered handling is repeated across the router pickers",
+      "reason": "Reported as CP-03.",
+      "finding": "CP-03"
+    },
+    {
+      "id": "review-style-w2:F-004",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-004 (The hint is appended after the existing prefix, so the user reads: `Unknown command: /provider. /pro) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-13 (minor): Stale comments and awkward removed-command hint wording",
+      "reason": "Consolidated into CP-13: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-13"
+    },
+    {
+      "id": "review-style-w2:F-005",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-005 (The edited comment still ends \"...instead of calling them unknown. Anything else falls back to the o) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-13 (minor): Stale comments and awkward removed-command hint wording",
+      "reason": "Consolidated into CP-13: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-13"
+    },
+    {
+      "id": "review-style-w2:F-006",
+      "source": "raw/review-style-w2.txt",
+      "question": "Is review-style finding F-006 (`connectedIds` collects the provider ids that connectWithDeviceLogin was called with, not ids of con) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-20 (minor): tests: remote Add flow gaps, fixtures a producer cannot emit, thin probe and gateway tests",
+      "reason": "Consolidated into CP-20: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-20"
+    },
+    {
+      "id": "review-style-w3:F-001",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-001 (pickProvidersTabbedStep is a single closure of roughly 400 lines holding about 20 nested functions a) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-04 (minor): Held: pickProvidersTabbedStep is one ~400-line closure",
+      "reason": "Reported as CP-04.",
+      "finding": "CP-04"
+    },
+    {
+      "id": "review-style-w3:F-002",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-002 (runProvidersModal repeats the same 'connected or not' block twice: after the connect sequence (actio) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-17 (minor): Connect-success block and the needs-a-key rule are written twice",
+      "reason": "Consolidated into CP-17: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-17"
+    },
+    {
+      "id": "review-style-w3:F-003",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-003 (The rule 'a provider that needs a key and has none' is spelled out twice with the same three-part co) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-17 (minor): Connect-success block and the needs-a-key rule are written twice",
+      "reason": "Consolidated into CP-17: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-17"
+    },
+    {
+      "id": "review-style-w3:F-004",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-004 (Two small duplications in the new tabbed code. (1) The left/right stepping `if (tab === \"connected\")) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-15 (minor): pickProvidersTabbedStep: hidden ordering, unnamed layout numbers, first/second buttons, repeated stepping",
+      "reason": "Consolidated into CP-15: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-15"
+    },
+    {
+      "id": "review-style-w3:F-005",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-005 (runProviderConnectSequence takes two positional booleans (`setup`, `requireKey = false`); the call s) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-18 (minor): Option and parameter shape: onlyConnected meaning, six positional parameters",
+      "reason": "Consolidated into CP-18: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-18"
+    },
+    {
+      "id": "review-style-w3:F-006",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-006 (`_direction` is unused: with two targets, left and right are the same move, so the function is a tog) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-16 (minor): The tabbed surface duplicates ModalHost and sits inside tui-shell.ts",
+      "reason": "Consolidated into CP-16: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-16"
+    },
+    {
+      "id": "review-style-w3:F-007",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-007 (Layout numbers are inline literals with their meaning only in a nearby comment: `bodyWidth - 24` (no) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-15 (minor): pickProvidersTabbedStep: hidden ordering, unnamed layout numbers, first/second buttons, repeated stepping",
+      "reason": "Consolidated into CP-15: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-15"
+    },
+    {
+      "id": "review-style-w3:F-008",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-008 (RowBlock's buttons are named `first` and `second`, whose meaning flips by tab (Test/Disconnect on Co) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-15 (minor): pickProvidersTabbedStep: hidden ordering, unnamed layout numbers, first/second buttons, repeated stepping",
+      "reason": "Consolidated into CP-15: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-15"
+    },
+    {
+      "id": "review-style-w3:F-009",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-009 (`surface` is a `const` typed `TabbedSurface | undefined` and used as `surface?.close()` / `surface?.) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-21 (minor): Style nits: const surface typing, import order, theme alias, declaration order, outcome-text constants",
+      "reason": "Consolidated into CP-21: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-21"
+    },
+    {
+      "id": "review-style-w3:F-010",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-010 (In the `../commands/agent-commands` import list (commandsForMode, describeUnavailableCommand, filter) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-21 (minor): Style nits: const surface typing, import order, theme alias, declaration order, outcome-text constants",
+      "reason": "Consolidated into CP-21: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-21"
+    },
+    {
+      "id": "review-style-w3:F-011",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-011 (User-facing outcome texts in createRemoteDeviceLogin are inconsistent: four are named constants (LOG) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-21 (minor): Style nits: const surface typing, import order, theme alias, declaration order, outcome-text constants",
+      "reason": "Consolidated into CP-21: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-21"
+    },
+    {
+      "id": "review-style-w3:F-012",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-012 (The PR adds a self-contained generic tabbed-surface component (about 180 lines with its types and th) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-16 (minor): The tabbed surface duplicates ModalHost and sits inside tui-shell.ts",
+      "reason": "Consolidated into CP-16: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-16"
+    },
+    {
+      "id": "review-style-w3:F-013",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-013 (`TabbedSurfaceTab` is `{ id: string; label: string }`, identical to `ModalTab` exported by modal-hos) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-16 (minor): The tabbed surface duplicates ModalHost and sits inside tui-shell.ts",
+      "reason": "Consolidated into CP-16: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-16"
+    },
+    {
+      "id": "review-style-w3:F-014",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-014 (A local alias that only forwards to getTheme(); the rest of the file calls `getTheme()` directly (in) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-21 (minor): Style nits: const surface typing, import order, theme alias, declaration order, outcome-text constants",
+      "reason": "Consolidated into CP-21: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-21"
+    },
+    {
+      "id": "review-style-w3:F-015",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is review-style finding F-015 (`focusApplied` is declared after the `renderTab` function that reads and writes it, in the middle of) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-21 (minor): Style nits: const surface typing, import order, theme alias, declaration order, outcome-text constants",
+      "reason": "Consolidated into CP-21: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-21"
+    },
+    {
+      "id": "review-style-w3:fu1",
+      "source": "raw/review-style-w3.txt",
+      "question": "Is the parent follow-up from review-style done or ruled out, and where is that recorded? none.",
+      "status": "refuted",
+      "evidence": "The reviewer's own follow-up reads \"none\"; the parity output prints 'Not verified: none.' for it.",
+      "reason": "No open question remains in this follow-up."
+    },
+    {
+      "id": "review-testing-practices-w1:F-001",
+      "source": "raw/review-testing-practices-w1.txt",
+      "question": "Is review-testing-practices finding F-001 (AC1 says typing the removed provider command in agent or chat mode answers 'Unknown command' with a ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-20 (minor): tests: remote Add flow gaps, fixtures a producer cannot emit, thin probe and gateway tests",
+      "reason": "Consolidated into CP-20: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-20"
+    },
+    {
+      "id": "review-testing-practices-w2:F-001",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-001 (`waitFor` returns the last frame when its deadline passes; it never throws. Four 'Esc at the X step ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-19 (minor): tests: waitFor never throws, a Tab test discards its results, AC7 has negative-only checks",
+      "reason": "Consolidated into CP-19: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-19"
+    },
+    {
+      "id": "review-testing-practices-w2:F-002",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-002 (The test named 'digits, Tab and the mouse switch tabs' presses Tab twice and discards both waitFor r) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-19 (minor): tests: waitFor never throws, a Tab test discards its results, AC7 has negative-only checks",
+      "reason": "Consolidated into CP-19: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-19"
+    },
+    {
+      "id": "review-testing-practices-w2:F-003",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-003 (AC7 ('the key appears nowhere else') is pinned by two negative-only checks that have no positive pro) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-19 (minor): tests: waitFor never throws, a Tab test discards its results, AC7 has negative-only checks",
+      "reason": "Consolidated into CP-19: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-19"
+    },
+    {
+      "id": "review-testing-practices-w2:F-004",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-004 (Three gaps in the remote Add flow's tests. (1) The new test 'keeps that refusal when the shell canno) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-20 (minor): tests: remote Add flow gaps, fixtures a producer cannot emit, thin probe and gateway tests",
+      "reason": "Consolidated into CP-20: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-20"
+    },
+    {
+      "id": "review-testing-practices-w2:F-005",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-005 (Two fixtures carry a shape the producer cannot emit, hidden by casts. (1) `ModelsFailure`'s `empty` ) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-20 (minor): tests: remote Add flow gaps, fixtures a producer cannot emit, thin probe and gateway tests",
+      "reason": "Consolidated into CP-20: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-20"
+    },
+    {
+      "id": "review-testing-practices-w2:F-006",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-006 (The 'one login at a time' test depends on `connect` calling the injected login synchronously: `relea) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-19 (minor): tests: waitFor never throws, a Tab test discards its results, AC7 has negative-only checks",
+      "reason": "Consolidated into CP-19: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-19"
+    },
+    {
+      "id": "review-testing-practices-w2:F-007",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-007 (`provider-probe.test.ts` is the only unit file for `probeProviderConnection` and covers two outcomes) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-20 (minor): tests: remote Add flow gaps, fixtures a producer cannot emit, thin probe and gateway tests",
+      "reason": "Consolidated into CP-20: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-20"
+    },
+    {
+      "id": "review-testing-practices-w2:F-008",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is review-testing-practices finding F-008 (The AC8 table no longer has a `/provider` row and `REMOTE_REFUSED.provider` is gone. `/provider` fro) real, and where is it reported?",
+      "status": "finding",
+      "evidence": "report.md CP-20 (minor): tests: remote Add flow gaps, fixtures a producer cannot emit, thin probe and gateway tests",
+      "reason": "Consolidated into CP-20: same defect or same area as the other findings listed in its \"Merged from\" line.",
+      "finding": "CP-20"
+    },
+    {
+      "id": "review-testing-practices-w2:fu1",
+      "source": "raw/review-testing-practices-w2.txt",
+      "question": "Is the parent follow-up from review-testing-practices done or ruled out, and where is that recorded? Run M1, M5, M6, M7, M9 and M10 first: they are the candidates the reading above says have no assertion. M2, M3, M4, M8, M11 and M12 are expected red and make the table's reds. None of the 12 was run b",
+      "status": "refuted",
+      "evidence": "research-evidence/mutation-1.md and mutation-2.md: M1, M5, M6, M7 and M10 were run (survivors are findings CP-22..CP-25); M2, M3, M4, M8, M12 ran and were killed.",
+      "reason": "The follow-up asked for the mutants to be run; they were, except w2-M9, which is listed under Not run."
+    }
+  ],
+  "dispatch": {
+    "version": 1,
+    "mode": "all",
+    "depth": "full",
+    "selected": [
+      "review-architecture",
+      "review-clean-code",
+      "review-highload",
+      "review-logic",
+      "review-performance",
+      "review-pr-contract",
+      "review-regression",
+      "review-security-code",
+      "review-style",
+      "review-testing-practices"
+    ],
+    "roles": [
+      "review-pr-contract"
+    ],
+    "unresolvedRules": [],
+    "runs": [
+      {
+        "reviewer": "review-architecture",
+        "executionId": "review-architecture:a873bd459d84",
+        "rawEvidence": "raw/review-architecture-w3.txt#sha256:a873bd459d84",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-architecture/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-clean-code",
+        "executionId": "review-clean-code:50844802d4e9",
+        "rawEvidence": "raw/review-clean-code-w2.txt#sha256:50844802d4e9",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-highload",
+        "executionId": "review-highload:f4b6271f5276",
+        "rawEvidence": "raw/review-highload-w2.txt#sha256:f4b6271f5276",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-highload/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-logic",
+        "executionId": "review-logic:433626b69eb2",
+        "rawEvidence": "raw/review-logic-w4.txt#sha256:433626b69eb2",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-performance",
+        "executionId": "review-performance:2270f331998a",
+        "rawEvidence": "raw/review-performance-w2.txt#sha256:2270f331998a",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-pr-contract",
+        "executionId": "review-pr-contract:2602570cc7e2",
+        "rawEvidence": "raw/review-pr-contract-w4.txt#sha256:2602570cc7e2",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-regression",
+        "executionId": "review-regression:8d1b813f3686",
+        "rawEvidence": "raw/review-regression-w2.txt#sha256:8d1b813f3686",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-regression/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-security-code",
+        "executionId": "review-security-code:ac3789355820",
+        "rawEvidence": "raw/review-security-code-w2.txt#sha256:ac3789355820",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-security-code/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-style",
+        "executionId": "review-style:132d3cf72fdd",
+        "rawEvidence": "raw/review-style-w3.txt#sha256:132d3cf72fdd",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-style/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-03"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      },
+      {
+        "reviewer": "review-testing-practices",
+        "executionId": "review-testing-practices:b8e94e51d9b6",
+        "rawEvidence": "raw/review-testing-practices-w2.txt#sha256:b8e94e51d9b6",
+        "executionRequired": false,
+        "layersUsed": {
+          "graph": "unknown",
+          "wiki": "unknown",
+          "memory": "unknown",
+          "ctx": "unknown"
+        },
+        "usage": "unknown",
+        "ruleEvidence": [
+          ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+        ],
+        "coveredSlices": [
+          "slice-01",
+          "slice-02",
+          "slice-04"
+        ],
+        "status": "complete",
+        "executionReason": "source-only review: the result is DONE with no open needs_context, and nothing it was asked to do required running a command",
+        "scopeComplete": true
+      }
+    ]
+  },
+  "usage": {
+    "dispatches": 26,
+    "known": 0,
+    "unknown": 26,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "complete": false
+  }
+}

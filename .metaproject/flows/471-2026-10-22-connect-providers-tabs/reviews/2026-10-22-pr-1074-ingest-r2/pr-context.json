@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "repo": "MrCipherSmith/keryx",
+  "number": 1074,
+  "headSha": "2e1936eeb9760e1bbfb05500bd7479c37d44ba80",
+  "collectedAt": "2026-10-22T16:17:03.775Z",
+  "round": 1,
+  "intent": {
+    "round": 1,
+    "title": "feat: one /connect modal with Connected and Add provider tabs",
+    "body": "## Summary\n- `/connect` is the only command: one \"Providers\" modal with two tabs. \"Connected\" is today's rows with [Test] and [Disconnect], plus an [Add provider] button. \"Add provider\" lists every known provider with [Connect] and [Test].\n- [Connect] runs the base-URL, key or device-login steps, checks `/models`, returns to \"Connected\" and does not switch the session. With nothing connected the modal opens on \"Add provider\".\n- `/provider` is removed (registry, menu, help, README, docs, init hint). Typing it answers with a hint to use `/connect`.\n- Telegram `/connect` gains an \"Add provider\" button, a [Test] per provider, and [Connect] by device login only. A key is never typed in chat (flow 387 AC4).\n- `modal-host` gets an optional `footerFor(tabId)` so the footer lists the keys of the active tab.\n\nFlow 471. Operator decisions: polls 248 and 249 (Telegram message 219474).\n\n## Test plan\n- [x] `bun test` on connect-modal, connect-provider-buttons, agent-commands, help-groups, shell, modal-host, queue-nav, remote (1327 pass), provider-probe\n- [x] `bunx tsc --noEmit -p .`\n- [x] AC10 invariant: no `/provider` in README, docs/docs, src/standard, init.ts\n- [ ] AC12 live run in a real `keryx shell` with an empty config dir (frames and config file mode go into the flow journal)\n- [ ] Review round"
+  },
+  "ci": {
+    "state": "passing",
+    "checks": [
+      {
+        "name": "deploy to GitHub Pages",
+        "state": "skipped"
+      },
+      {
+        "name": "standard-pr",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "metrics-contract",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (darwin-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (darwin-arm64)",
+        "state": "passing"
+      },
+      {
+        "name": "opentui native (linux-x64)",
+        "state": "passing"
+      },
+      {
+        "name": "macOS real-host legs — OS sandbox + TUI pty launch",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (runtime)",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (terminal)",
+        "state": "passing"
+      },
+      {
+        "name": "dependency-audit",
+        "state": "passing"
+      },
+      {
+        "name": "standard-baseline",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (cancel-resume)",
+        "state": "passing"
+      },
+      {
+        "name": "linux sandbox (bubblewrap) live smoke",
+        "state": "passing"
+      },
+      {
+        "name": "client matrix (streaming)",
+        "state": "passing"
+      },
+      {
+        "name": "AC8 full suite (5000 ms, preload)",
+        "state": "passing"
+      },
+      {
+        "name": "typecheck-and-tests",
+        "state": "passing"
+      },
+      {
+        "name": "wiki validate (gate) + freshness (report)",
+        "state": "passing"
+      },
+      {
+        "name": "vscode-extension",
+        "state": "passing"
+      },
+      {
+        "name": "mkdocs build --strict",
+        "state": "passing"
+      }
+    ],
+    "failing": []
+  },
+  "backendPins": [],
+  "comments": []
+}

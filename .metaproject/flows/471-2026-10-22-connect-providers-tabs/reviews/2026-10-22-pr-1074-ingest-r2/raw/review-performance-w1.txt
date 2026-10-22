@@ -1,0 +1,62 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "slice-02 (agent-commands registry, shell chat/agent REPL dispatch, remote command router/gateway/bridge, help-groups, tests) read in full. No performance finding on a named hot path: the changed code is a registry edit, a removed-command hint lookup on the unknown-command path, and Telegram picker steps that run once per operator button press. One info question about an unbounded await in the device-login path, whose host side is outside this slice.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "info",
+      "file": "src/remote/command-router.ts",
+      "line": null,
+      "quote": "outcome = await host.connectWithDeviceLogin(provider.id, notify);",
+      "problem": "connectAddable awaits the host's device login with no time bound of its own. The router's commandLimitMs (120_000, used only for enqueued runs) does not apply here, because the picker flow is started through detach() and is not on the command chain. The wait ends only when the host's login resolves or throws.",
+      "impact": "If the host login hangs (user never enters the code, polling has no expiry), the detached flow stays pending: RemoteCommandRouter.idle() never resolves (it waits on detachedDone while detached > 0), and each further /connect > Add provider > Connect press adds another pending flow. No evidence in this slice that the host lacks an expiry; the host implementation (src/tui/remote-provider-hooks.ts) is outside slice-02 and was not read here.",
+      "suggested_fix": "Confirm that the host's connectWithDeviceLogin enforces the device code's own expiry (or an AbortSignal/timeout). If it does, nothing to change. If not, race the call against a limit in connectAddable and report 'login not finished'.",
+      "evidence": "src/remote/command-router.ts, connectAddable: `outcome = await host.connectWithDeviceLogin(provider.id, notify);` inside try/catch with no timeout; picker flows run under detach() (`private detach(work: () => Promise<void>): void`). Reaching the hang needs a host login that never settles, which this slice does not show.",
+      "confidence": "low",
+      "reviewer": "review-performance",
+      "dedupe_key": "perf:connect-device-login-unbounded-await",
+      "location_class": "in-diff",
+      "publication": "question"
+    }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Performance Review
+
+### Scope
+- Slice read in full: slice-02 (1522 diff lines)
+- Files in slice: src/commands/agent-commands.ts, agent.ts, shell-types.ts, shell.ts, src/remote/command-connect.test.ts, command-gateway.test.ts, command-gateway.ts, command-router.ts, command.test-helpers.ts, shell-bridge.ts, src/standard/help-groups.ts and its test
+- Head file read for context: src/remote/command-router.ts (detach/idle, lines 255-315)
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 1
+
+### Findings
+
+### [F-001] Device login await has no bound of its own (question)
+- **Severity**: info
+- **File**: src/remote/command-router.ts (connectAddable)
+- **Hot path**: once per Telegram [Connect] press on a device-login provider; not a loop and not a per-request path.
+- **Problem**: `outcome = await host.connectWithDeviceLogin(provider.id, notify);` has no timeout in the router. commandLimitMs does not cover it, because the picker flow runs detached.
+- **Why it matters**: only if the host login never settles: `idle()` would stay pending and each extra press adds another pending flow. The host side is not in this slice, so this stays a question.
+- **Fix**: confirm the host login expires with the device code, or race it against a limit.
+
+### Clean Areas
+- N+1 queries and missing indexes: no data access in the slice.
+- Render and re-render cost: no UI code in this slice.
+- Hot-path computation: `removedCommandHint` is one object lookup on the unknown-command path only; `renderCommandHelp` / HELP_TEXT are unchanged in cost and the registry shrank by one entry.
+- Memory growth: REMOVED_COMMAND_HINTS is a constant one-entry map; the router adds no listeners, timers or caches. The notify closure is per press and released when the login ends.
+- Redundant calls: `pickProvider` calls listProviders and, on Add provider, listAddableProviders once each per operator press; the second call is on a different list and is not repeated within one flow.
+- Bundle imports and sync blocking: none added.
+- Pagination: the addable list is the known-provider set (a small fixed catalog), shown as buttons; not unbounded.

@@ -1,0 +1,80 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Slice-03 (src/tui, 2915 diff lines) read in full against pr-context.md. The PR body has no Documentation, Breaking-change or Screenshots boxes, only a Test plan; each Test plan box and each Summary claim was worked as a row. Three disagreements between the body and the diff are filed: one chat-facing string that tells a Telegram operator to Connect where Connect is device-login only (minor), a claim that omits the failure path of [Connect] (info), and a claim that the Add list is every known provider with [Connect] and [Test] (info). The `/provider` removal claim holds in this slice: every `/provider` mention the slice touches in src/tui is rewritten to `/connect`, and the orchestrator's search at the worktree head shows no production `/provider` left in src/tui (only history comments in two test files) and one deliberate mention in src/commands/agent-commands.ts (the removed-command table), which the AC10 invariant in the body does not cover and does not contradict. No documentation gap is filed from this slice: the user-visible strings it adds (tab labels, the `a` key, 1/2 and Tab, the footers) are not described in any document supplied to this lane.",
+  "findings": [
+    {
+      "id": "PC-201",
+      "severity": "minor",
+      "file": "src/tui/remote-provider-hooks.ts",
+      "line": null,
+      "quote": "export const NO_CREDENTIAL_TEXT = \"no credential, Connect first\";",
+      "problem": "PR body: \"Telegram `/connect` gains an \\\"Add provider\\\" button, a [Test] per provider, and [Connect] by device login only. A key is never typed in chat (flow 387 AC4).\" The diff reuses one string, NO_CREDENTIAL_TEXT, for the TUI Add tab and for Telegram: `testProviderForRemote` returns `{ ok: false, message: NO_CREDENTIAL_TEXT }` for every provider that has no credential, including key-only providers, and tui-shell.ts wires it as `testProvider: (providerId) => testProviderForRemote(providerId, { probe: (id) => probeProviderConnection(id, { requireCredential: true }) })`. In the same file `createRemoteDeviceLogin.connect` answers a provider without a device login with \"this provider has no device login; its key is entered in the shell with /connect\". So in the topic, [Test] on a key-only provider says \"Connect first\", while [Connect] from chat is refused for that provider. Whether the topic shows a [Connect] button for key-only providers is decided in the command router (another slice, not read here); the text is wrong either way, because Connect cannot finish in chat for them.",
+      "impact": "A Telegram operator who tests a key-only provider is told to Connect first and has no way to do it from the chat; the pointer to the shell is only in the refusal text. The wording is right in the TUI (where [Connect] takes a key) and wrong in the chat the body says is device-login-only.",
+      "suggested_fix": "Make the Telegram wording depend on `deviceLogin`: for a provider without a device login say the key is entered in the shell with /connect; keep \"Connect first\" for device-login providers. Or word the shared text so it is true on both surfaces.",
+      "evidence": "pr-context.md line 13 (\"[Connect] by device login only\") vs src/tui/remote-provider-hooks.ts `case \"no-credential\": return { ok: false, message: NO_CREDENTIAL_TEXT };` and the `if (!allows(providerId))` refusal in `createRemoteDeviceLogin`; src/tui/tui-shell.ts `testProvider: ...requireCredential: true` and `listAddableProviders` (`deviceLogin: catalogAllows(prov.name, \"device-code\")`).",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:remote-test-says-connect-first",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "PC-202",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "text: result.models.failure !== undefined ? modelsFailureLine(result.label, result.models.failure) : `${result.label}: no models returned`,",
+      "problem": "PR body: \"[Connect] runs the base-URL, key or device-login steps, checks `/models`, returns to \\\"Connected\\\" and does not switch the session.\" In `runProvidersModal` the dialog returns to Connected only when `/models` answers with models. On Esc in any step, a skipped key (\"no key entered\"), a `/models` failure or an empty list it sets `tab = \"add\"` and, except for a plain Esc, shows an error notice; the body states only the success path.",
+      "impact": "Low: the code is sensible and matches its own doc comment (\"a failed one back on the Add tab with the reason\"). A reader of the body expects to land on Connected whatever happens.",
+      "suggested_fix": "If the body is kept as the record of the change, add \"a failed connect stays on Add provider with the reason\".",
+      "evidence": "pr-context.md line 11 vs src/tui/tui-shell.ts `runProvidersModal`: `if (result.kind === \"back\") { tab = \"add\"; ... }` and the `else { tab = \"add\"; notice = { tone: \"error\", ... } }` branch.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:connect-failure-path-not-described",
+      "location_class": "pr-process"
+    },
+    {
+      "id": "PC-203",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": ".filter((prov) => prov.name !== \"fake\")",
+      "problem": "PR body: \"\\\"Add provider\\\" lists every known provider with [Connect] and [Test].\" The TUI Add tab builds its rows from `const all = [...detected];` plus `CUSTOM_ADD_ENTRY` with no filter, and the custom row gets [Connect] only (`if (!isCustom) { second = smallActionButton(... \"Test\" ...) }`). Telegram's Add list, built in `listAddableProviders`, drops `fake`. So the two Add lists differ from each other and neither is exactly \"every known provider with [Connect] and [Test]\".",
+      "impact": "Cosmetic. A test-only provider can show in the TUI Add tab (when detection returns it) and not in Telegram; the \"Add custom provider\" row has one button.",
+      "suggested_fix": "Either state the two exceptions in the body or apply the same `fake` rule in both lists. Unverified whether `detected` ever carries `fake` in a user session: the doc comment of `filterConnectedDetectedProviders` says non-registry entries (ollama/anthropic/fake) stay as detection left them.",
+      "evidence": "pr-context.md line 10 vs src/tui/tui-shell.ts (`const all = [...detected];`, `if (!isCustom) {`, and the `listAddableProviders` filter).",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:add-list-every-known-provider",
+      "location_class": "pr-process"
+    }
+  ],
+  "needs_context": [],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 2 }
+}
+```
+
+Checklist rows (pr-context.md, slice-03 view)
+
+| Box or claim (quoted) | State | What the diff shows (`file`, quoted) | Expectation / result |
+|---|---|---|---|
+| `bun test` on connect-modal, connect-provider-buttons, agent-commands, help-groups, shell, modal-host, queue-nav, remote (1327 pass), provider-probe | ticked | the PR scope lists connect-modal, connect-provider-buttons, modal-host, queue-nav, provider-probe and remote-provider-hooks tests (outside this slice's text); the slice adds `stepAddNavAction`, `footerFor`, `createRemoteDeviceLogin` | consistent |
+| `bunx tsc --noEmit -p .` | ticked | no signal in the diff; CI `typecheck-and-tests: passing` | consistent |
+| AC10 invariant: no `/provider` in README, docs/docs, src/standard, init.ts | ticked | slice rewrites `/provider` to `/connect` in balance-panel.ts, chat-shell.ts, game-modal.ts, games/model-turn.ts, tui-shell.ts; the invariant does not name src/tui. Orchestrator's search at the head: no production `/provider` in src/tui; one in src/commands/agent-commands.ts (removed-command table) | consistent; nothing contradicts the body |
+| AC12 live run in a real `keryx shell` | unticked | n/a (merged) | author's statement; not contradicted by the diff |
+| Review round | unticked | n/a | this review |
+| `/connect` is the only command; two tabs; Connected rows [Test] [Disconnect] + [Add provider] | claim | `PROVIDERS_TABS` (`connected`, `add`), `smallActionButton(otui, r, "Add provider", "cp-add-provider", ...)`, Test and Disconnect buttons | consistent |
+| Add provider lists every known provider with [Connect] and [Test] | claim | custom row has [Connect] only; Telegram list drops `fake` | PC-203 |
+| [Connect] runs steps, checks /models, returns to Connected, no session switch | claim | `runProvidersModal` returns to Add on failure and never resolves a selection from `connect` | PC-202 (success path matches) |
+| With nothing connected the modal opens on Add provider | claim | `let tab: ProvidersTabId = connected.length > 0 ? "connected" : "add";` and `selectProviderModelInTui` opens `runProvidersModal` before the `detected.length === 0` shortcut | consistent |
+| `/provider` removed; typing it answers with a hint to use `/connect` | claim | `removedCommandHint(line)` appended to the "Unknown command" text in tui-shell.ts; `/connect` handler no longer accepts `/provider` | consistent for the agent shell; the helper itself is in another slice |
+| Telegram: Add provider button, [Test] per provider, [Connect] by device login only, key never typed in chat | claim | `listAddableProviders`, `testProvider`, `connectWithDeviceLogin`, `allows` guard refuses key providers | consistent, except the shared "Connect first" wording (PC-201) |
+| `modal-host` gets optional `footerFor(tabId)` | claim | `footerFor?: (tabId: string) => ...` in `OpenModalInput`; `mountTab` calls `paintFooter(state, input.footerFor(tabId) ?? input.footer)`; the overlay fallback repaints the footer on `mount` | consistent |
+| Documentation / Breaking change / Screenshots boxes | absent from the body | no checklist boxes to contradict | no row; no document describing the new keys (`a`, 1/2, Tab, left/right Connect/Test) was supplied to this lane |
+
+Not read (outside the slice, read-only): documents and src/tui files outside the diff; slices 01, 02 and 04 belong to other passes.

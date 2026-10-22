@@ -1,0 +1,159 @@
+{
+ "judge": "review-premise",
+ "source": "round",
+ "findings": [
+  {
+   "id": "review-clean-code-w2:CC-5",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": 3292,
+   "quote": null,
+   "problem": "RowBlock fields `first` and `second` (3292-3293) say nothing about what they hold, while the surrounding code is about label and detail lines.",
+   "suggested_fix": "Rename to `title` and `detail` (or whatever the painter treats them as)."
+  },
+  {
+   "id": "review-clean-code-w2:CC-6",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": 3314,
+   "quote": null,
+   "problem": "Unnamed layout numbers in pickProvidersTabbedStep: `bodyWidth - 24 - labelOf(d).length` (3314), the same `24` plus a `13` for the connected mark at 3319 (13 is the length of the literal `\"  ✓ connected\"` at 3338, restated by hand), and `Math.min(24, rowCount * 2 + 3)` for contentRows at 3625.",
+   "suggested_fix": "Name them (`DETAIL_COLUMN_RESERVE`, `MAX_CONTENT_ROWS`) and derive 13 from the mark string's `.length`."
+  },
+  {
+   "id": "review-clean-code-w2:CC-7",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": 3987,
+   "quote": null,
+   "problem": "In runProvidersModal the connect-success block (3987-3998) and the custom-success block (4009-4018) are near-duplicates: both save the provider, run the /models check and emit the same \"no models returned\" literal (3996, 4017). The custom branch is also the catch-all, identified only by the comment `// action.kind === \"custom\"` at 4001.",
+   "suggested_fix": "Share one `finishConnect(entry)` helper and switch on `action.kind` explicitly with an exhaustive default."
+  },
+  {
+   "id": "review-clean-code-w2:CC-8",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/remote-provider-hooks.ts",
+   "line": 136,
+   "quote": "void notify(`Open ${challenge.verificationUri} and enter the code ${challenge.userCode}`).catch(() => undefined);",
+   "problem": "A failure to send the challenge message to Telegram is swallowed with no comment. If the notify fails, the user never sees the code, the login waits out the full 10-minute limit and then reports only \"Device login timed out\".",
+   "suggested_fix": "Keep the swallow (an unhandled rejection would be worse) but add a comment saying why, and either abort the login on a failed notify or record the failure so endedEarly can say \"could not send the code\"."
+  },
+  {
+   "id": "review-clean-code-w2:CC-9",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": 3591,
+   "quote": null,
+   "problem": "The code relies on ordering inside one closure: a comment at 3591-3592 says \"(before `surface` is assigned)\", `focusApplied` (3616) guards a first paint that may run before `surface` exists, and `finish` (3368-3374) and `switchTab` (3448-3452) both use `surface?.`. The `const surface: TabbedSurface | undefined = openTabbedSurface(...)` at 3619 is typed as possibly undefined only to satisfy those earlier references.",
+   "suggested_fix": "Part of the CC-1 extraction: pass the surface into paint/finish explicitly, or create the surface first and fill in the paint callback afterwards."
+  },
+  {
+   "id": "review-clean-code-w2:CC-10",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": 2278,
+   "quote": null,
+   "problem": "openTabbedSurface duplicates the ModalHost key handling (Esc, x, Tab, digit keys) for its full-screen fallback; the Tab cycle is written twice in the same function (claimKey at ~2278 and `cycle` at ~2347).",
+   "suggested_fix": "Make `cycle` the single implementation and call it from claimKey; share the key table between the two branches."
+  },
+  {
+   "id": "review-clean-code-w2:CC-11",
+   "reviewer": "review-clean-code",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/remote-provider-hooks.ts",
+   "line": 128,
+   "quote": null,
+   "problem": "createRemoteDeviceLogin.connect is about 47 lines with a nested ternary in endedEarly (`timedOut ? ... : stoppedByCaller ? ... : ...`). The LOGIN_* constants (84-87) cover some messages, but four sentences are inline (115, 131-ish, 148, 152).",
+   "suggested_fix": "Turn the outcome into a small `endReason()` function with if/return, and move the inline sentences next to the other LOGIN_* constants."
+  },
+  {
+   "id": "review-highload-w2:F-001",
+   "reviewer": "review-highload",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": null,
+   "quote": "async function runTest(tabId: ProvidersTabId, name: string): Promise<void> {",
+   "problem": "Provider [Test] has no in-flight guard, on either surface. In the Providers dialog, Enter or a click on [Test] calls runTest(...) every time; a second press before the first probe returns starts a second concurrent GET /models (and a second model-profile store refresh through onSummary) for the same provider, and whichever resolves last writes the row's status, so a slow first probe can overwrite a newer result. Telegram's [Test] (testProvider -> testProviderForRemote -> probeProviderConnection) likewise starts one probe per tap, with no per-provider dedup.",
+   "suggested_fix": "Keep a Map<providerId, Promise<ProviderProbeOutcome>> of probes in flight (one in the dialog step, one in the Telegram hook) and return the existing promise for a repeat press; delete the entry in finally. Or ignore the press while statuses holds the 'testing…' content for that row."
+  },
+  {
+   "id": "review-logic-w2:F-001",
+   "reviewer": "review-logic",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/remote/command-router.ts",
+   "line": null,
+   "quote": "const outcome = await host.testProvider(provider.id);",
+   "problem": "testAddable awaits host.testProvider, and pickAddableProvider awaits host.listAddableProviders, with no try/catch. connectAddable, in the same class, wraps host.connectWithDeviceLogin in try/catch and answers with a fixed sentence. If either unguarded hook rejects, the rejection reaches detach()'s `.catch(() => undefined)`, so the topic gets no reply and `ended(end, ...)` is never called.",
+   "suggested_fix": "Wrap the testProvider and listAddableProviders calls like connectAddable does. On a throw, reply with a fixed sentence such as 'Test failed. The details are in the shell.' and return \"failed\". Never put the error message in the reply."
+  },
+  {
+   "id": "review-logic-w3:L1",
+   "reviewer": "review-logic",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": null,
+   "quote": "if (result.models.failure === undefined && result.models.models.length > 0) {",
+   "problem": "runProvidersModal decides 'connected' from `failure === undefined && models.length > 0`. For a provider that providerByName does not know, resolveModelsForPicker returns `{ models: [...provider.models], source: \"fallback\" }` with no failure, so the check passes without any /models call. The same condition guards both the connect branch and the custom branch. Reproducible path: Connected tab, Disconnect a custom provider (removeCustomCompatProvider); switch to Add provider (the `all` snapshot is not pruned in armOrConfirmDisconnect, so the removed provider is still listed); [Connect] it; the base-URL step writes an orphan baseUrls override; the picker falls back to the stale provider.models; the modal shows 'connected - N model(s)' and upserts a phantom row on the Connected tab. Picking that row would switch the session to a provider that no longer exists. Non-registry providers (e.g. ollama, anthropic) take the same path, whereas Add-tab [Test] answers 'unknown provider - cannot test' for them, so the two buttons disagree.",
+   "suggested_fix": "Require `result.models.source === \"live\"` (or re-check providerByName) before marking the provider connected, in both the connect and custom branches. Also drop the provider from `all` when disconnectProvider returns kind `custom`, so the Add tab cannot offer a removed provider."
+  },
+  {
+   "id": "review-logic-w4:F-001",
+   "reviewer": "review-logic",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/connect-modal.test.ts:733",
+   "line": null,
+   "problem": "In 'the typed key is on no channel the shell shows' the test mounts selectProviderModelInTui directly, never the /connect handler inside launchTuiAgentShell (tui-shell.ts:10436) that is the code which toasts, prints system lines and writes the transcript. So transcriptText(h.chrome) not containing the key, and the toast/status/header/title spy collecting nothing secret, only prove that the picker function itself does not write there; the shell-side half is not exercised. Also `expect(existsSync(configDir)).toBe(true)` is true by construction (mkdtempSync in beforeEach), and `expect(settled).toBe(true)` at line 367 directly follows `await pending` and is tautological.",
+   "suggested_fix": "Drop the tautological assertions, and either narrow the test title to 'the picker writes the key to no chrome channel' or add a source-text audit like the AC7 block in connect-provider-buttons.test.ts for the /connect handler. AC7's journal and flow-log clauses are verified by no test in this slice at all (see F-002)."
+  },
+  {
+   "id": "review-performance-w2:F-001",
+   "reviewer": "review-performance",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/remote-provider-hooks.ts",
+   "line": null,
+   "quote": "if (entry !== undefined && now() - entry.at < ttlMs) {",
+   "problem": "createConnectedProvidersCache stamps `at: now()` when the load STARTS and treats an entry older than ttlMs (15s) as expired even while its promise is still pending. The probe behind it (filterConnectedDetectedProviders) is a sequential `for ... await fetchOpenAiCompatModelsDetailed` loop, one /models request per keyed provider, each bounded only by MODELS_FETCH_TIMEOUT_MS. If a burst's load takes longer than 15s (several slow or timing-out providers), the second call of the burst (listProviders then listAddableProviders) finds the entry 'expired', starts a second full sequential probe in parallel with the first, and the 'one probe serves both' claim in the doc comment does not hold.",
+   "suggested_fix": "Stamp the TTL when the load RESOLVES, and while an entry's promise is pending always return it: keep `entry = { at: Infinity, value }` until it settles, then set `at = now()` in a `.then`. The failed-load eviction already handles the error path."
+  },
+  {
+   "id": "review-pr-contract-w1:PC-001",
+   "reviewer": "review-pr-contract",
+   "severity": "minor",
+   "source": "round",
+   "file": "docs/docs/guides/drive-keryx-remotely.md",
+   "line": null,
+   "quote": "`/connect` shows providers that are already connected, then their models. No key or address is shown.",
+   "problem": "pr-context.md claims: \"Telegram `/connect` gains an \\\"Add provider\\\" button, a [Test] per provider, and [Connect] by device login only.\" The page that describes Telegram commands, drive-keryx-remotely.md (touched by this diff only to drop `/provider` from the stay-in-shell list), still says in the Buttons row of the \"Commands from the topic\" table: \"`/connect` shows providers that are already connected, then their models. No key or address is shown.\" It names none of the new Add provider list, the per-row Test, or the device-login Connect (code and link posted to the chat).",
+   "suggested_fix": "Extend that row: after the connected list and models, an Add provider button lists every provider with Test and, where the provider offers a device login, Connect (code and link are posted to the chat); a provider that needs a key says to enter it in the shell. Keep the line that no key is typed in chat."
+  },
+  {
+   "id": "review-pr-contract-w1:PC-002",
+   "reviewer": "review-pr-contract",
+   "severity": "minor",
+   "source": "round",
+   "file": "CHANGELOG.md",
+   "line": null,
+   "quote": "in Telegram the same modal opens, with Add provider and a [Test] on each row.",
+   "problem": "The 0.3.130 entry says \"in Telegram the same modal opens\". pr-context.md describes Telegram as buttons, not a modal: \"Telegram `/connect` gains an \\\"Add provider\\\" button, a [Test] per provider, and [Connect] by device login only\"; description.md in the diff says \"Telegram gets the same two-part flow with buttons\"; and the drive-keryx-remotely.md row calls it a picker. A Telegram chat has no ModalHost modal.",
+   "suggested_fix": "Reword the bullet: in Telegram, `/connect` shows the connected providers as buttons and an Add provider button; each row in the list has Test, and Connect where the provider has a device login."
+  }
+ ]
+}
