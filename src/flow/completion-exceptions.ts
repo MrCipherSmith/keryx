@@ -60,3 +60,17 @@ export function selectCompletionExceptions(
   }
   return { ok: true, exceptions, remaining: [...failed.keys()] };
 }
+
+export type CompletionExceptionContext = {
+  head: string | null;
+  acChecksum: string | null;
+  prUrl: string | null;
+  baseBranch: string | null;
+  mergedCommit: string | null;
+};
+
+/** The selected refusal alone is not an identity: different heads can fail identically. */
+export function completionExceptionQuestion(id: string, selected: readonly CompletionExceptionSelection[], context?: CompletionExceptionContext): string {
+  return `Complete flow ${id} with exceptions? ` + selected.map(formatCompletionException).join(" ") +
+    (context === undefined ? "" : ` Context: ${JSON.stringify(context)}`);
+}

@@ -554,6 +554,7 @@ export type FlowCompletionCheck = {
   passed: boolean;
   /** The flow opted into a confirmation token (`gates.confirmation`); one is minted only by `keryx flow confirm`. */
   confirmationRequired: boolean;
+  exceptionContext: import("./completion-exceptions").CompletionExceptionContext;
 };
 
 export type FlowConfirmMintResult = {
@@ -767,7 +768,7 @@ export interface FlowService {
   complete(input: {
     acceptGates?: string[] | undefined;
     reason?: string | undefined;
-    confirmExceptions?: ((selected: readonly import("./completion-exceptions").CompletionExceptionSelection[]) => Promise<Pick<CompletionException, "operatorWords" | "confirmedVia" | "hostQuestion"> | undefined>) | undefined;
+    confirmExceptions?: ((selected: readonly import("./completion-exceptions").CompletionExceptionSelection[], context: import("./completion-exceptions").CompletionExceptionContext) => Promise<Pick<CompletionException, "operatorWords" | "confirmedVia" | "hostQuestion"> | undefined>) | undefined;
     cwd: string;
     id: string;
     comment?: boolean | undefined;

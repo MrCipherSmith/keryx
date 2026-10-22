@@ -1,4 +1,4 @@
-import { formatCompletionException } from "../flow/service";
+import { completionExceptionQuestion, type CompletionExceptionContext } from "../flow/service";
 // Terminal counterparts of the flow-457 operator cards, and `verify-run` (flow 457, T7).
 //
 //   keryx review waive-mutation      --package <dir> --reason "<why>"     (TTY; card: review_waive_mutation)
@@ -545,6 +545,7 @@ export function completionHostAnswer(
   flowId: string,
   cwd: string,
   env: Readonly<Record<string, string | undefined>> = process.env,
+  context?: CompletionExceptionContext,
 ): { operatorWords: string; confirmedVia: "host-question"; hostQuestion: HostQuestion } {
   if (env["KERYX_TOOL_CALL"] === "1" || env["KERYX_UNATTENDED"] === "1" ||
       isAutonomousEnv(env) || readRunProfile(cwd)?.mode === "unattended") {
@@ -559,7 +560,7 @@ export function completionHostAnswer(
   if (hiddenInCard(questionText) || hiddenInCard(answerText) || hiddenInCard(by.ref)) {
     throw new Error("Host question and answer must contain no hidden or control characters.");
   }
-  const expected = `Complete flow ${flowId} with exceptions? ` + selected.map(formatCompletionException).join(" ");
+  const expected = completionExceptionQuestion(flowId, selected, context);
   if (questionText !== expected) {
     throw new Error(`Ask the current completion question verbatim: ${expected}`);
   }

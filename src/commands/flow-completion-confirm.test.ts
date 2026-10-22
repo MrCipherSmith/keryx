@@ -3,6 +3,8 @@ import { confirmCompletionExceptions, acceptedGateArgs } from "./flow-completion
 import { flowExceptionSpec } from "./operator-confirm-flow-exceptions";
 import type { FlowService } from "../flow/types";
 
+const context = { head: "a".repeat(40), acChecksum: "criteria", prUrl: "https://github.com/acme/app/pull/1", baseBranch: "main", mergedCommit: null };
+
 const selected = [{ gate: "health" as const, detail: "released regression", reason: "already shipped" }];
 
 test("accept-gate is repeatable and comma separated", () => {
@@ -25,9 +27,9 @@ test("terminal asks about exact failures and preserves the operator's words", as
 test("exception card rejects changed refusals before completing", async () => {
   let completed = false;
   const service = {
-    checkComplete: async () => ({ transition: { allowed: true }, gates: [{ name: "health", status: "fail", detail: "released regression" }] }),
+    checkComplete: async () => ({ exceptionContext: context, transition: { allowed: true }, gates: [{ name: "health", status: "fail", detail: "released regression" }] }),
     complete: async (input: Parameters<FlowService["complete"]>[0]) => {
-      await input.confirmExceptions?.([{ ...selected[0]!, detail: "new failure" }]); completed = true;
+      await input.confirmExceptions?.([{ ...selected[0]!, detail: "new failure" }], context); completed = true;
     },
   } as unknown as FlowService;
   const spec = flowExceptionSpec(async () => service);
@@ -41,9 +43,9 @@ test("exception card rejects changed refusals before completing", async () => {
 
 test("exception card forwards the operator answer, not the rendered question, to completion", async () => {
   const service = {
-    checkComplete: async () => ({ transition: { allowed: true }, gates: [{ name: "health", status: "fail", detail: "released regression" }] }),
+    checkComplete: async () => ({ exceptionContext: context, transition: { allowed: true }, gates: [{ name: "health", status: "fail", detail: "released regression" }] }),
     complete: async (input: Parameters<FlowService["complete"]>[0]) => {
-      const decision = await input.confirmExceptions?.(selected);
+      const decision = await input.confirmExceptions?.(selected, context);
       expect(decision).toEqual({ operatorWords: "yes", confirmedVia: "shell-card" });
       return { passed: true };
     },
@@ -57,3 +59,20 @@ test("exception card forwards the operator answer, not the rendered question, to
   } as never, card.prepared);
   expect(result.isError).toBe(false);
 });
+
+for (const changed of ["head", "acChecksum", "prUrl", "baseBranch"] as const) {
+  test(`exception card rejects stale ${changed} with identical failures`, async () => {
+    const service = {
+      checkComplete: async () => ({ exceptionContext: context, transition: { allowed: true }, gates: [{ name: "health", status: "fail", detail: "released regression" }] }),
+      complete: async (input: Parameters<FlowService["complete"]>[0]) => {
+        await input.confirmExceptions?.(selected, { ...context, [changed]: "changed" });
+        return { passed: true };
+      },
+    } as unknown as FlowService;
+    const spec = flowExceptionSpec(async () => service);
+    const ctx = { projectRoot: "/tmp", env: {}, now: () => new Date() };
+    const card = await spec.buildCard({ flow_id: "469", accept_gates: ["health"], reason: "already shipped" }, ctx);
+    if ("refusal" in card) throw new Error(card.refusal);
+    await expect(spec.apply({}, ctx, { answer: "yes" } as never, card.prepared)).rejects.toThrow(/changed/);
+  });
+}

@@ -14,17 +14,19 @@ export class ReviewCompletionChangedError extends Error {
 
 /** Track exact authorized writes, never re-baseline unrelated changes after a waiver. */
 export function completionWriter(packageDir: string, snapshot: string): { write: CompletionWriter; assertUnchanged: () => void; rollback: () => void } {
-  const names = ["manifest.json", "report.md", "research.json", "findings.json", "decisions.md"];
-  const expected = JSON.parse(snapshot) as string[];
+  const parsed = JSON.parse(snapshot) as Record<string, string | null> | string[];
+  // Old callers supplied the original five-file array; retain that API without weakening new snapshots.
+  const names = Array.isArray(parsed) ? ["manifest.json", "report.md", "research.json", "findings.json", "decisions.md"] : Object.keys(parsed);
+  const expected: Array<string | null> = Array.isArray(parsed) ? [...parsed] : names.map((name) => parsed[name] ?? null);
   const original = [...expected];
   const written = new Set<number>();
   const assertUnchanged = (): void => {
     for (const [index, name] of names.entries()) {
-      let content: string;
+      let content: string | null;
       try { content = readFileSync(path.join(packageDir, name), "utf8"); }
       catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT" || name !== "research.json") throw error;
-        content = "{}";
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        content = Array.isArray(parsed) && name === "research.json" ? "{}" : null;
       }
       if (content !== expected[index]) throw new ReviewCompletionChangedError();
     }
@@ -37,6 +39,11 @@ export function completionWriter(packageDir: string, snapshot: string): { write:
       try {
         // Only undo our own last version; preserve any subsequently edited file.
         if (readFileSync(file, "utf8") !== expected[index]) continue;
+        if (original[index] === null) {
+          rmSync(file, { force: true });
+          expected[index] = null;
+          continue;
+        }
         writeFileSync(temporary, original[index]!, { mode: 0o600, flag: "wx" });
         if (readFileSync(file, "utf8") === expected[index]) {
           renameSync(temporary, file);

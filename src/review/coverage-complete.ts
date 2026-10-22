@@ -1,3 +1,4 @@
+import { withCompletionLock } from "./completion-lock";
 import type { CompletionWriter } from "./completion-write";
 // Which in-scope files a review actually looked at. In scope is scope A (the changed files) together with scope B (the
 // blast radius, including the files the cap dropped). Every file ends up covered, omitted under a named reason, or
@@ -214,6 +215,10 @@ const MIN_WAIVER_QUOTE_CHARS = 8;
  * of the mutation waiver: their quote, the time, and the waived file list). Nothing uncovered means nothing to waive.
  */
 export async function recordCoverageWaiver(packageDir: string, operatorQuote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia, press?: CardPress & { hostQuestion?: HostQuestion }, write: CompletionWriter = writeFileAtomic): Promise<CoverageWaiver | undefined> {
+  return withCompletionLock(packageDir, () => recordCoverageWaiverLocked(packageDir, operatorQuote, now, confirmedVia, press, write));
+}
+
+async function recordCoverageWaiverLocked(packageDir: string, operatorQuote: string, now: Date = new Date(), confirmedVia?: ConfirmedVia, press?: CardPress & { hostQuestion?: HostQuestion }, write: CompletionWriter = writeFileAtomic): Promise<CoverageWaiver | undefined> {
   // A flag name or a one-word "ok" is not the operator's words; the flag is also a human-confirmation command (see command-risk).
   const quote = operatorQuote.replace(/-{0,2}waive[- ]?coverage/gi, "").trim();
   if (quote.length < MIN_WAIVER_QUOTE_CHARS || !/[\p{L}\p{N}]/u.test(quote)) {
