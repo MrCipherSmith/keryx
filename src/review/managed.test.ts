@@ -1,3 +1,4 @@
+import { completionSnapshot } from "./completion-snapshot";
 import { READY_DISPATCH } from "./dispatch.test-helpers";
 import { COVERAGE_MD_MARK } from "./coverage-md";
 import { afterEach, describe, test, expect } from "bun:test";
@@ -2090,6 +2091,7 @@ for (const scenario of ["success", "changed report", "replay", "nested", "unatte
       research: await readFile(path.join(dir, "research.json"), "utf8"),
       findings: await readFile(path.join(dir, "findings.json"), "utf8"),
       decisions: await readFile(path.join(dir, "decisions.md"), "utf8"),
+      coverage: JSON.parse(await completionSnapshot(dir)) as Record<string, string | null>,
       dispositions: [], waiveReadiness: [], waiveCoverage: undefined,
     };
     const hostQuestion = { source: "codex" as const, ref: "host-integration", questionText: reviewCompletionQuestion(context), answerText: "yes", time: "2026-10-21T10:00:00Z" };
@@ -2144,7 +2146,8 @@ test(`host completion persists dispositions and both waiver provenances atomical
     manifest: stored,
     research: await readFile(path.join(dir, "research.json"), "utf8"),
     findings: await readFile(path.join(dir, "findings.json"), "utf8"),
-    decisions: await readFile(path.join(dir, "decisions.md"), "utf8"), dispositions, waiveReadiness, waiveCoverage };
+    decisions: await readFile(path.join(dir, "decisions.md"), "utf8"),
+      coverage: JSON.parse(await completionSnapshot(dir)) as Record<string, string | null>, dispositions, waiveReadiness, waiveCoverage };
   const hostQuestion = { source: "codex" as const, ref: "host-waivers", time: "2026-10-21T10:00:00Z", answerText: "yes", questionText: reviewCompletionQuestion(context) };
   expect(hostQuestion.questionText.length).toBeGreaterThan(2000);
   const previous = process.env["KERYX_TOOL_CALL"];
@@ -2201,7 +2204,8 @@ for (const phase of ["waiver", "disposition", "readiness"] as const) {
       report: await readFile(path.join(dir, "report.md"), "utf8"), manifest: stored,
       research: await readFile(path.join(dir, "research.json"), "utf8"),
       findings: await readFile(path.join(dir, "findings.json"), "utf8"),
-      decisions: await readFile(path.join(dir, "decisions.md"), "utf8"), dispositions, waiveReadiness, waiveCoverage: waiver };
+      decisions: await readFile(path.join(dir, "decisions.md"), "utf8"),
+      coverage: JSON.parse(await completionSnapshot(dir)) as Record<string, string | null>, dispositions, waiveReadiness, waiveCoverage: waiver };
     const hostQuestion = { source: "codex" as const, ref: `race-${phase}`, time: "2026-10-21T10:00:00Z", answerText: "yes", questionText: reviewCompletionQuestion(context) };
     let waiverRecorded = false;
     const now = new Date("2026-10-21T10:00:00Z");

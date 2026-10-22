@@ -1,3 +1,4 @@
+import { completionExceptionQuestion } from "./completion-exceptions";
 // Flow 291, AC4 — `flow complete` persists the outcome of every gate it
 // evaluated on EVERY attempt, pass or fail, as an append-only additive field
 // (`FlowState.completionAttempts`) — no longer reduced to one prose history
@@ -227,12 +228,12 @@ for (const confirmed of [true, false]) {
     let asked = false;
     const result = await service.complete({
       cwd: ROOT, id: flow.id, acceptGates: ["health"], reason: "released; tracked separately",
-      confirmExceptions: async (selected) => {
+      confirmExceptions: async (selected, context) => {
         asked = true;
         expect(selected[0]?.detail).toContain("released regression");
         return confirmed ? { operatorWords: "Да", confirmedVia: "host-question", hostQuestion: {
           source: "codex", ref: "fresh-host-answer", time: "2026-09-22T10:00:00.000Z",
-          questionText: "Complete flow with the shown exceptions?", answerText: "Да",
+          questionText: completionExceptionQuestion(flow.id, selected, context), answerText: "Да",
         } } : undefined;
       },
     });

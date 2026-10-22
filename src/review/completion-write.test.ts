@@ -59,3 +59,16 @@ for (const name of ["coverage.md", "scope-files.json", "slices-manifest.json", "
     }
   });
 }
+
+test("completion fences recorded raw reviewer evidence", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "completion-raw-fence-"));
+  try {
+    await writeFile(path.join(dir, "manifest.json"), "original manifest");
+    await writeFile(path.join(dir, "research.json"), JSON.stringify({ dispatch: { runs: [{ rawEvidence: "result.txt#L1" }] } }));
+    await writeFile(path.join(dir, "result.txt"), "review result");
+    const writer = completionWriter(dir, await completionSnapshot(dir));
+    await rm(path.join(dir, "result.txt"));
+    await expect(writer.write(path.join(dir, "manifest.json"), "closed")).rejects.toThrow(/snapshot changed/);
+    expect(await readFile(path.join(dir, "manifest.json"), "utf8")).toBe("original manifest");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});

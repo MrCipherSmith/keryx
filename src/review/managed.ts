@@ -1,3 +1,5 @@
+import { withCompletionLock } from "./completion-lock";
+import { completionSnapshot } from "./completion-snapshot";
 import { completionWriter, type CompletionWriter } from "./completion-write";
 import { validateCompletionHost } from "./completion-host";
 import { isAutonomousEnv, readRunProfile } from "./run-profile";
@@ -19,7 +21,7 @@ import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat } from "nod
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { loadSchema, validateJson } from "../gdskills/contracts";
-import { pathExists, withFileLock, writeFileAtomic } from "../lib/fs";
+import { pathExists, writeFileAtomic } from "../lib/fs";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { clearActiveReview } from "./active-review";
 import { listFlowDirs, readFlow, resolveFlowDir, slugify } from "../flow/store";
@@ -958,14 +960,7 @@ export async function completeManagedReview(
   options: CompleteManagedReviewOptions = {},
 ): Promise<CompleteManagedReviewResult> {
   const packageDir = await resolveReviewPackagePath(cwd, ref);
-  return withFileLock(path.join(packageDir, ".completion.lock"), () => completeManagedReviewLocked(cwd, packageDir, options));
-}
-
-async function completionSnapshot(packageDir: string): Promise<string> {
-  return JSON.stringify(await Promise.all(["manifest.json", "report.md", "research.json", "findings.json", "decisions.md"].map(async (name) => {
-    try { return await readFile(path.join(packageDir, name), "utf8"); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT" && name === "research.json") return "{}"; throw error; }
-  })));
+  return withCompletionLock(packageDir, () => completeManagedReviewLocked(cwd, packageDir, options));
 }
 
 async function completeManagedReviewLocked(
@@ -973,9 +968,10 @@ async function completeManagedReviewLocked(
   packageDir: string,
   options: CompleteManagedReviewOptions,
 ): Promise<CompleteManagedReviewResult> {
-  const writer = options.hostQuestion === undefined ? undefined : completionWriter(packageDir, await completionSnapshot(packageDir));
-  const writeCompletion: CompletionWriter = writer?.write ?? writeFileAtomic;
-  const assertUnchanged = async (): Promise<void> => { writer?.assertUnchanged(); };
+  const snapshot = await completionSnapshot(packageDir);
+  const writer = completionWriter(packageDir, snapshot);
+  const writeCompletion: CompletionWriter = writer.write;
+  const assertUnchanged = async (): Promise<void> => { writer.assertUnchanged(); };
   const manifestPath = path.join(packageDir, "manifest.json");
   const stored = JSON.parse(await readFile(manifestPath, "utf8")) as ManagedReviewManifest;
   const missing = await missingArtifacts(packageDir);
@@ -1011,6 +1007,7 @@ async function completeManagedReviewLocked(
       research: await readFile(path.join(packageDir, "research.json"), "utf8").catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return "{}"; throw error; }),
       findings: await readFile(path.join(packageDir, "findings.json"), "utf8"),
       decisions: await readFile(path.join(packageDir, "decisions.md"), "utf8"),
+      coverage: JSON.parse(snapshot) as Record<string, string | null>,
       dispositions: options.dispositions ?? [], waiveReadiness: options.waiveReadiness ?? [], waiveCoverage: options.waiveCoverage,
     };
     const confirmation = validateCompletionHost(context, options.hostQuestion, stored.completionConfirmations ?? []);
@@ -1032,12 +1029,9 @@ async function completeManagedReviewLocked(
   const researchFindings = JSON.parse(await readFile(path.join(packageDir, "findings.json"), "utf8"));
   // The waiver is written first because the coverage gate reads it from research.json; a close that then fails takes it back,
   // so the next run does not pass the same gate without the flag.
-  const researchPath = path.join(packageDir, "research.json");
-  const researchBefore = options.waiveCoverage === undefined ? undefined : await readFile(researchPath, "utf8").catch(() => undefined);
   let coverageWaiver: CoverageWaiver | undefined;
   let readiness: ReadinessReport | undefined;
   let updated: ManagedReviewManifest;
-  const waiverBackup = (options.waiveReadiness ?? []).length === 0 ? undefined : { manifest: await readFile(manifestPath, "utf8"), report: reportText };
   await assertUnchanged();
   try {
     coverageWaiver = options.waiveCoverage === undefined ? undefined : await recordCoverageWaiver(packageDir, options.waiveCoverage, options.now, options.hostQuestion === undefined ? undefined : "host-question", options.hostQuestion === undefined ? undefined : { hostQuestion: options.hostQuestion }, writeCompletion);
@@ -1071,14 +1065,8 @@ async function completeManagedReviewLocked(
     await writeCompletion(manifestPath, `${JSON.stringify(updated, null, 2)}\n`);
   } catch (error) {
     // Any failure before the manifest is closed takes the waiver back, so the next plain close meets the gate again.
-    if (writer !== undefined) {
-      try { writer.rollback(); }
-      catch (rollbackError) { throw new AggregateError([error, rollbackError], "Review completion failed and rollback was incomplete", { cause: rollbackError }); }
-    } else if (researchBefore !== undefined) await writeFileAtomic(researchPath, researchBefore).catch(() => undefined);
-    if (writer === undefined && waiverBackup !== undefined) {
-      await writeFileAtomic(manifestPath, waiverBackup.manifest).catch(() => undefined);
-      await writeFileAtomic(path.join(packageDir, "report.md"), waiverBackup.report).catch(() => undefined);
-    }
+    try { writer.rollback(); }
+    catch (rollbackError) { throw new AggregateError([error, rollbackError], "Review completion failed and rollback was incomplete", { cause: rollbackError }); }
     throw error;
   }
   await clearActiveReview(resolveProjectRoot(cwd), updated.reviewId);

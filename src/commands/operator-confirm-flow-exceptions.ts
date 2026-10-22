@@ -1,10 +1,10 @@
-import { formatCompletionException, selectCompletionExceptions, type CompletionExceptionSelection } from "../flow/service";
+import { formatCompletionException, selectCompletionExceptions, type CompletionExceptionSelection, type CompletionExceptionContext } from "../flow/service";
 import type { FlowService } from "../flow/service";
 import { hiddenInCard } from "../lib/card-safe";
 import type { OperatorConfirmSpec } from "./operator-confirm-tools";
 import { CompletionConfirmationError } from "./flow-completion-confirm";
 
-type Prepared = { id: string; gates: string[]; reason: string; mergedCommit?: string; confirmToken?: string; selected: CompletionExceptionSelection[] };
+type Prepared = { id: string; gates: string[]; reason: string; mergedCommit?: string; confirmToken?: string; selected: CompletionExceptionSelection[]; context: CompletionExceptionContext };
 async function defaultService(): Promise<FlowService> {
   const [{ flowServiceDeps }, { createFlowService }] = await Promise.all([import("./flow"), import("../flow/service")]);
   return createFlowService(flowServiceDeps());
@@ -24,17 +24,17 @@ export function flowExceptionSpec(service: () => Promise<FlowService> = defaultS
       const choice = selectCompletionExceptions(check.gates, gates, reason);
       if (!choice.ok) return { refusal: choice.error };
       if (choice.remaining.length) return { refusal: `Unaccepted failures: ${choice.remaining.join(", ")}` };
-      const lines = choice.exceptions.map(formatCompletionException);
+      const lines = [...choice.exceptions.map(formatCompletionException), `Context: ${JSON.stringify(check.exceptionContext)}`];
       if ([id, ...lines].some(hiddenInCard)) return { refusal: "Hidden characters in exception text" };
       return { title: `Complete flow ${id} with exceptions?`, subject: `flow ${id}`, lines,
-        prepared: { id, gates, reason, ...(mergedCommit ? { mergedCommit } : {}), ...(confirmToken ? { confirmToken } : {}), selected: choice.exceptions } };
+        prepared: { id, gates, reason, ...(mergedCommit ? { mergedCommit } : {}), ...(confirmToken ? { confirmToken } : {}), selected: choice.exceptions, context: check.exceptionContext } };
     },
     async apply(_input, ctx, confirmation, prepared) {
       if (!prepared) return { output: "No exception completion prepared", isError: true };
       const result = await (await service()).complete({ cwd: ctx.projectRoot, id: prepared.id, acceptGates: prepared.gates, reason: prepared.reason,
         mergedCommit: prepared.mergedCommit, confirmToken: prepared.confirmToken,
-        confirmExceptions: async (current) => {
-          if (JSON.stringify(current) !== JSON.stringify(prepared.selected)) throw new CompletionConfirmationError("Refusals changed; ask again.");
+        confirmExceptions: async (current, context) => {
+          if (JSON.stringify(current) !== JSON.stringify(prepared.selected) || JSON.stringify(context) !== JSON.stringify(prepared.context)) throw new CompletionConfirmationError("Refusals changed; ask again.");
           return { operatorWords: confirmation.answer, confirmedVia: "shell-card" };
         },
       });

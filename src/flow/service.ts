@@ -1,4 +1,4 @@
-import { selectCompletionExceptions } from "./completion-exceptions";
+import { completionExceptionQuestion, formatCompletionException, selectCompletionExceptions } from "./completion-exceptions";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { DEFAULT_LOCK_STALE_MS, isLockHeld, pathExists, writeFileAtomic, withFileLock } from "../lib/fs";
@@ -58,6 +58,8 @@ import {
 // Re-exported so a client (the CLI) reads the caveat through this facade,
 // not from the zone's internals (import policy, rule 2).
 export {
+  completionExceptionQuestion,
+  type CompletionExceptionContext,
   formatCompletionException,
   selectCompletionExceptions,
   type CompletionExceptionSelection,
@@ -1483,6 +1485,8 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         gates: evaluation.gates,
         passed: allowed && evaluation.gates.every((gate) => gate.status !== "fail"),
         confirmationRequired: flow.gates?.confirmation === true,
+        exceptionContext: { head: evaluation.evaluatedHeadCommit ?? null, acChecksum: flow.acChecksum,
+          prUrl: flow.pr.url, baseBranch: flow.baseBranch ?? null, mergedCommit: mergedCommit ?? null },
       };
     },
 
@@ -1529,6 +1533,8 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         confirmToken,
       );
 
+      const exceptionContext = { head: evaluatedHeadCommit ?? null, acChecksum: flow.acChecksum,
+        prUrl: flow.pr.url, baseBranch: flow.baseBranch ?? null, mergedCommit: mergedCommit ?? null };
       const selection = selectCompletionExceptions(gates, acceptGates, reason);
       let exceptions: import("./types").CompletionException[] = [];
       let confirmationError: string | undefined;
@@ -1536,7 +1542,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         confirmationError = selection.error;
       } else if (selection.exceptions.length && !selection.remaining.length) {
         try {
-          const decision = await confirmExceptions?.(structuredClone(selection.exceptions));
+          const decision = await confirmExceptions?.(structuredClone(selection.exceptions), structuredClone(exceptionContext));
           if (!decision || !/^(yes|да|y)$/iu.test(decision.operatorWords.trim()) ||
               !["host-question", "terminal", "shell-card"].includes(decision.confirmedVia)) {
             confirmationError = "Accepted exceptions require an affirmative operator decision.";
@@ -1546,6 +1552,9 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
                 item.hostQuestion?.ref === decision.hostQuestion?.ref)))) {
             confirmationError = "Host question is missing or already used; ask a fresh question.";
           } else {
+            if (decision.confirmedVia === "host-question" && decision.hostQuestion?.questionText !== completionExceptionQuestion(flow.id, selection.exceptions, exceptionContext)) {
+              throw new Error("Stale completion question; ask the current question with its HEAD, AC and PR context.");
+            }
             const current = await evaluateCompletionGates(cwd, dir, flow, mergedCommit ?? undefined, confirmToken);
             if (current.evaluatedHeadCommit !== evaluatedHeadCommit || JSON.stringify(current.gates) !== JSON.stringify(gates)) {
               confirmationError = "Completion gates changed while the operator answered; ask again with current refusal text.";
@@ -1662,7 +1671,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         return { flow, gates: lateGates, passed: false, issueComment, commented };
       }
 
-      if (mergedCommit) {
+      if (mergedCommit && recordedGates.some((gate) => gate.name === "main-merge" && gate.status === "pass")) {
         flow.merged = { commit: mergedCommit, ref: "origin/main", at: now() };
       }
       // Spent only here, on the passing path, immediately before the one write
@@ -2517,7 +2526,8 @@ function buildIssueComment(flow: FlowState, gates: GateOutcome[]): string {
     .map((gate) => (gate.name === "health" && warnNote ? warnNote : `${gate.name}: ${gate.status}`))
     .join(", ");
   return [
-    `Flow ${flow.id} (${flow.title}) is complete.`,
+    `Flow ${flow.id} (${flow.title}) is complete${flow.signatures?.at(-1)?.cleanCompletion === false ? " with exceptions" : ""}.`,
+    ...(flow.signatures?.at(-1)?.exceptions ?? []).map((item) => `- Accepted exception: ${formatCompletionException(item)}; operator: ${item.operatorWords}`),
     "",
     `- Draft PR: ${flow.pr.url ?? "n/a"}`,
     ...(flow.merged ? [`- Main merge: ${flow.merged.commit} contained in ${flow.merged.ref}`] : []),

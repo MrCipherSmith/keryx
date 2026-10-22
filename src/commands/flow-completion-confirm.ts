@@ -1,6 +1,6 @@
 import { hiddenInCard } from "../lib/card-safe";
 import { isAutonomousEnv, readRunProfile } from "../review/run-profile";
-import { formatCompletionException, type CompletionExceptionSelection } from "../flow/service";
+import { completionExceptionQuestion, formatCompletionException, type CompletionExceptionSelection, type CompletionExceptionContext } from "../flow/service";
 import { completionHostAnswer } from "./review-operator";
 
 export class CompletionConfirmationError extends Error {}
@@ -38,10 +38,11 @@ async function ttyAnswer(prompt: string): Promise<string> {
 export async function confirmCompletionExceptions(
   args: string[], selected: readonly CompletionExceptionSelection[], id: string, cwd: string,
   seams: { env?: Readonly<Record<string, string | undefined>>; isTerminal?: boolean; readAnswer?: (question: string) => Promise<string> } = {},
+  context?: CompletionExceptionContext,
 ) {
   const env = seams.env ?? process.env;
   if (args.some((arg) => arg === "--answered-by" || arg.startsWith("--answered-by="))) {
-    return completionHostAnswer(args, selected, id, cwd, env);
+    return completionHostAnswer(args, selected, id, cwd, env, context);
   }
   if (env["KERYX_TOOL_CALL"] === "1" || env["KERYX_UNATTENDED"] === "1" || isAutonomousEnv(env) || readRunProfile(cwd)?.mode === "unattended" ||
       !(seams.isTerminal ?? (process.stdin.isTTY === true && process.stdout.isTTY === true))) {
@@ -49,7 +50,7 @@ export async function confirmCompletionExceptions(
   }
   const lines = selected.map(formatCompletionException);
   if (lines.some(hiddenInCard)) throw new CompletionConfirmationError("Exception text contains hidden characters; nothing recorded.");
-  const answer = await (seams.readAnswer ?? ttyAnswer)(`Complete flow ${id} with exceptions?\n${lines.join("\n")}\nType yes/да to accept: `);
+  const answer = await (seams.readAnswer ?? ttyAnswer)(`${completionExceptionQuestion(id, selected, context)}\nType yes/да to accept: `);
   if (!/^(yes|y|да)$/iu.test(answer.trim())) return undefined;
   return { operatorWords: answer, confirmedVia: "terminal" as const };
 }

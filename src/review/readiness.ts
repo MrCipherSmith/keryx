@@ -1,3 +1,4 @@
+import { withCompletionLock } from "./completion-lock";
 import type { CompletionWriter } from "./completion-write";
 import { hostQuestionFields, type HostQuestion } from "./types";
 // One checklist that a review passes before it may be called completed or reach GitHub. Every item reuses a check that
@@ -565,6 +566,10 @@ async function writePartialHeader(packageDir: string, waivers: readonly Readines
  * blanket quote would let every held finding through unanswered.
  */
 export async function waiveReadiness(packageDir: string, selectors: readonly string[], operatorQuote: string, options: ReadinessOptions & { writeCompletion?: CompletionWriter; now?: Date; confirmedVia?: ConfirmedVia; hostQuestion?: HostQuestion } & CardPress = {}): Promise<ReadinessWaiver[]> {
+  return withCompletionLock(packageDir, () => waiveReadinessLocked(packageDir, selectors, operatorQuote, options));
+}
+
+async function waiveReadinessLocked(packageDir: string, selectors: readonly string[], operatorQuote: string, options: ReadinessOptions & { writeCompletion?: CompletionWriter; now?: Date; confirmedVia?: ConfirmedVia; hostQuestion?: HostQuestion } & CardPress = {}): Promise<ReadinessWaiver[]> {
   const quote = operatorQuote.replace(/-{0,2}waive/gi, "").trim();
   if (quote.length < MIN_WAIVER_QUOTE_CHARS || !/[\p{L}\p{N}]/u.test(quote)) {
     throw new Error(`--waive needs the operator's own words as its value: at least ${MIN_WAIVER_QUOTE_CHARS} characters, with letters or digits in them.`);

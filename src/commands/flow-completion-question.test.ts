@@ -1,3 +1,4 @@
+import { completionExceptionQuestion } from "../flow/service";
 import { expect, test } from "bun:test";
 import { completionHostAnswer } from "./review-operator";
 
@@ -58,3 +59,12 @@ for (const length of [100000, 100001]) {
     else expect(() => completionHostAnswer(args(question), long, "469", "/tmp", {})).toThrow();
   });
 }
+
+test("host answer cannot transfer between heads, AC checksums, PRs or bases", () => {
+  const context = { head: "a".repeat(40), acChecksum: "criteria", prUrl: "https://github.com/acme/app/pull/1", baseBranch: "main", mergedCommit: null };
+  const question = completionExceptionQuestion("469", selected, context);
+  expect(completionHostAnswer(args(question), selected, "469", "/tmp", {}, context).hostQuestion.questionText).toBe(question);
+  for (const changed of ["head", "acChecksum", "prUrl", "baseBranch"] as const) {
+    expect(() => completionHostAnswer(args(question), selected, "469", "/tmp", {}, { ...context, [changed]: "changed" })).toThrow();
+  }
+});

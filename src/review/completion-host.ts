@@ -8,6 +8,7 @@ export type ReviewCompletionContext = {
   research: string; findings: string; decisions: string;
   dispositions: readonly unknown[]; waiveReadiness: readonly unknown[];
   waiveCoverage?: string | undefined;
+  coverage?: Readonly<Record<string, string | null>>;
 };
 
 /** A question shows the decision and binds the remaining package content by digest. */

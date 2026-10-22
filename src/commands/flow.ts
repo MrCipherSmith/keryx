@@ -1560,7 +1560,7 @@ async function runComplete(args: string[]): Promise<void> {
     confirmToken: optionValue(args, "--confirm-token"),
     acceptGates: acceptedGateArgs(args),
     reason: optionValue(args, "--reason"),
-    confirmExceptions: (selected) => confirmCompletionExceptions(args, selected, id, cwd),
+    confirmExceptions: (selected, context) => confirmCompletionExceptions(args, selected, id, cwd, {}, context),
   });
 
   heading(
