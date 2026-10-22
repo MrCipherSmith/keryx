@@ -72,7 +72,6 @@ export const REMOTE_REFUSED: Readonly<Record<string, string>> = {
   exit: "it would close the shell",
   quit: "it would close the shell",
   channels: "it manages the Telegram connection itself",
-  provider: "it asks for provider keys and addresses, which are never typed into a chat",
   "search-provider": "it asks for provider keys, which are never typed into a chat",
   "search-connect": "it changes where searches are sent",
   "remote-control": "turning remote control off would archive this topic, and its panel is local",
