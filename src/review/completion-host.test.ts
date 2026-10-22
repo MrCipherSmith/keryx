@@ -26,3 +26,10 @@ test("review completion refuses decline, hidden text, unbound question and repla
   for (const answer of [{ ...host(), answerText: "no" }, { ...host(), answerText: "yes but no" }, { ...host(), answerText: "yes\u200b" }, host("Close review-469?")]) expect(validateCompletionHost(context, answer, []).ok).toBe(false);
   expect(validateCompletionHost(context, host(), [host()]).ok).toBe(false);
 });
+
+test("host completion binds coverage decision inputs", () => {
+  const current = { ...context, coverage: { "scope-files.json": "first scope", "coverage.md": "reviewed" } };
+  const answer = host(reviewCompletionQuestion(current));
+  expect(validateCompletionHost(current, answer, []).ok).toBe(true);
+  expect(validateCompletionHost({ ...current, coverage: { ...current.coverage, "scope-files.json": "different scope" } }, answer, []).ok).toBe(false);
+});
