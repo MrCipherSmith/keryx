@@ -315,6 +315,30 @@ describe("/connect: Add provider (AC8)", () => {
     expect(h.client().replies[0]).toContain("not available from this shell");
   });
 
+  it("[Connect] on a provider shown as connected starts no login and points to Test or the shell", async () => {
+    const connectedIds: string[] = [];
+    const h = commandHarness({
+      listProviders: async () => [],
+      listModels: async () => undefined,
+      switchModel: async () => ({ output: "", ok: true }),
+      listAddableProviders: async () => [{ id: "copilot", label: "Copilot", connected: true, deviceLogin: true }],
+      testProvider: async () => ({ ok: true, message: "ok — 3 model(s)" }),
+      connectWithDeviceLogin: async (id) => {
+        connectedIds.push(id);
+        return { ok: true, message: "connected. The session and model are unchanged." };
+      },
+    });
+    await h.bridge.enable();
+    await h.say("/connect");
+    await waitFor(() => h.client().choices.length === 1, "the add list");
+    h.client().choices[0]?.answer(0);
+    await waitFor(() => h.client().choices.length === 2, "Test / Connect");
+    h.client().choices[1]?.answer(1);
+    await h.bridge.idle();
+    expect(connectedIds).toEqual([]);
+    expect(h.client().replies).toEqual(["Copilot is already connected. Use Test, or reconnect in the shell (/connect)."]);
+  });
+
   it("does not start a device login while the shell is busy", async () => {
     const connectedIds: string[] = [];
     const h = addRig({ connected: [], connectedIds });

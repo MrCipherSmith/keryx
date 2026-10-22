@@ -153,6 +153,14 @@ import {
 import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
 import { isReviewCommand, openReview } from "./review-inspector";
 import { openRouting, loadRoutingProviders, ROUTING_COMMAND } from "./routing-inspector";
+import {
+  createConnectedProvidersCache,
+  createRemoteDeviceLogin,
+  NO_CREDENTIAL_TEXT,
+  type ProviderProbeOutcome,
+  type RemoteDeviceLogin,
+  testProviderForRemote,
+} from "./remote-provider-hooks";
 import { loadModelProfiles, profileKey, type ModelProfile, type ProfileRefreshSummary } from "../harness/routing/model-profile";
 import { appendTaskCostRecord } from "../harness/routing/task-cost";
 import { isCiTriageCommand, openCiTriage } from "./ci-triage-inspector";
@@ -3183,19 +3191,6 @@ function clipText(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
-/** How long a device login started from Telegram may wait for the operator to authorize it. */
-const REMOTE_DEVICE_LOGIN_LIMIT_MS = 10 * 60_000;
-
-/** What a provider test says when there is nothing to authenticate with; no network call is made. */
-const NO_CREDENTIAL_TEXT = "no credential, Connect first";
-
-/** How probing one provider's `/models` ended. Carries no credential, address or response body. */
-export type ProviderProbeOutcome =
-  | { kind: "unknown" }
-  | { kind: "no-credential" }
-  | { kind: "live"; modelCount: number; profileSummary?: ProfileRefreshSummary }
-  | { kind: "failed"; failure: ModelsFailure };
-
 /**
  * The [Test] probe of the Add provider tab, shared with Telegram's `/connect`.
  * With `requireCredential`, a provider that needs a key and has none answers
@@ -3703,9 +3698,16 @@ function pickProvidersTabbedStep(otui: OpenTui, target: StepTarget, opts: Provid
   });
 }
 
+/** The notice when the key step was skipped for a provider that needs one. */
+const NO_KEY_ENTERED_TEXT = "no key entered";
+
 /** Where a connect sequence stopped: the operator went back, or the provider is ready for a model pick. */
 type ConnectSequenceResult =
-  | { kind: "back" }
+  | {
+      kind: "back";
+      /** Why the sequence stopped, when it is more than the operator pressing Esc. */
+      notice?: string;
+    }
   | {
       kind: "ready";
       /** The provider as listed, with the endpoint the sequence settled on. */
@@ -3746,6 +3748,12 @@ async function runProviderConnectSequence(
   prov: DetectedProvider,
   deps: ConnectSequenceDeps,
   setup: boolean,
+  /**
+   * The Add tab's [Connect] (flow 471): a provider that needs a key and still has none after the
+   * key step (the operator skipped it) is not connected, so the sequence stops with a notice.
+   * The startup and chat-shell wizard leave this off: skipping there keeps the curated models.
+   */
+  requireKey = false,
 ): Promise<ConnectSequenceResult> {
   // Picking a connected provider never edits the endpoint or collects a key.
   // Copilot's API host comes from the token exchange (`endpoints.api`),
@@ -3772,7 +3780,7 @@ async function runProviderConnectSequence(
    * proof of nothing, so the "we already have one" shortcut is skipped
    * and the operator finally gets asked.
    */
-  const collectCredential = async (notice?: string): Promise<"ok" | "back"> => {
+  const collectCredential = async (notice?: string): Promise<"ok" | "back" | "no-key"> => {
     if (!setup || (envKey === undefined && !catalogAllows(prov.name, "device-code"))) {
       return "ok";
     }
@@ -3820,11 +3828,23 @@ async function runProviderConnectSequence(
       saveApiKey(envKey, kr.value, deps.configDir); // persist (0600)
     }
     // kind === "skip" → proceed without a key (curated fallback models)
+    if (
+      kr.kind === "skip" &&
+      requireKey &&
+      (connectionProviderByName(prov.name, deps.configDir)?.requiresApiKey ?? true) &&
+      classifyProviderConnection(prov.name, deps.env ?? process.env, deps.configDir).kind === "no-credential"
+    ) {
+      return "no-key";
+    }
     return "ok";
   };
 
-  if ((await collectCredential()) === "back") {
+  const firstCredential = await collectCredential();
+  if (firstCredential === "back") {
     return { kind: "back" };
+  }
+  if (firstCredential === "no-key") {
+    return { kind: "back", notice: NO_KEY_ENTERED_TEXT };
   }
 
   const modelDeps = {
@@ -3839,8 +3859,12 @@ async function runProviderConnectSequence(
   // `env` was itself the reason the key step never ran, so an expired
   // grok login produced an empty model list and no way out of it.
   if (models.failure?.kind === "rejected") {
-    if ((await collectCredential(modelsFailureLine(label, models.failure))) === "back") {
+    const retried = await collectCredential(modelsFailureLine(label, models.failure));
+    if (retried === "back") {
       return { kind: "back" };
+    }
+    if (retried === "no-key") {
+      return { kind: "back", notice: NO_KEY_ENTERED_TEXT };
     }
     models = await modelsForPicker(selectedProvider, modelDeps);
   }
@@ -3952,10 +3976,11 @@ async function runProvidersModal(
         continue;
       }
       if (action.kind === "connect") {
-        const result = await runProviderConnectSequence(otui, target, action.provider, deps, true);
+        const result = await runProviderConnectSequence(otui, target, action.provider, deps, true, true);
         focusName = action.provider.name;
         if (result.kind === "back") {
           tab = "add";
+          if (result.notice !== undefined) notice = { tone: "error", text: `${action.provider.label ?? action.provider.name}: ${result.notice}` };
           continue;
         }
         if (result.models.failure === undefined && result.models.models.length > 0) {
@@ -4558,6 +4583,8 @@ export async function launchTuiAgentShell(opts: {
   // operator's `/remote-control <name>`; `closeRemote` deregisters (deletes the
   // topic) on every exit path.
   let remoteBridge: RemoteBridge | undefined;
+  // A device login started from the topic (flow 471); ended when remote control goes off or the shell closes.
+  let remoteDeviceLogin: RemoteDeviceLogin | undefined;
   let liveRemotePanel: RemotePanelHandle | undefined;
   // Flow 464 (AC6): the operator cards this shell mirrored to the topic, for the sidebar, the status tab and /decisions.
   const operatorCards = new OperatorConfirmationLog();
@@ -4677,6 +4704,7 @@ export async function launchTuiAgentShell(opts: {
         liveChannelsPanel?.dispose();
         // Closing the shell deregisters: the topic is archived (closing note, history kept). Best effort here
         // (this callback is synchronous); the `finally` below awaits the same call.
+        remoteDeviceLogin?.abort();
         void remoteBridge?.disable();
         liveApprovals?.dispose();
         liveIntake?.dispose();
@@ -11195,16 +11223,23 @@ export async function launchTuiAgentShell(opts: {
     // is OFF until `/remote-control <name>` (or the modal's `o`) calls `enable()`. A line
     // from Telegram enters the session exactly like a typed one: idle, `runLine`; busy, the
     // ordinary main queue (the same `qN` rows, labelled `[tg]`).
+    const shellIsBusy = (): boolean =>
+      chrome.isBusy() ||
+      foregroundOperation.isActive ||
+      forceHandoff.isAwaitingSettlement ||
+      turnLoop.queue.length > 0 ||
+      leaseView()?.held() === true;
+    // `/connect` in the topic asks for the connected providers and then for the Add list; each would
+    // otherwise probe every provider's `/models` again. One probe serves both for a short while.
+    const connectedProviders = createConnectedProvidersCache(async () => {
+      const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+      return { detected, connected: await filterConnectedDetectedProviders(detected, {}) };
+    });
     remoteBridge = new RemoteBridge({
       host: {
         sessionId: () => liveSession.summary.id,
         project: () => sessionCwd,
-        isBusy: () =>
-          chrome.isBusy() ||
-          foregroundOperation.isActive ||
-          forceHandoff.isAwaitingSettlement ||
-          turnLoop.queue.length > 0 ||
-          leaseView()?.held() === true,
+        isBusy: shellIsBusy,
         // The streaming loop writes the assistant message in place while a turn runs: only then is
         // the newest answer in `history` unfinished. A queued line or another holder of the lease
         // makes the shell busy without making that answer incomplete.
@@ -11223,6 +11258,8 @@ export async function launchTuiAgentShell(opts: {
           }
         },
         recordOff: () => {
+          // Remote control going off ends a device login that was started from the topic.
+          remoteDeviceLogin?.abort();
           if (!sessionLease.canPersist()) return;
           try {
             liveSession = recordRemoteOff(liveSession);
@@ -11252,8 +11289,7 @@ export async function launchTuiAgentShell(opts: {
           return decision === "deferred" || decision === "not-a-command" ? BUSY_REASON : undefined;
         },
         listProviders: async () => {
-          const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
-          const connected = await filterConnectedDetectedProviders(detected, {});
+          const { connected } = await connectedProviders.get();
           return connected.map((prov) => ({
             id: prov.name,
             label: prov.label ?? prov.name,
@@ -11261,10 +11297,11 @@ export async function launchTuiAgentShell(opts: {
           }));
         },
         // Flow 471: the Add provider list of Telegram's /connect. The label, whether it is connected and
-        // whether it offers a device login; never a key, an address or an env var name.
+        // whether it offers a device login; never a key, an address or an env var name. The connected set
+        // is the one `listProviders` just probed (see `connectedProviders`).
         listAddableProviders: async () => {
-          const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
-          const connectedNames = new Set((await filterConnectedDetectedProviders(detected, {})).map((prov) => prov.name));
+          const { detected, connected } = await connectedProviders.get();
+          const connectedNames = new Set(connected.map((prov) => prov.name));
           return detected
             .filter((prov) => prov.name !== "fake")
             .map((prov) => ({
@@ -11274,51 +11311,12 @@ export async function launchTuiAgentShell(opts: {
               deviceLogin: catalogAllows(prov.name, "device-code"),
             }));
         },
-        // The same probe as the Add provider tab's [Test]; the reply is the status text, never a credential.
-        testProvider: async (providerId) => {
-          const outcome = await probeProviderConnection(providerId, { requireCredential: true });
-          switch (outcome.kind) {
-            case "unknown":
-              return { ok: false, message: "Unknown provider, cannot test." };
-            case "no-credential":
-              return { ok: false, message: NO_CREDENTIAL_TEXT };
-            case "live":
-              return { ok: true, message: `ok — ${outcome.modelCount} model(s)` };
-            case "failed": {
-              const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
-              const label = detected.find((prov) => prov.name === providerId)?.label ?? providerId;
-              return { ok: false, message: modelsFailureLine(label, outcome.failure) };
-            }
-          }
-        },
+        // The same probe as the Add provider tab's [Test]; the reply is fixed text, never a provider's own error.
+        testProvider: (providerId) => testProviderForRemote(providerId, { probe: (id) => probeProviderConnection(id, { requireCredential: true }) }),
         // Device login only: the code and link go to the chat through `notify` (public by design); the tokens go to the
-        // user-global store and never leave it. A login nobody completes ends at the time limit.
-        connectWithDeviceLogin: async (providerId, notify) => {
-          if (!catalogAllows(providerId, "device-code")) {
-            return { ok: false, message: "This provider has no device login; its key is entered in the shell with /connect." };
-          }
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), REMOTE_DEVICE_LOGIN_LIMIT_MS);
-          try {
-            const result = await loginDeviceCode({
-              provider: providerId,
-              fetch: (input, init) => globalThis.fetch(input, init),
-              signal: controller.signal,
-              onChallenge: (challenge) => {
-                void notify(`Open ${challenge.verificationUri} and enter the code ${challenge.userCode}`).catch(() => undefined);
-              },
-            });
-            if (!result.ok) {
-              return { ok: false, message: controller.signal.aborted ? "Device login timed out; nothing was saved." : `Device login failed: ${result.error}` };
-            }
-            applyOAuthAccessToEnv();
-            return { ok: true, message: `${providerId} connected. The session and model are unchanged.` };
-          } catch (error) {
-            return { ok: false, message: controller.signal.aborted ? "Device login timed out; nothing was saved." : `Device login failed: ${error instanceof Error ? error.message : "device authorization failed"}` };
-          } finally {
-            clearTimeout(timer);
-          }
-        },
+        // user-global store and never leave it. One at a time; ended when remote control goes off or the shell closes.
+        connectWithDeviceLogin: (providerId, notify) =>
+          (remoteDeviceLogin ??= createRemoteDeviceLogin({ isBusy: shellIsBusy, onConnected: () => connectedProviders.invalidate() })).connect(providerId, notify),
         listModels: async (providerId) => {
           const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
           const name = providerId ?? currentSel.provider;

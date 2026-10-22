@@ -8,7 +8,7 @@
 // never reached.
 //
 // On a machine holding an expired grok login that read as a broken picker.
-// `/provider` → grok → no prompt (a value WAS in env, just a dead one) → an
+// the old /provider (now /connect) → grok → no prompt (a value WAS in env, just a dead one) → an
 // empty list, and no way to learn that `api.x.ai` had answered "403 The OAuth2
 // access token could not be validated".
 //

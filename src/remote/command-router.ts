@@ -686,6 +686,12 @@ export class RemoteCommandRouter {
 
   private async connectAddable(provider: AddableProvider): Promise<AskResult> {
     const host = this.ctx.host;
+    if (provider.connected) {
+      // Signing in again would replace a working credential; that is a shell decision. No host call.
+      this.ctx.record(`/connect ${provider.id}: already connected`);
+      await this.ctx.reply(this.ctx.compose(`${provider.label} is already connected. Use Test, or reconnect in the shell (/connect).`)).catch(() => false);
+      return "failed";
+    }
     if (!provider.deviceLogin) {
       // A key is never typed into a chat: no host call, the operator is sent to the shell.
       this.ctx.record(`/connect ${provider.id}: needs a key, entered in the shell`);
