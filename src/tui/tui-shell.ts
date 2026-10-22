@@ -3277,6 +3277,9 @@ function pickProvidersTabbedStep(otui: OpenTui, target: StepTarget, opts: Provid
     let nextNotice: ProvidersNotice | undefined;
     let rendered = false;
     let bodyBox: Box | undefined;
+    let addHint: InstanceType<OpenTui["TextRenderable"]> | undefined;
+    const addHintContent = (total: number): ReturnType<OpenTui["t"]> =>
+      otui.t`${dimChunk(otui, `Connect saves a key or login · Test checks it   ${total === 0 ? 0 : selected.add + 1}/${total}`)}`;
     let bodyWidth = 70;
     let bodyHeight = 15;
     const statuses = new Map<string, StatusContent>();
@@ -3346,6 +3349,7 @@ function pickProvidersTabbedStep(otui: OpenTui, target: StepTarget, opts: Provid
     }
 
     function applyHighlight(): void {
+      if (tab === "add" && addHint !== undefined) addHint.content = addHintContent(rowsOf("add").length);
       for (const block of blocks) {
         const d = rowsOf(block.tab)[block.index];
         if (d === undefined) continue;
@@ -3494,12 +3498,8 @@ function pickProvidersTabbedStep(otui: OpenTui, target: StepTarget, opts: Provid
         header.add(addButton.box);
         header.add(new otui.TextRenderable(r, { id: "cp-count", marginLeft: 1, content: otui.t`${dimChunk(otui, `${connected.length} connected`)}` }));
       } else {
-        header.add(
-          new otui.TextRenderable(r, {
-            id: "ap-hint",
-            content: otui.t`${dimChunk(otui, `Connect saves a key or login · Test checks it   ${rows.length === 0 ? 0 : selected.add + 1}/${rows.length}`)}`,
-          }),
-        );
+        addHint = new otui.TextRenderable(r, { id: "ap-hint", content: addHintContent(rows.length) });
+        header.add(addHint);
       }
       body.add(header);
       if (notice !== undefined) {
