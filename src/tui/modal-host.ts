@@ -39,6 +39,11 @@ export type OpenModalInput = {
   initialTab?: string;
   /** Footer key-hints. Default: tab switch + Esc close. */
   footer?: readonly ModalFooterAction[];
+  /**
+   * Footer key-hints per tab, evaluated each time a tab is mounted (tab switch, theme repaint),
+   * so the footer lists the keys of the tab on screen. Absent: `footer` applies to every tab.
+   */
+  footerFor?: (tabId: string) => readonly ModalFooterAction[] | undefined;
   renderTab: (tabId: string, body: unknown, ctx: ModalTabContext) => void | (() => void);
   /** Claim left/right arrows before modal-host's tab switch. */
   onArrowKeys?: (key: KeypressEvent, direction: "left" | "right") => boolean | undefined;
@@ -375,6 +380,9 @@ function mountTab(state: HostState, input: OpenModalInput, tabId: string): void 
   unmountActiveTab(state);
   state.active = tabId;
   paintTabs(state);
+  if (input.footerFor !== undefined) {
+    paintFooter(state, input.footerFor(tabId) ?? input.footer);
+  }
   // Deterministic panel-body size from the renderer, NOT from the panel's own
   // width/height getters: OpenTUI's getters return the last LAYOUT value, so
   // at mount time (before the first layout pass) they still read the

@@ -210,7 +210,7 @@ export async function modelMove(board: readonly Cell[], opts: GameModelOptions =
     return { move: undefined, error: `model error: ${turn.error.message}` };
   }
   if (!turn.credentialAvailable && opts.providerFactory === undefined) {
-    return { move: undefined, error: "no model credential — configure a provider first (/provider)" };
+    return { move: undefined, error: "no model credential — configure a provider first (/connect)" };
   }
   return { move: parseModelMove(turn.text, board), error: undefined };
 }

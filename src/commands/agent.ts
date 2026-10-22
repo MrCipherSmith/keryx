@@ -800,7 +800,7 @@ export interface AgentDeps {
    * Flow 268: resolved per-provider `temperature`/`maxOutputTokens`/`timeoutMs`
    * overrides (`resolveProviderModelParams`/`resolveProviderModelParamsByName`
    * in `commands/providers.ts`), resolved once at model-selection time by the
-   * caller and re-resolved on every `/model`/`/provider`/`/connect` rebuild —
+   * caller and re-resolved on every `/model`/`/connect` rebuild —
    * same lifecycle as `providerId`/`modelId` above. Only `temperature`
    * (folded into `request.options.temperature` by {@link buildRequestOptions})
    * and `timeoutMs` (an internal chat-call abort timer, threaded straight into

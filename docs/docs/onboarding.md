@@ -435,9 +435,10 @@ keryx shell
                                 # no vendor revoke call is made
   ```
 
-- **Inside a running session**, `/connect` switches between providers you
-  already configured (no key/URL prompts). Since flow 304, each row in that
-  list also carries two buttons, drawn and reachable the same way the queue
+- **Inside a running session**, `/connect` opens one Providers dialog with two
+  tabs, Connected and Add provider (switch with `1`/`2`, Tab or the mouse). The
+  Connected tab switches between providers you already configured (no key/URL
+  prompts). Since flow 304, each row in that list also carries two buttons, drawn and reachable the same way the queue
   dock's Force/Edit/Delete are: `[Test]` runs the same live model-list probe
   `keryx providers test` does and shows the result on the row; `[Disconnect]`
   asks for confirmation, then removes that provider's saved credential the
@@ -445,9 +446,14 @@ keryx shell
   picks a row, ←/→ picks Label, Test or Disconnect, Enter fires it, Esc backs
   out. Disconnecting the provider the CURRENT session is using does not
   switch it or interrupt a turn — the session keeps its already-loaded
-  credential until you `/connect` another provider or restart. `/provider`
-  opens the same add/reconfigure wizard the startup picker used (no row
-  buttons there), so it also covers a provider you have not set up yet.
+  credential until you `/connect` another provider or restart. The
+  `[Add provider]` button (or `a`) opens the Add provider tab, which lists
+  every provider keryx knows about, including one you have not set up yet.
+  `[Connect]` there saves the key or login (kept in the user-global store with
+  owner-only permissions), checks the provider's `/models` list, and returns to
+  the Connected tab without switching your session; `[Test]` checks a provider
+  that already has a credential and says "no credential, Connect first"
+  otherwise. When nothing is connected yet, `/connect` opens on that tab.
   `/model` opens a model picker for the current provider; in chat mode
   (`--no-tui --chat`) it instead takes an argument (`/model <name>`) and
   `/models` lists what is available as a numbered menu.

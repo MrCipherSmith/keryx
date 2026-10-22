@@ -47,6 +47,22 @@ export interface ProviderChoice {
   current?: boolean;
 }
 
+/** A provider the Add provider list offers (flow 471). Never a key, an address or an env var name. */
+export interface AddableProvider {
+  id: string;
+  label: string;
+  /** Already connected here. */
+  connected: boolean;
+  /** Connecting it is a device login (a code and a link), which needs nothing typed. */
+  deviceLogin: boolean;
+}
+
+/** How testing or connecting a provider ended; `message` is shown to the topic as is (after redaction). */
+export interface ProviderOutcome {
+  ok: boolean;
+  message: string;
+}
+
 export interface SessionChoice {
   id: string;
   label: string;
@@ -75,6 +91,15 @@ export interface RemoteCommandHost {
   listModels?(providerId?: string): Promise<ModelListing | undefined>;
   /** The providers the operator already connected, usable as they are. Never a way to connect a new one. */
   listProviders?(): Promise<ProviderChoice[]>;
+  /** Every provider the Add provider list can offer, connected or not (flow 471). Never a key or an address. */
+  listAddableProviders?(): Promise<AddableProvider[]>;
+  /** Probe a provider's model list with what is stored for it; "no credential, Connect first" when there is none. Never sends a key to the topic. */
+  testProvider?(providerId: string): Promise<ProviderOutcome>;
+  /**
+   * Connect a provider by device login. `notify` posts text to the topic: the router passes it so the user code and the
+   * verification link reach the chat (both public by design). Resolves when the login ends. Never switches the model.
+   */
+  connectWithDeviceLogin?(providerId: string, notify: (text: string) => Promise<void>): Promise<ProviderOutcome>;
   /** Switch the model (and the provider, when one is named). */
   switchModel?(modelId: string, providerId?: string): Promise<CommandOutcome>;
   /** Recent sessions of this project, newest first. */
@@ -144,6 +169,9 @@ interface PickOption {
   id: string;
   label: string;
 }
+
+/** The Add provider button's id on the connected-providers picker; no provider id can equal it. */
+const ADD_PROVIDER_ID = "::add-provider";
 
 /** Commands that swap the live session; the topic follows them. */
 const SESSION_COMMANDS: readonly string[] = ["new", "clear", "resume"];
@@ -581,11 +609,19 @@ export class RemoteCommandRouter {
       return "failed";
     }
     const providers = await host.listProviders();
+    const canAdd = host.listAddableProviders !== undefined;
     if (providers.length === 0) {
+      if (canAdd) {
+        // Nothing to switch to: go straight to the providers that can be added.
+        return await this.pickAddableProvider(fromId);
+      }
       await this.ctx.reply("No provider is connected yet. Connecting one needs a key, which is never typed into a chat; use the shell.").catch(() => false);
       return "failed";
     }
     const options = providers.map((provider) => ({ id: provider.id, label: provider.current === true ? `* ${provider.label}` : provider.label }));
+    if (canAdd) {
+      options.push({ id: ADD_PROVIDER_ID, label: "Add provider" });
+    }
     const chosen = await this.pick("connect", "Connected providers. Pick one to switch to:", options, fromId);
     if (chosen === "refused") {
       return "failed";
@@ -594,7 +630,101 @@ export class RemoteCommandRouter {
       this.ctx.record("/connect not answered in time; nothing changed");
       return "failed";
     }
+    if (chosen.id === ADD_PROVIDER_ID) {
+      return await this.pickAddableProvider(fromId);
+    }
     return await this.pickModel(chosen.id, fromId);
+  }
+
+  /** The Add provider list: every provider the shell reports, then [Test] / [Connect] for the one pressed. */
+  private async pickAddableProvider(fromId: number | undefined): Promise<AskResult> {
+    const host = this.ctx.host;
+    if (host.listAddableProviders === undefined) {
+      await this.ctx.reply("/connect is not available from this shell.").catch(() => false);
+      return "failed";
+    }
+    const addable = await host.listAddableProviders();
+    if (addable.length === 0) {
+      await this.ctx.reply("There are no providers to add from this shell.").catch(() => false);
+      return "failed";
+    }
+    const options = addable.map((provider) => ({ id: provider.id, label: provider.connected ? `${provider.label} (connected)` : provider.label }));
+    const chosen = await this.pick("connect", "Add provider. Pick one to test or connect:", options, fromId);
+    if (chosen === "refused") {
+      return "failed";
+    }
+    if (chosen === undefined) {
+      this.ctx.record("/connect not answered in time; nothing changed");
+      return "failed";
+    }
+    const provider = addable.find((entry) => entry.id === chosen.id);
+    if (provider === undefined) {
+      return "failed";
+    }
+    const action = await this.ask("connect", this.ctx.compose(`${provider.label}: test the stored credential, or connect it?`), [["Test", "Connect"]], fromId);
+    if (action === "refused") {
+      return "failed";
+    }
+    if (action === undefined) {
+      this.ctx.record("/connect not answered in time; nothing changed");
+      return "failed";
+    }
+    return action === 0 ? await this.testAddable(provider) : await this.connectAddable(provider);
+  }
+
+  private async testAddable(provider: AddableProvider): Promise<AskResult> {
+    const host = this.ctx.host;
+    if (host.testProvider === undefined) {
+      await this.ctx.reply("Testing a provider is not available from this shell.").catch(() => false);
+      return "failed";
+    }
+    const outcome = await host.testProvider(provider.id);
+    this.ctx.record(`/connect test ${provider.id}: ${outcome.ok ? "ok" : "failed"}`);
+    await this.ctx.reply(this.ctx.compose(`${provider.label}: ${outcome.message}`)).catch(() => false);
+    return outcome.ok ? "done" : "failed";
+  }
+
+  private async connectAddable(provider: AddableProvider): Promise<AskResult> {
+    const host = this.ctx.host;
+    if (provider.connected) {
+      // Signing in again would replace a working credential; that is a shell decision. No host call.
+      this.ctx.record(`/connect ${provider.id}: already connected`);
+      await this.ctx.reply(this.ctx.compose(`${provider.label} is already connected. Use Test, or reconnect in the shell (/connect).`)).catch(() => false);
+      return "failed";
+    }
+    if (!provider.deviceLogin) {
+      // A key is never typed into a chat: no host call, the operator is sent to the shell.
+      this.ctx.record(`/connect ${provider.id}: needs a key, entered in the shell`);
+      await this.ctx
+        .reply(this.ctx.compose(`${provider.label} needs a key. The key is entered in the shell with /connect (Add provider tab), never in this chat.`))
+        .catch(() => false);
+      return "failed";
+    }
+    if (host.connectWithDeviceLogin === undefined) {
+      await this.ctx.reply("Connecting a provider is not available from this shell.").catch(() => false);
+      return "failed";
+    }
+    // The login signs in a provider for the whole shell; not while a turn is using the current one.
+    const busy = this.busyReason("/connect", "connect");
+    if (busy !== undefined) {
+      this.ctx.record(`/connect not run: ${busy}`);
+      await this.ctx.reply(`/connect was not run: ${busy}.`).catch(() => false);
+      return "failed";
+    }
+    this.ctx.record(`/connect ${provider.id}: device login started`);
+    // The code and the link are public by design; they are the only thing the login posts.
+    const notify = async (text: string): Promise<void> => {
+      await this.ctx.reply(this.ctx.compose(text)).catch(() => false);
+    };
+    let outcome: ProviderOutcome;
+    try {
+      outcome = await host.connectWithDeviceLogin(provider.id, notify);
+    } catch {
+      outcome = { ok: false, message: "Device login failed. The details are in the shell." };
+    }
+    this.ctx.record(`/connect ${provider.id}: device login ${outcome.ok ? "done" : "failed"}`);
+    await this.ctx.reply(this.ctx.compose(`${provider.label}: ${outcome.message}`)).catch(() => false);
+    return outcome.ok ? "done" : "failed";
   }
 
   private async pickSession(fromId: number | undefined, end: CommandEnd | undefined): Promise<AskResult> {

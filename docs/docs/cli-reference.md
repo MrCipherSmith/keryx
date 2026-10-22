@@ -1029,7 +1029,7 @@ Refusals print their code and exit non-zero (except where noted):
   (`/mode trust|auto`, `/plan off` (bare `/plan` shows the mode and does not ask),
   and `/delegate`, `/external` and `/external-agents`, which name the agent and say
   it is external and paid). The rest, for example `/mcp`, `/guard`, `/route`,
-  `/editguard`, `/provider`, `/channels`, `/schedule`, `/rewind`, `/conform`, `/ci`,
+  `/editguard`, `/channels`, `/schedule`, `/rewind`, `/conform`, `/ci`,
   bare `/theme` and bare `/think`, stay local (they open a panel, form or picker in
   the shell) and are refused in the topic with the reason. A command from the topic
   never cancels the turn running in the shell; `/stop` in the topic ends the run
@@ -1206,7 +1206,7 @@ lists each provider with the environment variable it reads.
 
 Operator-defined OpenAI-compatible providers can be added on top of that list
 by registering them in `~/.local/share/keryx/llm-providers.json`; the
-`/provider` wizard in `keryx shell` has an "add custom provider" entry that
+Add provider tab of `/connect` in `keryx shell` has an "add custom provider" entry that
 writes this file for you (name → URL → key → models → temperature (optional)
 → max output tokens (optional) → request timeout ms (optional)). A custom
 name colliding with a built-in provider is rejected. Custom providers may
@@ -1483,11 +1483,11 @@ keryx auth status <provider> [--json]
 | `logout` | `<provider>` | Discard the stored grant. |
 | `status` | `<provider>`, `--json` | Method, state, expiry, refreshability — never the secret. |
 
-`/provider` in `keryx shell` offers the same SuperGrok vs API-key choice for xAI.
+The Add provider tab of `/connect` in `keryx shell` offers the same SuperGrok vs API-key choice for xAI.
 
 ### OpenAI API and ChatGPT subscriptions
 
-`/provider` offers two independent entries:
+The Add provider tab of `/connect` offers two independent entries:
 
 | Entry | Provider ID | Credential and usage |
 |---|---|---|
@@ -1495,11 +1495,11 @@ keryx auth status <provider> [--json]
 | ChatGPT / Codex | `openai-codex` | ChatGPT subscription login, using the account's Codex access and limits. |
 
 For a ChatGPT subscription, enable device-code login in your ChatGPT security
-settings, then choose **ChatGPT / Codex** in `/provider`. Keryx displays a
+settings, then open `/connect`, switch to Add provider and choose **ChatGPT / Codex**. Keryx displays a
 verification URL and a one-time code and opens the browser when available.
 Sign in to your account in that browser and enter the code. On a headless
 machine, open the displayed URL on another device. Escape cancels the Shell
-login. The command is `/provider`, not `/provide`.
+login and returns to the list.
 
 The same login can be started before opening Shell:
 
@@ -1509,9 +1509,8 @@ keryx auth status openai-codex
 keryx shell
 ```
 
-Then choose `/provider` → **ChatGPT / Codex** and a model returned by the
-subscription service. `/connect` lists connected providers and offers Test and
-Disconnect; CLI equivalents are `keryx providers test openai-codex` and
+Then open `/connect`: the Connected tab lists **ChatGPT / Codex** and a model returned by the
+subscription service, with Test and Disconnect buttons; CLI equivalents are `keryx providers test openai-codex` and
 `keryx providers remove openai-codex`. A successful model-list probe verifies
 authentication and discovery; send a short prompt to verify inference too.
 

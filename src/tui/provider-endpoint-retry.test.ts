@@ -1,4 +1,4 @@
-// A typo'd endpoint was a dead end in `/provider`.
+// A typo'd endpoint was a dead end in the old /provider (now /connect).
 //
 // The operator edited the base URL, got it slightly wrong, and the picker
 // answered with an empty model list and no way back to the URL step: the only

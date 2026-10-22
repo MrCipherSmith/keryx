@@ -98,8 +98,9 @@ keryx providers list         # providers you already have configured
 keryx auth login <provider>  # subscription login (device code / OAuth) or API key
 ```
 
-Inside a running session, `/provider` reopens the same add/reconfigure wizard
-and `/connect` switches between providers you already configured.
+Inside a running session, `/connect` opens one Providers dialog with two tabs:
+Connected (switch to a provider you already configured, test it, disconnect it)
+and Add provider (save a key or log in, then check the provider's model list).
 
 ChatGPT / Codex model discovery reads the current stable Codex version from npm
 metadata and caches it for one day. **Test** in `/connect` (or
@@ -384,7 +385,7 @@ What is in it today:
   change the loop, the tools or the policy.
 - **Custom file-backed providers.** Register any OpenAI-compatible endpoint —
   including one on your own LAN — in `~/.local/share/keryx/llm-providers.json`;
-  it merges into the built-in provider list. The `/provider` wizard in the TUI
+  it merges into the built-in provider list. The Add provider tab of `/connect` in the TUI
   has an "add custom provider" entry that walks name → URL → key → models and
   writes the file for you; a name that collides with a built-in provider is
   rejected. Custom providers get a narrow, opt-in SSRF allowance for private
@@ -1095,7 +1096,7 @@ queued lines will not run. From the topic you can also run a fixed list of slash
 commands (`/status`, `/model` and `/connect` as buttons, `/new`, `/clear`, `/resume`
 in the same topic); `/mode trust`, `/plan off`, `/delegate` and `/external*` run only
 after a Yes press (so do `/route on` and `/route off`; bare `/route` shows at once),
-and commands such as `/mcp`, `/guard`, `/provider`, `/schedule`, `/rewind`,
+and commands such as `/mcp`, `/guard`, `/schedule`, `/rewind`,
 `/conform` and `/ci` stay local. When main is busy, `/route`, `/external`,
 `/external-agents` and `/model` are queued with a notice in the topic and run when
 it goes idle; `/mode` takes effect at once. A topic is archived when the shell

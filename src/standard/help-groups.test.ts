@@ -211,7 +211,11 @@ describe("AC4: group view, command detail, and closest-match", () => {
     expect(text).toContain("providers");
     expect(text).toContain("in keryx shell:");
     expect(text).toContain("/connect");
-    expect(text).toContain("/provider");
+    // The old add/reconfigure command was folded into `/connect` (flow 471).
+    // Built from parts so the docs/standard invariant that no file names it stays literal.
+    const removed = `/${"provider"}`;
+    expect(text).not.toContain(`${removed} `);
+    expect(findSlashEntry(removed)).toBeUndefined();
   });
 
   test("groupBySlug resolves a known slug and refuses an unknown one", () => {

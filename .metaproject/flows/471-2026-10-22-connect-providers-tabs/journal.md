@@ -1,0 +1,25 @@
+# Flow Journal
+
+- 2026-10-22T09:13:24.137Z - flow created
+- 2026-10-22T09:14:16.051Z - origin-set: unknown -> human-request; quote: "Синхронизируйся с main. Изучи как работают команды /providers и /connect, я хочу объединить их. То есть 1 команда, 1 модалка и 2 табы. На первой connect как сейчас + кнопка add provider который переключает на следующую табу, на второй провайдеры где можно подключить и проверить конеекшн,"; source: telegram:219474 (Operator asked for the merge in Telegram message 219474)
+- 2026-10-22T09:15:19.330Z - frozen: 12 criteria; checksum recorded
+- 2026-10-22T09:15:19.710Z - started
+- 2026-10-22T09:19:10.931Z - task-done: T1: Collect remaining context
+- 2026-10-22T09:19:11.530Z - task-added: T5: Verify: AC10 invariant and AC12 live run in keryx shell with empty config dir
+- 2026-10-22T09:51:31.094Z - task-done: T2: Implement per plan
+- 2026-10-22T09:59:25.856Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-22T12:02:49.047Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-22T12:09:29.737Z - ac-confirmed: AC1: bun test agent-commands + help-groups: 301 pass across the AC suites, 2026-10-22 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-22T12:09:29.961Z - ac-confirmed: AC2: connect-modal.test.ts green; live run opened Providers with Connected and Add provider tabs (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-22T12:09:30.192Z - ac-confirmed: AC3: connect-provider-buttons.test.ts green; only the line-565 source anchor changed to the new /connect handler (deviation from 'unchanged', noted in plan) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-22T12:09:30.412Z - ac-confirmed: AC4: connect-modal.test.ts green; live: key a and the [Add provider] button switch the open modal (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-22T12:09:30.636Z - ac-confirmed: AC5: connect-modal.test.ts green; live: 14 rows incl. custom, Test on a provider with a key answered ok with 2 models; fake local provider answered 'unknown provider' (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-22T12:09:30.860Z - ac-confirmed: AC6: connect-modal.test.ts green; live: custom wizard returned to Connected with 'livetest connected - 2 model(s)', session unchanged (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-22T12:09:31.078Z - ac-confirmed: AC7: connect-modal.test.ts green; live: typed key absent from the screen and scrollback; stored only in llm-providers.json at mode 600, dir 700 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-22T12:09:31.310Z - ac-confirmed: AC8: command-connect.test.ts green (19+ tests), no key/URL/Disconnect step in chat (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-22T12:09:31.531Z - ac-confirmed: AC9: shell.test.ts, main-queue-drain, busy-dispatch green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-22T12:09:31.746Z - ac-confirmed: AC10: rg for /provider across README, docs/docs, src/standard, init.ts: 0 matches (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-22T12:09:31.967Z - ac-confirmed: AC11: connect-modal.test.ts green; live run at 100x30; footer per tab (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-22T12:09:32.187Z - ac-confirmed: AC12: Live run 2026-10-22 in tmux, bun src/cli.ts shell, XDG_DATA_HOME empty: added local OpenAI-compatible provider 'livetest' on Add provider (fake server on :18765), returned to Connected, Test = ok 2 model(s); config dir 700, files 600; found one cosmetic defect (stale n/14 counter), fixed in e99d0a717. Caveat: env-var keys from this machine made other providers appear connected (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-22T12:09:36.074Z - task-done: T5: Verify: AC10 invariant and AC12 live run in keryx shell with empty config dir
+- 2026-10-22T12:09:38.887Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/1074

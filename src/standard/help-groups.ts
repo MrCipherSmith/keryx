@@ -157,7 +157,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Connect a model provider",
     summary: "Category -> model routing table (list, set, unset, trust), the model-profile catalogue (profile list, profile set), and real measured task cost (stats).",
   },
-  { kind: "slash", name: "/connect", group: "Connect a model provider", summary: "Switch provider; row buttons test/disconnect it." },
+  { kind: "slash", name: "/connect", group: "Connect a model provider", summary: "Providers dialog: switch, test or disconnect a connected provider, or add one (Connected / Add provider tabs)." },
   {
     kind: "slash",
     name: "/routing",
@@ -175,12 +175,6 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "/search-connect",
     group: "Connect a model provider",
     summary: "Select a connected web search provider.",
-  },
-  {
-    kind: "slash",
-    name: "/provider",
-    group: "Connect a model provider",
-    summary: "Switch provider — /provider <name>, or no arg to re-select.",
   },
   {
     kind: "cli",
