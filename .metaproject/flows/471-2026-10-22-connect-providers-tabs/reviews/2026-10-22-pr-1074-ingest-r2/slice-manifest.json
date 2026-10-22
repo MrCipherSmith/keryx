@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 138016,
+      "contentHash": "6d1dd77fc060d20e9aaab5d71d5c1484265b89827c9d6075351a11ae7105a906",
+      "files": [
+        ".metaproject/data/gdgraph/.provenance.json",
+        ".metaproject/data/gdgraph/artifacts/module-map.json",
+        ".metaproject/flows/471-2026-10-22-connect-providers-tabs/flow.json",
+        ".metaproject/flows/471-2026-10-22-connect-providers-tabs/resolved/T2.implement.json",
+        ".metaproject/flows/471-2026-10-22-connect-providers-tabs/resolved/T2b.implement.json",
+        ".metaproject/data/gdgraph/artifacts/summary.md",
+        ".metaproject/flows/471-2026-10-22-connect-providers-tabs/acceptance-criteria.md",
+        ".metaproject/flows/471-2026-10-22-connect-providers-tabs/context.md",
+        ".metaproject/flows/471-2026-10-22-connect-providers-tabs/description.md",
+        ".metaproject/flows/471-2026-10-22-connect-providers-tabs/journal.md",
+        ".metaproject/flows/471-2026-10-22-connect-providers-tabs/plan.md",
+        ".metaproject/flows/471-2026-10-22-connect-providers-tabs/tasks.md",
+        "CHANGELOG.md",
+        "README.md",
+        "docs/docs/cli-reference.md",
+        "docs/docs/commands-by-task.md",
+        "docs/docs/guides/drive-keryx-remotely.md",
+        "docs/docs/harness.md",
+        "docs/docs/hooks.md",
+        "docs/docs/onboarding.md",
+        "package.json",
+        "src/commands/agent-commands.test.ts",
+        "src/commands/providers.models-failure.test.ts",
+        "src/commands/shell-grant-refresh.test.ts",
+        "src/commands/shell-slash-registry.test.ts",
+        "src/commands/shell-subscription-selection.test.ts",
+        "src/commands/shell.test.ts"
+      ],
+      "domain": ".metaproject, .metaproject [docs], . [docs] +3 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-logic",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 69643,
+      "contentHash": "2319e1149f0d0dd580296c0b9876ce6ac8f1ab5d621641ca35454e88f1b95cb5",
+      "files": [
+        "src/commands/agent-commands.ts",
+        "src/commands/agent.ts",
+        "src/commands/shell-types.ts",
+        "src/commands/shell.ts",
+        "src/remote/command-connect.test.ts",
+        "src/remote/command-gateway.test.ts",
+        "src/remote/command-gateway.ts",
+        "src/remote/command-router.ts",
+        "src/remote/command.test-helpers.ts",
+        "src/remote/shell-bridge.ts",
+        "src/standard/help-groups.test.ts",
+        "src/standard/help-groups.ts"
+      ],
+      "domain": "src/commands, src/remote [test], src/remote +2 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/commands/agent-commands.ts, src/commands/agent.ts, src/commands/shell-types.ts (+6)"
+        ]
+      }
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 136350,
+      "contentHash": "f9e0d37d2d9480fd16a48a3ce20a3b864a580d24f265bfd1d32394e986d4ab4e",
+      "files": [
+        "src/tui/balance-panel.ts",
+        "src/tui/chat-shell.ts",
+        "src/tui/game-modal.ts",
+        "src/tui/games/model-turn.ts",
+        "src/tui/modal-host.ts",
+        "src/tui/queue-nav.ts",
+        "src/tui/remote-provider-hooks.ts",
+        "src/tui/tui-shell.ts"
+      ],
+      "domain": "src/tui",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/tui/balance-panel.ts, src/tui/chat-shell.ts, src/tui/game-modal.ts (+5)"
+        ]
+      }
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 58248,
+      "contentHash": "ab7d9e6596304fdca648d5c392896bf2cd9a4aa413f5c2a87423b696d651db34",
+      "files": [
+        "src/tui/connect-modal.test.ts",
+        "src/tui/connect-provider-buttons.test.ts",
+        "src/tui/modal-host.test.ts",
+        "src/tui/model-picker-notice.test.ts",
+        "src/tui/provider-endpoint-retry.test.ts",
+        "src/tui/provider-probe.test.ts",
+        "src/tui/queue-nav.test.ts",
+        "src/tui/remote-provider-hooks.test.ts",
+        "src/tui/wizard-modal.test.ts"
+      ],
+      "domain": "src/tui [test]",
+      "split": "domain",
+      "roles": [
+        "review-logic",
+        "review-testing-practices"
+      ],
+      "depth": "light",
+      "risk": {
+        "score": 0,
+        "why": [
+          "docs, tests, config or generated files only"
+        ]
+      }
+    }
+  ],
+  "omissions": [
+    {
+      "path": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "data-ledger",
+      "detail": "data ledger: tabular or line-delimited data, not code",
+      "bytes": 23828
+    }
+  ],
+  "totals": {
+    "slices": 4,
+    "bytes": 402257,
+    "files": 56,
+    "omittedFiles": 1,
+    "omittedBytes": 23828,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

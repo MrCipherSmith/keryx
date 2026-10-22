@@ -1,0 +1,3 @@
+{ "mutants": [
+  { "id": "w2-M9", "file": "src/tui/tui-shell.ts", "anchor": "saveApiKey(envKey, kr.value, deps.configDir); // persist (0600)", "replacement": "void 0; // persist (0600)", "kind": "behavior" }
+] }

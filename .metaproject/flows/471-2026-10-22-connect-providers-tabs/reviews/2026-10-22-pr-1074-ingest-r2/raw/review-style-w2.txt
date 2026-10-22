@@ -1,0 +1,115 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice-02 (agent-commands, shell, shell-types, remote command router/gateway/bridge, help-groups and their tests) reads cleanly: the /provider removal is carried through comments, help text and the registry consistently, naming follows the surrounding code, and the new router methods are small and well commented. Only minor/info observations: one duplicated test, repeated test preamble, a repeated pick/refuse/timeout shape in the router, and two wording nits.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/remote/command-connect.test.ts",
+      "line": null,
+      "quote": "it(\"keeps that refusal when the shell cannot list addable providers\", async () => {",
+      "problem": "This test is a near-copy of the test directly above it, \"sends the operator to the shell when no provider is connected\". Both build the harness with listProviders returning [], no listAddableProviders, send /connect, and expect no choices and a \"No provider is connected\" reply. The new one asserts a strict subset of the old one, so it adds no coverage.",
+      "impact": "Two tests name the same behaviour; a future change to the refusal wording must be made in both, and the second name (\"that refusal\") depends on reading the neighbour to make sense.",
+      "suggested_fix": "Delete the new test, or fold its intent into the older test's name (\"... and when the shell cannot list addable providers\"). If the point is to pin that listAddableProviders is absent, say so in the old test's setup comment.",
+      "evidence": "Hunk @@ 93,356 @@: the pre-existing test and the added one share identical commandHarness options (listProviders: async () => [], listModels, switchModel) and identical /connect flow; the added test's only assertions (choices empty, replies[0] contains \"No provider is connected\") are already made by the old one.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/remote/command-connect.test.ts",
+      "line": null,
+      "quote": "describe(\"/connect: Add provider (AC8)\", () => {",
+      "problem": "Eleven tests in this block open with the same five-line preamble: enable the bridge, say \"/connect\", waitFor choices.length === 1, answer an index, waitFor choices.length === 2 (then repeat for the Test/Connect step). Only the answer indices and the harness options differ.",
+      "impact": "Repeated choreography makes each test's real subject (the assertion at the end) harder to see, and a change to the picker's step count has to be repeated in every test.",
+      "suggested_fix": "Add a helper next to addRig, for example `async function pressAddProvider(h, index, action)` that drives /connect to the Test / Connect step for the provider at `index` and returns, so each test reads as setup, one call, assertions.",
+      "evidence": "Sites: the tests \"[Test] relays the host message...\", \"[Test] relays the no-credential answer\", \"[Connect] on a device-login provider...\", \"[Connect] on a key provider...\", \"changes nothing when the Add list or Test / Connect is not answered\", \"answers that Test is not available...\", \"[Connect] on a provider shown as connected...\", \"does not start a device login while the shell is busy\" all repeat the same waitFor(...\"the add list\") then waitFor(...\"Test / Connect\") sequence.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/remote/command-router.ts",
+      "line": null,
+      "quote": "const action = await this.ask(\"connect\", this.ctx.compose(`${provider.label}: test the stored credential, or connect it?`), [[\"Test\", \"Connect\"]], fromId);",
+      "problem": "pickAddableProvider copies the shape that pickProvider (and pickModel, pickSession) already carry: ask, then `if (x === \"refused\") return \"failed\"`, then `if (x === undefined) { record(\"/connect not answered in time; nothing changed\"); return \"failed\"; }`. The record string now appears three times for /connect (pickProvider once, pickAddableProvider twice), and \"/connect is not available from this shell.\" twice.",
+      "impact": "Each new step in the flow adds another copy of the same eight lines; the timeout wording can drift between copies. Small, but it is the third and fourth copy in one command.",
+      "suggested_fix": "Extract a private helper, for example `private async settle(command: string, answer: unknown): Promise<\"failed\" | undefined>` that handles the refused/not-answered pair, or a const for the repeated record text. Not required for this PR; worth doing before a fifth step is added.",
+      "evidence": "Added lines in pickProvider (`if (chosen === undefined) { this.ctx.record(\"/connect not answered in time; nothing changed\"); ...`) and in pickAddableProvider (the `chosen` and `action` checks). The same pair exists unchanged in pickModel and pickSession. Sites in diff: pickProvider, pickAddableProvider (x2).",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/commands/agent-commands.ts",
+      "line": null,
+      "quote": "\"/provider\": \"/provider was merged into /connect — run /connect (Connected and Add provider tabs).\",",
+      "problem": "The hint is appended after the existing prefix, so the user reads: `Unknown command: /provider. /provider was merged into /connect — run /connect (...)`. The command name appears three times and the message calls it unknown and then explains it.",
+      "impact": "Wording only. A reader sees a slightly redundant message the first time they type the removed command.",
+      "suggested_fix": "Start the hint with the action: \"merged into /connect — run /connect (Connected and Add provider tabs).\" so the combined line reads `Unknown command: /provider. Merged into /connect ...`, or drop \"/provider was\" from the hint. Optional.",
+      "evidence": "Call sites in shell.ts chat loop (`Unknown command: ${command}. ${removedCommandHint(command) ?? \"Type /help for commands.\"}`) and readline agent REPL build the sentence from the prefix plus this value.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/commands/shell.ts",
+      "line": null,
+      "quote": "// `/models` is a chat-mode command: say so instead of",
+      "problem": "The edited comment still ends \"...instead of calling them unknown. Anything else falls back to the old message.\" After the edit there is one command named, so \"them\" is left over, and \"the old message\" no longer describes the fallback, which now also appends a removed-command hint.",
+      "impact": "Slightly stale comment next to code changed in this PR.",
+      "suggested_fix": "Reword to: \"`/models` is a chat-mode command: say so instead of calling it unknown. A removed command gets its hint; anything else falls back to the plain message.\"",
+      "evidence": "Hunk @@ 3246,3290 @@ in shell.ts: the comment lines kept as context below the changed first line read \"calling them unknown. Anything else falls back to the old message.\" while the code below now calls removedCommandHint.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": "src/remote/command-connect.test.ts",
+      "line": null,
+      "quote": "function addRig(extra: { connected?: typeof PROVIDERS; tested?: string[]; connectedIds?: string[]; switched?: string[] } = {}) {",
+      "problem": "`connectedIds` collects the provider ids that connectWithDeviceLogin was called with, not ids of connected providers. Next to `connected` (the connected providers) and the ADDABLE fixture's `connected` flag, the name reads as a list of connected providers.",
+      "impact": "Test readability only; no observed wrong outcome.",
+      "suggested_fix": "Rename to `loginStartedFor` (or `loggedIn`) in addRig and in the tests that pass it.",
+      "evidence": "In addRig, `connectedIds.push(id)` runs inside connectWithDeviceLogin; the assertions `expect(connectedIds).toEqual([\"copilot\"])` and `expect(connectedIds).toEqual([])` check that a login was or was not started.",
+      "confidence": "low",
+      "reviewer": "review-style"
+    }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 3 }
+}
+```
+
+# Style Review Report
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+## Summary
+The /provider removal is applied consistently across the registry, comments, help text and gateway tests, and the new router methods are short, named by verb and documented. Findings are limited to one redundant test, repeated test setup, a repeated ask/refused/timeout shape in the router, and two wording nits.
+
+## Review Scope
+- Branch: `feat/connect-providers-tabs`
+- Merge-base: `6a8941b75fd90a79caff47484440faffe1e226f2`
+- Scope mode: explicit-hash-range (slice-02 only)
+
+## Stats
+- major: 0
+- minor: 3
+- info: 3
+
+## Minor & Info
+F-001 duplicate test; F-002 repeated test preamble; F-003 repeated router pick/timeout shape; F-004 hint wording; F-005 stale comment; F-006 test variable name.
+
+## Positive Notes
+Comment edits across agent.ts, shell.ts and shell-types.ts were updated with the removal rather than left stale; REMOVED_COMMAND_HINTS is a small pure lookup with a doc comment; ADD_PROVIDER_ID is a named constant with the reason it cannot collide.

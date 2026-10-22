@@ -1,0 +1,71 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Slice-04 (TUI tests, 58248 bytes) read in full against pr-context.md. The PR body has no Documentation, Breaking-change or Screenshots boxes, only a Test plan of five boxes. Three ticked boxes are backed by test files in this slice, and the unticked AC12 live-run box is consistent with the diff, which has no AC12 test. One box, 'Review round', is unticked although the slice's tests record review rounds that already happened (minor). One body claim, that [Connect] runs the device-login step, has only its Esc path in this slice (info, unverified). The check for a literal /provider in src/tui turned up comment-only mentions in two test files, a correction to the earlier PC-204 answer; it is not a finding.",
+  "findings": [
+    {
+      "id": "PC-301",
+      "severity": "minor",
+      "file": "src/tui/connect-modal.test.ts",
+      "line": null,
+      "quote": "describe(\"review round 2 — the Add tab's other paths\", () => {",
+      "problem": "pr-context.md Test plan line 23: `- [ ] Review round` (unticked). The diff of this slice adds tests that name review rounds already run on this change: `describe(\"review round 2 — the Add tab's other paths\"` in src/tui/connect-modal.test.ts, and `// Flow 471 (AC8, review F-001, F-002, F-003, F-007): the provider hooks Telegram's /connect calls.` in src/tui/remote-provider-hooks.test.ts. If the box were true, the diff would hold the fixes a review round produced; it holds them (round 2 and findings F-001, F-002, F-003, F-007), so the box is stale or means a different review than the one the tests cite.",
+      "impact": "A reader of the merged PR sees an open review item, while the code carries fixes from at least two earlier rounds. They cannot tell whether review happened and the box was not updated, or the in-flow rounds are a different review than the one the box asks for.",
+      "suggested_fix": "Tick the box, or reword it to say which review it still awaits (the post-merge managed review of #1074), so the body and the test comments agree.",
+      "evidence": "pr-context.md:23 `- [ ] Review round` vs slice-04.diff `describe(\"review round 2 — the Add tab's other paths\"` (connect-modal.test.ts, around diff line 495) and `(AC8, review F-001, F-002, F-003, F-007)` (remote-provider-hooks.test.ts, diff line 1041).",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:review-round-box-stale",
+      "location_class": "pr-process"
+    },
+    {
+      "id": "PC-302",
+      "severity": "info",
+      "file": "src/tui/connect-modal.test.ts",
+      "line": null,
+      "quote": "otuiTest(\"Esc at the device-login step returns to the Add tab and saves nothing\", async () => {",
+      "problem": "UNVERIFIED. pr-context.md Summary line 11: `[Connect] runs the base-URL, key or device-login steps, checks `/models`, returns to \"Connected\" and does not switch the session.` In slice-04 the base-URL step has an Esc test and a reachable-then-corrected URL test, and the key step has a success, a rejected-key and a skipped-key test. The device-login step has only the Esc test (the injected fetch is `hanging`, a promise that never settles) and no test in which the device login succeeds and the dialog returns to Connected. The Telegram device-login hook is tested in remote-provider-hooks.test.ts, but that is the Telegram path, not the TUI [Connect] path.",
+      "impact": "If a login that succeeds in the TUI does not return to the Connected tab, no test in this slice would catch it. The claim may be covered by pre-existing tests in src/tui/tui-shell.test.ts or wizard-modal.test.ts, which are not in this slice.",
+      "suggested_fix": "Settle by reading the existing device-login tests for selectProviderModelInTui (paths to check: src/tui/tui-shell.test.ts, src/tui/wizard-modal.test.ts, src/tui/connect-provider-buttons.test.ts). If none drives a successful device login through the Add tab, add one that asserts the 'connected —' line and [Disconnect] on the Connected tab.",
+      "evidence": "pr-context.md:11 vs slice-04.diff lines 587-608 (Esc-only device-login test, fetch never resolves) and lines 1124-1246 (hook tests, Telegram only).",
+      "confidence": "low",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:device-login-success-untested-in-tui",
+      "location_class": "in-diff",
+      "publication": "question"
+    }
+  ],
+  "slices": ["slice-04"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 1 },
+  "needs_context": [],
+  "inputs_unreadable": []
+}
+```
+
+## Checklist form (every box and claim read as a row)
+
+| Box or claim (quoted) | State | What the diff shows (slice-04) | Expectation | Result |
+|---|---|---|---|---|
+| `bun test on connect-modal, connect-provider-buttons, agent-commands, help-groups, shell, modal-host, queue-nav, remote (1327 pass), provider-probe` | ticked | connect-modal.test.ts (new, 773 lines), connect-provider-buttons.test.ts (edited), modal-host.test.ts (footerFor test), queue-nav.test.ts (stepAddNavAction), provider-probe.test.ts (new), remote-provider-hooks.test.ts (new, matched by the `remote` filter). agent-commands, help-groups, shell and src/remote tests are in other slices. | Test files exist for the named areas | Backed for the files in this slice. wizard-modal, model-picker-notice and provider-endpoint-retry tests are edited in comments and a describe title only, so they are not a gap. |
+| `bunx tsc --noEmit -p .` | ticked | Not a diff artifact. CI lists typecheck-and-tests as passing. | n/a | Not checkable from the diff; CI line agrees. |
+| `AC10 invariant: no /provider in README, docs/docs, src/standard, init.ts` | ticked | No test in this slice. src/tui is outside the named scope and holds comment-only mentions (see Notes). | Scope as stated | No contradiction. |
+| `AC12 live run in a real keryx shell with an empty config dir` | unticked | No AC12 test or journal artifact in the slice. | Unticked means no live run recorded | Consistent. |
+| `Review round` | unticked | `describe("review round 2 — the Add tab's other paths"`, `review F-001, F-002, F-003, F-007` | If true, review-round fixes are in the diff | PC-301 |
+| `"Connected" is today's rows with [Test] and [Disconnect], plus an [Add provider] button` | claim | connect-modal.test.ts AC2 and AC4 tests assert `[Disconnect]`, `[Test]`, `[Add provider]`; the button is clicked and the `a` key is tested | Test on both | Backed. |
+| `"Add provider" lists every known provider with [Connect] and [Test]` | claim | AC5 test checks `[Connect]` and `[Test]` on each provider row and on the custom entry; Right then Enter runs Test | Test | Backed. |
+| `[Connect] runs the base-URL, key or device-login steps, checks /models, returns to "Connected" and does not switch the session` | claim | key step: connect-modal.test.ts AC6/AC7 asserts `settled` is false and the Connected tab shows the provider. Base-URL: URL-retry test. Device-login: Esc only. | Test per step | Key and base-URL backed; device-login success not in this slice (PC-302). |
+| `With nothing connected the modal opens on "Add provider"` | claim | AC2 second test asserts `Add custom provider`, no `No connected providers`, `calls()` equal to 0 | Test | Backed. |
+| `/provider is removed ... Typing it answers with a hint to use /connect` | claim | Test is not in this slice (agent-commands.test.ts, another slice). The tui-shell source audit in connect-provider-buttons.test.ts now anchors on `if (command.name === "/connect")`. | Test elsewhere | Not settled here; covered by the earlier slice passes. |
+| `Telegram /connect gains an "Add provider" button, a [Test] per provider, and [Connect] by device login only. A key is never typed in chat` | claim | remote-provider-hooks.test.ts: `testProviderForRemote` returns fixed words and no masked key fragments; `createRemoteDeviceLogin` refuses a provider without a device login (`allows: false`) and starts no login; failures use fixed text. Button rendering and the gateway are in other slices. | Test of hook behaviour | Backed for the hooks; gateway is outside the slice. |
+| `modal-host gets an optional footerFor(tabId) so the footer lists the keys of the active tab` | claim | modal-host.test.ts `footerFor shows each tab's own footer, and falls back to footer when it returns undefined`; connect-modal.test.ts AC11 asserts the footers at 80x24 | Test | Backed. |
+| Documentation needed / Breaking change / Screenshots | not in the body | The body has only Summary and Test plan. | n/a | No box to contradict. Slice-04 is test-only and adds no user-visible string. |
+
+## Notes
+
+- Answer to PC-204: the earlier search of src for a literal `/provider` is correct for non-test source. The diff adds two comment-only mentions in src/tui test files: `// "(no models found)" was the only thing the old /provider (now /connect) could say.` (model-picker-notice.test.ts) and `// A typo'd endpoint was a dead end in the old /provider (now /connect).` (provider-endpoint-retry.test.ts). They are history comments, not references to a live command, and src/tui is outside the AC10 scope the body names. Not filed.
+- Documents not read (outside this slice): README.md, docs/docs/*. They are in the diff and belong to slices 01-03.
+- No `blocker` or `major`, so no `class_scope` is required.

@@ -1,0 +1,119 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice-02 (registry, readline shells, remote router/gateway/bridge, help-groups) keeps the layering intact: the removed-command hint lives in the shared registry, the new Add provider / Test / device-login capabilities enter the remote router only through optional RemoteCommandHost hooks wired by the bridge, and the key-never-in-chat rule is enforced in the router before any host call. No blocker or major. Three minor and two info points, all about the readline surfaces and capability gating: a hint that points at /connect where the readline agent REPL has none, a chat-mode registry description that promises 'add one' which the readline chat selector does not do (with the /provider <name> and openai-codex entries dropped without a replacement), and a self-referential CONNECT_GUIDANCE. History (git log/blame) was not read: the slice and the files at head were enough.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/shell.ts",
+      "line": null,
+      "quote": "${removedCommandHint(command) ?? \"Type /help.\"}",
+      "problem": "removedCommandHint answers a typed /provider in the readline AGENT REPL with 'run /connect', but that REPL implements no /connect: READLINE_AGENT_COMMANDS (shell.ts ~272) omits it, and its own comment says /model and /connect are 'TUI pickers ... that have no readline equivalent'. The hint is added to the readline agent unknown-command branch and the registry helper is surface-agnostic.",
+      "impact": "The operator is sent to a command that the same surface then answers with 'Unknown command: /connect. Type /help.' A dead-end hint on a fallback surface; no data or security effect.",
+      "suggested_fix": "Give the hint only where /connect exists: either pass the surface to removedCommandHint (or have the readline agent branch use the plain 'Type /help.' text), or word the hint surface-neutrally ('use the Providers dialog in the TUI, /connect in chat').",
+      "evidence": "Diff hunk src/commands/shell.ts @@ 3246,3290 (agent REPL else-branch gains removedCommandHint); shell.ts lines 266-304 (READLINE_AGENT_COMMANDS has no /connect); shell.ts comment 'this readline AGENT REPL has no `/model`/`/connect` command to react to'.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "removed-hint-dead-end-readline-agent"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/agent-commands.ts",
+      "line": null,
+      "quote": "Providers picker: switch to a connected provider or add one (picker when available)",
+      "problem": "The chat-mode registry text says /connect can 'add one', and /provider was removed on the grounds that /connect now covers it. In the readline chat loop /connect is selectAndApply({ onlyConnected: true }) -> realSelectProviderModel (shell.ts ~1363-1391), which ignores onlyConnected and runs pickProviderModel over already detected providers only; there is no add/key/login step. The removed chat branch also carried /provider <name> (a by-name switch that kept model and base URL) and /provider openai-codex (selectAndApply({ onlyProvider: 'openai-codex' })), and neither has a /connect equivalent in this loop. Whether detectProviders still lists openai-codex without the removed entry was not checked here.",
+      "impact": "The registry (and so /help in chat) over-promises, and a readline chat user loses the direct by-name switch and the codex subscription entry point. The TUI covers it with the new tabbed modal; the readline fallback does not. Capability moved out of one command without being re-homed in the other.",
+      "suggested_fix": "Either reword the chat description to what the readline picker does ('Providers picker: switch among detected providers'), or add the missing arguments to chat /connect (/connect <name>, /connect openai-codex) before dropping /provider. Also fix the stale JSDoc in shell-types.ts, which says /connect 'switch among live providers' while the real selector does not filter on onlyConnected.",
+      "evidence": "Diff: agent-commands.ts chat modeDescription; shell.ts @@ 1152,1207 (the whole /provider branch removed, /connect branch unchanged); shell.ts lines 1363-1391 read at head: opts.onlyConnected is never read in realSelectProviderModel.",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "chat-connect-add-promise"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/shell.ts",
+      "line": null,
+      "quote": "logs, or echoes the key. Then run /connect to pick the anthropic provider.",
+      "problem": "CONNECT_GUIDANCE is what /connect prints when deps.selectProviderModel is undefined (the 'not available' path). The rewrite turns its last sentence from 'run /provider' into 'run /connect', so the guidance printed by /connect tells the user to run /connect.",
+      "impact": "Circular instruction on a path where the picker is unavailable: the user is told to repeat the command that just printed it. Previously the pointer went to a different command, which was a (weaker) way forward.",
+      "suggested_fix": "End the guidance with a way that works without the picker, e.g. 'Then restart keryx and pick the provider with /connect' or name the CLI route (keryx auth / the env var in the next launch).",
+      "evidence": "Diff hunk src/commands/shell.ts @@ 227,267; the /connect branch 'if (deps.selectProviderModel === undefined) { system(CONNECT_GUIDANCE); continue; }' (hunk @@ 1152,1207).",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "connect-guidance-circular"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/remote/command-router.ts",
+      "line": null,
+      "quote": "const canAdd = host.listAddableProviders !== undefined;",
+      "problem": "The Add provider capability is advertised by one hook only (listAddableProviders), while the actions behind it (testProvider, connectWithDeviceLogin) are three independently optional members of RemoteCommandHost. A host that supplies the list alone shows 'Add provider', then [Test] / [Connect], and only then answers 'Testing a provider is not available from this shell.' / 'Connecting a provider is not available from this shell.' The router tests cover that answer (see 'answers that Test is not available when the shell has no such hook').",
+      "impact": "Not a defect today: the only real host (the TUI) is expected to supply all three, and the answer is clear. It is the shape of the port: a capability group split across three optional members invites a partial host. Settled by: confirming the TUI host in remote-provider-hooks.ts always supplies all three.",
+      "suggested_fix": "Optional: derive canAdd from all three hooks, or group them into one optional member (addProvider?: { list, test, connect }) so a host provides the capability whole.",
+      "evidence": "Diff hunks src/remote/command-router.ts @@ 592,749 (canAdd, testAddable, connectAddable) and src/remote/command-router.ts @@ 30,122 (three separate optional members).",
+      "confidence": "medium",
+      "reviewer": "review-architecture",
+      "dedupe_key": "add-provider-capability-split",
+      "publication": "question"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/remote/command-gateway.ts",
+      "line": null,
+      "quote": "it is not on the list of commands a topic may run; /help shows the list",
+      "problem": "Removing 'provider' from REMOTE_REFUSED means a topic that sends /provider now gets the generic 'not on the list' refusal (known: false), where it used to get the specific reason, and the topic is not pointed at /connect the way the shell is (removedCommandHint is not used on this path).",
+      "impact": "Cosmetic: the line is still refused and nothing runs, so the AC8 invariant holds. The topic just gets less guidance than the shell does for the same removed command.",
+      "suggested_fix": "None required. If wanted, route the remote unknown-command refusal through removedCommandHint so both surfaces answer alike.",
+      "evidence": "Diff hunks src/remote/command-gateway.ts (REMOTE_REFUSED entry removed) and src/remote/command-gateway.test.ts (['/provider', 'provider'] removed from REFUSED_LINES); classifyRemoteCommand lines 188-206 read at head.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "dedupe_key": "remote-provider-generic-refusal"
+    }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 2 }
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Branch: `feat/connect-providers-tabs`, merge-base `6a8941b75fd90a79caff47484440faffe1e226f2`, head `2e1936eeb9760e1bbfb05500bd7479c37d44ba80`
+- Scope mode: diff, slice-02 only (registry, readline shells, remote router/gateway/bridge/test helpers, help-groups)
+- Stack detected: generic-ts (CLI/TUI, no NestJS or MobX)
+
+### Summary
+The change folds /provider into /connect without breaking layer direction. The registry owns the removed-command hint, the remote router reaches new behaviour only through optional host hooks wired in shell-bridge, and the router refuses to put a key or URL button in chat before any host call. The remaining points are about the readline fallback surfaces, where /connect does less than the new registry wording and hint promise.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 3  |  info: 2
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected. shell.ts imports removedCommandHint from the shared registry module (same direction as describeUnavailableCommand).
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+[F-004] (info) Add provider capability gated by one of three optional hooks.
+
+### SOLID Violations
+None detected. RemoteCommandRouter gained three private methods (pickAddableProvider, testAddable, connectAddable) for one command flow; that is cohesion with pickProvider, not a second responsibility.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A - not detected in stack.
+
+### Other (readline surfaces)
+[F-001] (minor) hint to /connect where the readline agent has none. [F-002] (minor) chat /connect does not add, and /provider <name> and openai-codex are dropped. [F-003] (minor) CONNECT_GUIDANCE refers to /connect. [F-005] (info) remote /provider now generic refusal.

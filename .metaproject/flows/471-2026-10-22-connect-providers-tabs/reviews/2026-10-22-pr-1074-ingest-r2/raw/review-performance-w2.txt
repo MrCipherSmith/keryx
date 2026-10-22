@@ -1,0 +1,127 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "slice-03 (PR #1074, tui/remote-provider-hooks, tui-shell /connect tabbed dialog, modal-host, queue-nav, chat-shell comments). No blocker or major performance finding. The new dialog windows its rows to the body height, repaints only when the selection leaves the window, and the connect sequence reuses the /models result instead of re-fetching; Telegram's two-call /connect burst now shares one probe. One minor (the probe cache's TTL clock starts at load start and expires in-flight loads, so a slow probe is repeated) and three info observations; none is on a path whose frequency or scale makes it a cost today.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/tui/remote-provider-hooks.ts",
+      "line": null,
+      "quote": "if (entry !== undefined && now() - entry.at < ttlMs) {",
+      "problem": "createConnectedProvidersCache stamps `at: now()` when the load STARTS and treats an entry older than ttlMs (15s) as expired even while its promise is still pending. The probe behind it (filterConnectedDetectedProviders) is a sequential `for ... await fetchOpenAiCompatModelsDetailed` loop, one /models request per keyed provider, each bounded only by MODELS_FETCH_TIMEOUT_MS. If a burst's load takes longer than 15s (several slow or timing-out providers), the second call of the burst (listProviders then listAddableProviders) finds the entry 'expired', starts a second full sequential probe in parallel with the first, and the 'one probe serves both' claim in the doc comment does not hold.",
+      "impact": "Per Telegram /connect press, on a machine with several slow or hung providers: the probe round runs twice concurrently instead of once, doubling outbound /models requests and the wait before the Add provider list appears. With fast providers (the normal case) the cache works as intended, hence minor, not major.",
+      "suggested_fix": "Stamp the TTL when the load RESOLVES, and while an entry's promise is pending always return it: keep `entry = { at: Infinity, value }` until it settles, then set `at = now()` in a `.then`. The failed-load eviction already handles the error path.",
+      "evidence": "src/tui/remote-provider-hooks.ts createConnectedProvidersCache: `const mine = { at: now(), value }; entry = mine;` and `now() - entry.at < ttlMs`. Probe loop read in src/tui/tui-shell.ts filterConnectedDetectedProviders (lines ~780-787: `const result = await fetchOpenAiCompatModelsDetailed(fetchFn, compat, ..., { timeoutMs: MODELS_FETCH_TIMEOUT_MS })` inside `for (const prov of detected)`). The TTL-on-completion behaviour is not tested in the diff (the cache's test file is in another slice and was not read).",
+      "confidence": "medium",
+      "reviewer": "review-performance",
+      "dedupe_key": "perf-connected-cache-ttl-from-start"
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "void runTest(\"add\", d.name);",
+      "problem": "[Test] has no in-flight guard. On the Add tab (button click, or Enter with the Test column highlighted) and on Telegram's [Test] (`testProvider` -> `probeProviderConnection`), each press starts a new /models probe for that provider, and each probe also refreshes the model-profile store through `onSummary`. Two quick presses on the same row run two probes concurrently and both write the same status line and the same store. The Connected tab's [Test] had the same shape before this PR; the Add tab and the Telegram hook extend it to every known provider.",
+      "impact": "Bounded by how fast a person presses a button; one extra HTTP request and one extra store refresh per extra press. No reproducible cost at a stated frequency, so info. What would settle it: whether the Telegram router (src/remote/command-router.ts, not in this slice) already ignores a second tap while a Test is pending, and whether the profile-store refresh is idempotent under two concurrent writers.",
+      "suggested_fix": "Keep a `Set<string>` of `tab:name` keys being tested in pickProvidersTabbedStep and return early while the key is present; do the same per provider id in the remote testProvider hook if the router does not.",
+      "evidence": "pickProvidersTabbedStep: runTest is called from the Add-tab Test button callback, from the Enter handler (`void runTest(\"add\", row.name)`) and from the Connected-tab paths; none checks a pending marker. remote-provider-hooks.ts testProviderForRemote calls `deps.probe` unconditionally.",
+      "confidence": "low",
+      "reviewer": "review-performance",
+      "dedupe_key": "perf-test-probe-no-inflight-guard",
+      "publication": "question"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const connected = await filterConnectedDetectedProviders(detected, deps);",
+      "problem": "The /connect dialog opens only after filterConnectedDetectedProviders has probed every keyed provider's /models one after another (sequential awaits). The Add provider tab needs none of those probes: it lists every detected provider and its own [Test] probes on demand. A user who opened /connect only to add a provider waits for the whole connected-list probe first when several providers are already connected. This is the same wait the old `/connect` had (it also awaited the filter before drawing), moved into runProvidersModal rather than introduced by it.",
+      "impact": "Per /connect open, latency = sum over keyed providers of their /models time, each capped by MODELS_FETCH_TIMEOUT_MS. With the usual handful of keyed providers that is a second or two. Not measured here, and unchanged by this PR, so info.",
+      "suggested_fix": "If it is ever tuned: probe with Promise.all (bounded concurrency) in filterConnectedDetectedProviders, or open on the Add tab immediately and fill Connected when the probe returns. Track separately from this PR.",
+      "evidence": "runProvidersModal: `const connected = await filterConnectedDetectedProviders(detected, deps);` before the first `pickProvidersTabbedStep`. The sequential loop is pre-existing code outside the diff (shown only as context).",
+      "confidence": "medium",
+      "reviewer": "review-performance",
+      "dedupe_key": "perf-connect-open-sequential-probe",
+      "location_class": "pre-existing"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/tui/tui-shell.ts",
+      "line": null,
+      "quote": "const addRows = (): DetectedProvider[] => [...opts.all, CUSTOM_ADD_ENTRY];",
+      "problem": "`rowsOf(\"add\")` allocates a fresh copy of the provider list on every call, and it is called per block inside applyHighlight (once per visible row), plus in moveSelection, addCustomRowSelected, capacityRows' callers and the Enter handler. A single arrow key on the Add tab copies the list about ten times.",
+      "impact": "N is the number of detected providers (tens) and the visible window is a handful of rows, so a few hundred element copies per keypress. Not measurable in a TUI; reported only so the pattern is on record.",
+      "suggested_fix": "Build the Add rows once (`const addRowList = [...opts.all, CUSTOM_ADD_ENTRY]`) and return it from rowsOf; `opts.all` is not mutated while the dialog is open.",
+      "evidence": "pickProvidersTabbedStep: addRows/rowsOf definitions, and `const d = rowsOf(block.tab)[block.index];` inside the `for (const block of blocks)` loop of applyHighlight.",
+      "confidence": "high",
+      "reviewer": "review-performance",
+      "dedupe_key": "perf-add-rows-realloc",
+      "publication": "omit"
+    }
+  ],
+  "slices": ["slice-03"],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 3 }
+}
+```
+
+## Performance Review
+
+### Scope
+- Branch: `feat/connect-providers-tabs`
+- Base: `6a8941b75fd90a79caff47484440faffe1e226f2`, head `2e1936eeb9760e1bbfb05500bd7479c37d44ba80`
+- Scope mode: diff, slice-03 (balance-panel, chat-shell, game-modal, games/model-turn, modal-host, queue-nav, remote-provider-hooks, tui-shell), read in full
+- Changed files reviewed: 8
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 1
+- Info: 3
+
+### Findings
+
+### [F-001] Connected-providers cache expires an in-flight probe
+- **Severity**: minor
+- **File**: src/tui/remote-provider-hooks.ts (`createConnectedProvidersCache`)
+- **Hot path**: each Telegram `/connect` press (listProviders then listAddableProviders)
+- **Problem**: TTL runs from load start, so a load slower than 15s is treated as expired while still pending; the second call starts a parallel full probe.
+- **Why it matters**: only with several slow providers; doubles /models requests and the wait.
+- **Fix**: stamp `at` on resolution; always return the pending promise while it is in flight.
+
+### [F-002] [Test] has no in-flight guard (info)
+- **File**: src/tui/tui-shell.ts (Add-tab `runTest`), src/tui/remote-provider-hooks.ts (`testProviderForRemote`)
+- **Hot path**: per button press; user-bound
+- **Problem**: repeated presses start concurrent /models probes, each refreshing the model-profile store.
+- **Fix**: a pending-key set in the dialog and, if the router does not do it, in the remote hook. Settled by reading `command-router.ts` (not in this slice).
+
+### [F-003] /connect opens only after a sequential probe of every keyed provider (info, pre-existing)
+- **File**: src/tui/tui-shell.ts (`runProvidersModal`)
+- **Hot path**: per `/connect` open; N = keyed providers
+- **Problem**: the Add tab does not need the probe, but the dialog waits for it. Same wait as the old `/connect`.
+- **Fix**: bounded-concurrency probe or open first and fill Connected later; track separately.
+
+### [F-004] Add rows list reallocated per call (info)
+- **File**: src/tui/tui-shell.ts (`addRows`/`rowsOf`)
+- **Problem**: copy of tens of entries about ten times per arrow key. Not measurable.
+
+### Clean Areas
+- N+1 queries and missing indexes: no database access in the slice.
+- React re-renders and MobX derived state: OpenTUI imperative renderables, no React/MobX in the slice.
+- Memory leaks: the `onKeypress` unsubscribe runs on every `finish` path (Esc, pick, connect, custom); the overlay fallback unsubscribes in `close`; the device-login timer is cleared in `finally` and `current` is reset; `statuses` is bounded by the provider count; the cache keeps one entry and evicts a failed load.
+- Unbounded collections: `selected`, `windowStart` and `statuses` are keyed by tab and provider name only.
+- Expensive computation in hot paths: rows are windowed to `capacityRows()`, selection moves repaint only when leaving the window, tab switches rebuild at most one window of rows.
+- Bundle imports: only named imports of local modules.
+- Synchronous blocking: no new sync fs or exec calls in the diff; `loadProviderCatalogCache` is one small read per dialog open (existing).
+- Pagination: not applicable (provider lists are small and local).
+- Redundant API calls: a successful Add-tab [Connect] reuses the `/models` result it just fetched (upsert into `connected`) and does not re-probe; Telegram's two list calls share one probe through the cache (see F-001 for its edge).
+- Optimisation claims (performance law 3): the cache is an optimisation with no before/after in the diff. Counted as minor/unjustified at most; it has an obvious rationale (two probes per button press) and the cache's test file was not in this slice, so no separate finding.
+
+Layers: no `layers` block was supplied in the payload; graph/test/wiki/memory commands were not run (read-only, no commands allowed).

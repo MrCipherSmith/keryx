@@ -1,0 +1,144 @@
+{
+ "mutants": [
+  {
+   "id": "w1-M1",
+   "file": "src/commands/agent-commands.ts",
+   "anchor": "return REMOVED_COMMAND_HINTS[commandToken(line)];",
+   "replacement": "return undefined;",
+   "kind": "behavior"
+  },
+  {
+   "id": "w1-M2",
+   "file": "src/commands/agent-commands.ts",
+   "anchor": "REMOVED_COMMAND_HINTS[commandToken(line)]",
+   "replacement": "REMOVED_COMMAND_HINTS[line]",
+   "kind": "behavior"
+  },
+  {
+   "id": "w1-M3",
+   "file": "src/commands/shell.ts",
+   "anchor": "removedCommandHint(command) ?? \"Type /help.\"",
+   "replacement": "\"Type /help.\"",
+   "kind": "behavior"
+  },
+  {
+   "id": "w1-M4",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "const removedHint = removedCommandHint(line);",
+   "replacement": "const removedHint: string | undefined = undefined;",
+   "kind": "behavior"
+  },
+  {
+   "id": "w1-M5",
+   "file": "src/commands/shell.ts",
+   "anchor": "removedCommandHint(command) ?? \"Type /help for commands.\"",
+   "replacement": "\"Type /help for commands.\"",
+   "kind": "behavior"
+  },
+  {
+   "id": "w1-M6",
+   "file": "src/commands/shell.ts",
+   "anchor": "await selectAndApply({ onlyConnected: true });",
+   "replacement": "await selectAndApply({});",
+   "kind": "behavior"
+  },
+  {
+   "id": "w1-M7",
+   "file": "src/commands/shell.ts",
+   "anchor": "system(CONNECT_GUIDANCE);",
+   "replacement": "system(\"\");",
+   "kind": "behavior"
+  },
+  {
+   "id": "w1-M8",
+   "file": "src/commands/shell.ts",
+   "anchor": "Then run /connect to pick the anthropic provider.",
+   "replacement": "Then run /provider to pick the anthropic provider.",
+   "kind": "behavior"
+  },
+  {
+   "id": "w2-M1",
+   "file": "src/remote/command-router.ts",
+   "anchor": "if (chosen === undefined) {\n      this.ctx.record(\"/connect not answered in time; nothing changed\");\n      return \"failed\";\n    }\n    const provider = addable.find(",
+   "replacement": "const provider = addable.find(",
+   "kind": "behavior"
+  },
+  {
+   "id": "w2-M2",
+   "file": "src/remote/command-router.ts",
+   "anchor": "if (provider.connected) {",
+   "replacement": "if (false) {",
+   "kind": "behavior"
+  },
+  {
+   "id": "w2-M3",
+   "file": "src/remote/command-router.ts",
+   "anchor": "if (!provider.deviceLogin) {",
+   "replacement": "if (false) {",
+   "kind": "behavior"
+  },
+  {
+   "id": "w2-M4",
+   "file": "src/remote/command-router.ts",
+   "anchor": "const busy = this.busyReason(\"/connect\", \"connect\");",
+   "replacement": "const busy = undefined;",
+   "kind": "behavior"
+  },
+  {
+   "id": "w2-M5",
+   "file": "src/remote/command-router.ts",
+   "anchor": "outcome = { ok: false, message: \"Device login failed. The details are in the shell.\" };",
+   "replacement": "throw new Error(\"x\");",
+   "kind": "behavior"
+  },
+  {
+   "id": "w2-M6",
+   "file": "src/remote/command-router.ts",
+   "anchor": "if (host.connectWithDeviceLogin === undefined) {",
+   "replacement": "if (false) {",
+   "kind": "behavior"
+  },
+  {
+   "id": "w2-M7",
+   "file": "src/remote/command-router.ts",
+   "anchor": "if (addable.length === 0) {",
+   "replacement": "if (false) {",
+   "kind": "behavior"
+  },
+  {
+   "id": "w2-M8",
+   "file": "src/remote/command-router.ts",
+   "anchor": "const canAdd = host.listAddableProviders !== undefined;",
+   "replacement": "const canAdd = true;",
+   "kind": "behavior"
+  },
+  {
+   "id": "w2-M9",
+   "file": "src/tui/tui-shell.ts",
+   "anchor": "(a toast or status write that includes the typed key, on the connect-success path)",
+   "replacement": "add chrome.showToast(key) after saveApiKey",
+   "kind": "behavior"
+  },
+  {
+   "id": "w2-M10",
+   "file": "src/tui/modal-host.ts",
+   "anchor": "(the Tab key branch that cycles tabs)",
+   "replacement": "delete the branch",
+   "kind": "behavior"
+  },
+  {
+   "id": "w2-M11",
+   "file": "src/remote/shell-bridge.ts",
+   "anchor": "...(this.host.connectWithDeviceLogin !== undefined",
+   "replacement": "...(false",
+   "kind": "behavior"
+  },
+  {
+   "id": "w2-M12",
+   "file": "src/remote/command-router.ts",
+   "anchor": "options.push({ id: ADD_PROVIDER_ID, label: \"Add provider\" });",
+   "replacement": "void 0;",
+   "kind": "behavior"
+  }
+ ]
+}

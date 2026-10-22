@@ -1,0 +1,63 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-testing-practices",
+  "summary": "Slice-01 is mostly flow metadata, docs and mechanical test renames; the test edits that carry weight are the removal of `/provider` and the `removedCommandHint` tests. Those pin the registry (exact-order lists, `filterCommands('/p', ...)`), the pure hint function and the readline chat path, and would fail if the removed command came back or the hint were dropped there. The one gap: the same hint is wired in two more places (readline agent REPL and the TUI) and no test reaches either, and AC9's 'guidance names only /connect' is never asserted. No mutation was run (read-only, exec budget 0): 8 mutants proposed, 0 reached.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/commands/shell.ts",
+      "line": null,
+      "quote": "removedCommandHint(command) ?? \"Type /help.\"",
+      "problem": "AC1 says typing the removed provider command in agent or chat mode answers 'Unknown command' with a hint to use /connect. The diff adds that hint at three call sites: readline chat (shell.ts:1187), readline agent REPL (shell.ts:3270) and the full-screen TUI (tui-shell.ts:10493, `const removedHint = removedCommandHint(line);`). Only the first is driven by a test (shell.test.ts:618, `/${\"provider\"} ollama` through `runShell`). Every other test that builds the removed name (`${\"provider\"}`: agent-commands.test.ts:304, help-groups.test.ts:216, shell.test.ts:513 and :618) calls the pure function or the chat REPL. Nothing sends the removed command to the agent REPL or the TUI input path. Same shape one level up: AC9 says the shell without a TUI prints guidance naming only /connect, but the `/connect` guidance test (shell.test.ts:670-691) asserts only `ANTHROPIC_API_KEY` and the absence of an `sk-` value, not the absence of the removed name, and the AC10 invariant does not cover src/commands.",
+      "impact": "Deleting the hint from the agent REPL or the TUI, or reintroducing the removed name in `CONNECT_GUIDANCE`, leaves every test in this slice green, so the next edit to those lines is unprotected. This is a static finding: no mutation was run (exec budget 0), the claim is that no test in the repository reaches the two sites, established by searching for the `${\"provider\"}` token across src. M3, M4 and M8 in mutant_candidates would settle it.",
+      "suggested_fix": "Add one test per surface: feed the removed command to the readline agent REPL (the harness in shell-agent-repl.test.ts) and to the TUI input path (tui-shell.test.ts) and assert the output contains 'Unknown command' and '/connect'. In the `/connect` guidance test add `expect(output).not.toContain(`/${\"provider\"}`)`.",
+      "evidence": "keryx ctx rg for the `${\"provider\"}` token across src returns 4 matches in 3 files: shell.test.ts:513, shell.test.ts:618, help-groups.test.ts:216, agent-commands.test.ts:304. Call sites of removedCommandHint: shell.ts:1187 (covered by shell.test.ts:618), shell.ts:3270 and tui-shell.ts:10493 (no test).",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "dedupe_key": "testing:removed-command-hint-unpinned-outside-chat",
+      "class_scope": {
+        "sites": ["src/commands/shell.ts:3270", "src/tui/tui-shell.ts:10493", "src/commands/shell.ts:247"],
+        "enumeration_method": "keryx ctx rg for removedCommandHint (10 matches, 4 files) gives the three call sites; keryx ctx rg for the `${\"provider\"}` token across src gives the 4 test lines, none reaching the agent REPL or the TUI; CONNECT_GUIDANCE has one definition (shell.ts:240) and one use (shell.ts:1174)."
+      }
+    }
+  ],
+  "mutant_candidates": [
+    {"id": "M1", "file": "src/commands/agent-commands.ts", "anchor": "return REMOVED_COMMAND_HINTS[commandToken(line)];", "replacement": "return undefined;", "kind": "behavior"},
+    {"id": "M2", "file": "src/commands/agent-commands.ts", "anchor": "REMOVED_COMMAND_HINTS[commandToken(line)]", "replacement": "REMOVED_COMMAND_HINTS[line]", "kind": "behavior"},
+    {"id": "M3", "file": "src/commands/shell.ts", "anchor": "removedCommandHint(command) ?? \"Type /help.\"", "replacement": "\"Type /help.\"", "kind": "behavior"},
+    {"id": "M4", "file": "src/tui/tui-shell.ts", "anchor": "const removedHint = removedCommandHint(line);", "replacement": "const removedHint: string | undefined = undefined;", "kind": "behavior"},
+    {"id": "M5", "file": "src/commands/shell.ts", "anchor": "removedCommandHint(command) ?? \"Type /help for commands.\"", "replacement": "\"Type /help for commands.\"", "kind": "behavior"},
+    {"id": "M6", "file": "src/commands/shell.ts", "anchor": "await selectAndApply({ onlyConnected: true });", "replacement": "await selectAndApply({});", "kind": "behavior"},
+    {"id": "M7", "file": "src/commands/shell.ts", "anchor": "system(CONNECT_GUIDANCE);", "replacement": "system(\"\");", "kind": "behavior"},
+    {"id": "M8", "file": "src/commands/shell.ts", "anchor": "Then run /connect to pick the anthropic provider.", "replacement": "Then run /provider to pick the anthropic provider.", "kind": "behavior"}
+  ],
+  "slices": ["slice-01"],
+  "stats": {"blocker": 0, "major": 0, "minor": 1, "info": 0}
+}
+```
+
+## Summary
+
+Scope: slice-01 only (26 files: generated graph data, flow folder, CHANGELOG, README, docs, package.json, and six test files). Read in full. Production code outside the slice was read only where needed to judge the tests (agent-commands.ts `removedCommandHint`, shell.ts call sites and `CONNECT_GUIDANCE`, tui-shell.ts call site).
+
+### Mutation table
+
+Not run: allowed_tools is read-only and exec_budget_s is 0, so no suite was executed and no result is reported. Cap: 8 mutants proposed in `mutant_candidates`, 0 reached, 8 not reached. The main session writes them to `mutants.json` and runs them. Expected by reading, not observed: M1, M2, M5, M6, M7 die (agent-commands.test.ts:304-318, shell.test.ts:618, :664, :670); M3, M4, M8 survive (F-001).
+
+### Checklist
+
+- Registry removal is pinned well. `AGENT_SLASH_COMMANDS`, `commandsForMode` (agent, chat) and `filterCommands('/', ...)` are exact-order lists with the removed entry deleted; `filterCommands('/p', 'chat')` is now `[]` and `('/p', 'agent')` drops the entry. Re-registering the command fails five assertions.
+- `removedCommandHint` tests are two-sided: the removed name with an argument returns a hint containing `/connect`, `/connect` and `/nope` return `undefined`. That kills both "always hint" and "never hint" mutants.
+- The tests build the removed name as `/${"provider"}` so the AC10 invariant does not trip on test files. A deliberate choice with a stated reason; not a defect.
+- shell.test.ts: the `/connect` tests now pin `selectCalls` to `[{ onlyConnected: true }]` with `toEqual`, so the call shape is asserted, not just that a selector ran. The new "removed provider command" test has a positive artifact ('Unknown command', '/connect') and negative ones (no selection, no model turn), so the negatives are not vacuous.
+- `describeCommand(connect, 'agent')` checks for "Connected" and "Add provider" are copy assertions (presentation).
+- shell-grant-refresh.test.ts, shell-slash-registry.test.ts, providers.models-failure.test.ts: comment-only edits. shell-grant-refresh.test.ts reads `shell.ts` as text; that is pre-existing and unchanged in this diff.
+- Fixtures: no scenario-named fixture was added or changed in this slice.
+- Outside this slice: AC3 says the flow 304 and 309 tests stay unchanged, but the flow's own journal records a change to the source anchor at connect-provider-buttons.test.ts line 565. That file is in slice-04, not covered here.
+
+Routing audit: graph_used no (not-relevant: read-only test review of a given diff); wiki_used no (not-relevant); ctx_used yes (`keryx ctx rg`); raw_rg_used no.

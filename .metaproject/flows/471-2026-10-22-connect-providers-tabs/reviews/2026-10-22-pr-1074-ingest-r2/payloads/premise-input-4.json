@@ -1,0 +1,149 @@
+{
+ "judge": "review-premise",
+ "source": "round",
+ "findings": [
+  {
+   "id": "review-style-w3:F-003",
+   "reviewer": "review-style",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": null,
+   "quote": "deps.requireCredential && (provider.requiresApiKey ?? true)",
+   "problem": "The rule 'a provider that needs a key and has none' is spelled out twice with the same three-part condition: in probeProviderConnection (`requireCredential && (provider.requiresApiKey ?? true) && classifyProviderConnection(name, env, configDir).kind === \"no-credential\"`) and in runProviderConnectSequence's collectCredential (`requireKey && (connectionProviderByName(...)?.requiresApiKey ?? true) && classifyProviderConnection(...).kind === \"no-credential\"`).",
+   "suggested_fix": "Add `function lacksRequiredCredential(name: string, env: Record<string, string | undefined>, configDir?: string): boolean` next to probeProviderConnection and call it from both sites."
+  },
+  {
+   "id": "review-style-w3:F-004",
+   "reviewer": "review-style",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": null,
+   "quote": "else if (!addCustomRowSelected()) addAction = stepAddNavAction(addAction, direction);",
+   "problem": "Two small duplications in the new tabbed code. (1) The left/right stepping `if (tab === \"connected\") connectAction = stepConnectNavAction(...); else if (!addCustomRowSelected()) addAction = stepAddNavAction(...)` appears in the surface's onArrowKeys and again in the onKeypress left/right branch. (2) Tab cycling to the next tab (`tabIds[(at + 1) % length]`) appears in the ModalHost claimKey and in the overlay's cycle().",
+   "suggested_fix": "Extract `stepRowAction(direction)` for (1) and a shared `nextTabId(tabs, active)` for (2)."
+  },
+  {
+   "id": "review-style-w3:F-005",
+   "reviewer": "review-style",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": null,
+   "quote": "const result = await runProviderConnectSequence(otui, target, action.provider, deps, true, true);",
+   "problem": "runProviderConnectSequence takes two positional booleans (`setup`, `requireKey = false`); the call sites read `(…, deps, true, true)` and `(…, deps, false)` and `(…, deps, true)`, so a reader cannot tell which flag is which without opening the signature.",
+   "suggested_fix": "Pass an options object `{ setup: true, requireKey: true }`, or two named wrappers (`connectForAddTab`, `pickConnected`)."
+  },
+  {
+   "id": "review-style-w3:F-007",
+   "reviewer": "review-style",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": null,
+   "quote": "return clipText(full, bodyWidth - 24 - labelOf(d).length);",
+   "problem": "Layout numbers are inline literals with their meaning only in a nearby comment: `bodyWidth - 24` (noteOf) and `bodyWidth - 24 ... (isConnected ? 13 : 0)` (addNoteOf) for the button columns, `Math.min(24, rowCount * 2 + 3)` for contentRows, `let bodyWidth = 70; let bodyHeight = 15;`, `bodyHeight - 2` in capacityRows, and in the overlay fallback `Math.max(20, r.width - 4)` and `r.height - 6`. The comments say the buttons take '~22 columns' while the code subtracts 24.",
+   "suggested_fix": "Name them once: `ROW_BUTTON_COLS = 24`, `CONNECTED_BADGE_COLS = 13`, `ROW_LINES = 2`, `HEADER_AND_SPARE_ROWS = 2`, `DEFAULT_BODY_WIDTH/HEIGHT`, `OVERLAY_GUTTER_COLS/ROWS`, and align the comment with the value."
+  },
+  {
+   "id": "review-style-w3:F-008",
+   "reviewer": "review-style",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": null,
+   "quote": "first: { box: Box; setActive: (active: boolean) => void };",
+   "problem": "RowBlock's buttons are named `first` and `second`, whose meaning flips by tab (Test/Disconnect on Connected, Connect/Test on Add) and which can be undefined for the custom row. Elsewhere `all` (`opts.all`, `const all = [...detected]`) is a vague name for 'every detected provider'.",
+   "suggested_fix": "Name by role (`primary`/`secondary`) with a doc comment per tab, or keep a discriminated block type per tab; rename `all` to `allProviders`/`detectedProviders`."
+  },
+  {
+   "id": "review-style-w3:F-010",
+   "reviewer": "review-style",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": null,
+   "quote": "  removedCommandHint,",
+   "problem": "In the `../commands/agent-commands` import list (commandsForMode, describeUnavailableCommand, filterCommands, findAgentCommand, parseDelegateCommand, parseDemoteCommand, renderCommandHelp), `removedCommandHint` is inserted between `describeUnavailableCommand` and `filterCommands`, breaking the alphabetical order the rest of the list keeps.",
+   "suggested_fix": "Move `removedCommandHint,` between `parseDemoteCommand,` and `renderCommandHelp,`."
+  },
+  {
+   "id": "review-style-w3:F-012",
+   "reviewer": "review-style",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/tui-shell.ts",
+   "line": null,
+   "quote": "function openTabbedSurface(otui: OpenTui, target: StepTarget, opts: TabbedSurfaceOptions): TabbedSurface {",
+   "problem": "The PR adds a self-contained generic tabbed-surface component (about 180 lines with its types and the overlay fallback), the Providers tabbed step (about 400 lines), runProviderConnectSequence and runProvidersModal (about 250 lines) to src/tui/tui-shell.ts, which the slice's own hunk offsets put at more than 11,000 lines. The same PR extracts the Telegram hooks to `remote-provider-hooks.ts` precisely to keep them out of this file.",
+   "suggested_fix": "Move openTabbedSurface/TabbedSurface/tabDigit into a `tabbed-surface.ts` (or into modal-host.ts) and the /connect Providers step and connect sequence into `providers-modal.ts`; leave `selectProviderModelInTui` as the entry point."
+  },
+  {
+   "id": "review-testing-practices-w1:F-001",
+   "reviewer": "review-testing-practices",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/commands/shell.ts",
+   "line": null,
+   "quote": "removedCommandHint(command) ?? \"Type /help.\"",
+   "problem": "AC1 says typing the removed provider command in agent or chat mode answers 'Unknown command' with a hint to use /connect. The diff adds that hint at three call sites: readline chat (shell.ts:1187), readline agent REPL (shell.ts:3270) and the full-screen TUI (tui-shell.ts:10493, `const removedHint = removedCommandHint(line);`). Only the first is driven by a test (shell.test.ts:618, `/${\"provider\"} ollama` through `runShell`). Every other test that builds the removed name (`${\"provider\"}`: agent-commands.test.ts:304, help-groups.test.ts:216, shell.test.ts:513 and :618) calls the pure function or the chat REPL. Nothing sends the removed command to the agent REPL or the TUI input path. Same shape one level up: AC9 says the shell without a TUI prints guidance naming only /connect, but the `/connect` guidance test (shell.test.ts:670-691) asserts only `ANTHROPIC_API_KEY` and the absence of an `sk-` value, not the absence of the removed name, and the AC10 invariant does not cover src/commands.",
+   "suggested_fix": "Add one test per surface: feed the removed command to the readline agent REPL (the harness in shell-agent-repl.test.ts) and to the TUI input path (tui-shell.test.ts) and assert the output contains 'Unknown command' and '/connect'. In the `/connect` guidance test add `expect(output).not.toContain(`/${\"provider\"}`)`."
+  },
+  {
+   "id": "review-testing-practices-w2:F-001",
+   "reviewer": "review-testing-practices",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/connect-modal.test.ts",
+   "line": null,
+   "quote": "await waitFor(h, (f) => f.includes(\"Device login\"));",
+   "problem": "`waitFor` returns the last frame when its deadline passes; it never throws. Four 'Esc at the X step returns to the Add tab and saves nothing' tests discard the result of the waitFor that proves the step opened (`API key`, `endpoint URL`, `Device login`, `Provider name`). Every assertion after Esc is then negative (no key saved, no file written, `calls()` is 0, text absent) or holds on the Add tab whether or not the step ever opened (`Add custom provider && !<step label>`, `[Connect]`). If Enter on the row did nothing, each test still passes, after a 5 s stall.",
+   "suggested_fix": "Assert the step frame: `expect(await waitFor(h, (f) => f.includes(\"Device login\"))).toContain(\"Device login\")` (same for `API key`, `endpoint URL`, `Provider name`). Better, make `waitFor` throw on deadline with the predicate's description, so every call site is checked and the 5 s stall becomes a failure."
+  },
+  {
+   "id": "review-testing-practices-w2:F-002",
+   "reviewer": "review-testing-practices",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/connect-modal.test.ts",
+   "line": null,
+   "quote": "h.mockInput.pressTab(); // cycles to the next tab",
+   "problem": "The test named 'digits, Tab and the mouse switch tabs' presses Tab twice and discards both waitFor results (`frame = await waitFor(...)` is reassigned, never asserted). With Tab doing nothing, the first wait times out silently on the Connected frame, the second wait is already satisfied by `[Disconnect]`, and the test goes on to the mouse-click step, which only needs the Connected frame. Digits and the mouse are asserted (`not.toContain(\"Add custom provider\")`, `toContain(\"[Connect]\")`); Tab is not.",
+   "suggested_fix": "After the first Tab: `expect(frame).toContain(\"Add custom provider\")`. After the second: `expect(frame).not.toContain(\"Add custom provider\")`. Or fold the check into the throwing `waitFor` from F-001."
+  },
+  {
+   "id": "review-testing-practices-w2:F-003",
+   "reviewer": "review-testing-practices",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/connect-modal.test.ts",
+   "line": null,
+   "quote": "for (const text of channels) expect(text).not.toContain(SECRET);",
+   "problem": "AC7 ('the key appears nowhere else') is pinned by two negative-only checks that have no positive proof. (a) `spyOnChrome` replaces `showToast`, `setStatus`, `setHeaderMeta` and `setTitle` on the chrome object after it was created, and `channels` is never asserted non-empty. If the code under test holds a reference taken before the spy was installed, or never calls these methods on this path, the loop is vacuous. `transcriptText` likewise has no assertion that the walker finds any text at all. (b) The first AC6 test says 'every frame AFTER Enter must be free of it' but samples three frames: the Add tab, the key step before typing, and the final Connected frame. No frame is captured between Enter and completion, which is where an in-flight 'checking' or error line would show a key.",
+   "suggested_fix": "Add one positive artifact per channel, for example assert `channels` contains the expected non-secret toast or status text, or fire `chrome.showToast('probe')` once and assert the spy saw it. Assert `transcriptText(h.chrome).length > 0` after some known text is added. For frames, sample on every poll in a loop between Enter and the connected frame (collect inside `waitFor`) and assert none holds SECRET."
+  },
+  {
+   "id": "review-testing-practices-w2:F-004",
+   "reviewer": "review-testing-practices",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/remote/command-connect.test.ts",
+   "line": null,
+   "quote": "it(\"keeps that refusal when the shell cannot list addable providers\", async () => {",
+   "problem": "Three gaps in the remote Add flow's tests. (1) The new test 'keeps that refusal when the shell cannot list addable providers' uses the same fixture as the existing 'sends the operator to the shell when no provider is connected' (`listProviders: []`, no `listAddableProviders`) and asserts a subset of what that one asserts; it adds no coverage. (2) 'changes nothing when the Add list or Test / Connect is not answered' exercises only the second picker (`choices[1].answer(undefined)`); the Add list not-answered path is only touched by two tests that answer `undefined` for cleanup and assert nothing afterwards. No test drives `refuseChoice` through the Add list or the Test/Connect question, so the `chosen === \"refused\"` and `action === \"refused\"` branches of `pickAddableProvider` are unasserted. (3) `connectAddable`'s catch (host throws, topic gets 'Device login failed. The details are in the shell.'), the missing `connectWithDeviceLogin` hook message, and the `addable.length === 0` message have no test.",
+   "suggested_fix": "Delete the duplicate test (or give it a fixture that differs: `listAddableProviders` present but returning []) and assert 'There are no providers to add from this shell.'. In the not-answered test, answer `undefined` at the Add list too and assert `replies` is []. Add a case with `refuseChoice` and a case where `connectWithDeviceLogin` throws, asserting the fixed failure text and that the thrown text is not relayed."
+  },
+  {
+   "id": "review-testing-practices-w2:F-005",
+   "reviewer": "review-testing-practices",
+   "severity": "minor",
+   "source": "round",
+   "file": "src/tui/remote-provider-hooks.test.ts",
+   "line": null,
+   "quote": "{ kind: \"empty\", detail: MASKED.join(\" \") },",
+   "problem": "Two fixtures carry a shape the producer cannot emit, hidden by casts. (1) `ModelsFailure`'s `empty` variant is `{ kind: \"empty\" }` with no `detail` (src/commands/providers.ts:536-537); the test builds `{ kind: \"empty\", detail: MASKED... }` and casts the array `as ModelsFailure[]`. It pins a state that does not exist, so the 'never relays a provider's error text' check for `empty` proves nothing about the real value. (2) `SUCCESS = { ok: true } as unknown as DeviceLoginResult`, but the producer's success is `{ ok: true; provider: string }` (src/lib/oauth/login.ts:41). `CHALLENGE as never` also bypasses the `LoginChallenge` type.",
+   "suggested_fix": "Use `{ kind: \"empty\" }` for that case, and build the success as `{ ok: true, provider: \"copilot\" }` and the challenge as a full `LoginChallenge` without `as never` / `as unknown as`."
+  }
+ ]
+}

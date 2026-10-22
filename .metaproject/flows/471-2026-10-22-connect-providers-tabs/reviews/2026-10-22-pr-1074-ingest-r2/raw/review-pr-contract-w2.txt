@@ -1,0 +1,78 @@
+STATUS: DONE_WITH_CONCERNS
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-pr-contract",
+  "summary": "Slice-02 (src/commands, src/remote, help-groups) read in full against pr-context.md. The PR body has no Documentation/Tests/Breaking-change template boxes, only a Test plan list; the AC10 box (no /provider in README, docs/docs, src/standard, init.ts) holds at head 2e1936e (git grep finds the literal only in src/commands/agent-commands.ts, outside the claimed paths). Three disagreements, none above minor: one stale doc line that still describes the old Telegram /connect, one chat-mode description that promises adding a provider the readline picker cannot do, and one unqualified 'hint' claim that does not reach the Telegram gateway.",
+  "findings": [
+    {
+      "id": "PC-101",
+      "severity": "minor",
+      "file": "docs/docs/guides/drive-keryx-remotely.md",
+      "line": null,
+      "quote": "`/connect` shows providers that are already connected, then their models. No key or address is shown.",
+      "problem": "The PR changes Telegram /connect: the diff adds an 'Add provider' button to the connected picker (src/remote/command-router.ts: `options.push({ id: ADD_PROVIDER_ID, label: \"Add provider\" })`), an Add list with [Test] / [Connect], and a device-login flow that posts a user code and link to the topic; the gateway menu text becomes 'Switch to a connected provider with buttons; also add a provider (device login only) and test it' (src/remote/command-gateway.ts). PR body: 'Telegram `/connect` gains an \"Add provider\" button, a [Test] per provider, and [Connect] by device login only.' The Telegram guide's Buttons row (line 429) was left describing only 'providers that are already connected, then their models'. The PR did edit this same file (line 521, dropping /provider from the stay-in-the-shell list) but not this row. 'No key or address is shown' also omits that a device code and verification link are now posted.",
+      "impact": "A reader of the remote-control guide does not learn that /connect in a topic can now test a provider or start a device login, or that a code and link will appear in the chat. The statement 'No key or address is shown' stays true for keys but no longer describes everything the topic shows. Cost is an incomplete guide, not a wrong result.",
+      "suggested_fix": "Extend the line-429 row: /connect also offers an Add provider button with [Test] and, for device-login providers only, [Connect], which posts the code and link; key providers send the operator to the shell. Check line 539 ('/connect' refused while a turn runs) still matches: the busy check now also guards the device login branch.",
+      "evidence": "pr-context.md line 13 (Telegram bullet) vs diff slice-02 command-router.ts hunk 'pickAddableProvider' / 'connectAddable' and command-gateway.ts line 'description: \"Switch to a connected provider with buttons; also add a provider (device login only) and test it\"'; doc found with `git grep -n \"/connect\" 2e1936e -- docs/docs/guides/drive-keryx-remotely.md` (hits at 429, 462, 539; only 429 describes the picker). git diff base..head on that file shows only the line-521 edit. Possible overlap with a slice-01 doc finding; reported here because the contradicting diff lines are in slice-02.",
+      "confidence": "high",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:docs-remote-connect-row-stale",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "PC-102",
+      "severity": "minor",
+      "file": "src/commands/agent-commands.ts",
+      "line": null,
+      "quote": "chat: \"Providers picker: switch to a connected provider or add one (picker when available)\",",
+      "problem": "PR body: '`/connect` is the only command ... \"Add provider\" lists every known provider with [Connect] and [Test]' and '[Connect] runs the base-URL, key or device-login steps'. The diff gives the readline chat-mode /connect the registry wording 'switch to a connected provider or add one', and rewrites the ShellDeps comment to '`/connect` passes `{ onlyConnected: true }` (the Providers dialog: switch among live providers, or add one)'. The chat handler itself is unchanged (`await selectAndApply({ onlyConnected: true });`), and the readline selector it calls, `realSelectProviderModel` (src/commands/shell.ts:1363-1389), never reads `opts.onlyConnected`: it runs `detectProviders`, then `pickProviderModel` over the detected providers. There is no Add provider tab, key or base-URL step in that path. Before the PR `/provider` (no arg) called the same selector with `{}` and `/provider <name>` switched by name; both are removed, so the readline chat surface now has fewer ways to reach a provider than before, while its help text says it can add one.",
+      "impact": "A chat-mode user (no TUI) reads in /help that /connect can add a provider, runs it, and gets a numbered list of already-detected providers with no way to enter a key or URL. The 'picker when available' hedge narrows the claim to where a picker exists, but the readline picker is a picker and still cannot add. Cost is a misleading help line, not a runtime fault.",
+      "suggested_fix": "Make the chat description say what the readline picker does (switch among detected providers; adding a provider is the TUI's Add provider tab or `keryx auth`), and trim the ShellDeps comment the same way; or state in the PR that chat mode keeps the old picker.",
+      "evidence": "Diff slice-02: agent-commands.ts `/connect` entry (chat mode description), shell-types.ts selectProviderModel comment, shell.ts hunk 958-1003 context `selectAndApply` and the `/connect` handler; shell.ts:1363-1389 read at the worktree (git grep `onlyConnected` in src/commands shows only the type, the two call sites and tests, no reader in the selector). pr-context.md lines 10-11.",
+      "confidence": "medium",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:chat-connect-add-one-claim",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "PC-103",
+      "severity": "info",
+      "file": "src/remote/command-gateway.ts",
+      "line": null,
+      "quote": "return refuse(canonical, \"it is not on the list of commands a topic may run; /help shows the list\", false);",
+      "problem": "PR body: '`/provider` is removed (registry, menu, help, README, docs, init hint). Typing it answers with a hint to use `/connect`.' The hint (`removedCommandHint`) is wired into the chat REPL (shell.ts), the readline agent REPL (shell.ts) and the TUI (tui-shell.ts), but not into the Telegram gateway. The diff deletes `provider` from REMOTE_REFUSED and from REFUSED_LINES, so a `/provider` typed in a topic now takes the generic branch above ('Not available remotely: /provider. It is not on the list of commands a topic may run; /help shows the list'), with no pointer to /connect. The claim is unqualified; if it means the shell surfaces only, it is correct as written.",
+      "impact": "Unverified scope: a Telegram user who types /provider gets a refusal that does not name /connect. Harmless (the command list is one /help away), and the previous refusal did not name /connect either.",
+      "suggested_fix": "Either qualify the PR sentence to the shell surfaces, or have the gateway's unknown-command branch call `removedCommandHint`. Settled by the author's intent for the Telegram surface.",
+      "evidence": "pr-context.md line 12; diff slice-02 command-gateway.ts (REMOTE_REFUSED hunk, `provider:` line removed) and command-gateway.test.ts (`[\"/provider\", \"provider\"]` row removed); classifyRemoteCommand read at src/remote/command-gateway.ts:188-206.",
+      "confidence": "low",
+      "reviewer": "review-pr-contract",
+      "dedupe_key": "pr-contract:provider-hint-not-in-gateway",
+      "location_class": "in-diff",
+      "publication": "question"
+    }
+  ],
+  "slices": ["slice-02"],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 }
+}
+```
+
+Checklist rows (every box and claim of pr-context.md, as the skill form asks):
+
+| Box or claim (quoted) | State | What the diff shows | Expectation / result |
+|---|---|---|---|
+| `bun test` on connect-modal, connect-provider-buttons, agent-commands, help-groups, shell, modal-host, queue-nav, remote (1327 pass), provider-probe | ticked | slice-02 carries `src/remote/command-connect.test.ts` (new Add provider cases), `command-gateway.test.ts`, `help-groups.test.ts`; `src/commands/agent-commands.test.ts`, `shell.test.ts` are in the PR scope | Consistent: tests are in the diff. Not re-run (read-only). |
+| `bunx tsc --noEmit -p .` | ticked | n/a to a diff line | Not checkable from a diff; CI lists typecheck-and-tests as passing. |
+| AC10 invariant: no `/provider` in README, docs/docs, src/standard, init.ts | ticked | help-groups.ts drops the `/provider` entry; help-groups.test.ts builds the token from parts (`/${"provider"}`) so no file under src/standard names it; `git grep` at 2e1936e finds the literal only in src/commands/agent-commands.ts (`REMOVED_COMMAND_HINTS`) | Holds for the four named paths. |
+| AC12 live run in a real `keryx shell` with an empty config dir | unticked | no diff line to test | Not a diff claim; PR is merged with this box open. Noted, not filed. |
+| Review round | unticked | n/a | This review. |
+| Summary: `/provider` is removed (registry, menu, help, README, docs, init hint); typing it answers with a hint | claim | registry entry, help-groups entry, REMOTE_REFUSED entry removed; `removedCommandHint` used in chat and readline agent | Registry and help hold; hint on the Telegram surface see PC-103. |
+| Summary: Telegram `/connect` gains Add provider, [Test] per provider, [Connect] by device login only; a key is never typed in chat | claim | command-router.ts `pickAddableProvider`, `testAddable`, `connectAddable` (key providers: no host call, reply sends operator to the shell) | Holds in code; the Telegram guide row is stale, see PC-101. |
+| Summary: `/connect` modal tabs, `modal-host` `footerFor(tabId)` | claim | in slice-01 (src/tui), not in this slice | Not covered by this pass. |
+| Documentation needed / Tests updated / Breaking change / Screenshots | not present | the body has no such boxes | No row to contradict. For the record: `/provider` removal is a removed slash command and a removed REMOTE_REFUSED key; the body states it in the Summary, so the claim and diff agree. |
+
+Documents not read: docs/docs/cli-reference.md, README.md, docs/docs/onboarding.md (slice-01 scope, earlier pass); docs/docs/shell-recovery.md:57 mentions `/connect` only as a remedy, no behaviour described.
+
+Parent follow-up: none.

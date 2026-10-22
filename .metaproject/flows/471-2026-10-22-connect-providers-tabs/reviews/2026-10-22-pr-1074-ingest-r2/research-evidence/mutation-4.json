@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "worktree": "/home/altsay/keryx/.worktrees/connect-providers-tabs",
+  "command": "bun test src/tui/connect src/tui/modal-host",
+  "baseline": {
+    "exitCode": 0,
+    "ms": 12846
+  },
+  "mutants": [
+    {
+      "id": "w2-M10",
+      "file": "src/tui/modal-host.ts",
+      "anchor": "if (key.name === \"right\" || (onStrip && key.name === \"tab\")) {",
+      "replacement": "if (key.name === \"right\") {",
+      "command": "bun test src/tui/connect src/tui/modal-host",
+      "kind": "behavior",
+      "line": 648,
+      "status": "killed",
+      "exitCode": 1,
+      "ms": 12842
+    }
+  ],
+  "totals": {
+    "killed": 1,
+    "survived": 0,
+    "invalid": 0,
+    "timeout": 0
+  }
+}

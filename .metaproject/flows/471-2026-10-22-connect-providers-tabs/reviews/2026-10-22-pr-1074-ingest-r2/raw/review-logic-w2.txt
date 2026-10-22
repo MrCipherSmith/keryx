@@ -1,0 +1,65 @@
+STATUS: DONE
+
+REVIEW_RESULT
+```json
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Slice-02 removes /provider from the registry, help groups, readline chat/agent shells and the remote gateway, adds the removedCommandHint answer, and adds Telegram Add provider / Test / Connect (device login only) to RemoteCommandRouter. The control flow is sound: the Add provider id cannot collide with a provider id and is resolved by index, a key provider never reaches a host hook, an already-connected provider starts no login, the busy check runs before the login starts, and /provider in Telegram now falls to the generic 'not on the list' refusal. One minor gap: Test and the Add list call host hooks with no error guard, unlike Connect in the same class.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/remote/command-router.ts",
+      "line": null,
+      "quote": "const outcome = await host.testProvider(provider.id);",
+      "problem": "testAddable awaits host.testProvider, and pickAddableProvider awaits host.listAddableProviders, with no try/catch. connectAddable, in the same class, wraps host.connectWithDeviceLogin in try/catch and answers with a fixed sentence. If either unguarded hook rejects, the rejection reaches detach()'s `.catch(() => undefined)`, so the topic gets no reply and `ended(end, ...)` is never called.",
+      "impact": "Only if a host hook rejects: the message that carried /connect keeps its 'working' reaction indefinitely and the operator is told nothing. When nothing is connected, pickProvider goes straight to listAddableProviders, so a rejection there leaves /connect with no answer at all. No hook in this slice is shown to throw: the shell-side probe is outside slice-02 and I did not read it. The existing listProviders/switchModel calls have the same exposure, so this is the pattern rather than a new regression.",
+      "suggested_fix": "Wrap the testProvider and listAddableProviders calls like connectAddable does. On a throw, reply with a fixed sentence such as 'Test failed. The details are in the shell.' and return \"failed\". Never put the error message in the reply.",
+      "evidence": "src/remote/command-router.ts, diff hunk @@ 592,749 @@: testAddable and pickAddableProvider have no catch; connectAddable has `try { outcome = await host.connectWithDeviceLogin(...) } catch { outcome = { ok: false, message: \"Device login failed...\" } }`. handle() runs picker() inside detach(), and its `ended(end, result)` is skipped when picker() throws.",
+      "confidence": "medium",
+      "reviewer": "review-logic",
+      "dedupe_key": "router-host-hook-unguarded-throw",
+      "blocking_merge": false
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 1, "info": 0 },
+  "slices": ["slice-02"],
+  "follow_ups": []
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/connect-providers-tabs`
+- Base: `6a8941b75fd90a79caff47484440faffe1e226f2`
+- Scope mode: diff, slice-02 only (agent-commands.ts, agent.ts, shell-types.ts, shell.ts, command-connect.test.ts, command-gateway(.test).ts, command-router.ts, command.test-helpers.ts, shell-bridge.ts, help-groups(.test).ts)
+- Spec compliance gate: ran against AC1, AC8, AC9 and AC10 (acceptance-criteria.md); the TUI criteria (AC2-AC7, AC11) are outside this slice.
+
+### Summary
+The /provider removal is consistent across this slice. Chat and agent readline answer a hint, and Telegram falls to the gateway's generic refusal. The Telegram Add provider path matches AC8: Test is available for every row, Connect runs only a device login, a key provider gets a pointer to the shell with no host call, and there is no Disconnect, key or URL button. No blocker or major defects. I did not read the host-side hooks (remote-provider-hooks.ts, tui-shell.ts wiring), which are in other slices; I read remote-provider-hooks.ts only for context.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 1  |  info: 0
+
+### Spec Gaps (blocker)
+None detected.
+
+### Logic Bugs
+None detected. Checked: ADD_PROVIDER_ID is resolved by id and `pick` returns the option by index, so label truncation cannot confuse it. The Test/Connect row indexes (0 = Test, 1 = Connect) match the `[["Test","Connect"]]` row. connectAddable's busy check matches picker()'s check for /connect.
+
+### Async & Concurrency
+None detected. The device login is not on the command chain, but the host serialises it ("one login at a time") and re-checks busy before applying the token.
+
+### Error Handling
+See F-001 (minor).
+
+### Null / Undefined Safety
+None detected.
+
+### Type Contract Violations
+None detected.
+
+### Edge Cases
+None detected.
