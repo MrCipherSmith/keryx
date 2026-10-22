@@ -316,9 +316,10 @@
                 "type": "string",
                 "minLength": 1,
                 "enum": [
-                  "claude",
+                  "claude-code",
                   "codex",
-                  "gemini",
+                  "keryx-shell",
+                  "helyx-poll",
                   "other"
                 ]
               },
@@ -588,9 +589,10 @@
             "type": "string",
             "minLength": 1,
             "enum": [
-              "claude",
+              "claude-code",
               "codex",
-              "gemini",
+              "keryx-shell",
+              "helyx-poll",
               "other"
             ]
           },
