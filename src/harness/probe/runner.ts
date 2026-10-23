@@ -1,4 +1,4 @@
-import { redactSensitiveText } from "../../security/redact";
+import { redactSensitiveText } from "../../security/service";
 import { writeContained } from "../../lib/contained-write";
 import type { ProbeSession } from "../../learning/probe";
 import type { ProbeTask, ProbeComparison, ProbeFinalization } from "../../learning/probe-schema";
