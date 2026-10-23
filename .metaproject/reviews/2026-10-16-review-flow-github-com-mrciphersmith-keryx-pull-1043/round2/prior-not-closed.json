@@ -1,0 +1,62 @@
+[
+ {
+  "id": "review-architecture-skills#F-005",
+  "disposition": "partial",
+  "evidence": "step-10b added to Step 6a and rule 0 (review-orchestrator/SKILL.md:105,120) but session-plan-bridge.mdc:39 still says step-0..step-14 (new finding F-001)",
+  "_src": "review-architecture-skills"
+ },
+ {
+  "id": "review-clean-code-w9#CC-002",
+  "disposition": "partial",
+  "evidence": "shared src/review/premise-fixtures.ts (heldFinding, premiseAnswer) now used by premise-decision, readiness, verdict-input and review-gate tests, but local held builders remain: src/flow/review-gate.test.ts:1609, src/commands/review-operator-cli.test.ts:64, src/commands/operator-confirm-review-tools.test.ts:365, src/review/verdict.test.ts:32 (verdict.test.ts keeps its own `held` for the owner-decision options branch)",
+  "_src": "review-clean-code-code"
+ },
+ {
+  "id": "review-clean-code-skills#CC-005",
+  "disposition": "partial",
+  "evidence": "review-premise/SKILL.md downgraded row and rule row now bar downgrade of minor, external and security findings; review-pr-feedback rule 7 maps a dismissal to `disagree`; but review-orchestrator/SKILL.md Wave D still says 'Never with findings it raised' (guards a case that cannot occur, the judge adds no findings)",
+  "_src": "review-clean-code-code"
+ },
+ {
+  "id": "review-clean-code-skills#CC-005",
+  "disposition": "partial",
+  "evidence": "External never downgraded now stated (review-premise/SKILL.md:93,113; pr-feedback:355,366) and a dismissal maps to verdict `disagree` (pr-feedback:366). Left: review-premise/SKILL.md:48 Step 1 and review-orchestrator/SKILL.md:1127 still 'Never with findings it raised', a case the judge cannot create (it never adds findings); only the self-judgement merge rule (:108) is real.",
+  "_src": "review-clean-code-skills"
+ },
+ {
+  "id": "review-logic-w8#LG8-002",
+  "disposition": "partial",
+  "evidence": "premise.ts:205-208 resolves through merged_from, but merged_from holds global_ids (dedupe.ts:102,330; minted before dedupe at managed.ts:303). A claim naming the bare id of an absorbed finding (the form review-premise SKILL.md:150 shows, and the only one a judge has before ingest mints the ids) still matches nothing and is rejected as unknown-finding. The test premise.test.ts:281 covers only the global_id form.",
+  "_src": "review-logic-code"
+ },
+ {
+  "id": "review-logic-skills#LG-003",
+  "disposition": "partial",
+  "evidence": "The wording is unified: review-orchestrator:110, reviewer-input.schema.json:188, the review-premise Iron Law and 14 reviewer skills all allow git log/blame/show. On keryx shell, though, read-only children have no shell and no git tool (spawn-subagent-tool.ts:1003-1004, profiles.ts:152 shell: deny), so law 4's history half is still out of reach there and nothing supplies it. See LG2-001.",
+  "_src": "review-logic-skills"
+ },
+ {
+  "id": "review-regression-w8#RG8-003",
+  "disposition": "partial",
+  "evidence": "Named sites fixed: docs/docs/cli-reference.md:4857 'eleven-item', SKILL.detail.md:654 and :666 (both copies) list item 11. Same class left: src/commands/operator-confirm-review.ts:306, the review_waive_readiness tool schema, still says 'its number (1-10)'.",
+  "_src": "review-regression-code"
+ },
+ {
+  "id": "review-regression-skills#RG-002",
+  "disposition": "partial",
+  "evidence": "review-orchestrator/SKILL.md:1128 now saves claims to research-evidence/premises.json and the early-verdict bullet (line 134) reads them there, and line 1129 asks only after `ingest --premises` wrote findings.json; but ingest still runs in the tail after `review verdict` (line 59), and nothing says the operator question is asked at the tail, so Wave D (step 8) still reads as asking before ingest.",
+  "_src": "review-regression-skills"
+ },
+ {
+  "id": "review-security-code-w4#F-001",
+  "disposition": "partial",
+  "evidence": "Named paths closed: review-gate.ts:366 no longer reads premise.operator; operator-decisions.ts:106-110 requires quote, confirmedVia and subject; automatic-review.ts:268 refuses the exact file. But that guard can be got past (case variant, nested file fed through the --prior carry): see SEC2-001.",
+  "_src": "review-security-code-code"
+ },
+ {
+  "id": "review-style-w8#F-005",
+  "disposition": "partial",
+  "evidence": "src/review/managed.ts:1912 parseJsonBody shares the try/catch, but the fence regex/more-than-one-fence guard/embeddedBlockBody call are still written twice (:1854-1880 vs :1893-1910)",
+  "_src": "review-style-code"
+ }
+]

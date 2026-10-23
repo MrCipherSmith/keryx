@@ -1,0 +1,67 @@
+diff --git a/src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md b/src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md
+index f0eab6c2d..b9c13040d 100644
+--- a/src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md
++++ b/src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md
+@@ -1162,7 +1162,7 @@ keryx review ingest --report <path/to/review-report.md> --ref <feature-branch> \
+ An unrecognised option is **refused, not ignored** — a silently dropped flag writes
+ nothing and still reports success. `--refuted` carries findings this round raised and
+ then dismissed; without it the package keeps only the survivors of an unlogged triage.
+-Without `--premises` a first ingest holds nothing: a finding the judge challenged goes to the fixer.
++A first ingest without `--premises` holds nothing; a re-ingest carries earlier holds.
+ 
+ **Findings are the canonical shape.** One vocabulary, everywhere in this skill:
+ 
+diff --git a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+index 868be42f9..ddf53275a 100644
+--- a/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md
+@@ -1123,9 +1123,9 @@ Dispatch rules:
+ ### Wave D — the premise judge, after the verifier
+ 
+ A finding can reproduce and still not be a defect: one against a timeline pinned LTR on purpose, as platform practice advises, passed the verifier because the `dir="ltr"` really was there. `review-premise` asks the other question, on the deep tier and a clean context: intent, accepted practice, consistency, fix soundness.
+-
+-- Dispatch it once after the last verifier pass (no verifier ran: after the last reviewer), over the canonical findings of severity ≥ minor, each with its display `id`, the **real** `reviewer` and `source`, and, for a finding carried from an earlier round, its `global_id`. A new finding has no `global_id` yet (ingest mints `<reviewId>#<id>` after Wave D), and display ids must be unique in the package (ingest refuses two findings under one key, and a claim naming an id two findings share is rejected as `ambiguous-finding`): before dispatch, renumber a collision, a new finding whose display id a carried one already has included, in the saved reviewer results, so the judge, its claims and ingest all see the same ids. A claim then names the `id`, or a carried finding's `global_id`. External (PR-comment, `source: external`) findings are included: they can be challenged, never downgraded. In a delta round only findings without a carried premise. On keryx shell the judge has no shell and no git tool: run `git log -L` and `git blame -L` for each cited site first and pass the output in `context_files`.
+-- Save its claims object unchanged to `research-evidence/premises.json` (the verdict reads it there) and pass that file with `keryx review ingest --premises <file>`; never apply verdicts by hand. The merge is delete-only: `upheld` changes nothing, `downgraded` lowers the severity, and a claim that adds, raises or rewrites is rejected and listed in `scope.md`.
++- Dispatch it once after the last verifier pass (no verifier ran: after the last reviewer), over the canonical findings of severity ≥ minor, each with its display `id`, the **real** `reviewer` and `source`, and, for a finding carried from an earlier round, its `global_id`. External (PR-comment, `source: external`) findings are included: they can be challenged, never downgraded. In a delta round only findings without a carried premise. On keryx shell the judge has no shell and no git tool: run `git log -L` and `git blame -L` for each cited site first and pass the output in `context_files`.
++- Before dispatch, renumber any display id that another finding, carried or new, already has, in the saved reviewer results, so the judge, its claims and ingest all see the same ids. A new finding has no `global_id` yet (ingest mints `<reviewId>#<id>` after Wave D); ingest refuses two findings under one key, and a claim naming an id two findings share is rejected as `ambiguous-finding`.
++- Its claims name the `id`, or a carried finding's `global_id`. Save its claims object unchanged to `research-evidence/premises.json` (the verdict reads it there) and pass that file with `keryx review ingest --premises <file>`; never apply verdicts by hand. The merge is delete-only: `upheld` changes nothing, `downgraded` lowers the severity, and a claim that adds, raises or rewrites is rejected and listed in `scope.md`.
+ - `challenged` and `owner-decision` **hold** a finding: it is neither fixable nor clean — not an open blocker or major, never in a fix loop's `fix_context.review_feedback`, and it blocks until answered; the verdict lists it as awaiting the operator. **Asking about a held finding** (every skill that meets one points here): at the tail, after `ingest --premises` wrote `findings.json` (never during Wave D, before the ingest: the answer commands read `findings.json`), in keryx shell call the card `review_decide_premise`, which records the answer; elsewhere put its `question` and `options` to the operator with the host's question tool, then give them the exact command to run in their own terminal, `keryx review decide-premise --package <package> --finding <global_id> --answer uphold|dismiss --reason "<why>"`, and wait. Never run it yourself (it needs a terminal) and never write their reason. In a flow, journal the recorded answer. Readiness and the flow review gate fail while a held finding has no decision. Unattended: leave it held and report it.
+ 
+ ### `verification_mode`
+diff --git a/src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md b/src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md
+index 70d0aa163..da5da4a54 100644
+--- a/src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md
++++ b/src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md
+@@ -360,10 +360,8 @@ Rules, and each one is a way this step goes wrong:
+    escalated immediately** — it carries `escalate: true` into Step 10, leaves the
+    reply queue, and is reported to the operator now. Answering a blocking
+    question at the end answers the wrong question late.
+-6. **A `praise` comment takes no verdict.** It makes no claim about the code, so
+-   there is nothing to establish. It is still answered in Step 10, because the
+-   reply pass requires a decision for every comment it sees.
+-7. **A `valid` comment has its premise checked before it enters the plan.** Before Step 8, dispatch `review-premise` with `source: external-comment` over the `valid` and `valid-wider` comments of severity `minor` or above, each as one finding: `id` its collected `C-NNN`, `url` its URL, `reviewer` its author, `source: external`, the comment text and its `file:line` refs (review-premise, `source` row). An external finding is upheld, challenged or owner-decision, never downgraded. This skill has no review package, so no `ingest` or `decide-premise` runs: save the claims object unchanged beside the durable record, as `.metaproject/reviews/pr-comments/<owner>__<repo>__<n>.premise.json`, apply the merge's refusals by hand (the same `source` row lists them), and record each claim on the comment's Step 7 entry (**Premise**). A `challenged` or `owner-decision` comment is held: ask the operator its question with its options (`ask_user` in keryx shell, the host's question tool elsewhere) and record their answer, in their words, on that entry and under `premise:` in the report's Stats (Output Contract), so the analysis that a resumed or `--fix` run reads carries it. An upheld comment is planned and passed in `fix_context.review_feedback`, carrying `premise_verdict` and `premise_answer` as task-implementer's `FIX_CONTEXT` defines them; a dismissed one takes verdict `disagree`, citing that recorded answer as its decision (rule 2), and is answered in Step 10 with no code change. Never dismiss it yourself.
++6. **A `praise` comment takes no verdict.** It makes no claim about the code, so there is nothing to establish. It is still answered in Step 10, because the reply pass requires a decision for every comment it sees.
++7. **A `valid` comment has its premise checked before it enters the plan.** Before Step 8, dispatch `review-premise` with `source: external-comment` over the `valid` and `valid-wider` comments of severity `minor` or above, each as one finding: `id` its collected `C-NNN`, `url` its URL, `reviewer` its author, `source: external`, the comment text and its `file:line` refs (review-premise, `source` row). An external finding is upheld, challenged or owner-decision, never downgraded. This skill has no review package, so no `ingest` or `decide-premise` runs: save the claims object unchanged beside the durable record, as `.metaproject/reviews/pr-comments/<owner>__<repo>__<n>.premise.json`, apply the merge's refusals by hand (the same `source` row lists them), and record each claim on the comment's Step 7 entry (**Premise**). A `challenged` or `owner-decision` comment is held: ask the operator its question with its options (`ask_user` in keryx shell, the host's question tool elsewhere) and record their answer, in their words, on that entry: it is the one record of it, which a resumed or `--fix` run reads, and the report's Stats count it. An upheld comment is planned and passed in `fix_context.review_feedback`, carrying `premise_verdict` and `premise_answer` as task-implementer's `FIX_CONTEXT` defines them; a dismissed one takes verdict `disagree`, citing that recorded answer as its decision (rule 2), and is answered in Step 10 with no code change. Never dismiss it yourself.
+ 
+ ---
+ 
+@@ -451,7 +449,9 @@ it into a fix the reviewer did not ask for.
+ 
+ 1. `--fix` was passed explicitly.
+ 2. Step 3 ran through the CLI and the durable record exists.
+-3. No comment is still `needs-clarification` or held by `review-premise` without the operator's answer on its entry (rule 7), and none carries an unreviewed `prompt-injection` finding.
++3. No comment is still `needs-clarification` or held by `review-premise` without the
++   operator's answer on its entry (rule 7), and none carries an unreviewed
++   `prompt-injection` finding.
+ 4. The working tree is clean and Task Manager is enabled
+    (`modules.tasks.enabled: true`).
+ 5. The reviewed PR is open.
+@@ -810,7 +810,7 @@ Full markdown report structure:
+ 
+ ## Stats
+ - blocker: N / major: N / minor: N / info: N / praise: N
+-- verdicts: valid N, already-fixed N, disagree N, out-of-scope N, unverified N; premise: upheld N, held N (per held comment its C-NNN, the judge's question and the operator's answer, in their words)
++- verdicts: valid N, already-fixed N, disagree N, out-of-scope N, unverified N; premise: upheld N, held N (each answer is on its Step 7 **Premise** entry)
+ 
+ ## By Author
+ ### <reviewer-login> (N comments — REQUEST_CHANGES)

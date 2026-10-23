@@ -1,0 +1,150 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "slice-01 (schema quote_unlocated, flow 458/459/460 records, orchestrator skill text, CHANGELOG, cli-reference/guide docs, agent.ts nudge roots wiring, review-ledger.ts usage/mutation wiring) reviewed against flow 460's description and acceptance criteria. The code paths in the slice are sound: KERYX_USAGE is stripped by splitUsage inside isEmptyOutput and parseReviewResult, so a usage line cannot make an empty reply non-empty or disturb parsing; mutationRecorded reads research-evidence/mutation-<n>.json only (baseline records excluded); the nudge wiring passes session roots and the pointer resolver already rejects closed packages. One spec gap: AC8 (flows 458 and 459 closed with `flow complete`) is not met at the reviewed head. Minors: a stale cli-reference sentence still says ingest refuses an unresolved quote, the AC8 verify command checks only flow 459, and the orchestrator's 'append that one line' instruction loses the usage when the raw file has no trailing newline.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "LG-001",
+      "severity": "major",
+      "reviewer": "review-logic",
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "line": null,
+      "quote": "  \"status\": \"implemented\",",
+      "problem": "Spec gap, AC8: 'Flows 458 and 459 are closed through the flow CLI (AC confirmations with evidence, implemented, complete).' At the reviewed head both flows stop at status `implemented`; neither has a `completed` transition, and flow 460's own task T9 'Close flows 458 and 459 (I)' is still `todo` in 460/flow.json even though commit 9f67f8978 is titled 'close flows 458 and 459'.",
+      "impact": "Outcome I of the PR (flows implemented and released but not closed in Task Manager) is still true after this PR as it stands: Task Manager keeps listing 458 and 459 as open, and the commit message claims a closure the records do not show.",
+      "suggested_fix": "Run `keryx flow complete 458` and `keryx flow complete 459` (they need the merged PRs and confirmed ACs they already have), commit the resulting flow.json/journal.md, then `keryx flow task done 460 T9`. If `flow complete` refuses, record why in 460's journal and narrow AC8 through `keryx flow ac update`.",
+      "evidence": "Reviewed head dff7a38a1: .metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json:12 and .metaproject/flows/459-2026-10-16-review-premise/flow.json:12 both read `\"status\": \"implemented\"`; history ends with event `implemented` (slice-01 diff lines 331-334 and 749-752); .metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json T9 `\"status\": \"todo\"` (slice-01 diff line 1044). AC8 text: .metaproject/flows/460-2026-10-17-review-gate-consistency/acceptance-criteria.md (slice-01 diff line 1427).",
+      "confidence": "high",
+      "blocking_merge": false,
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json:12",
+          ".metaproject/flows/459-2026-10-16-review-premise/flow.json:12",
+          ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json:163"
+        ],
+        "enumeration_method": "AC8 names exactly two flows (458, 459); grep of `\"status\":` at line 12 of each flow.json shows `implemented`, and 460/flow.json's only task for AC8 (T9) is todo. No other flow is in AC8's scope."
+      }
+    },
+    {
+      "id": "LG-002",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "docs/docs/cli-reference.md",
+      "line": null,
+      "quote": "`review complete` on a package bound to a pull request refuses a merged PR or a moved head unless the first line of `report.md` names the reviewed SHA and says so, and refuses a report with no `Evidence level:` line (`static only — did not run: <what>` or `ran — <what>`); a package ingested before the field existed completes with a warning. `review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA and refuses one that does not resolve there, and adds a `citation not found: <path>` line to a dismissal whose rebuttal cites a rule or document that is not in the tree. A research obligation may close as `narrowed` with a `remains` text; without it, it stays open.",
+      "problem": "This paragraph (unchanged context in the slice's cli-reference hunk) still says `review ingest` refuses a finding whose quote does not resolve. After flow 460 an absent or ambiguous quote is kept and flagged `quote_unlocated` (managed.ts anchorFindings / refuseUnresolvedLocators); the same file's locator section, the guide, SKILL.md and CHANGELOG were updated, this sentence was not.",
+      "impact": "The CLI reference contradicts itself: an operator or orchestrator reading this section expects a refused round and re-runs reviewers instead of reading scope.md / readiness item `quotes-located`.",
+      "suggested_fix": "Reword to match the guide: ingest keeps a finding whose quote is absent or in several places with no line, flagged `quote_unlocated` (readiness `quotes-located`), and refuses only a quote it could not check (commit not in the checkout, no file named, a size bound).",
+      "evidence": "keryx ctx rg for 'does not resolve there' across docs/, .metaproject/skills and src/gdskills/bundled: only docs/docs/cli-reference.md:4849 remains; contrast src/review/managed.ts:1399-1406 and 1478-1505.",
+      "confidence": "high",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LG-003",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+      "line": null,
+      "quote": "      \"check\": \"keryx flow status 459\"",
+      "problem": "AC8's verify is `invariant keryx flow status 459`: it inspects only flow 459, and `flow status` exits 0 for a flow in any state, so it neither covers flow 458 nor checks the `complete` the criterion requires.",
+      "impact": "AC8 can be confirmed with evidence that does not establish it — which is exactly the present state (LG-001): the check passes while both flows are only `implemented`.",
+      "suggested_fix": "Through `keryx flow ac update`, make the check name both flows and the state, e.g. a command that fails unless 458 and 459 report status completed, or mark it `judged` and cite both `flow status` outputs at confirmation.",
+      "evidence": "460/flow.json acKinds.AC8 (slice-01 diff lines 1209-1212); acceptance-criteria.md AC8 (diff line 1427).",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LG-004",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "- **The result is the file, never the spawn tool's output.** keryx shell cuts a child's summary at 16000 characters and Claude Code returns only the last message: parse `<package>/raw/<reviewer>.txt`. A missing file is no result (`BLOCKED`). Token spend: keryx shell appends `KERYX_USAGE {\"tokens_in\":…,\"tokens_out\":…,\"model\":…}` to that file itself; on another host, when your spawn tool's result reports the subagent's tokens, append that one line to the file yourself (a dispatch without it is counted unknown, never 0).",
+      "problem": "On Claude Code/Codex the orchestrator appends the usage line to a file the reviewer wrote. splitUsage's USAGE_LINE regex is anchored `^[ \\t]*KERYX_USAGE` per line, so if the reviewer's file does not end in a newline (common for a Write-tool file ending in a summary sentence) a plain append joins the marker onto the last line and it is never recognised.",
+      "impact": "The host's measured tokens are silently dropped: the dispatch is counted `unknown` and the report's spend is a lower bound although the usage was supplied, defeating outcome H on exactly the hosts that must append by hand.",
+      "suggested_fix": "Say 'append it on a new line of its own (start with a newline)', and/or relax USAGE_LINE to accept the marker after other text on the last line, or have `ledger build` warn when `KERYX_USAGE` appears but no line matched.",
+      "evidence": "src/review/dispatch-usage.ts:18 `const USAGE_LINE = /^[ \\t]*KERYX_USAGE[ \\t]+(\\{[^\\n]*\\})[ \\t]*\\r?$/gm;` and splitUsage:44-55 (a non-matching marker returns the raw body with no usage). The bundled copy src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:45 and docs/docs/cli-reference.md (Token spend paragraph) carry the same wording.",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LG-005",
+      "severity": "info",
+      "reviewer": "review-logic",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "const REVIEW_PACKAGE_PATH = /((?:[A-Za-z]:)?[^\\s\"'`<>|;&()]*?)\\.metaproject[\\\\/]reviews[\\\\/]([^\\\\/\\s\"'`<>|;&()]+)/g;",
+      "problem": "sessionReviewRoots (newly wired into holdReviewGate in agent.ts) takes everything before `.metaproject` up to whitespace as the project root. A tool call written `keryx review ingest --package=output/review-pr-7975/.metaproject/reviews/r03` (optionValue accepts `--flag=value`) yields root `<cwd>/--package=output/review-pr-7975`, which does not exist.",
+      "impact": "That mention contributes no root. The package is still found when another message names it cleanly (e.g. the path `review start` printed) or through the pointer, so no wrong nudge is shown; only the redundancy is lost.",
+      "suggested_fix": "Strip a leading `--name=` / `name=` from the captured prefix (or exclude `=` from the prefix class) before resolving.",
+      "evidence": "src/lib/args.ts:26-27 accepts `--name=value`; completion-gate.ts:55-59 resolves the raw prefix.",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LG-006",
+      "severity": "info",
+      "reviewer": "review-logic",
+      "file": "src/review/ledger.ts",
+      "line": null,
+      "quote": "  const usage = usageTotals(raws.map(rawUsage));",
+      "problem": "The round total (`dispatches`, `unknown`) counts raw result files, not dispatches: a dispatch whose child died before writing raw/<reviewer>.txt (a not-run reviewer) is absent from both counts, while AC7 says missing usage is stated as unknown.",
+      "impact": "For a round with lost dispatches the report's 'N dispatch(es)' understates what was paid for; the tokens are correctly labelled a lower bound only when some recorded raw lacked usage. Would be settled by counting drivers/*.json dispatches and listing those without a raw as unknown.",
+      "suggested_fix": "Optionally count driver files (one per reviewer x wave) as dispatches and add those with no raw file to `unknown`.",
+      "evidence": "src/review/ledger.ts:630-632; renderLedgerReport now prints usageTotalsLine(ledger.usage) (slice-01 review-ledger.ts hunk).",
+      "confidence": "low",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "LG-007",
+      "severity": "info",
+      "reviewer": "review-logic",
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "line": null,
+      "quote": "        \"candidate_lines\": { \"type\": \"array\", \"items\": { \"type\": \"integer\", \"minimum\": 1 } }",
+      "problem": "The new `quote_unlocated` object accepts `candidate_lines` with `reason: \"absent\"`; the description ties candidate lines to `ambiguous` only, and the sibling `locator` object enforces its pairing with allOf/if-then.",
+      "impact": "None today: the only writer (managed.ts:1402-1405) adds candidate_lines only for ambiguous. A hand-edited record could carry a contradictory pair the schema accepts.",
+      "suggested_fix": "Add an if/then: reason absent -> not candidate_lines (and keep the two schema copies identical).",
+      "evidence": "slice-01 diff lines 23-32 vs the locator allOf at lines 8-17.",
+      "confidence": "medium",
+      "location_class": "in-diff"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 3, "info": 3 }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `fix/review-gate-consistency` (PR #1045)
+- Reviewed head: `dff7a38a1`
+- Scope mode: supplied slice `slice-01` (no diff rebuilt)
+- Spec compliance gate: ran — against `.metaproject/flows/460-2026-10-17-review-gate-consistency/description.md` and `acceptance-criteria.md`, limited to what slice-01 carries
+
+### Summary
+Slice-01 holds the new `quote_unlocated` schema field, the flow 458/459/460 records, orchestrator skill and doc text, the agent.ts wiring that passes session review roots to the nudge, and review-ledger.ts wiring for token usage and the mutation record. The code paths are correct. `splitUsage` strips the usage line before the emptiness test and the parse. Only `mutation-<n>.json` counts as a mutation record. The active-review pointer already rejects closed packages. The gap is AC8: flows 458 and 459 are `implemented`, not completed, and T9 is still todo.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 3  |  info: 3
+
+### Spec Gaps
+- [LG-001] major: AC8 is not met. Flows 458 and 459 stop at `implemented`, and 460's T9 is still todo. Graded major, not blocker: the flow's own task list leaves T9 open and nothing in code blocks it.
+
+### Logic Bugs
+- [LG-003] minor: AC8's verify command `keryx flow status 459` covers neither flow 458 nor the `complete` state.
+- [LG-002] minor: one sentence at docs/docs/cli-reference.md:4849 still says ingest refuses a quote that does not resolve.
+
+### Edge Cases
+- [LG-004] minor: an appended `KERYX_USAGE` line is lost when the raw file has no trailing newline.
+- [LG-005] info: `--package=<path>` produces a bogus session root. The package is still found by other means.
+- [LG-006] info: spend totals count raw files, not dispatches.
+- [LG-007] info: the schema does not tie `candidate_lines` to `ambiguous`.
+
+### Async & Concurrency / Error Handling / Null Safety / Type Contracts
+None detected.
+
+Routing audit: graph_used: no (narrow slice, callers read directly); wiki_used: not-relevant; ctx_used: yes (keryx ctx rg/read); raw_rg_used: no (targeted single-file grep/sed with keryx:raw markers for exact quote lines).

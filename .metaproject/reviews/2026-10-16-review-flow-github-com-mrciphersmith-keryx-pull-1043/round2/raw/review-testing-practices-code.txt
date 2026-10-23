@@ -1,0 +1,74 @@
+STATUS: DONE_WITH_CONCERNS
+
+Note: premise-input-{core,cli,skills}.json hold no `review-testing-practices-*` ids. The round-1 testing-practices findings are F-001..F-006 in raw/review-testing-practices-w459.txt (wave w459); dispositions below use those ids. Read-only: no tests or mutations were run; every disposition is from reading HEAD f47ebb0ec.
+
+```json keryx:findings
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-testing-practices",
+    "status": "DONE_WITH_CONCERNS",
+    "summary": "Round 2 fix delta (c144874f..90f0861ab, HEAD f47ebb0ec). The delta adds substantial, deterministic, behaviour-level tests (carry, subject binding, forged/unconfirmed entries, concurrent writers, answered-state digest, prompt sanitising, apply_patch refusal, security-downgrade, malformed-claim). Of the six round-1 testing findings: 0 closed, 2 partial (F-001, F-002), 4 open (F-003..F-006). New defects are minor/info only; no blockers or majors.",
+    "prior_dispositions": [
+      {"id": "review-testing-practices-w459#F-001", "disposition": "partial", "evidence": "src/review/premise-decision.test.ts 'the answer reaches findings.json' (answer dismiss then uphold, asserts findingStatus back to open) and 'applyPremiseDecisions takes the LATEST decision' pin the rule; still no test records two decisions and asserts the gate, computeReadiness or verdict take the later one (latest rule is `.at(-1)` at src/review/premise.ts:509 and src/review/operator-decisions.ts:215)."},
+      {"id": "review-testing-practices-w459#F-002", "disposition": "partial", "evidence": "closed: answered state + digest change (premise-decision.test.ts 'shows the answered state'), premises.json fallback removed from src/review/premise-question.ts:30-60 and its replacement pinned ('a claim the merge rejected... is not a held finding'), changed problem/question refused (operator-confirm-review-tools.test.ts 'a change to the problem or the judge's question'). Still open: ambiguous-id refusal (premise-question.ts:39, no test), CLI 'no' decline half, verdict-change half of apply-time staleness."},
+      {"id": "review-testing-practices-w459#F-003", "disposition": "open", "evidence": "src/review/premise-fixtures.ts:14-26 heldFinding is still {verdict:'challenged', judge, question} with no intent_signals/practice_sources, a shape mergePremises rejects (challenged-without-evidence); now shared by premise-decision, readiness, verdict, review-operator-cli, operator-confirm-review-tools tests. Only review-gate.test.ts:1608 HELD_PREMISE carries evidence."},
+      {"id": "review-testing-practices-w459#F-004", "disposition": "open", "evidence": "rg 'premises' over src/commands/review*.test.ts returns nothing; no in-process `review ingest --premises` case (readPremises, stdin '-', missing-file error) in the delta or at HEAD."},
+      {"id": "review-testing-practices-w459#F-005", "disposition": "open", "evidence": "src/review/dedupe.test.ts:126-170 adds an absorbed-upheld-premise case but still no [confirmed, downgraded] cluster for severityRule precedence, and the never-merge test at :140 covers only 'challenged' (not owner-decision, not held-with-held)."},
+      {"id": "review-testing-practices-w459#F-006", "disposition": "open", "evidence": "keryx:premises appears in tests only inside src/review/premise-embedded.test.ts (self-built claims); no test feeds the shipped review-premise/SKILL.md example through parseEmbeddedPremises + parsePremiseClaims."}
+    ],
+    "findings": [
+      {
+        "id": "T2-001",
+        "severity": "minor",
+        "file": "src/review/premise-decision.test.ts",
+        "line": 40,
+        "problem": "carryPremiseDecisions is tested only as a unit. Its production call site is src/commands/review.ts (the delta-round ingest path); no test drives `review ingest` over a delta round with a previous package holding an answer and asserts the new package's operator-decisions.json gets the carried entry (carriedFrom set) and that readiness/verdict then pass without a second question. The 'does not ask again' behaviour the describe title claims is therefore unwired in tests.",
+        "impact": "Dropping, mis-ordering (before findings are written) or mis-scoping the call in review.ts leaves every suite green while every delta round re-asks the operator or carries for the wrong ids.",
+        "suggested_fix": "One in-process review.test.ts case: package A with a held finding and a recorded answer, delta ingest into package B carrying that id, assert B's decisions have carriedFrom and readiness premise-decisions passes; and one where the carried finding's problem changed (asks again). Mutant: delete the carryPremiseDecisions call in review.ts.",
+        "evidence": "keryx ctx rg 'carryPremiseDecisions' src: 7 hits in premise-decision.test.ts, 2 in review.ts, 1 definition; zero in any command-level test. Mutation not run (read-only).",
+        "confidence": "medium",
+        "reviewer": "review-testing-practices",
+        "category": "unpinned-wiring",
+        "evidence_class": "read"
+      },
+      {
+        "id": "T2-002",
+        "severity": "minor",
+        "file": "src/review/premise-fixtures.ts",
+        "line": 14,
+        "problem": "The delta centralised the held-finding fixture into a non-test module, so the producer-invalid shape (challenged with no evidence, see prior F-003) is now the single source for five suites, and the helper's test-only status is by comment only ('Nothing in the shipped CLI imports this module'). It lives in src/review next to production code, so it is typechecked and importable by production code without a guard.",
+        "impact": "A future production import would ship test scaffolding; and a fix to the evidence shape has one place to land but has not been made.",
+        "suggested_fix": "Add practice_sources to heldFinding's premise, and add an import-boundary assertion (no non-test file imports premise-fixtures) unless flow/review-fixtures.ts already has an equivalent guard to copy.",
+        "evidence": "imported only from *.test.ts files today; premise-fixtures.ts:14-26 premise has no evidence fields. No guard found for the sibling src/flow/review-fixtures.ts either.",
+        "confidence": "low",
+        "reviewer": "review-testing-practices",
+        "category": "fixture-fidelity",
+        "evidence_class": "read"
+      },
+      {
+        "id": "T2-003",
+        "severity": "info",
+        "file": "src/review/readiness.test.ts",
+        "line": 205,
+        "problem": "The new waiver test waives by the positional id \"11\" ('premise-decisions' is the eleventh checklist item) alongside the item name; src/tui/review-readiness.test.ts also hard-codes toHaveLength(11). Adding or reordering one checklist item breaks the ordinal with a message that does not say why. The review-gate 'below the floor' test also asserts two literal message fragments.",
+        "impact": "Brittle to unrelated checklist/message edits; the usual response is to bump the number rather than re-think the test.",
+        "suggested_fix": "Derive the ordinal from the items array and assert message parts that carry the contract (item id, 'awaiting'), not full phrases.",
+        "evidence": "readiness.test.ts waiver test (waiveReadiness(pkg, [\"11\"], ...)); src/tui/review-readiness.test.ts:117-120.",
+        "confidence": "medium",
+        "reviewer": "review-testing-practices",
+        "category": "brittle-assertion",
+        "evidence_class": "read"
+      }
+    ],
+    "mutation_table": [],
+    "mutant_candidates": [
+      {"file": "src/commands/review.ts", "change": "remove the carryPremiseDecisions call", "expected_killer": "none today (T2-001)"},
+      {"file": "src/review/premise.ts", "line": 509, "change": ".at(-1) -> .at(0)", "expected_killer": "applyPremiseDecisions test only; no reader-level test (F-001)"},
+      {"file": "src/review/premise-question.ts", "line": 39, "change": "keys.size > 1 -> keys.size > 5", "expected_killer": "none (F-002)"}
+    ],
+    "stats": {"prior": {"closed": 0, "open": 4, "partial": 2, "regressed": 0}, "new": {"blocker": 0, "major": 0, "minor": 2, "info": 1}}
+  }
+}
+```
+
+Summary: no round-1 testing finding is fully closed (F-001, F-002 partial; F-003..F-006 open). The delta's own tests are sound; new concerns are the untested production wiring of carryPremiseDecisions (minor), the shared evidence-less held-finding fixture living in src/review (minor), and brittle ordinals/message literals (info).

@@ -1,0 +1,131 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Slice 08 (src/review premise merge, operator decisions, premise-question lookup, readiness item 11, interim verdict, dedupe, managed ingest, types). One major: a finding record's own premise.operator answer is trusted as the operator's dismissal by the merge gate and readiness, and that field reaches findings.json unvalidated from the agent-written ingest input, which bypasses the TTY/card-only decide-premise path the PR introduces. Three minors: PR-authored intent signals are accepted as premise evidence; the terminal decide-premise prompt prints model-authored text unsanitised while the card sanitises it; the premise-question decision record is weaker than its gate-decision siblings (optional confirmedVia, no operator quote, no binding to what was shown). One info: newline injection into scope.md through unescaped judge/claim strings.",
+  "findings": [
+    {
+      "id": "SEC-001",
+      "severity": "major",
+      "file": "src/review/premise.ts",
+      "line": null,
+      "quote": "  const answer = decided?.answer ?? (isRecord(premise.operator) ? premise.operator.answer : undefined);",
+      "problem": "The operator's answer to a held finding is read from the finding record's own `premise.operator` as well as from operator-decisions.json, and that record field is accepted from the ingest input without any check. `mergePremises` validates only claims from `--premises`; a finding that arrives in `--findings` already carrying a `premise` is kept verbatim (the `already-judged` path, tested in premise.test.ts:395), `toContractFinding` writes it to findings.json, and review-finding.schema.json declares `premise.operator`. The merge gate then treats `premise.operator.answer: \"dismiss\"` as a terminal dismissal (src/flow/review-gate.ts `toGateFinding` reads `operatorAnswer` from the record; `findingVerdict` returns `{ terminal: true, kind: \"dismissed\" }` before any disposition or verifier check), and readiness item 11 passes through `premiseHoldState`. The judge-identity, self-judgement, evidence and question checks are all skipped for a carried premise.",
+      "impact": "Attack vector: the orchestrating agent (or anything that shapes the report it ingests, e.g. a prompt injection in PR content steering it) writes a keryx:findings block in which another reviewer's security blocker carries `\"premise\": {\"verdict\": \"challenged\", \"judge\": \"review-premise\", \"question\": \"q\", \"operator\": {\"answer\": \"dismiss\", \"reason\": \"x\", \"at\": \"2026-10-16T00:00:00Z\", \"actor\": \"operator\"}}` and runs `keryx review ingest`. Entry point: the `--findings` / report channel of ingest. Impact: the blocker is dismissed at the flow review gate and readiness item 11 reads it as answered, with no operator decision in operator-decisions.json, no TTY, no card and no verifier `refuted` verdict. This defeats the control the PR states (`keryx review decide-premise` refuses without a TTY because \"an agent's shell cannot answer for the operator\"), and it is a lower bar than the pre-existing `dismissed-incorrect` rule, which requires a verifier verdict with method and evidence. The interim verdict disagrees (classify sees `premiseHoldState` = dismissed, not awaiting, and counts the finding as kept), so the operator-facing verdict and the gate tell different stories about the same record. Precondition not established by the diff: an agent acting against the operator; flow 457 names exactly that actor as untrusted for operator decisions.",
+      "suggested_fix": "Trust only operator-decisions.json for the answer: in `premiseHoldState` drop the `premise.operator` fallback, and in review-gate `toGateFinding` stop reading `operatorAnswer` from the record (keep only `withPremiseAnswers`). Additionally strip `operator` from any premise that arrives on an ingested finding (in `mergePremises` for carried findings, or in normalisation), and require `confirmedVia` in `validPremise` as `valid` does for the gate decisions. If carried answers must survive into a delta round, carry them as decisions copied into the new package by a reviewed code path, not as a field the report author can write.",
+      "evidence": "src/review/premise.ts:435 (premiseHoldState fallback to premise.operator.answer); src/review/premise.ts:371-377 (mergePremises returns a finding that already carries a premise unchanged; claims naming it are rejected as already-judged, so no check ever runs on it); src/review/managed.ts toContractFinding `if (finding.premise !== undefined) record.premise = finding.premise;`; src/review/managed.ts coerceStructured copies the whole input finding (`const record = { ...finding }`); src/gdskills/contracts/review-finding.schema.json premise.properties.operator; src/flow/review-gate.ts:366 `operatorAnswer: readString(readRecord(premise[\"operator\"])?.[\"answer\"])`, review-gate.ts premiseGateState and findingVerdict `if (hold === \"dismissed\") return { terminal: true, kind: \"dismissed\" };`; src/review/premise.test.ts:395-403 shows an input-carried premise reaching findings.json; src/commands/review-operator.ts:9 states the TTY rule this bypasses.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "dedupe_key": "premise-operator-answer-from-record",
+      "blocking_merge": false,
+      "class_scope": {
+        "sites": [
+          "src/review/premise.ts:435",
+          "src/review/premise.ts:371",
+          "src/flow/review-gate.ts:366",
+          "src/flow/review-gate.ts:414",
+          "src/flow/review-gate.ts:685",
+          "src/review/premise-question.ts:975",
+          "src/review/readiness.ts:220",
+          "src/review/managed.ts:1567"
+        ],
+        "enumeration_method": "grep -rnE 'premise\\.operator|premise\\[\"operator\"\\]' src (non-test): two readers, premise.ts:435 and review-gate.ts:366; then followed each reader's callers (premiseHoldState -> readiness premiseDecisionsCheck, verdict classify, premise-question findHeldFinding; premiseGateState -> findingVerdict and evaluateReviewGate blocking filter) and the one writer path into findings.json (mergePremises carried branch -> toContractFinding)."
+      }
+    },
+    {
+      "id": "SEC-002",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "line": null,
+      "quote": "    if (verdict === \"downgraded\" && (signals.value?.length ?? 0) + (sources.value?.length ?? 0) === 0) {",
+      "problem": "Premise evidence is any non-empty `intent_signals` / `practice_sources` entry; nothing checks that a cited intent signal exists, or that it predates the change under review. The review-premise skill tells the judge to treat a comment, a commit message, a lint exemption or a sibling as proof that \"someone chose\", without excluding signals the PR under review adds itself, and without any carve-out for security findings.",
+      "impact": "Attack vector: a PR author who introduces a vulnerability adds, in the same diff, a comment or eslint-disable with a reason (\"deliberate: input is trusted here, see ADR\") or a commit message saying the same. The premise judge, following its procedure, cites it as an intent signal and downgrades the security blocker to minor or challenges it with a question framed by the attacker's text. With the default gate floor (`minor`) the finding still blocks, so this is not a gate bypass today; but the report and interim verdict headline drop to \"no open blockers or majors\", the fix loop deprioritises it, and in a project that sets `review_gate.severity_floor: major` the downgraded blocker no longer blocks merge.",
+      "suggested_fix": "In the review-premise skill, state that a signal introduced by the branch under review (`git log base..head`, lines added in the diff) is not evidence of a prior deliberate choice, and that a finding from review-security-code is never downgraded, only upheld or held for the operator. In `mergePremises`, optionally reject `downgraded` on findings whose reviewer is review-security-code, mirroring the `external-downgrade` rule.",
+      "evidence": "src/review/premise.ts:312 (the only evidence check is a count of entries); src/review/premise.ts signalList accepts any non-empty ref/says strings; src/gdskills/bundled/skills/review/review-premise/SKILL.md 'The four questions' item 1 lists comments, commit messages and exemptions as intent with no branch/base distinction; src/flow/review-gate.ts:77 REVIEW_GATE_SEVERITY_FLOOR_DEFAULT = \"minor\" (why this is minor, not major).",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "premise-intent-signal-attacker-controlled"
+    },
+    {
+      "id": "SEC-003",
+      "severity": "minor",
+      "file": "src/review/premise-question.ts",
+      "line": null,
+      "quote": "      problem: str(record[\"problem\"]) ?? str(record[\"summary\"]) ?? str(record[\"title\"]) ?? \"(no problem statement)\",",
+      "problem": "`findHeldFinding` returns the reviewer-authored `problem` and the judge-authored `question` with only `trim()`. The card writer sanitises them with `cardSafe` (operator-confirm-review.ts decidePremiseSpec), but the terminal writer, `keryx review decide-premise` (src/commands/review-operator.ts:144), interpolates them raw into the readline prompt the operator confirms.",
+      "impact": "Attack vector: PR content steers a reviewer or the premise judge into emitting a `problem` or `question` that contains ANSI/OSC control sequences (JSON `\\u001b[2K\\r...`), which survive ingest into findings.json / premises.json. When the operator runs decide-premise at a terminal, the sequences rewrite or hide the prompt (e.g. erase the \"dismiss it as incorrect\" clause and print a benign one), so the operator confirms something other than what is recorded. The operator still picked `--answer` on their own command line, so impact is limited to misleading the confirmation; this is the same class flow 295 F7 fixed for cards.",
+      "suggested_fix": "Apply `cardSafe` (or a shared terminal-safe sanitiser) to key, severity, problem, verdict and question in `findHeldFinding`, so both writers show the same sanitised facts, or at least in the review-operator.ts prompt.",
+      "evidence": "src/review/premise-question.ts:59-61 (str() trims only); src/commands/review-operator.ts:144 builds the prompt from finding.problem and finding.question unsanitised; src/commands/operator-confirm-review.ts decidePremiseSpec wraps the same fields in cardSafe; src/trigger/schedules.ts:410 cardSafe strips CSI/OSC/control characters.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "decide-premise-terminal-unsanitised"
+    },
+    {
+      "id": "SEC-004",
+      "severity": "minor",
+      "file": "src/review/operator-decisions.ts",
+      "line": null,
+      "quote": "    (d.confirmedVia === undefined || VIAS.includes(d.confirmedVia as OperatorDecisionVia))",
+      "problem": "The premise-question decision is held to a weaker shape than the gate decisions in the same file: `confirmedVia` is optional in `validPremise` (required in `valid`), the operator's typed confirmation is not recorded (the terminal path discards `answer` where waive-mutation stores it as `quote`), and the decision is not bound to what the operator was shown (no head, severity or problem in the record; security review M4 bound the gate decisions to a subject for this reason). A decision is matched by finding key only.",
+      "impact": "Attack vector: (a) any entry appended to operator-decisions.json without `confirmedVia` is read as the operator's answer by readiness, the interim verdict and the gate, so the record cannot distinguish a card/terminal answer from one written another way; (b) a re-ingest of the same `--review-id` (the retry path) in which a different finding reuses the same reviewer-local id and is again held inherits the earlier dismissal, because `premiseDecisionFor` matches `<reviewId>#<id>` with no check that it is the finding the operator answered. Impact is a dismissal applied to a finding the operator never saw; no direct external entry point, hence minor.",
+      "suggested_fix": "Require `confirmedVia` in `validPremise`; record the operator's typed words as `quote`; add a `subject` (head, severity, problem hash) captured from the card/terminal prompt and have `premiseDecisionFor` ignore a decision whose subject no longer matches the finding.",
+      "evidence": "src/review/operator-decisions.ts:77 (confirmedVia optional) vs the `valid` predicate requiring VIAS.includes(d.confirmedVia); src/commands/review-operator.ts:150 recordPremiseDecision call has no quote while line 164 recordOperatorDecision stores `quote: answer`; src/review/operator-decisions.ts premiseDecisionFor matches on finding key alone; decisionCovers shows the subject binding the gate decisions have.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "premise-decision-record-weaker-than-siblings"
+    },
+    {
+      "id": "SEC-005",
+      "severity": "info",
+      "file": "src/review/premise.ts",
+      "line": null,
+      "quote": "  lines.push(`premise_judge: ${counts.judge ?? \"not named\"}`);",
+      "problem": "`renderPremiseMarkdown` writes the judge name unescaped and the rejection `finding` (the claim's raw `finding_id`) and `detail` with `escapePipes` only, so a newline in either injects arbitrary lines into scope.md. Because the judge line precedes the counts, an injected `premise_held: 0` / `premise_claims_received: N` is what `parsePremiseStats` (first-match `matchLine`) reads.",
+      "impact": "No attack vector to a decision today: the only consumer of parsePremiseStats (review-gate readReviewRounds) stores the stats and nothing non-test decides on them; the judge string is written by the same agent that writes the premises file. It does let a crafted premises file forge the human-readable '## Premise check' record. Settled by: confirming no future gate reads PremiseStats, or by rendering through oneLine()/a newline-folding escape.",
+      "suggested_fix": "Pass judge, rejection.finding and rejection.detail through oneLine() (or the same newline folding cardSafe uses) before rendering.",
+      "evidence": "src/review/premise.ts:512 (judge unescaped), :548 (rejection row escapes pipes only); src/flow/review-gate.ts parsePremiseStats uses matchLine with the m flag; grep for parsePremiseStats/round.premise shows no non-test consumer.",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "dedupe_key": "premise-scope-md-newline-injection"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 3, "info": 1 }
+}
+```
+
+## Security Review
+
+### Scope
+- Branch: `feat/review-premise` (PR #1043), head c144874f
+- Scope mode: supplied slice (slice-08.diff); context read from the worktree at head
+- Changed files reviewed: 10 (src/review/coverage.ts, dedupe.ts, managed.ts, operator-decisions.ts, premise-question.ts, premise.ts, readiness.ts, types.ts, verdict.ts, verification.ts)
+
+### Summary
+- Blockers: 0
+- Major: 1
+- Minor: 3
+- Info: 1
+
+### Findings
+
+**[SEC-001] major: the finding record's own `premise.operator` dismisses a finding at the gate, and ingest input can set it.** The gate (`toGateFinding` -> `premiseGateState` -> `findingVerdict`) and `premiseHoldState` accept `premise.operator.answer` from the record. A premise carried in `--findings` passes `mergePremises` unchecked (already-judged path) into findings.json. Result: an agent-written report can dismiss any blocker with no operator decision, no TTY/card and no verifier `refuted`, which undoes the decide-premise TTY rule. Fix: trust only operator-decisions.json, strip `operator` from ingested premises, require `confirmedVia`.
+
+**[SEC-002] minor: intent signals the PR adds itself count as premise evidence.** A PR author can plant a "deliberate" comment to get a security blocker downgraded to minor or challenged. With the default `minor` floor it still blocks. With `severity_floor: major` it does not.
+
+**[SEC-003] minor: the terminal decide-premise prompt prints reviewer/judge text unsanitised.** The card uses `cardSafe` and the terminal path does not, so ANSI sequences can rewrite what the operator confirms.
+
+**[SEC-004] minor: the premise-question decision is weaker than the gate decisions in the same file.** `confirmedVia` is optional, no operator quote is stored, and nothing binds the decision to what was shown, so an id reused on re-ingest inherits an old dismissal.
+
+**[SEC-005] info: unescaped newlines in the judge name or claim id can inject lines into scope.md's Premise check block.** No decision reads those counts today.
+
+### Clean Areas
+- Injection (SQL/command/eval): none in the slice. The `keryx:premises` fence regex is anchored per line, with no catastrophic backtracking.
+- Path traversal: PREMISES_FILE and OPERATOR_DECISIONS_FILE are constants joined to the package dir. `findHeldFinding` reads only package files.
+- Delete-only claim merge: unknown properties, raise-severity, below-minor downgrade, self-judgement (actorKey over-matching), external downgrade, duplicate claims and unknown/ambiguous finding ids are all rejected, and every rejection keeps the finding.
+- Dedupe: held findings are excluded from merges, so a hold cannot be laundered into or out of a duplicate.
+- recordOperatorDecision/recordPremiseDecision keep each other's entries (no lost gate decisions).
+- Secrets/crypto/CSRF/open redirect: not applicable to this slice.
+
+Routing audit: graph_used: no (not-relevant: bounded slice review, callers found by targeted search); wiki_used: no (not-relevant: flow description read directly); ctx_used: yes (keryx ctx rg); raw_rg_used: no (raw grep used only for narrow single-file listings, marked keryx:raw).

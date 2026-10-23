@@ -1,0 +1,70 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-regression",
+  "summary": "Slice 04 (decide-premise CLI/card, --premises, tier --premise, gate hold). One major regression: an operator dismissal lives only in operator-decisions.json, so dependents that read findings.json dispositions (prior-round, PR round block, review notes) still see the dismissed finding as open. Three infos on scope and coverage limits.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "file": "src/review/prior-round.ts",
+      "line": 241,
+      "problem": "The change records an operator `--answer dismiss` (review-operator.ts decide-premise, the review_decide_premise card, recordPremiseDecision) ONLY as a premise-question entry in operator-decisions.json. The docs (cli-reference decide-premise row, review-with-a-record guide) and the card text say it records the finding `dismissed-incorrect` with the reason as evidence, but nothing writes that disposition into findings.json. The new readers (review-gate.ts premiseGateState/withPremiseAnswers, verdict.ts, readiness.ts, premise-question.ts) consult the decisions file; the unchanged dependents read `disposition.state` from findings.json and know nothing of it. prior-round.ts priorFindingsOf computes status via findingStatus(raw), which yields `open` for a finding with no disposition, so a finding the operator dismissed is carried into the next round as an open prior finding. publish.ts buildRoundBlock uses the same findingStatus, so the round block posted to the PR lists it `open`, and that block is what the next round reads back from the PR.",
+      "impact": "Operator dismisses a held finding (e.g. LY-003, major), publishes, then runs the next round: the delta round's prior_findings.json and the PR round block carry LY-003 as `open` at its original severity, so it is treated as an unresolved prior finding (located, eligible for a fix slice); the operator's answer is silently lost outside the gate/verdict/readiness. review-notes.ts MODEL_ERROR_STATES (`dismissed-incorrect` = reviewer wrong) never counts the dismissal either, contrary to the documented effect.",
+      "suggested_fix": "Have recordPremiseDecision (or a shared helper called by both the CLI and the card apply) also write disposition {state: dismissed-incorrect, evidence: reason} onto the finding in findings.json for `dismiss`, or make findingStatus (round-record.ts) premise-decision aware; otherwise correct the docs to say the answer is held in operator-decisions.json only.",
+      "evidence": "src/review/prior-round.ts:231-241 (status from findingStatus), src/review/round-record.ts:81-88 (disposition.state, else refuted, else open), src/review/publish.ts:137 (status: findingStatus(raw)); a search of prior-round.ts, publish.ts, round-record.ts, loop.ts for `premise` finds nothing, and none of these files is in the PR diff. Changed symbols whose behaviour moved: review-gate.ts premiseGateState, operator-decisions.ts recordPremiseDecision, review-operator.ts decide-premise.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "class_scope": {
+        "sites": ["src/review/prior-round.ts:241", "src/review/publish.ts:137", "src/review/round-record.ts:81", "src/review/review-notes.ts:53"],
+        "enumeration_method": "keryx ctx rg for premise / operator-decisions over the blast-radius dependents of review-gate.ts and operator-decisions.ts that read findings.json dispositions (prior-round.ts, publish.ts, round-record.ts, loop.ts, review-notes.ts, pr-comments.ts, ledger.ts): none read operator-decisions.json; the four listed read disposition/status from findings.json, loop.ts, pr-comments.ts and ledger.ts were not found to be in the class"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "info",
+      "file": "src/flow/review-gate.ts",
+      "line": 849,
+      "problem": "The operator's answer is read per package (readPremiseDecisions(packageDir)) and attached to that round's findings. latestFindingStates keeps the most recent round that carried a finding identity. If round 2 re-raises the same finding without --premises (premise absent on the new record), the round-1 dismissal no longer applies and the finding needs an ordinary disposition with a verifier verdict.",
+      "impact": "Re-asking is the safe direction (the gate blocks rather than passes), so this is a friction observation, not a break. Would be settled by deciding whether a premise answer should carry across rounds the way dispositions do.",
+      "suggested_fix": "None required; state the per-round scope in the docs.",
+      "evidence": "review-gate.ts latestFindingStates (unchanged) with withPremiseAnswers (changed) reading only the round's own package.",
+      "confidence": "medium",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/commands/routing-corpus.ts",
+      "line": 1406,
+      "problem": "The radius cannot answer two questions for this slice. (a) RANK1_FIRST/RANK1_TOTAL moved 334/337 to 338/341 on the claim that the four new review-premise positives all rank first and no existing case moved; that is a ranking computation over the whole catalog, which a no-run review cannot confirm (review-premise shares vocabulary with review-verifier). skills.bundled-verify.test.ts 79 to 80 likewise assumes review-premise is the only skill added. (b) Most of the PR's changed files are skills, rules, schemas and docs, which have an empty graph radius (recorded as unresolved, not clean).",
+      "impact": "If an existing positive (e.g. review-verifier's) now ranks second, the routing-corpus test fails in CI; not reproduced here.",
+      "suggested_fix": "Rely on the routing-corpus and bundled-verify tests in CI for this.",
+      "evidence": "routing-corpus.ts hunks; blast-radius.json `unresolved` and `dropped` lists (cap 40 files, depth 2). Dropped files are recorded; this review did not walk them.",
+      "confidence": "low",
+      "reviewer": "review-regression"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/review/operator-decisions.ts",
+      "line": 63,
+      "problem": "validPremise accepts a premise-question entry with confirmedVia undefined, unlike the sibling `valid` which requires a recognised via. Data files (.json) inside the package are writable by an approved apply_patch in an automatic-review turn (automatic-review.ts PACKAGE_DATA_EXTENSIONS), and no protection of operator-decisions.json was found, so an agent could write a dismiss entry the gate honours.",
+      "impact": "The same exposure exists for mutation-waiver/reviewer-override entries (a via is still forgeable), so it is pre-existing in kind; the new kind weakens the shape check slightly. Not reproduced.",
+      "suggested_fix": "Require confirmedVia for premise-question entries as `valid` does; consider excluding operator-decisions.json from the auto-approved apply_patch targets.",
+      "evidence": "operator-decisions.ts:63-75 vs 77-89; automatic-review.ts PACKAGE_DATA_EXTENSIONS.",
+      "confidence": "low",
+      "reviewer": "review-regression"
+    }
+  ]
+}
+```
+
+## Summary
+
+Scope B, slice-04. The radius could answer for the TypeScript files (gate, operator commands, review.ts, routing corpus); it cannot for the docs, skills and schemas in the PR (empty radius, unresolved). The cap (40 files, depth 2) dropped files, recorded in blast-radius.json; I did not walk them.
+
+- F-001 major: an operator dismissal is never written as a disposition in findings.json, so prior-round, the PR round block and review notes still treat the finding as open (the docs claim otherwise).
+- F-002, F-003, F-004 info.
+
+Checked and clean: the new tool and command are registered wherever their siblings are (OPERATOR_COMMANDS, group-subcommands, the unattended exclusion list, the roster test counts, not on the trust-routine list); the CREATE_FLAGS, CREATE_PATH_FLAGS and TIER_FLAGS additions; findingVerdict is called only from the gate; the added `dismissed` terminal kind is already a member of FindingVerdict.

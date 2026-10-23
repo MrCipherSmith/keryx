@@ -1,0 +1,65 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Slice 05 (tests, catalog, schema, tier signal, ceilings) is clean at function/class level. Two minor and two info observations on vocabulary, contract enforcement and test hygiene.",
+  "slices": ["slice-05"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "problem": "review-premise is called 'delete-only' in the catalog entry and in the bundled-eval comment, but every other statement of its contract (the two EXEMPT reasons, the schema description) says it can lower, hold or leave a finding. A judge that downgrades severity and holds findings is not delete-only; the verifier is. Two names for one concept in one diff (A3).",
+      "impact": "A reader of the catalog description will assume the judge only removes findings and be surprised by downgraded/held outcomes that change gate behaviour.",
+      "suggested_fix": "Replace 'delete-only' with 'can only lower, hold or leave' at src/gdskills/catalog.ts:723 and src/gdskills/bundled-eval.test.ts:220, matching the EXEMPT reasons.",
+      "evidence": "catalog.ts: 'before anyone acts on it; delete-only.'; bundled-eval.test.ts comment: 'a delete-only judge of findings' premises'; review-skills-class-scope.test.ts EXEMPT: 'can only lower, hold or leave them'.",
+      "confidence": 0.8,
+      "reviewer": "review-clean-code",
+      "file": "src/gdskills/catalog.ts",
+      "line": 723
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "problem": "The premise schema states invariants in prose that it does not enforce: 'downgraded carries a strictly lower severity', challenged/owner-decision carry a question, options needs two entries. Only verdict and judge are required and there is no if/then, unlike the sibling `verification` block which encodes its method/verdict rule with if/then. A downgraded premise without severity, or a challenged one without question, validates.",
+      "impact": "Enforcement then lives only in code; a hand-edited findings.json passes schema validation with a hold that has no question for the operator.",
+      "suggested_fix": "Add if/then: verdict=downgraded requires severity and original_severity; verdict in (challenged, owner-decision) requires question. Strict-lower stays a code check.",
+      "evidence": "src/gdskills/contracts/review-finding.schema.json premise block: required is only [verdict, judge].",
+      "confidence": 0.6,
+      "reviewer": "review-clean-code",
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "line": 772
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "problem": "The EXEMPT map is duplicated across review-skills-class-scope.test.ts and review-skills-iron-laws.test.ts and this diff adds the same new entry to both. The iron-laws comment claims 'same set and same reasons', but reasons already differ (e.g. review-pr-feedback), so the claim is stale and a further exemption must be edited in two places.",
+      "impact": "Drift risk only; no current wrong outcome. Two sites, below the DRY threshold.",
+      "suggested_fix": "Optionally share one exemption map, or soften the comment to 'same set'.",
+      "evidence": "Both files' EXEMPT maps list the same seven names.",
+      "confidence": 0.5,
+      "reviewer": "review-clean-code",
+      "file": "src/gdskills/review-skills-iron-laws.test.ts",
+      "line": 401
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "problem": "In the 'operator's answer written onto the record' test the fixture uses `at: \"t\"` as the timestamp, while sibling tests use an ISO string. A throwaway literal with no meaning.",
+      "impact": "None at runtime; reads as a placeholder next to ISO values and would break if the schema ever validated the format.",
+      "suggested_fix": "Use \"2026-10-16T12:00:00Z\" as in the neighbouring tests.",
+      "evidence": "review-gate.test.ts: operator: { answer: \"dismiss\", reason: \"kept LTR\", at: \"t\", actor: \"owner\" }",
+      "confidence": 0.5,
+      "reviewer": "review-clean-code",
+      "file": "src/flow/review-gate.test.ts",
+      "line": 1656
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2 }
+}
+```
+
+## Clean Code Review (slice-05)
+
+No blockers or majors. Names, comments, error handling and function size are fine in the diff; the new tests are small, single-purpose and each names one mechanism. The model-tier floor is a four-line addition consistent with its siblings. Findings: F-001 (minor, 'delete-only' vocabulary), F-002 (minor, schema does not enforce documented invariants), F-003 and F-004 (info).
+
+Stats: blocker 0 | major 0 | minor 2 | info 2

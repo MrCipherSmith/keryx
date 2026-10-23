@@ -1,0 +1,37 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE",
+  "prior_dispositions": [
+    {"id": "r4-review-clean-code-code#CC4-001", "disposition": "closed", "evidence": "src/review/premise.ts:241-243 uses isDowngrade, and the two named predicates carriesStraySeverity (:257) and severityIsStale (:262) replace the severityAgrees flag; behaviour is unchanged"},
+    {"id": "r4-review-clean-code-code#CC4-002", "disposition": "closed", "evidence": "src/review/premise.ts:745 inheritedPremiseClaims is now parse, trial merge, union, refuse-or-ok; the rules moved into heldRecords, readStoredClaims, appliedClaimNames, claimsNoLongerHeld (:780), heldFindingsChanged (:785) and refuseInheritance, with no refuse closure or side variable"}
+  ],
+  "findings": [
+    {
+      "id": "r5-review-clean-code-code#CC5-001",
+      "severity": "minor",
+      "file": "src/review/prior-round.ts",
+      "line": 560,
+      "problem": "findPreviousRound adds the 'skipped, not ingested' text by calling record(...) and then reading back the entry it pushed (`tried.at(-1)`, guarded by `flow?.source === \"flow\"`) to mutate its `detail`. The edit depends on record() having pushed exactly one entry last, and the guard exists only to satisfy that implicit coupling. findPreviousRound is already a long function, and this adds a step that mutates a shared array entry after the fact.",
+      "impact": "If record() is later changed to push nothing, or to push after an await, the skipped-package note is silently dropped or lands on the wrong source. Nothing wrong happens today.",
+      "suggested_fix": "Pass the skipped-package suffix into record() (an optional `note` argument) or build the flow attempt in a helper `flowAttempt(read.rounds)` that returns the finished entry, so nothing edits an entry after it is pushed.",
+      "evidence": "src/review/prior-round.ts:560-563 (record call, tried.at(-1), flow.detail reassigned)",
+      "confidence": "medium"
+    },
+    {
+      "id": "r5-review-clean-code-code#CC5-002",
+      "severity": "info",
+      "file": "src/review/premise.ts",
+      "line": 785,
+      "problem": "heldFindingsChanged takes a generic PremiseMergeResult<T> and casts every trial finding to Loose (`finding as unknown as Loose`). The cast is needed only because T is unconstrained. Constraining T to StructuredReviewFinding, as the caller already does, would remove the double cast.",
+      "impact": "None observed; a typing nicety. A later change to the finding shape is not checked at this cast.",
+      "suggested_fix": "Constrain `T extends StructuredReviewFinding` on claimsNoLongerHeld and heldFindingsChanged, or give keysOf and premiseSubjectOf a typed overload.",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
+Summary: both prior -code findings (CC4-001, CC4-002) are closed. The delta is clean overall: the premise.ts refactor keeps behaviour (the predicates match the old severityAgrees rules for both verdict kinds). The layout routing is consistent with the new package-location header; the remaining `".metaproject", "reviews"` sites are ones the header names as not routed, or fixtures. findingsWithHolds in review-gate.ts pushes onto `problems` before `ingested` is computed (review-gate.ts:505-510), so the round correctly reports not ingested. No blockers or majors. New: 1 minor, 1 info.

@@ -1,0 +1,70 @@
+```json keryx:findings
+{
+  "reviewer": "review-testing-practices",
+  "status": "DONE",
+  "slices": ["slice-02"],
+  "summary": "Slice-02 is mostly tests and docs. Mutation pass skipped: this lane is read-only and runs no tests, so no mutant was run (0 reached); no mutation results are claimed.",
+  "findings": [
+    {
+      "id": "TP-001",
+      "severity": "minor",
+      "file": "src/commands/agent-review-gate.test.ts",
+      "quote": "toolCalls: [{ id: \"s2\", name: \"bash\", arguments: JSON.stringify({ command: \"keryx review status pr-1-all\" }) }],",
+      "problem": "The shared reviewHistory() fixture now always names the package (keryx review status pr-1-all) so the gate recognises it. The file has two tests, both on that fixture. No test drives the opposite branch: a history that does not name the package. Deleting the session-naming condition in the gate would leave both tests green.",
+      "impact": "The new 'named in history is used' rule (flow 460 C) is pinned only on its positive side. A regression that holds the gate for any package on disk would pass.",
+      "suggested_fix": "Add a test whose history omits the status call, with the same package on disk. Assert the gate does not name or hold that package, or follows whatever the intended rule is.",
+      "evidence": "src/commands/agent-review-gate.test.ts has two test() blocks (lines 123 and 131); both call reviewHistory(), which now includes s2. Branch coverage elsewhere was not visible in this slice.",
+      "confidence": "medium"
+    },
+    {
+      "id": "TP-002",
+      "severity": "minor",
+      "file": "src/commands/review-ledger.test.ts",
+      "quote": "expect(researchErrors(out.ledger, canonical).filter((error) => error.includes(\"review-logic-w1\"))).toEqual([]);",
+      "problem": "The filter keeps only errors containing the raw stem. An unresolved-link error that names the canonical global id (2026-10-17-round#review-arch-w1:F-009) does not contain it and would be filtered out, so the assertion can pass when a link is broken.",
+      "impact": "The claim 'every link resolves' (readiness item 5) is weaker than the comment says. The obligations assertion above does pin links, so the cost is small.",
+      "suggested_fix": "Assert researchErrors(...) equals [] unfiltered, or filter on both the stem and the canonical ids.",
+      "evidence": "Filter at the quoted line; the canonical array uses ids review-arch-w1:F-009 and review-logic-w1:F-001.",
+      "confidence": "medium"
+    },
+    {
+      "id": "TP-003",
+      "severity": "info",
+      "file": "src/commands/review-plan.e2e.test.ts",
+      "quote": "expect(second.dispatches).toBeLessThanOrEqual(40);",
+      "problem": "A loose upper bound equal to the default maxDispatches threshold. It does not pin the dispatch count the scenario implies (fix: 2 dispatches plus the new slice's roles), and it would stay green if the fix slice's roster grew by one reviewer. The preceding split.fix dispatches: 2 assertion pins the fix side, so the bound adds little.",
+      "impact": "Little: the useful assertions are the roles and split checks beside it.",
+      "suggested_fix": "Assert the exact total, or drop the line.",
+      "evidence": "Neighbouring assertions: roles toEqual [review-logic, review-regression]; split.fix toMatchObject {slices:1, dispatches:2}.",
+      "confidence": "high"
+    },
+    {
+      "id": "TP-004",
+      "severity": "info",
+      "file": "src/commands/review-plan.e2e.test.ts",
+      "quote": "repo = await mkdtemp(path.join(tmpdir(), \"keryx-plan-e2e-\"));",
+      "problem": "A real-git e2e suite with two 60s tests lives under src/commands/, and package.json test:core runs src/commands/ whole. The file is named .e2e.test.ts, but no script separates that name from the fast lane (a search of package.json and scripts for the name found none).",
+      "impact": "Real git init and commits in the fast feedback lane. The tests were already in test:core before this move, so nothing gets worse. The new name suggests a tier split that does not exist.",
+      "suggested_fix": "Either route *.e2e.test.ts to its own script, or keep the file in review-plan.test.ts and state in the header that it runs in test:core.",
+      "evidence": "package.json:48 test:core includes src/commands/; no e2e-specific script was found.",
+      "confidence": "medium"
+    },
+    {
+      "id": "TP-005",
+      "severity": "info",
+      "file": "src/commands/review-premises-cli.test.ts",
+      "quote": "a disagreement across files applies neither",
+      "problem": "The CLI docs say two claims on one finding that agree apply once (across files, or on a finding and its folded duplicate). This test drives only the disagreement case and a one-file-only case. The agreeing-across-files branch is not driven at the CLI seam. src/review/premise.test.ts covers duplicate-claim at the merge level, but whether it covers the agreeing case was not checked in this slice.",
+      "impact": "If the agreeing case regressed to 'apply neither', the multi-judge flow would silently lose agreeing premises.",
+      "suggested_fix": "Add a file pair with the same upheld verdict on one finding and assert it is applied once. Or confirm premise.test.ts pins it.",
+      "evidence": "Test body: LY-003 upheld in code.json vs challenged in rest.json (conflict); LG-001 in one file only.",
+      "confidence": "low"
+    }
+  ],
+  "needs_context": []
+}
+```
+
+## Summary
+
+Slice-02 reviewed: tests, docs and flow bookkeeping. Mutation pass skipped (read-only lane, no tests run); 0 mutants reached, none claimed. Positive notes: the coverageErrors assertions were tightened from `.not.toContain("missing")` to `toEqual([])`. The e2e L6 test checks fix and new roster separation with the exact fix roster. The "#" id refusal and the late-DONE-no-slices case are pinned. Findings: 0 blocker, 0 major, 2 minor, 3 info.

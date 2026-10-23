@@ -1,0 +1,116 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-testing-practices",
+  "summary": "Slice-03 tests are mostly well built (real git repos, behaviour assertions, negative cases for head and reviewer-set mismatch). Mutation pass skipped: this run is read-only and allowed_tools does not include run-tests. Findings are from reading fixtures against the code under test. 2 minor, 4 info, no blocker or major.",
+  "slices": ["slice-03"],
+  "findings": [
+    {
+      "id": "T-001",
+      "severity": "minor",
+      "file": "src/review/completion-gate.test.ts",
+      "line": null,
+      "quote": "  await writeActiveReview(sub, { id: \"pr-7975\", dir: current });",
+      "problem": "The pointer-wins test does not drive the pointer branch. The package the pointer names (pr-7975) is also the only package written this session, and the next test shows such a package is found with no pointer at all. The competing package (pr-7912) is already excluded by its age (writeOldPackage backdates the manifest 1h before `since`). So the test stays green with the pointer read removed.",
+      "impact": "The test is titled as pinning that the active-review pointer decides which package the nudge names, but it pins only the session-age filter. The pointer lookup is unprotected; the next edit to it can break the stated contract with the suite green. Predicted from the fixture, not run (read-only reviewer).",
+      "suggested_fix": "Add a fixture in which the pointer and the session filter disagree: two packages fresh this session with the pointer naming the older one, or a pointer naming a package whose manifest predates `since`. Assert the pointer's package is the one returned.",
+      "evidence": "Fixture construction in the 'the nudge names the package the active-review pointer names' test versus 'a package started this session under a subdirectory is found without a pointer'. Both resolve to pr-7975 for the same reason (fresh mtime in `[sub]`).",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "blocking_merge": false
+    },
+    {
+      "id": "T-002",
+      "severity": "minor",
+      "file": "src/review/locate.test.ts",
+      "line": null,
+      "quote": "    expect(outcome.state === \"unlocatable\" && outcome.reason).toContain(\"whitespace\");",
+      "problem": "The new machine-readable `kind` is asserted only for the exact-pass ambiguity (kind ambiguous, candidates [2, 10]), `absent` and `empty`. The whitespace-normalised ambiguity test beside it, and the two `bound` tests (quote past the line bound, file past the line bound), do not assert `kind` or `candidates`.",
+      "impact": "Ingest branches on `kind` to decide what is kept and flagged (absent and ambiguous become quote_unlocated; bound is documented as a third kind). A loose-pass ambiguity that returns the wrong kind or an empty candidate list, or a bound case that falls to absent, passes every locate test. The loose pass is exactly where the older comment in this file says a gap went unpinned before.",
+      "suggested_fix": "In the normalised-pass ambiguity test add `expect(outcome).toMatchObject({ kind: \"ambiguous\", candidates: [1, 3] })`; in the two bound tests add `kind: \"bound\"`.",
+      "evidence": "locate.ts documents kinds absent, ambiguous, bound, empty; locate.test.ts asserts kind in three of the seven unlocatable-outcome tests.",
+      "confidence": "medium",
+      "reviewer": "review-testing-practices",
+      "blocking_merge": false
+    },
+    {
+      "id": "T-003",
+      "severity": "info",
+      "file": "src/review/ledger.test.ts",
+      "line": null,
+      "quote": "    expect(buildLedger({ ...base, mutationRecorded: true }).ledger.dispatch.notRun).toBeUndefined();",
+      "problem": "The 'Not run: mutation (light round)' line is tested only with depth light. No case builds a non-light round and asserts the line is absent, so the depth condition is not separated from the mutationRecorded condition beside it.",
+      "impact": "If the depth guard were dropped, a deep round with no mutation record would claim 'light round' in the report; no test here would fail. Not run; a search of test files found no other assertion on this string in this slice.",
+      "suggested_fix": "Add `buildLedger(await inputs({ depth: \"deep\" }))` and assert `dispatch.notRun` is undefined (or does not contain the light-round line).",
+      "evidence": "Only `inputs({ depth: \"light\" })` is used in the F test.",
+      "confidence": "low",
+      "reviewer": "review-testing-practices",
+      "blocking_merge": false
+    },
+    {
+      "id": "T-004",
+      "severity": "info",
+      "file": "src/review/ledger.test.ts",
+      "line": null,
+      "quote": "      // The envelope's own usage counts when the host wrote no line.",
+      "problem": "The comment states a precedence (host KERYX_USAGE line first, envelope usage as fallback) but no fixture carries both on one dispatch. The first raw has only the host-side usage, the second only the envelope's.",
+      "impact": "Reversing the precedence, or summing both, leaves the test green. Double counting would overstate spend.",
+      "suggested_fix": "Add a raw with both `usage` on the RawFile and `usage` in the envelope and assert the host line is the one counted.",
+      "evidence": "Fixture construction in 'each run carries its usage'.",
+      "confidence": "low",
+      "reviewer": "review-testing-practices",
+      "blocking_merge": false
+    },
+    {
+      "id": "T-005",
+      "severity": "info",
+      "file": "src/review/complete-coverage-gate.test.ts",
+      "line": null,
+      "quote": "      await decide(await operatorDecisionSubject(dir, \"reviewer-override\", selected));",
+      "problem": "The positive AC2 case builds its subject with the production helper `operatorDecisionSubject`, the same one the gate presumably uses to compare. The accepting path therefore agrees with itself by construction. The negative cases use hand-built subjects, which does independently pin the head and item-set mismatch. A decision whose items are a superset of the missing set is not covered.",
+      "impact": "If the helper and the gate agree on a wrong subject shape (for example both ignore the head), only the negative cases would show it. They do cover head and item mismatch, so this is a small residual.",
+      "suggested_fix": "Optionally assert the helper's output shape once (`{ head: \"aaaaaaa\", items: [\"review-architecture\", \"review-style\"] }`) and add a superset-items case.",
+      "evidence": "AC2 describe block.",
+      "confidence": "low",
+      "reviewer": "review-testing-practices",
+      "blocking_merge": false
+    },
+    {
+      "id": "T-006",
+      "severity": "info",
+      "file": "src/review/evidence-level.test.ts",
+      "line": null,
+      "quote": "  await writeFile(path.join(pkg, \"coverage.md\"), READY_COVERAGE_MD);",
+      "problem": "The same coverage.md write is added by hand beside each `research.json` write in seven places: active-review, complete-head-gate (two sites), evidence-level, research (two sites). Each must be remembered by the next test author who builds a closable package. This is one class with all sites listed in the finding text.",
+      "impact": "A new closable-package fixture that omits the line fails at complete with a coverage.md error that points away from the fixture. Maintenance cost only. READY_COVERAGE_MD itself matches READY_DISPATCH's single synthetic-reviewer, so the fixture shape is consistent with its producer.",
+      "suggested_fix": "Fold the two writes into one helper next to READY_DISPATCH (for example `writeReadyResearch(pkg)`).",
+      "evidence": "Sites: active-review.test.ts closing-package test; complete-head-gate.test.ts ingest() and the --head report test; evidence-level.test.ts ingest(); research.test.ts two tests.",
+      "confidence": "high",
+      "reviewer": "review-testing-practices",
+      "blocking_merge": false
+    }
+  ],
+  "mutant_candidates": [
+    { "id": "M1", "file": "src/review/completion-gate.ts", "anchor": "active-review pointer lookup in findReviewGateState", "replacement": "skip the pointer lookup", "kind": "behavior" },
+    { "id": "M2", "file": "src/review/ledger.ts", "anchor": "depth === \"light\" guard on the mutation not-run line", "replacement": "drop the depth guard", "kind": "behavior" },
+    { "id": "M3", "file": "src/review/locate.ts", "anchor": "kind/candidates on the whitespace-normalised ambiguous return", "replacement": "omit kind", "kind": "behavior" }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 4 }
+}
+```
+
+## Summary
+
+Reviewed slice-03 (tests for the flow 460 review-gate changes). No blocker or major.
+
+Mutation pass: not run. This reviewer was read-only and its payload did not include `run-tests`. 0 of the gates added in the diff were mutated; 3 mutant candidates are listed in `mutant_candidates` for the main session. The three candidates are untested guesses, not results.
+
+What holds up: the AC1 fixtures use real git repositories with a recorded base, a nested project, and an unreadable head, and assert the refusal names cwd, base and head. The AC2 tests cover no decision, wrong head and wrong item set. Item 3 of the readiness checklist is checked against the same refusal text complete uses. The ingest-locator tests cover absent, ambiguous and unchecked-head cases with a positive artifact in each.
+
+Findings:
+- T-001 (minor): the pointer-wins test also passes without the pointer (completion-gate.test.ts).
+- T-002 (minor): loose-pass ambiguity and the `bound` cases do not assert the new `kind` (locate.test.ts).
+- T-003 (info): the light-round mutation line has no non-light counterpart (ledger.test.ts).
+- T-004 (info): usage precedence between host line and envelope is not pinned (ledger.test.ts).
+- T-005 (info): the positive reviewer-override case derives its subject from the production helper (complete-coverage-gate.test.ts).
+- T-006 (info): the coverage.md write is copy-pasted at seven fixture sites.

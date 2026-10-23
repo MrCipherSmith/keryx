@@ -1,0 +1,71 @@
+REVIEW_RESULT
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice-02 is readable and consistent; four minor style issues (stale count in docs, repeated sentinel literal, misleading variable name, duplicated number-coercion) and one info on duplicated exit-path boilerplate.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "S-1", "reviewer": "review-style", "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "reads the package and prints eleven items, READY or NOT READY",
+      "problem": "The section still says readiness prints eleven items, but this diff adds a twelfth item (quotes-located) to the same list.",
+      "impact": "Outdated doc count; a reader sees two different totals.",
+      "suggested_fix": "Say \"twelve items\" (or drop the number).",
+      "evidence": "SKILL.detail.md line 654 'eleven items'; the list in the diff ends '12. `quotes-located`'.",
+      "confidence": "high"
+    },
+    {
+      "id": "S-2", "reviewer": "review-style", "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "if (status === \"Completed\" && raw === \"(subagent produced no text)\" && turnResult?.submittedResult === undefined) {",
+      "problem": "The placeholder string \"(subagent produced no text)\" is now a magic literal in three places (the fallback at ~2280, hadText at ~2298, and this comparison). The new check couples to the fallback text by string equality.",
+      "impact": "Changing the fallback wording silently disables the new empty-reply guard and the hadText check.",
+      "suggested_fix": "Extract a NO_TEXT_PLACEHOLDER constant and use it at all three sites.",
+      "evidence": "keryx ctx rg shows 3 matches at lines 2280, 2298, 2316.",
+      "confidence": "high"
+    },
+    {
+      "id": "S-3", "reviewer": "review-style", "severity": "minor",
+      "file": "src/commands/review-plan.test.ts",
+      "line": null,
+      "quote": "const latest = (await readdir(path.join(repo, \".metaproject\", \"reviews\"))).filter((name) => existsSync(path.join(repo, \".metaproject\", \"reviews\", name, PLAN_FILE))).sort();",
+      "problem": "`latest` holds every package directory that has a plan file, not the latest one; the real latest is chosen two lines later by round number. The reviews dir path is also rebuilt three times.",
+      "impact": "Misleading name in a helper that decides which round the test asserts on.",
+      "suggested_fix": "Rename to `planned`/`packages` and hoist a `reviewsDir` constant.",
+      "evidence": "The following lines map, sort by round.number and take the last element.",
+      "confidence": "high"
+    },
+    {
+      "id": "S-4", "reviewer": "review-style", "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "const tokensOut = Number.isFinite(usage.outputTokens) ? (usage.outputTokens as number) : undefined;",
+      "problem": "tokensIn and tokensOut repeat the same isFinite-and-cast expression, and the `as number` casts exist only because Number.isFinite does not narrow.",
+      "impact": "Small duplication plus two type assertions that hide the field type.",
+      "suggested_fix": "A tiny helper (typeof n === \"number\" && Number.isFinite(n) ? n : undefined) used for both.",
+      "evidence": "Both lines in the onUsage handler share the same shape.",
+      "confidence": "medium"
+    },
+    {
+      "id": "S-5", "reviewer": "review-style", "severity": "info",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "treat the task as not done and re-dispatch it.",
+      "problem": "The new empty-reply exit repeats the emit-upsert / foldChildSlateAndCleanup / fireSubagentStop sequence that the timeout, rate-limited and other early-return paths already carry.",
+      "impact": "One more copy of a 3-step exit sequence in a very long function; easy to drift.",
+      "suggested_fix": "Consider a local failChild(status, detail) helper if a further exit path is added; not required now.",
+      "evidence": "Same sequence visible in the timeout branch and rate-limited branch in this slice.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 1 }
+}
+```
+
+# Style Review Report (slice-02)
+
+Verdict: APPROVE_WITH_SUGGESTIONS. Naming and structure in the new tests, schema and prose are consistent. Findings: S-1 stale "eleven items", S-2 repeated sentinel literal, S-3 misleading `latest`, S-4 duplicated coercion, S-5 info on exit-path boilerplate. Not flagged as style: the long single-line SKILL.md edit (prose), logic of the usage sum and quote_unlocated (other lanes). The reviewer-finding schema's `quote` description still says an ambiguous quote is recorded `unlocatable`, which this diff changes; it sits outside this slice's lines.

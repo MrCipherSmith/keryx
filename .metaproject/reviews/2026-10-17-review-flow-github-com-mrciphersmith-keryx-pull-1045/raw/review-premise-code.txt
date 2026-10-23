@@ -1,0 +1,148 @@
+STATUS: DONE
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    { "finding_id": "review-architecture-w1#F-003", "verdict": "upheld", "reasoning": "src/commands/review-ledger.ts:113-114 calls splitUsage(body) twice in adjacent lines; no signal of intent. Same fact as review-clean-code-w1#F-003 and review-style-w1#F-004." },
+    { "finding_id": "review-architecture-w2#F-001", "verdict": "upheld", "reasoning": "The locate.ts comment that keeps `kind` out of `locator` and turns absent/ambiguous into quote_unlocated is added by this branch, so it cannot ratify the overlap. The two-sources-of-truth premise stands." },
+    { "finding_id": "review-architecture-w2#F-002", "verdict": "upheld", "reasoning": "The placeholder literal is compared at spawn-subagent-tool.ts:2298 (from f167f9fa4, before this branch) and at :2316 (new). The fix makes all sites consistent. Same fact as review-clean-code-w2#F-002, review-highload-w2#F-002 and review-style-w2#S-2." },
+    { "finding_id": "review-architecture-w2#F-003", "verdict": "upheld", "reasoning": "The new empty-reply exit (:2317-2327) repeats the timeout (:2232-2234) and rate-limit (:2285-2295) epilogue. Extracting one helper used by every exit makes the code more consistent, not less. Same fact as review-clean-code-w2#F-003." },
+    { "finding_id": "review-architecture-w3#F-001", "verdict": "upheld", "reasoning": "coverage.ts:464-468 explains the any-depth constant, but this branch added that comment. gitDiffStats (:488) still uses the top-level set. No prior signal of intent." },
+    { "finding_id": "review-architecture-w3#F-002", "verdict": "upheld", "reasoning": "coverageFromResearch (managed.ts:1201-1217) hand-casts dispatch.runs, and readiness.ts reads the same shape on its own. No signal of intent." },
+    { "finding_id": "review-architecture-w3#F-003", "verdict": "upheld", "reasoning": "The ledgerBlockers doc comment (ledger.ts:743-748) that admits the divergence came from 372c6af65 on this branch, so it is not prior intent. The flow intent is one gate." },
+    { "finding_id": "review-clean-code-w1#F-003", "verdict": "upheld", "reasoning": "Double splitUsage call at review-ledger.ts:113-114. Duplicate of review-architecture-w1#F-003." },
+    { "finding_id": "review-clean-code-w1#F-004", "verdict": "upheld", "reasoning": "The diff adds a ninth positional parameter to an eight-parameter signature (review-ledger.ts:179). The existing shape gives no stated reason. The minor holds as a maintenance cost." },
+    { "finding_id": "review-clean-code-w2#F-001", "verdict": "upheld", "reasoning": "SKILL.detail.md:654 still says 'eleven items' while the list and readiness.ts now have twelve. Duplicate group with review-logic-w2#F-001, review-regression-w2#F-001 and review-style-w2#S-1." },
+    { "finding_id": "review-clean-code-w2#F-002", "verdict": "upheld", "reasoning": "Placeholder sentinel compared by string. Duplicate of review-architecture-w2#F-002." },
+    { "finding_id": "review-clean-code-w2#F-003", "verdict": "upheld", "reasoning": "Repeated failure epilogue. Duplicate of review-architecture-w2#F-003." },
+    { "finding_id": "review-clean-code-w2#F-004", "verdict": "upheld", "reasoning": "Two `Number.isFinite(x) ? (x as number)` casts at spawn-subagent-tool.ts:1918-1919, added by a55c3bf29. A typeof guard narrows without a cast. Duplicate of review-style-w2#S-4." },
+    { "finding_id": "review-clean-code-w3#CC-1", "verdict": "upheld", "reasoning": "ledger.ts:518 is indented 16 spaces inside an 8-space loop body. A plain edit leftover; nothing suggests it was deliberate." },
+    { "finding_id": "review-clean-code-w3#CC-2", "verdict": "upheld", "reasoning": "locate.ts:52 has the LocatorRecord comment stacked directly above the new UnlocatableKind block. Duplicate of review-style-w3#F-001." },
+    { "finding_id": "review-clean-code-w3#CC-3", "verdict": "upheld", "reasoning": "The lazy import of ./prior-round (coverage.ts:530) probably avoids a real cycle: prior-round imports publish, which imports readiness, which imports coverage. But no comment says so, and the suggested fix accepts 'comment why it must be lazy'. The function-size premise is not touched by intent." },
+    { "finding_id": "review-clean-code-w3#CC-4", "verdict": "upheld", "reasoning": "coverage.ts:526-527 repeat the same nominal-base expression. Duplicate of review-style-w3#F-004." },
+    { "finding_id": "review-clean-code-w3#CC-5", "verdict": "upheld", "reasoning": "The decisionWriters path-formatting expression is copied into a second message. No signal of intent." },
+    { "finding_id": "review-clean-code-w3#CC-6", "verdict": "upheld", "reasoning": "readiness.ts:267 and :270 use the same regex literal. Duplicate of review-style-w3#F-002." },
+    { "finding_id": "review-clean-code-w3#CC-7", "verdict": "upheld", "reasoning": "The mutation record file-name regex is repeated. Duplicate of review-style-w3#F-003." },
+    { "finding_id": "review-clean-code-w3#CC-8", "verdict": "upheld", "reasoning": "managed.ts:541 tests for the '## Token spend' heading literal, which dispatch-usage.ts:99 also writes. The guard depends on a string shared by convention only." },
+    { "finding_id": "review-clean-code-w3#CC-9", "verdict": "upheld", "reasoning": "runUsage (ledger.ts:639) returns a loose record or a string while sibling usage types exist. No signal of intent." },
+    { "finding_id": "review-clean-code-w3#CC-10", "verdict": "upheld", "reasoning": "UNREADABLE_INPUT (ledger.ts:19-24) has unnamed bounds, and the false-positive risk is real. It is the readability side of review-logic-w3#F-001 and review-logic-w4#F-001." },
+    { "finding_id": "review-clean-code-w3#CC-11", "verdict": "upheld", "reasoning": "cwd is removed both in sessionReviewRoots (completion-gate.ts:65) and in findReviewGateState (:115). Both are exported, so one filter is defensive, but the function size and density premise stands." },
+    { "finding_id": "review-highload-w1#F-001", "verdict": "upheld", "reasoning": "REVIEW_PACKAGE_PATH (completion-gate.ts:43) opens with an unanchored lazy class before the literal. It runs over every history string on each gate evaluation. Nothing shows intent; this is a new scan. Duplicate group with review-highload-w3#F-001, review-performance-w3#PERF-001 and review-security-code-w3#SEC-001." },
+    { "finding_id": "review-highload-w1#F-002", "verdict": "upheld", "reasoning": "sessionReviewRoots returns an uncapped set, and each root is scanned on every evaluation. Duplicate group with review-highload-w3#F-002 and review-performance-w3#PERF-002." },
+    { "finding_id": "review-highload-w2#F-001", "verdict": "upheld", "reasoning": "The PRD R9 guard (spawn-subagent-tool.ts:2336-2338) forbids auto-retry in the child tool. Stating a cap in the advisory message is consistent with it. The empty-reply path really writes no usage line, because it returns before saveChildResult at :2363. That overlaps review-logic-w2#F-003." },
+    { "finding_id": "review-highload-w2#F-002", "verdict": "upheld", "reasoning": "Placeholder sentinel. Duplicate of review-architecture-w2#F-002." },
+    { "finding_id": "review-highload-w3#F-001", "verdict": "upheld", "reasoning": "Quadratic lazy-prefix scan. Duplicate of review-highload-w1#F-001." },
+    { "finding_id": "review-highload-w3#F-002", "verdict": "upheld", "reasoning": "Unbounded session roots, rescanned on every evaluation. Duplicate of review-highload-w1#F-002." },
+    { "finding_id": "review-highload-w3#F-003", "verdict": "upheld", "reasoning": "Flow 460 A asks readiness to run the coverage gate, so the call itself is intended. The finding is about paying for it repeatedly, and its memoise fix keeps that intent. Duplicate of review-performance-w3#PERF-003." },
+    { "finding_id": "review-highload-w3#F-004", "verdict": "upheld", "reasoning": "No intent signal or practice source argues against guarding a parser of model-written text. Whether the stated superlinear cost reproduces is for the verifier. The pattern is anchored at line start, and a greedy [^\\n]* that backtracks to '}' looks linear per line, so the magnitude may not hold." },
+    { "finding_id": "review-logic-w2#F-001", "verdict": "upheld", "reasoning": "Stale 'eleven items'. Duplicate of review-clean-code-w2#F-001." },
+    { "finding_id": "review-logic-w2#F-002", "verdict": "upheld", "reasoning": "refuseUnresolvedLocators still refuses (managed.ts:1473-1478, called at :303), but the rewritten SKILL.md:294 rule names only the case that is kept. A doc gap with no signal of intent." },
+    { "finding_id": "review-logic-w2#F-003", "verdict": "upheld", "reasoning": "The empty-reply branch returns before any save (spawn-subagent-tool.ts:2316-2334 vs :2363). The timeout suffix is taken when the deadline fires (:2244). Flow 460 H asks that every dispatch's token use land in the package." },
+    { "finding_id": "review-logic-w3#F-001", "verdict": "upheld", "reasoning": "ledger.ts:23 pairs a bare MANDATORY_INPUT noun (schema, payload) with UNREADABLE, which includes 'missing' and 'is not', with no reading verb. Ordinary defect summaries match it. No signal of intent, and it works against flow 460's goal that a finished review closes. Duplicate of review-logic-w4#F-001." },
+    { "finding_id": "review-logic-w4#F-001", "verdict": "upheld", "reasoning": "Same over-broad pattern 2 at ledger.ts:20-23. Duplicate of review-logic-w3#F-001." },
+    {
+      "finding_id": "review-logic-w4#F-002",
+      "verdict": "owner-decision",
+      "reasoning": "This branch chose the age veto on the pointer (completion-gate.ts:108 'An open package older than since is never named'; :126). Flow 460 C asks that the gate name the review this session is running, after a stale pointer or package from another PR misdirected it. The suggested 'trust the pointer whatever its age' would let an earlier session's pointer to another PR win again, which is defect C. 'Name it when this session's history names its path or id' does not. Whether a new session continuing an older review counts as this session's run is a product choice. The current placeholder ('no review package exists') is false in that case either way. Same fact as review-regression-w3#REG-W3-002.",
+      "question": "A new shell session that continues a review opened in an earlier session is not recognised: the gate ignores the older pointer and says no package exists, then nudges toward `keryx review start`. Should the gate name an older review when this session works on it?",
+      "options": [
+        "uphold — name an older pointer/package when this session's history names its package path or review id",
+        "dismiss — a new session's gate ignores reviews opened before it, as flow 460 C chose"
+      ]
+    },
+    { "finding_id": "review-logic-w4#F-003", "verdict": "upheld", "reasoning": "The completion-gate.ts:46 docstring ('tool calls and results') shows scanning results was deliberate, but this branch added it. The findReviewGateState docstring (:105-106) says only 'own tool calls', so the code and its own doc disagree. Same fact as review-security-code-w1#SEC-001 and review-security-code-w3#SEC-002." },
+    { "finding_id": "review-logic-w4#F-004", "verdict": "upheld", "reasoning": "packageDiffStats documents a recorded target.base (coverage.ts:507-509), and the evidence names no CLI writer of it. No signal of intent." },
+    { "finding_id": "review-logic-w4#F-005", "verdict": "upheld", "reasoning": "Nothing in packageDiffStats (coverage.ts:528-538) checks for an empty range. review plan warns on the same condition, so the gate is the inconsistent site." },
+    { "finding_id": "review-logic-w4#F-006", "verdict": "upheld", "reasoning": "coverageFromResearch (managed.ts:1212) labels every complete run 'dispatched', and that includes routedOut runs synthesised at ledger.ts:488. coverage.md is held to tell the truth by readiness item 6." },
+    { "finding_id": "review-logic-w4#F-007", "verdict": "upheld", "reasoning": "managed.ts:274-284 passes the coverage-derived run list as the attribution fallback for normalizeFindings. No signal that a single finished reviewer should absorb unattributed findings." },
+    { "finding_id": "review-logic-w4#F-008", "verdict": "upheld", "reasoning": "The repair at readiness.ts:272 repeats the step that fails when --reviewers is given. It is related to review-regression-w3#REG-W3-003 (legacy coverage.md)." },
+    { "finding_id": "review-performance-w3#PERF-001", "verdict": "upheld", "reasoning": "Quadratic lazy-prefix scan. Duplicate of review-highload-w1#F-001." },
+    { "finding_id": "review-performance-w3#PERF-002", "verdict": "upheld", "reasoning": "The whole history is rescanned on each evaluation. Duplicate group with review-highload-w1#F-002." },
+    { "finding_id": "review-performance-w3#PERF-003", "verdict": "upheld", "reasoning": "Intent (flow 460 A) requires readiness to run the gate, not to run it twice. The fix of passing complete's computed errors keeps the intent. Duplicate of review-highload-w3#F-003." },
+    { "finding_id": "review-performance-w3#PERF-004", "verdict": "upheld", "reasoning": "Sequential gitTopLevel and resolveBase spawns (coverage.ts:524, 530-531). A small cost, no signal of intent." },
+    { "finding_id": "review-regression-w2#F-001", "verdict": "upheld", "reasoning": "Stale 'eleven items'. Duplicate of review-clean-code-w2#F-001." },
+    { "finding_id": "review-regression-w2#F-002", "verdict": "upheld", "reasoning": "operator-confirm-review.ts:306 still says items 1-11 while item 12 is documented as waivable. A stale tool contract." },
+    { "finding_id": "review-regression-w2#F-003", "verdict": "upheld", "reasoning": "The empty-reply branch (spawn-subagent-tool.ts:2316) does not depend on mode. Flow 460 E is about review children, and the 're-dispatch it' advice is unsafe for a write-mode child that already acted. No signal that write mode was considered." },
+    { "finding_id": "review-regression-w3#REG-W3-001", "verdict": "upheld", "reasoning": "retry-eval.ts:79-81 keeps the old 'no list means the whole assignment' rule and its comment still claims it is the ledger's rule. ledger.ts:521-523 now claims none. The fix restores consistency between the two readers." },
+    {
+      "finding_id": "review-regression-w3#REG-W3-002",
+      "verdict": "owner-decision",
+      "reasoning": "Same fact as review-logic-w4#F-002. The age veto on the pointer (completion-gate.ts:126) is this branch's own choice, made for flow 460 C. The primary suggested fix (trust the pointer whatever its startedAt) would reopen defect C when cwd holds an earlier session's pointer to another PR. The alternative (keep an older package the session's history names) does not. Whether a resumed review belongs to the new session is a product choice, and the false 'no package exists' message stands in either reading.",
+      "question": "When a new shell session continues a review opened earlier, the gate ignores its pointer and package because they predate the session, and nudges toward opening a second package. Should the gate recognise that older review?",
+      "options": [
+        "uphold — recognise an older review when this session's history names its package path or review id (not by trusting any older pointer)",
+        "dismiss — reviews opened before the session are out of the gate's scope, as flow 460 C chose"
+      ]
+    },
+    { "finding_id": "review-regression-w3#REG-W3-003", "verdict": "upheld", "reasoning": "coverageMdCheck (readiness.ts:269-272) has no legacy or closed-package exemption. The only mention of the stand-in is the comment that motivates the check. No signal that historical packages were meant to fail." },
+    { "finding_id": "review-security-code-w1#SEC-001", "verdict": "upheld", "reasoning": "A security finding: held or upheld only. Roots are taken from any history string with no containment check (completion-gate.ts:55-65), and closedAt is folded across every root (:121, :136). No intent signal or practice source against it." },
+    { "finding_id": "review-security-code-w1#SEC-002", "verdict": "upheld", "reasoning": "A security finding. The usage line is read from a body the reviewer can write on Claude Code and Codex hosts. No signal against it." },
+    { "finding_id": "review-security-code-w3#SEC-001", "verdict": "upheld", "reasoning": "A security finding. Quadratic lazy-prefix scan over attacker-influenced history. Duplicate of review-highload-w1#F-001." },
+    { "finding_id": "review-security-code-w3#SEC-002", "verdict": "upheld", "reasoning": "A security finding. Roots come from tool results, and closedAt is folded across all roots. Overlaps review-security-code-w1#SEC-001 and review-logic-w4#F-003." },
+    { "finding_id": "review-style-w1#F-003", "verdict": "upheld", "reasoning": "review-ledger.ts:50-53: the inserted Token spend paragraph now runs into the unrelated 'scopeReviewed and rawReconciled' sentence." },
+    { "finding_id": "review-style-w1#F-004", "verdict": "upheld", "reasoning": "Double splitUsage call. Duplicate of review-architecture-w1#F-003." },
+    { "finding_id": "review-style-w2#S-1", "verdict": "upheld", "reasoning": "Stale 'eleven items'. Duplicate of review-clean-code-w2#F-001." },
+    { "finding_id": "review-style-w2#S-2", "verdict": "upheld", "reasoning": "Placeholder sentinel. Duplicate of review-architecture-w2#F-002." },
+    { "finding_id": "review-style-w2#S-4", "verdict": "upheld", "reasoning": "isFinite-and-cast duplication. Duplicate of review-clean-code-w2#F-004." },
+    { "finding_id": "review-style-w3#F-001", "verdict": "upheld", "reasoning": "Misplaced doc comment at locate.ts:52. Duplicate of review-clean-code-w3#CC-2." },
+    { "finding_id": "review-style-w3#F-002", "verdict": "upheld", "reasoning": "Duplicated coverage.md regex. Duplicate of review-clean-code-w3#CC-6." },
+    { "finding_id": "review-style-w3#F-003", "verdict": "upheld", "reasoning": "Duplicated mutation file-name regex. Duplicate of review-clean-code-w3#CC-7." },
+    { "finding_id": "review-style-w3#F-004", "verdict": "upheld", "reasoning": "Repeated nominal-base expression. Duplicate of review-clean-code-w3#CC-4." },
+    { "finding_id": "review-style-w3#F-005", "verdict": "upheld", "reasoning": "The validator is named as a noun (`count`). A naming minor with no signal against it." },
+    { "finding_id": "review-style-w3#F-006", "verdict": "upheld", "reasoning": "A negated compound predicate repeated two lines later in managed.ts normalizeCoverage. No signal of intent." },
+    { "finding_id": "review-testing-practices-w1#F-003", "verdict": "upheld", "reasoning": "The accumulation (+=) at spawn-subagent-tool.ts:1921-1922 and the timeout suffix at :2244 have no fixture. A test gap stays as reported." }
+  ]
+}
+```
+
+## Summary
+
+70 findings judged. None was below `minor`.
+
+- upheld: 68
+- downgraded: 0
+- challenged: 0
+- owner-decision: 2
+
+### Held findings
+
+**review-logic-w4#F-002** (minor) and **review-regression-w3#REG-W3-002** (major) state the same fact, and both are held as owner-decision.
+
+- **The question:** a new shell session that continues a review opened in an earlier session is not recognised. The gate ignores the older active-review pointer and package, says "no review package exists" and nudges toward `keryx review start`. Should the gate recognise the older review?
+- **The options:**
+  - uphold: recognise it when this session's history names its package path or review id (not by trusting any older pointer).
+  - dismiss: reviews opened before the session are out of the gate's scope, as flow 460 C chose.
+- **The signals behind it:**
+  - This branch chose the age veto itself: completion-gate.ts:108 says "An open package older than `since` is never named", and the pointer check is at :126.
+  - Flow 460 C (description.md) was caused by a nudge pointing at another PR's package.
+  - REG-W3-002's main suggested fix (trust the pointer whatever its age) would let an earlier session's pointer to another PR win again, which is defect C.
+  - The placeholder "no review package exists" is false in this case under either answer.
+
+### Duplicate groups
+
+- splitUsage called twice: review-architecture-w1#F-003, review-clean-code-w1#F-003, review-style-w1#F-004
+- "eleven items": review-clean-code-w2#F-001, review-logic-w2#F-001, review-regression-w2#F-001, review-style-w2#S-1
+- placeholder sentinel: review-architecture-w2#F-002, review-clean-code-w2#F-002, review-highload-w2#F-002, review-style-w2#S-2
+- repeated failure epilogue: review-architecture-w2#F-003, review-clean-code-w2#F-003
+- isFinite cast: review-clean-code-w2#F-004, review-style-w2#S-4
+- quadratic REVIEW_PACKAGE_PATH: review-highload-w1#F-001, review-highload-w3#F-001, review-performance-w3#PERF-001, review-security-code-w3#SEC-001
+- unbounded or rescanned roots: review-highload-w1#F-002, review-highload-w3#F-002, review-performance-w3#PERF-002
+- readiness runs the git-backed coverage gate: review-highload-w3#F-003, review-performance-w3#PERF-003 (PERF-004 related)
+- over-broad UNREADABLE_INPUT: review-logic-w3#F-001, review-logic-w4#F-001 (review-clean-code-w3#CC-10 related)
+- pointer age veto: review-logic-w4#F-002, review-regression-w3#REG-W3-002
+- roots taken from tool results: review-logic-w4#F-003, review-security-code-w1#SEC-001, review-security-code-w3#SEC-002
+- empty-reply or timeout usage not recorded: review-highload-w2#F-001, review-logic-w2#F-003
+- misplaced locate.ts comment: review-clean-code-w3#CC-2, review-style-w3#F-001
+- duplicated coverage.md regex: review-clean-code-w3#CC-6, review-style-w3#F-002
+- mutation file-name regex: review-clean-code-w3#CC-7, review-style-w3#F-003
+- nominal-base expression: review-clean-code-w3#CC-4, review-style-w3#F-004
+- coverage.md omission check: review-regression-w3#REG-W3-003, review-logic-w4#F-008 (related)
+
+### Notes
+
+- **review-highload-w3#F-004** is upheld on premise. Its stated cost is doubtful: USAGE_LINE is anchored at line start and looks linear per line. Whether it reproduces is for the verifier.
+- **review-clean-code-w3#CC-3**: the lazy import probably avoids a real cycle (coverage → prior-round → publish → readiness → coverage). It is upheld because no comment states that, and the suggested fix accepts adding one.
+- **review-architecture-w1#F-003** carries no `reviewer` field. Its id prefix names review-architecture.
+- **History read:** `git log origin/main..HEAD`, plus `git blame` on spawn-subagent-tool.ts:1915-1923, 2280 and 2298, and on ledger.ts:738-753.

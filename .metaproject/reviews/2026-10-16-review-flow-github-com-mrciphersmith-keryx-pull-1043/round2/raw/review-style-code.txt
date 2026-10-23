@@ -1,0 +1,141 @@
+```json keryx:findings
+{
+  "reviewer": "review-style",
+  "findings": [
+    {
+      "id": "STYLE-R2-001",
+      "severity": "minor",
+      "file": "src/review/managed.ts",
+      "line": 2472,
+      "problem": "The new ScopeExtras type and its one-line doc were inserted between renderScope's long docblock ('scope.md: what this review looked at...') and the function, so that docblock now documents the ScopeExtras type and renderScope has none.",
+      "impact": "Readers and doc tooling attach the scope.md contract (two ways the pre-filter record arrives) to the wrong symbol.",
+      "evidence": "managed.ts:2455-2472 docblock ends, then '/** The optional blocks of scope.md, by name. */ type ScopeExtras', then 'function renderScope(' at :2481",
+      "suggested_fix": "Move ScopeExtras above the renderScope docblock."
+    },
+    {
+      "id": "STYLE-R2-002",
+      "severity": "minor",
+      "file": "src/review/verdict.ts",
+      "line": 208,
+      "problem": "applyPremiseClaims gained a boolean `ingested` flag and, when true, applies nothing and only counts records carrying a premise; the same count is returned under the field name premiseClaims, which the doc now says counts findings, not claims.",
+      "impact": "A function named apply that skips applying behind a flag, and a field whose name contradicts its doc (premiseClaims vs 'findings that carry a premise judgement').",
+      "evidence": "verdict.ts:228 `if (ingested) return entries.filter(...).length;`; verdict.ts:68 premiseClaims documented as findings carrying a judgement",
+      "suggested_fix": "Split into countPremisedFindings (ingested) and applyPremiseClaims (raw), and rename the field premisedFindings (or keep premiseClaims only for a real claim count)."
+    },
+    {
+      "id": "STYLE-R2-003",
+      "severity": "info",
+      "file": "src/review/premise.ts",
+      "line": 497,
+      "problem": "awaitingOperator falls back to UNNAMED_CLAIM for a finding with no id; the constant is documented as 'how a claim without a usable finding_id is named', so one name serves two different things.",
+      "impact": "Naming noise only.",
+      "evidence": "premise.ts: `keysOf(record)[0] ?? UNNAMED_CLAIM` in awaitingOperator",
+      "suggested_fix": "Keep a literal or a separate UNNAMED_FINDING constant."
+    },
+    {
+      "id": "STYLE-R2-004",
+      "severity": "info",
+      "file": "src/commands/review-operator.ts",
+      "line": 61,
+      "problem": "The decide-premise help text was extended mid-sentence, leaving a ~125 character line ('(so the next round ... original') where the rest of the block wraps near 110.",
+      "impact": "Ragged help text.",
+      "evidence": "review-operator.ts:59-62",
+      "suggested_fix": "Rewrap the paragraph."
+    },
+    {
+      "id": "STYLE-R2-005",
+      "severity": "info",
+      "file": "src/review/premise-question.ts",
+      "line": 82,
+      "problem": "carryPremiseDecisions takes both previousDir (absolute) and carriedFrom (the same path as stored), so the caller resolves one and passes the other; the call at commands/review.ts:1103 is ~170 characters on one line.",
+      "impact": "Four positional arguments, two derived from one value.",
+      "evidence": "review.ts:1103 carryPremiseDecisions(result.path, path.resolve(cwd, previousPackage), ids, previousPackage)",
+      "suggested_fix": "Take previousPackage and cwd (or an options object) and resolve inside."
+    }
+  ],
+  "prior_dispositions": [
+    {
+      "id": "review-style-w4#STY-002",
+      "disposition": "closed",
+      "evidence": "src/flow/review-gate.ts:527 withPremiseHolds types decisions as PremiseQuestionDecision[]; no Awaited<ReturnType<...>>"
+    },
+    {
+      "id": "review-style-w5#STYLE-003",
+      "disposition": "closed",
+      "evidence": "src/flow/review-gate.test.ts:18-20 the ../ imports now precede ./service at :21"
+    },
+    {
+      "id": "review-style-w8#F-001",
+      "disposition": "closed",
+      "evidence": "src/review/dedupe.ts:299 severityRuleOf + :375 single guarded filter replace the nested ternary chains; labels via SEVERITY_RULE_LABEL/OUTRANKED_WORDS tables"
+    },
+    {
+      "id": "review-style-w8#F-002",
+      "disposition": "closed",
+      "evidence": "src/review/operator-decisions.ts appendDecision shared by both recorders, validGateDecision/validDecision rename, header rewritten for both families"
+    },
+    {
+      "id": "review-style-w8#F-003",
+      "disposition": "closed",
+      "evidence": "src/review/premise.ts premiseHoldState doc now states the decisions store alone lifts a hold; premise.operator is audit trail only"
+    },
+    {
+      "id": "review-style-w8#F-004",
+      "disposition": "closed",
+      "evidence": "src/review/premise.ts:131 MALFORMED_CLAIM symbol + UNNAMED_CLAIM const; rejected as malformed-claim naming premises[i]"
+    },
+    {
+      "id": "review-style-w8#F-005",
+      "disposition": "partial",
+      "evidence": "src/review/managed.ts:1912 parseJsonBody shares the try/catch, but the fence regex/more-than-one-fence guard/embeddedBlockBody call are still written twice (:1854-1880 vs :1893-1910)"
+    },
+    {
+      "id": "review-style-w8#F-006",
+      "disposition": "closed",
+      "evidence": "src/review/verdict.ts:185 asSubjects used at :201 and :229"
+    },
+    {
+      "id": "review-style-w8#F-008",
+      "disposition": "closed",
+      "evidence": "src/review/managed.ts:2481 renderScope takes one ScopeExtras object; :365-367 split by source !== external, not by slice position"
+    },
+    {
+      "id": "review-style-w8#F-010",
+      "disposition": "closed",
+      "evidence": "src/review/premise.ts MAX_LINE_CHARS / ELLIPSIS constants in oneLine"
+    },
+    {
+      "id": "review-style-w9#ST-001",
+      "disposition": "closed",
+      "evidence": "src/review/verdict.test.ts:33 helper parameter renamed record, no shadowing of finding()"
+    },
+    {
+      "id": "review-style-w9#ST-002",
+      "disposition": "closed",
+      "evidence": "src/review/premise-decision.test.ts:84 one disposition() helper"
+    },
+    {
+      "id": "review-style-w9#ST-003",
+      "disposition": "closed",
+      "evidence": "src/review/premise.test.ts:24-25 GID / GID_4 constants used throughout"
+    },
+    {
+      "id": "review-style-w4#STY-001",
+      "disposition": "closed",
+      "evidence": "src/review/operator-decisions.ts PREMISE_DECISION_ACTOR set by recordPremiseDecision; both writers drop the actor field"
+    },
+    {
+      "id": "review-style-w5#STYLE-001",
+      "disposition": "closed",
+      "evidence": "src/gdskills/model-tier.ts:1388 rule 3 names the premise judge floor"
+    },
+    {
+      "id": "review-style-w5#STYLE-002",
+      "disposition": "closed",
+      "evidence": "src/gdskills/review-skills-iron-laws.test.ts header comments say 'shared laws'; no stale 'three' left except the unrelated :295"
+    }
+  ]
+}
+```
+
+Summary: of 16 prior review-style findings in scope, 15 are closed and 1 partial (F-005: JSON parse shared, fence handling still duplicated). The delta introduced 0 blocker/major, 2 minor (orphaned renderScope docblock; verdict ingested-flag/premiseClaims naming) and 3 info.

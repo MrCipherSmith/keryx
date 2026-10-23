@@ -1,0 +1,71 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-performance",
+  "summary": "Slice 08 (src/review premise stage): no blocker, major or minor performance finding. Every new loop runs once per ingest/verdict/readiness call over a findings set bounded by the findings cap; three info observations.",
+  "findings": [
+    {
+      "id": "perf-1",
+      "severity": "info",
+      "file": "src/review/premise.ts",
+      "line": 1224,
+      "quote": "const matches = findings.filter((finding) => finding.global_id === claim.finding_id || finding.id === claim.finding_id);",
+      "problem": "mergePremises resolves each claim by a linear scan of all findings (claims x findings). The same shape recurs in premiseHoldState/applyPremiseDecisions (copy and filter the decisions array per finding) in premise.ts, readiness.ts and verdict.ts.",
+      "impact": "Quadratic in claims x findings, but it runs once per ingest/verdict/readiness call on a round that the findings cap bounds to hundreds at most; microseconds. No hot path reaches it.",
+      "suggested_fix": "None needed. If a round ever carries thousands of findings, index findings by global_id/id in a Map once before the claim loop.",
+      "evidence": "Called from managed.ts createManagedReviewPackage (once per ingest) and verdict.ts applyPremiseClaims (once per computeVerdict). Not in a render or request loop.",
+      "confidence": "high",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "perf-2",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": 627,
+      "quote": "const EMBEDDED_PREMISES_FENCE = /^ {0,3}(`{3,}|~{3,})[^\\n]*\\bkeryx:premises\\b[^\\n]*$/gm;",
+      "problem": "The fence regex backtracks quadratically on one very long line made of backticks or tildes that does not contain keryx:premises: the greedy fence group gives back one character at a time and [^\\n]* rescans the line each time.",
+      "impact": "Needs a single line of tens of thousands of fence characters in a report or judge reply handed to --premises. No such input exists in normal use; the cost lands on the operator's own CLI call. EMBEDDED_FINDINGS_FENCE at managed.ts:1847 has the identical shape, so this follows the sibling rather than adding a new class.",
+      "suggested_fix": "None required. If both are ever hardened, match the fence line first and test the info string with includes('keryx:premises').",
+      "evidence": "Sibling at managed.ts:1847 (keryx ctx rg). Input is a local file path, not a network request.",
+      "confidence": "medium",
+      "reviewer": "review-performance"
+    },
+    {
+      "id": "perf-3",
+      "severity": "info",
+      "file": "src/review/operator-decisions.ts",
+      "line": 868,
+      "quote": "export async function recordPremiseDecision(packageDir: string, decision: PremiseQuestionDecision)",
+      "problem": "recordPremiseDecision and recordOperatorDecision rewrite the whole operator-decisions.json on each answer, and decisions only ever append. The file grows by one entry per answer.",
+      "impact": "One entry per operator answer in a single package; a human answers a handful. Read cost is a single JSON.parse of a small file per verdict/readiness/card call.",
+      "suggested_fix": "None needed.",
+      "evidence": "Writers are the CLI command and the card, each invoked by a person per held finding.",
+      "confidence": "high",
+      "reviewer": "review-performance"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 3 }
+}
+```
+
+## Performance Review
+
+### Scope
+- Slice: slice-08 (src/review: coverage, dedupe, managed, operator-decisions, premise-question, premise, readiness, types, verdict, verification)
+- Changed files reviewed: 10
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 3
+
+### Clean Areas
+- N+1 database queries: no DB access in the slice.
+- React/MobX re-renders, bundle imports, indexes: not applicable (CLI/review pipeline code).
+- Synchronous blocking: new I/O is async (readJsonFileOr, writeFileAtomic); one mkdir and one write per ingest.
+- Unbounded growth: premise claims and rejections are bounded by the claim file; the decisions file grows per human answer only.
+- Redundant reads: verdict and readiness each read operator-decisions.json once per call; findHeldFinding reads findings.json, premises.json and the decisions file once per card or command.
+- The dedupe change adds an O(1) predicate to `mergeable` and no new pass over the findings.

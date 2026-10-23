@@ -1,0 +1,546 @@
+diff --git a/src/commands/review-premises-cli.test.ts b/src/commands/review-premises-cli.test.ts
+index bbb4c35c3..236e2370c 100644
+--- a/src/commands/review-premises-cli.test.ts
++++ b/src/commands/review-premises-cli.test.ts
+@@ -89,6 +89,37 @@ test("a re-ingest without --premises is not refused over a stored held claim the
+   expect((await readFindings(dir))[0]?.premise?.verdict).toBe("challenged");
+ });
+ 
++test("a re-ingest without --premises carries the hold when a second claim on the same finding was rejected (review RG4-001)", async () => {
++  await writeFile(path.join(ROOT, "report.md"), REPORT);
++  const { question: _question, ...noQuestion } = PREMISES.premises[0] as (typeof PREMISES.premises)[number];
++  await writeFile(path.join(ROOT, "premises.json"), JSON.stringify({ ...PREMISES, premises: [...PREMISES.premises, noQuestion] }));
++  const dir = await ingest("2026-10-16-sibling", ["--premises", "premises.json"]);
++  await ingest("2026-10-16-sibling");
++  expect(process.exitCode).toBe(0);
++  expect((await readFindings(dir))[0]?.premise).toMatchObject({ verdict: "challenged", question: "Mirror the timeline?" });
++});
++
++test("a re-ingest without --premises never applies an edited premises.json: the holds come from findings.json (review SEC5-001)", async () => {
++  await writeFile(path.join(ROOT, "report.md"), REPORT);
++  await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));
++  const dir = await ingest("2026-10-16-planted", ["--premises", "premises.json"]);
++  const planted = { judge: "review-premise", premises: [{ finding_id: "LY-003", verdict: "owner-decision", options: ["a", "b"], question: "planted?", practice_sources: PREMISES.premises[0]?.practice_sources }] };
++  await writeFile(path.join(dir, PREMISES_FILE), JSON.stringify(planted));
++  await ingest("2026-10-16-planted");
++  expect(process.exitCode).toBe(0);
++  expect((await readFindings(dir))[0]?.premise).toMatchObject({ verdict: "challenged", question: "Mirror the timeline?" });
++});
++
++test("a re-ingest without --premises carries a hold with no premises.json left (review LG5-003)", async () => {
++  await writeFile(path.join(ROOT, "report.md"), REPORT);
++  await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));
++  const dir = await ingest("2026-10-16-nofile", ["--premises", "premises.json"]);
++  await rm(path.join(dir, PREMISES_FILE));
++  await ingest("2026-10-16-nofile");
++  expect(process.exitCode).toBe(0);
++  expect((await readFindings(dir))[0]?.premise?.verdict).toBe("challenged");
++});
++
+ test("a re-ingest without --premises whose held finding changed is refused, asks for --premises, and leaves the package as it was (review RG2-004)", async () => {
+   await writeFile(path.join(ROOT, "report.md"), REPORT);
+   await writeFile(path.join(ROOT, "premises.json"), JSON.stringify(PREMISES));
+diff --git a/src/commands/review.ts b/src/commands/review.ts
+index a9b59a098..7a7eaf05c 100644
+--- a/src/commands/review.ts
++++ b/src/commands/review.ts
+@@ -33,7 +33,7 @@ import {
+   type ManagedReviewIngestInput,
+ } from "../review/managed";
+ import { parityLines, readReviewParity, renderParityReport } from "../review/parity";
+-import { reviewsRoot } from "../review/package-location";
++import { packageDirById } from "../review/package-location";
+ import type { PrLookup, PrSnapshot } from "../review/complete-head-gate";
+ import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
+ import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
+@@ -1080,7 +1080,7 @@ async function runCreate(mode: ManagedReviewMode, args: string[], createSeams: R
+   console.log(`status: ${result.manifest.status}`);
+   console.log(`path: ${result.path}`);
+   console.log(`flow: ${result.manifest.flow?.id ?? "none"}`);
+-  if (result.premisesCarriedForward === true) console.log("premise claims: carried forward from this package's research-evidence/premises.json (no --premises given; the held findings still match them)");
++  if (result.premisesCarriedForward === true) console.log("premise claims: carried forward, the holds from this package's previous findings.json (no --premises given; the held findings are unchanged)");
+   if (mode !== "ingest") {
+     const profile = buildRunProfile({ unattended: args.includes("--unattended"), host: hostArg });
+     await writeRunProfile(result.path, profile, { stampManifest: true });
+@@ -3612,8 +3612,9 @@ async function readVerifications(source: string | undefined, reviewId: string |
+     );
+   }
+   // Flow 457 (T7): a claim citing a `keryx review verify-run` record of its own finding, in the package this ingest
+-  // writes (`--review-id`), ran in the parent: execution. Without a review id no record can be bound to a package.
+-  const packageDir = reviewId === undefined || !/^[\w.-]+$/.test(reviewId) ? undefined : path.join(reviewsRoot(resolveProjectRoot(process.cwd())), reviewId);
++  // writes (`--review-id`, under the reviews root or a flow's), ran in the parent: execution. Without a review id no
++  // record can be bound to a package.
++  const packageDir = reviewId === undefined || !/^[\w.-]+$/.test(reviewId) ? undefined : packageDirById(resolveProjectRoot(process.cwd()), reviewId);
+   return promoteParentExecutions(verificationClaims(parsed as VerificationSource), packageDir);
+ }
+ 
+@@ -5305,8 +5306,8 @@ verification (attach/start/ingest):
+   object, or a reply / report holding it in one \`\`\`json keryx:premises block. The merge is
+   DELETE-ONLY too: it holds a challenged finding for the operator (never dismisses it) and can
+   only lower a severity. The operator answers with \`keryx review decide-premise\`. A re-ingest
+-  without --premises over a package the judge held re-applies its stored claims while they still
+-  hold the same findings, and is refused otherwise.
++  without --premises over a package the judge held carries each hold from the previous
++  findings.json to the same unchanged finding, and is refused otherwise.
+   --scope takes the WHOLE \`keryx review scope --json\` document — counts and the
+   per-drop reasons — so the package records what the pre-filter dropped and why.
+   Omitted, a \`## Pre-filter scope\` block already in the package's scope.md is
+diff --git a/src/review/harness-robustness.test.ts b/src/review/harness-robustness.test.ts
+index 9e5d39376..214aee7c9 100644
+--- a/src/review/harness-robustness.test.ts
++++ b/src/review/harness-robustness.test.ts
+@@ -19,6 +19,7 @@ import { coverageErrors, requiredReviewers } from "./coverage";
+ import { HOST_WAVE_BYTES, defaultWaveBytes, detectReviewHost } from "./host-profile";
+ import { confirmedDecision, recordOperatorDecision } from "./operator-decisions";
+ import { recordProcessCall, startOrchestratorLog } from "./orchestrator-log";
++import { packageDirById } from "./package-location";
+ import { planConfirmed, recordPlanConfirmation, type PlanNumbers } from "./plan-confirmation";
+ import { computeReadiness, renderReadiness } from "./readiness";
+ import { publishReview } from "./publish";
+@@ -503,6 +504,16 @@ describe("row 4: verification commands run in the parent", () => {
+     expect(promoteParentExecutions(claims, undefined)[0]!.method).toBe("reasoning");
+   });
+ 
++  test("a flow-bound package is found by its review id, so its verify-run records are execution (review LG5-002)", async () => {
++    const flowPkg = path.join(root, ".metaproject", "flows", "001-x", "reviews", "flow-r1");
++    mkdirSync(flowPkg, { recursive: true });
++    await verifyRun({ packageDir: flowPkg, finding: "f-1", argv: ["true"], cwd: root, runner: async () => ({ exitCode: 0, stdout: "", stderr: "", timedOut: false }) });
++    expect(packageDirById(root, "flow-r1")).toBe(flowPkg);
++    const claims = [{ finding: "f-1", verdict: "confirmed" as const, method: "reasoning" as const, evidence: "see research-evidence/verify-f-1-1.txt", verifier: "review-verifier" }];
++    expect(promoteParentExecutions(claims, packageDirById(root, "flow-r1"))[0]!.method).toBe("execution");
++    expect(packageDirById(root, "not-yet")).toBe(path.join(root, ".metaproject", "reviews", "not-yet"));
++  });
++
+   test("a timed-out command is killed with its whole process group (security review M7)", async () => {
+     const marker = path.join(root, "grandchild-survived");
+     const started = Date.now();
+diff --git a/src/review/managed.ts b/src/review/managed.ts
+index fdf5817a5..02161f665 100644
+--- a/src/review/managed.ts
++++ b/src/review/managed.ts
+@@ -52,7 +52,7 @@ import {
+ import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
+ import { mergeDuplicates, renderDuplicatesMarkdown, type DuplicateMerge } from "./dedupe";
+ import { flowReviewsRoot, reviewsRoot } from "./package-location";
+-import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, inheritedPremiseClaims, mergePremises, parsePremiseClaims, renderPremiseMarkdown } from "./premise";
++import { PREMISES_FILE, PREMISES_SUPERSEDED_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaims, renderPremiseMarkdown } from "./premise";
+ import { readJsonFileOr } from "../lib/json";
+ import { withOperatorDecisionsLock } from "./operator-decisions";
+ import { repairMechanicalOmissions, type FindingRepair } from "./repair";
+@@ -364,14 +364,11 @@ export async function createManagedReviewPackage(
+   // One merge over both sets (a claim may name either, and two claims on one finding must meet to cancel), then split
+   // by what each finding IS rather than by position.
+   const premiseSet = [...deduped.findings, ...scoped.external];
+-  // Review RG2-004: an ingest without --premises over a package the judge held carries the stored claims forward while
+-  // they still hold the same findings, and is refused otherwise; it never silently drops a hold.
+-  const inherited =
+-    premiseClaims === undefined
+-      ? inheritedPremiseClaims(premiseSet, await readJsonFileOr<unknown>(path.join(packageDir, PREMISES_FILE), undefined), await readJsonFileOr<unknown>(path.join(packageDir, "findings.json"), undefined))
+-      : undefined;
+-  if (inherited?.ok === false) throw new Error(inherited.refusal);
+-  const premised = mergePremises(premiseSet, premiseClaims ?? inherited?.parsed);
++  // Review RG2-004: an ingest without --premises over a package the judge held carries each hold from the previous
++  // findings.json to the same, unchanged finding, and is refused otherwise; it never silently drops a hold.
++  const carriedHolds = premiseClaims === undefined ? carriedPremiseHolds(premiseSet, await readJsonFileOr<unknown>(path.join(packageDir, "findings.json"), undefined)) : undefined;
++  if (carriedHolds?.ok === false) throw new Error(carriedHolds.refusal);
++  const premised = mergePremises(carriedHolds?.ok === true ? carriedHolds.findings : premiseSet, premiseClaims);
+   const premisedInternal = premised.findings.filter((finding) => finding.source !== "external");
+   const premisedExternal = premised.findings.filter((finding) => finding.source === "external");
+ 
+@@ -512,10 +509,10 @@ export async function createManagedReviewPackage(
+     // ingested round re-applies it (the interim verdict over raw results); findings.json is the record after ingest.
+     await mkdir(path.join(packageDir, "research-evidence"), { recursive: true });
+     await writeFileAtomic(path.join(packageDir, PREMISES_FILE), `${JSON.stringify(input.premises, null, 2)}\n`);
+-  } else if (inherited === undefined && (await pathExists(path.join(packageDir, PREMISES_FILE)))) {
+-    // An ingest without --premises keeps the judge's record, moved aside (review RG2-004): the verdict never re-applies
+-    // claims to an ingested round, so the file at its own name would only mislead a reader into thinking this ingest
+-    // carried them.
++  } else if (carriedHolds === undefined && (await pathExists(path.join(packageDir, PREMISES_FILE)))) {
++    // An ingest without --premises that carried no hold keeps the judge's record, moved aside (review RG2-004): the
++    // verdict never re-applies claims to an ingested round, so the file at its own name would only mislead a reader
++    // into thinking this ingest applied them. When holds were carried it stays, as the record of the claims they came from.
+     await rename(path.join(packageDir, PREMISES_FILE), path.join(packageDir, PREMISES_SUPERSEDED_FILE));
+   }
+   if (input.scope?.files !== undefined) {
+@@ -569,7 +566,7 @@ export async function createManagedReviewPackage(
+     verificationCaps: verification.caps,
+     premise: premised.counts,
+     premiseRejections: premised.rejections,
+-    ...(inherited?.ok === true ? { premisesCarriedForward: true as const } : {}),
++    ...(carriedHolds?.ok === true ? { premisesCarriedForward: true as const } : {}),
+     caps,
+     filterStats,
+     reviewNotes,
+diff --git a/src/review/package-location.ts b/src/review/package-location.ts
+index 530244b06..3d12bca97 100644
+--- a/src/review/package-location.ts
++++ b/src/review/package-location.ts
+@@ -1,11 +1,13 @@
+ // Where a review package lives (review R3-ARCH-001, R4-ARCH-001): directly under `.metaproject/reviews/`, or
+ // under `.metaproject/flows/<flow>/reviews/`. The ingest's allocation, the prior-round detector (globs and disk
+ // scan), the "is this a real package" check, the flow review gate, the loop detector, flow spend, the arbiter log,
+-// the autonomous run and `review` commands that open a package by id take the layout from here. Not yet routed: the
+-// TUI's flow readers (tui/jev-triage-command.ts, tui/conform-source.ts), the bot's package scan (bot/packages.ts)
+-// and flow-move; and the pr-comments and bot caches, which sit under the reviews root but are not packages.
++// the autonomous run, and ingest's lookup of verify-run records by `--review-id` ({@link packageDirById}, review
++// LG5-002) take the layout from here; `resolveReviewPackagePath` (managed.ts) walks both roots with these helpers.
++// Not yet routed: the TUI's flow readers (tui/jev-triage-command.ts, tui/conform-source.ts), the bot's package scan
++// (bot/packages.ts) and flow-move; and the pr-comments and bot caches, which sit under the reviews root but are
++// not packages.
+ 
+-import { existsSync, realpathSync } from "node:fs";
++import { existsSync, readdirSync, realpathSync } from "node:fs";
+ import path from "node:path";
+ import { flowsRoot } from "../flow/store";
+ 
+@@ -19,6 +21,26 @@ export function flowReviewsRoot(cwd: string, flowDir: string): string {
+   return path.join(flowsRoot(cwd), flowDir, "reviews");
+ }
+ 
++/**
++ * The directory of package `reviewId` (a plain directory name, never a path): the standalone one when it exists, else
++ * the one under a flow's reviews root, else where a standalone package of that id is written. A flow-bound ingest
++ * writes its package, and `keryx review verify-run --package` its records, under the flow (review LG5-002).
++ */
++export function packageDirById(cwd: string, reviewId: string): string {
++  const standalone = path.join(reviewsRoot(cwd), reviewId);
++  if (existsSync(standalone)) return standalone;
++  return flowDirs(cwd).map((flowDir) => path.join(flowReviewsRoot(cwd, flowDir), reviewId)).find((dir) => existsSync(dir)) ?? standalone;
++}
++
++/** The flow directories of the checkout; none when there is no flows root. */
++function flowDirs(cwd: string): string[] {
++  try {
++    return readdirSync(flowsRoot(cwd));
++  } catch {
++    return [];
++  }
++}
++
+ /** Every package's manifest, as git pathspec globs relative to the checkout. */
+ export const REVIEW_PACKAGE_MANIFEST_GLOBS: readonly string[] = [
+   path.posix.join(".metaproject", "reviews", "*", "manifest.json"),
+diff --git a/src/review/premise-decision.test.ts b/src/review/premise-decision.test.ts
+index 06f0ca97a..90f7766b1 100644
+--- a/src/review/premise-decision.test.ts
++++ b/src/review/premise-decision.test.ts
+@@ -324,11 +324,13 @@ describe("the decision store", () => {
+   });
+ 
+   test("folds a file name the way a case-insensitive filesystem may compare it (review SEC3-001)", () => {
+-    for (const name of ["operator-deciſions.json", "operator-decısions.json", "OPERATOR-DECISIONS.JSON", "ｏperator-decisions.json", "operator-decisions.json".normalize("NFD")]) {
++    for (const name of ["operator-deciſions.json", "operator-decısions.json", "OPERATOR-DECISIONS.JSON", "ｏperator-decisions.json"]) {
+       expect(foldFileName(name)).toBe("operator-decisions.json");
+     }
+     expect(foldFileName(".operator-decisions.locK")).toBe(".operator-decisions.lock");
+-    expect(foldFileName("operator-décisions.json")).toBe(foldFileName("operator-décisions.json"));
++    // A decomposed spelling (e + U+0301) folds onto its composed form (review T4-004: NFD of an ASCII name is a no-op).
++    expect(foldFileName("operator-de\u0301cisions.json")).toBe(foldFileName("operator-d\u00e9cisions.json"));
++    expect(foldFileName("operator-de\u0301cisions.json")).not.toBe("operator-de\u0301cisions.json");
+   });
+ 
+   test("the store is read by its exact name only: a planted look-alike alone is not the store (review SEC3-001)", async () => {
+@@ -354,6 +356,12 @@ describe("the decision store", () => {
+     expect((await readPremiseDecisions(dir)).map((entry) => entry.answer)).toEqual(["dismiss"]);
+   });
+ 
++  test("a package directory that cannot be listed holds no decisions (review T4-005)", async () => {
++    const missing = path.join(await pkg(), "no-such-package");
++    expect(await readPremiseDecisions(missing)).toEqual([]);
++    expect(await readOperatorDecisions(missing)).toEqual([]);
++  });
++
+   test("a premise record is never read as a gate decision, even with the fields of one", async () => {
+     const dir = await pkg();
+     await writeFile(
+diff --git a/src/review/premise.test.ts b/src/review/premise.test.ts
+index 147cd406a..0891c7dd5 100644
+--- a/src/review/premise.test.ts
++++ b/src/review/premise.test.ts
+@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { loadSchema, validateJson } from "../gdskills/contracts";
+ import { createManagedReviewPackage } from "./managed";
+-import { PREMISES_FILE, inheritedPremiseClaims, mergePremises, parsePremiseClaims, renderPremiseMarkdown, type PremiseRejectionReason } from "./premise";
++import { PREMISES_FILE, carriedPremiseHolds, mergePremises, parsePremiseClaims, renderPremiseMarkdown, type PremiseRejectionReason } from "./premise";
+ import { downgradedPremise, heldPremise } from "./premise-fixtures";
+ import { PREMISE_VERDICTS, type PremiseClaimInput, type StructuredReviewFinding } from "./types";
+ 
+@@ -526,50 +526,67 @@ describe("the claims reach the review record", () => {
+   });
+ });
+ 
+-// Review T4-001, LG4-001, RG4-001: what an ingest without --premises does with the claims a package already holds.
+-describe("inheritedPremiseClaims", () => {
++// Review T4-001, LG4-001, RG4-001, SEC5-001, LG5-003: what an ingest without --premises does with the holds a package
++// already has. Holds come from the previous findings.json only; premises.json is not an input.
++describe("carriedPremiseHolds", () => {
+   const held = (over: Partial<PremiseClaimInput> = {}): PremiseClaimInput => claim({ verdict: "challenged", intent_signals: [SIGNAL], practice_sources: [SOURCE], question: "mirror it?", ...over });
+-  const stored = (claims: PremiseClaimInput[]): unknown => ({ judge: "review-premise", premises: claims });
+   /** What the previous ingest's findings.json recorded once `claims` were merged over `findings`. */
+   const previousIngest = (claims: PremiseClaimInput[], findings = [finding()]): StructuredReviewFinding[] => mergePremises(findings, parsed(claims)).findings;
+-  const refusal = (result: ReturnType<typeof inheritedPremiseClaims>): string => (result?.ok === false ? result.refusal : "");
++  const refusal = (result: ReturnType<typeof carriedPremiseHolds>): string => (result?.ok === false ? result.refusal : "");
++  const carriedFindings = (result: ReturnType<typeof carriedPremiseHolds<StructuredReviewFinding>>): StructuredReviewFinding[] => (result?.ok === true ? result.findings : []);
+ 
+-  test("a first ingest (no findings.json) holds nothing, whatever premises.json holds (LG4-001)", () => {
+-    expect(inheritedPremiseClaims([finding()], stored([held()]), undefined)).toBeUndefined();
++  test("a first ingest (no findings.json) holds nothing (LG4-001)", () => {
++    expect(carriedPremiseHolds([finding()], undefined)).toBeUndefined();
+   });
+ 
+-  test("a stored held claim the merge rejected never held anything: the re-ingest carries the claims (RG4-001)", () => {
+-    const claims = [held(), held({ finding_id: "2026-10-16-round#LY-999" })];
+-    expect(reasons(mergePremises([finding()], parsed(claims)))).toEqual(["unknown-finding"]);
+-    expect(inheritedPremiseClaims([finding()], stored(claims), previousIngest(claims))).toMatchObject({ ok: true });
++  test("nothing previously held: undefined, even when a held claim was sent and rejected", () => {
++    expect(carriedPremiseHolds([finding()], previousIngest([held({ finding_id: "2026-10-16-round#LY-999" })]))).toBeUndefined();
+   });
+ 
+-  test("nothing previously held: undefined, even over a rejected held claim", () => {
+-    const rejected = [held({ finding_id: "2026-10-16-round#LY-999" })];
+-    expect(inheritedPremiseClaims([finding()], stored(rejected), previousIngest(rejected))).toBeUndefined();
++  test("an unchanged held finding gets the previous record's premise, and the merge counts it held", () => {
++    const previous = previousIngest([held()]);
++    const result = carriedPremiseHolds([finding()], previous);
++    expect(carriedFindings(result)[0]?.premise).toEqual(previous[0]?.premise);
++    expect(mergePremises(carriedFindings(result), undefined).counts).toMatchObject({ claims: 0, held: 1, challenged: 1 });
+   });
+ 
+-  test("premises.json gone while a finding was held: refused, naming the file", () => {
+-    const result = inheritedPremiseClaims([finding()], undefined, previousIngest([held()]));
+-    expect(result?.ok).toBe(false);
+-    expect(refusal(result)).toContain(`${PREMISES_FILE} is gone`);
++  test("two held claims on one finding, one rejected: the hold that applied carries (RG4-001)", () => {
++    const claims = [held(), held({ question: undefined })];
++    expect(reasons(mergePremises([finding()], parsed(claims)))).toEqual(["held-without-question"]);
++    const result = carriedPremiseHolds([finding()], previousIngest(claims));
++    expect(result?.ok).toBe(true);
++    expect(carriedFindings(result)[0]?.premise).toMatchObject({ verdict: "challenged", question: "mirror it?" });
+   });
+ 
+-  test("premises.json unreadable while a finding was held: refused with the parse error", () => {
+-    const result = inheritedPremiseClaims([finding()], ["not", "an", "object"], previousIngest([held()]));
+-    expect(result?.ok).toBe(false);
+-    expect(refusal(result)).toContain(`${PREMISES_FILE} cannot be read`);
++  test("a hold carried in from an earlier round needs no claims file (LG5-003)", () => {
++    const previous = previousIngest([held()]).map((record) => ({ ...record, premise: { ...record.premise, judge: "an earlier round" } }));
++    expect(carriedFindings(carriedPremiseHolds([finding()], previous))[0]?.premise).toMatchObject({ verdict: "challenged", judge: "an earlier round" });
++  });
++
++  test("a held finding whose problem or severity changed: refused, naming it, asking for --premises", () => {
++    for (const changed of [finding({ problem: "a different problem" }), finding({ severity: "minor" })]) {
++      const result = carriedPremiseHolds([changed], previousIngest([held()]));
++      expect(result?.ok).toBe(false);
++      expect(refusal(result)).toContain(GID);
++      expect(refusal(result)).toContain("Pass --premises");
++    }
+   });
+ 
+   test("a held finding gone from this round: refused, naming it", () => {
+-    const result = inheritedPremiseClaims([finding({ id: "LY-004", global_id: GID_4 })], stored([held()]), previousIngest([held()]));
++    const result = carriedPremiseHolds([finding({ id: "LY-004", global_id: GID_4 })], previousIngest([held()]));
+     expect(result?.ok).toBe(false);
+     expect(refusal(result)).toContain(GID);
+   });
+ 
+-  test("an applied claim rejected as already-judged is no loss: the carried premise still holds the finding", () => {
++  test("a finding that arrives already judged keeps its own premise", () => {
+     const previous = previousIngest([held()]);
+-    expect(reasons(mergePremises(previous, parsed([held()])))).toEqual(["already-judged"]);
+-    expect(inheritedPremiseClaims(previous, stored([held()]), previous)).toMatchObject({ ok: true });
++    const result = carriedPremiseHolds(previous, previous);
++    expect(carriedFindings(result)[0]).toBe(previous[0]);
++  });
++
++  test("an upheld or downgraded judgement is not carried, only holds are", () => {
++    const previous = previousIngest([held(), claim({ finding_id: GID_4, verdict: "upheld" })], [finding(), finding({ id: "LY-004", global_id: GID_4 })]);
++    const result = carriedPremiseHolds([finding(), finding({ id: "LY-004", global_id: GID_4 })], previous);
++    expect(carriedFindings(result).map((record) => record.premise?.verdict)).toEqual(["challenged", undefined]);
+   });
+ });
+diff --git a/src/review/premise.ts b/src/review/premise.ts
+index 9b9c5947e..d2c2de52d 100644
+--- a/src/review/premise.ts
++++ b/src/review/premise.ts
+@@ -725,32 +725,41 @@ export function renderPremiseMarkdown(input: PremiseRenderInput): string {
+   return lines.join("\n");
+ }
+ 
+-/** What an ingest without `--premises` does about the claims a package already holds (see {@link inheritedPremiseClaims}). */
+-export type InheritedPremises = { ok: true; parsed: ParsedPremiseClaims } | { ok: false; refusal: string };
++/** What an ingest without `--premises` does about the holds a package already has (see {@link carriedPremiseHolds}). */
++export type CarriedPremiseHolds<T> = { ok: true; findings: T[] } | { ok: false; refusal: string };
+ 
+ /**
+- * An ingest without `--premises` over a package whose findings the judge held (review RG2-004). Ingesting without the
+- * claims would silently return every held finding to the fix loop as an ordinary open finding, and readiness would
+- * pass it as "no finding is held". So the package's stored claims (`stored`, the content of {@link PREMISES_FILE}) are
+- * carried forward when they still hold what they held: every finding the previous ingest recorded as held
+- * (`previousFindings`, its findings.json) is held again for the same subject (severity, verdict, problem;
+- * {@link premiseSubjectOf}), and no claim that applied then is rejected now. Otherwise the ingest is refused, naming the
+- * findings, so the caller passes `--premises` with claims for what this round reports.
++ * An ingest without `--premises` over a package whose findings the judge held (review RG2-004): ingesting without the
++ * holds would silently return every held finding to the fix loop as an ordinary open finding, and readiness would pass
++ * it as "no finding is held".
+  *
+- * The carry is keyed on what the previous ingest applied, never on a stored claim's verdict word (review LG4-001,
+- * RG4-001): the stored file keeps the claims as received, rejected ones included, and a rejected claim never held
+- * anything. Undefined when the previous ingest held nothing, a first ingest (no findings.json) included: a first ingest
+- * without `--premises` holds nothing, whatever premises.json holds.
++ * The rule: each held record of the previous ingest's findings.json (`previousFindings`) carries its `premise`, which
++ * that ingest's merge already validated, to the same finding of this round when the finding's subject (severity,
++ * verdict, problem digest; {@link premiseSubjectOf}) is unchanged, and a held finding that is gone or whose subject
++ * changed refuses the ingest, naming it, so the caller passes `--premises`.
++ *
++ * {@link PREMISES_FILE} is never read for this: it stays the record of what the judge sent, rejected claims included,
++ * and an agent can write it (review SEC4-001, SEC5-001). So a claim the merge rejected never holds anything (RG4-001),
++ * and a hold carried in from an earlier round needs no claims file (LG5-003). Only holds carry; an upheld or downgraded
++ * judgement does not. Undefined when the previous ingest held nothing, a first ingest (no findings.json) included.
+  */
+-export function inheritedPremiseClaims<T extends StructuredReviewFinding>(findings: readonly T[], stored: unknown, previousFindings: unknown): InheritedPremises | undefined {
++export function carriedPremiseHolds<T extends StructuredReviewFinding>(findings: readonly T[], previousFindings: unknown): CarriedPremiseHolds<T> | undefined {
+   const previousHeld = heldRecords(previousFindings);
+   if (previousHeld.length === 0) return undefined;
+-  const parsed = readStoredClaims(stored);
+-  if (!parsed.ok) return refuseInheritance(parsed.why);
+-  const trial = mergePremises(findings, parsed.claims);
+-  const lost = new Set([...claimsNoLongerHeld(trial, appliedClaimNames(parsed.claims, previousHeld)), ...heldFindingsChanged(trial, previousHeld)]);
+-  if (lost.size > 0) return refuseInheritance(`the stored claims no longer hold ${[...lost].join(", ")} as they did (the finding is gone, or its severity, verdict or problem changed)`);
+-  return { ok: true, parsed: parsed.claims };
++  const carried = [...findings];
++  const changed: string[] = [];
++  for (const record of previousHeld) {
++    const key = keysOf(record)[0] ?? UNNAMED_CLAIM;
++    const index = carried.findIndex((finding) => keysOf(finding).includes(key));
++    const current = carried[index];
++    // A finding that arrived already judged (carried into a delta round) keeps its own premise, as the merge does.
++    const candidate = current === undefined || current.premise !== undefined ? current : { ...current, premise: record.premise as ReviewFindingPremise };
++    const subject = premiseSubjectOf(record);
++    if (candidate === undefined || subject === undefined || !sameSubject(subject, premiseSubjectOf(candidate))) changed.push(key);
++    else carried[index] = candidate;
++  }
++  if (changed.length > 0) return refuseInheritance(`the held findings ${changed.join(", ")} are gone from this round, or their severity, verdict or problem changed`);
++  return { ok: true, findings: carried };
+ }
+ 
+ /** The records of a previous findings.json whose premise held them; none when there was no previous ingest. */
+@@ -759,43 +768,7 @@ function heldRecords(previousFindings: unknown): Loose[] {
+   return previousFindings.filter(isRecord).filter((record) => isRecord(record.premise) && isHeldVerdict(record.premise.verdict));
+ }
+ 
+-/** The stored claims parsed, or why they cannot be carried: the file is gone, or it does not parse. */
+-function readStoredClaims(stored: unknown): { ok: true; claims: ParsedPremiseClaims } | { ok: false; why: string } {
+-  let claims: ParsedPremiseClaims | undefined;
+-  try {
+-    claims = parsePremiseClaims(stored);
+-  } catch (error) {
+-    return { ok: false, why: `${PREMISES_FILE} cannot be read (${error instanceof Error ? error.message : String(error)})` };
+-  }
+-  return claims === undefined ? { ok: false, why: `${PREMISES_FILE} is gone, so the holds cannot be carried` } : { ok: true, claims };
+-}
+-
+-/** The names of the held-verdict claims that applied at the previous ingest: each names a key of a record it held. */
+-function appliedClaimNames(parsed: ParsedPremiseClaims, previousHeld: readonly Loose[]): string[] {
+-  const heldKeys = new Set(previousHeld.flatMap(keysOf));
+-  return parsed.claims.filter((claim) => !isMalformed(claim) && isHeldVerdict(claim.verdict)).map(claimName).filter((name) => heldKeys.has(name));
+-}
+-
+-/** The applied claims the trial merge now rejects; `already-judged` is no loss (the finding keeps its carried premise). */
+-function claimsNoLongerHeld<T>(trial: PremiseMergeResult<T>, applied: readonly string[]): string[] {
+-  return applied.filter((name) => trial.rejections.some((rejection) => rejection.finding === name && rejection.reason !== "already-judged"));
+-}
+-
+-/** The keys of previously held records that the trial merge does not hold again for the same subject. */
+-function heldFindingsChanged<T>(trial: PremiseMergeResult<T>, previousHeld: readonly Loose[]): string[] {
+-  const now = trial.findings.map((finding) => finding as unknown as Loose);
+-  const changed: string[] = [];
+-  for (const record of previousHeld) {
+-    const key = keysOf(record)[0];
+-    if (key === undefined) continue;
+-    const current = now.find((finding) => keysOf(finding).includes(key));
+-    const subject = premiseSubjectOf(record);
+-    if (current === undefined || subject === undefined || !sameSubject(subject, premiseSubjectOf(current))) changed.push(key);
+-  }
+-  return changed;
+-}
+-
+-function refuseInheritance(why: string): InheritedPremises {
++function refuseInheritance<T>(why: string): CarriedPremiseHolds<T> {
+   return {
+     ok: false,
+     refusal: `This package holds findings the premise judge held, and an ingest without --premises would silently return them to the fix loop: ${why}. Pass --premises <file> with the judge's claims for this round (${PREMISES_FILE}, or ${PREMISES_SUPERSEDED_FILE} from an earlier ingest, when they still apply). Nothing was written.`,
+diff --git a/src/review/prior-round.test.ts b/src/review/prior-round.test.ts
+index 43443573a..997367dcd 100644
+--- a/src/review/prior-round.test.ts
++++ b/src/review/prior-round.test.ts
+@@ -206,6 +206,18 @@ describe("each source alone", () => {
+     expect(round.sourcesTried.find((attempt) => attempt.source === "flow")?.detail).toContain("skipped, not ingested: flow-r2 (operator decisions cannot be read: look-alike)");
+   });
+ 
++  test("flow: the package being started is never named as a skipped round (review LG5-001, RG5-001)", async () => {
++    writePackage(".metaproject/flows/001-x/reviews/flow-r1", { reviewId: "flow-r1", head: A, ref: "feat/elsewhere" });
++    const good: ReviewRoundRecord = { reviewId: "flow-r1", dir: ".metaproject/flows/001-x/reviews/flow-r1", sortKey: "2026-10-01T00:00:00Z", ingested: true, problems: [], head: A, mode: "review-flow", coverage: [], findings: [], verification: null };
++    const starting: ReviewRoundRecord = { ...good, reviewId: "flow-r3", dir: ".metaproject/flows/001-x/reviews/flow-r3", ingested: false, problems: ["research scope census is incomplete"] };
++    const { round } = await findPreviousRound(TARGET, B, { cwd: root, github: offline, flowDir: "001-x", excludeReviewId: "flow-r3", flowRounds: async () => [good, starting] });
++    expect(round).toMatchObject({ source: "flow", previous: { reviewId: "flow-r1" } });
++    const detail = round.sourcesTried.find((attempt) => attempt.source === "flow")?.detail ?? "";
++    expect(detail).toContain("flow-r1");
++    expect(detail).not.toContain("flow-r3");
++    expect(detail).not.toContain("skipped");
++  });
++
+   test("nothing anywhere: round 1, and the line names every source tried", async () => {
+     const { round, priorFindings } = await findPreviousRound(TARGET, B, { cwd: root, github: offline });
+     expect(round).toMatchObject({ round: 1, source: "none", mode: "first", previous: null, fixHunks: [], carried: [] });
+diff --git a/src/review/prior-round.ts b/src/review/prior-round.ts
+index 3708a70e4..bcba1d076 100644
+--- a/src/review/prior-round.ts
++++ b/src/review/prior-round.ts
+@@ -857,7 +857,8 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
+       tried.push(source === found.source ? { source, result: "found", detail: `forced by --prior ${deps.forced}` } : { source, result: "not-consulted", detail: "--prior given" });
+     }
+   } else {
+-    const record = async (source: SearchedSource, list: RoundCandidate[], none: string): Promise<RoundCandidate[]> => {
++    /** Check `list` against the branch line and record the attempt; `note` is appended to its detail. */
++    const record = async (source: SearchedSource, list: RoundCandidate[], none: string, note = ""): Promise<RoundCandidate[]> => {
+       const found: RoundCandidate[] = [];
+       const off: string[] = [];
+       for (const candidate of list) {
+@@ -866,7 +867,7 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
+       }
+       candidates.push(...found);
+       const offLine = off.length === 0 ? "" : `; ${off.length} branch package(s) not on this branch line: ${off.join(", ")}`;
+-      tried.push({ source, result: found.length > 0 ? "found" : "none", detail: `${found.length > 0 ? `${found.length} round(s): ${found.map((c) => c.reviewId).join(", ")}` : none}${offLine}` });
++      tried.push({ source, result: found.length > 0 ? "found" : "none", detail: `${found.length > 0 ? `${found.length} round(s): ${found.map((c) => c.reviewId).join(", ")}` : none}${offLine}${note}` });
+       return found;
+     };
+     const local = await record("local-package", exclude(localPackageCandidates(deps.cwd, target, targetKey)), "no package for this target in this checkout");
+@@ -897,10 +898,10 @@ export async function findPreviousRound(target: PriorRoundTarget, head: string |
+       if ("error" in read) {
+         tried.push({ source: "flow", result: "not-consulted", detail: `the rounds of flow ${deps.flowDir} could not be read (${read.error})` });
+       } else {
+-        await record("flow", exclude(flowCandidates(read.rounds, deps.cwd)).filter((candidate) => !known.has(candidate.reviewId)), `no reviewed round in flow ${deps.flowDir}`);
+-        const skipped = read.rounds.filter((round) => !round.ingested);
+-        const flow = tried.at(-1);
+-        if (skipped.length > 0 && flow?.source === "flow") flow.detail = `${flow.detail}; skipped, not ingested: ${skipped.map((round) => `${round.reviewId} (${round.problems.join("; ")})`).join(", ")}`;
++        // The package being started (excludeReviewId) is not an earlier round, so it is never named as skipped (review LG5-001).
++        const skipped = read.rounds.filter((round) => !round.ingested && round.reviewId !== deps.excludeReviewId);
++        const note = skipped.length === 0 ? "" : `; skipped, not ingested: ${skipped.map((round) => `${round.reviewId} (${round.problems.join("; ")})`).join(", ")}`;
++        await record("flow", exclude(flowCandidates(read.rounds, deps.cwd)).filter((candidate) => !known.has(candidate.reviewId)), `no reviewed round in flow ${deps.flowDir}`, note);
+       }
+     }
+   }
+diff --git a/src/review/types.ts b/src/review/types.ts
+index 170a6d9b9..9406931ab 100644
+--- a/src/review/types.ts
++++ b/src/review/types.ts
+@@ -886,7 +886,7 @@ export type ManagedReviewPackageResult = {
+   /** Flow 459. Present on every package, whether or not a premise judge ran. */
+   premise: PremiseCounts;
+   premiseRejections: readonly PremiseRejection[];
+-  /** Set when an ingest without `--premises` re-applied the package's stored claims (review RG2-004). */
++  /** Set when an ingest without `--premises` carried the previous findings.json's holds forward (review RG2-004). */
+   premisesCarriedForward?: true | undefined;
+   /**
+    * What the findings, spend and concurrency caps did (flow 203 AC5–AC7, AC10).

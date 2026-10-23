@@ -1,0 +1,85 @@
+REVIEW_RESULT
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B regression check for slice-02 (spawn-subagent-tool.ts empty-reply and KERYX_USAGE changes, review-finding.schema.json quote_unlocated, orchestrator SKILL docs, ledger/plan tests). The changes that could move the behaviour of dependents do not break any of them that I could find. KERYX_USAGE: every reader of a saved raw reply goes through parseReviewResult/splitUsage (src/review/ledger.ts:354, src/commands/review-ledger.ts:113, src/review/verdict.ts:153). Child-usage summing matches the sibling meter in src/commands/trigger-dispatch.ts:494. Empty-reply Error: the ledger treated the old placeholder file as empty and skipped it (src/review/ledger.ts:468, 618), so a missing file is the same or stricter. line:null from quote_unlocated: the consumers in the radius (bot/post.ts, publish.ts, pr-comments.ts, dedupe.ts, verdict.ts) already guard on typeof line === 'number' or line !== null. What remains is two stale counts made stale by the new readiness item 12, the empty-reply path now applying to write-mode children with a 're-dispatch' instruction, and a stale-file observation. None is a regression of major or above, so under the scope B screen these minor/info findings are expected to land in 'Scope B rejections'. They are reported because the dispatcher asked for every severity.",
+  "slices": ["slice-02"],
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-regression",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "`keryx review readiness <review-id-or-path> [--json]` reads the package and prints eleven items, READY or NOT READY, each with the evidence and the command that repairs it. It writes nothing, and exits non-zero when the verdict is NOT READY. Only item 9 reaches GitHub (the PR's own file list); the TUI and `review status` read the package alone.",
+      "problem": "The change adds readiness item 12 `quotes-located` to the list in SKILL.detail.md (and READINESS_ITEMS in src/review/readiness.ts:39), but the sentence that introduces the list still says readiness 'prints eleven items'. The installed copy at .metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md is identical, so it says the same.",
+      "impact": "An orchestrator following the skill expects eleven items. When the output has twelve, it may treat item 12 as unexpected or count the checklist wrong when it tells the operator what is outstanding.",
+      "suggested_fix": "Say 'twelve items', or drop the count ('prints every item').",
+      "evidence": "SKILL.detail.md:654 at head says 'eleven items'. The list right after it now ends at '12. `quotes-located`' (line 667). src/review/readiness.ts:39 defines number 12.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-regression",
+      "severity": "minor",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": 306,
+      "quote": "      properties: { package: packageSchema, item: { type: \"string\", description: \"The readiness item: its number (1-11) or id, e.g. head or pr-files. Item 11 (premise-decisions) is never waived: each held finding is answered with review_decide_premise.\" } },",
+      "problem": "The `review_waive_readiness` card's input schema tells the model that readiness items are numbered 1-11. The change documents item 12 `quotes-located` as waivable ('or the operator waives the item', SKILL.detail.md item 12; readiness.ts:250 repair text points to review_waive_readiness). The code path still accepts '12' (readinessItemId('12') resolves, readiness.test.ts:356), so this is a stale tool contract, not a refusal.",
+      "impact": "In keryx shell a model reading the tool schema can decide item 12 is out of range and not offer the operator the card for `quotes-located`. It would then send the operator elsewhere, or report the round as unable to complete, when the documented waiver path exists.",
+      "suggested_fix": "Change the description to 'its number (1-12) or id', or derive the range from READINESS_ITEMS.length.",
+      "evidence": "operator-confirm-review.ts:306 (blast-radius entry via src/review/readiness.ts). readiness.ts:39 adds number 12. SKILL.detail.md item 12 names an operator waiver.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-regression",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 2333,
+      "quote": "              \"treat the task as not done and re-dispatch it.\",",
+      "problem": "The flow 460 E empty-reply branch in spawn-subagent-tool.ts applies to every spawn_subagent child, not only read-only reviewer children. A write-mode child (shell.ts / tui-shell.ts parents) can call tools that edit files and never emit assistant text. raw then falls back to '(subagent produced no text)' because history holds no assistant content. Before this change it returned Completed. Now it returns Error with the instruction 'treat the task as not done and re-dispatch it'.",
+      "impact": "Trigger: a write-mode child whose provider stream contains only tool calls and then model_end with no text. Outcome: the parent is told the task was not done and to re-dispatch it, so edits or commands the child already applied can run a second time. The PR intent (D/E) is about an empty reviewer child counting as coverage, and it does not discuss write-mode children.",
+      "suggested_fix": "Limit the instruction to the read-only/review case, or for write mode say that the child may have changed files and the parent should inspect the working tree before re-dispatching. The error status itself can stay.",
+      "evidence": "spawn-subagent-tool.ts:2273-2280 computes raw (assistant text, else history assistant messages, else the placeholder). Line 2316 checks only status/raw/submittedResult, not mode. The message is at line 2333.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-004",
+      "reviewer": "review-regression",
+      "severity": "info",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 2316,
+      "quote": "        if (status === \"Completed\" && raw === \"(subagent produced no text)\" && turnResult?.submittedResult === undefined) {",
+      "problem": "Before this change, an empty child with save_result_to overwrote the target with '(subagent produced no text)', which ledger and verdict read as empty output (src/review/ledger.ts:402-405, :468) and skip. The new branch returns before saveChildResult, so a file an earlier dispatch left at the same path (for example a re-dispatch to the same raw/<reviewer>.txt) now stays. `ledger build`, `verdict` and `retry-plan` then read that file as the latest dispatch's reply.",
+      "impact": "This matters only when a re-dispatch reuses the exact save_result_to path of an earlier dispatch. The spawn tool's output tells the parent model the dispatch failed, but the package readers do not see that. Whether this is reachable depends on how the orchestrator names retry raw files (this package uses -wN suffixes), so it is an observation. To settle it, check whether retry-plan or the shell orchestrator ever re-dispatches to an existing raw path.",
+      "suggested_fix": "On the empty-reply branch, if save_result_to is set, either write the empty marker as before (the ledger already treats it as lost output) or remove or rename a stale file at the target, so the package matches the Error the parent saw.",
+      "evidence": "Diff hunk @@ 2294,2383 @@: the early return comes before the saveNote/saveChildResult block. Compare with saveTimedOutPartial (line 323), which handles an existing file at the target explicitly.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 1 }
+}
+```
+
+## Summary (review-regression, slice-02)
+
+**Scope:** I checked slice-02 against the 40-file blast-radius set. The cap dropped 14 files (`droppedByCap: 14`), among them `src/commands/review-next.ts`, `src/review/prior-round.ts`, `src/commands/operator-confirm-tools.ts`, `src/flow/service.ts` and `src/cli-registry.ts`, so the sweep is not complete over the full dependent set. The JSON schema and the two SKILL docs in this slice are not graph nodes and are recorded as `unresolved`. For those I checked the code consumers by search (readiness items, `line` readers, raw-file readers) rather than from the graph. The graph has no runtime edges, so dispatch hosts that write `raw/*.txt` outside keryx shell (Claude Code, Codex) were checked against the documentation only.
+
+**Checked and holding:**
+- **KERYX_USAGE line in saved raw files:** every package reader goes through `splitUsage`/`parseReviewResult` (ledger.ts:354, review-ledger.ts:113, verdict.ts:153).
+- **Usage summing:** done per `usage_update` event, the same as the trigger-dispatch spend meter.
+- **Empty child no longer writing the placeholder:** the ledger had been skipping that placeholder as empty, so the missing file is the same or stricter.
+- **`quote_unlocated` with `line: null`:** every `line` consumer in the radius (bot/post.ts, publish.ts, pr-comments.ts, dedupe.ts, verdict.ts) already guards on null or non-number.
+- **Installed copies:** the bundled and installed SKILL.md / SKILL.detail.md are identical, and the core schema copy matches.
+
+**Findings:** 0 blocker, 0 major, 3 minor, 1 info.
+- **F-001 and F-002:** stale item counts ("eleven items", "1-11") after readiness item 12 was added.
+- **F-003:** the empty-reply Error and its "re-dispatch it" text also apply to write-mode children.
+- **F-004:** an empty reply no longer overwrites a stale file at the `save_result_to` target.
+
+Under the scope B screen, all four sit below `major` and are expected to be listed under Scope B rejections. They are reported because the dispatcher asked for every severity. F-001 and F-003 are better filed under scope A.
+
+Routing audit: graph_used: yes (the package's blast-radius.json, built at the PR head); wiki_used: not-relevant (bounded diff-review task); ctx_used: yes (keryx ctx rg); raw_rg_used: no (two targeted single-file `grep -n` line lookups, marked keryx:raw).

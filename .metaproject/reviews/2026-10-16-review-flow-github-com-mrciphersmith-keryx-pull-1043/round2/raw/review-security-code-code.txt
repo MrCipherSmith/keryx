@@ -1,0 +1,66 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "Round 2 (fix delta c144874f..90f0861ab, read at HEAD f47ebb0ec). All ten round-1 security findings are addressed in code; nine closed, one partial. The fix delta introduces one major (the new operator-only-file guard is keyed on one exact relative path, so a case variant on a case-insensitive filesystem, or a decisions file inside a crafted --prior package that the new carry step copies, gets past it) and one minor (a disposition written into findings.json now lifts a premise hold).",
+  "findings": [
+    {
+      "id": "SEC2-001",
+      "severity": "major",
+      "file": "src/commands/automatic-review.ts",
+      "line": 268,
+      "quote": "!OPERATOR_ONLY_FILES.has(path.relative(dir, resolved))",
+      "problem": "The fix for round-1 F-001 refuses an auto-approved apply_patch to operator-decisions.json by an exact, case-sensitive compare of the relative path with `operator-decisions.json`. Two other paths still land an agent-written premise answer in a store the gate trusts. (a) On a case-insensitive filesystem, which is the default on macOS APFS and Windows NTFS, `Operator-Decisions.json` or `operator-decisions.JSON` is the same file. The extension check lowercases (`path.extname(resolved).toLowerCase()`), so `.JSON` passes it, and the name check does not match. (b) The new `carryPremiseDecisions` (src/review/premise-question.ts:82-97, called at src/commands/review.ts:1103) copies every valid `premise-question` decision from the previous round's package into the new package's operator-decisions.json. That previous package can be forced with `--prior <path>` (src/review/prior-round.ts:820-822 accepts any directory holding a manifest.json), and approvesShell does not path-check `--prior`, because it is not in CREATE_PATH_FLAGS. A file at `<bound package>/x/operator-decisions.json` has relative path `x/operator-decisions.json`, so apply_patch writes it without asking. `validPremise` now needs confirmedVia, quote and subject, but the writer supplies all three itself: problemSha256 is just sha256 of the problem text, which the agent can read.",
+      "impact": "Attack vector: in an automatic review, hostile PR content steers the orchestrating agent. (a) It apply_patches `<pkg>/Operator-Decisions.json` with {kind:'premise-question', finding:<held id>, answer:'dismiss', reason, quote, at, actor:'operator', confirmedVia:'terminal', subject:{severity, verdict, problemSha256}}. readPremiseDecisions reads it, premiseHoldState returns `dismissed`, and the flow gate's findingVerdict marks the held blocker terminal (`dismissed`) with no verifier verdict and no operator. (b) Across turns, the agent writes a fake package (manifest.json, findings.json, operator-decisions.json) under a subdirectory of the bound package, then runs `keryx review start --automatic --prior <that dir>`. The forged answers are carried into the new round's real operator-decisions.json, stamped only with `carriedFrom`. Either way the control this fix adds ('an agent cannot write an answer the operator did not give') is bypassed. Major, not blocker: it needs an agent steered against the operator, the same precondition round-1 F-001 was graded on.",
+      "suggested_fix": "Compare case-insensitively and by basename: refuse any target whose `path.basename(resolved).toLowerCase()` is `operator-decisions.json` (or the lock name), at any depth in the package. Better, compare the realpath of the target's parent plus the lowercased name against the bound package's real decisions path. In carryPremiseDecisions, carry only from a previous package that the round registry or git history found, not from a forced `--prior` path. Or path-check `--prior` in approvesShell like CREATE_PATH_FLAGS, and refuse a previous package located inside the current one. A test should show that `Operator-Decisions.json` and `sub/operator-decisions.json` are not approved.",
+      "evidence": "src/commands/automatic-review.ts:263-269 (extension lowercased, name compared exactly); :207-212 OPERATOR_ONLY_FILES; :252 only CREATE_PATH_FLAGS are path-checked, and `--prior` is not one; src/review/prior-round.ts:820-822 resolveForced accepts any dir with manifest.json; src/commands/review.ts:1101-1104 carry from detected.round.previous.packagePath; src/review/premise-question.ts:82-97 carry trusts the previous dir's decisions; src/review/operator-decisions.ts:100-111 validPremise fields are all writer-supplied. Not run: did not confirm that the shell's apply_patch keeps the target's case, or that one AutomaticReviewRun spans a single turn (path b needs two runs).",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "class_scope": {
+        "sites": [
+          "src/commands/automatic-review.ts:268 (exact-case, top-level-only name check)",
+          "src/review/premise-question.ts:82 carryPremiseDecisions (second writer of operator-decisions.json, fed from an agent-choosable directory)",
+          "src/commands/review.ts:1103 (carry call site, previous path from --prior)"
+        ],
+        "enumeration_method": "listed every writer of operator-decisions.json at HEAD (appendDecision via recordOperatorDecision / recordPremiseDecision; callers: review-operator.ts terminal, operator-confirm-review.ts cards, carryPremiseDecisions), then checked which agent-reachable path feeds each one in automatic mode (apply_patch allowance, approved keryx review subcommands)"
+      }
+    },
+    {
+      "id": "SEC2-002",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "line": 538,
+      "quote": "return hasTerminalOutcome(record) ? \"none\" : \"awaiting\";",
+      "problem": "premiseHoldState now returns `none` for an unanswered held finding whose record already carries a `dismissed*` disposition (hasTerminalOutcome, :476-480). Until this delta a held finding stayed `awaiting` whatever its disposition, so the flow gate refused it until the operator answered. Now a disposition in findings.json lifts the hold, and in automatic mode the agent can apply_patch that file without asking. The gate then falls through to the ordinary rules, where `dismissed-wont-fix|out-of-scope|deprioritised` needs only evidence matching HUMAN_DECISION_PATTERN (review-gate.ts:776-785), and the agent can write that text itself. Readiness item 11 passes the same way. The comment gives a reason: a finding that already has an outcome 'waits for nobody', to match the verdict. That reason holds for `refuted` and for `acted-on` (both need a verifier verdict), but not for a dismissal the agent wrote: the hold exists to keep that decision for the operator.",
+      "impact": "Attack vector: a steered agent adds `disposition:{state:'dismissed-wont-fix', evidence:'decided-by: owner'}` to a held security blocker in findings.json. premiseGateState becomes `none`, findingVerdict returns terminal `dismissed`, and readiness premise-decisions passes, all without a premise-question decision. Minor, not major: this is the same self-asserted bar that already applies to every non-held finding, so the diff does not open a new way to dismiss. What it loses is the extra 'only the operator answers' guarantee that premise.ts:521-528 still claims for held findings.",
+      "suggested_fix": "Lift a hold through hasTerminalOutcome only for a verifier `refuted` verdict, or for `acted-on` (the outcomes the gate backs with a verifier). Keep `dismissed*` without a matching premise-question decision as `awaiting`. Or keep the verdict-alignment, but make the gate's premiseGateState ignore dispositions.",
+      "evidence": "src/review/premise.ts:476-480 hasTerminalOutcome, :529-538 premiseHoldState; src/flow/review-gate.ts:431 premiseGateState -> holdRecord passes `disposition`; :776-785 CORRECT_BUT_DISMISSED accepted on HUMAN_DECISION_PATTERN; round-1 code (c144874f) returned `awaiting` for any held finding without an answer.",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "review-security-code-w4#F-001", "disposition": "partial", "evidence": "Named paths closed: review-gate.ts:366 no longer reads premise.operator; operator-decisions.ts:106-110 requires quote, confirmedVia and subject; automatic-review.ts:268 refuses the exact file. But that guard can be got past (case variant, nested file fed through the --prior carry): see SEC2-001." },
+    { "id": "review-security-code-w4#F-002", "disposition": "closed", "evidence": "src/commands/review-operator.ts:147-150 wraps key, severity, problem, verdict, question and reason in cardSafe and prints the effect last." },
+    { "id": "review-security-code-w4#F-003", "disposition": "closed", "evidence": "review-operator.ts:156 passes quote: answer; operator-decisions.ts records actor as the fixed label PREMISE_DECISION_ACTOR plus a subject; premise.ts:506 latestPremiseDecision ignores a decision whose subject no longer matches." },
+    { "id": "review-security-code-w4#F-004", "disposition": "closed", "evidence": "premise-question.ts:70 digest over key/severity/problem/verdict/question/answered; operator-confirm-review.ts:622 compares the digest in apply." },
+    { "id": "review-security-code-w8#SEC-001", "disposition": "closed", "evidence": "premise.ts:529-538 has no premise.operator fallback; review-gate.ts:366 reads only verdict; premise.ts:216 normaliseCarriedPremise strips operator from ingested findings (mergePremises always runs it)." },
+    { "id": "review-security-code-w8#SEC-002", "disposition": "closed", "evidence": "premise.ts:326-328 rejects `security-downgrade` (checks reviewer and reported_by); review-premise SKILL.md:76 excludes branch-introduced signals, :113 says never downgrade a security finding." },
+    { "id": "review-security-code-w8#SEC-003", "disposition": "closed", "evidence": "review-operator.ts:147-150 sanitises at the terminal writer (the card already did), so both writers show cleaned text; findHeldFinding itself still returns raw text, which is acceptable now that both writers clean it." },
+    { "id": "review-security-code-w8#SEC-004", "disposition": "closed", "evidence": "operator-decisions.ts:106-110 needs quote, confirmedVia and subject; premise.ts:506 binds the decision to severity, verdict and problemSha256, so a reused id with a different problem is not answered." },
+    { "id": "review-security-code-w9#SEC-001", "disposition": "closed", "evidence": "operator-decisions.ts:109 VIAS.includes(confirmedVia) is required as in validGateDecision:121; fixtures (premise-fixtures.ts premiseAnswer) carry confirmedVia, quote and subject." }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 0 }
+}
+```
+
+## Summary
+
+- Prior (9 security-code ids found in the three premise-input files; none in skills): 8 closed, 1 partial (w4#F-001), 0 open, 0 regressed.
+- New findings: 0 blocker, 1 major, 1 minor, 0 info.
+  - SEC2-001 (major): the new operator-only-file guard in automatic-review.ts:268 compares one exact, case-sensitive relative path. A case variant on macOS/Windows, or a decisions file nested in a crafted `--prior` package that the new `carryPremiseDecisions` copies, still puts an agent-written premise answer in the store the gate trusts.
+  - SEC2-002 (minor): `hasTerminalOutcome` lets a self-written `dismissed*` disposition in findings.json lift a premise hold. Before this delta the gate kept a held finding `awaiting` until the operator answered.
+- Clean in the delta: the terminal prompt is sanitised; decisions are bound to a subject and carry a quote; the premise.operator fallback is gone everywhere; security findings are never downgraded; the readiness waiver refuses premise-decisions; the lock covers both writes. No injection, crypto or secrets concerns.
+- Routing: graph_used: no (not-relevant: fix-delta review on a supplied diff); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no (targeted grep/sed with keryx:raw markers for line anchors).

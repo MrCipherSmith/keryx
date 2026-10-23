@@ -1,0 +1,70 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "slices": ["slice-05"],
+  "summary": "Scope B regression check of slice-05 (src/review: completion-gate, coverage, dispatch-check, dispatch-usage, display-id, filter-stats, ledger, locate, managed, mutate, premise, prior-round) at head 375279e78. One major: allocatePackage in src/review/managed.ts now keeps an `ingest --flow/--review-id` (or a flow matched by PR url) in the reviews root, while every flow-scoped reader (review loop, flow complete's review gate, governance spend) reads only flows/<dir>/reviews, so those rounds stop being seen. One minor docs drift for merged_duplicates. One info on narrowed root discovery in the completion gate. The blast radius record dropped 21 files by cap (and 105 as unrelated-symbol, 91 text-hub); src/flow/review-gate.ts and src/governance/spend.ts were not in the computed set: the link from managed.ts to them is a filesystem layout edge the code graph cannot see.",
+  "findings": [
+    {
+      "id": "REG-001",
+      "severity": "major",
+      "file": "src/review/loop.ts",
+      "line": 486,
+      "quote": "const reviewsDir = flowReviewsRoot(cwd, dir);",
+      "problem": "allocatePackage (src/review/managed.ts, flow 460 L5) now returns the reviews-root package (`path.join(reviewsRoot(input.cwd), input.reviewId)`) for `review ingest --review-id <id>` when a flow matches (explicit --flow, or findRelatedFlow matching the PR url) and the reviews-root package is a `review start` (mode review-flow) package or already bound to that flow. Before this change packagePath put that ingest into `.metaproject/flows/<dir>/reviews/<id>`. Every flow-scoped reader still reads only the flow directory: readFlowReviewRounds (src/review/loop.ts:486, `keryx review loop --flow`), readReviewRounds (src/flow/review-gate.ts:460, the require_clean_round gate of `flow complete`) and readFlowReviewManifests (src/governance/spend.ts:21). The test 'ingest --flow --review-id of a review-flow package binds that package to the flow' asserts the flow's reviews dir stays empty.",
+      "impact": "Trigger: `keryx review start --pr <n>` then `keryx review ingest --review-id <same id>` for a PR tracked by a flow (or with --flow). Outcome: the round is recorded with manifest.flow.id set but is invisible to the flow: `flow complete` sees no ingested round ('no ingested round to read findings from'), `review loop --flow` under-counts rounds so its repeat/attempt bound is not reached, and flow review spend omits the round. Previously the round landed in the flow directory and all three counted it.",
+      "suggested_fix": "Either keep ingest writing the flow-bound copy where the flow readers look (move/rename the started package into flowReviewsRoot on binding), or make readReviewRounds, readFlowReviewRounds and readFlowReviewManifests also enumerate reviews-root packages whose manifest.flow.id is the flow's id. Add a test that runs start -> ingest --flow -> readReviewRounds/readFlowReviewRounds.",
+      "evidence": "src/review/managed.ts:2853 `const standalone = path.join(reviewsRoot(input.cwd), input.reviewId);` returned when `recorded?.mode === \"review-flow\" || recorded?.flowId === flowMatch.id`; packagePath (managed.ts:1150) previously routed every ingest with a flowMatch to flowReviewsRoot. keryx ctx rg 'reviewsRoot\\(' over src/flow, src/review/loop.ts, src/governance returns no match; review-gate.ts:1940 calls readReviewRounds(input.cwd, input.flowDir) which reads flowReviewsRoot only; managed.test.ts:222 expects the flow reviews dir not to exist.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "class_scope": {
+        "sites": ["src/review/loop.ts:486", "src/flow/review-gate.ts:460", "src/governance/spend.ts:21"],
+        "enumeration_method": "keryx ctx rg 'flowReviewsRoot\\(' over src (non-test): 7 call sites; managed.ts:1151 (packagePath, the writer) and managed.ts:2949 (reviewPackagesNamed, also scans reviewsRoot) and prior-round.ts:421 (packageDirs, also adds reviewsRoot) are unaffected; the three listed read only the flow directory and are the ones that lose the round."
+      }
+    },
+    {
+      "id": "REG-002",
+      "severity": "minor",
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "line": 656,
+      "quote": "minus the measured finding-stage drops must equal `retained`) or when a count is",
+      "problem": "checkFilterStats and renderFilterStatsLine (src/review/filter-stats.ts) changed: the arithmetic is now total - drops - merged_duplicates = retained, and the status line prints `merged_duplicates=` between findings_cap and dismissed_by_round. The guide still states the old rule and shows the old line, in both copies of the section (lines 647/655-656 and 956/964-965).",
+      "impact": "An operator reconciling a round that merged duplicates by the documented rule gets a record that does not add up and reads a correct record as broken; the sample line no longer matches what `review status` prints.",
+      "suggested_fix": "Update both copies of the filter_stats section: add merged_duplicates to the example line and to the arithmetic sentence.",
+      "evidence": "src/review/filter-stats.ts:426-436 subtract merged_duplicates; filter-stats.ts:509 prints merged_duplicates=; grep for merged_duplicates in the guide returns nothing.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "class_scope": {
+        "sites": ["docs/docs/guides/review-with-a-record.md:647", "docs/docs/guides/review-with-a-record.md:656", "docs/docs/guides/review-with-a-record.md:956", "docs/docs/guides/review-with-a-record.md:965"],
+        "enumeration_method": "keryx ctx rg 'findings_cap=|dismissed_by_round=' across the repo (hidden included, reviews excluded): only filter-stats.ts, its test and these two doc blocks; grep 'add up|minus' in the guide for the arithmetic sentence."
+      }
+    },
+    {
+      "id": "REG-003",
+      "severity": "info",
+      "file": "src/review/completion-gate.ts",
+      "line": 160,
+      "quote": "if (!KERYX_REVIEW_COMMAND.test(call.arguments)) continue;",
+      "problem": "sessionReviewNames replaced sessionReviewRoots (used by src/commands/agent.ts:3487). The old scan found a project root from any message content or tool-call argument naming `<prefix>/.metaproject/reviews/<id>` (e.g. a write of raw/<reviewer>.txt or spawn_subagent save_result_to under a subdirectory package). Now only `keryx review` tool-call arguments and the `path:`/`# managed review:` lines of their replies name roots, and `path:` is printed relative to the keryx process cwd but resolved against the agent's cwd. A session that runs `cd sub && keryx review ...` with relative package paths and names the subdirectory path only in non-keryx tool calls would now get the NO_PACKAGE_BLOCKER placeholder nudge instead of its package.",
+      "impact": "Observation only: I could not establish that the orchestrator ever runs keryx review from a different cwd than the shell while naming the full path only outside keryx commands. If it does, the gate nudges about a missing package until the stall limit. Settled by a transcript of a subdirectory-package review (flow 460 A shape) through keryx shell.",
+      "suggested_fix": "If subdirectory packages are run via cd, resolve `path:` against the cd target of the same command, or keep discovering roots from save_result_to/write paths under `.metaproject/reviews/`.",
+      "evidence": "git show dff7a38a1c1c:src/review/completion-gate.ts sessionReviewRoots scanned message.content and every toolCalls[].arguments; head completion-gate.ts:158-183 scans only KERYX_REVIEW_COMMAND calls and their tool replies; managed.ts:588 prints path relative to input.cwd.",
+      "confidence": "low",
+      "reviewer": "review-regression"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 1, "info": 1 }
+}
+```
+
+## Summary
+
+Scope B (regression) review of slice-05, PR #1045 round 2, head 375279e78.
+
+- **major REG-001**: `allocatePackage` in src/review/managed.ts now binds `review ingest --review-id` on a flow-matched target to the reviews-root package that `review start` opened. But `review loop --flow` (src/review/loop.ts:486), `flow complete`'s review gate (src/flow/review-gate.ts:460) and flow spend (src/governance/spend.ts:21) read only `flows/<dir>/reviews`. Those rounds become invisible to the flow: the clean-round gate finds no ingested round and the loop bound under-counts.
+- **minor REG-002**: the guide's filter_stats arithmetic and its sample line leave out `merged_duplicates`. Both copies of the section are affected.
+- **info REG-003**: completion-gate root discovery now reads only `keryx review` commands and their replies. A subdirectory package named only in non-keryx tool calls is no longer found. No reproduction was established.
+
+Checked and found no regression: `findReviewGateState`'s signature change (its only caller, agent.ts, is updated); the removed `gitDiffStats` (no callers); the substring locator (schema enums in both copies include `substring`; ingest treats `ambiguous` the same as `absent`); `merged_duplicates` (schema allows it; older records read as 0); premise sets (the verdict.ts reader is updated); `ledgerBlockers` taking options from the package (it uses the same scope-files source as before); coverage.md mark (closed packages from before flow 460 are exempt); mutation record names; parallel `resolveBase` (same order of precedence); display-id refusals (no producer mints a `#` id: external comments and legacy headings were checked).
+
+Radius limits: the record dropped 21 files by cap, 105 as unrelated-symbol and 91 as text-hub. 13 changed files are not graph nodes. The REG-001 sites in review-gate.ts and spend.ts are outside the computed set, because the link is a filesystem-layout edge the code graph cannot see. Here the radius alone could not answer the question.

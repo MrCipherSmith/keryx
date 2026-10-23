@@ -1,0 +1,105 @@
+REVIEW_RESULT
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-architecture",
+  "summary": "Slice-02 keeps the layering intact: usage formatting stays in review/dispatch-usage and the harness tool only calls it, as it already does for orchestrator-log and wave-key. No blocker or major. Four minors on duplicated state, a stringly-typed sentinel, a repeated exit-path block and schema doc drift.",
+  "slices": ["slice-02"],
+  "stats": {"blocker": 0, "major": 0, "minor": 4, "info": 2},
+  "findings": [
+    {
+      "id": "F-001",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "line": null,
+      "quote": "\"quote_unlocated\": {",
+      "problem": "A finding whose quote cannot be placed is now described by three overlapping fields: `locator.state: unlocatable` (with `reason`), `path_missing`, and the new `quote_unlocated` (reason absent|ambiguous). absent/ambiguous restates what `locator.reason` already carries, so two sources of truth can disagree on one finding.",
+      "impact": "Readers (scope.md, readiness `quotes-located`, future consumers) must choose which field to trust, and a writer that sets one and not the other produces an inconsistent record.",
+      "suggested_fix": "Either derive `quote_unlocated` from `locator` at read time, or state in the schema description which field is authoritative and assert in a test that both are always set together.",
+      "evidence": "Diff hunk adds quote_unlocated beside the existing locator object (state derived|unlocatable, reason) and path_missing; the e2e test asserts only quote_unlocated for F-2, not the locator state.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-002",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "if (status === \"Completed\" && raw === \"(subagent produced no text)\" && turnResult?.submittedResult === undefined) {",
+      "problem": "The empty-reply decision is keyed on a display placeholder string compared by value. The same literal is already compared at the earlier rate-limited branch (`hadText = raw !== \"(subagent produced no text)\"`), so the producer of the placeholder and two consumers are coupled by an unnamed string.",
+      "impact": "Changing the placeholder wording silently turns this gate off and the empty child is again reported Completed, which is the defect the change fixes.",
+      "suggested_fix": "Export one constant (or compute `hasText` once from the trimmed assistant text) and use it at the producer and both consumers.",
+      "evidence": "Both comparisons appear in the diff context of spawn-subagent-tool.ts.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "await fireSubagentStop(\"Error\");",
+      "problem": "The new empty-reply exit repeats the upsert, foldChildSlateAndCleanup and fireSubagentStop sequence already inlined in the timeout and rate-limit exits, adding a third copy inside one very large invoke function (SRP: outcome classification, fleet reporting, cleanup and result formatting in one body).",
+      "impact": "Each exit path must be edited in step when the cleanup contract changes; the empty-reply path already differs (no save of `save_result_to`, no usage line) with no stated reason.",
+      "suggested_fix": "Extract a `finishChild(status, detail)` helper that does upsert, slate fold and stop hook, and call it from every non-success exit.",
+      "evidence": "Timeout branch and rate-limit branch in the diff show the same three calls.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-004",
+      "reviewer": "review-architecture",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json",
+      "line": 85,
+      "quote": "A quote that appears in more than one place is recorded as `unlocatable` rather than anchored to the first hit, so quote enough to be unambiguous.",
+      "problem": "The reviewer-facing contract still says an unplaceable/ambiguous quote is recorded as `unlocatable`; this slice changes ingest to keep the finding with `quote_unlocated` and line null instead of refusing the round, and documents that only in SKILL.md and review-finding.schema.json. The two schemas are declared to be kept identical on shared fields.",
+      "impact": "Reviewers are told a contract that no longer matches ingest behaviour; the quote guidance that avoids the readiness failure is not where reviewers read it.",
+      "suggested_fix": "Update the `quote` description here to name `quote_unlocated` and the `quotes-located` readiness item.",
+      "evidence": "Line 85 of the reviewer schema at head; the slice touches only the finding-record schema.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-005",
+      "reviewer": "review-architecture",
+      "severity": "info",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "import { formatUsageLine } from \"../../../review/dispatch-usage\";",
+      "problem": "The harness tool layer imports a review-domain module. Direction is acceptable here: the module is a leaf with no harness imports and the file already imports review/orchestrator-log, review/wave-key and review/chunks-estimate (sibling decision, law 4).",
+      "impact": "None now. If dispatch-usage grows parsing dependencies, the harness would inherit them.",
+      "suggested_fix": "Keep dispatch-usage dependency-free, or move the line format to a shared lib if more hosts need it.",
+      "evidence": "Existing imports in the same file's import block.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-006",
+      "reviewer": "review-architecture",
+      "severity": "info",
+      "file": "src/commands/review-plan.test.ts",
+      "line": null,
+      "quote": "process.chdir(repo);",
+      "problem": "The new end-to-end block mutates process-global cwd, XDG_DATA_HOME, console and exitCode inside a describe in a file whose other tests assume a fixed cwd; it restores them in afterEach. Safe only while tests in the file run serially.",
+      "impact": "A future concurrent-test setting would let it leak cwd into sibling tests.",
+      "suggested_fix": "Keep it serial, or move it to its own test file so the isolation is structural.",
+      "evidence": "afterEach restores cwd, so no live defect; observation only.",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
+## Architecture Review (slice-02)
+
+Stack: generic TS. Usage plumbing keeps formatting in review/dispatch-usage; the harness only appends the line. No layer or dependency-direction violation.
+
+Stats: blocker 0 | major 0 | minor 4 | info 2
+
+- F-001 minor: quote_unlocated overlaps locator/path_missing.
+- F-002 minor: empty-reply gate keyed on placeholder string.
+- F-003 minor: third copy of the exit-path cleanup block.
+- F-004 minor: reviewer schema still describes the old `unlocatable` behaviour.
+- F-005 info: harness imports review leaf, consistent with siblings.
+- F-006 info: process-global state in new e2e test.
+
+History: no git log/blame excerpts supplied; I read no commit history for these choices.

@@ -1,0 +1,161 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-architecture",
+  "summary": "Slice 08 adds the premise merge (premise.ts), operator premise decisions, a held-state in verdict/readiness and the dedupe/managed wiring. Dependency direction is clean (type-only edges from types.ts, no runtime cycle). The structural problem is that hold state is derived in several places from different inputs, and the decide-premise lookup trusts the judge's raw, unvalidated claim.",
+  "findings": [
+    {
+      "id": "ARCH-1",
+      "severity": "major",
+      "file": "src/review/premise-question.ts",
+      "line": 966,
+      "quote": "const premise = obj(record[\"premise\"]) ?? (claim !== undefined && isHeldVerdict(claim[\"verdict\"]) ? claim : undefined);",
+      "problem": "findHeldFinding treats a raw entry of research-evidence/premises.json as a held premise when the finding record carries none. That file keeps rejected claims verbatim (managed.ts writes input.premises as received), while the verdict path (verdict.ts applyPremiseClaims) and the ingest path both run every claim through mergePremises, which rejects self-judgement, challenged-without-evidence, held-without-question, owner-decision-without-options and similar. The lookup re-derives 'held' without those checks.",
+      "impact": "A claim that mergePremises rejected (for example a challenged claim with no intent signal or practice source, or one made by the reviewer itself) still produces a card or decide-premise prompt. recordPremiseDecision then stores the operator's answer, but applyPremiseDecision requires record.premise to be a held verdict and the validated merge never set it, so a 'dismiss' dismisses nothing and an 'uphold' changes nothing. The operator's decision is accepted and silently discarded, and readiness item 11 never counted the finding as held.",
+      "suggested_fix": "Do not read premises.json raw in premise-question.ts. Run parsePremiseClaims plus mergePremises over the single finding (as verdict.ts applyPremiseClaims does) and use the resulting premise, or expose one shared function in premise.ts that returns the effective premise of a finding record (record.premise, else the validated claim). Refuse the lookup when the claim was rejected, naming the rejection reason.",
+      "evidence": "premise-question.ts:965-969 reads PREMISES_FILE and accepts any claim whose verdict is challenged/owner-decision. premise.ts mergePremises (lines 205-344) holds all the rejection rules. managed.ts:482-487 writes the claims 'as received, rejected ones included'. verdict.ts:2243-2254 applies claims only through mergePremises. premise.ts applyPremiseDecision returns the finding unchanged when record.premise is missing.",
+      "confidence": "high",
+      "reviewer": "review-architecture",
+      "class_scope": {
+        "sites": [
+          "src/review/premise-question.ts:966",
+          "src/review/verdict.ts:2253",
+          "src/review/readiness.ts:1680",
+          "src/flow/review-gate.ts:416"
+        ],
+        "enumeration_method": "keryx ctx rg for premiseHoldState|isHeldVerdict|PREMISES_FILE|readPremiseDecisions in src (non-test): 4 consumers derive 'is this finding held' from 4 different inputs; only verdict.ts validates the raw claims, premise-question.ts uses them unvalidated, readiness.ts and review-gate.ts use only the finding record."
+      }
+    },
+    {
+      "id": "ARCH-2",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "line": 1419,
+      "quote": "export function premiseHoldState(record: Loose, decisions: readonly PremiseQuestionDecision[] = []): PremiseHoldState {",
+      "problem": "Hold state is computed by premiseHoldState, but consumers re-derive pieces of it: premise-question.ts (premise from claim fallback, answered state), verdict.ts classify (calls premiseHoldState without decisions and relies on an earlier in-place application), review-gate.ts (own isHeldVerdict check and withPremiseAnswers). There is no single owner of 'effective premise of a finding' (record premise, plus validated claim, plus operator answer).",
+      "impact": "A change to how a hold is lifted or what counts as held has to be repeated in each reader; ARCH-1 is the first divergence. verdict.ts classify only works because computeVerdict happens to apply decisions first.",
+      "suggested_fix": "Add one resolver in premise.ts, for example effectivePremise(record, claims, decisions) returning the premise and its hold state, and have verdict, readiness, review-gate and premise-question call it.",
+      "evidence": "premise.ts:1419-1427; verdict.ts:2189-2191 and 2276-2282; premise-question.ts:973-984; review-gate.ts:416 and 502.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "ARCH-3",
+      "severity": "minor",
+      "file": "src/review/operator-decisions.ts",
+      "line": 17,
+      "quote": "export const OPERATOR_DECISION_KINDS = [\"mutation-waiver\", \"reviewer-override\", \"premise-question\"] as const;",
+      "problem": "The module is documented (header, lines 1-8) as decisions that relax a review gate, carrying quote/subject and confirmedVia. A premise-question record has a different shape (finding, answer, actor) and a different meaning (it answers a question, and its 'dismiss' ends a finding). It was added to the same file, the same kinds array and the same union, and the code then needs a second type (OperatorDecisionKind vs AnyOperatorDecisionKind), a second validator, and an extra 'd.kind !== premise-question' guard in valid() to stop the array it just widened from matching.",
+      "impact": "The shared kinds constant now lists a kind the gate readers must exclude; any future consumer iterating OPERATOR_DECISION_KINDS will treat premise-question as a gate decision. The header comment is now false for the file.",
+      "suggested_fix": "Keep OPERATOR_DECISION_KINDS as the gate kinds only and put the premise decisions in their own export/type (still the same JSON file if desired, via a separate PREMISE_DECISION_KIND), or update the header and name the two record families explicitly.",
+      "evidence": "operator-decisions.ts:760-768, 811-837, 912-920.",
+      "confidence": "high",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "ARCH-4",
+      "severity": "minor",
+      "file": "src/review/managed.ts",
+      "line": 422,
+      "quote": "const premisedInternal = premised.findings.slice(0, deduped.findings.length);",
+      "problem": "Internal and external findings are concatenated, run through mergePremises, and split back by position. Correctness depends on an unstated ordering/length guarantee of mergePremises (its doc says 'every input finding, in order').",
+      "impact": "If mergePremises ever filters, reorders or deduplicates, external findings silently move into the capped internal set or the reverse, with no type error.",
+      "suggested_fix": "Call mergePremises once per set and combine counts and rejections, or have it take the two lists and return them separately.",
+      "evidence": "managed.ts:421-423; premise.ts:1099-1103 (the order guarantee is only a doc comment).",
+      "confidence": "high",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "ARCH-5",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "line": 1,
+      "quote": "The premise merge: what a premise judgement may do to a finding (flow 459, AC1/AC2).",
+      "problem": "One 555-line module holds claim parsing and validation, the delete-only merge, the hold-state machine, applying the operator's decision to a record, and markdown rendering of scope.md. The embedded-fence parser for the same input (parseEmbeddedPremises) lives in managed.ts instead.",
+      "impact": "Several unrelated reasons to change; the module's own header names only the merge. The premise input parser is split across two modules.",
+      "suggested_fix": "Split decision application and hold state (premise-hold.ts) and the scope.md renderer from the merge; move parseEmbeddedPremises next to parsePremiseClaims.",
+      "evidence": "premise.ts sections at lines 1116, 1196, 1404-1469, 1475-1545; managed.ts:627-651.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "ARCH-6",
+      "severity": "minor",
+      "file": "src/review/types.ts",
+      "line": 1852,
+      "quote": "export type PremiseOperatorAnswer = {",
+      "problem": "PremiseOperatorAnswer { answer, reason, at, actor } repeats the fields of PremiseQuestionDecision in operator-decisions.ts, and applyPremiseDecision copies them by hand into premise.operator. There are also two near-identical claim types (PremiseClaimInput and PremiseSource in types.ts versus ParsedPremiseClaims in premise.ts), and PremiseSource appears unused by the code in this slice.",
+      "impact": "Two definitions of the same answer record drift when a field is added.",
+      "suggested_fix": "Derive one from the other (Pick of PremiseQuestionDecision) and drop PremiseSource if nothing consumes it.",
+      "evidence": "types.ts:1852-1857, 1897-1901; operator-decisions.ts:797-805; premise.ts:1450 and 1107-1111.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "ARCH-7",
+      "severity": "minor",
+      "file": "src/review/managed.ts",
+      "line": 696,
+      "quote": "premiseBlock = \"\",",
+      "problem": "renderScope gains an eleventh positional parameter, a pre-rendered markdown string, next to ten others that are already optional positionals. Callers pass renderPremiseMarkdown(...) output through, so scope.md assembly is split between renderScope and the call site (which also appends renderDuplicatesMarkdown itself).",
+      "impact": "Argument-order mistakes are silent (several parameters are strings or arrays with defaults) and the scope.md layout is decided in two places.",
+      "suggested_fix": "Pass an options object, or append the premise block at the call site like the duplicates block.",
+      "evidence": "managed.ts:685-697 and 493-495.",
+      "confidence": "medium",
+      "reviewer": "review-architecture"
+    },
+    {
+      "id": "ARCH-8",
+      "severity": "info",
+      "file": "src/review/dedupe.ts",
+      "line": 196,
+      "quote": "const downgraded = members.filter((member) => member.premise?.verdict === \"downgraded\");",
+      "problem": "In a fresh ingest mergeDuplicates runs before mergePremises (managed.ts), so no finding carries a premise when duplicates are merged; the new dedupe branches (premise severity rule, held exclusion) only act on findings carried from an earlier round. The comments describe the premise rule as general. Separately, held findings enter applyFindingsCap, so a per-reviewer cap could drop a finding the operator was to be asked about.",
+      "impact": "Observation only: the ordering is deliberate and documented in managed.ts, and a cap drop is recorded in caps. What would settle the second point is whether the cap can drop a held finding in a round with more findings than the per-reviewer limit.",
+      "suggested_fix": "State in the dedupe comments that the premise rules apply to carried findings; consider exempting held findings from the findings cap.",
+      "evidence": "managed.ts:414-425 (merge order); dedupe.ts:140-149, 194-199.",
+      "confidence": "low",
+      "reviewer": "review-architecture"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 6, "info": 1 }
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Slice: slice-08 (src/review: coverage, dedupe, managed, operator-decisions, premise-question, premise, readiness, types, verdict, verification), PR #1043 head c144874f
+- Stack detected: generic-ts (CLI, no framework layers)
+
+### Summary
+The change adds an independent, delete-only premise stage and wires it through ingest, dedupe, verdict and readiness. Dependency direction holds: types.ts imports only types, premise.ts depends on verification and types, operator-decisions.ts has no premise dependency. The weakness is that "is this finding held, and was it answered" has no single owner, and the decide-premise lookup uses the judge's raw claim without the merge's validation.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 6  |  info: 1
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected (no runtime cycle: types.ts uses type-only imports; dedupe -> premise -> verification is acyclic).
+
+### Module Boundary Violations
+- ARCH-1 (major): premise-question.ts bypasses the validated merge.
+- ARCH-2 (minor): hold state derived in several modules.
+- ARCH-3 (minor): operator-decisions.ts mixes two record families.
+
+### Design Pattern Misuse
+- ARCH-4 (minor): positional split of a concatenated list.
+- ARCH-7 (minor): eleventh positional parameter in renderScope.
+
+### SOLID Violations
+- ARCH-5 (minor): premise.ts holds several responsibilities.
+- ARCH-6 (minor): duplicated answer/claim types.
+
+### Framework-Specific (NestJS / React+MobX)
+N/A, not detected in stack.
+
+Note: ARCH-8 (info) records an ordering observation in dedupe/managed.
