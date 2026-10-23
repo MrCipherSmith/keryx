@@ -78,6 +78,7 @@ const STATUSES: readonly LearningStatus[] = ["candidate", "accepted", "rejected"
 const CONFIDENCE_LEVELS: readonly ConfidenceLevel[] = ["low", "medium", "high"];
 const EVIDENCE_KINDS: readonly EvidenceKind[] = ["reinforcement", "contradiction"];
 const EVIDENCE_SOURCE_TYPES: readonly EvidenceSourceType[] = [
+  "probe",
   "review",
   "test",
   "failure",
@@ -143,7 +144,7 @@ function validateEvidenceItem(value: unknown, path: string, errors: string[]): v
     errors.push(`${path}.observedAt: must be an ISO 8601 date-time string`);
   }
   if (value.weight !== undefined) {
-    if (typeof value.weight !== "number" || value.weight < 0 || value.weight > MAX_EVIDENCE_WEIGHT) {
+    if (typeof value.weight !== "number" || !Number.isFinite(value.weight) || value.weight < 0 || value.weight > MAX_EVIDENCE_WEIGHT) {
       errors.push(`${path}.weight: must be a number in [0, ${MAX_EVIDENCE_WEIGHT}]`);
     }
   }

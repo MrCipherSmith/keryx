@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { validateLearnedPattern, validateObservationEvent } from "./schema";
+import { validateAgainstSchemaObject } from "../contracts/validator";
 import type { LearnedPattern, ObservationEvent } from "./types";
 
 const DOCS_SCHEMA_PATH = path.join(
@@ -329,4 +330,30 @@ describe("validateObservationEvent", () => {
     delete event.sessionId;
     expect(validateObservationEvent(event).ok).toBe(false);
   });
+});
+
+// Same fixtures exercise every evidence enforcement site, including old records.
+describe("probe evidence compatibility", () => {
+  const schemas = [RUNTIME_SCHEMA_PATH, DOCS_SCHEMA_PATH].map((file) => JSON.parse(readFileSync(file, "utf8")));
+  for (const sourceType of ["probe", "review", "test", "failure", "health", "memory", "observation", "reviewer-comment"]) {
+    for (const weight of [undefined, 0, 1, 1.5]) {
+      test(`${sourceType} weight ${weight}`, () => {
+        const record = baseCandidate();
+        const evidence = { ...record.evidence[0], sourceType };
+        if (weight === undefined) delete evidence.weight;
+        else evidence.weight = weight;
+        const value = { ...record, evidence: [evidence] };
+        expect(validateLearnedPattern(value).ok).toBe(true);
+        for (const schema of schemas) expect(validateAgainstSchemaObject(schema, value).valid).toBe(true);
+      });
+    }
+  }
+  for (const patch of [{ sourceType: "unknown" }, { weight: -1 }, { weight: 1.51 }, { observedAt: "bad" }, { kind: "bad" }, { extra: true }]) {
+    test(`malformed evidence ${JSON.stringify(patch)}`, () => {
+      const record = baseCandidate();
+      const value = { ...record, evidence: [{ ...record.evidence[0], sourceType: "probe", ...patch }] };
+      expect(validateLearnedPattern(value).ok).toBe(false);
+      for (const schema of schemas) expect(validateAgainstSchemaObject(schema, value).valid).toBe(false);
+    });
+  }
 });

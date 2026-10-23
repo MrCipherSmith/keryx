@@ -511,34 +511,54 @@ test("the exports map closes the accidental deep-import surface", () => {
  *
  * The fix keeps asking npm (the point of this test, stated below) rather
  * than falling back to re-implementing `files`/ignore semantics, but no
- * longer assumes stdout IS the JSON: it locates the array npm actually
- * printed and parses that slice. A `prepare` preamble contains no `[`, so
- * the first `[` in the stream is unambiguously where npm's own array starts
- * regardless of which npm version honoured `--ignore-scripts`. Genuinely
+ * longer assumes stdout IS the JSON: it locates the payload and accepts
+ * either the legacy array or the package-keyed object emitted by newer npm.
+ * Each package file list and path is checked before use. Genuinely
  * broken JSON — from npm itself, or from contamination that happens to
  * follow rather than precede the array — still throws, with the raw stream
  * attached, rather than being silently swallowed.
  */
 function parseNpmPackJson(stdout: string): Array<{ files: Array<{ path: string }> }> {
-  const start = stdout.indexOf("[");
-  if (start === -1) {
-    throw new Error(
-      `\`npm pack --dry-run --json\` produced no JSON array on stdout at all. ` +
-        `First 400 bytes: ${JSON.stringify(stdout.slice(0, 400))}`,
-    );
-  }
+  const start = stdout.search(/\[|{/);
   try {
-    return JSON.parse(stdout.slice(start)) as Array<{ files: Array<{ path: string }> }>;
+    if (start === -1) throw new Error("missing JSON payload");
+    const payload: unknown = JSON.parse(stdout.slice(start));
+    const entries: unknown[] = Array.isArray(payload)
+      ? payload
+      : payload !== null && typeof payload === "object"
+        ? Object.values(payload)
+        : [];
+    if (entries.length === 0) throw new Error("empty package list");
+    for (const entry of entries) {
+      if (entry === null || typeof entry !== "object" || !("files" in entry) || !Array.isArray(entry.files)) {
+        throw new Error("invalid package files");
+      }
+      for (const file of entry.files) {
+        if (file === null || typeof file !== "object" || typeof file.path !== "string") {
+          throw new Error("invalid package file path");
+        }
+      }
+    }
+    return entries as Array<{ files: Array<{ path: string }> }>;
   } catch (cause) {
-    const message = cause instanceof Error ? cause.message : String(cause);
     throw new Error(
-      `\`npm pack --dry-run --json\`'s stdout was not parseable JSON once its own array was ` +
-        `located (${message}). This is not the known \`prepare\`-preamble case (that case parses); ` +
-        `something else is wrong. First 400 bytes: ${JSON.stringify(stdout.slice(0, 400))}`,
+      `Invalid npm pack JSON output: ${JSON.stringify(stdout.slice(0, 400))}`,
       { cause },
     );
   }
 }
+
+test("npm pack JSON accepts package-keyed output after a build preamble", () => {
+  const entry = { files: [{ path: "package.json" }] };
+  expect(parseNpmPackJson(`Bundled 3 modules\n${JSON.stringify({ pkg: entry })}`)).toEqual([entry]);
+  expect(parseNpmPackJson(JSON.stringify([entry]))).toEqual([entry]);
+});
+
+test("npm pack JSON rejects invalid file entries and trailing contamination", () => {
+  for (const stdout of ['[{"files":[{"path":4}]}]', '{"pkg":{"files":[]}} trailing']) {
+    expect(() => parseNpmPackJson(stdout)).toThrow();
+  }
+});
 
 test("npm pack ships no test file — asked of npm, not of the manifest", () => {
   // The repository's own method for "what is in the tarball" is `npm pack`
