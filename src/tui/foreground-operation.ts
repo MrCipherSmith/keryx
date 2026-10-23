@@ -111,6 +111,13 @@ export function createForegroundOperationOwner(): ForegroundOperationOwner {
 export class ForegroundForceHandoff<T> {
   private readonly pending: T[] = [];
   private awaitingSettlement = false;
+  private handoffGeneration = 0;
+
+  /** Changes when the parked batch is cleared or returned to the queue. */
+  get generation(): number {
+    return this.handoffGeneration;
+  }
+
 
   enqueue(item: T): boolean {
     this.pending.push(item);
@@ -120,6 +127,7 @@ export class ForegroundForceHandoff<T> {
   }
 
   clear(): void {
+    this.handoffGeneration += 1;
     this.pending.length = 0;
     this.awaitingSettlement = false;
   }
@@ -139,6 +147,7 @@ export class ForegroundForceHandoff<T> {
    * deletes the operator's message outright; a session switch must re-queue.
    */
   drainPending(): T[] {
+    this.handoffGeneration += 1;
     const items = [...this.pending];
     this.pending.length = 0;
     this.awaitingSettlement = false;
@@ -244,6 +253,7 @@ export async function forceForegroundQueueItem<T>(
   },
 ): Promise<void> {
   const ownsSettlement = handoff.enqueue(item);
+  const handoffGeneration = handoff.generation;
   // Only claim an interruption the owner performed. `cancel` answers "did that
   // abort anything": with no operation active it is a no-op, and the old
   // unconditional message told the operator the main turn was interrupted when
@@ -257,7 +267,7 @@ export async function forceForegroundQueueItem<T>(
   if (!ownsSettlement) {
     return;
   }
-  const dispatched = await runAfterForegroundSettlement(owner, () => {
+  const settlementActionRan = await runAfterForegroundSettlement(owner, () => {
     // The operation settled, but something else still owns the busy state (wiki
     // work, detached jobs): `run` would be diverted by the busy branch instead of
     // becoming the main turn. Keep the line queued, unblock the drain sites, and
@@ -272,9 +282,9 @@ export async function forceForegroundQueueItem<T>(
       deps.run(next);
     }
   });
-  if (!dispatched) {
+  if (!settlementActionRan && handoff.generation === handoffGeneration) {
     // Disposed, or the session changed under us: `takeAfterSettlement` never ran,
-    // so the parked lines are still here and nothing else can see them.
+    // so return only the batch this waiter owned, never a replacement batch.
     deps.requeue?.(handoff.drainPending());
   }
 }

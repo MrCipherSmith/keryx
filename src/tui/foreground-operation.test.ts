@@ -381,15 +381,24 @@ test("session switch parks old Force selections and permits a fresh settlement h
   const token = owner.begin();
   const handoff = createForegroundForceHandoff<string>();
   const dispatched: string[] = [];
-  const old = forceForegroundQueueItem(owner, handoff, "old", { run: item => dispatched.push(item) });
+  const requeued: string[] = [];
+  const old = forceForegroundQueueItem(owner, handoff, "old", {
+    run: item => dispatched.push(item),
+    requeue: items => requeued.push(...items),
+  });
   owner.invalidateSession();
   // The session switch takes the parked line back (the shell re-queues it)
   // instead of clearing it — clearing is what made the operator's message vanish.
   expect(handoff.drainPending()).toEqual(["old"]);
   expect(handoff.isAwaitingSettlement).toBe(false);
-  const fresh = forceForegroundQueueItem(owner, handoff, "fresh", { run: item => dispatched.push(item) });
   owner.settle(token);
-  await Promise.all([old, fresh]);
+  const freshToken = owner.begin();
+  const fresh = forceForegroundQueueItem(owner, handoff, "fresh", { run: item => dispatched.push(item) });
+  await old;
+  expect(requeued).toEqual([]);
+  expect(handoff.pendingCount).toBe(1);
+  owner.settle(freshToken);
+  await fresh;
   expect(dispatched).toEqual(["fresh"]);
   expect(handoff.hasPending).toBe(false);
   expect(handoff.isAwaitingSettlement).toBe(false);
