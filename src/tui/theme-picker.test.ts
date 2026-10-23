@@ -62,6 +62,8 @@ test("presentThemePicker opens a compact 1-tab modal and applies only on Enter",
           input.onClose?.();
         },
         setTab: () => {},
+        addTab: () => {},
+        removeTab: () => {},
         activeTab: () => "picker",
       };
     },
@@ -100,7 +102,7 @@ test("Esc/close without Enter does not apply the highlighted theme", () => {
   presentThemePicker(
     (_otui, _chrome, input) => {
       onClose = input.onClose;
-      return { close: () => input.onClose?.(), setTab: () => {}, activeTab: () => "picker" };
+      return { close: () => input.onClose?.(), setTab: () => {}, addTab: () => {}, removeTab: () => {}, activeTab: () => "picker" };
     },
     {},
     {},

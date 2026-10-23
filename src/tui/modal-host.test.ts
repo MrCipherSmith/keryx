@@ -104,6 +104,34 @@ function countById(node: { id: string; getChildren: () => { id: string; getChild
   return n;
 }
 
+otuiTest("temporary tabs disappear on return and Escape returns to their source", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  let cleaned = 0;
+  try {
+    const handle = openModal(otui.core, h.chrome, {
+      title: "Work",
+      tabs: [{ id: "list", label: "List" }],
+      renderTab: () => {},
+    })!;
+    const detail = { id: "agent", label: "Agent", temporary: true,
+      renderTab: () => () => { cleaned += 1; } };
+    handle.addTab(detail, "list");
+    expect(handle.activeTab()).toBe("agent");
+    handle.setTab("list");
+    expect(cleaned).toBe(1);
+    handle.setTab("agent");
+    expect(handle.activeTab()).toBe("list");
+    handle.addTab(detail, "list");
+    await pressEscapeAndSettle(h);
+    expect(handle.activeTab()).toBe("list");
+    expect(cleaned).toBe(2);
+    expect(h.chrome.overlayActive()).toBe(true);
+    await pressEscapeAndSettle(h);
+    expect(h.chrome.overlayActive()).toBe(false);
+  } finally { h.destroy(); }
+});
+
 // AC5 / AC7: these do not need a TTY or the optional renderer.
 test("AC5: openModal is a no-op when OpenTUI is unavailable", () => {
   const calls: string[] = [];
