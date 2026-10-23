@@ -22,7 +22,7 @@ type Box = InstanceType<OpenTui["BoxRenderable"]>;
 type Text = InstanceType<OpenTui["TextRenderable"]>;
 type ScrollBox = InstanceType<OpenTui["ScrollBoxRenderable"]>;
 
-export type ModalTab = { id: string; label: string };
+export type ModalTab = { id: string; label: string; temporary?: boolean; renderTab?: OpenModalInput["renderTab"] };
 
 export type ModalFooterAction = { key: string; label: string };
 
@@ -73,6 +73,8 @@ export type ModalHandle = {
    */
   close(opts?: { restoreFocus?: boolean }): void;
   setTab(id: string): void;
+  addTab(tab: ModalTab, afterId?: string): void;
+  removeTab(id: string): void;
   activeTab(): string;
 };
 
@@ -252,7 +254,8 @@ type HostState = {
   footerText: Text;
   open: boolean;
   generation: number;
-  tabs: readonly ModalTab[];
+  tabs: ModalTab[];
+  temporaryParents: Map<string, string>;
   active: string;
   tabCleanup: (() => void) | undefined;
   onClose: (() => void) | undefined;
@@ -377,7 +380,14 @@ function unmountActiveTab(state: HostState): void {
 }
 
 function mountTab(state: HostState, input: OpenModalInput, tabId: string): void {
+  const target = state.tabs.find((tab) => tab.id === tabId);
+  if (target === undefined) return;
+  const previous = state.tabs.find((tab) => tab.id === state.active);
   unmountActiveTab(state);
+  if (previous?.temporary && previous.id !== tabId) {
+    state.tabs = state.tabs.filter((tab) => tab.id !== previous.id);
+    state.temporaryParents.delete(previous.id);
+  }
   state.active = tabId;
   paintTabs(state);
   if (input.footerFor !== undefined) {
@@ -393,7 +403,7 @@ function mountTab(state: HostState, input: OpenModalInput, tabId: string): void 
   const availWidth = resolveModalAvailableWidth(state.chrome);
   const size = resolveModalPanelSize(availWidth, state.chrome.renderer.height, input.contentRows);
   const panelWidth = Math.min(availWidth, size.width);
-  const cleanup = input.renderTab(tabId, state.body, {
+  const cleanup = (target.renderTab ?? input.renderTab)(tabId, state.body, {
     // The body sits in a scroll box whose scrollbar takes a column; a line
     // wrapped to the full inner width lost its last characters to it and the
     // renderer wrapped the rest onto a blank-looking extra row (flow 270).
@@ -577,6 +587,7 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     open: false,
     generation: 0,
     tabs: [],
+    temporaryParents: new Map(),
     active: "",
     tabCleanup: undefined,
     onClose: undefined,
@@ -600,7 +611,12 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     const focused = r.currentFocusedRenderable;
     const inBody = focused !== null && containsNode(state.scroll, focused);
     if (key.name === "escape") {
-      closeHost(state, { restoreFocus: true, runOnClose: true });
+      const parent = state.temporaryParents.get(state.active);
+      if (parent !== undefined && state.tabs.some((tab) => tab.id === parent)) {
+        mountTab(state, state.input, parent);
+      } else {
+        closeHost(state, { restoreFocus: true, runOnClose: true });
+      }
       key.preventDefault();
       key.stopPropagation();
       return;
@@ -722,6 +738,33 @@ function makeHandle(state: HostState, generation: number): ModalHandle {
       }
       mountTab(state, state.input, id);
     },
+    addTab(tab: ModalTab, afterId?: string): void {
+      if (state.generation !== generation || !state.open || state.input === undefined) return;
+      if (state.tabs.some((entry) => entry.id === tab.id)) return;
+      const parent = afterId ?? state.temporaryParents.get(state.active) ?? state.active;
+      const index = state.tabs.findIndex((entry) => entry.id === parent && !entry.temporary);
+      if (index < 0) return;
+      state.tabs.splice(index + 1, 0, { ...tab });
+      if (tab.temporary) state.temporaryParents.set(tab.id, parent);
+      mountTab(state, state.input, tab.id);
+      state.chrome.renderer.requestRender();
+    },
+    removeTab(id: string): void {
+      if (state.generation !== generation || !state.open || state.input === undefined) return;
+      // Permanent source tabs belong to the modal, not to the drill-down caller.
+      const tab = state.tabs.find((entry) => entry.id === id);
+      if (!tab?.temporary) return;
+      if (state.active === id) {
+        const parent = state.temporaryParents.get(id);
+        if (parent === undefined) return;
+        mountTab(state, state.input, parent);
+      } else {
+        state.tabs = state.tabs.filter((entry) => entry.id !== id);
+        state.temporaryParents.delete(id);
+        paintTabs(state);
+      }
+      state.chrome.renderer.requestRender();
+    },
     activeTab(): string {
       return state.active;
     },
@@ -769,7 +812,8 @@ export function openModal(
   state.generation += 1;
   const generation = state.generation;
   state.input = input;
-  state.tabs = input.tabs;
+  state.tabs = input.tabs.map((tab) => ({ ...tab }));
+  state.temporaryParents.clear();
   state.onClose = input.onClose;
   paintHeader(state, input.title);
   paintFooter(state, input.footer);

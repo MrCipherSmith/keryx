@@ -249,6 +249,8 @@ function fakeHost(captured: CapturedModal) {
         captured.onClose?.();
       },
       setTab: () => {},
+      addTab: () => {},
+      removeTab: () => {},
       activeTab: () => "game",
     };
   };
