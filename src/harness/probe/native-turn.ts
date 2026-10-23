@@ -42,25 +42,65 @@ export function boundedProbeProvider(provider: ProviderPort): ProviderPort {
     },
   };
 }
-export async function nativeProbeTurn(input: ProbeTurnInput, providerId: string, modelId: string): Promise<ProbeTurnResult> {
-  const provider = boundedProbeProvider(makeProvider(providerId, modelId, { fetch }));
-  const events: unknown[] = [];
-  const history: NormalizedMessage[] = [];
-  let sequence = 0;
-  const deps: AgentDeps = { provider, providerId, modelId,
-    tools: builtinReadOnlyTools(input.root), systemInstruction: input.instructions,
-    idSeq: () => `probe-${input.arm}-${input.seed}-${++sequence}`,
-    maxRounds: REQUEST_LIMIT, maxToolCalls: 12, maxOutputTokens: OUTPUT_TOKENS,
-    unattended: true, planFollowThrough: false };
-  await runAgentTurn({ write: () => undefined,
-    onUsage: (usage) => events.push({ type: "usage", usage }),
-    onToolCall: (name, args) => events.push({ type: "tool-call", name, args }),
-    onToolResult: (name, result) => events.push({ type: "tool-result", name, result }),
-    onSystem: (message) => events.push({ type: "system", message }),
-  }, deps, history, input.prompt, input.signal ? { signal: input.signal } : {});
-  const answer = [...history].reverse().find((message) => message.role === "assistant")?.content ?? "";
-  // Missing/partial receipts are never zero-cost: runner charges the full durable reserve.
-  return { answer, events };
+export const PROBE_TURN_TIMEOUT_MS = 120_000;
+export class ProbeTurnFailedError extends Error {
+  readonly code = "PROBE_TURN_FAILED";
+}
+export interface NativeProbeTurnOptions { provider?: ProviderPort; timeoutMs?: number }
+export async function nativeProbeTurn(input: ProbeTurnInput, providerId: string, modelId: string,
+  options: NativeProbeTurnOptions = {}): Promise<ProbeTurnResult> {
+  const timeoutMs = options.timeoutMs ?? PROBE_TURN_TIMEOUT_MS;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new ProbeTurnFailedError("Invalid probe deadline");
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  input.signal?.addEventListener("abort", abort, { once: true });
+  if (input.signal?.aborted) abort();
+  const timer = setTimeout(abort, timeoutMs);
+  // Abort before headers and during streaming; await settlement before cleanup.
+  // A Promise.race would leave a paid request running after worktree removal.
+  try {
+    if (controller.signal.aborted) throw new ProbeTurnFailedError("Probe was cancelled");
+    const bounded = boundedProbeProvider(options.provider ?? makeProvider(providerId, modelId, { fetch }));
+    let terminalSeen = false;
+    let streamFailed = false;
+    const provider: ProviderPort = {
+      describe: () => bounded.describe(),
+      async *stream(request, streamOptions) {
+        terminalSeen = false;
+        try {
+          for await (const event of bounded.stream(request, streamOptions)) {
+            if (event.kind === "provider_error") streamFailed = true;
+            if (event.kind === "model_end") terminalSeen = true;
+            yield event;
+          }
+        } catch (error) { streamFailed = true; throw error; }
+        finally { if (!terminalSeen) streamFailed = true; }
+      },
+    };
+    const events: unknown[] = [];
+    const history: NormalizedMessage[] = [];
+    let sequence = 0;
+    const deps: AgentDeps = { provider, providerId, modelId,
+      tools: builtinReadOnlyTools(input.root), systemInstruction: input.instructions,
+      idSeq: () => `probe-${input.arm}-${input.seed}-${++sequence}`,
+      maxRounds: REQUEST_LIMIT, maxToolCalls: 12, maxOutputTokens: OUTPUT_TOKENS,
+      unattended: true, planFollowThrough: false };
+    const result = await runAgentTurn({ write: () => undefined,
+      onUsage: (usage) => events.push({ type: "usage", usage }),
+      onToolCall: (name, args) => events.push({ type: "tool-call", name, args }),
+      onToolResult: (name, result) => events.push({ type: "tool-result", name, result }),
+      onSystem: (message) => events.push({ type: "system", message }),
+    }, deps, history, input.prompt, { signal: controller.signal });
+    const last = history.at(-1);
+    if (controller.signal.aborted || result.finishReason !== undefined || streamFailed || !terminalSeen
+      || last?.role !== "assistant" || (last.toolCalls?.length ?? 0) > 0 || !last.content.trim()) {
+      throw new ProbeTurnFailedError("Probe did not complete a terminal text answer");
+    }
+    return { answer: last.content, events };
+  } finally {
+    clearTimeout(timer);
+    input.signal?.removeEventListener("abort", abort);
+  }
 }
 export async function runNativeProbe(session: ProbeSession, task: ProbeTask | undefined) {
   const { provider, model, commit } = session.plan.environment;

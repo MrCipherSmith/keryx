@@ -102,7 +102,7 @@
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "keryx://schemas/learn-probe/plan.schema.json",
+  "$id": "keryx://schemas/learn-probe/probe-plan.schema.json",
   "title": "Learn Probe Immutable Plan",
   "description": "Schema version 1. maxUsd null only for dry-run; persisted plans require a finite positive budget. Digest derivation/linkage are semantic checks.",
   "$defs": {

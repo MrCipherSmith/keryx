@@ -85,3 +85,66 @@ test("insufficient remaining budget never shrinks the conservative call reservat
   expect(f.counts().calls).toBe(0);
   expect(result.value.comparison.runs).toEqual([]);
 });
+
+for (const answer of [
+  "FILE: src/metrics/benchmark.ts SYMBOL: wilsoninterval",
+  "FILE: src/Metrics/benchmark.ts SYMBOL: wilsonInterval",
+]) test(`case-only incorrect answer fails: ${answer}`, async () => {
+  const f = await fixture(); f.port.turn = async () => ({ answer, events: [] });
+  const result = await runProbeSession(f.root, f.plan, s => executeProbe(s, task, f.port, { baseline: "baseline", reservationUsd: 0.2 }));
+  if (!result.ok) throw new Error(result.message);
+  expect(result.value.comparison.runs.every(run => run.answered && !run.success)).toBe(true);
+});
+test("leading dot slash remains supported", async () => {
+  const f = await fixture(); f.port.turn = async () => ({ answer: "FILE: ./src/metrics/benchmark.ts SYMBOL: wilsonInterval", events: [] });
+  const result = await runProbeSession(f.root, f.plan, s => executeProbe(s, task, f.port, { baseline: "baseline", reservationUsd: 0.2 }));
+  if (!result.ok) throw new Error(result.message);
+  expect(result.value.comparison.runs.every(run => run.success)).toBe(true);
+});
+// Synthetic detector fixture, not a real credential.
+const fakeSecret = `ghp_${"aB9cD2eF3gH4iJ5kL6mN7oP8qR9sT0uV1wX2"}`;
+test("durable transcript redacts nested output, answers, keys and system messages", async () => {
+  const f = await fixture();
+  f.port.turn = async () => ({ answer: fakeSecret, events: [
+    { type: "tool-result", name: "read_file", result: { output: `token=${fakeSecret}` } },
+    { type: "system", message: fakeSecret }, { [fakeSecret]: "sensitive key" },
+  ] });
+  const result = await runProbeSession(f.root, f.plan, s => executeProbe(s, task, f.port, { baseline: "baseline", reservationUsd: 0.2 }));
+  if (!result.ok) throw new Error(result.message);
+  const text = await readFile(path.join(f.root, result.value.comparison.runs[0]!.transcript), "utf8");
+  expect(text).not.toContain(fakeSecret);
+  expect(text.trim().split("\n").map(line => JSON.parse(line))).toHaveLength(5);
+});
+test("durable error text is redacted and failed requests remain charged", async () => {
+  const f = await fixture(); f.port.turn = async () => { throw new Error(fakeSecret); };
+  const result = await runProbeSession(f.root, f.plan, s => executeProbe(s, task, f.port, { baseline: "baseline", reservationUsd: 0.2 }));
+  if (!result.ok) throw new Error(result.message);
+  expect(result.value.comparison.reason).toBe("run-failed");
+  const run = result.value.comparison.runs[0]!;
+  const text = await readFile(path.join(f.root, run.transcript), "utf8");
+  expect(text).not.toContain(fakeSecret); expect(run.chargedUsd).toBe(0.2);
+  expect(f.counts().cleanups).toBe(1);
+});
+import { readFileSync, readdirSync } from "node:fs";
+import { resolvePointer } from "../../contracts/resolver";
+test("probe refs resolve when schemas are registered only by canonical $id", () => {
+  const directory = path.join(import.meta.dir, "../../../docs/requirements/keryx-learn-probe/schemas");
+  const schemas = readdirSync(directory).filter(name => name.endsWith(".schema.json"))
+    .map(name => JSON.parse(readFileSync(path.join(directory, name), "utf8")) as Record<string, unknown>);
+  const registry = new Map(schemas.map(schema => [String(schema.$id), schema]));
+  expect(registry.size).toBe(4);
+  const visit = (node: unknown, owner: string) => {
+    if (!node || typeof node !== "object") return;
+    const object = node as Record<string, unknown>;
+    const base = typeof object.$id === "string" ? new URL(object.$id, owner).href : owner;
+    if (typeof object.$ref === "string") {
+      const ref = new URL(object.$ref, base); const fragment = ref.hash.slice(1); ref.hash = "";
+      const target = registry.get(ref.href);
+      expect(target).toBeDefined();
+      if (!target) throw new Error(`Unregistered schema identity: ${ref.href}`);
+      expect(fragment ? resolvePointer(target, decodeURIComponent(fragment)) : target).toBeDefined();
+    }
+    for (const child of Object.values(object)) visit(child, base);
+  };
+  for (const schema of schemas) visit(schema, String(schema.$id));
+});

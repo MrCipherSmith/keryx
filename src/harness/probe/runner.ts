@@ -1,3 +1,4 @@
+import { redactSensitiveText } from "../../security/redact";
 import { writeContained } from "../../lib/contained-write";
 import type { ProbeSession } from "../../learning/probe";
 import type { ProbeTask, ProbeComparison, ProbeFinalization } from "../../learning/probe-schema";
@@ -22,8 +23,17 @@ export function probeInstructions(baseline: string, pattern: { id: string; trigg
 function answeredCorrectly(task: ProbeTask, answer: string): { answered: boolean; success: boolean } {
   const match = /^FILE:\s*(.+?)\s+SYMBOL:\s*(\S+)\s*$/i.exec(answer.trim());
   return { answered: answer.trim().length > 0, success: !!match
-    && match[1]!.replace(/^\.\//, "").toLowerCase() === task.expect.file.replace(/^\.\//, "").toLowerCase()
-    && match[2]!.toLowerCase() === task.expect.symbol.toLowerCase() };
+    && match[1]!.replace(/^\.\//, "") === task.expect.file.replace(/^\.\//, "")
+    && match[2]! === task.expect.symbol };
+}
+/** Scrub every durable string, including raw tool results, errors and object keys. */
+function redactTranscript(value: unknown): unknown {
+  if (typeof value === "string") return redactSensitiveText(value);
+  if (Array.isArray(value)) return value.map(redactTranscript);
+  if (value !== null && typeof value === "object") return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [redactSensitiveText(key), redactTranscript(item)]),
+  );
+  return value;
 }
 async function executeSeed(s: ProbeSession, task: ProbeTask, port: ProbeRunnerPort,
   input: ProbeTurnInput, reservation: number): Promise<boolean> {
@@ -39,7 +49,7 @@ async function executeSeed(s: ProbeSession, task: ProbeTask, port: ProbeRunnerPo
     await s.recover(); return false;
   }
   const transcript = [...result.events, { type: "probe-answer", content: result.answer }, { type: "probe-result", ...outcome }]
-    .map((event) => JSON.stringify(event)).join("\n") + "\n";
+    .map((event) => JSON.stringify(redactTranscript(event))).join("\n") + "\n";
   await writeContained(s.root, s.transcriptPath(input.arm, input.seed), transcript);
   await s.complete(input.arm, input.seed, { ...outcome, chargedUsd });
   return !failed && outcome.answered;
